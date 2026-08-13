@@ -52,7 +52,9 @@ func jugar_temporada(rng: RandomNumberGenerator) -> void:
 ## Cierra la temporada: economía/mercado/progresión con la tabla recién
 ## jugada, decide y ejecuta ascensos/descensos, y arma el fixture nuevo de
 ## cada división con su composición ya actualizada.
-func fin_de_temporada(rng: RandomNumberGenerator) -> Dictionary:
+## equipo_protegido: el club del jugador humano, si corresponde — nunca
+## participa del mercado automático entre clubes de la IA (ver Mercado).
+func fin_de_temporada(rng: RandomNumberGenerator, equipo_protegido: Team = null) -> Dictionary:
 	var ordenes := []  # por division: Array de Team, en el orden final de tabla
 	for liga in divisiones:
 		var mapa := {}
@@ -65,7 +67,7 @@ func fin_de_temporada(rng: RandomNumberGenerator) -> Dictionary:
 
 	var informes := []
 	for liga in divisiones:
-		informes.append(liga.procesar_economia_y_mercado_y_progresion(rng))
+		informes.append(liga.procesar_economia_y_mercado_y_progresion(rng, equipo_protegido))
 
 	var movimientos := _ejecutar_ascensos_y_descensos(ordenes, rng)
 

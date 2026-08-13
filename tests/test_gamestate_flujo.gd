@@ -43,6 +43,10 @@ func _init() -> void:
 
 	_test_todas_las_divisiones_jugaron(piramide)
 
+	var ids_antes := []
+	for j in equipo_jugador.jugadores:
+		ids_antes.append(j["id"])
+
 	print("\n=== Cerrando la temporada (copas + internacional + ascensos/descensos + cantera) ===")
 	var copa_nacional := Copas.jugar_copa_nacional(piramide, rng)
 	var copas_division := Copas.jugar_copas_de_division(piramide, rng)
@@ -52,7 +56,7 @@ func _init() -> void:
 	for i in range(copas_division.size()):
 		noticias.append("COPA DIVISIÓN %d: campeón %s" % [i + 1, copas_division[i].campeon.nombre])
 
-	var resultado_piramide := piramide.fin_de_temporada(rng)
+	var resultado_piramide := piramide.fin_de_temporada(rng, equipo_jugador)
 	for m in resultado_piramide["movimientos"]:
 		if m["equipo"] == equipo_jugador.nombre:
 			noticias.append("%s: %s (división %d → división %d)" % [equipo_jugador.nombre, m["tipo"], m["de_division"], m["a_division"]])
@@ -70,8 +74,20 @@ func _init() -> void:
 
 	_test_cierre_temporada(piramide, resultado_internacional, nueva_division, equipo_jugador, noticias)
 	_test_cantera(equipo_jugador)
+	_test_equipo_jugador_protegido(equipo_jugador, ids_antes)
 
 	quit()
+
+
+func _test_equipo_jugador_protegido(equipo_jugador: Team, ids_antes: Array) -> void:
+	print("\n=== El equipo del jugador no participa del mercado automatico ===")
+	var ids_despues := []
+	for j in equipo_jugador.jugadores:
+		ids_despues.append(j["id"])
+	if ids_antes == ids_despues:
+		print("OK: los 11 jugadores siguen siendo los mismos despues del cierre de temporada.")
+	else:
+		print("FALLA: el equipo del jugador cambio de jugadores sin que el jugara ninguna transferencia.")
 
 
 func _test_todas_las_divisiones_jugaron(piramide: Piramide) -> void:

@@ -92,7 +92,7 @@ func _cerrar_temporada() -> void:
 		if campeon != null:
 			_agregar_noticia("INTERNACIONAL (%s): campeón %s" % [copa_nombre.capitalize(), campeon.nombre])
 
-	var resultado_piramide := piramide.fin_de_temporada(rng)
+	var resultado_piramide := piramide.fin_de_temporada(rng, equipo_jugador)
 	for m in resultado_piramide["movimientos"]:
 		if m["equipo"] == equipo_jugador.nombre:
 			_agregar_noticia("%s: %s (división %d → división %d)" % [equipo_jugador.nombre, m["tipo"], m["de_division"], m["a_division"]])

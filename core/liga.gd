@@ -149,7 +149,7 @@ func avanzar_dias(dias: int = 7) -> void:
 ## que Piramide (Fase 7) pueda mover equipos de división entre una cosa y
 ## la otra (ascensos/descensos se deciden con la tabla vieja, pero el
 ## fixture nuevo tiene que armarse con la composición de equipos ya nueva).
-func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator) -> Array:
+func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo_protegido: Team = null) -> Array:
 	var orden_final := tabla_ordenada()
 	var informes_economia := []
 	for i in range(orden_final.size()):
@@ -161,7 +161,7 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator) -> Arr
 				informes_economia.append(informe)
 				break
 
-	var transferencias := Mercado.ejecutar_ventana(self, rng)
+	var transferencias := Mercado.ejecutar_ventana(self, rng, equipo_protegido)
 	for t in transferencias:
 		noticias.append("FICHAJES: jugador #%d (%s) pasa de %s a %s por $%.0f" % [t["jugador_id"], t["posicion"], t["de"], t["a"], t["valor"]])
 
@@ -205,8 +205,8 @@ func iniciar_temporada() -> void:
 
 ## Fin de temporada para una liga suelta (sin pirámide de divisiones): todo
 ## el procesamiento de una y el fixture nuevo, de un saque.
-func nueva_temporada(rng: RandomNumberGenerator) -> Array:
-	var resultado := procesar_economia_y_mercado_y_progresion(rng)
+func nueva_temporada(rng: RandomNumberGenerator, equipo_protegido: Team = null) -> Array:
+	var resultado := procesar_economia_y_mercado_y_progresion(rng, equipo_protegido)
 	iniciar_temporada()
 	return resultado
 

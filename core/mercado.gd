@@ -13,7 +13,11 @@ const UMBRAL_DIFERENCIA_MEDIA := 8.0
 const POSICIONES := ["ARQ", "DFC", "LAT", "MC", "MCO", "EXT", "DC"]
 
 
-static func ejecutar_ventana(liga: Liga, rng: RandomNumberGenerator) -> Array:
+## equipo_protegido: si se pasa (el club del jugador humano), nunca
+## participa de estos intercambios automáticos — el mercado de la IA es
+## entre clubes de la IA. Sin esto, el jugador se puede despertar con un
+## fichaje que nunca pidió ni vio venir.
+static func ejecutar_ventana(liga: Liga, rng: RandomNumberGenerator, equipo_protegido: Team = null) -> Array:
 	var transferencias := []
 	if liga.equipos.size() < 2:
 		return transferencias
@@ -26,6 +30,8 @@ static func ejecutar_ventana(liga: Liga, rng: RandomNumberGenerator) -> Array:
 			continue
 		var club_a: Team = liga.equipos[idx_a]
 		var club_b: Team = liga.equipos[idx_b]
+		if club_a == equipo_protegido or club_b == equipo_protegido:
+			continue
 
 		var posicion: String = POSICIONES[rng.randi() % POSICIONES.size()]
 		var indice_a := _indice_en_posicion(club_a, posicion, rng)
