@@ -50,7 +50,7 @@ static func generar(piramide: Piramide, rng: RandomNumberGenerator) -> Confedera
 			for j in range(CLUBES_POR_PAIS):
 				var fuerza: float = clamp(fuerza_base + rng.randf_range(-15.0, 15.0), 20.0, 95.0)
 				var club := ClubExterior.generar("%s FC %02d" % [nombre_pais, j + 1], nombre_pais, fuerza, siguiente_id)
-				siguiente_id += Team.FORMACION.size()
+				siguiente_id += Team.RANGO_IDS_RESERVADO
 				entry["clubes"].append(club)
 		c.paises.append(entry)
 	return c

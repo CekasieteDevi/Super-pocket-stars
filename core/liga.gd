@@ -9,6 +9,12 @@ var equipos: Array = []  # Team
 var tabla: Dictionary = {}  # nombre_equipo -> fila de stats
 var fixture: Array = []  # fechas -> [[idx_local, idx_visitante], ...]
 
+## Fase 9: feed de noticias (fichajes, cantera). Sin nombres de jugador
+## todavía (eso es contenido pendiente, Fix 10 del GDD) — se identifican
+## por posición e id. Lesiones/resultados destacados quedan pendientes de
+## conectar acá.
+var noticias: Array = []
+
 
 ## Sistema del círculo: fija el equipo 0 y rota el resto. Da n-1 fechas donde
 ## cada equipo juega una vez contra todos, sin repetir rival — la base que
@@ -66,7 +72,7 @@ func inicializar(nombres_equipos: Array, rng: RandomNumberGenerator, id_inicial:
 	var siguiente_id := id_inicial
 	for nombre in nombres_equipos:
 		var equipo := Team.generar(nombre, rng, siguiente_id)
-		siguiente_id += Team.FORMACION.size()
+		siguiente_id += Team.RANGO_IDS_RESERVADO
 		equipos.append(equipo)
 		tabla[nombre] = _fila_vacia()
 	fixture = generar_fixture_ida_vuelta(equipos.size())
@@ -156,14 +162,35 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator) -> Arr
 				break
 
 	var transferencias := Mercado.ejecutar_ventana(self, rng)
+	for t in transferencias:
+		noticias.append("FICHAJES: jugador #%d (%s) pasa de %s a %s por $%.0f" % [t["jugador_id"], t["posicion"], t["de"], t["a"], t["valor"]])
 
+	var reporte_cantera := []
 	for equipo in equipos:
 		_avanzar_contratos(equipo, rng)
 		for jugador in equipo.jugadores:
 			Progresion.aplicar_temporada(jugador, rng)
+		var reporte := _procesar_cantera(equipo, rng)
+		reporte_cantera.append(reporte)
+		for r in reporte["promovidos"]:
+			noticias.append("CANTERA: %s hace debutar a un canterano en %s" % [equipo.nombre, r["promovido"]["posicion"]])
+		if not reporte["liberados"].is_empty():
+			noticias.append("CANTERA: %s deja libres a %d juveniles que no debutaron a tiempo" % [equipo.nombre, reporte["liberados"].size()])
 		equipo.recalcular_capitan()
 
-	return [informes_economia, transferencias]
+	return [informes_economia, transferencias, reporte_cantera]
+
+
+## §17: envejece a los juveniles (crecen igual que cualquiera, §7.1),
+## libera a los que llegaron a los 20 sin debutar, genera la camada nueva
+## y deja que la IA promueva a los que ya superan claramente a su titular.
+func _procesar_cantera(equipo: Team, rng: RandomNumberGenerator) -> Dictionary:
+	for juvenil in equipo.cantera:
+		Progresion.aplicar_temporada(juvenil, rng)
+	var liberados := equipo.liberar_veteranos_de_cantera()
+	var nuevos := equipo.generar_camada(rng)
+	var promovidos := equipo.promover_automatico()
+	return {"equipo": equipo.nombre, "liberados": liberados, "nuevos": nuevos, "promovidos": promovidos}
 
 
 ## Resetea la tabla y arma el fixture para self.equipos tal como estén en

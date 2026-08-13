@@ -62,6 +62,7 @@ static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator) -
 	jugador["edad"] += 1
 	var mult_edad := _multiplicador_crecimiento(jugador["edad"])
 	var mult_tier: float = VELOCIDAD_POR_TIER.get(jugador["genetica_tier"], 1.0)
+	var mult_personalidad: float = Personalidad.factor_entrenamiento(jugador)
 
 	for attr in jugador["atributos"].keys():
 		var valor_actual: float = jugador["atributos"][attr]
@@ -70,7 +71,7 @@ static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator) -
 		if mult_edad >= 0.0:
 			var distancia: float = float(jugador["potencial"]) - valor_actual
 			if distancia > 0.0:
-				cambio = distancia * 0.12 * mult_edad * mult_tier
+				cambio = distancia * 0.12 * mult_edad * mult_tier * mult_personalidad
 		else:
 			var grupo := _grupo_de_atributo(attr)
 			var factor_declive: float = DECLIVE_POR_GRUPO.get(grupo, 0.5)

@@ -1,0 +1,16 @@
+{
+  "fuertes": [
+    "Creador", "Picaro", "Protagonista", "Enfocado",
+    "Ejemplar fisico", "Nunca rendirse", "Lider nato", "Clutch"
+  ],
+  "comunes": [
+    "Positivo", "Canchero", "Calmado", "Trabajador", "Profesional",
+    "Hincha del club", "Metodico", "Adaptable", "Sociable", "Madrugador"
+  ],
+  "negativas": [
+    "Egoista", "Pie preferido", "Vago", "Fiestero", "De cristal",
+    "Calenton", "Lloron", "Mercenario", "Fragil mental", "Bajon",
+    "Conflictivo", "Comodon", "Ansioso", "Impuntual", "Egolatra",
+    "Lento de arranque", "Se apaga", "Dependiente", "Rencoroso", "Mala pinta"
+  ]
+}

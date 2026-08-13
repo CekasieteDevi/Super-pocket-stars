@@ -37,7 +37,7 @@ static func generar(rng: RandomNumberGenerator) -> Piramide:
 			nombres.append("D%d Club %02d" % [d + 1, i + 1])
 		var liga := Liga.new()
 		liga.inicializar(nombres, rng, siguiente_id)
-		siguiente_id += EQUIPOS_POR_DIVISION * Team.FORMACION.size()
+		siguiente_id += EQUIPOS_POR_DIVISION * Team.RANGO_IDS_RESERVADO
 		p.divisiones.append(liga)
 	return p
 

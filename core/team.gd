@@ -8,6 +8,12 @@ extends RefCounted
 
 const FORMACION := ["ARQ", "DFC", "DFC", "LAT", "LAT", "MC", "MC", "MCO", "EXT", "EXT", "DC"]
 
+## Cuántos ids reserva cada equipo (Liga/Piramide/Confederacion espacian
+## id_inicial por este número, no por FORMACION.size()): los 11 titulares
+## usan los primeros 11, el resto queda para la cantera (§17) a lo largo de
+## muchas temporadas sin arriesgar colisión con el equipo vecino.
+const RANGO_IDS_RESERVADO := 300
+
 ## §3: cuánto recupera la fatiga acumulada por día de descanso entre fechas.
 const RECUPERACION_FATIGA_POR_DIA := 0.1
 ## §3: velocidad de la deriva natural del ánimo hacia 50 (por semana).
@@ -37,6 +43,10 @@ var reputacion: float = 50.0  # 0-100, afecta entradas/sponsors (§10.5)
 var quebrado: bool = false
 var scouts: Array = []  # [{"nivel":int}], §9.4 — empieza con 1 al mínimo (§15 decisión 9)
 
+## Fase 9: cantera (§17).
+var cantera: Array = []  # dicts de PlayerGenerator.generate, juveniles sin promover
+var siguiente_id_cantera: int = 0
+
 
 ## id_inicial debe ser único por equipo dentro de una Liga: los ids de
 ## jugador no son únicos por sí solos (son 0..10 salvo que el llamador pase
@@ -56,13 +66,15 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 		t.fatiga_acumulada[jugador["id"]] = 1.0
 		t.animo[jugador["id"]] = 50.0
 		var valor := ValorJugador.calcular(jugador, 50.0, 3)
-		t.sueldos[jugador["id"]] = Economia.sueldo_sugerido(valor)
+		t.sueldos[jugador["id"]] = Economia.sueldo_sugerido(valor) * Personalidad.factor_sueldo(jugador)
 		t.contratos[jugador["id"]] = rng.randi_range(1, 5)
-	t.armonia = rng.randf_range(-3.0, 5.0)
+		t.armonia += Personalidad.bonus_armonia(jugador)
+	t.armonia += rng.randf_range(-3.0, 5.0)
 	t.reputacion = clamp(t.media_equipo(), 20.0, 80.0)
 	t.scouts = [{"nivel": 1}]
 	for categoria in Economia.PRESUPUESTO_PORCENTAJES:
 		t.caja[categoria] = 0.0
+	t.siguiente_id_cantera = id_inicial + FORMACION.size()
 	t.recalcular_capitan()
 	return t
 
@@ -171,7 +183,8 @@ func actualizar_post_partido(goles_propios: int, goles_rival: int, goleadores_id
 func avanzar_dias(dias: int) -> Array:
 	for j in jugadores:
 		var id: int = j["id"]
-		fatiga_acumulada[id] = min(1.0, fatiga_acumulada.get(id, 1.0) + RECUPERACION_FATIGA_POR_DIA * dias)
+		var recuperacion: float = RECUPERACION_FATIGA_POR_DIA * Personalidad.factor_recuperacion_fatiga(j)
+		fatiga_acumulada[id] = min(1.0, fatiga_acumulada.get(id, 1.0) + recuperacion * dias)
 		var actual: float = animo.get(id, 50.0)
 		var deriva: float = clamp(50.0 - actual, -DERIVA_ANIMO_POR_SEMANA, DERIVA_ANIMO_POR_SEMANA) * (dias / 7.0)
 		animo[id] = clamp(actual + deriva, 0.0, 100.0)
@@ -184,3 +197,108 @@ func avanzar_dias(dias: int) -> Array:
 	for id in recuperados:
 		lesiones.erase(id)
 	return recuperados
+
+
+## §17: camada anual de juveniles. 15 años, media baja (se generan con las
+## curvas normales y se escalan como si todavía no hubieran entrenado nada
+## — la genética real que van a alcanzar queda oculta en "potencial" igual
+## que cualquier jugador). "cantidad" es fija en 3 hasta que exista el
+## nivel de la mejora de Juveniles (§9.5, todavía sin sistema de mejoras).
+func generar_camada(rng: RandomNumberGenerator, cantidad: int = 3) -> Array:
+	var nuevos := []
+	for i in range(cantidad):
+		var jugador := PlayerGenerator.generate(siguiente_id_cantera, rng)
+		siguiente_id_cantera += 1
+		jugador["edad"] = 15
+
+		var factor_juventud: float = rng.randf_range(0.5, 0.7)
+		for attr in jugador["atributos"]:
+			jugador["atributos"][attr] = int(round(float(jugador["atributos"][attr]) * factor_juventud))
+		jugador["media"] = PlayerGenerator.compute_media(jugador["atributos"], jugador["posicion"])
+		var mejor := PlayerGenerator.best_position(jugador["atributos"])
+		jugador["mejor_posicion"] = mejor["posicion"]
+		jugador["media_mejor_posicion"] = mejor["media"]
+
+		cantera.append(jugador)
+		nuevos.append(jugador)
+	return nuevos
+
+
+## §17: si no se promueve antes de los 20, se va libre. Se llama en el
+## envejecimiento de fin de temporada.
+func liberar_veteranos_de_cantera() -> Array:
+	var liberados := []
+	var conservados := []
+	for j in cantera:
+		if j["edad"] >= 20:
+			liberados.append(j)
+		else:
+			conservados.append(j)
+	cantera = conservados
+	return liberados
+
+
+## Saca al juvenil de la cantera y lo pone titular, reemplazando al de
+## menor media en su posición (o al de menor media del plantel si nadie
+## juega en esa posición). El que sale queda libre — sin plantel de 25
+## todavía (§14) no hay banco a donde mandarlo, simplificación documentada
+## igual que el resto del mercado de esta fase.
+func promover_juvenil(jugador_id: int) -> Dictionary:
+	var idx_cantera := -1
+	for i in range(cantera.size()):
+		if cantera[i]["id"] == jugador_id:
+			idx_cantera = i
+			break
+	if idx_cantera < 0:
+		return {}
+
+	var juvenil: Dictionary = cantera[idx_cantera]
+
+	var idx_saliente := -1
+	for i in range(jugadores.size()):
+		if jugadores[i]["posicion"] == juvenil["posicion"]:
+			if idx_saliente == -1 or jugadores[i]["media"] < jugadores[idx_saliente]["media"]:
+				idx_saliente = i
+	if idx_saliente == -1:
+		idx_saliente = 0
+		for i in range(1, jugadores.size()):
+			if jugadores[i]["media"] < jugadores[idx_saliente]["media"]:
+				idx_saliente = i
+
+	var saliente: Dictionary = jugadores[idx_saliente]
+	juvenil["es_canterano"] = true
+	jugadores[idx_saliente] = juvenil
+	cantera.remove_at(idx_cantera)
+
+	fatiga_acumulada[juvenil["id"]] = 1.0
+	animo[juvenil["id"]] = 50.0
+	var valor := ValorJugador.calcular(juvenil, 50.0, 3)
+	sueldos[juvenil["id"]] = Economia.sueldo_sugerido(valor) * Personalidad.factor_sueldo(juvenil)
+	contratos[juvenil["id"]] = 3
+
+	sueldos.erase(saliente["id"])
+	contratos.erase(saliente["id"])
+	fatiga_acumulada.erase(saliente["id"])
+	animo.erase(saliente["id"])
+	lesiones.erase(saliente["id"])
+
+	recalcular_capitan()
+	return {"promovido": juvenil, "saliente": saliente}
+
+
+## Heurística simple de IA: promueve al juvenil que más mejoraría el
+## plantel si supera claramente al titular más débil de su posición.
+## Sin esto, la cantera no haría nada durante una temporada simulada sin
+## intervención humana.
+func promover_automatico(umbral_media: float = 3.0) -> Array:
+	var promovidos := []
+	for juvenil in cantera.duplicate():
+		var peor_en_posicion := -1.0
+		for j in jugadores:
+			if j["posicion"] == juvenil["posicion"] and (peor_en_posicion < 0.0 or j["media"] < peor_en_posicion):
+				peor_en_posicion = j["media"]
+		if peor_en_posicion >= 0.0 and juvenil["media"] >= peor_en_posicion + umbral_media:
+			var resultado := promover_juvenil(juvenil["id"])
+			if not resultado.is_empty():
+				promovidos.append(resultado)
+	return promovidos

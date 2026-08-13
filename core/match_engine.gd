@@ -33,14 +33,18 @@ static func _elegir(jugadores: Array, rng: RandomNumberGenerator) -> Dictionary:
 	return jugadores[rng.randi() % jugadores.size()]
 
 
-## §8.5: bloque B (equipo/racha/armonía/capitán) y bloque C (local). Los
-## bloques A y D quedan en 0 hasta que existan sus datos de origen.
-static func _bloques_equipo(equipo: Team, jugador_id: int) -> Dictionary:
+## §8.5: bloque B (equipo/racha/armonía/capitán), bloque C (local) y
+## bloque D (personalidad de ESE jugador en ESE duelo, §6 — Ansioso de
+## visitante, Egoísta priorizando su propio tiro). El bloque A (forma,
+## ánimo de partido a partido) sigue sin sistema de origen.
+static func _bloques_equipo(equipo: Team, jugador: Dictionary, atributo: String) -> Dictionary:
+	var jugador_id: int = jugador["id"]
 	var bloque_b: float = equipo.armonia + clamp(float(equipo.racha), 0.0, 10.0)
 	if jugador_id == equipo.capitan_id:
 		bloque_b += 2.0
 	var bloque_c := 5.0 if equipo.local else 0.0
-	return {"B": bloque_b, "C": bloque_c}
+	var bloque_d := Personalidad.modificador_partido(jugador, equipo.local, atributo)
+	return {"B": bloque_b, "C": bloque_c, "D": bloque_d}
 
 
 ## §2.3: tira riesgo de lesión para un jugador que acaba de participar en un
@@ -64,8 +68,8 @@ static func _duelo(atacante: Dictionary, atacante_attr: String, equipo_atacante:
 		equipo_defensor.resistencia_pct(defensor["id"]))
 	var resultado := Duel.resolver(
 		ata_eff, def_eff,
-		_bloques_equipo(equipo_atacante, atacante["id"]),
-		_bloques_equipo(equipo_defensor, defensor["id"]))
+		_bloques_equipo(equipo_atacante, atacante, atacante_attr),
+		_bloques_equipo(equipo_defensor, defensor, defensor_attr))
 	equipo_atacante.desgastar(atacante["id"], atacante["atributos"]["energia"])
 	equipo_defensor.desgastar(defensor["id"], defensor["atributos"]["energia"])
 	_chequear_lesion(atacante, equipo_atacante, rng)
@@ -228,8 +232,8 @@ static func _duelo_tiro(atacante: Dictionary, tiro_valor: float, equipo_atacante
 	var def_eff := Duel.atributo_efectivo(arquero_valor, "tecnico", equipo_defensor.resistencia_pct(arquero["id"]))
 	var resultado := Duel.resolver(
 		ata_eff, def_eff,
-		_bloques_equipo(equipo_atacante, atacante["id"]),
-		_bloques_equipo(equipo_defensor, arquero["id"]))
+		_bloques_equipo(equipo_atacante, atacante, "tiro"),
+		_bloques_equipo(equipo_defensor, arquero, "reflejos"))
 	equipo_atacante.desgastar(atacante["id"], atacante["atributos"]["energia"])
 	equipo_defensor.desgastar(arquero["id"], arquero["atributos"]["energia"])
 	_chequear_lesion(atacante, equipo_atacante, rng)

@@ -68,6 +68,8 @@ static func generate(id: int, rng: RandomNumberGenerator, forced_position: Strin
 		# Distribución triangular (promedio de dos tiradas) para que los
 		# extremos (indestructible / de cristal) sean menos comunes.
 		"propension_lesion": int(round((rng.randf() + rng.randf()) / 2.0 * 100.0)),
+		# §6: 1 positiva + 1 negativa, o ninguna de las dos — nunca una sola.
+		"personalidades": Personalidad.generar(rng),
 	}
 
 
