@@ -156,6 +156,14 @@ func _construir_panel_partido(padre: Control) -> void:
 	boton_ver_animado.pressed.connect(_mostrar_partido_animado)
 	panel.add_child(boton_ver_animado)
 
+	var separador := HSeparator.new()
+	panel.add_child(separador)
+
+	var boton_simular_temporada := Button.new()
+	boton_simular_temporada.text = "[debug] Simular resto de la temporada"
+	boton_simular_temporada.pressed.connect(_on_simular_temporada)
+	panel.add_child(boton_simular_temporada)
+
 
 ## Fase 8: reproduce los eventos del ultimo partido jugado con una pelota
 ## placeholder (sin pixel art ni posiciones por jugador todavia).
@@ -338,6 +346,33 @@ func _on_jugar_fecha() -> void:
 		]
 	if GameState.temporada_actual != temporada_antes:
 		label_resultado.text += "\n¡Termino la temporada! Division actual: %d." % (GameState.division_jugador + 1)
+
+	var texto_log := ""
+	for entry in GameState.ultimo_log:
+		if entry.find("GOL") != -1:
+			texto_log += entry + "\n"
+	lista_log.text = texto_log
+	boton_ver_animado.disabled = GameState.ultimos_eventos.is_empty()
+
+	_refrescar_tabla()
+	_refrescar_plantel()
+
+
+## [debug] Simula todas las fechas que queden de la temporada de una,
+## para no tener que clickear "jugar fecha" muchas veces al probar.
+func _on_simular_temporada() -> void:
+	if not GameState.hay_fecha_pendiente():
+		label_resultado.text = "Temporada terminada."
+		return
+
+	var temporada_antes := GameState.temporada_actual
+	GameState.simular_temporada_completa()
+
+	label_resultado.text = "[debug] Temporada simulada entera. Ahora en temporada %d, division %d." % [
+		GameState.temporada_actual, GameState.division_jugador + 1
+	]
+	if GameState.temporada_actual == temporada_antes:
+		label_resultado.text = "[debug] Se jugaron las fechas que quedaban."
 
 	var texto_log := ""
 	for entry in GameState.ultimo_log:

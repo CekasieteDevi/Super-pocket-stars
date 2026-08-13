@@ -120,6 +120,20 @@ func _cerrar_temporada() -> void:
 	fecha_actual = 0
 
 
+## Debug: juega todas las fechas que queden de la temporada actual de una
+## sola vez (incluye el cierre). Pensado para probar rápido sin clickear
+## "jugar fecha" 38 veces — no es parte del flujo normal del juego.
+##
+## OJO: hay_fecha_pendiente() sola NO alcanza como condición de corte acá
+## — fecha_actual vuelve a 0 apenas cierra la temporada, así que
+## "while hay_fecha_pendiente()" nunca daría false y simularía temporadas
+## para siempre. Hay que cortar por el número de temporada, no por fecha.
+func simular_temporada_completa() -> void:
+	var temporada_inicial := temporada_actual
+	while temporada_actual == temporada_inicial and hay_fecha_pendiente():
+		jugar_siguiente_fecha()
+
+
 func _agregar_noticia(texto: String) -> void:
 	noticias.push_front(texto)
 	if noticias.size() > MAX_NOTICIAS_GUARDADAS:
