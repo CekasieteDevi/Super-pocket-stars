@@ -29,18 +29,38 @@ var fatiga_acumulada: Dictionary = {}  # jugador_id -> 0..1, 1 = totalmente desc
 var animo: Dictionary = {}  # jugador_id -> 0..100 (§3)
 var lesiones: Dictionary = {}  # jugador_id -> {"tipo":String, "dias_restantes":int}
 
+## Fase 6: economía del club (§9.1).
+var caja: Dictionary = {}  # "fichajes"/"contratos"/"mejoras"/"mantenimiento" -> moneda
+var sueldos: Dictionary = {}  # jugador_id -> sueldo anual
+var contratos: Dictionary = {}  # jugador_id -> años restantes
+var reputacion: float = 50.0  # 0-100, afecta entradas/sponsors (§10.5)
+var quebrado: bool = false
+var scouts: Array = []  # [{"nivel":int}], §9.4 — empieza con 1 al mínimo (§15 decisión 9)
 
-static func generar(nombre: String, rng: RandomNumberGenerator) -> Team:
+
+## id_inicial debe ser único por equipo dentro de una Liga: los ids de
+## jugador no son únicos por sí solos (son 0..10 salvo que el llamador pase
+## un offset), y el mercado (Fase 6) transfiere jugadores entre clubes usando
+## el id como clave de sueldos/contratos/ánimo — si dos equipos reusan el
+## mismo rango de ids, un fichaje puede pisar el registro de otro jugador.
+static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int = 0) -> Team:
 	var t := Team.new()
 	t.nombre = nombre
-	var next_id := 0
+	var next_id := id_inicial
 	for pos in FORMACION:
 		var jugador := PlayerGenerator.generate(next_id, rng, pos)
 		next_id += 1
 		t.jugadores.append(jugador)
 		t.fatiga_acumulada[jugador["id"]] = 1.0
 		t.animo[jugador["id"]] = 50.0
+		var valor := ValorJugador.calcular(jugador, 50.0, 3)
+		t.sueldos[jugador["id"]] = Economia.sueldo_sugerido(valor)
+		t.contratos[jugador["id"]] = rng.randi_range(1, 5)
 	t.armonia = rng.randf_range(-3.0, 5.0)
+	t.reputacion = clamp(t.media_equipo(), 20.0, 80.0)
+	t.scouts = [{"nivel": 1}]
+	for categoria in Economia.PRESUPUESTO_PORCENTAJES:
+		t.caja[categoria] = 0.0
 	t.recalcular_capitan()
 	return t
 

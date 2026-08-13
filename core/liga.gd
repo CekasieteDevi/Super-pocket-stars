@@ -51,8 +51,10 @@ static func generar_fixture_ida_vuelta(n: int) -> Array:
 func inicializar(nombres_equipos: Array, rng: RandomNumberGenerator) -> void:
 	equipos.clear()
 	tabla.clear()
+	var siguiente_id := 0
 	for nombre in nombres_equipos:
-		var equipo := Team.generar(nombre, rng)
+		var equipo := Team.generar(nombre, rng, siguiente_id)
+		siguiente_id += Team.FORMACION.size()
 		equipos.append(equipo)
 		tabla[nombre] = _fila_vacia()
 	fixture = generar_fixture_ida_vuelta(equipos.size())
@@ -118,11 +120,26 @@ func avanzar_dias(dias: int = 7) -> void:
 		equipo.avanzar_dias(dias)
 
 
-## Fin de temporada (GDD §7.1): envejece y entrena a todos los jugadores,
-## y arma el fixture y la tabla para la temporada siguiente con el mismo
-## plantel de 20 equipos.
-func nueva_temporada(rng: RandomNumberGenerator) -> void:
+## Fin de temporada: procesa la economía de cada club con la tabla recién
+## jugada (§9.1), corre una ventana de mercado (§9.3), envejece/entrena a
+## todos los jugadores (§7.1) y arma el fixture y la tabla para la
+## temporada siguiente con el mismo plantel de 20 equipos.
+func nueva_temporada(rng: RandomNumberGenerator) -> Array:
+	var orden_final := tabla_ordenada()
+	var informes_economia := []
+	for i in range(orden_final.size()):
+		var nombre: String = orden_final[i]
+		for equipo in equipos:
+			if equipo.nombre == nombre:
+				var informe := Economia.procesar_temporada(equipo, i + 1, orden_final.size())
+				informe["equipo"] = nombre
+				informes_economia.append(informe)
+				break
+
+	var transferencias := Mercado.ejecutar_ventana(self, rng)
+
 	for equipo in equipos:
+		_avanzar_contratos(equipo, rng)
 		for jugador in equipo.jugadores:
 			Progresion.aplicar_temporada(jugador, rng)
 		equipo.recalcular_capitan()
@@ -131,6 +148,19 @@ func nueva_temporada(rng: RandomNumberGenerator) -> void:
 	for equipo in equipos:
 		tabla[equipo.nombre] = _fila_vacia()
 	fixture = generar_fixture_ida_vuelta(equipos.size())
+
+	return [informes_economia, transferencias]
+
+
+## §9.3: si el contrato llega a 0 debería salir gratis al mercado de libres,
+## pero sin plantel de 25 todavía (fase 14) perder un titular deja al
+## equipo corto de jugadores — así que por ahora se renueva solo con un
+## contrato nuevo. Simplificación documentada, no la regla final del GDD.
+func _avanzar_contratos(equipo: Team, rng: RandomNumberGenerator) -> void:
+	for id in equipo.contratos.keys():
+		equipo.contratos[id] -= 1
+		if equipo.contratos[id] <= 0:
+			equipo.contratos[id] = rng.randi_range(2, 4)
 
 
 func _actualizar_tabla(local: String, visitante: String, gl: int, gv: int) -> void:
