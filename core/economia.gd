@@ -65,6 +65,7 @@ static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos:
 
 	return {
 		"ingresos": ingresos, "egresos": egresos, "neto": neto,
+		"sueldos": total_sueldos, "mantenimiento": MANTENIMIENTO_FIJO,
 		"caja_total": caja_total, "valor_plantel": valor_plantel, "quebrado": equipo.quebrado,
 	}
 

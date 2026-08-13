@@ -198,6 +198,22 @@ func _refrescar_economia() -> void:
 	var equipo := GameState.equipo_jugador
 	var texto := "Reputacion: %.1f / 100%s\n\n" % [equipo.reputacion, "  (EN QUIEBRA)" if equipo.quebrado else ""]
 
+	var sueldos_totales := 0.0
+	for id in equipo.sueldos:
+		sueldos_totales += equipo.sueldos[id]
+
+	var informe: Dictionary = GameState.ultimo_informe_economico
+	if informe.is_empty():
+		texto += "Ultimo balance: todavia no cerraste una temporada.\n"
+		texto += "La plata entra recien cuando termina la fecha 38 (entradas + sponsor + premio segun tabla).\n\n"
+	else:
+		texto += "Ultimo balance de temporada:\n"
+		texto += "  Ingresos            $%.0f\n" % informe["ingresos"]
+		texto += "  Egresos             $%.0f\n" % informe["egresos"]
+		texto += "    de los cuales sueldos:      $%.0f\n" % informe["sueldos"]
+		texto += "    de los cuales mantenimiento: $%.0f\n" % informe["mantenimiento"]
+		texto += "  Neto                $%.0f%s\n\n" % [informe["neto"], "  (en rojo)" if informe["neto"] < 0 else ""]
+
 	texto += "Caja por presupuesto:\n"
 	var total := 0.0
 	for categoria in equipo.caja:
@@ -205,10 +221,7 @@ func _refrescar_economia() -> void:
 		total += equipo.caja[categoria]
 	texto += "  %-14s $%.0f\n\n" % ["Total", total]
 
-	var sueldos_totales := 0.0
-	for id in equipo.sueldos:
-		sueldos_totales += equipo.sueldos[id]
-	texto += "Masa salarial anual: $%.0f\n" % sueldos_totales
+	texto += "Masa salarial actual del plantel: $%.0f (puede diferir del ultimo balance si hubo fichajes despues)\n" % sueldos_totales
 
 	var valor_plantel := 0.0
 	for j in equipo.jugadores:

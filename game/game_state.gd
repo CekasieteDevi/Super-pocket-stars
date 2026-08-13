@@ -29,6 +29,7 @@ var ultimo_resultado: Dictionary = {}
 var ultimo_log: Array = []
 var ultimos_eventos: Array = []
 var noticias: Array = []
+var ultimo_informe_economico: Dictionary = {}  # ingresos/egresos/neto del ultimo cierre de temporada
 
 
 func _ready() -> void:
@@ -95,6 +96,15 @@ func _cerrar_temporada() -> void:
 	for m in resultado_piramide["movimientos"]:
 		if m["equipo"] == equipo_jugador.nombre:
 			_agregar_noticia("%s: %s (división %d → división %d)" % [equipo_jugador.nombre, m["tipo"], m["de_division"], m["a_division"]])
+
+	# El informe economico de CADA division se calculo antes de mover a
+	# nadie, con la composicion vieja — division_jugador todavia apunta a
+	# la division donde jugo esta temporada.
+	var informes_economia_division: Array = resultado_piramide["informes_por_division"][division_jugador][0]
+	for informe in informes_economia_division:
+		if informe["equipo"] == equipo_jugador.nombre:
+			ultimo_informe_economico = informe
+			break
 
 	for liga in piramide.divisiones:
 		for n in liga.noticias:
