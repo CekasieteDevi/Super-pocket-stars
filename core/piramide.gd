@@ -31,10 +31,11 @@ var divisiones: Array = []  # Liga, indice 0 = division 1 (mejor) .. 9 = divisio
 static func generar(rng: RandomNumberGenerator) -> Piramide:
 	var p := Piramide.new()
 	var siguiente_id := 0
+	var nombres_usados := {}  # compartido entre las 10 divisiones: ningún club repite nombre
 	for d in range(N_DIVISIONES):
 		var nombres := []
 		for i in range(EQUIPOS_POR_DIVISION):
-			nombres.append("D%d Club %02d" % [d + 1, i + 1])
+			nombres.append(GeneradorNombres.nombre_club(rng, nombres_usados))
 		var liga := Liga.new()
 		liga.inicializar(nombres, rng, siguiente_id)
 		siguiente_id += EQUIPOS_POR_DIVISION * Team.RANGO_IDS_RESERVADO

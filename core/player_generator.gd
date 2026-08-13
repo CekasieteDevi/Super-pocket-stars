@@ -53,9 +53,12 @@ static func generate(id: int, rng: RandomNumberGenerator, forced_position: Strin
 
 	var media_natural := compute_media(atributos, position)
 	var mejor := best_position(atributos)
+	var identidad := GeneradorNombres.nombre_jugador(rng)
 
 	return {
 		"id": id,
+		"nombre": identidad["nombre"],
+		"apellido": identidad["apellido"],
 		"posicion": position,
 		"genetica_tier": tier,
 		"potencial": potencial,

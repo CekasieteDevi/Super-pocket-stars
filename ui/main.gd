@@ -78,6 +78,11 @@ func _ready() -> void:
 	_mostrar_plantel()
 
 
+## Fix 10: nombre y apellido del jugador, para las listas de la UI.
+func _nombre_jugador(j: Dictionary) -> String:
+	return "%s %s" % [j.get("nombre", "?"), j.get("apellido", "")]
+
+
 func _ocultar_todos() -> void:
 	for panel in paneles.values():
 		panel.visible = false
@@ -128,8 +133,8 @@ func _refrescar_plantel() -> void:
 	for j in equipo.jugadores:
 		var capitan := "  (C)" if j["id"] == equipo.capitan_id else ""
 		var canterano := "  [cantera]" if j.get("es_canterano", false) else ""
-		texto += "%-4s  media %5.1f   potencial %3d   genetica %s%s%s\n" % [
-			j["posicion"], j["media"], j["potencial"], j["genetica_tier"], capitan, canterano
+		texto += "%-4s  %-22s  media %5.1f   potencial %3d   genetica %s%s%s\n" % [
+			j["posicion"], _nombre_jugador(j), j["media"], j["potencial"], j["genetica_tier"], capitan, canterano
 		]
 	lista_plantel.text = texto
 
@@ -139,7 +144,7 @@ func _refrescar_plantel() -> void:
 		var fila := HBoxContainer.new()
 		var canterano := "  [cantera]" if j.get("es_canterano", false) else ""
 		var label := Label.new()
-		label.text = "%-4s  media %5.1f   potencial %3d%s" % [j["posicion"], j["media"], j["potencial"], canterano]
+		label.text = "%-4s  %-22s  media %5.1f   potencial %3d%s" % [j["posicion"], _nombre_jugador(j), j["media"], j["potencial"], canterano]
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		fila.add_child(label)
 
@@ -384,7 +389,7 @@ func _refrescar_mercado() -> void:
 		var fila := HBoxContainer.new()
 		var valor := ValorJugador.calcular(jugador, rival.animo.get(jugador["id"], 50.0), rival.contratos.get(jugador["id"], 1))
 		var label := Label.new()
-		label.text = "%-14s  media %5.1f  potencial %3d  ~%s" % [rival.nombre, jugador["media"], jugador["potencial"], Economia.formato_dinero(valor)]
+		label.text = "%-22s  %-14s  media %5.1f  potencial %3d  ~%s" % [_nombre_jugador(jugador), rival.nombre, jugador["media"], jugador["potencial"], Economia.formato_dinero(valor)]
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		fila.add_child(label)
 
@@ -453,7 +458,7 @@ func _refrescar_libres() -> void:
 	for agente in pool:
 		var fila := HBoxContainer.new()
 		var label := Label.new()
-		label.text = "%-4s  media %5.1f  potencial %3d  edad %d" % [agente["posicion"], agente["media"], agente["potencial"], agente["edad"]]
+		label.text = "%-4s  %-22s  media %5.1f  potencial %3d  edad %d" % [agente["posicion"], _nombre_jugador(agente), agente["media"], agente["potencial"], agente["edad"]]
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		fila.add_child(label)
 
@@ -577,7 +582,7 @@ func _refrescar_prestamos() -> void:
 		var fila := HBoxContainer.new()
 		var origen_txt := "cantera" if entrada["desde_cantera"] else "banco"
 		var label := Label.new()
-		label.text = "%-4s  media %5.1f  potencial %3d  (%s)" % [j["posicion"], j["media"], j["potencial"], origen_txt]
+		label.text = "%-4s  %-22s  media %5.1f  potencial %3d  (%s)" % [j["posicion"], _nombre_jugador(j), j["media"], j["potencial"], origen_txt]
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		fila.add_child(label)
 
@@ -608,7 +613,7 @@ func _refrescar_prestamos() -> void:
 		var fila := HBoxContainer.new()
 		var origen_txt := "cantera" if candidato["desde_cantera"] else "banco"
 		var label := Label.new()
-		label.text = "%-14s  %-4s  media %5.1f  potencial %3d  (%s)" % [rival.nombre, j["posicion"], j["media"], j["potencial"], origen_txt]
+		label.text = "%-14s  %-4s  %-22s  media %5.1f  potencial %3d  (%s)" % [rival.nombre, j["posicion"], _nombre_jugador(j), j["media"], j["potencial"], origen_txt]
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		fila.add_child(label)
 
@@ -777,8 +782,8 @@ func _refrescar_cantera() -> void:
 		var potencial_min: int = clamp(juvenil["potencial"] - margen, 0, 99)
 		var potencial_max: int = clamp(juvenil["potencial"] + margen, 0, 99)
 		var label := Label.new()
-		label.text = "%-4s  edad %d  media %.1f  potencial %d-%d (scout nivel %d)" % [
-			juvenil["posicion"], juvenil["edad"], juvenil["media"], potencial_min, potencial_max, nivel_scout
+		label.text = "%-4s  %-22s  edad %d  media %.1f  potencial %d-%d (scout nivel %d)" % [
+			juvenil["posicion"], _nombre_jugador(juvenil), juvenil["edad"], juvenil["media"], potencial_min, potencial_max, nivel_scout
 		]
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		fila.add_child(label)

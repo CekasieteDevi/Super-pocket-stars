@@ -1,0 +1,37 @@
+{
+  "tipos_club": [
+    "Club Atlético", "Deportivo", "Sportivo", "Atlético", "Racing",
+    "Unión", "Estudiantes", "Juventud", "Porvenir", "Social", "Rampla"
+  ],
+  "nombres_club": [
+    "Alborada", "Amanecer", "Cardal", "Espinillo", "Ceibal", "Talar",
+    "Ombú", "Rosedal", "Miramar", "Bellavista", "Altamira", "Los Cerros",
+    "Costa Azul", "San Rafael", "Loma Verde", "Valle Hondo", "Piedra Alta",
+    "Río Claro", "Puente Alto", "Estrella del Sur", "Nueva Esperanza",
+    "Villa Real", "Las Colinas", "Fortín", "El Faro", "Aurora",
+    "Sol Naciente", "Media Luna", "Tres Cruces", "El Pinar", "Robledo",
+    "Santa Lucía", "Arroyo Seco", "Las Piedras", "Monte Alto", "Del Este",
+    "La Blanqueada", "Punta Norte", "Sauce Viejo", "Barrio Nuevo"
+  ],
+  "nombres_jugador": [
+    "Diego", "Mateo", "Nicolás", "Santiago", "Facundo", "Braian", "Agustín",
+    "Franco", "Bruno", "Ignacio", "Lucas", "Federico", "Joaquín", "Emiliano",
+    "Maximiliano", "Rodrigo", "Sebastián", "Martín", "Gonzalo", "Cristian",
+    "Damián", "Fabián", "Gastón", "Hernán", "Ivo", "Julián", "Leonardo",
+    "Marcelo", "Nahuel", "Octavio", "Pablo", "Ramiro", "Tomás", "Valentín",
+    "Walter", "Andrés", "Bautista", "Ciro", "Darío", "Ezequiel", "Guido",
+    "Héctor", "Iván", "Jonathan", "Kevin", "Lautaro", "Maximino", "Nelson",
+    "Osvaldo", "Patricio", "Rafael"
+  ],
+  "apellidos_jugador": [
+    "Rodríguez", "González", "Fernández", "Pérez", "Sánchez", "Romero",
+    "Sosa", "Torres", "Flores", "Acosta", "Silva", "Núñez", "Rojas",
+    "Molina", "Ortiz", "Ramos", "Medina", "Herrera", "Aguirre", "Vega",
+    "Cabrera", "Ibarra", "Godoy", "Bravo", "Correa", "Lima", "Delgado",
+    "Cardozo", "Machado", "Pintos", "Techera", "Methol", "Olivera",
+    "Batista", "Coitiño", "Larrosa", "Píriz", "Umpiérrez", "Bergara",
+    "Curbelo", "Denis", "Etcheverry", "Ferreira", "Giménez", "Hornos",
+    "Iglesias", "Jara", "Leites", "Méndez", "Navarro", "Ocampo", "Paredes",
+    "Quintana", "Rivas", "Saravia", "Uriarte", "Varela", "Zunino"
+  ]
+}
