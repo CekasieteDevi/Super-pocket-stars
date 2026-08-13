@@ -5,8 +5,12 @@ extends SceneTree
 ## la IA). Correr con: godot --headless --script tests/test_mercado_oferta.gd
 ##
 ## Qué verificamos:
-##   1. Oferta exitosa: el jugador entra, el más débil sale, la caja de
-##      Fichajes se mueve la diferencia exacta en los dos clubes.
+##   1. Oferta exitosa: es un intercambio de verdad (no una compra que dejaría
+##      a alguien duplicado en dos planteles). El objetivo entra como titular
+##      directo del comprador. El titular que sale se va ENTERO al club
+##      vendedor: el vendedor promueve a su propio suplente de esa posición
+##      al puesto titular vacante, y el que llegó a cambio ocupa ese lugar
+##      del banco. Nadie queda registrado en los dos clubes a la vez.
 ##   2. Rechazo si el objetivo no es mejor que tu titular actual.
 ##   3. Rechazo si no alcanza el presupuesto de Fichajes.
 
@@ -51,15 +55,27 @@ func _test_oferta_exitosa(rng: RandomNumberGenerator) -> void:
 
 	var resultado := Mercado.ofertar_por_jugador(comprador, vendedor, jugador_objetivo_id)
 
+	var comprador_banco_ids := []
+	for j in comprador.banco:
+		comprador_banco_ids.append(j["id"])
+	var vendedor_banco_ids := []
+	for j in vendedor.banco:
+		vendedor_banco_ids.append(j["id"])
+	var vendedor_titulares_ids := []
+	for j in vendedor.jugadores:
+		vendedor_titulares_ids.append(j["id"])
+
 	var ok: bool = resultado["exito"]
-	ok = ok and comprador.jugadores[idx_saliente]["id"] == jugador_objetivo_id
-	ok = ok and vendedor.jugadores[idx_objetivo]["id"] == jugador_saliente_id
+	ok = ok and comprador.jugadores[idx_saliente]["id"] == jugador_objetivo_id  # entra directo a titular
+	ok = ok and not comprador_banco_ids.has(jugador_saliente_id)  # NO se banquea en su propio club, se fue entero
+	ok = ok and not vendedor_titulares_ids.has(jugador_objetivo_id) and not vendedor_banco_ids.has(jugador_objetivo_id)  # el vendedor ya no lo tiene en ningun lado
+	ok = ok and vendedor_banco_ids.has(jugador_saliente_id)  # el que llego a cambio ocupa el banco del vendedor
 	ok = ok and vendedor.caja["fichajes"] > caja_vendedor_antes
-	ok = ok and comprador.sueldos.has(jugador_objetivo_id) and not comprador.sueldos.has(jugador_saliente_id)
+	ok = ok and comprador.sueldos.has(jugador_objetivo_id) and not comprador.sueldos.has(jugador_saliente_id)  # comprador ya no tiene registro del que se fue
 	ok = ok and vendedor.sueldos.has(jugador_saliente_id) and not vendedor.sueldos.has(jugador_objetivo_id)
 
 	if ok:
-		print("OK: el jugador entra, el debil sale, la plata y los sueldos se movieron bien.")
+		print("OK: intercambio real -- el objetivo entra a titular, el que sale se va entero al vendedor (banco), nadie duplicado.")
 	else:
 		print("FALLA: %s" % [resultado])
 

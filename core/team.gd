@@ -2,11 +2,15 @@ class_name Team
 extends RefCounted
 
 ## Equipo para el motor de partido — Fase 2, extendido en Fase 5 con estado
-## que persiste entre partidos (fatiga acumulada, ánimo, lesiones). Todavía
-## no es el club de la partida completo (eso llega con la economía/plantel
-## de 25 en fases posteriores): acá es la plantilla titular fija de 11.
+## que persiste entre partidos (fatiga acumulada, ánimo, lesiones), y en
+## esta fase con el plantel de 25 (§14): 11 titulares + 7 banco (suplentes
+## adultos) + hasta ~7 en cantera (reserva, §17, ya existía). Mínimo 18
+## disponibles (titulares+banco sanos) para jugar — si no se llega, ver
+## Liga._resolver_forfeit().
 
 const FORMACION := ["ARQ", "DFC", "DFC", "LAT", "LAT", "MC", "MC", "MCO", "EXT", "EXT", "DC"]
+## Un suplente por puesto — banco de 7, como pide §14.
+const BANCO_FORMACION := ["ARQ", "DFC", "LAT", "MC", "MCO", "EXT", "DC"]
 
 ## Cuántos ids reserva cada equipo (Liga/Piramide/Confederacion espacian
 ## id_inicial por este número, no por FORMACION.size()): los 11 titulares
@@ -20,7 +24,8 @@ const RECUPERACION_FATIGA_POR_DIA := 0.1
 const DERIVA_ANIMO_POR_SEMANA := 1.0
 
 var nombre: String
-var jugadores: Array = []  # 11 dicts (PlayerGenerator.generate), uno por puesto de FORMACION
+var jugadores: Array = []  # 11 dicts (PlayerGenerator.generate), uno por puesto de FORMACION (titulares)
+var banco: Array = []  # 7 dicts, uno por puesto de BANCO_FORMACION (suplentes)
 var local: bool = false
 var armonia: float = 0.0  # placeholder hasta que exista §3 completo (vestuario real)
 ## §8.4 modificador 2 ("Forma, de -5 a +5 según los últimos 5 partidos"),
@@ -76,11 +81,13 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 		var jugador := PlayerGenerator.generate(next_id, rng, pos, potencial_objetivo)
 		next_id += 1
 		t.jugadores.append(jugador)
-		t.fatiga_acumulada[jugador["id"]] = 1.0
-		t.animo[jugador["id"]] = 50.0
-		var valor := ValorJugador.calcular(jugador, 50.0, 3)
-		t.sueldos[jugador["id"]] = Economia.sueldo_sugerido(valor) * Personalidad.factor_sueldo(jugador)
-		t.contratos[jugador["id"]] = rng.randi_range(1, 5)
+		t._registrar_fichaje(jugador, ValorJugador.calcular(jugador, 50.0, 3), rng.randi_range(1, 5))
+		t.armonia += Personalidad.bonus_armonia(jugador)
+	for pos in BANCO_FORMACION:
+		var jugador := PlayerGenerator.generate(next_id, rng, pos, potencial_objetivo)
+		next_id += 1
+		t.banco.append(jugador)
+		t._registrar_fichaje(jugador, ValorJugador.calcular(jugador, 50.0, 3), rng.randi_range(1, 5))
 		t.armonia += Personalidad.bonus_armonia(jugador)
 	t.armonia += rng.randf_range(-3.0, 5.0)
 	t.reputacion = clamp(t.media_equipo(), 20.0, 80.0)
@@ -89,7 +96,7 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 		t.caja[categoria] = 0.0
 		t.presupuesto_temporada[categoria] = 0.0
 		t.caja_al_cierre[categoria] = 0.0
-	t.siguiente_id_cantera = id_inicial + FORMACION.size()
+	t.siguiente_id_cantera = id_inicial + FORMACION.size() + BANCO_FORMACION.size()
 	t.recalcular_capitan()
 	return t
 
@@ -102,12 +109,122 @@ func recalcular_capitan() -> void:
 			capitan_id = j["id"]
 
 
+## Titulares + banco (18), sin la cantera/reserva — esos no son parte del
+## plantel de partido (§14) hasta que se los promueve.
+func todos_los_jugadores() -> Array:
+	return jugadores + banco
+
+
+func jugadores_sanos_count() -> int:
+	var count := 0
+	for j in todos_los_jugadores():
+		if not esta_lesionado(j["id"]):
+			count += 1
+	return count
+
+
+## Da de alta a un jugador que se suma al plantel (fichaje, ascenso desde
+## cantera): sueldo, contrato, ánimo neutro, totalmente descansado.
+func _registrar_fichaje(jugador: Dictionary, valor: float, contrato_anios: int = 3) -> void:
+	var id: int = jugador["id"]
+	sueldos[id] = Economia.sueldo_sugerido(valor) * Personalidad.factor_sueldo(jugador)
+	contratos[id] = contrato_anios
+	animo[id] = 50.0
+	fatiga_acumulada[id] = 1.0
+
+
+## Da de baja a un jugador que se va del club (vendido, liberado).
+func _limpiar_registro(id: int) -> void:
+	sueldos.erase(id)
+	contratos.erase(id)
+	animo.erase(id)
+	fatiga_acumulada.erase(id)
+	lesiones.erase(id)
+
+
+## Mete a un jugador en el banco, en el puesto de BANCO_FORMACION que le
+## corresponde por posición (desplazando y liberando al que estaba ahí, si
+## había alguien). La usa el mercado cuando un fichaje externo desplaza a
+## un titular — antes del plantel de 25 ese titular se liberaba directo;
+## ahora pasa al banco en vez de desaparecer.
+func mover_a_banco(jugador: Dictionary) -> Dictionary:
+	var posicion: String = jugador["posicion"]
+	var idx := -1
+	for i in range(banco.size()):
+		if banco[i]["posicion"] == posicion:
+			idx = i
+			break
+	if idx == -1:
+		idx = 0
+		for i in range(1, banco.size()):
+			if banco[i]["media"] < banco[idx]["media"]:
+				idx = i
+
+	var liberado: Dictionary = banco[idx]
+	banco[idx] = jugador
+	return liberado
+
+
+## El jugador (o la IA) decide subir a un suplente a titular — swap directo
+## de posición, el titular más débil de esa posición pasa al banco. Sin
+## costo, es reordenar tu propio plantel, no un fichaje.
+func promover_a_titular(jugador_banco_id: int) -> Dictionary:
+	var idx_banco := -1
+	for i in range(banco.size()):
+		if banco[i]["id"] == jugador_banco_id:
+			idx_banco = i
+			break
+	if idx_banco < 0:
+		return {}
+
+	var entrante: Dictionary = banco[idx_banco]
+	var posicion: String = entrante["posicion"]
+
+	var idx_titular := -1
+	for i in range(jugadores.size()):
+		if jugadores[i]["posicion"] == posicion:
+			if idx_titular == -1 or jugadores[i]["media"] < jugadores[idx_titular]["media"]:
+				idx_titular = i
+	if idx_titular == -1:
+		return {}
+
+	var saliente: Dictionary = jugadores[idx_titular]
+	jugadores[idx_titular] = entrante
+	banco[idx_banco] = saliente
+	recalcular_capitan()
+	return {"entra": entrante, "sale": saliente}
+
+
+## El club que VENDE en una transferencia: en vez de que el jugador que
+## llega (más débil, es la contraparte del trueque) pise el puesto titular
+## directo, se promueve al suplente de esa posición del banco y el que
+## llega ocupa ese lugar del banco — más realista que arrancar de la nada
+## con quien sea que llegó a cambio.
+func vender_titular(indice_titular: int, jugador_entrante: Dictionary) -> void:
+	var posicion: String = jugadores[indice_titular]["posicion"]
+	var idx_banco := -1
+	for i in range(banco.size()):
+		if banco[i]["posicion"] == posicion:
+			idx_banco = i
+			break
+	if idx_banco == -1:
+		# no debería pasar (siempre hay un suplente por posición), pero por
+		# las dudas: el que llega ocupa el puesto titular directo.
+		jugadores[indice_titular] = jugador_entrante
+		recalcular_capitan()
+		return
+
+	jugadores[indice_titular] = banco[idx_banco]
+	banco[idx_banco] = jugador_entrante
+	recalcular_capitan()
+
+
 func reset_partido() -> void:
 	racha = 0
 	avance = 0
 	goles = 0
 	resistencia.clear()
-	for j in jugadores:
+	for j in todos_los_jugadores():
 		resistencia[j["id"]] = fatiga_acumulada.get(j["id"], 1.0)
 
 
@@ -119,14 +236,16 @@ func jugadores_por_posiciones(posiciones: Array) -> Array:
 	return out
 
 
-## Como jugadores_por_posiciones pero descarta lesionados. Si no queda nadie
-## sano en esas posiciones, cae a cualquier sano; si NADIE está sano (sin
-## plantel de 25 puede pasar), devuelve la lista completa como último
-## recurso — hueco conocido hasta que exista el plantel de 25 (§14).
+## Como jugadores_por_posiciones pero busca en titulares+banco (§14) y
+## descarta lesionados. Si no queda nadie sano en esas posiciones, cae a
+## cualquier sano del plantel; si NADIE está sano (con 18 sanos mínimo para
+## jugar no debería pasar en un partido real, ver Liga._resolver_forfeit),
+## devuelve la lista completa como último recurso.
 func jugadores_disponibles_por_posiciones(posiciones: Array) -> Array:
 	var en_posicion := []
 	var sanos := []
-	for j in jugadores:
+	var todos := todos_los_jugadores()
+	for j in todos:
 		if esta_lesionado(j["id"]):
 			continue
 		sanos.append(j)
@@ -136,14 +255,24 @@ func jugadores_disponibles_por_posiciones(posiciones: Array) -> Array:
 		return en_posicion
 	if not sanos.is_empty():
 		return sanos
-	return jugadores
+	return todos
 
 
+## El titular si está sano; si está lesionado, el suplente de banco (§14).
+## Si ninguno está sano, el titular igual (ver Liga._resolver_forfeit para
+## el caso de que falten demasiados jugadores para jugar el partido).
 func arquero() -> Dictionary:
+	var titular: Dictionary = {}
 	for j in jugadores:
 		if j["posicion"] == "ARQ":
+			titular = j
+			break
+	if not titular.is_empty() and not esta_lesionado(titular["id"]):
+		return titular
+	for j in banco:
+		if j["posicion"] == "ARQ" and not esta_lesionado(j["id"]):
 			return j
-	return jugadores[0]
+	return titular if not titular.is_empty() else jugadores[0]
 
 
 func media_equipo() -> float:
@@ -178,7 +307,7 @@ func lesionar(jugador_id: int, tipo: String, dias: int) -> void:
 ## bonus de gol) siguiendo el GDD §3 simplificado — todavía no hay xG ni
 ## stats de pases/duelos por jugador para el criterio completo por puesto.
 func actualizar_post_partido(goles_propios: int, goles_rival: int, goleadores_ids: Array) -> void:
-	for j in jugadores:
+	for j in todos_los_jugadores():
 		var id: int = j["id"]
 		fatiga_acumulada[id] = resistencia_pct(id)
 
@@ -196,7 +325,7 @@ func actualizar_post_partido(goles_propios: int, goles_rival: int, goleadores_id
 ## Avanza el calendario entre fechas: recupera fatiga, hace derivar el ánimo
 ## hacia 50 y cuenta los días de lesión. Devuelve los ids que se recuperaron.
 func avanzar_dias(dias: int) -> Array:
-	for j in jugadores:
+	for j in todos_los_jugadores():
 		var id: int = j["id"]
 		var recuperacion: float = RECUPERACION_FATIGA_POR_DIA * Personalidad.factor_recuperacion_fatiga(j)
 		fatiga_acumulada[id] = min(1.0, fatiga_acumulada.get(id, 1.0) + recuperacion * dias)
@@ -253,11 +382,10 @@ func liberar_veteranos_de_cantera() -> Array:
 	return liberados
 
 
-## Saca al juvenil de la cantera y lo pone titular, reemplazando al de
-## menor media en su posición (o al de menor media del plantel si nadie
-## juega en esa posición). El que sale queda libre — sin plantel de 25
-## todavía (§14) no hay banco a donde mandarlo, simplificación documentada
-## igual que el resto del mercado de esta fase.
+## Saca al juvenil de la cantera y lo pone en el banco (§14 — un debutante
+## entra al plantel, no directo al 11 titular; para eso está
+## promover_a_titular, aparte). El suplente que ocupaba ese lugar en el
+## banco queda libre.
 func promover_juvenil(jugador_id: int) -> Dictionary:
 	var idx_cantera := -1
 	for i in range(cantera.size()):
@@ -268,52 +396,50 @@ func promover_juvenil(jugador_id: int) -> Dictionary:
 		return {}
 
 	var juvenil: Dictionary = cantera[idx_cantera]
-
-	var idx_saliente := -1
-	for i in range(jugadores.size()):
-		if jugadores[i]["posicion"] == juvenil["posicion"]:
-			if idx_saliente == -1 or jugadores[i]["media"] < jugadores[idx_saliente]["media"]:
-				idx_saliente = i
-	if idx_saliente == -1:
-		idx_saliente = 0
-		for i in range(1, jugadores.size()):
-			if jugadores[i]["media"] < jugadores[idx_saliente]["media"]:
-				idx_saliente = i
-
-	var saliente: Dictionary = jugadores[idx_saliente]
 	juvenil["es_canterano"] = true
-	jugadores[idx_saliente] = juvenil
+
+	var liberado := mover_a_banco(juvenil)
 	cantera.remove_at(idx_cantera)
 
-	fatiga_acumulada[juvenil["id"]] = 1.0
-	animo[juvenil["id"]] = 50.0
-	var valor := ValorJugador.calcular(juvenil, 50.0, 3)
-	sueldos[juvenil["id"]] = Economia.sueldo_sugerido(valor) * Personalidad.factor_sueldo(juvenil)
-	contratos[juvenil["id"]] = 3
+	_registrar_fichaje(juvenil, ValorJugador.calcular(juvenil, 50.0, 3))
+	_limpiar_registro(liberado["id"])
 
-	sueldos.erase(saliente["id"])
-	contratos.erase(saliente["id"])
-	fatiga_acumulada.erase(saliente["id"])
-	animo.erase(saliente["id"])
-	lesiones.erase(saliente["id"])
-
-	recalcular_capitan()
-	return {"promovido": juvenil, "saliente": saliente}
+	return {"promovido": juvenil, "saliente": liberado}
 
 
 ## Heurística simple de IA: promueve al juvenil que más mejoraría el
-## plantel si supera claramente al titular más débil de su posición.
-## Sin esto, la cantera no haría nada durante una temporada simulada sin
-## intervención humana.
+## plantel (contra el banco, que es a donde entra un debutante — ver
+## promover_juvenil). Sin esto, la cantera no haría nada durante una
+## temporada simulada sin intervención humana. No se llama para el equipo
+## del jugador humano (ver Liga._procesar_cantera) — esa decisión es suya.
 func promover_automatico(umbral_media: float = 3.0) -> Array:
 	var promovidos := []
 	for juvenil in cantera.duplicate():
-		var peor_en_posicion := -1.0
-		for j in jugadores:
-			if j["posicion"] == juvenil["posicion"] and (peor_en_posicion < 0.0 or j["media"] < peor_en_posicion):
-				peor_en_posicion = j["media"]
-		if peor_en_posicion >= 0.0 and juvenil["media"] >= peor_en_posicion + umbral_media:
+		var actual_en_banco := -1.0
+		for j in banco:
+			if j["posicion"] == juvenil["posicion"]:
+				actual_en_banco = j["media"]
+				break
+		if actual_en_banco >= 0.0 and juvenil["media"] >= actual_en_banco + umbral_media:
 			var resultado := promover_juvenil(juvenil["id"])
+			if not resultado.is_empty():
+				promovidos.append(resultado)
+	return promovidos
+
+
+## Simétrico a promover_automatico pero banco -> titular: si un suplente
+## ya es claramente mejor que el titular de su posición, la IA lo pone a
+## jugar. Tampoco se llama para el equipo del jugador humano.
+func promover_banco_automatico(umbral_media: float = 3.0) -> Array:
+	var promovidos := []
+	for suplente in banco.duplicate():
+		var actual_titular := -1.0
+		for j in jugadores:
+			if j["posicion"] == suplente["posicion"]:
+				actual_titular = j["media"]
+				break
+		if actual_titular >= 0.0 and suplente["media"] >= actual_titular + umbral_media:
+			var resultado := promover_a_titular(suplente["id"])
 			if not resultado.is_empty():
 				promovidos.append(resultado)
 	return promovidos

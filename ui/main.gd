@@ -13,6 +13,7 @@ extends Control
 var paneles: Dictionary = {}  # nombre -> Control, para mostrar/ocultar en bloque
 
 var lista_plantel: RichTextLabel
+var contenedor_banco_botones: VBoxContainer
 var lista_tabla: RichTextLabel
 var label_resultado: Label
 var lista_log: RichTextLabel
@@ -70,6 +71,10 @@ func _ocultar_todos() -> void:
 		panel.visible = false
 
 
+## §14: plantel de 25 — 11 titulares + 7 banco (se muestran acá) + cantera
+## (pestaña aparte). "Subir a titular" es la contraparte manual de
+## Team.promover_a_titular(): la IA lo hace sola (Liga._procesar_cantera),
+## el jugador humano lo decide desde acá.
 func _construir_panel_plantel(padre: Control) -> void:
 	var panel := VBoxContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -80,22 +85,64 @@ func _construir_panel_plantel(padre: Control) -> void:
 	titulo.text = "Plantel / formacion — %s" % GameState.equipo_jugador.nombre
 	panel.add_child(titulo)
 
+	var titulo_titulares := Label.new()
+	titulo_titulares.text = "Titulares (11)"
+	panel.add_child(titulo_titulares)
+
 	lista_plantel = RichTextLabel.new()
 	lista_plantel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	lista_plantel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.add_child(lista_plantel)
+
+	var titulo_banco := Label.new()
+	titulo_banco.text = "Banco (7)"
+	panel.add_child(titulo_banco)
+
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 180)
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+
+	contenedor_banco_botones = VBoxContainer.new()
+	contenedor_banco_botones.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(contenedor_banco_botones)
+
 	_refrescar_plantel()
 
 
 func _refrescar_plantel() -> void:
+	var equipo := GameState.equipo_jugador
 	var texto := ""
-	for j in GameState.equipo_jugador.jugadores:
-		var capitan := "  (C)" if j["id"] == GameState.equipo_jugador.capitan_id else ""
+	for j in equipo.jugadores:
+		var capitan := "  (C)" if j["id"] == equipo.capitan_id else ""
 		var canterano := "  [cantera]" if j.get("es_canterano", false) else ""
 		texto += "%-4s  media %5.1f   potencial %3d   genetica %s%s%s\n" % [
 			j["posicion"], j["media"], j["potencial"], j["genetica_tier"], capitan, canterano
 		]
 	lista_plantel.text = texto
+
+	for hijo in contenedor_banco_botones.get_children():
+		hijo.queue_free()
+	for j in equipo.banco:
+		var fila := HBoxContainer.new()
+		var canterano := "  [cantera]" if j.get("es_canterano", false) else ""
+		var label := Label.new()
+		label.text = "%-4s  media %5.1f   potencial %3d%s" % [j["posicion"], j["media"], j["potencial"], canterano]
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		fila.add_child(label)
+
+		var btn := Button.new()
+		btn.text = "Subir a titular"
+		var jugador_id: int = j["id"]
+		btn.pressed.connect(func(): _on_promover_a_titular(jugador_id))
+		fila.add_child(btn)
+
+		contenedor_banco_botones.add_child(fila)
+
+
+func _on_promover_a_titular(jugador_id: int) -> void:
+	GameState.equipo_jugador.promover_a_titular(jugador_id)
+	_refrescar_plantel()
 
 
 func _construir_panel_tabla(padre: Control) -> void:
@@ -361,7 +408,7 @@ func _construir_panel_cantera(padre: Control) -> void:
 	paneles["cantera"] = panel
 
 	var titulo := Label.new()
-	titulo.text = "Cantera (§17) — juveniles sin debutar"
+	titulo.text = "Cantera (§17) — juveniles sin debutar. Promover los manda al banco (para subirlos a titular, ver Plantel)."
 	panel.add_child(titulo)
 
 	var scroll := ScrollContainer.new()
@@ -399,7 +446,7 @@ func _refrescar_cantera() -> void:
 		fila.add_child(label)
 
 		var btn := Button.new()
-		btn.text = "Promover"
+		btn.text = "Promover al banco"
 		var id: int = juvenil["id"]
 		btn.pressed.connect(func(): _on_promover_juvenil(id))
 		fila.add_child(btn)

@@ -93,6 +93,13 @@ func jugar_temporada(rng: RandomNumberGenerator, con_log: bool = false) -> Array
 	return resumen
 
 
+## §14: mínimo de titulares+banco sanos para poder presentarte a jugar.
+const MINIMO_DISPONIBLES := 18
+## Multa por no poder presentar el mínimo, descontada del presupuesto de
+## Mantenimiento (administrativo, no es un gasto de plantel).
+const MULTA_NO_PRESENTARSE := 30000.0
+
+
 ## Simula una sola fecha (todos sus partidos) y actualiza la tabla.
 ## Si se pasa equipo_seguido, además devuelve el resultado y el log
 ## detallado de su partido para mostrarlo en la UI.
@@ -107,7 +114,15 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 		var home: Team = equipos[partido[0]]
 		var away: Team = equipos[partido[1]]
 		var con_log: bool = equipo_seguido != null and (home == equipo_seguido or away == equipo_seguido)
-		var r := MatchEngine.simular(home, away, rng, con_log)
+
+		var home_corto: bool = home.jugadores_sanos_count() < MINIMO_DISPONIBLES
+		var away_corto: bool = away.jugadores_sanos_count() < MINIMO_DISPONIBLES
+		var r: Dictionary
+		if home_corto or away_corto:
+			r = _resolver_forfeit(home, away, home_corto, away_corto)
+		else:
+			r = MatchEngine.simular(home, away, rng, con_log)
+
 		_actualizar_tabla(home.nombre, away.nombre, r["goles_local"], r["goles_visitante"])
 		_actualizar_estado_jugadores(home, away, r)
 		resultados_texto.append("%s %d-%d %s" % [home.nombre, r["goles_local"], r["goles_visitante"], away.nombre])
@@ -120,6 +135,30 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 		"resultados_texto": resultados_texto, "resultado_seguido": resultado_seguido,
 		"log_seguido": log_seguido, "eventos_seguido": eventos_seguido,
 	}
+
+
+## §14: "si no llegás a 18 disponibles, perdés el partido por no
+## presentarte" — 0-3 en contra + multa. Devuelve el mismo formato que
+## MatchEngine.simular() para que el resto de jugar_fecha() no note la
+## diferencia. Si a los DOS equipos les falta gente a la vez (rarísimo),
+## se resuelve como empate administrativo 0-0 con multa para ambos, para
+## no romper la simetría de goles a favor/en contra de la tabla.
+func _resolver_forfeit(home: Team, away: Team, home_corto: bool, away_corto: bool) -> Dictionary:
+	var gl := 0
+	var gv := 0
+	if home_corto and not away_corto:
+		gv = 3
+		home.caja["mantenimiento"] -= MULTA_NO_PRESENTARSE
+		noticias.append("%s no pudo presentar %d jugadores disponibles: pierde 0-3 y paga una multa." % [home.nombre, MINIMO_DISPONIBLES])
+	elif away_corto and not home_corto:
+		gl = 3
+		away.caja["mantenimiento"] -= MULTA_NO_PRESENTARSE
+		noticias.append("%s no pudo presentar %d jugadores disponibles: pierde 0-3 y paga una multa." % [away.nombre, MINIMO_DISPONIBLES])
+	else:
+		home.caja["mantenimiento"] -= MULTA_NO_PRESENTARSE
+		away.caja["mantenimiento"] -= MULTA_NO_PRESENTARSE
+		noticias.append("%s y %s no pudieron presentar %d disponibles cada uno: empate administrativo, ambos multados." % [home.nombre, away.nombre, MINIMO_DISPONIBLES])
+	return {"goles_local": gl, "goles_visitante": gv, "log": [], "goles_log": [], "eventos": []}
 
 
 ## Fase 5: §3 (ánimo según el resultado) y la fatiga acumulada que arranca
@@ -168,12 +207,14 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 	var reporte_cantera := []
 	for equipo in equipos:
 		_avanzar_contratos(equipo, rng)
-		for jugador in equipo.jugadores:
+		for jugador in equipo.todos_los_jugadores():
 			Progresion.aplicar_temporada(jugador, rng)
-		var reporte := _procesar_cantera(equipo, rng)
+		var reporte := _procesar_cantera(equipo, rng, equipo == equipo_protegido)
 		reporte_cantera.append(reporte)
 		for r in reporte["promovidos"]:
-			noticias.append("CANTERA: %s hace debutar a un canterano en %s" % [equipo.nombre, r["promovido"]["posicion"]])
+			noticias.append("CANTERA: %s hace debutar a un canterano en %s (banco)" % [equipo.nombre, r["promovido"]["posicion"]])
+		for r in reporte["promovidos_a_titular"]:
+			noticias.append("PLANTEL: %s sube a un suplente a titular en %s" % [equipo.nombre, r["entra"]["posicion"]])
 		if not reporte["liberados"].is_empty():
 			noticias.append("CANTERA: %s deja libres a %d juveniles que no debutaron a tiempo" % [equipo.nombre, reporte["liberados"].size()])
 		equipo.recalcular_capitan()
@@ -182,15 +223,25 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 
 
 ## §17: envejece a los juveniles (crecen igual que cualquiera, §7.1),
-## libera a los que llegaron a los 20 sin debutar, genera la camada nueva
-## y deja que la IA promueva a los que ya superan claramente a su titular.
-func _procesar_cantera(equipo: Team, rng: RandomNumberGenerator) -> Dictionary:
+## libera a los que llegaron a los 20 sin debutar, y genera la camada
+## nueva. Para los equipos de la IA, además deja que se promuevan solos
+## (cantera->banco y banco->titular) — para el equipo del jugador humano
+## (es_protegido) esas dos decisiones quedan para que las tome desde la UI,
+## igual que el mercado no lo toca a él.
+func _procesar_cantera(equipo: Team, rng: RandomNumberGenerator, es_protegido: bool = false) -> Dictionary:
 	for juvenil in equipo.cantera:
 		Progresion.aplicar_temporada(juvenil, rng)
 	var liberados := equipo.liberar_veteranos_de_cantera()
 	var nuevos := equipo.generar_camada(rng)
-	var promovidos := equipo.promover_automatico()
-	return {"equipo": equipo.nombre, "liberados": liberados, "nuevos": nuevos, "promovidos": promovidos}
+	var promovidos := []
+	var promovidos_a_titular := []
+	if not es_protegido:
+		promovidos = equipo.promover_automatico()
+		promovidos_a_titular = equipo.promover_banco_automatico()
+	return {
+		"equipo": equipo.nombre, "liberados": liberados, "nuevos": nuevos,
+		"promovidos": promovidos, "promovidos_a_titular": promovidos_a_titular,
+	}
 
 
 ## Resetea la tabla y arma el fixture para self.equipos tal como estén en

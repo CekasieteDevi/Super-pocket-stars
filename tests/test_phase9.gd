@@ -79,25 +79,40 @@ func _test_cantera(rng: RandomNumberGenerator) -> void:
 	else:
 		print("FALLA: se esperaban 3 juveniles de 15 anos.")
 
-	# Promocion manual: forzamos a que el primer juvenil sea mucho mejor
-	# que el titular mas debil de su posicion, para poder probar el swap.
+	# Promocion manual: la cantera entra al BANCO (§14), no directo a
+	# titular — para eso esta promover_a_titular, aparte.
 	var juvenil: Dictionary = equipo.cantera[0]
-	var media_antes_swap := equipo.media_equipo()
 	var jugadores_antes := equipo.jugadores.size()
+	var banco_antes := equipo.banco.size()
 	var cantera_antes := equipo.cantera.size()
 	juvenil["media"] = 95.0
 	var resultado := equipo.promover_juvenil(juvenil["id"])
+	var banco_ids := []
+	for j in equipo.banco:
+		banco_ids.append(j["id"])
+
 	if resultado.is_empty():
 		print("FALLA: promover_juvenil no encontro al juvenil.")
 	else:
-		print("Promovido: %s (media 95) reemplaza a %s (media %.1f)" % [
+		print("Promovido al banco: %s (media 95), sale del banco %s (media %.1f)" % [
 			resultado["promovido"]["posicion"], resultado["saliente"]["posicion"], resultado["saliente"]["media"]
 		])
-	var ok_promocion := equipo.jugadores.size() == jugadores_antes and equipo.cantera.size() == cantera_antes - 1 and equipo.media_equipo() > media_antes_swap
+	var ok_promocion := equipo.jugadores.size() == jugadores_antes and equipo.banco.size() == banco_antes
+	ok_promocion = ok_promocion and equipo.cantera.size() == cantera_antes - 1 and banco_ids.has(juvenil["id"])
 	if ok_promocion:
-		print("OK: la promocion mantiene 11 titulares, saca 1 de la cantera, y sube la media del equipo.")
+		print("OK: la promocion mantiene 11 titulares y 7 en banco, saca 1 de la cantera, y el juvenil queda en el banco.")
 	else:
 		print("FALLA: la promocion no dejo el plantel como se esperaba.")
+
+	# Subir a titular: ahora sí debería mejorar la media del 11 titular.
+	var media_titulares_antes := equipo.media_equipo()
+	var resultado_titular := equipo.promover_a_titular(juvenil["id"])
+	var ok_titular := not resultado_titular.is_empty() and equipo.media_equipo() > media_titulares_antes
+	ok_titular = ok_titular and equipo.jugadores.size() == jugadores_antes and equipo.banco.size() == banco_antes
+	if ok_titular:
+		print("OK: promover_a_titular sube al canterano a titular y baja al que estaba a banco, sin cambiar los tamaños.")
+	else:
+		print("FALLA: promover_a_titular no funciono como se esperaba.")
 
 	# Liberacion a los 20: forzamos la edad de otro juvenil.
 	if equipo.cantera.size() >= 1:

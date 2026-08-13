@@ -1,13 +1,16 @@
 class_name Mercado
 extends RefCounted
 
-## Mercado de pases — Fase 6 (GDD §9.3), simplificado. Sin plantel de 25
-## todavía (eso es fase 14) no hay banco ni agentes libres: cada club tiene
-## exactamente 11 titulares fijos, así que un fichaje acá es un
-## INTERCAMBIO directo entre dos clubes en la misma posición, pagando el
-## club que recibe el jugador mejor la diferencia de valor de mercado. No es
-## la cadena de reemplazo completa del GDD (esa necesita plantilla con
-## suplentes) pero ya usa presupuesto, valor de mercado y contratos reales.
+## Mercado de pases — Fase 6 (GDD §9.3), extendido en la fase del plantel
+## de 25 (§14) para usar el banco de verdad. Sigue siendo un INTERCAMBIO
+## directo entre dos clubes en la misma posición (no la cadena de
+## reemplazo completa del GDD, que necesitaría agentes libres y un mercado
+## de ofertas más rico) pero ahora, en vez de que el jugador que llega pise
+## el puesto titular a la fuerza en ambos lados: el que compra sube al
+## entrante como titular directo y manda a su titular saliente al banco; el
+## que vende promueve a su suplente de esa posición y el que llega a cambio
+## entra al banco. El único que sale del club de verdad es a quien no le
+## queda lugar en el banco.
 
 const UMBRAL_DIFERENCIA_MEDIA := 8.0
 const POSICIONES := ["ARQ", "DFC", "LAT", "MC", "MCO", "EXT", "DC"]
@@ -65,12 +68,18 @@ static func ejecutar_ventana(liga: Liga, rng: RandomNumberGenerator, equipo_prot
 		peor_club.caja["fichajes"] -= diferencia
 		mejor_club.caja["fichajes"] += diferencia
 
+		# El que compra (peor_club) pisa el puesto titular directo con el
+		# que llega — no hay que "banquear" a peor_jugador en peor_club
+		# porque se va entero al otro club (ver vender_titular abajo), no
+		# se queda de suplente en su club de origen.
 		peor_club.jugadores[peor_indice] = mejor_jugador
-		mejor_club.jugadores[mejor_indice] = peor_jugador
-		_reasentar(mejor_jugador, mejor_club, peor_club, valor_mejor)
-		_reasentar(peor_jugador, peor_club, mejor_club, valor_peor)
 		peor_club.recalcular_capitan()
-		mejor_club.recalcular_capitan()
+		mejor_club.vender_titular(mejor_indice, peor_jugador)
+
+		peor_club._registrar_fichaje(mejor_jugador, valor_mejor)
+		mejor_club._registrar_fichaje(peor_jugador, valor_peor)
+		peor_club._limpiar_registro(peor_jugador["id"])  # peor_jugador ya no es de este club
+		mejor_club._limpiar_registro(mejor_jugador["id"])  # mejor_jugador ya no es de este club
 
 		transferencias.append({
 			"jugador_id": mejor_jugador["id"], "posicion": posicion,
@@ -82,11 +91,10 @@ static func ejecutar_ventana(liga: Liga, rng: RandomNumberGenerator, equipo_prot
 
 ## Oferta del jugador humano por un jugador puntual de otro club — a
 ## diferencia de ejecutar_ventana() (automático, entre clubes de la IA),
-## esto lo dispara la UI cuando el usuario elige a alguien. Como no hay
-## banco (§14), el que sale a cambio es siempre tu jugador más débil en
-## esa misma posición, y solo se permite si el objetivo es realmente
-## mejor (si no, no tiene sentido la oferta: no hay forma de vender solo,
-## siempre es un intercambio).
+## esto lo dispara la UI cuando el usuario elige a alguien. El que sale a
+## cambio es siempre tu titular más débil en esa misma posición (pasa a tu
+## banco, no se libera), y solo se permite si el objetivo es realmente
+## mejor — si no, no tiene sentido la oferta.
 static func ofertar_por_jugador(comprador: Team, vendedor: Team, jugador_objetivo_id: int) -> Dictionary:
 	var indice_objetivo := -1
 	for i in range(vendedor.jugadores.size()):
@@ -121,12 +129,17 @@ static func ofertar_por_jugador(comprador: Team, vendedor: Team, jugador_objetiv
 	comprador.caja["fichajes"] -= diferencia
 	vendedor.caja["fichajes"] += diferencia
 
+	# El comprador pisa el puesto titular directo — jugador_saliente se va
+	# entero al club vendedor (ver vender_titular), no se banquea en el
+	# suyo propio.
 	comprador.jugadores[indice_saliente] = jugador_objetivo
-	vendedor.jugadores[indice_objetivo] = jugador_saliente
-	_reasentar(jugador_objetivo, vendedor, comprador, valor_objetivo)
-	_reasentar(jugador_saliente, comprador, vendedor, valor_saliente)
 	comprador.recalcular_capitan()
-	vendedor.recalcular_capitan()
+	vendedor.vender_titular(indice_objetivo, jugador_saliente)
+
+	comprador._registrar_fichaje(jugador_objetivo, valor_objetivo)
+	vendedor._registrar_fichaje(jugador_saliente, valor_saliente)
+	comprador._limpiar_registro(jugador_saliente["id"])  # jugador_saliente ya no es de este club
+	vendedor._limpiar_registro(jugador_objetivo["id"])  # jugador_objetivo ya no es de este club
 
 	return {
 		"exito": true, "jugador_entra": jugador_objetivo, "jugador_sale": jugador_saliente,
@@ -142,19 +155,3 @@ static func _indice_en_posicion(equipo: Team, posicion: String, rng: RandomNumbe
 	if candidatos.is_empty():
 		return -1
 	return candidatos[rng.randi() % candidatos.size()]
-
-
-## Actualiza el estado ligado al club (sueldo/contrato/ánimo/fatiga/lesión)
-## cuando un jugador pasa de origen a destino.
-static func _reasentar(jugador: Dictionary, origen: Team, destino: Team, valor: float) -> void:
-	var id: int = jugador["id"]
-	origen.sueldos.erase(id)
-	origen.contratos.erase(id)
-	origen.animo.erase(id)
-	origen.fatiga_acumulada.erase(id)
-	origen.lesiones.erase(id)
-
-	destino.sueldos[id] = Economia.sueldo_sugerido(valor)
-	destino.contratos[id] = 3
-	destino.animo[id] = 50.0
-	destino.fatiga_acumulada[id] = 1.0
