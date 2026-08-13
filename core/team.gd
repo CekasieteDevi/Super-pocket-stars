@@ -65,6 +65,10 @@ var scouts: Array = []  # [{"nivel":int}], §9.4 — empieza con 1 al mínimo (�
 var cantera: Array = []  # dicts de PlayerGenerator.generate, juveniles sin promover
 var siguiente_id_cantera: int = 0
 
+## Préstamos (§9.3 extendido, §14): ver core/prestamos.gd.
+var prestados_afuera: Dictionary = {}  # jugador_id -> {"club":Team, "temporada_retorno":int, "desde_cantera":bool} — jugadores MIOS que cedí, no están en mi plantel ahora
+var prestados_propios: Dictionary = {}  # jugador_id -> {"club_dueno":Team, "temporada_retorno":int} — jugadores AJENOS que tengo a préstamo, en mi banco
+
 
 ## id_inicial debe ser único por equipo dentro de una Liga: los ids de
 ## jugador no son únicos por sí solos (son 0..10 salvo que el llamador pase

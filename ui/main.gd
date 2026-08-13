@@ -27,6 +27,11 @@ var lista_noticias: RichTextLabel
 var contenedor_mercado_botones: VBoxContainer
 var label_mercado_estado: Label
 var posicion_mercado_actual: String = "DC"
+var contenedor_libres_botones: VBoxContainer
+var label_libres_estado: Label
+var contenedor_prestamos_ceder_botones: VBoxContainer
+var contenedor_prestamos_pedir_botones: VBoxContainer
+var label_prestamos_estado: Label
 
 
 func _ready() -> void:
@@ -42,6 +47,7 @@ func _ready() -> void:
 	for entrada in [
 		["Plantel", "_mostrar_plantel"], ["Tabla", "_mostrar_tabla"], ["Partido", "_mostrar_partido"],
 		["Economia", "_mostrar_economia"], ["Mercado", "_mostrar_mercado"],
+		["Libres", "_mostrar_libres"], ["Prestamos", "_mostrar_prestamos"],
 		["Cantera", "_mostrar_cantera"], ["Noticias", "_mostrar_noticias"],
 	]:
 		var btn := Button.new()
@@ -60,6 +66,8 @@ func _ready() -> void:
 	_construir_panel_partido_animado(contenedor)
 	_construir_panel_economia(contenedor)
 	_construir_panel_mercado(contenedor)
+	_construir_panel_libres(contenedor)
+	_construir_panel_prestamos(contenedor)
 	_construir_panel_cantera(contenedor)
 	_construir_panel_noticias(contenedor)
 
@@ -400,6 +408,254 @@ func _on_ofertar(vendedor: Team, jugador_id: int) -> void:
 	_refrescar_economia()
 
 
+## Agentes libres (§9.3 extendido): pool de tu división, sin fee de
+## transferencia, ver core/agentes_libres.gd.
+func _construir_panel_libres(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	padre.add_child(panel)
+	paneles["libres"] = panel
+
+	var titulo := Label.new()
+	titulo.text = "Agentes libres — sin fee de transferencia, solo pagas el sueldo"
+	panel.add_child(titulo)
+
+	label_libres_estado = Label.new()
+	label_libres_estado.text = ""
+	panel.add_child(label_libres_estado)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+
+	contenedor_libres_botones = VBoxContainer.new()
+	contenedor_libres_botones.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(contenedor_libres_botones)
+
+
+func _refrescar_libres() -> void:
+	for hijo in contenedor_libres_botones.get_children():
+		hijo.queue_free()
+
+	var pool: Array = GameState.liga_jugador().agentes_libres
+	if pool.is_empty():
+		var label := Label.new()
+		label.text = "No hay agentes libres en tu division por ahora — aparecen cuando a un club de la IA se le vence el contrato de alguien."
+		contenedor_libres_botones.add_child(label)
+		return
+
+	for agente in pool:
+		var fila := HBoxContainer.new()
+		var label := Label.new()
+		label.text = "%-4s  media %5.1f  potencial %3d  edad %d" % [agente["posicion"], agente["media"], agente["potencial"], agente["edad"]]
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		fila.add_child(label)
+
+		var btn := Button.new()
+		btn.text = "Fichar"
+		var agente_id: int = agente["id"]
+		btn.pressed.connect(func(): _on_fichar_libre(agente_id))
+		fila.add_child(btn)
+
+		contenedor_libres_botones.add_child(fila)
+
+
+## Reemplaza siempre a tu jugador mas debil en esa posicion (titular o
+## banco, lo que sea mas bajo) — asi el fichaje de un libre nunca empeora
+## el plantel.
+func _on_fichar_libre(agente_id: int) -> void:
+	var pool: Array = GameState.liga_jugador().agentes_libres
+	var agente: Dictionary = {}
+	for a in pool:
+		if a["id"] == agente_id:
+			agente = a
+			break
+	if agente.is_empty():
+		return
+
+	var equipo := GameState.equipo_jugador
+	var posicion: String = agente["posicion"]
+	var mejor_indice := -1
+	var mejor_es_banco := false
+	var peor_media := 999.0
+	for i in range(equipo.jugadores.size()):
+		if equipo.jugadores[i]["posicion"] == posicion and equipo.jugadores[i]["media"] < peor_media:
+			peor_media = equipo.jugadores[i]["media"]
+			mejor_indice = i
+			mejor_es_banco = false
+	for i in range(equipo.banco.size()):
+		if equipo.banco[i]["posicion"] == posicion and equipo.banco[i]["media"] < peor_media:
+			peor_media = equipo.banco[i]["media"]
+			mejor_indice = i
+			mejor_es_banco = true
+
+	if mejor_indice < 0:
+		label_libres_estado.text = "No tenes ningun jugador en esa posicion para reemplazar."
+		return
+
+	var resultado := GameState.fichar_agente_libre(agente_id, mejor_indice, mejor_es_banco)
+	if resultado["exito"]:
+		label_libres_estado.text = "Fichado: entra un %s, sale un %s al pool." % [resultado["entra"]["posicion"], resultado["sale"]["posicion"]]
+	else:
+		label_libres_estado.text = "No se pudo: %s" % resultado["motivo"]
+
+	_refrescar_libres()
+	_refrescar_plantel()
+
+
+## Prestamos (§9.3 extendido): cedes banco/cantera propios por una
+## temporada, o pedis prestado a otro club de tu division — ver
+## core/prestamos.gd.
+func _construir_panel_prestamos(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	padre.add_child(panel)
+	paneles["prestamos"] = panel
+
+	var titulo := Label.new()
+	titulo.text = "Prestamos — 1 temporada, fee unico del 10%% del valor + sueldo mientras dure"
+	panel.add_child(titulo)
+
+	label_prestamos_estado = Label.new()
+	label_prestamos_estado.text = ""
+	panel.add_child(label_prestamos_estado)
+
+	var titulo_ceder := Label.new()
+	titulo_ceder.text = "Ceder a prestamo (tu banco y cantera)"
+	panel.add_child(titulo_ceder)
+
+	var scroll_ceder := ScrollContainer.new()
+	scroll_ceder.custom_minimum_size = Vector2(0, 160)
+	scroll_ceder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll_ceder)
+
+	contenedor_prestamos_ceder_botones = VBoxContainer.new()
+	contenedor_prestamos_ceder_botones.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll_ceder.add_child(contenedor_prestamos_ceder_botones)
+
+	var titulo_pedir := Label.new()
+	titulo_pedir.text = "Pedir prestado (banco y cantera de tu division)"
+	panel.add_child(titulo_pedir)
+
+	var scroll_pedir := ScrollContainer.new()
+	scroll_pedir.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll_pedir.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll_pedir)
+
+	contenedor_prestamos_pedir_botones = VBoxContainer.new()
+	contenedor_prestamos_pedir_botones.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll_pedir.add_child(contenedor_prestamos_pedir_botones)
+
+
+func _refrescar_prestamos() -> void:
+	for hijo in contenedor_prestamos_ceder_botones.get_children():
+		hijo.queue_free()
+	for hijo in contenedor_prestamos_pedir_botones.get_children():
+		hijo.queue_free()
+
+	var equipo := GameState.equipo_jugador
+
+	var cedibles := []
+	for j in equipo.banco:
+		cedibles.append({"jugador": j, "desde_cantera": false})
+	for j in equipo.cantera:
+		cedibles.append({"jugador": j, "desde_cantera": true})
+
+	if cedibles.is_empty():
+		var label := Label.new()
+		label.text = "No tenes banco ni cantera disponible para ceder."
+		contenedor_prestamos_ceder_botones.add_child(label)
+	for entrada in cedibles:
+		var j: Dictionary = entrada["jugador"]
+		var fila := HBoxContainer.new()
+		var origen_txt := "cantera" if entrada["desde_cantera"] else "banco"
+		var label := Label.new()
+		label.text = "%-4s  media %5.1f  potencial %3d  (%s)" % [j["posicion"], j["media"], j["potencial"], origen_txt]
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		fila.add_child(label)
+
+		var btn := Button.new()
+		btn.text = "Ceder"
+		var jugador_id: int = j["id"]
+		btn.pressed.connect(func(): _on_ceder_prestamo(jugador_id))
+		fila.add_child(btn)
+
+		contenedor_prestamos_ceder_botones.add_child(fila)
+
+	var candidatos := []  # [{equipo, jugador, desde_cantera}]
+	for rival in GameState.liga_jugador().equipos:
+		if rival == equipo:
+			continue
+		for j in rival.banco:
+			candidatos.append({"equipo": rival, "jugador": j, "desde_cantera": false})
+		for j in rival.cantera:
+			candidatos.append({"equipo": rival, "jugador": j, "desde_cantera": true})
+
+	if candidatos.is_empty():
+		var label2 := Label.new()
+		label2.text = "No hay candidatos para pedir prestado en tu division."
+		contenedor_prestamos_pedir_botones.add_child(label2)
+	for candidato in candidatos:
+		var rival: Team = candidato["equipo"]
+		var j: Dictionary = candidato["jugador"]
+		var fila := HBoxContainer.new()
+		var origen_txt := "cantera" if candidato["desde_cantera"] else "banco"
+		var label := Label.new()
+		label.text = "%-14s  %-4s  media %5.1f  potencial %3d  (%s)" % [rival.nombre, j["posicion"], j["media"], j["potencial"], origen_txt]
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		fila.add_child(label)
+
+		var btn := Button.new()
+		btn.text = "Pedir prestado"
+		var jugador_id: int = j["id"]
+		btn.pressed.connect(func(): _on_pedir_prestamo(rival, jugador_id))
+		fila.add_child(btn)
+
+		contenedor_prestamos_pedir_botones.add_child(fila)
+
+
+## Elige un rival al azar de tu division como destino del prestamo — no
+## hay negociacion todavia (eso es contenido pendiente), cualquier club de
+## tu misma division puede recibirlo.
+func _on_ceder_prestamo(jugador_id: int) -> void:
+	var rivales := []
+	for rival in GameState.liga_jugador().equipos:
+		if rival != GameState.equipo_jugador:
+			rivales.append(rival)
+	if rivales.is_empty():
+		return
+	var destino: Team = rivales[GameState.rng.randi() % rivales.size()]
+
+	var resultado := GameState.ceder_a_prestamo(jugador_id, destino)
+	if resultado["exito"]:
+		label_prestamos_estado.text = "Prestamo concretado: %s se va a %s por esta temporada (fee cobrado %s)." % [
+			resultado["jugador"]["posicion"], destino.nombre, Economia.formato_dinero(resultado["fee"])
+		]
+	else:
+		label_prestamos_estado.text = "No se pudo: %s" % resultado["motivo"]
+
+	_refrescar_prestamos()
+	_refrescar_plantel()
+	_refrescar_economia()
+
+
+func _on_pedir_prestamo(club_origen: Team, jugador_id: int) -> void:
+	var resultado := GameState.pedir_prestamo(club_origen, jugador_id)
+	if resultado["exito"]:
+		label_prestamos_estado.text = "Prestamo recibido: llega un %s de %s (fee pagado %s)." % [
+			resultado["jugador"]["posicion"], club_origen.nombre, Economia.formato_dinero(resultado["fee"])
+		]
+	else:
+		label_prestamos_estado.text = "No se pudo: %s" % resultado["motivo"]
+
+	_refrescar_prestamos()
+	_refrescar_plantel()
+	_refrescar_economia()
+
+
 func _construir_panel_cantera(padre: Control) -> void:
 	var panel := VBoxContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -573,6 +829,20 @@ func _mostrar_mercado() -> void:
 	paneles["mercado"].visible = true
 	label_mercado_estado.text = ""
 	_refrescar_mercado()
+
+
+func _mostrar_libres() -> void:
+	_ocultar_todos()
+	paneles["libres"].visible = true
+	label_libres_estado.text = ""
+	_refrescar_libres()
+
+
+func _mostrar_prestamos() -> void:
+	_ocultar_todos()
+	paneles["prestamos"].visible = true
+	label_prestamos_estado.text = ""
+	_refrescar_prestamos()
 
 
 func _mostrar_cantera() -> void:

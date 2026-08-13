@@ -92,7 +92,7 @@ func _cerrar_temporada() -> void:
 		if campeon != null:
 			_agregar_noticia("INTERNACIONAL (%s): campeón %s" % [copa_nombre.capitalize(), campeon.nombre])
 
-	var resultado_piramide := piramide.fin_de_temporada(rng, equipo_jugador)
+	var resultado_piramide := piramide.fin_de_temporada(rng, equipo_jugador, temporada_actual)
 	for m in resultado_piramide["movimientos"]:
 		if m["equipo"] == equipo_jugador.nombre:
 			_agregar_noticia("%s: %s (división %d → división %d)" % [equipo_jugador.nombre, m["tipo"], m["de_division"], m["a_division"]])
@@ -129,6 +129,40 @@ func ofertar_por_jugador(vendedor: Team, jugador_objetivo_id: int) -> Dictionary
 		_agregar_noticia("FICHAJE: %s ficha a un %s de %s por $%.0f (sale un %s)" % [
 			equipo_jugador.nombre, resultado["posicion"], vendedor.nombre,
 			resultado["diferencia"], resultado["jugador_sale"]["posicion"]
+		])
+	return resultado
+
+
+## Fichar del pool de agentes libres de tu división (AgentesLibres.fichar):
+## sin fee de transferencia, solo el sueldo. El jugador que reemplazás pasa
+## a integrar el pool en tu lugar.
+func fichar_agente_libre(jugador_id: int, indice_saliente: int, es_banco: bool) -> Dictionary:
+	var resultado := AgentesLibres.fichar(equipo_jugador, liga_jugador().agentes_libres, jugador_id, indice_saliente, es_banco)
+	if resultado["exito"]:
+		_agregar_noticia("AGENTE LIBRE: %s ficha a un %s libre (sale un %s al pool)." % [
+			equipo_jugador.nombre, resultado["entra"]["posicion"], resultado["sale"]["posicion"]
+		])
+	return resultado
+
+
+## Cedés a un jugador de TU banco o cantera a préstamo por una temporada
+## (Prestamos.ceder). Vuelve solo al cierre de la temporada de retorno.
+func ceder_a_prestamo(jugador_id: int, club_destino: Team) -> Dictionary:
+	var resultado := Prestamos.ceder(equipo_jugador, club_destino, jugador_id, temporada_actual)
+	if resultado["exito"]:
+		_agregar_noticia("PRÉSTAMO: %s cede un %s a %s por esta temporada." % [
+			equipo_jugador.nombre, resultado["jugador"]["posicion"], club_destino.nombre
+		])
+	return resultado
+
+
+## Pedís prestado a un jugador del banco/cantera de otro club de tu
+## división. Vuelve solo a su club al cierre de la temporada de retorno.
+func pedir_prestamo(club_origen: Team, jugador_id: int) -> Dictionary:
+	var resultado := Prestamos.ceder(club_origen, equipo_jugador, jugador_id, temporada_actual)
+	if resultado["exito"]:
+		_agregar_noticia("PRÉSTAMO: %s recibe a préstamo un %s de %s." % [
+			equipo_jugador.nombre, resultado["jugador"]["posicion"], club_origen.nombre
 		])
 	return resultado
 

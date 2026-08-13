@@ -15,6 +15,11 @@ var fixture: Array = []  # fechas -> [[idx_local, idx_visitante], ...]
 ## conectar acá.
 var noticias: Array = []
 
+## Agentes libres (§9.3 extendido): jugadores sin club, fichables sin fee de
+## transferencia. Ver core/agentes_libres.gd. Pool por división, igual que
+## el resto del mercado.
+var agentes_libres: Array = []
+
 
 ## Sistema del círculo: fija el equipo 0 y rota el resto. Da n-1 fechas donde
 ## cada equipo juega una vez contra todos, sin repetir rival — la base que
@@ -188,7 +193,7 @@ func avanzar_dias(dias: int = 7) -> void:
 ## que Piramide (Fase 7) pueda mover equipos de división entre una cosa y
 ## la otra (ascensos/descensos se deciden con la tabla vieja, pero el
 ## fixture nuevo tiene que armarse con la composición de equipos ya nueva).
-func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo_protegido: Team = null) -> Array:
+func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo_protegido: Team = null, temporada_actual: int = 0) -> Array:
 	var orden_final := tabla_ordenada()
 	var informes_economia := []
 	for i in range(orden_final.size()):
@@ -206,7 +211,11 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 
 	var reporte_cantera := []
 	for equipo in equipos:
-		_avanzar_contratos(equipo, rng)
+		var vueltos := Prestamos.procesar_retornos(equipo, temporada_actual)
+		for j in vueltos:
+			noticias.append("PRÉSTAMOS: %s vuelve a %s tras el préstamo." % [j["posicion"], equipo.nombre])
+
+		_avanzar_contratos(equipo, rng, equipo == equipo_protegido)
 		for jugador in equipo.todos_los_jugadores():
 			Progresion.aplicar_temporada(jugador, rng)
 		var reporte := _procesar_cantera(equipo, rng, equipo == equipo_protegido)
@@ -256,21 +265,51 @@ func iniciar_temporada() -> void:
 
 ## Fin de temporada para una liga suelta (sin pirámide de divisiones): todo
 ## el procesamiento de una y el fixture nuevo, de un saque.
-func nueva_temporada(rng: RandomNumberGenerator, equipo_protegido: Team = null) -> Array:
-	var resultado := procesar_economia_y_mercado_y_progresion(rng, equipo_protegido)
+func nueva_temporada(rng: RandomNumberGenerator, equipo_protegido: Team = null, temporada_actual: int = 0) -> Array:
+	var resultado := procesar_economia_y_mercado_y_progresion(rng, equipo_protegido, temporada_actual)
 	iniciar_temporada()
 	return resultado
 
 
-## §9.3: si el contrato llega a 0 debería salir gratis al mercado de libres,
-## pero sin plantel de 25 todavía (fase 14) perder un titular deja al
-## equipo corto de jugadores — así que por ahora se renueva solo con un
-## contrato nuevo. Simplificación documentada, no la regla final del GDD.
-func _avanzar_contratos(equipo: Team, rng: RandomNumberGenerator) -> void:
-	for id in equipo.contratos.keys():
+## §9.3: si el contrato llega a 0, el club de la IA decide si renueva o deja
+## salir al jugador libre (más probable cuanto más veterano) — si lo deja
+## salir, se va al pool de agentes libres (ver AgentesLibres.liberar) y su
+## puesto lo ocupa un refuerzo nuevo. Al jugador humano todavía no se le
+## vencen los contratos solos (sin una pantalla de "renovar", forzar la
+## salida de alguien de su plantel sin que él lo decida sería sacarle el
+## control) — simplificación documentada, no la regla final del GDD.
+func _avanzar_contratos(equipo: Team, rng: RandomNumberGenerator, es_protegido: bool = false) -> void:
+	for id in equipo.contratos.keys().duplicate():
 		equipo.contratos[id] -= 1
-		if equipo.contratos[id] <= 0:
+		if equipo.contratos[id] > 0:
+			continue
+		if es_protegido:
 			equipo.contratos[id] = rng.randi_range(2, 4)
+			continue
+
+		var jugador := _buscar_en_plantel(equipo, id)
+		if jugador.is_empty():
+			equipo.contratos[id] = rng.randi_range(2, 4)
+			continue
+
+		var edad: int = jugador.get("edad", 25)
+		var probabilidad_irse: float = clamp(0.10 + max(0, edad - 27) * 0.03, 0.10, 0.55)
+		if rng.randf() >= probabilidad_irse:
+			equipo.contratos[id] = rng.randi_range(2, 4)
+			continue
+
+		AgentesLibres.liberar(equipo, jugador, agentes_libres, rng)
+		noticias.append("AGENTES LIBRES: un %s queda libre, se va de %s." % [jugador["posicion"], equipo.nombre])
+
+
+func _buscar_en_plantel(equipo: Team, jugador_id: int) -> Dictionary:
+	for j in equipo.jugadores:
+		if j["id"] == jugador_id:
+			return j
+	for j in equipo.banco:
+		if j["id"] == jugador_id:
+			return j
+	return {}
 
 
 func _actualizar_tabla(local: String, visitante: String, gl: int, gv: int) -> void:
