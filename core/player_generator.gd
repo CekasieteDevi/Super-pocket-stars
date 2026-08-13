@@ -29,12 +29,23 @@ static func get_all_attributes() -> Array:
 
 
 ## Genera un jugador. forced_position vacío = posición al azar.
-static func generate(id: int, rng: RandomNumberGenerator, forced_position: String = "") -> Dictionary:
+## potencial_forzado >= 0 saltea la tabla de tiers de §4 y usa ese valor
+## (± variación) como potencial directamente — lo usan los clubes del
+## exterior (Fase 7, §10.5) para que el plantel generado ronde su
+## fuerza_equipo horneada en vez de la distribución calibrada para Uruguay.
+static func generate(id: int, rng: RandomNumberGenerator, forced_position: String = "", potencial_forzado: int = -1) -> Dictionary:
 	var positions := get_weights().keys()
 	var position: String = forced_position if forced_position != "" else positions[rng.randi() % positions.size()]
 
-	var genetica := Genetics.roll(rng)
-	var potencial: int = genetica["potencial"]
+	var potencial: int
+	var tier: String
+	if potencial_forzado >= 0:
+		potencial = clamp(potencial_forzado + rng.randi_range(-8, 8), 15, 99)
+		tier = "Extranjero"
+	else:
+		var genetica := Genetics.roll(rng)
+		potencial = genetica["potencial"]
+		tier = genetica["tier"]
 
 	var atributos := {}
 	for attr in get_all_attributes():
@@ -46,7 +57,7 @@ static func generate(id: int, rng: RandomNumberGenerator, forced_position: Strin
 	return {
 		"id": id,
 		"posicion": position,
-		"genetica_tier": genetica["tier"],
+		"genetica_tier": tier,
 		"potencial": potencial,
 		"atributos": atributos,
 		"media": media_natural,

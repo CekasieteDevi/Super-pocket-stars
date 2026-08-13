@@ -11,8 +11,10 @@ var fixture: Array = []  # fechas -> [[idx_local, idx_visitante], ...]
 
 
 ## Sistema del círculo: fija el equipo 0 y rota el resto. Da n-1 fechas donde
-## cada equipo juega una vez contra todos; la vuelta repite invirtiendo local.
-static func generar_fixture_ida_vuelta(n: int) -> Array:
+## cada equipo juega una vez contra todos, sin repetir rival — la base que
+## reutiliza FaseLiga (Fase 7) para las copas internacionales, que solo
+## necesitan las primeras N fechas de esto en vez de todas las n-1.
+static func generar_fixture_simple(n: int) -> Array:
 	var arr := []
 	for i in range(n):
 		arr.append(i)
@@ -38,6 +40,13 @@ static func generar_fixture_ida_vuelta(n: int) -> Array:
 			arr[i] = arr[i - 1]
 		arr[1] = last
 
+	return ida
+
+
+## Da la ida y la vuelta completas (2*(n-1) fechas, cada equipo juega dos
+## veces contra todos). Lo que usa la liga de 20 equipos de cada división.
+static func generar_fixture_ida_vuelta(n: int) -> Array:
+	var ida := generar_fixture_simple(n)
 	var vuelta := []
 	for ronda in ida:
 		var ronda_vuelta := []

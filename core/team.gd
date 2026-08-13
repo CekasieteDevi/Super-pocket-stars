@@ -43,12 +43,14 @@ var scouts: Array = []  # [{"nivel":int}], §9.4 — empieza con 1 al mínimo (�
 ## un offset), y el mercado (Fase 6) transfiere jugadores entre clubes usando
 ## el id como clave de sueldos/contratos/ánimo — si dos equipos reusan el
 ## mismo rango de ids, un fichaje puede pisar el registro de otro jugador.
-static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int = 0) -> Team:
+## potencial_objetivo: ver PlayerGenerator.generate — lo usan los clubes del
+## exterior (Fase 7, §10.5) para que el plantel ronde su fuerza_equipo.
+static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int = 0, potencial_objetivo: int = -1) -> Team:
 	var t := Team.new()
 	t.nombre = nombre
 	var next_id := id_inicial
 	for pos in FORMACION:
-		var jugador := PlayerGenerator.generate(next_id, rng, pos)
+		var jugador := PlayerGenerator.generate(next_id, rng, pos, potencial_objetivo)
 		next_id += 1
 		t.jugadores.append(jugador)
 		t.fatiga_acumulada[jugador["id"]] = 1.0
