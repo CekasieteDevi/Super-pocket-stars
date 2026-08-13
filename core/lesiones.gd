@@ -15,7 +15,14 @@ extends RefCounted
 ## intención (cansado se lesiona más) sin el efecto absurdo.
 
 const TABLA_PATH := "res://data/lesiones.json"
-const RIESGO_BASE := 0.0018
+## Bajado de 0.0018 a 0.0010 en el balance de la fase 10: sin plantel de 25
+## todavía (§14), una lesión no se cubre con un suplente — le pega directo
+## a la posición por el resto de la temporada. A la tasa vieja (~0,75
+## lesiones nuevas por jugador y temporada) eso inflaba los goles de una
+## temporada completa a ~5,5 por partido con las defensas degradadas. No
+## es la solución real (esa es tener banco), pero mientras tanto conviene
+## que ocurran con menos frecuencia.
+const RIESGO_BASE := 0.0010
 
 static var _tabla_cache: Array = []
 

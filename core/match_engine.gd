@@ -33,18 +33,19 @@ static func _elegir(jugadores: Array, rng: RandomNumberGenerator) -> Dictionary:
 	return jugadores[rng.randi() % jugadores.size()]
 
 
-## §8.5: bloque B (equipo/racha/armonía/capitán), bloque C (local) y
-## bloque D (personalidad de ESE jugador en ESE duelo, §6 — Ansioso de
-## visitante, Egoísta priorizando su propio tiro). El bloque A (forma,
-## ánimo de partido a partido) sigue sin sistema de origen.
+## §8.5: bloque A (forma del día, ver Team.forma_partido), bloque B
+## (equipo/racha/armonía/capitán), bloque C (local) y bloque D
+## (personalidad de ESE jugador en ESE duelo, §6 — Ansioso de visitante,
+## Egoísta priorizando su propio tiro).
 static func _bloques_equipo(equipo: Team, jugador: Dictionary, atributo: String) -> Dictionary:
 	var jugador_id: int = jugador["id"]
+	var bloque_a := equipo.forma_partido
 	var bloque_b: float = equipo.armonia + clamp(float(equipo.racha), 0.0, 10.0)
 	if jugador_id == equipo.capitan_id:
 		bloque_b += 2.0
 	var bloque_c := 5.0 if equipo.local else 0.0
 	var bloque_d := Personalidad.modificador_partido(jugador, equipo.local, atributo)
-	return {"B": bloque_b, "C": bloque_c, "D": bloque_d}
+	return {"A": bloque_a, "B": bloque_b, "C": bloque_c, "D": bloque_d}
 
 
 ## §2.3: tira riesgo de lesión para un jugador que acaba de participar en un
@@ -85,6 +86,8 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_log:
 	away.reset_partido()
 	home.local = true
 	away.local = false
+	home.forma_partido = clamp(rng.randfn(0.0, 4.0), -10.0, 10.0)
+	away.forma_partido = clamp(rng.randfn(0.0, 4.0), -10.0, 10.0)
 
 	var log := []
 	var goles_log := []

@@ -23,6 +23,13 @@ var nombre: String
 var jugadores: Array = []  # 11 dicts (PlayerGenerator.generate), uno por puesto de FORMACION
 var local: bool = false
 var armonia: float = 0.0  # placeholder hasta que exista §3 completo (vestuario real)
+## §8.4 modificador 2 ("Forma, de -5 a +5 según los últimos 5 partidos"),
+## bloque A. Sin historial de partidos recientes todavía, se aproxima con
+## un valor al azar por partido ("día bueno/malo") — sirve al mismo
+## propósito (variedad de partido a partido más allá de la calidad pura
+## del plantel) y de paso evita que un equipo apenas mejor gane casi
+## siempre por el efecto acumulado de decenas de duelos por partido.
+var forma_partido: float = 0.0
 var racha: int = 0
 var avance: int = 0  # pases consecutivos exitosos en la zona de armado, ver MatchEngine
 var goles: int = 0
