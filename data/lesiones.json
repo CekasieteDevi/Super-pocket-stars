@@ -1,0 +1,14 @@
+{
+  "lesiones": [
+    {"nombre": "Golpe / contusion", "dias_min": 2, "dias_max": 6, "peso": 30, "solo_arquero": false},
+    {"nombre": "Fatiga muscular", "dias_min": 3, "dias_max": 8, "peso": 18, "solo_arquero": false},
+    {"nombre": "Desgarro leve isquiotibiales", "dias_min": 10, "dias_max": 21, "peso": 16, "solo_arquero": false},
+    {"nombre": "Esguince de tobillo", "dias_min": 14, "dias_max": 35, "peso": 13, "solo_arquero": false},
+    {"nombre": "Desgarro grave", "dias_min": 30, "dias_max": 60, "peso": 8, "solo_arquero": false},
+    {"nombre": "Conmocion", "dias_min": 7, "dias_max": 14, "peso": 6, "solo_arquero": false},
+    {"nombre": "Fractura de metatarsiano", "dias_min": 60, "dias_max": 100, "peso": 4, "solo_arquero": false},
+    {"nombre": "Pubalgia", "dias_min": 20, "dias_max": 45, "peso": 3, "solo_arquero": false},
+    {"nombre": "Luxacion de hombro", "dias_min": 30, "dias_max": 60, "peso": 4, "solo_arquero": true},
+    {"nombre": "Rotura de ligamentos (LCA)", "dias_min": 180, "dias_max": 270, "peso": 1, "solo_arquero": false}
+  ]
+}

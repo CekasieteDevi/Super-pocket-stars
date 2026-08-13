@@ -88,12 +88,49 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 		var con_log: bool = equipo_seguido != null and (home == equipo_seguido or away == equipo_seguido)
 		var r := MatchEngine.simular(home, away, rng, con_log)
 		_actualizar_tabla(home.nombre, away.nombre, r["goles_local"], r["goles_visitante"])
+		_actualizar_estado_jugadores(home, away, r)
 		resultados_texto.append("%s %d-%d %s" % [home.nombre, r["goles_local"], r["goles_visitante"], away.nombre])
 		if con_log:
 			resultado_seguido = {"local": home.nombre, "visitante": away.nombre, "gl": r["goles_local"], "gv": r["goles_visitante"]}
 			log_seguido = r["log"]
 
 	return {"resultados_texto": resultados_texto, "resultado_seguido": resultado_seguido, "log_seguido": log_seguido}
+
+
+## Fase 5: §3 (ánimo según el resultado) y la fatiga acumulada que arranca
+## el próximo partido (§7.4 punto 7).
+func _actualizar_estado_jugadores(home: Team, away: Team, r: Dictionary) -> void:
+	var goleadores_local := []
+	var goleadores_visitante := []
+	for gol in r["goles_log"]:
+		if gol["equipo"] == home.nombre:
+			goleadores_local.append(gol["jugador_id"])
+		else:
+			goleadores_visitante.append(gol["jugador_id"])
+	home.actualizar_post_partido(r["goles_local"], r["goles_visitante"], goleadores_local)
+	away.actualizar_post_partido(r["goles_visitante"], r["goles_local"], goleadores_visitante)
+
+
+## Entre fecha y fecha: recupera fatiga, hace derivar el ánimo y cuenta los
+## días de lesión de los 20 equipos. dias=7 asume calendario semanal.
+func avanzar_dias(dias: int = 7) -> void:
+	for equipo in equipos:
+		equipo.avanzar_dias(dias)
+
+
+## Fin de temporada (GDD §7.1): envejece y entrena a todos los jugadores,
+## y arma el fixture y la tabla para la temporada siguiente con el mismo
+## plantel de 20 equipos.
+func nueva_temporada(rng: RandomNumberGenerator) -> void:
+	for equipo in equipos:
+		for jugador in equipo.jugadores:
+			Progresion.aplicar_temporada(jugador, rng)
+		equipo.recalcular_capitan()
+
+	tabla.clear()
+	for equipo in equipos:
+		tabla[equipo.nombre] = _fila_vacia()
+	fixture = generar_fixture_ida_vuelta(equipos.size())
 
 
 func _actualizar_tabla(local: String, visitante: String, gl: int, gv: int) -> void:

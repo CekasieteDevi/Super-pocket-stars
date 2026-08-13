@@ -52,6 +52,11 @@ static func generate(id: int, rng: RandomNumberGenerator, forced_position: Strin
 		"media": media_natural,
 		"mejor_posicion": mejor["posicion"],
 		"media_mejor_posicion": mejor["media"],
+		"edad": rng.randi_range(18, 35),
+		# Oculto (§2, "Atributos ocultos"): multiplica el riesgo de lesión.
+		# Distribución triangular (promedio de dos tiradas) para que los
+		# extremos (indestructible / de cristal) sean menos comunes.
+		"propension_lesion": int(round((rng.randf() + rng.randf()) / 2.0 * 100.0)),
 	}
 
 

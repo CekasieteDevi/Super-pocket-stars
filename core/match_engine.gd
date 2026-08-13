@@ -1,13 +1,15 @@
 class_name MatchEngine
 extends RefCounted
 
-## Motor de partido — Fase 2 (GDD §8.8). Cadena de posesiones tick a tick,
-## sin ningún nodo de Godot: 1000 partidos deben poder simularse en segundos.
+## Motor de partido — Fase 2 (GDD §8.8), extendido en Fase 5 con lesiones.
+## Cadena de posesiones tick a tick, sin ningún nodo de Godot: 1000 partidos
+## deben poder simularse en segundos.
 ##
 ## Modificadores conectados en esta fase: local (§8.3, bloque C) y racha de
 ## acciones exitosas + armonía + capitán (bloque B). El resto de los 37
 ## modificadores (§8.4) llega cuando existan sus sistemas de origen: clima y
-## calendario (fase 7), ánimo/forma de temporada (fase 5), rasgos (fase 9).
+## calendario (fase 7), forma de partido a partido (todavía no distinguida
+## del ánimo de temporada), rasgos (fase 9).
 
 const TICKS_POR_MITAD := 90
 
@@ -41,8 +43,19 @@ static func _bloques_equipo(equipo: Team, jugador_id: int) -> Dictionary:
 	return {"B": bloque_b, "C": bloque_c}
 
 
+## §2.3: tira riesgo de lesión para un jugador que acaba de participar en un
+## duelo. No saca al jugador del partido en curso (no hay banco/cambios
+## todavía, §14) — solo lo deja indisponible para partidos futuros.
+static func _chequear_lesion(jugador: Dictionary, equipo: Team, rng: RandomNumberGenerator) -> void:
+	if equipo.esta_lesionado(jugador["id"]):
+		return
+	var resultado := Lesiones.intentar_lesion(jugador, equipo.resistencia_pct(jugador["id"]), rng)
+	if not resultado.is_empty():
+		equipo.lesionar(jugador["id"], resultado["tipo"], resultado["dias"])
+
+
 static func _duelo(atacante: Dictionary, atacante_attr: String, equipo_atacante: Team,
-		defensor: Dictionary, defensor_attr: String, equipo_defensor: Team) -> Dictionary:
+		defensor: Dictionary, defensor_attr: String, equipo_defensor: Team, rng: RandomNumberGenerator) -> Dictionary:
 	var ata_eff := Duel.atributo_efectivo(
 		atacante["atributos"][atacante_attr], _grupo_de(atacante_attr),
 		equipo_atacante.resistencia_pct(atacante["id"]))
@@ -55,6 +68,8 @@ static func _duelo(atacante: Dictionary, atacante_attr: String, equipo_atacante:
 		_bloques_equipo(equipo_defensor, defensor["id"]))
 	equipo_atacante.desgastar(atacante["id"], atacante["atributos"]["energia"])
 	equipo_defensor.desgastar(defensor["id"], defensor["atributos"]["energia"])
+	_chequear_lesion(atacante, equipo_atacante, rng)
+	_chequear_lesion(defensor, equipo_defensor, rng)
 	return resultado
 
 
@@ -76,16 +91,12 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_log:
 			var rival: Team = away if posesion == home else home
 
 			if zona == "build":
-				var medios := posesion.jugadores_por_posiciones(["MC", "MCO", "LAT"])
-				if medios.is_empty():
-					medios = posesion.jugadores
-				var marcadores := rival.jugadores_por_posiciones(["DFC", "LAT", "MC"])
-				if marcadores.is_empty():
-					marcadores = rival.jugadores
+				var medios := posesion.jugadores_disponibles_por_posiciones(["MC", "MCO", "LAT"])
+				var marcadores := rival.jugadores_disponibles_por_posiciones(["DFC", "LAT", "MC"])
 
 				var atacante := _elegir(medios, rng)
 				var defensor := _elegir(marcadores, rng)
-				var resultado := _duelo(atacante, "pases", posesion, defensor, "quite", rival)
+				var resultado := _duelo(atacante, "pases", posesion, defensor, "quite", rival, rng)
 				var exito := Duel.gana_atacante(resultado, rng)
 
 				if con_log:
@@ -107,16 +118,12 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_log:
 					posesion = rival
 					zona = "build"
 			else:
-				var ofensivos := posesion.jugadores_por_posiciones(["EXT", "DC", "MCO"])
-				if ofensivos.is_empty():
-					ofensivos = posesion.jugadores
-				var marcadores := rival.jugadores_por_posiciones(["DFC", "LAT"])
-				if marcadores.is_empty():
-					marcadores = rival.jugadores
+				var ofensivos := posesion.jugadores_disponibles_por_posiciones(["EXT", "DC", "MCO"])
+				var marcadores := rival.jugadores_disponibles_por_posiciones(["DFC", "LAT"])
 
 				var atacante := _elegir(ofensivos, rng)
 				var defensor := _elegir(marcadores, rng)
-				var resultado := _duelo(atacante, "control", posesion, defensor, "quite", rival)
+				var resultado := _duelo(atacante, "control", posesion, defensor, "quite", rival, rng)
 				var exito := Duel.gana_atacante(resultado, rng)
 
 				if con_log:
@@ -130,8 +137,7 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_log:
 					var tiro := _resolver_tiro(posesion, rival, atacante, rng, con_log, log, minuto)
 					if tiro["gol"]:
 						posesion.goles += 1
-						if con_log:
-							goles_log.append({"minuto": minuto, "equipo": posesion.nombre, "jugador_id": atacante["id"]})
+						goles_log.append({"minuto": minuto, "equipo": posesion.nombre, "jugador_id": tiro["goleador_id"]})
 					posesion.racha = 0
 					posesion = rival
 					zona = "build"
@@ -158,11 +164,11 @@ static func _resolver_tiro(equipo_atacante: Team, equipo_defensor: Team, atacant
 	if destino != "porteria":
 		if con_log:
 			log.append("min %d - TIRO (%s) - %s (tiro %d) -> %s" % [minuto, equipo_atacante.nombre, atacante["posicion"], tiro, destino])
-		return {"gol": false, "destino": destino}
+		return {"gol": false, "destino": destino, "goleador_id": -1}
 
 	var arquero_attrs = arquero["atributos"]
 	var arquero_valor: float = arquero_attrs["reflejos"] * 0.5 + arquero_attrs["estirada"] * 0.3 + arquero_attrs["agarre"] * 0.2
-	var resultado := _duelo_tiro(atacante, float(tiro), equipo_atacante, arquero, arquero_valor, equipo_defensor)
+	var resultado := _duelo_tiro(atacante, float(tiro), equipo_atacante, arquero, arquero_valor, equipo_defensor, rng)
 	var gol := Duel.gana_atacante(resultado, rng)
 
 	if con_log:
@@ -172,29 +178,27 @@ static func _resolver_tiro(equipo_atacante: Team, equipo_defensor: Team, atacant
 		])
 
 	if gol:
-		return {"gol": true, "destino": destino}
+		return {"gol": true, "destino": destino, "goleador_id": atacante["id"]}
 
 	var chance_rebote: float = clamp(1.0 - float(arquero_attrs["agarre"]) / 100.0, 0.1, 0.7)
 	if rng.randf() < chance_rebote:
-		var rebotadores := equipo_atacante.jugadores_por_posiciones(["DC", "EXT", "MCO"])
-		if rebotadores.is_empty():
-			rebotadores = equipo_atacante.jugadores
+		var rebotadores := equipo_atacante.jugadores_disponibles_por_posiciones(["DC", "EXT", "MCO"])
 		var rematador := _elegir(rebotadores, rng)
 		var tiro_rebote: float = float(rematador["atributos"]["tiro"]) * 0.8
-		var resultado_rebote := _duelo_tiro(rematador, tiro_rebote, equipo_atacante, arquero, arquero_valor * 0.9, equipo_defensor)
+		var resultado_rebote := _duelo_tiro(rematador, tiro_rebote, equipo_atacante, arquero, arquero_valor * 0.9, equipo_defensor, rng)
 		var gol_rebote := Duel.gana_atacante(resultado_rebote, rng)
 		if con_log:
 			log.append("min %d - REBOTE (%s) - %s (tiro %.0f) -> %.1f%% -> %s" % [
 				minuto, equipo_atacante.nombre, rematador["posicion"], tiro_rebote, resultado_rebote["final"],
 				"GOL (%s)" % equipo_atacante.nombre if gol_rebote else "ATAJADA"
 			])
-		return {"gol": gol_rebote, "destino": "porteria"}
+		return {"gol": gol_rebote, "destino": "porteria", "goleador_id": rematador["id"]}
 
-	return {"gol": false, "destino": destino}
+	return {"gol": false, "destino": destino, "goleador_id": -1}
 
 
 static func _duelo_tiro(atacante: Dictionary, tiro_valor: float, equipo_atacante: Team,
-		arquero: Dictionary, arquero_valor: float, equipo_defensor: Team) -> Dictionary:
+		arquero: Dictionary, arquero_valor: float, equipo_defensor: Team, rng: RandomNumberGenerator) -> Dictionary:
 	var ata_eff := Duel.atributo_efectivo(tiro_valor, "tecnico", equipo_atacante.resistencia_pct(atacante["id"]))
 	var def_eff := Duel.atributo_efectivo(arquero_valor, "tecnico", equipo_defensor.resistencia_pct(arquero["id"]))
 	var resultado := Duel.resolver(
@@ -203,6 +207,8 @@ static func _duelo_tiro(atacante: Dictionary, tiro_valor: float, equipo_atacante
 		_bloques_equipo(equipo_defensor, arquero["id"]))
 	equipo_atacante.desgastar(atacante["id"], atacante["atributos"]["energia"])
 	equipo_defensor.desgastar(arquero["id"], arquero["atributos"]["energia"])
+	_chequear_lesion(atacante, equipo_atacante, rng)
+	_chequear_lesion(arquero, equipo_defensor, rng)
 	return resultado
 
 
