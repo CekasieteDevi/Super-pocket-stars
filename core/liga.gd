@@ -62,21 +62,38 @@ func _fila_vacia() -> Dictionary:
 	return {"pj": 0, "pg": 0, "pe": 0, "pp": 0, "gf": 0, "gc": 0, "dg": 0, "pts": 0}
 
 
-## Simula todas las fechas del fixture. Devuelve un resumen por fecha (para
-## que UI/Noticias lo consuman más adelante) además de dejar la tabla lista.
+## Simula todas las fechas del fixture de una. Para jugar de a una fecha
+## (como hace la UI) usar jugar_fecha().
 func jugar_temporada(rng: RandomNumberGenerator, con_log: bool = false) -> Array:
 	var resumen := []
-	for fecha in fixture:
-		var resultados_fecha := []
-		for partido in fecha:
-			var home: Team = equipos[partido[0]]
-			var away: Team = equipos[partido[1]]
-			var r := MatchEngine.simular(home, away, rng, false)
-			_actualizar_tabla(home.nombre, away.nombre, r["goles_local"], r["goles_visitante"])
-			if con_log:
-				resultados_fecha.append("%s %d-%d %s" % [home.nombre, r["goles_local"], r["goles_visitante"], away.nombre])
-		resumen.append(resultados_fecha)
+	for idx in range(fixture.size()):
+		var r := jugar_fecha(idx, rng)
+		if con_log:
+			resumen.append(r["resultados_texto"])
 	return resumen
+
+
+## Simula una sola fecha (todos sus partidos) y actualiza la tabla.
+## Si se pasa equipo_seguido, además devuelve el resultado y el log
+## detallado de su partido para mostrarlo en la UI.
+func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = null) -> Dictionary:
+	var fecha: Array = fixture[idx]
+	var resultados_texto := []
+	var resultado_seguido = null
+	var log_seguido := []
+
+	for partido in fecha:
+		var home: Team = equipos[partido[0]]
+		var away: Team = equipos[partido[1]]
+		var con_log: bool = equipo_seguido != null and (home == equipo_seguido or away == equipo_seguido)
+		var r := MatchEngine.simular(home, away, rng, con_log)
+		_actualizar_tabla(home.nombre, away.nombre, r["goles_local"], r["goles_visitante"])
+		resultados_texto.append("%s %d-%d %s" % [home.nombre, r["goles_local"], r["goles_visitante"], away.nombre])
+		if con_log:
+			resultado_seguido = {"local": home.nombre, "visitante": away.nombre, "gl": r["goles_local"], "gv": r["goles_visitante"]}
+			log_seguido = r["log"]
+
+	return {"resultados_texto": resultados_texto, "resultado_seguido": resultado_seguido, "log_seguido": log_seguido}
 
 
 func _actualizar_tabla(local: String, visitante: String, gl: int, gv: int) -> void:
