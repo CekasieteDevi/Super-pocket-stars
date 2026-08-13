@@ -47,7 +47,14 @@ static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos:
 
 	var neto: float = ingresos - egresos
 	for categoria in PRESUPUESTO_PORCENTAJES:
-		equipo.caja[categoria] += neto * PRESUPUESTO_PORCENTAJES[categoria]
+		var asignado: float = neto * PRESUPUESTO_PORCENTAJES[categoria]
+		equipo.caja[categoria] += asignado
+		equipo.presupuesto_temporada[categoria] = asignado
+	# Foto de la caja justo despues de repartir el ingreso y antes de que el
+	# mercado (que corre a continuacion en el mismo cierre) gaste nada —
+	# sirve para que la UI pueda mostrar cuanto se gasto de cada categoria
+	# esta temporada (caja_al_cierre - caja_actual).
+	equipo.caja_al_cierre = equipo.caja.duplicate()
 
 	# Reputación: sube despacio en la mitad de arriba de la tabla, baja en la
 	# de abajo. Simplificado hasta que existan sponsors/prensa reales (§10.5).
@@ -74,3 +81,19 @@ static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos:
 ## fracción de su valor de mercado, como es habitual en fútbol.
 static func sueldo_sugerido(valor: float) -> float:
 	return valor * 0.15
+
+
+## "$1234567.8" -> "$1,234,568" (redondeado). Para que los montos se lean
+## de un vistazo en vez de tener que contar ceros.
+static func formato_dinero(valor: float) -> String:
+	var negativo := valor < 0.0
+	var entero := int(round(abs(valor)))
+	var digitos := str(entero)
+	var con_comas := ""
+	var contador := 0
+	for i in range(digitos.length() - 1, -1, -1):
+		con_comas = digitos[i] + con_comas
+		contador += 1
+		if contador % 3 == 0 and i != 0:
+			con_comas = "," + con_comas
+	return ("-$" if negativo else "$") + con_comas

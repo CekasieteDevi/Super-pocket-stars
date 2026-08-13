@@ -44,6 +44,12 @@ var lesiones: Dictionary = {}  # jugador_id -> {"tipo":String, "dias_restantes":
 
 ## Fase 6: economía del club (§9.1).
 var caja: Dictionary = {}  # "fichajes"/"contratos"/"mejoras"/"mantenimiento" -> moneda
+## Lo que se sumo a cada categoria en el ultimo cierre de temporada, y como
+## quedo la caja justo despues de esa inyeccion (antes de que el mercado
+## gastara nada) — con las dos, la UI puede mostrar cuanto se gasto de cada
+## presupuesto esta temporada (caja_al_cierre - caja).
+var presupuesto_temporada: Dictionary = {}
+var caja_al_cierre: Dictionary = {}
 var sueldos: Dictionary = {}  # jugador_id -> sueldo anual
 var contratos: Dictionary = {}  # jugador_id -> años restantes
 var reputacion: float = 50.0  # 0-100, afecta entradas/sponsors (§10.5)
@@ -81,6 +87,8 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 	t.scouts = [{"nivel": 1}]
 	for categoria in Economia.PRESUPUESTO_PORCENTAJES:
 		t.caja[categoria] = 0.0
+		t.presupuesto_temporada[categoria] = 0.0
+		t.caja_al_cierre[categoria] = 0.0
 	t.siguiente_id_cantera = id_inicial + FORMACION.size()
 	t.recalcular_capitan()
 	return t

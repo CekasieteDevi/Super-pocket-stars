@@ -208,25 +208,32 @@ func _refrescar_economia() -> void:
 		texto += "La plata entra recien cuando termina la fecha 38 (entradas + sponsor + premio segun tabla).\n\n"
 	else:
 		texto += "Ultimo balance de temporada:\n"
-		texto += "  Ingresos            $%.0f\n" % informe["ingresos"]
-		texto += "  Egresos             $%.0f\n" % informe["egresos"]
-		texto += "    de los cuales sueldos:      $%.0f\n" % informe["sueldos"]
-		texto += "    de los cuales mantenimiento: $%.0f\n" % informe["mantenimiento"]
-		texto += "  Neto                $%.0f%s\n\n" % [informe["neto"], "  (en rojo)" if informe["neto"] < 0 else ""]
+		texto += "  Ingresos            %s\n" % Economia.formato_dinero(informe["ingresos"])
+		texto += "  Egresos             %s\n" % Economia.formato_dinero(informe["egresos"])
+		texto += "    de los cuales sueldos:      %s\n" % Economia.formato_dinero(informe["sueldos"])
+		texto += "    de los cuales mantenimiento: %s\n" % Economia.formato_dinero(informe["mantenimiento"])
+		texto += "  Neto                %s%s\n\n" % [Economia.formato_dinero(informe["neto"]), "  (en rojo)" if informe["neto"] < 0 else ""]
 
-	texto += "Caja por presupuesto:\n"
-	var total := 0.0
+	# "Restante" es lo que tenes disponible AHORA en cada presupuesto — no
+	# se puede gastar plata de Fichajes en Contratos ni viceversa, por eso
+	# no hay un "Total" (sumarlos no te dice cuanto podes gastar en nada
+	# concreto). "Usado" sale de comparar contra la foto de la caja justo
+	# despues del ultimo reparto, antes de que el mercado gastara nada.
+	texto += "Presupuestos (lo que se puede gastar de cada uno es independiente):\n"
+	texto += "  %-14s %14s %14s %14s\n" % ["Categoria", "Presupuesto", "Usado", "Restante"]
 	for categoria in equipo.caja:
-		texto += "  %-14s $%.0f\n" % [categoria.capitalize(), equipo.caja[categoria]]
-		total += equipo.caja[categoria]
-	texto += "  %-14s $%.0f\n\n" % ["Total", total]
+		var presupuesto: float = equipo.presupuesto_temporada.get(categoria, 0.0)
+		var restante: float = equipo.caja[categoria]
+		var usado: float = equipo.caja_al_cierre.get(categoria, 0.0) - restante
+		texto += "  %-14s %14s %14s %14s\n" % [categoria.capitalize(), Economia.formato_dinero(presupuesto), Economia.formato_dinero(usado), Economia.formato_dinero(restante)]
+	texto += "\n"
 
-	texto += "Masa salarial actual del plantel: $%.0f (puede diferir del ultimo balance si hubo fichajes despues)\n" % sueldos_totales
+	texto += "Masa salarial actual del plantel: %s (puede diferir del ultimo balance si hubo fichajes despues)\n" % Economia.formato_dinero(sueldos_totales)
 
 	var valor_plantel := 0.0
 	for j in equipo.jugadores:
 		valor_plantel += ValorJugador.calcular(j, equipo.animo.get(j["id"], 50.0), equipo.contratos.get(j["id"], 1))
-	texto += "Valor de mercado del plantel: $%.0f\n" % valor_plantel
+	texto += "Valor de mercado del plantel: %s\n" % Economia.formato_dinero(valor_plantel)
 
 	lista_economia.text = texto
 
