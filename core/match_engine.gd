@@ -89,8 +89,8 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_log:
 				var exito := Duel.gana_atacante(resultado, rng)
 
 				if con_log:
-					log.append("min %d - PASE - %s (pases %d) vs %s (quite %d) -> %.1f%% -> %s" % [
-						minuto, atacante["posicion"], atacante["atributos"]["pases"],
+					log.append("min %d - PASE (%s) - %s (pases %d) vs %s (quite %d) -> %.1f%% -> %s" % [
+						minuto, posesion.nombre, atacante["posicion"], atacante["atributos"]["pases"],
 						defensor["posicion"], defensor["atributos"]["quite"],
 						resultado["final"], "avanza" if exito else "pierde"
 					])
@@ -120,8 +120,8 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_log:
 				var exito := Duel.gana_atacante(resultado, rng)
 
 				if con_log:
-					log.append("min %d - GAMBETA - %s (control %d) vs %s (quite %d) -> %.1f%% -> %s" % [
-						minuto, atacante["posicion"], atacante["atributos"]["control"],
+					log.append("min %d - GAMBETA (%s) - %s (control %d) vs %s (quite %d) -> %.1f%% -> %s" % [
+						minuto, posesion.nombre, atacante["posicion"], atacante["atributos"]["control"],
 						defensor["posicion"], defensor["atributos"]["quite"],
 						resultado["final"], "tira" if exito else "pierde"
 					])
@@ -157,7 +157,7 @@ static func _resolver_tiro(equipo_atacante: Team, equipo_defensor: Team, atacant
 
 	if destino != "porteria":
 		if con_log:
-			log.append("min %d - TIRO - %s (tiro %d) -> %s" % [minuto, atacante["posicion"], tiro, destino])
+			log.append("min %d - TIRO (%s) - %s (tiro %d) -> %s" % [minuto, equipo_atacante.nombre, atacante["posicion"], tiro, destino])
 		return {"gol": false, "destino": destino}
 
 	var arquero_attrs = arquero["atributos"]
@@ -166,9 +166,9 @@ static func _resolver_tiro(equipo_atacante: Team, equipo_defensor: Team, atacant
 	var gol := Duel.gana_atacante(resultado, rng)
 
 	if con_log:
-		log.append("min %d - TIRO A PUERTA - %s (tiro %d) vs Arq. (%.1f) -> %.1f%% -> %s" % [
-			minuto, atacante["posicion"], tiro, arquero_valor, resultado["final"],
-			"GOL" if gol else "ATAJADA"
+		log.append("min %d - TIRO A PUERTA (%s) - %s (tiro %d) vs Arq. de %s (%.1f) -> %.1f%% -> %s" % [
+			minuto, equipo_atacante.nombre, atacante["posicion"], tiro, equipo_defensor.nombre, arquero_valor, resultado["final"],
+			"GOL (%s)" % equipo_atacante.nombre if gol else "ATAJADA"
 		])
 
 	if gol:
@@ -184,9 +184,9 @@ static func _resolver_tiro(equipo_atacante: Team, equipo_defensor: Team, atacant
 		var resultado_rebote := _duelo_tiro(rematador, tiro_rebote, equipo_atacante, arquero, arquero_valor * 0.9, equipo_defensor)
 		var gol_rebote := Duel.gana_atacante(resultado_rebote, rng)
 		if con_log:
-			log.append("min %d - REBOTE - %s (tiro %.0f) -> %.1f%% -> %s" % [
-				minuto, rematador["posicion"], tiro_rebote, resultado_rebote["final"],
-				"GOL" if gol_rebote else "ATAJADA"
+			log.append("min %d - REBOTE (%s) - %s (tiro %.0f) -> %.1f%% -> %s" % [
+				minuto, equipo_atacante.nombre, rematador["posicion"], tiro_rebote, resultado_rebote["final"],
+				"GOL (%s)" % equipo_atacante.nombre if gol_rebote else "ATAJADA"
 			])
 		return {"gol": gol_rebote, "destino": "porteria"}
 
