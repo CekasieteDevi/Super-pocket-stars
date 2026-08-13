@@ -1,0 +1,9 @@
+{
+  "ARQ": {"reflejos": 20, "estirada": 18, "agarre": 18, "achique": 12, "golpe": 10, "inteligencia": 12, "pies": 6, "velocidad": 4},
+  "DFC": {"quite": 18, "fuerza": 14, "inteligencia": 14, "cabezazo": 12, "barrida": 10, "velocidad": 10, "control": 8, "pases": 8, "salto": 6},
+  "LAT": {"velocidad": 16, "aceleracion": 12, "quite": 14, "centros": 12, "energia": 12, "control": 10, "pases": 10, "barrida": 8, "agilidad": 6},
+  "MC": {"pases": 20, "vision": 16, "control": 14, "inteligencia": 12, "quite": 12, "energia": 10, "agilidad": 8, "tiro": 8},
+  "MCO": {"vision": 18, "pases": 16, "control": 16, "agilidad": 12, "tiro": 12, "efecto": 10, "aceleracion": 8, "inteligencia": 8},
+  "EXT": {"velocidad": 18, "aceleracion": 16, "agilidad": 14, "control": 14, "centros": 12, "tiro": 10, "pases": 8, "energia": 8},
+  "DC": {"tiro": 20, "volea": 14, "control": 12, "cabezazo": 12, "aceleracion": 10, "velocidad": 10, "fuerza": 10, "inteligencia": 8, "pases": 4}
+}

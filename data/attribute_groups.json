@@ -1,0 +1,7 @@
+{
+  "fisicos": ["velocidad", "aceleracion", "agilidad", "salto", "fuerza", "energia", "vitalidad"],
+  "tecnicos": ["control", "pases", "centros", "tiro", "volea", "cabezazo", "tiros_libres", "efecto"],
+  "defensivos": ["quite", "barrida"],
+  "mentales": ["vision", "inteligencia"],
+  "arquero": ["estirada", "agarre", "golpe", "reflejos", "pies", "achique"]
+}
