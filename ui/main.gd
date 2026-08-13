@@ -23,6 +23,9 @@ var lista_economia: RichTextLabel
 var lista_cantera: RichTextLabel
 var contenedor_cantera_botones: VBoxContainer
 var lista_noticias: RichTextLabel
+var contenedor_mercado_botones: VBoxContainer
+var label_mercado_estado: Label
+var posicion_mercado_actual: String = "DC"
 
 
 func _ready() -> void:
@@ -37,7 +40,8 @@ func _ready() -> void:
 
 	for entrada in [
 		["Plantel", "_mostrar_plantel"], ["Tabla", "_mostrar_tabla"], ["Partido", "_mostrar_partido"],
-		["Economia", "_mostrar_economia"], ["Cantera", "_mostrar_cantera"], ["Noticias", "_mostrar_noticias"],
+		["Economia", "_mostrar_economia"], ["Mercado", "_mostrar_mercado"],
+		["Cantera", "_mostrar_cantera"], ["Noticias", "_mostrar_noticias"],
 	]:
 		var btn := Button.new()
 		btn.text = entrada[0]
@@ -54,6 +58,7 @@ func _ready() -> void:
 	_construir_panel_partido(contenedor)
 	_construir_panel_partido_animado(contenedor)
 	_construir_panel_economia(contenedor)
+	_construir_panel_mercado(contenedor)
 	_construir_panel_cantera(contenedor)
 	_construir_panel_noticias(contenedor)
 
@@ -246,6 +251,108 @@ func _refrescar_economia() -> void:
 	lista_economia.text = texto
 
 
+## Fase 9: mercado iniciado por el jugador (Mercado.ofertar_por_jugador).
+## Solo lista rivales de tu propia división — sin plantel de 25 (§14) cada
+## fichaje es un intercambio 1x1, así que mostrar toda la pirámide no
+## tendría mucho sentido todavía.
+const POSICIONES_MERCADO := ["ARQ", "DFC", "LAT", "MC", "MCO", "EXT", "DC"]
+
+
+func _construir_panel_mercado(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	padre.add_child(panel)
+	paneles["mercado"] = panel
+
+	var titulo := Label.new()
+	titulo.text = "Mercado — ofertar por un jugador de tu division"
+	panel.add_child(titulo)
+
+	var barra_posiciones := HBoxContainer.new()
+	panel.add_child(barra_posiciones)
+	for pos in POSICIONES_MERCADO:
+		var btn := Button.new()
+		btn.text = pos
+		btn.pressed.connect(func():
+			posicion_mercado_actual = pos
+			_refrescar_mercado()
+		)
+		barra_posiciones.add_child(btn)
+
+	label_mercado_estado = Label.new()
+	label_mercado_estado.text = ""
+	panel.add_child(label_mercado_estado)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+
+	contenedor_mercado_botones = VBoxContainer.new()
+	contenedor_mercado_botones.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(contenedor_mercado_botones)
+
+
+func _refrescar_mercado() -> void:
+	for hijo in contenedor_mercado_botones.get_children():
+		hijo.queue_free()
+
+	var equipo := GameState.equipo_jugador
+	var mi_media_en_posicion := -1.0
+	for j in equipo.jugadores:
+		if j["posicion"] == posicion_mercado_actual and (mi_media_en_posicion < 0.0 or j["media"] < mi_media_en_posicion):
+			mi_media_en_posicion = j["media"]
+
+	var candidatos := []  # [{equipo, jugador}]
+	for rival in GameState.liga_jugador().equipos:
+		if rival == equipo:
+			continue
+		for j in rival.jugadores:
+			if j["posicion"] == posicion_mercado_actual:
+				candidatos.append({"equipo": rival, "jugador": j})
+	candidatos.sort_custom(func(a, b): return a["jugador"]["media"] > b["jugador"]["media"])
+
+	var titulo_lista := Label.new()
+	titulo_lista.text = "Tu titular mas debil en %s tiene media %.1f — mostrando los mejores de la division:" % [posicion_mercado_actual, mi_media_en_posicion]
+	contenedor_mercado_botones.add_child(titulo_lista)
+
+	for i in range(min(10, candidatos.size())):
+		var candidato: Dictionary = candidatos[i]
+		var rival: Team = candidato["equipo"]
+		var jugador: Dictionary = candidato["jugador"]
+
+		var fila := HBoxContainer.new()
+		var valor := ValorJugador.calcular(jugador, rival.animo.get(jugador["id"], 50.0), rival.contratos.get(jugador["id"], 1))
+		var label := Label.new()
+		label.text = "%-14s  media %5.1f  potencial %3d  ~%s" % [rival.nombre, jugador["media"], jugador["potencial"], Economia.formato_dinero(valor)]
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		fila.add_child(label)
+
+		var btn := Button.new()
+		btn.text = "Ofertar"
+		btn.disabled = jugador["media"] <= mi_media_en_posicion
+		var jugador_id: int = jugador["id"]
+		btn.pressed.connect(func(): _on_ofertar(rival, jugador_id))
+		fila.add_child(btn)
+
+		contenedor_mercado_botones.add_child(fila)
+
+
+func _on_ofertar(vendedor: Team, jugador_id: int) -> void:
+	var resultado := GameState.ofertar_por_jugador(vendedor, jugador_id)
+	if resultado["exito"]:
+		label_mercado_estado.text = "Fichaje concretado: entra un %s, sale un %s, diferencia pagada %s." % [
+			resultado["jugador_entra"]["posicion"], resultado["jugador_sale"]["posicion"], Economia.formato_dinero(resultado["diferencia"])
+		]
+	else:
+		label_mercado_estado.text = "No se pudo: %s" % resultado["motivo"]
+
+	_refrescar_mercado()
+	_refrescar_plantel()
+	_refrescar_economia()
+
+
 func _construir_panel_cantera(padre: Control) -> void:
 	var panel := VBoxContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -412,6 +519,13 @@ func _mostrar_economia() -> void:
 	_ocultar_todos()
 	paneles["economia"].visible = true
 	_refrescar_economia()
+
+
+func _mostrar_mercado() -> void:
+	_ocultar_todos()
+	paneles["mercado"].visible = true
+	label_mercado_estado.text = ""
+	_refrescar_mercado()
 
 
 func _mostrar_cantera() -> void:

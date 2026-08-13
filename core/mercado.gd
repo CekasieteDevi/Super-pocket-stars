@@ -80,6 +80,60 @@ static func ejecutar_ventana(liga: Liga, rng: RandomNumberGenerator, equipo_prot
 	return transferencias
 
 
+## Oferta del jugador humano por un jugador puntual de otro club — a
+## diferencia de ejecutar_ventana() (automático, entre clubes de la IA),
+## esto lo dispara la UI cuando el usuario elige a alguien. Como no hay
+## banco (§14), el que sale a cambio es siempre tu jugador más débil en
+## esa misma posición, y solo se permite si el objetivo es realmente
+## mejor (si no, no tiene sentido la oferta: no hay forma de vender solo,
+## siempre es un intercambio).
+static func ofertar_por_jugador(comprador: Team, vendedor: Team, jugador_objetivo_id: int) -> Dictionary:
+	var indice_objetivo := -1
+	for i in range(vendedor.jugadores.size()):
+		if vendedor.jugadores[i]["id"] == jugador_objetivo_id:
+			indice_objetivo = i
+			break
+	if indice_objetivo < 0:
+		return {"exito": false, "motivo": "Ese jugador ya no juega en ese club."}
+
+	var jugador_objetivo: Dictionary = vendedor.jugadores[indice_objetivo]
+	var posicion: String = jugador_objetivo["posicion"]
+
+	var indice_saliente := -1
+	for i in range(comprador.jugadores.size()):
+		if comprador.jugadores[i]["posicion"] == posicion:
+			if indice_saliente == -1 or comprador.jugadores[i]["media"] < comprador.jugadores[indice_saliente]["media"]:
+				indice_saliente = i
+	if indice_saliente < 0:
+		return {"exito": false, "motivo": "No tenés ningún jugador en esa posición para dar de cambio."}
+
+	var jugador_saliente: Dictionary = comprador.jugadores[indice_saliente]
+	if jugador_objetivo["media"] <= jugador_saliente["media"]:
+		return {"exito": false, "motivo": "Tu jugador actual en esa posición ya es igual o mejor."}
+
+	var valor_objetivo := ValorJugador.calcular(jugador_objetivo, vendedor.animo.get(jugador_objetivo["id"], 50.0), vendedor.contratos.get(jugador_objetivo["id"], 1))
+	var valor_saliente := ValorJugador.calcular(jugador_saliente, comprador.animo.get(jugador_saliente["id"], 50.0), comprador.contratos.get(jugador_saliente["id"], 1))
+	var diferencia: float = max(0.0, valor_objetivo - valor_saliente)
+
+	if comprador.caja["fichajes"] < diferencia:
+		return {"exito": false, "motivo": "No te alcanza el presupuesto de Fichajes.", "diferencia": diferencia, "disponible": comprador.caja["fichajes"]}
+
+	comprador.caja["fichajes"] -= diferencia
+	vendedor.caja["fichajes"] += diferencia
+
+	comprador.jugadores[indice_saliente] = jugador_objetivo
+	vendedor.jugadores[indice_objetivo] = jugador_saliente
+	_reasentar(jugador_objetivo, vendedor, comprador, valor_objetivo)
+	_reasentar(jugador_saliente, comprador, vendedor, valor_saliente)
+	comprador.recalcular_capitan()
+	vendedor.recalcular_capitan()
+
+	return {
+		"exito": true, "jugador_entra": jugador_objetivo, "jugador_sale": jugador_saliente,
+		"diferencia": diferencia, "posicion": posicion,
+	}
+
+
 static func _indice_en_posicion(equipo: Team, posicion: String, rng: RandomNumberGenerator) -> int:
 	var candidatos := []
 	for i in range(equipo.jugadores.size()):

@@ -120,6 +120,19 @@ func _cerrar_temporada() -> void:
 	fecha_actual = 0
 
 
+## Oferta del jugador humano por un jugador de otro club (pantalla de
+## Mercado). Wrapper sobre Mercado.ofertar_por_jugador() que además deja
+## una noticia si la oferta se concreta.
+func ofertar_por_jugador(vendedor: Team, jugador_objetivo_id: int) -> Dictionary:
+	var resultado := Mercado.ofertar_por_jugador(equipo_jugador, vendedor, jugador_objetivo_id)
+	if resultado["exito"]:
+		_agregar_noticia("FICHAJE: %s ficha a un %s de %s por $%.0f (sale un %s)" % [
+			equipo_jugador.nombre, resultado["posicion"], vendedor.nombre,
+			resultado["diferencia"], resultado["jugador_sale"]["posicion"]
+		])
+	return resultado
+
+
 ## Debug: juega todas las fechas que queden de la temporada actual de una
 ## sola vez (incluye el cierre). Pensado para probar rápido sin clickear
 ## "jugar fecha" 38 veces — no es parte del flujo normal del juego.
