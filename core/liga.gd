@@ -48,10 +48,13 @@ static func generar_fixture_ida_vuelta(n: int) -> Array:
 	return ida + vuelta
 
 
-func inicializar(nombres_equipos: Array, rng: RandomNumberGenerator) -> void:
+## id_inicial: mismo motivo que Team.generar — si esta Liga es una división
+## de una Piramide (Fase 7), cada división necesita su propio rango de ids
+## para que un ascenso/descenso no pise jugadores de otra división.
+func inicializar(nombres_equipos: Array, rng: RandomNumberGenerator, id_inicial: int = 0) -> void:
 	equipos.clear()
 	tabla.clear()
-	var siguiente_id := 0
+	var siguiente_id := id_inicial
 	for nombre in nombres_equipos:
 		var equipo := Team.generar(nombre, rng, siguiente_id)
 		siguiente_id += Team.FORMACION.size()
@@ -120,11 +123,13 @@ func avanzar_dias(dias: int = 7) -> void:
 		equipo.avanzar_dias(dias)
 
 
-## Fin de temporada: procesa la economía de cada club con la tabla recién
-## jugada (§9.1), corre una ventana de mercado (§9.3), envejece/entrena a
-## todos los jugadores (§7.1) y arma el fixture y la tabla para la
-## temporada siguiente con el mismo plantel de 20 equipos.
-func nueva_temporada(rng: RandomNumberGenerator) -> Array:
+## Procesa la economía de cada club con la tabla recién jugada (§9.1), corre
+## una ventana de mercado (§9.3) y envejece/entrena a todos los jugadores
+## (§7.1). No toca fixture/tabla — eso es iniciar_temporada(), separado para
+## que Piramide (Fase 7) pueda mover equipos de división entre una cosa y
+## la otra (ascensos/descensos se deciden con la tabla vieja, pero el
+## fixture nuevo tiene que armarse con la composición de equipos ya nueva).
+func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator) -> Array:
 	var orden_final := tabla_ordenada()
 	var informes_economia := []
 	for i in range(orden_final.size()):
@@ -144,12 +149,25 @@ func nueva_temporada(rng: RandomNumberGenerator) -> Array:
 			Progresion.aplicar_temporada(jugador, rng)
 		equipo.recalcular_capitan()
 
+	return [informes_economia, transferencias]
+
+
+## Resetea la tabla y arma el fixture para self.equipos tal como estén en
+## este momento (después de que Piramide, si corresponde, ya movió a los
+## ascendidos/descendidos).
+func iniciar_temporada() -> void:
 	tabla.clear()
 	for equipo in equipos:
 		tabla[equipo.nombre] = _fila_vacia()
 	fixture = generar_fixture_ida_vuelta(equipos.size())
 
-	return [informes_economia, transferencias]
+
+## Fin de temporada para una liga suelta (sin pirámide de divisiones): todo
+## el procesamiento de una y el fixture nuevo, de un saque.
+func nueva_temporada(rng: RandomNumberGenerator) -> Array:
+	var resultado := procesar_economia_y_mercado_y_progresion(rng)
+	iniciar_temporada()
+	return resultado
 
 
 ## §9.3: si el contrato llega a 0 debería salir gratis al mercado de libres,
