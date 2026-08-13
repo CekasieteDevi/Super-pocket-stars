@@ -11,12 +11,15 @@ extends Control
 var panel_plantel: VBoxContainer
 var panel_tabla: VBoxContainer
 var panel_partido: VBoxContainer
+var panel_partido_animado: VBoxContainer
 
 var lista_plantel: RichTextLabel
 var lista_tabla: RichTextLabel
 var label_resultado: Label
 var lista_log: RichTextLabel
 var boton_jugar_fecha: Button
+var boton_ver_animado: Button
+var partido_visual: PartidoVisual
 
 
 func _ready() -> void:
@@ -52,6 +55,7 @@ func _ready() -> void:
 	_construir_panel_plantel(contenedor)
 	_construir_panel_tabla(contenedor)
 	_construir_panel_partido(contenedor)
+	_construir_panel_partido_animado(contenedor)
 
 	_mostrar_plantel()
 
@@ -132,6 +136,31 @@ func _construir_panel_partido(padre: Control) -> void:
 	lista_log.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel_partido.add_child(lista_log)
 
+	boton_ver_animado = Button.new()
+	boton_ver_animado.text = "Ver partido animado"
+	boton_ver_animado.disabled = true
+	boton_ver_animado.pressed.connect(_mostrar_partido_animado)
+	panel_partido.add_child(boton_ver_animado)
+
+
+## Fase 8: reproduce los eventos del ultimo partido jugado con una pelota
+## placeholder (sin pixel art ni posiciones por jugador todavia).
+func _construir_panel_partido_animado(padre: Control) -> void:
+	panel_partido_animado = VBoxContainer.new()
+	panel_partido_animado.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel_partido_animado.visible = false
+	padre.add_child(panel_partido_animado)
+
+	var btn_volver := Button.new()
+	btn_volver.text = "< Volver"
+	btn_volver.pressed.connect(_mostrar_partido)
+	panel_partido_animado.add_child(btn_volver)
+
+	var escena: PackedScene = load("res://ui/partido_visual.tscn")
+	partido_visual = escena.instantiate()
+	partido_visual.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	panel_partido_animado.add_child(partido_visual)
+
 
 func _on_jugar_fecha() -> void:
 	if not GameState.hay_fecha_pendiente():
@@ -153,6 +182,7 @@ func _on_jugar_fecha() -> void:
 		if entry.find("GOL") != -1:
 			texto_log += entry + "\n"
 	lista_log.text = texto_log
+	boton_ver_animado.disabled = GameState.ultimos_eventos.is_empty()
 
 	_refrescar_tabla()
 	_refrescar_plantel()
@@ -162,12 +192,14 @@ func _mostrar_plantel() -> void:
 	panel_plantel.visible = true
 	panel_tabla.visible = false
 	panel_partido.visible = false
+	panel_partido_animado.visible = false
 
 
 func _mostrar_tabla() -> void:
 	panel_plantel.visible = false
 	panel_tabla.visible = true
 	panel_partido.visible = false
+	panel_partido_animado.visible = false
 	_refrescar_tabla()
 
 
@@ -175,3 +207,13 @@ func _mostrar_partido() -> void:
 	panel_plantel.visible = false
 	panel_tabla.visible = false
 	panel_partido.visible = true
+	panel_partido_animado.visible = false
+
+
+func _mostrar_partido_animado() -> void:
+	panel_plantel.visible = false
+	panel_tabla.visible = false
+	panel_partido.visible = false
+	panel_partido_animado.visible = true
+	var r: Dictionary = GameState.ultimo_resultado
+	partido_visual.iniciar(r["local"], r["visitante"], GameState.ultimos_eventos)

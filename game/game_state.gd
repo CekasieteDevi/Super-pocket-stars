@@ -19,6 +19,7 @@ var temporada_actual: int = 1
 
 var ultimo_resultado: Dictionary = {}
 var ultimo_log: Array = []
+var ultimos_eventos: Array = []
 
 
 func _ready() -> void:
@@ -46,6 +47,7 @@ func jugar_siguiente_fecha() -> void:
 	if r["resultado_seguido"] != null:
 		ultimo_resultado = r["resultado_seguido"]
 		ultimo_log = r["log_seguido"]
+		ultimos_eventos = r["eventos_seguido"]
 	fecha_actual += 1
 
 	liga.avanzar_dias(DIAS_ENTRE_FECHAS)

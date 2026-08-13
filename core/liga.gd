@@ -95,6 +95,7 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 	var resultados_texto := []
 	var resultado_seguido = null
 	var log_seguido := []
+	var eventos_seguido := []
 
 	for partido in fecha:
 		var home: Team = equipos[partido[0]]
@@ -107,8 +108,12 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 		if con_log:
 			resultado_seguido = {"local": home.nombre, "visitante": away.nombre, "gl": r["goles_local"], "gv": r["goles_visitante"]}
 			log_seguido = r["log"]
+			eventos_seguido = r["eventos"]
 
-	return {"resultados_texto": resultados_texto, "resultado_seguido": resultado_seguido, "log_seguido": log_seguido}
+	return {
+		"resultados_texto": resultados_texto, "resultado_seguido": resultado_seguido,
+		"log_seguido": log_seguido, "eventos_seguido": eventos_seguido,
+	}
 
 
 ## Fase 5: §3 (ánimo según el resultado) y la fatiga acumulada que arranca

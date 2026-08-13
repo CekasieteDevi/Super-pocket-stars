@@ -73,6 +73,9 @@ static func _duelo(atacante: Dictionary, atacante_attr: String, equipo_atacante:
 	return resultado
 
 
+## eventos: Array de Dictionary siempre poblada (con_log solo controla el
+## log de texto, más caro/verboso) para que la UI (Fase 8) pueda animar un
+## partido sin tener que parsear el texto del log.
 static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_log: bool = false) -> Dictionary:
 	home.reset_partido()
 	away.reset_partido()
@@ -81,6 +84,7 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_log:
 
 	var log := []
 	var goles_log := []
+	var eventos := []
 
 	for mitad in range(2):
 		var posesion: Team = home if mitad == 0 else away
@@ -105,6 +109,10 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_log:
 						defensor["posicion"], defensor["atributos"]["quite"],
 						resultado["final"], "avanza" if exito else "pierde"
 					])
+				eventos.append({
+					"minuto": minuto, "tipo": "pase", "equipo": posesion.nombre, "rival": rival.nombre,
+					"jugador_posicion": atacante["posicion"], "resultado": "avanza" if exito else "pierde",
+				})
 
 				if exito:
 					posesion.racha += 1
@@ -132,9 +140,13 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_log:
 						defensor["posicion"], defensor["atributos"]["quite"],
 						resultado["final"], "tira" if exito else "pierde"
 					])
+				eventos.append({
+					"minuto": minuto, "tipo": "gambeta", "equipo": posesion.nombre, "rival": rival.nombre,
+					"jugador_posicion": atacante["posicion"], "resultado": "tira" if exito else "pierde",
+				})
 
 				if exito:
-					var tiro := _resolver_tiro(posesion, rival, atacante, rng, con_log, log, minuto)
+					var tiro := _resolver_tiro(posesion, rival, atacante, rng, con_log, log, eventos, minuto)
 					if tiro["gol"]:
 						posesion.goles += 1
 						goles_log.append({"minuto": minuto, "equipo": posesion.nombre, "jugador_id": tiro["goleador_id"]})
@@ -151,12 +163,13 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_log:
 		"goles_visitante": away.goles,
 		"log": log,
 		"goles_log": goles_log,
+		"eventos": eventos,
 	}
 
 
 ## §8.2: destino del tiro, duelo contra el arquero, y rebote si ataja sin agarrar.
 static func _resolver_tiro(equipo_atacante: Team, equipo_defensor: Team, atacante: Dictionary,
-		rng: RandomNumberGenerator, con_log: bool, log: Array, minuto: int) -> Dictionary:
+		rng: RandomNumberGenerator, con_log: bool, log: Array, eventos: Array, minuto: int) -> Dictionary:
 	var arquero := equipo_defensor.arquero()
 	var tiro: int = atacante["atributos"]["tiro"]
 	var destino := _resolver_destino(tiro, rng)
@@ -164,6 +177,10 @@ static func _resolver_tiro(equipo_atacante: Team, equipo_defensor: Team, atacant
 	if destino != "porteria":
 		if con_log:
 			log.append("min %d - TIRO (%s) - %s (tiro %d) -> %s" % [minuto, equipo_atacante.nombre, atacante["posicion"], tiro, destino])
+		eventos.append({
+			"minuto": minuto, "tipo": "tiro", "equipo": equipo_atacante.nombre, "rival": equipo_defensor.nombre,
+			"jugador_posicion": atacante["posicion"], "resultado": destino,
+		})
 		return {"gol": false, "destino": destino, "goleador_id": -1}
 
 	var arquero_attrs = arquero["atributos"]
@@ -176,6 +193,10 @@ static func _resolver_tiro(equipo_atacante: Team, equipo_defensor: Team, atacant
 			minuto, equipo_atacante.nombre, atacante["posicion"], tiro, equipo_defensor.nombre, arquero_valor, resultado["final"],
 			"GOL (%s)" % equipo_atacante.nombre if gol else "ATAJADA"
 		])
+	eventos.append({
+		"minuto": minuto, "tipo": "tiro_puerta", "equipo": equipo_atacante.nombre, "rival": equipo_defensor.nombre,
+		"jugador_posicion": atacante["posicion"], "resultado": "gol" if gol else "atajada",
+	})
 
 	if gol:
 		return {"gol": true, "destino": destino, "goleador_id": atacante["id"]}
@@ -192,6 +213,10 @@ static func _resolver_tiro(equipo_atacante: Team, equipo_defensor: Team, atacant
 				minuto, equipo_atacante.nombre, rematador["posicion"], tiro_rebote, resultado_rebote["final"],
 				"GOL (%s)" % equipo_atacante.nombre if gol_rebote else "ATAJADA"
 			])
+		eventos.append({
+			"minuto": minuto, "tipo": "rebote", "equipo": equipo_atacante.nombre, "rival": equipo_defensor.nombre,
+			"jugador_posicion": rematador["posicion"], "resultado": "gol" if gol_rebote else "atajada",
+		})
 		return {"gol": gol_rebote, "destino": "porteria", "goleador_id": rematador["id"]}
 
 	return {"gol": false, "destino": destino, "goleador_id": -1}
