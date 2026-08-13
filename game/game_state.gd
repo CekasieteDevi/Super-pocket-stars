@@ -167,6 +167,15 @@ func pedir_prestamo(club_origen: Team, jugador_id: int) -> Dictionary:
 	return resultado
 
 
+## Sube un nivel de instalación del club (Instalaciones.mejorar), pagado con
+## el presupuesto de Mejoras.
+func mejorar_instalacion(categoria: String) -> Dictionary:
+	var resultado := Instalaciones.mejorar(equipo_jugador, categoria)
+	if resultado["exito"]:
+		_agregar_noticia("INSTALACIONES: %s sube %s a nivel %d." % [equipo_jugador.nombre, categoria.capitalize(), resultado["nivel"]])
+	return resultado
+
+
 ## Debug: juega todas las fechas que queden de la temporada actual de una
 ## sola vez (incluye el cierre). Pensado para probar rápido sin clickear
 ## "jugar fecha" 38 veces — no es parte del flujo normal del juego.

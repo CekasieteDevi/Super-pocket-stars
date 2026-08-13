@@ -60,6 +60,7 @@ var contratos: Dictionary = {}  # jugador_id -> años restantes
 var reputacion: float = 50.0  # 0-100, afecta entradas/sponsors (§10.5)
 var quebrado: bool = false
 var scouts: Array = []  # [{"nivel":int}], §9.4 — empieza con 1 al mínimo (§15 decisión 9)
+var instalaciones: Dictionary = {}  # categoria -> nivel 1-5 (§9.5), ver core/instalaciones.gd
 
 ## Fase 9: cantera (§17).
 var cantera: Array = []  # dicts de PlayerGenerator.generate, juveniles sin promover
@@ -96,6 +97,7 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 	t.armonia += rng.randf_range(-3.0, 5.0)
 	t.reputacion = clamp(t.media_equipo(), 20.0, 80.0)
 	t.scouts = [{"nivel": 1}]
+	t.instalaciones = Instalaciones.nivel_inicial()
 	for categoria in Economia.PRESUPUESTO_PORCENTAJES:
 		t.caja[categoria] = 0.0
 		t.presupuesto_temporada[categoria] = 0.0
@@ -331,7 +333,7 @@ func actualizar_post_partido(goles_propios: int, goles_rival: int, goleadores_id
 func avanzar_dias(dias: int) -> Array:
 	for j in todos_los_jugadores():
 		var id: int = j["id"]
-		var recuperacion: float = RECUPERACION_FATIGA_POR_DIA * Personalidad.factor_recuperacion_fatiga(j)
+		var recuperacion: float = RECUPERACION_FATIGA_POR_DIA * Personalidad.factor_recuperacion_fatiga(j) * Instalaciones.factor_recuperacion_fatiga(self)
 		fatiga_acumulada[id] = min(1.0, fatiga_acumulada.get(id, 1.0) + recuperacion * dias)
 		var actual: float = animo.get(id, 50.0)
 		var deriva: float = clamp(50.0 - actual, -DERIVA_ANIMO_POR_SEMANA, DERIVA_ANIMO_POR_SEMANA) * (dias / 7.0)
@@ -350,8 +352,9 @@ func avanzar_dias(dias: int) -> Array:
 ## §17: camada anual de juveniles. 15 años, media baja (se generan con las
 ## curvas normales y se escalan como si todavía no hubieran entrenado nada
 ## — la genética real que van a alcanzar queda oculta en "potencial" igual
-## que cualquier jugador). "cantidad" es fija en 3 hasta que exista el
-## nivel de la mejora de Juveniles (§9.5, todavía sin sistema de mejoras).
+## que cualquier jugador). "cantidad" la decide el nivel de la mejora de
+## Juveniles (§9.5, Instalaciones.cantidad_camada) — el default de 3 acá es
+## solo para llamadas sueltas (tests) que no pasan por ese cálculo.
 func generar_camada(rng: RandomNumberGenerator, cantidad: int = 3) -> Array:
 	var nuevos := []
 	for i in range(cantidad):

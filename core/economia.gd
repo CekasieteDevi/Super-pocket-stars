@@ -34,7 +34,7 @@ static func _fila_vacia_caja() -> Dictionary:
 
 ## Procesa una temporada terminada para un club. posicion_tabla es 1-indexado.
 static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos: int) -> Dictionary:
-	var asistencia: float = AFORO_BASE * (0.3 + clamp(equipo.reputacion, 0.0, 100.0) / 100.0 * 0.7)
+	var asistencia: float = AFORO_BASE * Instalaciones.factor_aforo(equipo) * (0.3 + clamp(equipo.reputacion, 0.0, 100.0) / 100.0 * 0.7)
 	var ingreso_entradas: float = PARTIDOS_DE_LOCAL * asistencia * PRECIO_ENTRADA
 	var ingreso_sponsor: float = SPONSOR_BASE + (total_equipos - posicion_tabla) * 1000.0
 	var premio: float = PREMIO_POR_POSICION.get(posicion_tabla, 0.0)

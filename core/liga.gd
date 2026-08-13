@@ -241,7 +241,7 @@ func _procesar_cantera(equipo: Team, rng: RandomNumberGenerator, es_protegido: b
 	for juvenil in equipo.cantera:
 		Progresion.aplicar_temporada(juvenil, rng)
 	var liberados := equipo.liberar_veteranos_de_cantera()
-	var nuevos := equipo.generar_camada(rng)
+	var nuevos := equipo.generar_camada(rng, Instalaciones.cantidad_camada(equipo))
 	var promovidos := []
 	var promovidos_a_titular := []
 	if not es_protegido:

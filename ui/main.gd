@@ -32,6 +32,8 @@ var label_libres_estado: Label
 var contenedor_prestamos_ceder_botones: VBoxContainer
 var contenedor_prestamos_pedir_botones: VBoxContainer
 var label_prestamos_estado: Label
+var contenedor_instalaciones_botones: VBoxContainer
+var label_instalaciones_estado: Label
 
 
 func _ready() -> void:
@@ -48,6 +50,7 @@ func _ready() -> void:
 		["Plantel", "_mostrar_plantel"], ["Tabla", "_mostrar_tabla"], ["Partido", "_mostrar_partido"],
 		["Economia", "_mostrar_economia"], ["Mercado", "_mostrar_mercado"],
 		["Libres", "_mostrar_libres"], ["Prestamos", "_mostrar_prestamos"],
+		["Instalaciones", "_mostrar_instalaciones"],
 		["Cantera", "_mostrar_cantera"], ["Noticias", "_mostrar_noticias"],
 	]:
 		var btn := Button.new()
@@ -68,6 +71,7 @@ func _ready() -> void:
 	_construir_panel_mercado(contenedor)
 	_construir_panel_libres(contenedor)
 	_construir_panel_prestamos(contenedor)
+	_construir_panel_instalaciones(contenedor)
 	_construir_panel_cantera(contenedor)
 	_construir_panel_noticias(contenedor)
 
@@ -656,6 +660,84 @@ func _on_pedir_prestamo(club_origen: Team, jugador_id: int) -> void:
 	_refrescar_economia()
 
 
+## Instalaciones del club (§9.5): mejoras permanentes pagadas con el
+## presupuesto de Mejoras, ver core/instalaciones.gd.
+const NOMBRES_INSTALACIONES := {
+	"estadio": "Estadio (mas aforo, mas entradas)",
+	"medica": "Medica (menos lesiones, recupera mas rapido)",
+	"juveniles": "Juveniles (camada de cantera mas grande)",
+	"scouting": "Scouting (reportes de potencial mas precisos)",
+}
+
+
+func _construir_panel_instalaciones(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	padre.add_child(panel)
+	paneles["instalaciones"] = panel
+
+	var titulo := Label.new()
+	titulo.text = "Instalaciones — mejoras permanentes, se pagan con el presupuesto de Mejoras"
+	panel.add_child(titulo)
+
+	label_instalaciones_estado = Label.new()
+	label_instalaciones_estado.text = ""
+	panel.add_child(label_instalaciones_estado)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+
+	contenedor_instalaciones_botones = VBoxContainer.new()
+	contenedor_instalaciones_botones.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(contenedor_instalaciones_botones)
+
+
+func _refrescar_instalaciones() -> void:
+	for hijo in contenedor_instalaciones_botones.get_children():
+		hijo.queue_free()
+
+	var equipo := GameState.equipo_jugador
+	var label_presupuesto := Label.new()
+	label_presupuesto.text = "Presupuesto de Mejoras disponible: %s" % Economia.formato_dinero(equipo.caja["mejoras"])
+	contenedor_instalaciones_botones.add_child(label_presupuesto)
+
+	for categoria in Instalaciones.CATEGORIAS:
+		var nivel: int = equipo.instalaciones.get(categoria, 1)
+		var fila := HBoxContainer.new()
+		var label := Label.new()
+		if nivel >= Instalaciones.NIVEL_MAXIMO:
+			label.text = "%-45s  nivel %d/%d (maximo)" % [NOMBRES_INSTALACIONES[categoria], nivel, Instalaciones.NIVEL_MAXIMO]
+		else:
+			var costo := Instalaciones.costo_siguiente_nivel(nivel)
+			label.text = "%-45s  nivel %d/%d — subir a %d cuesta %s" % [
+				NOMBRES_INSTALACIONES[categoria], nivel, Instalaciones.NIVEL_MAXIMO, nivel + 1, Economia.formato_dinero(costo)
+			]
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		fila.add_child(label)
+
+		var btn := Button.new()
+		btn.text = "Mejorar"
+		btn.disabled = nivel >= Instalaciones.NIVEL_MAXIMO
+		btn.pressed.connect(func(): _on_mejorar_instalacion(categoria))
+		fila.add_child(btn)
+
+		contenedor_instalaciones_botones.add_child(fila)
+
+
+func _on_mejorar_instalacion(categoria: String) -> void:
+	var resultado := GameState.mejorar_instalacion(categoria)
+	if resultado["exito"]:
+		label_instalaciones_estado.text = "%s ahora esta en nivel %d." % [NOMBRES_INSTALACIONES[categoria], resultado["nivel"]]
+	else:
+		label_instalaciones_estado.text = "No se pudo: %s" % resultado["motivo"]
+
+	_refrescar_instalaciones()
+	_refrescar_economia()
+
+
 func _construir_panel_cantera(padre: Control) -> void:
 	var panel := VBoxContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -843,6 +925,13 @@ func _mostrar_prestamos() -> void:
 	paneles["prestamos"].visible = true
 	label_prestamos_estado.text = ""
 	_refrescar_prestamos()
+
+
+func _mostrar_instalaciones() -> void:
+	_ocultar_todos()
+	paneles["instalaciones"].visible = true
+	label_instalaciones_estado.text = ""
+	_refrescar_instalaciones()
 
 
 func _mostrar_cantera() -> void:

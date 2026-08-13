@@ -3,9 +3,9 @@ extends RefCounted
 
 ## Motor de lesiones — Fase 5 (GDD §2.3).
 ##
-## instalaciones_medicas y carga_entrenamiento todavía no son sistemas reales
-## (eso es Mejoras/Entrenamiento de club, fases de economía) — quedan en 1.0
-## hasta que existan y multipliquen el riesgo como dice el GDD.
+## instalaciones_medicas ya es un sistema real (§9.5, Instalaciones.factor_riesgo_lesion)
+## y se pasa desde MatchEngine._chequear_lesion. carga_entrenamiento todavía
+## no existe como sistema — queda en 1.0 hasta que haya algo real que lo mueva.
 ##
 ## Nota sobre la fórmula del GDD: "riesgo = base × (1 − energía/100) × ...",
 ## tomada literal, da riesgo CERO con el jugador 100% descansado — ningún
@@ -43,8 +43,8 @@ static func evaluar_riesgo(jugador: Dictionary, resistencia_pct: float,
 
 
 ## Devuelve {} si no hay lesión, o {"tipo":String, "dias":int} si hubo.
-static func intentar_lesion(jugador: Dictionary, resistencia_pct: float, rng: RandomNumberGenerator) -> Dictionary:
-	var riesgo := evaluar_riesgo(jugador, resistencia_pct)
+static func intentar_lesion(jugador: Dictionary, resistencia_pct: float, rng: RandomNumberGenerator, instalaciones_medicas: float = 1.0) -> Dictionary:
+	var riesgo := evaluar_riesgo(jugador, resistencia_pct, instalaciones_medicas)
 	if rng.randf() >= riesgo:
 		return {}
 
