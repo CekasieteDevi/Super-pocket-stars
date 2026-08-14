@@ -260,6 +260,14 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 				# equipo del jugador humano no se le vende nada sin que él
 				# lo decida (mismo criterio que mercado/cantera), pero se le
 				# avisa fuerte: la decisión de a quién vender es suya.
+				#
+				# La noticia de "entró en quiebra" es aparte de la de
+				# "vende de urgencia" (más abajo) — es puro color/chusmerío
+				# para que se note el momento exacto en que un club cae,
+				# no solo que después vendió a alguien.
+				if equipo.quebrado:
+					noticias.append("QUIEBRA: %s entró en números rojos." % equipo.nombre)
+
 				if equipo == equipo_protegido:
 					if equipo.quebrado:
 						noticias.append("QUIEBRA: %s está en números rojos. Vendé jugadores vos mismo (Mercado/cláusulas) antes de que sea peor." % equipo.nombre)
