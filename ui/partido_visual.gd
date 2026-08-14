@@ -1,15 +1,18 @@
 class_name PartidoVisual
 extends Control
 
-## Visualización de partido — Fase 8 (GDD roadmap §13, §11). Reproduce la
-## lista de "eventos" estructurados que ya devuelve MatchEngine.simular()
-## (Fase 8 le agregó esa lista además del log de texto) a un ritmo
-## controlable, con una pelota placeholder que se mueve entre zonas.
+## Visualización de partido — Fase 8 (GDD roadmap §13, §11), pulida con
+## formaciones fijas (Cancha.FORMACION_SLOTS). Reproduce la lista de
+## "eventos" estructurados que ya devuelve MatchEngine.simular() a un
+## ritmo controlable: 22 puntos en cancha (11 por equipo, en su posición
+## de formación) y una pelota que se mueve en X e Y según la zona de la
+## jugada y el carril de la posición que participa — el punto del que
+## está en juego se agranda.
 ##
-## Sin pixel art ni posiciones x/y por jugador (el motor no las calcula
-## todavía) — esto es una visualización abstracta de zona/posesión, no 22
-## muñequitos con movimiento realista. Eso necesita arte real (fase 9) y
-## un motor de posiciones que hoy no existe.
+## Sigue siendo abstracto: el motor no calcula movimiento real de
+## jugadores durante el partido (solo zona de la jugada + la posición del
+## que participa), así que los 22 puntos son una formación fija, no 22
+## muñequitos corriendo. Pixel art / arte real sigue pendiente.
 
 signal terminado
 
@@ -105,8 +108,11 @@ func iniciar(local: String, visitante: String, lista_eventos: Array) -> void:
 	boton_pausa.text = "Pausa"
 	label_evento.text = "Arranca el partido..."
 	label_minuto.text = "Min 0"
+	cancha.resaltado_local = ""
+	cancha.resaltado_visitante = ""
+	cancha.queue_redraw()
 	_refrescar_marcador()
-	_mover_pelota_instant(0.5)
+	_mover_pelota_instant(Vector2(0.5, 0.5))
 	_procesar_siguiente()
 
 
@@ -130,7 +136,7 @@ func _saltar() -> void:
 		_aplicar_evento(eventos[indice])
 		indice += 1
 	timer.stop()
-	_mover_pelota_instant(0.5)
+	_mover_pelota_instant(Vector2(0.5, 0.5))
 	label_evento.text = "Final del partido."
 	terminado.emit()
 
@@ -153,7 +159,17 @@ func _procesar_siguiente() -> void:
 func _aplicar_evento(evento: Dictionary) -> void:
 	label_minuto.text = "Min %d" % evento["minuto"]
 	label_evento.text = _texto_evento(evento)
-	_mover_pelota(_posicion_x(evento))
+
+	var es_local: bool = evento["equipo"] == equipo_local
+	if es_local:
+		cancha.resaltado_local = evento["jugador_posicion"]
+		cancha.resaltado_visitante = ""
+	else:
+		cancha.resaltado_visitante = evento["jugador_posicion"]
+		cancha.resaltado_local = ""
+	cancha.queue_redraw()
+
+	_mover_pelota(_posicion(evento))
 
 	if evento["resultado"] == "gol":
 		if evento["equipo"] == equipo_local:
@@ -163,30 +179,43 @@ func _aplicar_evento(evento: Dictionary) -> void:
 		_refrescar_marcador()
 
 
-## Sin coordenadas x/y por jugador, se aproxima la posición de la pelota
-## por la zona de la jugada: "pase" = zona de armado (mitad de cancha del
-## equipo que ataca), el resto = último tercio, cerca del arco rival.
+## Sin coordenadas x/y por jugador de verdad, se aproxima la posición de la
+## pelota con la zona de la jugada para X ("pase"/"tarjeta" = zona de
+## armado del equipo que participa, el resto = último tercio cerca del
+## arco rival) y con el carril típico de la posición para Y (Cancha.
+## FORMACION_SLOTS — un LAT/EXT tira por una punta al azar, el resto va
+## centrado).
+func _posicion(evento: Dictionary) -> Vector2:
+	return Vector2(_posicion_x(evento), _posicion_y(evento))
+
+
 func _posicion_x(evento: Dictionary) -> float:
 	var ataca_local: bool = evento["equipo"] == equipo_local
-	if evento["tipo"] == "pase":
+	if evento["tipo"] == "pase" or evento["tipo"] == "tarjeta":
 		return 0.35 if ataca_local else 0.65
 	return 0.85 if ataca_local else 0.15
 
 
-func _mover_pelota(x_normalizado: float) -> void:
-	var destino := _punto_cancha(x_normalizado)
+func _posicion_y(evento: Dictionary) -> float:
+	var slots: Array = Cancha.FORMACION_SLOTS.get(evento["jugador_posicion"], [{"y": 0.5}])
+	var slot: Dictionary = slots[randi() % slots.size()]
+	return slot["y"]
+
+
+func _mover_pelota(normalizado: Vector2) -> void:
+	var destino := _punto_cancha(normalizado)
 	var tween := create_tween()
 	tween.tween_property(pelota, "position", destino, max(0.02, (INTERVALO_BASE / velocidad) * 0.85))
 
 
-func _mover_pelota_instant(x_normalizado: float) -> void:
-	pelota.position = _punto_cancha(x_normalizado)
+func _mover_pelota_instant(normalizado: Vector2) -> void:
+	pelota.position = _punto_cancha(normalizado)
 
 
-func _punto_cancha(x_normalizado: float) -> Vector2:
+func _punto_cancha(normalizado: Vector2) -> Vector2:
 	var ancho: float = cancha.size.x
 	var alto: float = cancha.size.y
-	return Vector2(ancho * x_normalizado - pelota.size.x / 2.0, alto / 2.0 - pelota.size.y / 2.0)
+	return Vector2(ancho * normalizado.x - pelota.size.x / 2.0, alto * normalizado.y - pelota.size.y / 2.0)
 
 
 func _texto_evento(evento: Dictionary) -> String:
