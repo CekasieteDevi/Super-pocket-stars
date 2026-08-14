@@ -20,7 +20,11 @@ var lista_log: RichTextLabel
 var boton_jugar_fecha: Button
 var boton_ver_animado: Button
 var option_estilo: OptionButton
+var option_cambios: OptionButton
 var label_informe_rival: Label
+
+const OPCIONES_CAMBIOS := ["equilibrado", "descanso", "rendimiento"]
+const ETIQUETAS_CAMBIOS := {"equilibrado": "Equilibrado", "descanso": "Priorizar descanso", "rendimiento": "Priorizar rendimiento"}
 var partido_visual: PartidoVisual
 var lista_economia: RichTextLabel
 var lista_cantera: RichTextLabel
@@ -238,6 +242,17 @@ func _construir_panel_partido(padre: Control) -> void:
 		option_estilo.add_item(estilo)
 	option_estilo.item_selected.connect(_on_estilo_seleccionado)
 	fila_tactica.add_child(option_estilo)
+
+	var fila_cambios := HBoxContainer.new()
+	panel.add_child(fila_cambios)
+	var label_cambios := Label.new()
+	label_cambios.text = "Cambios automaticos: "
+	fila_cambios.add_child(label_cambios)
+	option_cambios = OptionButton.new()
+	for opcion in OPCIONES_CAMBIOS:
+		option_cambios.add_item(ETIQUETAS_CAMBIOS[opcion])
+	option_cambios.item_selected.connect(_on_config_cambios_seleccionado)
+	fila_cambios.add_child(option_cambios)
 
 	label_informe_rival = Label.new()
 	panel.add_child(label_informe_rival)
@@ -1074,7 +1089,7 @@ func _on_jugar_fecha() -> void:
 
 	var texto_log := ""
 	for entry in GameState.ultimo_log:
-		if entry.find("GOL") != -1 or entry.find("TARJETA") != -1:
+		if entry.find("GOL") != -1 or entry.find("TARJETA") != -1 or entry.find("CAMBIO") != -1:
 			texto_log += entry + "\n"
 	lista_log.text = texto_log
 	boton_ver_animado.disabled = GameState.ultimos_eventos.is_empty()
@@ -1130,6 +1145,8 @@ func _mostrar_partido() -> void:
 	paneles["partido"].visible = true
 	var idx_actual := Estilos.LISTA.find(GameState.equipo_jugador.estilo)
 	option_estilo.select(max(idx_actual, 0))
+	var idx_cambios := OPCIONES_CAMBIOS.find(GameState.equipo_jugador.config_cambios)
+	option_cambios.select(max(idx_cambios, 0))
 	_refrescar_informe_rival()
 
 
@@ -1169,6 +1186,10 @@ func _refrescar_informe_rival() -> void:
 func _on_estilo_seleccionado(idx: int) -> void:
 	GameState.equipo_jugador.estilo = Estilos.LISTA[idx]
 	_refrescar_informe_rival()
+
+
+func _on_config_cambios_seleccionado(idx: int) -> void:
+	GameState.equipo_jugador.config_cambios = OPCIONES_CAMBIOS[idx]
 
 
 func _mostrar_partido_animado() -> void:

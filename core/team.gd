@@ -42,6 +42,21 @@ var goles: int = 0
 var capitan_id: int = -1
 var resistencia: Dictionary = {}  # jugador_id -> % de resistencia en el partido actual (0..1)
 
+## §8.7 "hasta 5 cambios": quién está efectivamente en cancha AHORA, no
+## solo en el plantel de partido (jugadores+banco). Arranca en los 11
+## titulares en reset_partido() y MatchEngine.MAX_CAMBIOS (Team.MAX_CAMBIOS)
+## la va actualizando en las ventanas de cambio (entretiempo, 60', 75').
+var en_cancha: Array = []  # jugador_id
+var cambios_realizados: int = 0
+const MAX_CAMBIOS := 5
+
+## Preferencia del club para las sustituciones automáticas (no hay partido
+## interactivo todavía, así que se configura antes de la fecha, no en vivo):
+## "descanso" saca gente cansada más temprano para cuidarla de cara a la
+## fecha siguiente, "rendimiento" solo cambia por lesión o agotamiento
+## real, "equilibrado" es el punto medio (default para la IA).
+var config_cambios: String = "equilibrado"
+
 ## Fase 5: estado que persiste entre partidos (a diferencia de resistencia,
 ## que es solo dentro de un partido y siempre arranca desde fatiga_acumulada).
 var fatiga_acumulada: Dictionary = {}  # jugador_id -> 0..1, 1 = totalmente descansado
@@ -161,6 +176,7 @@ func guardar() -> Dictionary:
 		"sueldos": _claves_a_texto(sueldos), "contratos": _claves_a_texto(contratos),
 		"clausulas": _claves_a_texto(clausulas),
 		"reputacion": reputacion, "quebrado": quebrado, "scouts": scouts, "instalaciones": instalaciones,
+		"config_cambios": config_cambios,
 		"prestados_afuera": prestados_afuera_datos, "prestados_propios": prestados_propios_datos,
 	}
 
@@ -197,6 +213,7 @@ static func cargar(datos: Dictionary) -> Team:
 	t.quebrado = datos["quebrado"]
 	t.scouts = datos["scouts"]
 	t.instalaciones = datos["instalaciones"]
+	t.config_cambios = datos.get("config_cambios", "equilibrado")
 
 	# Quedan con el NOMBRE del club (String) en la clave "club"/"club_dueno"
 	# en vez de la referencia real -- Piramide.resolver_prestamos() los
@@ -389,8 +406,30 @@ func reset_partido() -> void:
 	resistencia.clear()
 	amarillas_partido.clear()
 	expulsados_partido.clear()
+	en_cancha = jugadores.map(func(j): return j["id"])
+	cambios_realizados = 0
 	for j in todos_los_jugadores():
 		resistencia[j["id"]] = fatiga_acumulada.get(j["id"], 1.0)
+
+
+## Los 11 (o menos, si hubo rojas) que están efectivamente jugando ahora
+## mismo, después de aplicar los cambios que se hayan hecho en el partido.
+func jugadores_en_cancha() -> Array:
+	var todos := todos_los_jugadores()
+	var out := []
+	for j in todos:
+		if en_cancha.has(j["id"]):
+			out.append(j)
+	return out
+
+
+## Cambio en firme: sale un jugador de la cancha, entra otro del banco.
+## No valida nada (posición, disponibilidad) — eso lo decide quien llama,
+## MatchEngine._procesar_cambios.
+func sustituir(id_sale: int, id_entra: int) -> void:
+	en_cancha.erase(id_sale)
+	en_cancha.append(id_entra)
+	cambios_realizados += 1
 
 
 func jugadores_por_posiciones(posiciones: Array) -> Array:
@@ -401,17 +440,17 @@ func jugadores_por_posiciones(posiciones: Array) -> Array:
 	return out
 
 
-## Como jugadores_por_posiciones pero busca en titulares+banco (§14) y
+## Busca entre los que están EN CANCHA ahora mismo (§8.7, ver en_cancha) y
 ## descarta lesionados, expulsados (este partido) y suspendidos. Si no
 ## queda nadie disponible en esas posiciones, cae a cualquiera disponible
-## del plantel; si NADIE está disponible (con el mínimo de Liga esto no
-## debería pasar en un partido real, ver Liga._resolver_forfeit), devuelve
-## la lista completa como último recurso.
+## en cancha; si NADIE de la cancha está disponible (caso extremo: varias
+## lesiones/rojas seguidas y ya no quedan cambios), amplía la búsqueda a
+## todo el plantel como último recurso (ver Liga._resolver_forfeit).
 func jugadores_disponibles_por_posiciones(posiciones: Array) -> Array:
 	var en_posicion := []
 	var disponibles := []
-	var todos := todos_los_jugadores()
-	for j in todos:
+	var en_cancha_dicts := jugadores_en_cancha()
+	for j in en_cancha_dicts:
 		if not puede_jugar(j["id"]):
 			continue
 		disponibles.append(j)
@@ -421,14 +460,18 @@ func jugadores_disponibles_por_posiciones(posiciones: Array) -> Array:
 		return en_posicion
 	if not disponibles.is_empty():
 		return disponibles
-	return todos
+	return todos_los_jugadores()
 
 
-## El titular si está disponible; si no (lesionado, expulsado o
-## suspendido), el suplente de banco (§14). Si ninguno está disponible, el
-## titular igual (ver Liga._resolver_forfeit para el caso de que falten
-## demasiados jugadores para jugar el partido).
+## El arquero que está EN CANCHA ahora mismo (si hubo un cambio de arquero
+## a mitad de partido, en_cancha ya refleja al suplente). Si por lo que
+## sea ninguno de los que están en cancha califica, cae al titular
+## original de todos modos (ver Liga._resolver_forfeit para el caso de que
+## falten demasiados jugadores para jugar el partido).
 func arquero() -> Dictionary:
+	for j in jugadores_en_cancha():
+		if j["posicion"] == "ARQ" and puede_jugar(j["id"]):
+			return j
 	var titular: Dictionary = {}
 	for j in jugadores:
 		if j["posicion"] == "ARQ":

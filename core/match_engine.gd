@@ -10,6 +10,12 @@ extends RefCounted
 ## (bloque B). El resto de los 37 modificadores (§8.4) llega cuando existan
 ## sus sistemas de origen: clima y calendario (fase 7), forma de partido a
 ## partido (todavía no distinguida del ánimo de temporada), rasgos (fase 9).
+##
+## §8.7: hay un "11 en cancha" real (Team.en_cancha) durante el partido, con
+## hasta 5 cambios automáticos por lesión/cansancio en 3 ventanas
+## (entretiempo, 60', 75' — ver _procesar_cambios). Antes de esto el motor
+## sampleaba directo de los 18 (titulares+banco) en cada duelo sin ningún
+## concepto de "quién está jugando ahora".
 
 const TICKS_POR_MITAD := 90
 
@@ -51,8 +57,10 @@ static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atri
 
 
 ## §2.3: tira riesgo de lesión para un jugador que acaba de participar en un
-## duelo. No saca al jugador del partido en curso (no hay banco/cambios
-## todavía, §14) — solo lo deja indisponible para partidos futuros.
+## duelo. No lo saca de la cancha al toque (eso requeriría parar el
+## partido); queda indisponible para el resto de esta acción y de
+## cualquier duelo hasta la próxima ventana de cambios (§8.7,
+## _procesar_cambios), que es la que decide si entra un reemplazo.
 static func _chequear_lesion(jugador: Dictionary, equipo: Team, rng: RandomNumberGenerator) -> void:
 	if equipo.esta_lesionado(jugador["id"]):
 		return
@@ -221,6 +229,67 @@ static func _jugar_periodo(equipo_inicial: Team, home: Team, away: Team, ticks: 
 				zona = "build"
 
 
+## §8.7: hasta 5 cambios entre los dos equipos, sacando primero a los
+## lesionados y después al más cansado por debajo del umbral que cada club
+## eligió (config_cambios). No reemplaza a los expulsados (roja) — eso no
+## existe en el fútbol real, el equipo sigue con uno menos. El reemplazo es
+## siempre de la MISMA posición desde el banco (7 suplentes, uno por
+## puesto): es una simplificación deliberada, no busca "el mejor disponible
+## en cualquier puesto".
+const UMBRAL_CAMBIO := {"descanso": 0.85, "equilibrado": 0.75, "rendimiento": 0.65}
+
+
+static func _mejor_suplente_para(equipo: Team, posicion: String):
+	var mejor = null
+	for j in equipo.banco:
+		if j["posicion"] != posicion or equipo.en_cancha.has(j["id"]) or not equipo.puede_jugar(j["id"]):
+			continue
+		if mejor == null or j["media"] > mejor["media"]:
+			mejor = j
+	return mejor
+
+
+static func _procesar_cambios_equipo(equipo: Team, minuto: int, con_log: bool, log: Array, eventos: Array) -> void:
+	if equipo.cambios_realizados >= Team.MAX_CAMBIOS:
+		return
+	var umbral: float = UMBRAL_CAMBIO.get(equipo.config_cambios, UMBRAL_CAMBIO["equilibrado"])
+
+	var candidatos := []
+	for j in equipo.jugadores_en_cancha():
+		if equipo.expulsados_partido.has(j["id"]):
+			continue  # una roja no se reemplaza
+		if equipo.esta_lesionado(j["id"]) or equipo.resistencia_pct(j["id"]) < umbral:
+			candidatos.append(j)
+	candidatos.sort_custom(func(a, b):
+		var a_les := equipo.esta_lesionado(a["id"])
+		var b_les := equipo.esta_lesionado(b["id"])
+		if a_les != b_les:
+			return a_les
+		return equipo.resistencia_pct(a["id"]) < equipo.resistencia_pct(b["id"]))
+
+	for saliente in candidatos:
+		if equipo.cambios_realizados >= Team.MAX_CAMBIOS:
+			break
+		var entrante = _mejor_suplente_para(equipo, saliente["posicion"])
+		if entrante == null:
+			continue
+		equipo.sustituir(saliente["id"], entrante["id"])
+		var motivo := "lesion" if equipo.esta_lesionado(saliente["id"]) else "cansancio"
+		if con_log:
+			log.append("min %d - CAMBIO (%s) - sale %s (%s), entra %s" % [
+				minuto, equipo.nombre, saliente["posicion"], motivo, entrante["posicion"]
+			])
+		eventos.append({
+			"minuto": minuto, "tipo": "cambio", "equipo": equipo.nombre, "rival": "",
+			"jugador_posicion": saliente["posicion"], "resultado": motivo,
+		})
+
+
+static func _procesar_cambios(home: Team, away: Team, minuto: int, con_log: bool, log: Array, eventos: Array) -> void:
+	_procesar_cambios_equipo(home, minuto, con_log, log, eventos)
+	_procesar_cambios_equipo(away, minuto, con_log, log, eventos)
+
+
 ## eventos: Array de Dictionary siempre poblada (con_log solo controla el
 ## log de texto, más caro/verboso) para que la UI (Fase 8) pueda animar un
 ## partido sin tener que parsear el texto del log.
@@ -236,9 +305,24 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_log:
 	var goles_log := []
 	var eventos := []
 
-	for mitad in range(2):
-		var equipo_inicial: Team = home if mitad == 0 else away
-		_jugar_periodo(equipo_inicial, home, away, TICKS_POR_MITAD, mitad * 45, 45.0, rng, con_log, log, goles_log, eventos)
+	_jugar_periodo(home, home, away, TICKS_POR_MITAD, 0, 45.0, rng, con_log, log, goles_log, eventos)
+	_procesar_cambios(home, away, 45, con_log, log, eventos)  # entretiempo
+
+	# El segundo tiempo se parte en 3 tandas de 15' reales (30 ticks cada
+	# una, TICKS_POR_MITAD/3) para poder meter dos ventanas de cambio más
+	# (60' y 75') sin duplicar el bucle de _jugar_periodo — el costo es que
+	# la posesión "reinicia" en el equipo que arranca cada tanda en vez de
+	# seguir de forma perfectamente continua, una simplificación menor
+	# frente a lo que ya aproxima el resto del motor. Alternando quién
+	# arranca cada tanda (away/home/away) en vez de repetir siempre el
+	# mismo equipo, ningún lado termina con más saques que el otro por el
+	# solo hecho de que existan las ventanas de cambio.
+	var tanda := int(TICKS_POR_MITAD / 3.0)
+	_jugar_periodo(away, home, away, tanda, 45, 15.0, rng, con_log, log, goles_log, eventos)
+	_procesar_cambios(home, away, 60, con_log, log, eventos)
+	_jugar_periodo(home, home, away, tanda, 60, 15.0, rng, con_log, log, goles_log, eventos)
+	_procesar_cambios(home, away, 75, con_log, log, eventos)
+	_jugar_periodo(away, home, away, TICKS_POR_MITAD - 2 * tanda, 75, 15.0, rng, con_log, log, goles_log, eventos)
 
 	return {
 		"goles_local": home.goles,
@@ -263,6 +347,7 @@ static func simular_alargue(home: Team, away: Team, rng: RandomNumberGenerator, 
 	var goles_log := []
 	var eventos := []
 
+	_procesar_cambios(home, away, 90, con_log, log, eventos)  # ultima ventana, antes del alargue
 	for tiempo in range(2):
 		var equipo_inicial: Team = home if tiempo == 0 else away
 		_jugar_periodo(equipo_inicial, home, away, TICKS_POR_TIEMPO_ALARGUE, 90 + tiempo * 15, 15.0, rng, con_log, log, goles_log, eventos)
