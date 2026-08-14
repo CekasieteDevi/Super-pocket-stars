@@ -15,6 +15,7 @@ func _init() -> void:
 	_test_mejorar_rechazo_nivel_maximo(rng)
 	_test_scouting_sube_nivel_de_scout(rng)
 	_test_efectos_escalan_con_el_nivel(rng)
+	_test_entrenamiento_escala_cupos_y_crecimiento(rng)
 
 	quit()
 
@@ -111,3 +112,23 @@ func _test_efectos_escalan_con_el_nivel(rng: RandomNumberGenerator) -> void:
 			riesgo_nivel1, riesgo_nivel5, recuperacion_nivel1, recuperacion_nivel5,
 			aforo_nivel1, aforo_nivel5, camada_nivel1, camada_nivel5
 		])
+
+
+func _test_entrenamiento_escala_cupos_y_crecimiento(rng: RandomNumberGenerator) -> void:
+	print("\n=== Entrenamiento: cupos de foco (=nivel) y +1%%/nivel de crecimiento, tope +4%% a nivel 5 ===")
+	var equipo := Team.generar("ClubF", rng, 0)
+
+	var cupos_nivel1 := Instalaciones.limite_foco_individual(equipo)
+	var factor_nivel1 := Instalaciones.factor_entrenamiento(equipo)
+	equipo.instalaciones["entrenamiento"] = 5
+	var cupos_nivel5 := Instalaciones.limite_foco_individual(equipo)
+	var factor_nivel5 := Instalaciones.factor_entrenamiento(equipo)
+
+	var ok: bool = cupos_nivel1 == 1 and cupos_nivel5 == 5
+	ok = ok and is_equal_approx(factor_nivel1, 1.0)
+	ok = ok and is_equal_approx(factor_nivel5, 1.04)
+
+	if ok:
+		print("OK: cupos 1->5, factor de crecimiento 1.00x->1.04x.")
+	else:
+		print("FALLA: cupos %d->%d factor %.3f->%.3f" % [cupos_nivel1, cupos_nivel5, factor_nivel1, factor_nivel5])

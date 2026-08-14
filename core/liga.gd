@@ -289,9 +289,24 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 
 		_avanzar_contratos(equipo, rng, equipo == equipo_protegido)
 		var bonus_mentor := Mentores.mejor_bonus_disponible(equipo)
+
+		# §7.4 punto 3: la IA mantiene el foco de quien ya lo tenía (para
+		# que llegue a las 2 temporadas seguidas) y llena los cupos que
+		# sobren. Al equipo del jugador humano no se le toca — el foco
+		# individual lo elige él desde la UI.
+		if equipo != equipo_protegido:
+			Entrenamiento.asignar_foco_automatico_ia(equipo, rng)
+		var mult_entrenamiento := Instalaciones.factor_entrenamiento(equipo)
+
 		for jugador in equipo.todos_los_jugadores():
-			Progresion.aplicar_temporada(jugador, rng, Mentores.multiplicador_para(jugador, bonus_mentor))
-		var reporte := _procesar_cantera(equipo, rng, equipo == equipo_protegido, bonus_mentor)
+			var foco: String = equipo.foco_individual.get(jugador["id"], "")
+			Progresion.aplicar_temporada(jugador, rng, Mentores.multiplicador_para(jugador, bonus_mentor), mult_entrenamiento, foco)
+			Entrenamiento.actualizar_racha(jugador, foco)
+			var aprendida := Aprendizaje.procesar_jugador(jugador, equipo, temporada_actual, rng)
+			if not aprendida.is_empty():
+				noticias.append("APRENDIZAJE: un %s de %s aprende %s (bronce)." % [jugador["posicion"], equipo.nombre, aprendida["nombre"]])
+
+		var reporte := _procesar_cantera(equipo, rng, equipo == equipo_protegido, bonus_mentor, temporada_actual)
 		reporte_cantera.append(reporte)
 		for r in reporte["promovidos"]:
 			noticias.append("CANTERA: %s hace debutar a un canterano en %s (banco)" % [equipo.nombre, r["promovido"]["posicion"]])
@@ -299,6 +314,8 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 			noticias.append("PLANTEL: %s sube a un suplente a titular en %s" % [equipo.nombre, r["entra"]["posicion"]])
 		if not reporte["liberados"].is_empty():
 			noticias.append("CANTERA: %s deja libres a %d juveniles que no debutaron a tiempo" % [equipo.nombre, reporte["liberados"].size()])
+		for a in reporte["aprendizajes"]:
+			noticias.append("APRENDIZAJE: un juvenil (%s) de %s aprende %s (bronce)." % [a["jugador"]["posicion"], equipo.nombre, a["habilidad"]["nombre"]])
 		equipo.recalcular_capitan()
 
 	return [informes_economia, transferencias, reporte_cantera]
@@ -310,9 +327,17 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 ## (cantera->banco y banco->titular) — para el equipo del jugador humano
 ## (es_protegido) esas dos decisiones quedan para que las tome desde la UI,
 ## igual que el mercado no lo toca a él.
-func _procesar_cantera(equipo: Team, rng: RandomNumberGenerator, es_protegido: bool = false, bonus_mentor: float = 0.0) -> Dictionary:
+func _procesar_cantera(equipo: Team, rng: RandomNumberGenerator, es_protegido: bool = false,
+		bonus_mentor: float = 0.0, temporada_actual: int = 0) -> Dictionary:
+	var mult_entrenamiento := Instalaciones.factor_entrenamiento(equipo)
+	var aprendizajes := []
 	for juvenil in equipo.cantera:
-		Progresion.aplicar_temporada(juvenil, rng, Mentores.multiplicador_para(juvenil, bonus_mentor))
+		var foco: String = equipo.foco_individual.get(juvenil["id"], "")
+		Progresion.aplicar_temporada(juvenil, rng, Mentores.multiplicador_para(juvenil, bonus_mentor), mult_entrenamiento, foco)
+		Entrenamiento.actualizar_racha(juvenil, foco)
+		var aprendida := Aprendizaje.procesar_jugador(juvenil, equipo, temporada_actual, rng)
+		if not aprendida.is_empty():
+			aprendizajes.append({"jugador": juvenil, "habilidad": aprendida})
 	var liberados := equipo.liberar_veteranos_de_cantera()
 	var nuevos := equipo.generar_camada(rng, Instalaciones.cantidad_camada(equipo))
 	var promovidos := []
@@ -326,6 +351,7 @@ func _procesar_cantera(equipo: Team, rng: RandomNumberGenerator, es_protegido: b
 	return {
 		"equipo": equipo.nombre, "liberados": liberados, "nuevos": nuevos,
 		"promovidos": promovidos, "promovidos_a_titular": promovidos_a_titular,
+		"aprendizajes": aprendizajes,
 	}
 
 

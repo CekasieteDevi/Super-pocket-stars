@@ -33,6 +33,7 @@ var calidad_cancha: float = 0.0  # -8..+3, ver core/estado_cancha.gd — rige cu
 var clima_partido: String = ""  # transitorio, solo dentro de un partido — "" (normal) / Lluvia / Calor / Viento, ver core/clima.gd
 var arbitro_partido: String = ""  # transitorio, solo dentro de un partido — Estricto/Permisivo/Casero, ver core/arbitro.gd
 var objetivo_en_riesgo: bool = false  # transitorio, lo recalcula GameState antes de cada fecha — ver core/objetivos.gd
+var foco_individual: Dictionary = {}  # jugador_id -> atributo (String), foco de ESTA temporada — ver core/entrenamiento.gd
 var armonia: float = 0.0  # placeholder hasta que exista §3 completo (vestuario real)
 ## §8.4 modificador 2 ("Forma, de -5 a +5 según los últimos 5 partidos"),
 ## bloque A. Sin historial de partidos recientes todavía, se aproxima con
@@ -193,6 +194,7 @@ func guardar() -> Dictionary:
 		"reputacion": reputacion, "quebrado": quebrado, "scouts": scouts, "instalaciones": instalaciones,
 		"config_cambios": config_cambios,
 		"objetivo_temporada": objetivo_temporada, "objetivos_incumplidos_seguidos": objetivos_incumplidos_seguidos,
+		"foco_individual": _claves_a_texto(foco_individual),
 		"prestados_afuera": prestados_afuera_datos, "prestados_propios": prestados_propios_datos,
 	}
 
@@ -252,6 +254,7 @@ static func cargar(datos: Dictionary) -> Team:
 	if t.objetivo_temporada.has("posicion_maxima"):
 		t.objetivo_temporada["posicion_maxima"] = int(t.objetivo_temporada["posicion_maxima"])
 	t.objetivos_incumplidos_seguidos = int(datos.get("objetivos_incumplidos_seguidos", 0))
+	t.foco_individual = _claves_a_entero(datos.get("foco_individual", {}))
 
 	# Quedan con el NOMBRE del club (String) en la clave "club"/"club_dueno"
 	# en vez de la referencia real -- Piramide.resolver_prestamos() los
@@ -300,6 +303,8 @@ static func _normalizar_jugadores(lista: Array) -> Array:
 		j["edad"] = int(j["edad"])
 		j["potencial"] = int(j["potencial"])
 		j["propension_lesion"] = int(j["propension_lesion"])
+		if j.has("foco_temporadas_consecutivas"):
+			j["foco_temporadas_consecutivas"] = int(j["foco_temporadas_consecutivas"])
 		for attr in j["atributos"]:
 			j["atributos"][attr] = int(j["atributos"][attr])
 	return lista

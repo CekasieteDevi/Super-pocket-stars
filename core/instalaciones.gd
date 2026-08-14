@@ -3,17 +3,23 @@ extends RefCounted
 
 ## Instalaciones del club (§9.5): mejoras permanentes pagadas con el
 ## presupuesto de Mejoras (10% de la economía, §9.1 / §15 decisión 2) que
-## hasta ahora se acumulaba sin que nada lo gastara. Cuatro áreas, niveles
+## hasta ahora se acumulaba sin que nada lo gastara. Cinco áreas, niveles
 ## 1-5 cada una, cada nivel más caro que el anterior:
 ##   - Estadio: más aforo, más ingreso de entradas (Economia.procesar_temporada).
 ##   - Médica: baja el riesgo de lesión (Lesiones.evaluar_riesgo) y recupera
 ##     la fatiga más rápido entre fechas (Team.avanzar_dias).
 ##   - Juveniles: camada de cantera más grande cada temporada (Team.generar_camada).
 ##   - Scouting: sube el nivel de tus scouts (Scout.margen), reportes más precisos.
+##   - Entrenamiento: cuántos jugadores podés poner en foco individual a la
+##     vez (core/entrenamiento.gd) y un +1% de crecimiento por nivel en el
+##     cierre de temporada (Progresion.aplicar_temporada) — chico a
+##     propósito: la fórmula de crecimiento ya tiene rendimientos
+##     decrecientes contra el potencial, así que este bonus acelera sin
+##     romper el techo real de cada jugador.
 
 const NIVEL_MAXIMO := 5
 const COSTO_BASE := 40000.0
-const CATEGORIAS := ["estadio", "medica", "juveniles", "scouting"]
+const CATEGORIAS := ["estadio", "medica", "juveniles", "scouting", "entrenamiento"]
 
 
 static func nivel_inicial() -> Dictionary:
@@ -78,3 +84,17 @@ static func factor_aforo(equipo: Team) -> float:
 static func cantidad_camada(equipo: Team) -> int:
 	var nivel: int = equipo.instalaciones.get("juveniles", 1)
 	return 2 + nivel
+
+
+## §9.5/§7.4 entrenamiento: cuántos jugadores pueden estar en foco
+## individual a la vez (ver core/entrenamiento.gd).
+static func limite_foco_individual(equipo: Team) -> int:
+	return equipo.instalaciones.get("entrenamiento", 1)
+
+
+## §9.5/§7.1 entrenamiento: +1% de crecimiento por nivel arriba del 1
+## (nivel 1 = sin bonus, nivel 5 = +4%) sobre TODO el crecimiento de la
+## temporada, no solo el atributo en foco — ver Progresion.aplicar_temporada.
+static func factor_entrenamiento(equipo: Team) -> float:
+	var nivel: int = equipo.instalaciones.get("entrenamiento", 1)
+	return 1.0 + (nivel - 1) * 0.01

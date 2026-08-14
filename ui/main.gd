@@ -779,6 +779,7 @@ const NOMBRES_INSTALACIONES := {
 	"medica": "Medica (menos lesiones, recupera mas rapido)",
 	"juveniles": "Juveniles (camada de cantera mas grande)",
 	"scouting": "Scouting (reportes de potencial mas precisos)",
+	"entrenamiento": "Entrenamiento (mas cupos de foco individual, crecimiento mas rapido)",
 }
 
 
@@ -837,6 +838,79 @@ func _refrescar_instalaciones() -> void:
 		fila.add_child(btn)
 
 		contenedor_instalaciones_botones.add_child(fila)
+
+	_refrescar_foco_individual(equipo)
+
+
+## §7.4 punto 3 / §5: hasta N jugadores (N = nivel de Entrenamiento) con
+## foco en un atributo, x2 de crecimiento esta temporada — y la vía de
+## entrada para aprender una habilidad de bronce (2 temporadas seguidas
+## en el mismo atributo, con ese atributo en 65+).
+func _refrescar_foco_individual(equipo: Team) -> void:
+	var titulo_foco := Label.new()
+	titulo_foco.text = "\nFoco individual (%d/%d cupos usados) — el atributo elegido crece x2 esta temporada. 2 temporadas seguidas en el mismo atributo (con ese atributo en 65+) puede hacerle aprender una habilidad de bronce." % [
+		equipo.foco_individual.size(), Entrenamiento.limite(equipo)
+	]
+	contenedor_instalaciones_botones.add_child(titulo_foco)
+
+	for jugador_id in equipo.foco_individual.keys():
+		var jugador := _buscar_jugador_por_id(equipo, jugador_id)
+		if jugador.is_empty():
+			continue
+		var atributo: String = equipo.foco_individual[jugador_id]
+		var racha: int = jugador.get("foco_temporadas_consecutivas", 0)
+		var fila := HBoxContainer.new()
+		var label := Label.new()
+		label.text = "%-22s %-5s foco: %-10s (racha: %d temporada%s)" % [
+			_nombre_jugador(jugador), jugador["posicion"], atributo, racha, "" if racha == 1 else "s"
+		]
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		fila.add_child(label)
+		var btn_quitar := Button.new()
+		btn_quitar.text = "Quitar"
+		btn_quitar.pressed.connect(func():
+			Entrenamiento.quitar(equipo, jugador_id)
+			_refrescar_instalaciones()
+		)
+		fila.add_child(btn_quitar)
+		contenedor_instalaciones_botones.add_child(fila)
+
+	if equipo.foco_individual.size() >= Entrenamiento.limite(equipo):
+		return
+
+	var elegibles: Array = equipo.jugadores + equipo.banco + equipo.cantera
+	elegibles = elegibles.filter(func(j): return not equipo.foco_individual.has(j["id"]))
+	if elegibles.is_empty():
+		return
+
+	var fila_nueva := HBoxContainer.new()
+	var option_jugador := OptionButton.new()
+	for j in elegibles:
+		option_jugador.add_item("%s (%s, %d años)" % [_nombre_jugador(j), j["posicion"], j["edad"]])
+	fila_nueva.add_child(option_jugador)
+
+	var option_atributo := OptionButton.new()
+	for attr in PlayerGenerator.get_all_attributes():
+		option_atributo.add_item(attr)
+	fila_nueva.add_child(option_atributo)
+
+	var btn_asignar := Button.new()
+	btn_asignar.text = "Asignar foco"
+	btn_asignar.pressed.connect(func():
+		var jugador_elegido: Dictionary = elegibles[option_jugador.selected]
+		var atributo_elegido := option_atributo.get_item_text(option_atributo.selected)
+		Entrenamiento.asignar(equipo, jugador_elegido["id"], atributo_elegido)
+		_refrescar_instalaciones()
+	)
+	fila_nueva.add_child(btn_asignar)
+	contenedor_instalaciones_botones.add_child(fila_nueva)
+
+
+func _buscar_jugador_por_id(equipo: Team, jugador_id: int) -> Dictionary:
+	for j in equipo.jugadores + equipo.banco + equipo.cantera:
+		if j["id"] == jugador_id:
+			return j
+	return {}
 
 
 func _on_mejorar_instalacion(categoria: String) -> void:

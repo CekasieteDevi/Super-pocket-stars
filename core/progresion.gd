@@ -60,8 +60,16 @@ static func _multiplicador_crecimiento(edad: int) -> float:
 ## Envejece un año al jugador y mueve sus atributos. Modifica el dict in
 ## place. mult_mentor (§6 extendido, Mentores.multiplicador_para): bonus de
 ## crecimiento si hay un veterano líder en su plantel y este jugador es
-## joven — 1.0 si no aplica ninguna de las dos cosas.
-static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator, mult_mentor: float = 1.0) -> void:
+## joven — 1.0 si no aplica ninguna de las dos cosas. mult_entrenamiento
+## (§9.5, Instalaciones.factor_entrenamiento): +1%/nivel de instalaciones
+## de entrenamiento, sobre TODO el crecimiento. foco_atributo (§7.4 punto
+## 3, core/entrenamiento.gd): si no es "", ESE atributo puntual crece al
+## doble esta temporada — "" si el jugador no tiene foco individual.
+const MULTIPLICADOR_FOCO := 2.0
+
+
+static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator, mult_mentor: float = 1.0,
+		mult_entrenamiento: float = 1.0, foco_atributo: String = "") -> void:
 	jugador["edad"] += 1
 	var mult_edad := _multiplicador_crecimiento(jugador["edad"])
 	var mult_tier: float = VELOCIDAD_POR_TIER.get(jugador["genetica_tier"], 1.0)
@@ -74,7 +82,8 @@ static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator, m
 		if mult_edad >= 0.0:
 			var distancia: float = float(jugador["potencial"]) - valor_actual
 			if distancia > 0.0:
-				cambio = distancia * 0.12 * mult_edad * mult_tier * mult_personalidad * mult_mentor
+				var mult_foco: float = MULTIPLICADOR_FOCO if attr == foco_atributo else 1.0
+				cambio = distancia * 0.12 * mult_edad * mult_tier * mult_personalidad * mult_mentor * mult_entrenamiento * mult_foco
 		else:
 			var grupo := _grupo_de_atributo(attr)
 			var factor_declive: float = DECLIVE_POR_GRUPO.get(grupo, 0.5)
