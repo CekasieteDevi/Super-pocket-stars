@@ -132,8 +132,16 @@ func jugar_temporada(rng: RandomNumberGenerator, con_log: bool = false) -> Array
 ## chequeo inútil.
 const MINIMO_DISPONIBLES := 15
 ## Multa por no poder presentar el mínimo, descontada del presupuesto de
-## Mantenimiento (administrativo, no es un gasto de plantel).
-const MULTA_NO_PRESENTARSE := 30000.0
+## Mantenimiento (administrativo, no es un gasto de plantel). Bajada de
+## $30,000 a $5,000 junto con el ajuste de PRECIO_ENTRADA (Economia.gd,
+## feedback de playtesting): a $30,000 la multa, calibrada cuando un club
+## de división baja ganaba ~$800,000 por temporada, pasó a ser ~20% del
+## ingreso de un club real (~$150,000) en vez de una fracción chica —
+## unos pocos forfeits por mala suerte con lesiones alcanzaban para
+## mandar a un club sano a quiebra técnica. $5,000 sigue siendo un golpe
+## real (nadie quiere pagarla), pero no un evento que quiebra un club por
+## sí solo.
+const MULTA_NO_PRESENTARSE := 5000.0
 
 
 ## Simula una sola fecha (todos sus partidos) y actualiza la tabla.

@@ -21,12 +21,20 @@ const PRESUPUESTO_PORCENTAJES := {
 ## Mantenimiento se repone con RESERVA_MANTENIMIENTO, no con un porcentaje.
 const CATEGORIAS_CAJA := ["fichajes", "contratos", "mejoras", "mantenimiento"]
 
-## Calibrado para que la masa salarial (sueldo ~15% del valor de mercado,
-## ValorJugador.VALOR_BASE=50000) sea una fracción realista de los ingresos
-## de un club de división baja, no un redondeo despreciable.
+## PRECIO_ENTRADA calibrado (feedback de playtesting: "gané $797,000 en
+## división 10 cuando un jugador de media 75 cuesta $170,000") — con
+## $80 la entrada, un club de división baja con reputación ~45 sacaba
+## ~$800,000 de ingresos por temporada contra un jugador MEDIANO del
+## propio plantel valuado en ~$17,500: una desproporción de ~45x que
+## dejaba a cualquier club de división baja nadando en plata en vez de
+## sentirse pobre. Bajado a $12 (de $80): el mismo club ahora saca
+## ~$140,000-195,000 por temporada, con el neto rondando cero para los
+## clubes de asistencia floja y positivo pero ajustado para el resto —
+## una temporada entera de ahorro no te compra la división entera, pero
+## sí un par de refuerzos reales si administrás bien.
 const PARTIDOS_DE_LOCAL := 19
 const AFORO_BASE := 800
-const PRECIO_ENTRADA := 80.0
+const PRECIO_ENTRADA := 12.0
 const SPONSOR_BASE := 15000.0
 const MANTENIMIENTO_FIJO := 25000.0
 ## Reserva de Mantenimiento que se repone CADA temporada, siempre igual —
@@ -85,8 +93,13 @@ static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos:
 	var relativo: float = (float(total_equipos) / 2.0) - posicion_tabla
 	equipo.reputacion = clamp(equipo.reputacion + relativo * 0.25, 0.0, 100.0)
 
+	# Todo el plantel activo (titulares+banco, §14), no solo los 11
+	# titulares -- el banco es un activo real del club (podría venderse),
+	# y contarlo de menos hacía que el umbral de quiebra fuera mucho más
+	# fácil de cruzar de lo que debería para cualquier club con un banco
+	# de valor.
 	var valor_plantel := 0.0
-	for j in equipo.jugadores:
+	for j in equipo.todos_los_jugadores():
 		valor_plantel += ValorJugador.calcular(j, equipo.animo.get(j["id"], 50.0), equipo.contratos.get(j["id"], 1))
 
 	var caja_total := 0.0
@@ -102,9 +115,16 @@ static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos:
 
 
 ## Sueldo anual sugerido para un jugador recién fichado o generado: una
-## fracción de su valor de mercado, como es habitual en fútbol.
+## fracción de su valor de mercado, como es habitual en fútbol. Bajado de
+## 0.15 a 0.10 junto con el ajuste de PRECIO_ENTRADA (feedback de
+## playtesting, ver más arriba): con 0.15, la masa salarial crecía más
+## rápido que el ingreso (que tiene techo — reputación tarda en subir y
+## la asistencia nunca pasa de 1.0x) a medida que los jugadores mejoraban
+## con la progresión, empujando a cada vez más clubes a números rojos
+## temporada tras temporada. Con 0.10 el neto promedio de la pirámide se
+## mantiene sano varias temporadas seguidas en vez de derrumbarse.
 static func sueldo_sugerido(valor: float) -> float:
-	return valor * 0.15
+	return valor * 0.10
 
 
 ## "$1234567.8" -> "$1,234,568" (redondeado). Para que los montos se lean

@@ -29,11 +29,19 @@ func _init() -> void:
 
 	_test_valor_y_scouts(liga)
 
-	liga.jugar_temporada(rng, false)
-
-	var resultado: Array = liga.nueva_temporada(rng)
-	var informes: Array = resultado[0]
-	var transferencias: Array = resultado[1]
+	# Con la economía calibrada a divisiones pobres (PRECIO_ENTRADA bajado
+	# — feedback de playtesting, ver Economia.gd), el presupuesto de
+	# Fichajes de un club recién generado (caja en 0) no siempre alcanza
+	# para una transferencia en la primerísima ventana — hace falta que
+	# se acumule plata de más de una temporada, como en un club real.
+	# Simulamos varias para que el mercado tenga margen de reaccionar.
+	var informes: Array = []
+	var transferencias: Array = []
+	for temporada in range(4):
+		liga.jugar_temporada(rng, false)
+		var resultado: Array = liga.nueva_temporada(rng)
+		informes = resultado[0]
+		transferencias.append_array(resultado[1])
 
 	_test_economia(informes)
 	_test_mercado(liga, transferencias)
@@ -96,15 +104,15 @@ func _test_economia(informes: Array) -> void:
 
 func _test_mercado(liga: Liga, transferencias: Array) -> void:
 	print("\n=== Mercado de pases ===")
-	print("Transferencias ejecutadas en la ventana: %d" % transferencias.size())
+	print("Transferencias ejecutadas en 4 ventanas (4 temporadas): %d" % transferencias.size())
 	for i in range(min(5, transferencias.size())):
 		var t = transferencias[i]
 		print("  %s (%s) : %s -> %s por %.0f" % [t["jugador_id"], t["posicion"], t["de"], t["a"], t["valor"]])
 
 	if transferencias.size() > 0:
-		print("OK: el mercado genero al menos una transferencia en la ventana.")
+		print("OK: el mercado genero al menos una transferencia en 4 temporadas.")
 	else:
-		print("FALLA: no hubo transferencias (revisar umbral/presupuesto).")
+		print("FALLA: no hubo transferencias en 4 temporadas (revisar umbral/presupuesto).")
 
 
 func _test_integridad_planteles(liga: Liga) -> void:
