@@ -17,6 +17,7 @@ var contenedor_banco_botones: VBoxContainer
 var lista_tabla: RichTextLabel
 var label_resultado: Label
 var lista_log: RichTextLabel
+var lista_estadisticas: RichTextLabel
 var boton_jugar_fecha: Button
 var boton_ver_animado: Button
 var option_estilo: OptionButton
@@ -265,6 +266,10 @@ func _construir_panel_partido(padre: Control) -> void:
 	label_resultado = Label.new()
 	label_resultado.text = "Todavia no jugaste ninguna fecha."
 	panel.add_child(label_resultado)
+
+	lista_estadisticas = RichTextLabel.new()
+	lista_estadisticas.custom_minimum_size = Vector2(0, 130)
+	panel.add_child(lista_estadisticas)
 
 	lista_log = RichTextLabel.new()
 	lista_log.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1096,10 +1101,31 @@ func _on_jugar_fecha() -> void:
 			texto_log += entry + "\n"
 	lista_log.text = texto_log
 	boton_ver_animado.disabled = GameState.ultimos_eventos.is_empty()
+	lista_estadisticas.text = _texto_estadisticas(r) if r.size() > 0 else ""
 
 	_refrescar_tabla()
 	_refrescar_plantel()
 	_refrescar_informe_rival()
+
+
+## Resumen de estadisticas post-partido (posesion/tiros/pases) — pensado
+## para que efectos como el choque de estilos (§8.6.3) o el rasgo del DT
+## (§8.6.4) se puedan VER, ya que hoy solo cambian el % de exito de cada
+## duelo y eso queda invisible si lo unico que se muestra es el marcador.
+func _texto_estadisticas(r: Dictionary) -> String:
+	var stats := EstadisticasPartido.calcular(GameState.ultimos_eventos, r["local"], r["visitante"])
+	var loc: Dictionary = stats[r["local"]]
+	var vis: Dictionary = stats[r["visitante"]]
+	var texto := "%-24s %10s %10s\n" % ["", r["local"], r["visitante"]]
+	texto += "%-24s %9.0f%% %9.0f%%\n" % ["Posesion", loc["posesion_pct"], vis["posesion_pct"]]
+	texto += "%-24s %10d %10d\n" % ["Tiros", loc["tiros"], vis["tiros"]]
+	texto += "%-24s %10d %10d\n" % ["Tiros al arco", loc["tiros_al_arco"], vis["tiros_al_arco"]]
+	texto += "%-24s %10s %10s\n" % [
+		"Pases (completados)",
+		"%d/%d" % [loc["pases_completados"], loc["pases_intentados"]],
+		"%d/%d" % [vis["pases_completados"], vis["pases_intentados"]],
+	]
+	return texto
 
 
 ## [debug] Simula todas las fechas que queden de la temporada de una,
@@ -1124,6 +1150,7 @@ func _on_simular_temporada() -> void:
 	GameState.ultimo_log = []
 	GameState.ultimos_eventos = []
 	lista_log.text = ""
+	lista_estadisticas.text = ""
 	boton_ver_animado.disabled = true
 
 	_refrescar_tabla()
