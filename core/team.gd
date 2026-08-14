@@ -27,6 +27,7 @@ var nombre: String
 var jugadores: Array = []  # 11 dicts (PlayerGenerator.generate), uno por puesto de FORMACION (titulares)
 var banco: Array = []  # 7 dicts, uno por puesto de BANCO_FORMACION (suplentes)
 var local: bool = false
+var estilo: String = ""  # Tiki taka/Contragolpe/Juego directo/Presión alta/Defensivo/Físico, ver core/estilos.gd
 var armonia: float = 0.0  # placeholder hasta que exista §3 completo (vestuario real)
 ## §8.4 modificador 2 ("Forma, de -5 a +5 según los últimos 5 partidos"),
 ## bloque A. Sin historial de partidos recientes todavía, se aproxima con
@@ -109,6 +110,7 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 		t._registrar_fichaje(jugador, ValorJugador.calcular(jugador, 50.0, 3), rng.randi_range(1, 5))
 		t.armonia += Personalidad.bonus_armonia(jugador)
 	t.armonia += rng.randf_range(-3.0, 5.0)
+	t.estilo = Estilos.generar(rng)
 	t.reputacion = clamp(t.media_equipo(), 20.0, 80.0)
 	t.scouts = [{"nivel": 1}]
 	t.instalaciones = Instalaciones.nivel_inicial()
@@ -149,7 +151,7 @@ func guardar() -> Dictionary:
 		}
 
 	return {
-		"nombre": nombre, "jugadores": jugadores, "banco": banco, "cantera": cantera,
+		"nombre": nombre, "estilo": estilo, "jugadores": jugadores, "banco": banco, "cantera": cantera,
 		"siguiente_id_cantera": siguiente_id_cantera, "capitan_id": capitan_id,
 		"fatiga_acumulada": _claves_a_texto(fatiga_acumulada),
 		"animo": _claves_a_texto(animo),
@@ -166,6 +168,16 @@ func guardar() -> Dictionary:
 static func cargar(datos: Dictionary) -> Team:
 	var t := Team.new()
 	t.nombre = datos["nombre"]
+	if datos.has("estilo"):
+		t.estilo = datos["estilo"]
+	else:
+		# Migracion de guardados de antes de que existiera §8.6.3 (choque de
+		# estilos): en vez de dejarlo en "" para siempre (matchup neutro
+		# eterno), se le sortea un estilo determinado por el nombre del
+		# club, asi es estable entre cargas sucesivas del mismo guardado.
+		var rng_migracion := RandomNumberGenerator.new()
+		rng_migracion.seed = hash(datos["nombre"])
+		t.estilo = Estilos.generar(rng_migracion)
 	t.jugadores = _normalizar_jugadores(datos["jugadores"])
 	t.banco = _normalizar_jugadores(datos["banco"])
 	t.cantera = _normalizar_jugadores(datos["cantera"])

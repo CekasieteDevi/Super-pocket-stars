@@ -5,11 +5,11 @@ extends RefCounted
 ## Cadena de posesiones tick a tick, sin ningún nodo de Godot: 1000 partidos
 ## deben poder simularse en segundos.
 ##
-## Modificadores conectados en esta fase: local (§8.3, bloque C) y racha de
-## acciones exitosas + armonía + capitán (bloque B). El resto de los 37
-## modificadores (§8.4) llega cuando existan sus sistemas de origen: clima y
-## calendario (fase 7), forma de partido a partido (todavía no distinguida
-## del ánimo de temporada), rasgos (fase 9).
+## Modificadores conectados en esta fase: local + choque de estilos (§8.3 y
+## §8.6.3, bloque C) y racha de acciones exitosas + armonía + capitán
+## (bloque B). El resto de los 37 modificadores (§8.4) llega cuando existan
+## sus sistemas de origen: clima y calendario (fase 7), forma de partido a
+## partido (todavía no distinguida del ánimo de temporada), rasgos (fase 9).
 
 const TICKS_POR_MITAD := 90
 
@@ -34,17 +34,18 @@ static func _elegir(jugadores: Array, rng: RandomNumberGenerator) -> Dictionary:
 
 
 ## §8.5: bloque A (forma del día, ver Team.forma_partido), bloque B
-## (equipo/racha/armonía/capitán), bloque C (local) y bloque D
-## (personalidad + habilidad de ESE jugador en ESE duelo, §6/§5 — Ansioso
-## de visitante, Egoísta priorizando su propio tiro, Cañón sumando en sus
-## duelos de tiro si ya se manifestó).
-static func _bloques_equipo(equipo: Team, jugador: Dictionary, atributo: String) -> Dictionary:
+## (equipo/racha/armonía/capitán), bloque C (local + choque de estilos,
+## §8.6.3) y bloque D (personalidad + habilidad de ESE jugador en ESE
+## duelo, §6/§5 — Ansioso de visitante, Egoísta priorizando su propio tiro,
+## Cañón sumando en sus duelos de tiro si ya se manifestó).
+static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atributo: String) -> Dictionary:
 	var jugador_id: int = jugador["id"]
 	var bloque_a := equipo.forma_partido
 	var bloque_b: float = equipo.armonia + clamp(float(equipo.racha), 0.0, 10.0)
 	if jugador_id == equipo.capitan_id:
 		bloque_b += 2.0
 	var bloque_c := 5.0 if equipo.local else 0.0
+	bloque_c += Estilos.modificador(equipo.estilo, rival.estilo)
 	var bloque_d := Personalidad.modificador_partido(jugador, equipo.local, atributo) + Habilidades.modificador_partido(jugador, atributo)
 	return {"A": bloque_a, "B": bloque_b, "C": bloque_c, "D": bloque_d}
 
@@ -129,8 +130,8 @@ static func _duelo(atacante: Dictionary, atacante_attr: String, equipo_atacante:
 		equipo_defensor.resistencia_pct(defensor["id"]))
 	var resultado := Duel.resolver(
 		ata_eff, def_eff,
-		_bloques_equipo(equipo_atacante, atacante, atacante_attr),
-		_bloques_equipo(equipo_defensor, defensor, defensor_attr))
+		_bloques_equipo(equipo_atacante, equipo_defensor, atacante, atacante_attr),
+		_bloques_equipo(equipo_defensor, equipo_atacante, defensor, defensor_attr))
 	equipo_atacante.desgastar(atacante["id"], atacante["atributos"]["energia"])
 	equipo_defensor.desgastar(defensor["id"], defensor["atributos"]["energia"])
 	_chequear_lesion(atacante, equipo_atacante, rng)
@@ -336,8 +337,8 @@ static func _duelo_tiro(atacante: Dictionary, tiro_valor: float, equipo_atacante
 	var def_eff := Duel.atributo_efectivo(arquero_valor, "tecnico", equipo_defensor.resistencia_pct(arquero["id"]))
 	var resultado := Duel.resolver(
 		ata_eff, def_eff,
-		_bloques_equipo(equipo_atacante, atacante, "tiro"),
-		_bloques_equipo(equipo_defensor, arquero, "reflejos"))
+		_bloques_equipo(equipo_atacante, equipo_defensor, atacante, "tiro"),
+		_bloques_equipo(equipo_defensor, equipo_atacante, arquero, "reflejos"))
 	equipo_atacante.desgastar(atacante["id"], atacante["atributos"]["energia"])
 	equipo_defensor.desgastar(arquero["id"], arquero["atributos"]["energia"])
 	_chequear_lesion(atacante, equipo_atacante, rng)

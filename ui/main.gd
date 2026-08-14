@@ -19,6 +19,8 @@ var label_resultado: Label
 var lista_log: RichTextLabel
 var boton_jugar_fecha: Button
 var boton_ver_animado: Button
+var option_estilo: OptionButton
+var label_informe_rival: Label
 var partido_visual: PartidoVisual
 var lista_economia: RichTextLabel
 var lista_cantera: RichTextLabel
@@ -225,6 +227,20 @@ func _construir_panel_partido(padre: Control) -> void:
 	panel.visible = false
 	padre.add_child(panel)
 	paneles["partido"] = panel
+
+	var fila_tactica := HBoxContainer.new()
+	panel.add_child(fila_tactica)
+	var label_tactica := Label.new()
+	label_tactica.text = "Tu estilo de juego: "
+	fila_tactica.add_child(label_tactica)
+	option_estilo = OptionButton.new()
+	for estilo in Estilos.LISTA:
+		option_estilo.add_item(estilo)
+	option_estilo.item_selected.connect(_on_estilo_seleccionado)
+	fila_tactica.add_child(option_estilo)
+
+	label_informe_rival = Label.new()
+	panel.add_child(label_informe_rival)
 
 	boton_jugar_fecha = Button.new()
 	boton_jugar_fecha.text = "Jugar siguiente fecha"
@@ -1065,6 +1081,7 @@ func _on_jugar_fecha() -> void:
 
 	_refrescar_tabla()
 	_refrescar_plantel()
+	_refrescar_informe_rival()
 
 
 ## [debug] Simula todas las fechas que queden de la temporada de una,
@@ -1093,6 +1110,7 @@ func _on_simular_temporada() -> void:
 
 	_refrescar_tabla()
 	_refrescar_plantel()
+	_refrescar_informe_rival()
 
 
 func _mostrar_plantel() -> void:
@@ -1110,6 +1128,47 @@ func _mostrar_tabla() -> void:
 func _mostrar_partido() -> void:
 	_ocultar_todos()
 	paneles["partido"].visible = true
+	var idx_actual := Estilos.LISTA.find(GameState.equipo_jugador.estilo)
+	option_estilo.select(max(idx_actual, 0))
+	_refrescar_informe_rival()
+
+
+## §8.6.3/§8.6.5: le muestra al jugador con qué rival juega la próxima
+## fecha y cómo pega el choque de estilos, para que elija táctica con
+## información en vez de a ciegas.
+func _proximo_rival() -> Team:
+	var liga := GameState.liga_jugador()
+	if not GameState.hay_fecha_pendiente():
+		return null
+	var fecha: Array = liga.fixture[GameState.fecha_actual]
+	for partido in fecha:
+		var home: Team = liga.equipos[partido[0]]
+		var away: Team = liga.equipos[partido[1]]
+		if home == GameState.equipo_jugador:
+			return away
+		if away == GameState.equipo_jugador:
+			return home
+	return null
+
+
+func _refrescar_informe_rival() -> void:
+	var rival := _proximo_rival()
+	if rival == null:
+		label_informe_rival.text = ""
+		return
+	var mio: String = GameState.equipo_jugador.estilo
+	var mod := Estilos.modificador(mio, rival.estilo)
+	var pista := ""
+	if mod > 0.0:
+		pista = " (tu estilo lo complica)"
+	elif mod < 0.0:
+		pista = " (su estilo te complica a vos)"
+	label_informe_rival.text = "Próximo rival: %s — estilo %s%s" % [rival.nombre, rival.estilo, pista]
+
+
+func _on_estilo_seleccionado(idx: int) -> void:
+	GameState.equipo_jugador.estilo = Estilos.LISTA[idx]
+	_refrescar_informe_rival()
 
 
 func _mostrar_partido_animado() -> void:
