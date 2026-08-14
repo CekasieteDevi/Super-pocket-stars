@@ -73,6 +73,8 @@ static func generate(id: int, rng: RandomNumberGenerator, forced_position: Strin
 		"propension_lesion": int(round((rng.randf() + rng.randf()) / 2.0 * 100.0)),
 		# §6: 1 positiva + 1 negativa, o ninguna de las dos — nunca una sola.
 		"personalidades": Personalidad.generar(rng),
+		# §5: como mucho 1 habilidad por jugador, {} si no le tocó ninguna.
+		"habilidad": Habilidades.generar(position, rng),
 	}
 
 

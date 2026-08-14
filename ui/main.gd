@@ -90,6 +90,20 @@ func _nombre_jugador(j: Dictionary) -> String:
 	return "%s %s" % [j.get("nombre", "?"), j.get("apellido", "")]
 
 
+## §5: si tiene una habilidad, la muestra con una estrella por nivel
+## (bronce=★, plata=★★, oro=★★★) — atenuada entre parentesis si todavia
+## no se manifesto (no llego a la media minima) para que se note que esta
+## "dormida", no activa.
+func _tag_habilidad(j: Dictionary) -> String:
+	var h: Dictionary = j.get("habilidad", {})
+	if h.is_empty():
+		return ""
+	var estrellas := "★".repeat(h.get("nivel", 1))
+	if Habilidades.tiene_manifestada(j, h["nombre"]):
+		return "  [%s %s]" % [h["nombre"], estrellas]
+	return "  (%s %s, dormida)" % [h["nombre"], estrellas]
+
+
 func _ocultar_todos() -> void:
 	for panel in paneles.values():
 		panel.visible = false
@@ -140,8 +154,8 @@ func _refrescar_plantel() -> void:
 	for j in equipo.jugadores:
 		var capitan := "  (C)" if j["id"] == equipo.capitan_id else ""
 		var canterano := "  [cantera]" if j.get("es_canterano", false) else ""
-		texto += "%-4s  %-22s  media %5.1f   potencial %3d   genetica %s%s%s\n" % [
-			j["posicion"], _nombre_jugador(j), j["media"], j["potencial"], j["genetica_tier"], capitan, canterano
+		texto += "%-4s  %-22s  media %5.1f   potencial %3d   genetica %s%s%s%s\n" % [
+			j["posicion"], _nombre_jugador(j), j["media"], j["potencial"], j["genetica_tier"], capitan, canterano, _tag_habilidad(j)
 		]
 	lista_plantel.text = texto
 
@@ -151,7 +165,7 @@ func _refrescar_plantel() -> void:
 		var fila := HBoxContainer.new()
 		var canterano := "  [cantera]" if j.get("es_canterano", false) else ""
 		var label := Label.new()
-		label.text = "%-4s  %-22s  media %5.1f   potencial %3d%s" % [j["posicion"], _nombre_jugador(j), j["media"], j["potencial"], canterano]
+		label.text = "%-4s  %-22s  media %5.1f   potencial %3d%s%s" % [j["posicion"], _nombre_jugador(j), j["media"], j["potencial"], canterano, _tag_habilidad(j)]
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		fila.add_child(label)
 
@@ -899,8 +913,8 @@ func _refrescar_cantera() -> void:
 		var potencial_min: int = clamp(juvenil["potencial"] - margen, 0, 99)
 		var potencial_max: int = clamp(juvenil["potencial"] + margen, 0, 99)
 		var label := Label.new()
-		label.text = "%-4s  %-22s  edad %d  media %.1f  potencial %d-%d (scout nivel %d)" % [
-			juvenil["posicion"], _nombre_jugador(juvenil), juvenil["edad"], juvenil["media"], potencial_min, potencial_max, nivel_scout
+		label.text = "%-4s  %-22s  edad %d  media %.1f  potencial %d-%d (scout nivel %d)%s" % [
+			juvenil["posicion"], _nombre_jugador(juvenil), juvenil["edad"], juvenil["media"], potencial_min, potencial_max, nivel_scout, _tag_habilidad(juvenil)
 		]
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		fila.add_child(label)
@@ -1082,6 +1096,7 @@ func _on_simular_temporada() -> void:
 func _mostrar_plantel() -> void:
 	_ocultar_todos()
 	paneles["plantel"].visible = true
+	_refrescar_plantel()
 
 
 func _mostrar_tabla() -> void:

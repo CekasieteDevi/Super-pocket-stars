@@ -31,12 +31,14 @@ func _test_sueldo_sube_al_renovar_si_el_jugador_mejoro(rng: RandomNumberGenerato
 	var id: int = jugador["id"]
 	var sueldo_antes: float = equipo.sueldos[id]
 
-	# Simula una gran mejora (progresion de varias temporadas) y fuerza el
-	# vencimiento del contrato.
+	# Simula una gran mejora (progresion de varias temporadas). Llama a
+	# _renovar_contrato() directo en vez de _avanzar_contratos() -- esta
+	# ultima decide primero, al azar, si el club de la IA renueva o deja
+	# ir al jugador (según edad), y ese resultado no es lo que este test
+	# quiere probar; probar la renovación en sí no debería depender de
+	# que la tirada de "se queda o se va" caiga de un lado en particular.
 	jugador["media"] = min(99.0, jugador["media"] + 30.0)
-	equipo.contratos[id] = 1
-
-	liga._avanzar_contratos(equipo, rng, false)
+	liga._renovar_contrato(equipo, id, jugador, rng)
 
 	var sueldo_despues: float = equipo.sueldos[id]
 
