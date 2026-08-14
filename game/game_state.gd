@@ -38,6 +38,11 @@ var noticias: Array = []
 var ultimo_informe_economico: Dictionary = {}  # ingresos/egresos/neto del ultimo cierre de temporada
 var ultima_posicion_final: Dictionary = {}  # {"posicion","total","division"} del cierre de temporada mas reciente
 
+## §10.5/§15: fin de partida real. Una vez true, jugar_siguiente_fecha() no
+## avanza mas — la unica salida es borrar la partida y empezar una nueva.
+var juego_terminado: bool = false
+var motivo_fin_partida: String = ""
+
 
 ## Si hay una partida guardada, arranca retomándola — si no, "guardar la
 ## partida" no serviría de nada en la práctica (¿quién va a acordarse de
@@ -55,10 +60,16 @@ func _ready() -> void:
 	confederacion = Confederacion.generar(piramide, rng)
 	seleccion = Seleccion.new()
 	equipo_jugador = piramide.divisiones[DIVISION_INICIAL].equipos[0]
+	equipo_jugador.objetivo_temporada = Objetivos.generar(
+		equipo_jugador, _es_ultima_division(DIVISION_INICIAL), liga_jugador().equipos.size())
 
 
 func liga_jugador() -> Liga:
 	return piramide.divisiones[division_jugador]
+
+
+func _es_ultima_division(division_idx: int) -> bool:
+	return division_idx == piramide.divisiones.size() - 1
 
 
 func hay_fecha_pendiente() -> bool:
@@ -71,7 +82,7 @@ func hay_fecha_pendiente() -> bool:
 ## con la tabla en cero para siempre y los ascensos/descensos y copas de
 ## fin de temporada no tendrían con qué trabajar.
 func jugar_siguiente_fecha() -> void:
-	if not hay_fecha_pendiente():
+	if juego_terminado or not hay_fecha_pendiente():
 		return
 
 	for d in range(piramide.divisiones.size()):
@@ -105,6 +116,25 @@ func _cerrar_temporada() -> void:
 	_agregar_noticia("%s termino la temporada %d° de %d en la Division %d." % [
 		equipo_jugador.nombre, posicion_final, tabla_final.size(), division_jugador + 1
 	])
+
+	# §10.5/§15: evalua el objetivo que la directiva pidio para la
+	# temporada que recien termino (se asigno la vez anterior que paso por
+	# aca, o al arrancar la partida) ANTES de sortear el de la temporada
+	# que viene.
+	var objetivo_cumplido := Objetivos.evaluar(equipo_jugador.objetivo_temporada, posicion_final)
+	if objetivo_cumplido:
+		equipo_jugador.objetivos_incumplidos_seguidos = 0
+		if not equipo_jugador.objetivo_temporada.is_empty():
+			_agregar_noticia("DIRECTIVA: cumpliste el objetivo de la temporada (%s)." % equipo_jugador.objetivo_temporada["descripcion"])
+	else:
+		equipo_jugador.objetivos_incumplidos_seguidos += 1
+		_agregar_noticia("DIRECTIVA: NO cumpliste el objetivo (%s). Van %d temporada(s) seguida(s) sin cumplir." % [
+			equipo_jugador.objetivo_temporada.get("descripcion", ""), equipo_jugador.objetivos_incumplidos_seguidos
+		])
+		if equipo_jugador.objetivos_incumplidos_seguidos >= Objetivos.MAX_INCUMPLIDOS_SEGUIDOS:
+			juego_terminado = true
+			motivo_fin_partida = "La directiva te destituyó: %d temporadas seguidas sin cumplir el objetivo." % equipo_jugador.objetivos_incumplidos_seguidos
+			_agregar_noticia("DIRECTIVA: te destituyen. Fin de la partida.")
 
 	var copa_nacional := Copas.jugar_copa_nacional(piramide, rng)
 	var copas_division := Copas.jugar_copas_de_division(piramide, rng)
@@ -151,6 +181,10 @@ func _cerrar_temporada() -> void:
 
 	temporada_actual += 1
 	fecha_actual = 0
+
+	if not juego_terminado:
+		equipo_jugador.objetivo_temporada = Objetivos.generar(
+			equipo_jugador, _es_ultima_division(division_jugador), liga_jugador().equipos.size())
 
 
 ## Amistoso de la selección (una vez por cierre de temporada): convoca a
@@ -312,6 +346,8 @@ func guardar_partida() -> void:
 		"noticias": noticias,
 		"ultimo_informe_economico": ultimo_informe_economico,
 		"ultima_posicion_final": ultima_posicion_final,
+		"juego_terminado": juego_terminado,
+		"motivo_fin_partida": motivo_fin_partida,
 	}
 	var file := FileAccess.open(RUTA_PARTIDA, FileAccess.WRITE)
 	file.store_string(JSON.stringify(datos))
@@ -359,6 +395,8 @@ func cargar_partida() -> bool:
 	noticias = datos["noticias"]
 	ultimo_informe_economico = datos["ultimo_informe_economico"]
 	ultima_posicion_final = datos["ultima_posicion_final"]
+	juego_terminado = datos.get("juego_terminado", false)
+	motivo_fin_partida = datos.get("motivo_fin_partida", "")
 
 	# Resultado/log/eventos del último partido son de la sesión anterior y
 	# ya no tienen mucho sentido mostrados sueltos (el jugador ni se

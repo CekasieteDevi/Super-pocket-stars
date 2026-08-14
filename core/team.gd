@@ -90,6 +90,12 @@ var contratos: Dictionary = {}  # jugador_id -> años restantes
 var clausulas: Dictionary = {}  # jugador_id -> monto de la cláusula
 var reputacion: float = 50.0  # 0-100, afecta entradas/sponsors (§10.5)
 var quebrado: bool = false
+## Objetivos de directiva (§10.5/§15): la directiva te pide un resultado
+## concreto cada temporada, ver core/objetivos.gd. Solo tiene sentido para
+## el equipo del jugador humano (Objetivos.evaluar/GameState._cerrar_temporada
+## deciden si se cumplió); los clubes de la IA lo dejan siempre vacío.
+var objetivo_temporada: Dictionary = {}  # {"tipo","descripcion","posicion_maxima"}
+var objetivos_incumplidos_seguidos: int = 0
 var scouts: Array = []  # [{"nivel":int}], §9.4 — empieza con 1 al mínimo (§15 decisión 9)
 var instalaciones: Dictionary = {}  # categoria -> nivel 1-5 (§9.5), ver core/instalaciones.gd
 
@@ -180,6 +186,7 @@ func guardar() -> Dictionary:
 		"clausulas": _claves_a_texto(clausulas),
 		"reputacion": reputacion, "quebrado": quebrado, "scouts": scouts, "instalaciones": instalaciones,
 		"config_cambios": config_cambios,
+		"objetivo_temporada": objetivo_temporada, "objetivos_incumplidos_seguidos": objetivos_incumplidos_seguidos,
 		"prestados_afuera": prestados_afuera_datos, "prestados_propios": prestados_propios_datos,
 	}
 
@@ -224,6 +231,14 @@ static func cargar(datos: Dictionary) -> Team:
 	t.scouts = datos["scouts"]
 	t.instalaciones = datos["instalaciones"]
 	t.config_cambios = datos.get("config_cambios", "equilibrado")
+	# JSON.parse() vuelve todos los numeros como float -- "posicion_maxima"
+	# despues se compara con un int (posicion_final) via <=, que en GDScript
+	# anda bien entre int/float, pero se normaliza igual por consistencia
+	# con el resto de los campos numericos del guardado.
+	t.objetivo_temporada = datos.get("objetivo_temporada", {}).duplicate()
+	if t.objetivo_temporada.has("posicion_maxima"):
+		t.objetivo_temporada["posicion_maxima"] = int(t.objetivo_temporada["posicion_maxima"])
+	t.objetivos_incumplidos_seguidos = int(datos.get("objetivos_incumplidos_seguidos", 0))
 
 	# Quedan con el NOMBRE del club (String) en la clave "club"/"club_dueno"
 	# en vez de la referencia real -- Piramide.resolver_prestamos() los

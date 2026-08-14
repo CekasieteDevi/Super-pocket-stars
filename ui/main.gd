@@ -20,6 +20,8 @@ var lista_log: RichTextLabel
 var lista_estadisticas: RichTextLabel
 var boton_jugar_fecha: Button
 var boton_ver_animado: Button
+var boton_simular_temporada: Button
+var label_objetivo: Label
 var option_estilo: OptionButton
 var option_cambios: OptionButton
 var label_informe_rival: Label
@@ -255,6 +257,9 @@ func _construir_panel_partido(padre: Control) -> void:
 	option_cambios.item_selected.connect(_on_config_cambios_seleccionado)
 	fila_cambios.add_child(option_cambios)
 
+	label_objetivo = Label.new()
+	panel.add_child(label_objetivo)
+
 	label_informe_rival = Label.new()
 	panel.add_child(label_informe_rival)
 
@@ -285,7 +290,7 @@ func _construir_panel_partido(padre: Control) -> void:
 	var separador := HSeparator.new()
 	panel.add_child(separador)
 
-	var boton_simular_temporada := Button.new()
+	boton_simular_temporada = Button.new()
 	boton_simular_temporada.text = "[debug] Simular resto de la temporada"
 	boton_simular_temporada.pressed.connect(_on_simular_temporada)
 	panel.add_child(boton_simular_temporada)
@@ -1079,6 +1084,9 @@ func _texto_cierre_temporada() -> String:
 
 
 func _on_jugar_fecha() -> void:
+	if GameState.juego_terminado:
+		_refrescar_objetivo()
+		return
 	if not GameState.hay_fecha_pendiente():
 		label_resultado.text = "Temporada terminada."
 		return
@@ -1106,6 +1114,7 @@ func _on_jugar_fecha() -> void:
 	_refrescar_tabla()
 	_refrescar_plantel()
 	_refrescar_informe_rival()
+	_refrescar_objetivo()
 
 
 ## Resumen de estadisticas post-partido (posesion/tiros/pases) — pensado
@@ -1131,6 +1140,9 @@ func _texto_estadisticas(r: Dictionary) -> String:
 ## [debug] Simula todas las fechas que queden de la temporada de una,
 ## para no tener que clickear "jugar fecha" muchas veces al probar.
 func _on_simular_temporada() -> void:
+	if GameState.juego_terminado:
+		_refrescar_objetivo()
+		return
 	if not GameState.hay_fecha_pendiente():
 		label_resultado.text = "Temporada terminada."
 		return
@@ -1156,6 +1168,7 @@ func _on_simular_temporada() -> void:
 	_refrescar_tabla()
 	_refrescar_plantel()
 	_refrescar_informe_rival()
+	_refrescar_objetivo()
 
 
 func _mostrar_plantel() -> void:
@@ -1178,6 +1191,31 @@ func _mostrar_partido() -> void:
 	var idx_cambios := OPCIONES_CAMBIOS.find(GameState.equipo_jugador.config_cambios)
 	option_cambios.select(max(idx_cambios, 0))
 	_refrescar_informe_rival()
+	_refrescar_objetivo()
+
+
+## §10.5/§15: objetivo de la directiva para esta temporada, y el estado de
+## game over si la directiva ya te destituyó (2 temporadas seguidas sin
+## cumplir). Cuando termina el juego se deshabilitan los botones que
+## avanzarían el calendario — la única salida es borrar la partida.
+func _refrescar_objetivo() -> void:
+	if GameState.juego_terminado:
+		label_objetivo.text = "GAME OVER: %s" % GameState.motivo_fin_partida
+		boton_jugar_fecha.disabled = true
+		boton_simular_temporada.disabled = true
+		return
+
+	boton_jugar_fecha.disabled = false
+	boton_simular_temporada.disabled = false
+	var objetivo: Dictionary = GameState.equipo_jugador.objetivo_temporada
+	if objetivo.is_empty():
+		label_objetivo.text = ""
+		return
+	var incumplidos: int = GameState.equipo_jugador.objetivos_incumplidos_seguidos
+	var advertencia := ""
+	if incumplidos > 0:
+		advertencia = "  (⚠ %d/%d temporadas sin cumplir — te destituyen a la 2ª seguida)" % [incumplidos, Objetivos.MAX_INCUMPLIDOS_SEGUIDOS]
+	label_objetivo.text = "Objetivo de la directiva: %s%s" % [objetivo["descripcion"], advertencia]
 
 
 ## §8.6.3/§8.6.5: le muestra al jugador con qué rival juega la próxima
