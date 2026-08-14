@@ -551,9 +551,11 @@ func lesionar(jugador_id: int, tipo: String, dias: int) -> void:
 
 ## Se llama al terminar cada partido: la resistencia con la que se terminó
 ## pasa a ser el nuevo piso de fatiga acumulada (§3, "energía" de mediano
-## plazo), y el ánimo se mueve según el resultado (±3, tope real ±6 con el
-## bonus de gol) siguiendo el GDD §3 simplificado — todavía no hay xG ni
-## stats de pases/duelos por jugador para el criterio completo por puesto.
+## plazo), y el ánimo se mueve según el resultado (±3, con el bonus de gol
+## y los rasgos de personalidad que lo modifican — Positivo/Bajón/
+## Egolatra, ver Personalidad.ajustar_delta_animo) siguiendo el GDD §3
+## simplificado — todavía no hay xG ni stats de pases/duelos por jugador
+## para el criterio completo por puesto.
 func actualizar_post_partido(goles_propios: int, goles_rival: int, goleadores_ids: Array) -> void:
 	for j in todos_los_jugadores():
 		var id: int = j["id"]
@@ -566,7 +568,8 @@ func actualizar_post_partido(goles_propios: int, goles_rival: int, goleadores_id
 			delta = -3.0
 		if goleadores_ids.has(id):
 			delta += 2.0
-		delta = clamp(delta, -6.0, 6.0)
+		delta = Personalidad.ajustar_delta_animo(j, delta, id == capitan_id)
+		delta = clamp(delta, -8.0, 8.0)  # tope un poco mas ancho que el base (±6): Bajon/Egolatra pueden empujarlo mas
 		animo[id] = clamp(animo.get(id, 50.0) + delta, 0.0, 100.0)
 
 

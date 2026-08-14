@@ -66,7 +66,7 @@ static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atri
 	bloque_c += Arbitro.modificador(equipo.arbitro_partido, equipo.local)
 	if equipo.objetivo_en_riesgo:
 		bloque_c += Objetivos.MALUS_EN_RIESGO
-	var bloque_d := Personalidad.modificador_partido(jugador, equipo.local, atributo) + Habilidades.modificador_partido(jugador, atributo)
+	var bloque_d := Personalidad.modificador_partido(jugador, equipo.local, atributo, minuto) + Habilidades.modificador_partido(jugador, atributo)
 	return {"A": bloque_a, "B": bloque_b, "C": bloque_c, "D": bloque_d}
 
 
@@ -111,9 +111,9 @@ static func _chequear_tarjeta(defensor: Dictionary, equipo_defensor: Team, rng: 
 	var es_roja := false
 	var doble_amarilla := false
 
-	if roll < CHANCE_ROJA_DIRECTA * factor_arbitro:
+	if roll < CHANCE_ROJA_DIRECTA * factor_arbitro * Personalidad.factor_roja(defensor):
 		es_roja = true
-	elif roll < CHANCE_AMARILLA * factor_arbitro:
+	elif roll < CHANCE_AMARILLA * factor_arbitro * Personalidad.factor_amarilla(defensor):
 		var actuales: int = equipo_defensor.amarillas_partido.get(id, 0) + 1
 		equipo_defensor.amarillas_partido[id] = actuales
 		if actuales >= 2:

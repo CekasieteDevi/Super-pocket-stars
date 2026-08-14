@@ -16,13 +16,15 @@ const RONDA_REGULAR := 5
 ## profesional) y se mueve según qué tan por encima o debajo del arquero
 ## está el tiro del pateador. §5: si el arquero tiene Atajapenales
 ## manifestada, le resta directo a esa chance — es la única habilidad que
-## no engancha en el bloque D genérico del duelo (Habilidades.gd),
-## porque Penales no pasa por el motor de posesión/duelos normal.
+## no engancha en el bloque D genérico del duelo (Habilidades.gd), porque
+## Penales no pasa por el motor de posesión/duelos normal. Mismo motivo
+## para Pícaro/Clutch/Frágil mental del pateador (Personalidad.bonus_penal).
 static func _chance_gol(pateador: Dictionary, arquero: Dictionary) -> float:
 	var tiro: float = pateador["atributos"]["tiro"]
 	var arquero_valor: float = arquero["atributos"]["reflejos"] * 0.6 + arquero["atributos"]["estirada"] * 0.4
 	var chance: float = 0.78 + (tiro - arquero_valor) / 250.0
 	chance -= Habilidades.bonus_atajapenales(arquero)
+	chance += Personalidad.bonus_penal(pateador)
 	return clamp(chance, 0.45, 0.95)
 
 

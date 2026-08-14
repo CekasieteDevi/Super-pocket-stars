@@ -91,12 +91,17 @@ func _test_bloque_c_del_motor_incluye_el_choque(rng: RandomNumberGenerator) -> v
 	# solo el estilo de away entre "le gana a home" y "neutro" -- un solo
 	# partido puede irse para cualquier lado por azar, asi que se promedia
 	# sobre muchos partidos con seeds distintas para que el +3/-3pp del
-	# choque de estilos se note en el agregado.
+	# choque de estilos se note en el agregado. Con el bloque D de
+	# Personalidad ahora atado al minuto (Lento de arranque/Se apaga/
+	# Clutch/etc.), cada partido individual tiene mas varianza que antes,
+	# asi que 150 muestras dejaron de alcanzar de forma confiable -- 500
+	# es donde el efecto del estilo (+569 de diferencia a los 800) ya se
+	# separa con margen del ruido de fondo.
 	var home := Team.generar("Home", rng, 0)
 	var away := Team.generar("Away", rng, 100)
 	home.estilo = "Tiki taka"
 
-	var muestras := 150
+	var muestras := 500
 	var goles_con_ventaja := 0
 	away.estilo = "Presión alta"  # Tiki taka le gana a Presion alta -> +3 para home
 	for i in range(muestras):
