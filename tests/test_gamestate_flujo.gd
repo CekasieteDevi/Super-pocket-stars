@@ -48,6 +48,10 @@ func _init() -> void:
 		ids_antes.append(j["id"])
 
 	print("\n=== Cerrando la temporada (copas + internacional + ascensos/descensos + cantera) ===")
+	var tabla_final: Array = piramide.divisiones[division_jugador].tabla_ordenada()
+	var posicion_final: int = tabla_final.find(equipo_jugador.nombre) + 1
+	_test_posicion_final(posicion_final, tabla_final.size())
+
 	var copa_nacional := Copas.jugar_copa_nacional(piramide, rng)
 	var copas_division := Copas.jugar_copas_de_division(piramide, rng)
 	var resultado_internacional := confederacion.jugar_temporada_internacional(rng)
@@ -77,6 +81,17 @@ func _init() -> void:
 	_test_equipo_jugador_protegido(equipo_jugador, ids_antes)
 
 	quit()
+
+
+## GameState._cerrar_temporada calcula la posicion final ANTES de que
+## Piramide.fin_de_temporada resetee la tabla — mismo calculo acá, sobre
+## la tabla todavia sin resetear, para validar que da un puesto real.
+func _test_posicion_final(posicion_final: int, total: int) -> void:
+	print("\n=== Posicion final de temporada, calculada antes del reset de tabla ===")
+	if posicion_final >= 1 and posicion_final <= total:
+		print("OK: el equipo del jugador termino %d° de %d." % [posicion_final, total])
+	else:
+		print("FALLA: posicion_final=%d fuera de rango (total=%d)." % [posicion_final, total])
 
 
 func _test_equipo_jugador_protegido(equipo_jugador: Team, ids_antes: Array) -> void:

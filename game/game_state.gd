@@ -30,6 +30,7 @@ var ultimo_log: Array = []
 var ultimos_eventos: Array = []
 var noticias: Array = []
 var ultimo_informe_economico: Dictionary = {}  # ingresos/egresos/neto del ultimo cierre de temporada
+var ultima_posicion_final: Dictionary = {}  # {"posicion","total","division"} del cierre de temporada mas reciente
 
 
 func _ready() -> void:
@@ -80,6 +81,16 @@ func jugar_siguiente_fecha() -> void:
 ## descensos (que mueven equipos entre divisiones), y por último localiza
 ## en qué división quedó el equipo del jugador para la temporada nueva.
 func _cerrar_temporada() -> void:
+	# Posicion final ANTES de que nada mueva la tabla (fin_de_temporada mas
+	# abajo la resetea para la temporada nueva) — asi el jugador se entera
+	# en que puesto termino, no solo que "se acabo la temporada".
+	var tabla_final := liga_jugador().tabla_ordenada()
+	var posicion_final := tabla_final.find(equipo_jugador.nombre) + 1
+	ultima_posicion_final = {"posicion": posicion_final, "total": tabla_final.size(), "division": division_jugador + 1}
+	_agregar_noticia("%s termino la temporada %d° de %d en la Division %d." % [
+		equipo_jugador.nombre, posicion_final, tabla_final.size(), division_jugador + 1
+	])
+
 	var copa_nacional := Copas.jugar_copa_nacional(piramide, rng)
 	var copas_division := Copas.jugar_copas_de_division(piramide, rng)
 	var resultado_internacional := confederacion.jugar_temporada_internacional(rng)

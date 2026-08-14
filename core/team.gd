@@ -4,9 +4,9 @@ extends RefCounted
 ## Equipo para el motor de partido — Fase 2, extendido en Fase 5 con estado
 ## que persiste entre partidos (fatiga acumulada, ánimo, lesiones), y en
 ## esta fase con el plantel de 25 (§14): 11 titulares + 7 banco (suplentes
-## adultos) + hasta ~7 en cantera (reserva, §17, ya existía). Mínimo 18
-## disponibles (titulares+banco sanos) para jugar — si no se llega, ver
-## Liga._resolver_forfeit().
+## adultos) + hasta ~7 en cantera (reserva, §17, ya existía). Mínimo 15
+## disponibles (titulares+banco sanos, de 18 posibles) para jugar — si no
+## se llega, ver Liga._resolver_forfeit().
 
 const FORMACION := ["ARQ", "DFC", "DFC", "LAT", "LAT", "MC", "MC", "MCO", "EXT", "EXT", "DC"]
 ## Un suplente por puesto — banco de 7, como pide §14.

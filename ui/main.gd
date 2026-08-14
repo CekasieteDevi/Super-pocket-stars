@@ -827,6 +827,16 @@ func _refrescar_noticias() -> void:
 	lista_noticias.text = "\n".join(GameState.noticias)
 
 
+## Texto de cierre de temporada, con la posicion final — se usa tanto al
+## jugar la ultima fecha a mano como al usar el boton de debug que simula
+## el resto de la temporada de una.
+func _texto_cierre_temporada() -> String:
+	var pos: Dictionary = GameState.ultima_posicion_final
+	return "\n¡Termino la temporada! Quedaste %d° de %d en la Division %d. Ahora en Division %d." % [
+		pos.get("posicion", 0), pos.get("total", 0), pos.get("division", 0), GameState.division_jugador + 1
+	]
+
+
 func _on_jugar_fecha() -> void:
 	if not GameState.hay_fecha_pendiente():
 		label_resultado.text = "Temporada terminada."
@@ -842,7 +852,7 @@ func _on_jugar_fecha() -> void:
 			r["local"], r["gl"], r["gv"], r["visitante"]
 		]
 	if GameState.temporada_actual != temporada_antes:
-		label_resultado.text += "\n¡Termino la temporada! Division actual: %d." % (GameState.division_jugador + 1)
+		label_resultado.text += _texto_cierre_temporada()
 
 	var texto_log := ""
 	for entry in GameState.ultimo_log:
@@ -865,10 +875,9 @@ func _on_simular_temporada() -> void:
 	var temporada_antes := GameState.temporada_actual
 	GameState.simular_temporada_completa()
 
-	label_resultado.text = "[debug] Temporada simulada entera. Ahora en temporada %d, division %d." % [
-		GameState.temporada_actual, GameState.division_jugador + 1
-	]
-	if GameState.temporada_actual == temporada_antes:
+	if GameState.temporada_actual != temporada_antes:
+		label_resultado.text = "[debug] Temporada simulada entera." + _texto_cierre_temporada()
+	else:
 		label_resultado.text = "[debug] Se jugaron las fechas que quedaban."
 
 	var texto_log := ""

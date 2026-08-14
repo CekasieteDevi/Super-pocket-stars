@@ -99,7 +99,13 @@ func jugar_temporada(rng: RandomNumberGenerator, con_log: bool = false) -> Array
 
 
 ## §14: mínimo de titulares+banco sanos para poder presentarte a jugar.
-const MINIMO_DISPONIBLES := 18
+## El plantel activo (titulares+banco) tiene 18 jugadores en total, así
+## que el mínimo tiene que ser MENOR a 18 — si fuera igual, una sola
+## lesión (algo que pasa todo el tiempo en una temporada de 38 fechas) te
+## dejaría corto automáticamente. 15 deja margen para hasta 3 lesionados
+## simultáneos, que es lo esperable en un plantel real, sin volver el
+## chequeo inútil.
+const MINIMO_DISPONIBLES := 15
 ## Multa por no poder presentar el mínimo, descontada del presupuesto de
 ## Mantenimiento (administrativo, no es un gasto de plantel).
 const MULTA_NO_PRESENTARSE := 30000.0
@@ -142,7 +148,7 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 	}
 
 
-## §14: "si no llegás a 18 disponibles, perdés el partido por no
+## §14: "si no llegás a MINIMO_DISPONIBLES, perdés el partido por no
 ## presentarte" — 0-3 en contra + multa. Devuelve el mismo formato que
 ## MatchEngine.simular() para que el resto de jugar_fecha() no note la
 ## diferencia. Si a los DOS equipos les falta gente a la vez (rarísimo),
