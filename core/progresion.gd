@@ -57,8 +57,11 @@ static func _multiplicador_crecimiento(edad: int) -> float:
 	return -1.0  # 38+: declive
 
 
-## Envejece un año al jugador y mueve sus atributos. Modifica el dict in place.
-static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator) -> void:
+## Envejece un año al jugador y mueve sus atributos. Modifica el dict in
+## place. mult_mentor (§6 extendido, Mentores.multiplicador_para): bonus de
+## crecimiento si hay un veterano líder en su plantel y este jugador es
+## joven — 1.0 si no aplica ninguna de las dos cosas.
+static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator, mult_mentor: float = 1.0) -> void:
 	jugador["edad"] += 1
 	var mult_edad := _multiplicador_crecimiento(jugador["edad"])
 	var mult_tier: float = VELOCIDAD_POR_TIER.get(jugador["genetica_tier"], 1.0)
@@ -71,7 +74,7 @@ static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator) -
 		if mult_edad >= 0.0:
 			var distancia: float = float(jugador["potencial"]) - valor_actual
 			if distancia > 0.0:
-				cambio = distancia * 0.12 * mult_edad * mult_tier * mult_personalidad
+				cambio = distancia * 0.12 * mult_edad * mult_tier * mult_personalidad * mult_mentor
 		else:
 			var grupo := _grupo_de_atributo(attr)
 			var factor_declive: float = DECLIVE_POR_GRUPO.get(grupo, 0.5)

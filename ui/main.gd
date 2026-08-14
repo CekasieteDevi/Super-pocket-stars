@@ -35,6 +35,7 @@ var label_prestamos_estado: Label
 var contenedor_instalaciones_botones: VBoxContainer
 var label_instalaciones_estado: Label
 var lista_seleccion: RichTextLabel
+var label_cantera_mentor: Label
 
 
 func _ready() -> void:
@@ -847,6 +848,9 @@ func _construir_panel_cantera(padre: Control) -> void:
 	titulo.text = "Cantera (§17) — juveniles sin debutar. Promover los manda al banco (para subirlos a titular, ver Plantel)."
 	panel.add_child(titulo)
 
+	label_cantera_mentor = Label.new()
+	panel.add_child(label_cantera_mentor)
+
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -862,6 +866,22 @@ func _refrescar_cantera() -> void:
 		hijo.queue_free()
 
 	var equipo := GameState.equipo_jugador
+
+	var mentor: Dictionary = {}
+	for j in equipo.todos_los_jugadores() + equipo.cantera:
+		if Mentores.es_mentor(j):
+			mentor = j
+			break
+	if mentor.is_empty():
+		label_cantera_mentor.text = "Sin mentor en el plantel: nadie de 28+ con Lider nato / Profesional / Metodico."
+	else:
+		var rasgo := "?"
+		for candidato in Mentores.BONUS_POR_RASGO:
+			if Personalidad.tiene(mentor, candidato):
+				rasgo = candidato
+				break
+		label_cantera_mentor.text = "Mentor: %s (%s, %d años) — los jugadores de 21 o menos crecen mas rapido." % [_nombre_jugador(mentor), rasgo, mentor["edad"]]
+
 	if equipo.cantera.is_empty():
 		var label := Label.new()
 		label.text = "No hay juveniles en la cantera esta temporada."

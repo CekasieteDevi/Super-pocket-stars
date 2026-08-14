@@ -13,9 +13,14 @@ extends RefCounted
 ## la intención explícita del texto ("raras").
 ##
 ## No todos los efectos están conectados todavía: los que dependen de
-## sistemas que no existen (penales, tarjetas, minutos finales de
-## partido, convocatoria, mentores, consistencia) quedan documentados
-## como pendientes en vez de aproximados a la fuerza.
+## sistemas que no existen (minutos finales de partido, consistencia)
+## quedan documentados como pendientes en vez de aproximados a la fuerza.
+## Penales, tarjetas y convocatoria (selección) ya EXISTEN como sistemas
+## (Penales, MatchEngine._chequear_tarjeta, Seleccion) pero todavía sin
+## un rasgo de personalidad propio conectado ahí (por ejemplo, Clutch
+## debería rendir mejor en penales) — pendiente real, no solo teórico
+## ahora. Mentores sí está conectado (core/mentores.gd, vía
+## Progresion.aplicar_temporada).
 
 const DATA_PATH := "res://data/personalidades.json"
 const P_CON_PERSONALIDAD := 0.70

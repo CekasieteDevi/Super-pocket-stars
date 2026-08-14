@@ -234,9 +234,10 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 			noticias.append("PRÉSTAMOS: %s vuelve a %s tras el préstamo." % [j["posicion"], equipo.nombre])
 
 		_avanzar_contratos(equipo, rng, equipo == equipo_protegido)
+		var bonus_mentor := Mentores.mejor_bonus_disponible(equipo)
 		for jugador in equipo.todos_los_jugadores():
-			Progresion.aplicar_temporada(jugador, rng)
-		var reporte := _procesar_cantera(equipo, rng, equipo == equipo_protegido)
+			Progresion.aplicar_temporada(jugador, rng, Mentores.multiplicador_para(jugador, bonus_mentor))
+		var reporte := _procesar_cantera(equipo, rng, equipo == equipo_protegido, bonus_mentor)
 		reporte_cantera.append(reporte)
 		for r in reporte["promovidos"]:
 			noticias.append("CANTERA: %s hace debutar a un canterano en %s (banco)" % [equipo.nombre, r["promovido"]["posicion"]])
@@ -255,9 +256,9 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 ## (cantera->banco y banco->titular) — para el equipo del jugador humano
 ## (es_protegido) esas dos decisiones quedan para que las tome desde la UI,
 ## igual que el mercado no lo toca a él.
-func _procesar_cantera(equipo: Team, rng: RandomNumberGenerator, es_protegido: bool = false) -> Dictionary:
+func _procesar_cantera(equipo: Team, rng: RandomNumberGenerator, es_protegido: bool = false, bonus_mentor: float = 0.0) -> Dictionary:
 	for juvenil in equipo.cantera:
-		Progresion.aplicar_temporada(juvenil, rng)
+		Progresion.aplicar_temporada(juvenil, rng, Mentores.multiplicador_para(juvenil, bonus_mentor))
 	var liberados := equipo.liberar_veteranos_de_cantera()
 	var nuevos := equipo.generar_camada(rng, Instalaciones.cantidad_camada(equipo))
 	var promovidos := []
