@@ -254,6 +254,19 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 				var informe := Economia.procesar_temporada(equipo, i + 1, orden_final.size())
 				informe["equipo"] = nombre
 				informes_economia.append(informe)
+
+				# Un club en quiebra no se queda ahí para siempre — si es de
+				# la IA, se liquida solo (Economia.procesar_quiebra). Al
+				# equipo del jugador humano no se le vende nada sin que él
+				# lo decida (mismo criterio que mercado/cantera), pero se le
+				# avisa fuerte: la decisión de a quién vender es suya.
+				if equipo == equipo_protegido:
+					if equipo.quebrado:
+						noticias.append("QUIEBRA: %s está en números rojos. Vendé jugadores vos mismo (Mercado/cláusulas) antes de que sea peor." % equipo.nombre)
+				else:
+					var ventas := Economia.procesar_quiebra(equipo, rng)
+					for v in ventas:
+						noticias.append("QUIEBRA: %s vende de urgencia a un %s por %s para pagar deudas." % [equipo.nombre, v["posicion"], Economia.formato_dinero(v["ingreso"])])
 				break
 
 	var transferencias := Mercado.ejecutar_ventana(self, rng, equipo_protegido)

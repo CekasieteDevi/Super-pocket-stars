@@ -93,11 +93,23 @@ static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos:
 	var relativo: float = (float(total_equipos) / 2.0) - posicion_tabla
 	equipo.reputacion = clamp(equipo.reputacion + relativo * 0.25, 0.0, 100.0)
 
-	# Todo el plantel activo (titulares+banco, §14), no solo los 11
-	# titulares -- el banco es un activo real del club (podría venderse),
-	# y contarlo de menos hacía que el umbral de quiebra fuera mucho más
-	# fácil de cruzar de lo que debería para cualquier club con un banco
-	# de valor.
+	var estado := _recalcular_quiebra(equipo)
+
+	return {
+		"ingresos": ingresos, "egresos": egresos, "neto": neto,
+		"sueldos": total_sueldos, "mantenimiento": MANTENIMIENTO_FIJO,
+		"caja_total": estado["caja_total"], "valor_plantel": estado["valor_plantel"], "quebrado": estado["quebrado"],
+	}
+
+
+## Todo el plantel activo (titulares+banco, §14), no solo los 11 titulares
+## -- el banco es un activo real del club (podría venderse), y contarlo de
+## menos hacía que el umbral de quiebra fuera mucho más fácil de cruzar de
+## lo que debería para cualquier club con un banco de valor. Actualiza
+## equipo.quebrado in-place y devuelve los tres valores, para que
+## procesar_quiebra() pueda reevaluar después de cada venta forzada sin
+## repetir la fórmula.
+static func _recalcular_quiebra(equipo: Team) -> Dictionary:
 	var valor_plantel := 0.0
 	for j in equipo.todos_los_jugadores():
 		valor_plantel += ValorJugador.calcular(j, equipo.animo.get(j["id"], 50.0), equipo.contratos.get(j["id"], 1))
@@ -105,13 +117,68 @@ static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos:
 	var caja_total := 0.0
 	for categoria in equipo.caja:
 		caja_total += equipo.caja[categoria]
-	equipo.quebrado = valor_plantel > 0.0 and caja_total < UMBRAL_QUIEBRA * valor_plantel
 
-	return {
-		"ingresos": ingresos, "egresos": egresos, "neto": neto,
-		"sueldos": total_sueldos, "mantenimiento": MANTENIMIENTO_FIJO,
-		"caja_total": caja_total, "valor_plantel": valor_plantel, "quebrado": equipo.quebrado,
-	}
+	equipo.quebrado = valor_plantel > 0.0 and caja_total < UMBRAL_QUIEBRA * valor_plantel
+	return {"caja_total": caja_total, "valor_plantel": valor_plantel, "quebrado": equipo.quebrado}
+
+
+## §9.1 extendido: un club en quiebra no se queda ahí para siempre —
+## liquida a sus jugadores más valiosos (el mejor primero) por una
+## fracción de su valor a un comprador externo genérico, y rellena el
+## puesto con un reemplazo barato (misma lógica que AgentesLibres.liberar:
+## nunca se queda con un agujero en la formación). Sigue vendiendo hasta
+## salir de la quiebra o quedarse sin nadie más para vender — exactamente
+## lo que haría un club real sin plata: se debilita para sobrevivir, y esa
+## debilidad se paga en la cancha (peor plantel → más fácil que descienda).
+## No se llama para el equipo del jugador humano (ver Liga) — esa decisión
+## de a quién vender es suya, no automática.
+const FRACCION_VENTA_DE_URGENCIA := 0.7
+
+
+static func procesar_quiebra(equipo: Team, rng: RandomNumberGenerator) -> Array:
+	var ventas := []
+	if not equipo.quebrado:
+		return ventas
+
+	var maximo_intentos: int = Team.FORMACION.size() + Team.BANCO_FORMACION.size()
+	var intentos := 0
+	while equipo.quebrado and intentos < maximo_intentos:
+		intentos += 1
+
+		var mejor_idx := -1
+		var mejor_media := -1.0
+		var en_banco := false
+		for i in range(equipo.jugadores.size()):
+			if equipo.jugadores[i]["media"] > mejor_media:
+				mejor_media = equipo.jugadores[i]["media"]
+				mejor_idx = i
+				en_banco = false
+		for i in range(equipo.banco.size()):
+			if equipo.banco[i]["media"] > mejor_media:
+				mejor_media = equipo.banco[i]["media"]
+				mejor_idx = i
+				en_banco = true
+		if mejor_idx < 0:
+			break
+
+		var lista: Array = equipo.banco if en_banco else equipo.jugadores
+		var saliente: Dictionary = lista[mejor_idx]
+		var valor := ValorJugador.calcular(saliente, equipo.animo.get(saliente["id"], 50.0), equipo.contratos.get(saliente["id"], 1))
+		var ingreso: float = valor * FRACCION_VENTA_DE_URGENCIA
+
+		var reemplazo := PlayerGenerator.generate(equipo.siguiente_id_cantera, rng, saliente["posicion"])
+		equipo.siguiente_id_cantera += 1
+		lista[mejor_idx] = reemplazo
+		equipo.recalcular_capitan()
+
+		equipo.caja["fichajes"] += ingreso
+		equipo._registrar_fichaje(reemplazo, ValorJugador.calcular(reemplazo, 50.0, 2), 2)
+		equipo._limpiar_registro(saliente["id"])
+
+		ventas.append({"saliente": saliente, "posicion": saliente["posicion"], "ingreso": ingreso})
+		_recalcular_quiebra(equipo)
+
+	return ventas
 
 
 ## Sueldo anual sugerido para un jugador recién fichado o generado: una
