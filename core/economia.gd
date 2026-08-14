@@ -76,10 +76,14 @@ static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos:
 	# esta temporada (caja_al_cierre - caja_actual).
 	equipo.caja_al_cierre = equipo.caja.duplicate()
 
-	# Reputación: sube despacio en la mitad de arriba de la tabla, baja en la
-	# de abajo. Simplificado hasta que existan sponsors/prensa reales (§10.5).
+	# Reputación: sube en la mitad de arriba de la tabla, baja en la de
+	# abajo — a un ritmo que se note en un puñado de temporadas de verdad
+	# buenas o malas (con 0.05 anterior, ganar el campeonato todas las
+	# temporadas tardaba ~90 temporadas en mover la reputación 40 puntos;
+	# con 0.25, tarda ~18, todavía gradual pero perceptible). Simplificado
+	# hasta que existan sponsors/prensa reales (§10.5).
 	var relativo: float = (float(total_equipos) / 2.0) - posicion_tabla
-	equipo.reputacion = clamp(equipo.reputacion + relativo * 0.05, 0.0, 100.0)
+	equipo.reputacion = clamp(equipo.reputacion + relativo * 0.25, 0.0, 100.0)
 
 	var valor_plantel := 0.0
 	for j in equipo.jugadores:

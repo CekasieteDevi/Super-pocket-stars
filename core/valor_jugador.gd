@@ -28,10 +28,17 @@ static func _factor_edad(edad: int) -> float:
 	return 0.25
 
 
+## factor_contrato: antes iba de 0.4 (contrato por vencer) a 1.1 (recién
+## renovado) — una renovación (2-4 años al azar, sin que el jugador haya
+## cambiado en nada) podía casi DUPLICAR el valor de un día para el otro,
+## haciendo que el valor de plantel saltara de forma que no tenía que ver
+## con la calidad real del equipo. Sigue siendo cierto que un contrato
+## corto resta valor de negociación (eso es real), pero con un rango más
+## angosto (0.7-1.0) el efecto está presente sin dominar la valuación.
 static func calcular(jugador: Dictionary, animo: float, contrato_restante: int) -> float:
 	var factor_media: float = pow(max(jugador["media"], 1.0) / 50.0, 4.0)
 	var factor_edad: float = _factor_edad(jugador["edad"])
 	var factor_animo: float = 0.85 + (clamp(animo, 0.0, 100.0) / 100.0) * 0.3
-	var factor_contrato: float = clamp(0.4 + 0.15 * contrato_restante, 0.4, 1.1)
+	var factor_contrato: float = clamp(0.7 + 0.075 * contrato_restante, 0.7, 1.0)
 
 	return VALOR_BASE * factor_media * factor_edad * factor_animo * factor_contrato

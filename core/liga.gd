@@ -302,23 +302,39 @@ func _avanzar_contratos(equipo: Team, rng: RandomNumberGenerator, es_protegido: 
 		equipo.contratos[id] -= 1
 		if equipo.contratos[id] > 0:
 			continue
-		if es_protegido:
-			equipo.contratos[id] = rng.randi_range(2, 4)
-			continue
 
 		var jugador := _buscar_en_plantel(equipo, id)
+
+		if es_protegido:
+			_renovar_contrato(equipo, id, jugador, rng)
+			continue
+
 		if jugador.is_empty():
-			equipo.contratos[id] = rng.randi_range(2, 4)
+			_renovar_contrato(equipo, id, jugador, rng)
 			continue
 
 		var edad: int = jugador.get("edad", 25)
 		var probabilidad_irse: float = clamp(0.10 + max(0, edad - 27) * 0.03, 0.10, 0.55)
 		if rng.randf() >= probabilidad_irse:
-			equipo.contratos[id] = rng.randi_range(2, 4)
+			_renovar_contrato(equipo, id, jugador, rng)
 			continue
 
 		AgentesLibres.liberar(equipo, jugador, agentes_libres, rng)
 		noticias.append("AGENTES LIBRES: un %s queda libre, se va de %s." % [jugador["posicion"], equipo.nombre])
+
+
+## Renueva por 2-4 años y RECALCULA el sueldo según el valor actual del
+## jugador — antes quedaba congelado en lo que costaba cuando se lo
+## registró (ficharlo, o la generación inicial del plantel), así que un
+## jugador que mejoraba muchísimo seguía cobrando lo mismo para siempre.
+## Ahora, mejorar te cuesta mantenerlo, como en la realidad.
+func _renovar_contrato(equipo: Team, id: int, jugador: Dictionary, rng: RandomNumberGenerator) -> void:
+	var anios := rng.randi_range(2, 4)
+	equipo.contratos[id] = anios
+	if jugador.is_empty():
+		return
+	var valor := ValorJugador.calcular(jugador, equipo.animo.get(id, 50.0), anios)
+	equipo.sueldos[id] = Economia.sueldo_sugerido(valor) * Personalidad.factor_sueldo(jugador)
 
 
 ## Descuenta 1 partido de suspensión a los ids que YA estaban suspendidos
