@@ -128,11 +128,23 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 
 		var home_corto: bool = home.jugadores_sanos_count() < MINIMO_DISPONIBLES
 		var away_corto: bool = away.jugadores_sanos_count() < MINIMO_DISPONIBLES
+		# Snapshot ANTES del partido: las suspensiones que ya tenía cada
+		# equipo se sirven (descuentan) por este partido que se está por
+		# jugar. Una tarjeta roja del PROPIO partido (si hay) se agrega
+		# recién durante MatchEngine.simular(), así que queda afuera de este
+		# snapshot y no se descuenta hasta la fecha siguiente — si no, una
+		# expulsión de hoy se perdonaría sola en el mismo cierre.
+		var suspendidos_previos_home: Array = home.suspendidos.keys().duplicate()
+		var suspendidos_previos_away: Array = away.suspendidos.keys().duplicate()
+
 		var r: Dictionary
 		if home_corto or away_corto:
 			r = _resolver_forfeit(home, away, home_corto, away_corto)
 		else:
 			r = MatchEngine.simular(home, away, rng, con_log)
+
+		_servir_suspensiones(home, suspendidos_previos_home)
+		_servir_suspensiones(away, suspendidos_previos_away)
 
 		_actualizar_tabla(home.nombre, away.nombre, r["goles_local"], r["goles_visitante"])
 		_actualizar_estado_jugadores(home, away, r)
@@ -306,6 +318,18 @@ func _avanzar_contratos(equipo: Team, rng: RandomNumberGenerator, es_protegido: 
 
 		AgentesLibres.liberar(equipo, jugador, agentes_libres, rng)
 		noticias.append("AGENTES LIBRES: un %s queda libre, se va de %s." % [jugador["posicion"], equipo.nombre])
+
+
+## Descuenta 1 partido de suspensión a los ids que YA estaban suspendidos
+## antes de este partido (ver el snapshot en jugar_fecha). Los que llegan
+## a 0 quedan disponibles otra vez.
+func _servir_suspensiones(equipo: Team, ids: Array) -> void:
+	for id in ids:
+		if not equipo.suspendidos.has(id):
+			continue
+		equipo.suspendidos[id] -= 1
+		if equipo.suspendidos[id] <= 0:
+			equipo.suspendidos.erase(id)
 
 
 func _buscar_en_plantel(equipo: Team, jugador_id: int) -> Dictionary:

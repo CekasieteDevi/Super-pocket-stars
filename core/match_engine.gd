@@ -59,8 +59,67 @@ static func _chequear_lesion(jugador: Dictionary, equipo: Team, rng: RandomNumbe
 		equipo.lesionar(jugador["id"], resultado["tipo"], resultado["dias"])
 
 
+## §8.7: chance de tarjeta para el defensor en un duelo de marca ("quite").
+## Con ~180 duelos de marca por partido (2 mitades x 90 ticks), estas
+## probabilidades dan ~3 amarillas por partido entre los dos equipos,
+## parecido a un partido real. Las rojas (directas + segunda amarilla)
+## salen bastante más seguido que en la vida real (~0.4 por partido en vez
+## de ~0.1) porque los defensores que participan de estos duelos son un
+## pool chico (unos pocos por equipo, no los 20+ de un plantel completo en
+## cancha), así que la chance de que el mismo jugador junte 2 amarillas es
+## mayor — simplificación conocida del motor de posesión por zona, no
+## calibrada para bajarlo más sin perder amarillas realistas. El expulsado
+## queda afuera del resto de ESTE partido (Team.expulsados_partido) y
+## arrastra 1 partido de suspensión (Team.suspendidos, lo sirve
+## Liga.jugar_fecha).
+const CHANCE_ROJA_DIRECTA := 0.0004
+const CHANCE_AMARILLA := 0.02
+
+
+static func _chequear_tarjeta(defensor: Dictionary, equipo_defensor: Team, rng: RandomNumberGenerator,
+		eventos: Array, minuto: int, con_log: bool = false, log: Array = []) -> void:
+	var id: int = defensor["id"]
+	if equipo_defensor.expulsados_partido.has(id):
+		return
+
+	var roll := rng.randf()
+	var es_roja := false
+	var doble_amarilla := false
+
+	if roll < CHANCE_ROJA_DIRECTA:
+		es_roja = true
+	elif roll < CHANCE_AMARILLA:
+		var actuales: int = equipo_defensor.amarillas_partido.get(id, 0) + 1
+		equipo_defensor.amarillas_partido[id] = actuales
+		if actuales >= 2:
+			es_roja = true
+			doble_amarilla = true
+		else:
+			if con_log:
+				log.append("min %d - TARJETA AMARILLA (%s) - %s" % [minuto, equipo_defensor.nombre, defensor["posicion"]])
+			eventos.append({
+				"minuto": minuto, "tipo": "tarjeta", "equipo": equipo_defensor.nombre, "rival": "",
+				"jugador_posicion": defensor["posicion"], "resultado": "amarilla",
+			})
+	else:
+		return
+
+	if es_roja:
+		equipo_defensor.expulsados_partido[id] = true
+		equipo_defensor.suspendidos[id] = equipo_defensor.suspendidos.get(id, 0) + 1
+		if con_log:
+			log.append("min %d - TARJETA ROJA%s (%s) - %s" % [
+				minuto, " (doble amarilla)" if doble_amarilla else "", equipo_defensor.nombre, defensor["posicion"]
+			])
+		eventos.append({
+			"minuto": minuto, "tipo": "tarjeta", "equipo": equipo_defensor.nombre, "rival": "",
+			"jugador_posicion": defensor["posicion"], "resultado": "roja_doble_amarilla" if doble_amarilla else "roja",
+		})
+
+
 static func _duelo(atacante: Dictionary, atacante_attr: String, equipo_atacante: Team,
-		defensor: Dictionary, defensor_attr: String, equipo_defensor: Team, rng: RandomNumberGenerator) -> Dictionary:
+		defensor: Dictionary, defensor_attr: String, equipo_defensor: Team, rng: RandomNumberGenerator,
+		eventos: Array = [], minuto: int = 0, con_log: bool = false, log: Array = []) -> Dictionary:
 	var ata_eff := Duel.atributo_efectivo(
 		atacante["atributos"][atacante_attr], _grupo_de(atacante_attr),
 		equipo_atacante.resistencia_pct(atacante["id"]))
@@ -75,7 +134,89 @@ static func _duelo(atacante: Dictionary, atacante_attr: String, equipo_atacante:
 	equipo_defensor.desgastar(defensor["id"], defensor["atributos"]["energia"])
 	_chequear_lesion(atacante, equipo_atacante, rng)
 	_chequear_lesion(defensor, equipo_defensor, rng)
+	if defensor_attr == "quite":
+		_chequear_tarjeta(defensor, equipo_defensor, rng, eventos, minuto, con_log, log)
 	return resultado
+
+
+## Un período de juego (una mitad regular, o un tiempo de alargue):
+## posesión alternándose duelo a duelo entre zona de armado y zona final,
+## igual que cualquier otra franja del partido. Factorizado para que
+## simular() (2 mitades de 45') y simular_alargue() (2 tiempos de 15')
+## compartan la misma lógica sin duplicar el bucle.
+static func _jugar_periodo(equipo_inicial: Team, home: Team, away: Team, ticks: int,
+		minuto_offset: int, minutos_reales: float, rng: RandomNumberGenerator, con_log: bool,
+		log: Array, goles_log: Array, eventos: Array) -> void:
+	var posesion: Team = equipo_inicial
+	var zona := "build"
+
+	for tick in range(ticks):
+		var minuto: int = minuto_offset + int(tick / (ticks / minutos_reales)) + 1
+		var rival: Team = away if posesion == home else home
+
+		if zona == "build":
+			var medios := posesion.jugadores_disponibles_por_posiciones(["MC", "MCO", "LAT"])
+			var marcadores := rival.jugadores_disponibles_por_posiciones(["DFC", "LAT", "MC"])
+
+			var atacante := _elegir(medios, rng)
+			var defensor := _elegir(marcadores, rng)
+			var resultado := _duelo(atacante, "pases", posesion, defensor, "quite", rival, rng, eventos, minuto, con_log, log)
+			var exito := Duel.gana_atacante(resultado, rng)
+
+			if con_log:
+				log.append("min %d - PASE (%s) - %s (pases %d) vs %s (quite %d) -> %.1f%% -> %s" % [
+					minuto, posesion.nombre, atacante["posicion"], atacante["atributos"]["pases"],
+					defensor["posicion"], defensor["atributos"]["quite"],
+					resultado["final"], "avanza" if exito else "pierde"
+				])
+			eventos.append({
+				"minuto": minuto, "tipo": "pase", "equipo": posesion.nombre, "rival": rival.nombre,
+				"jugador_posicion": atacante["posicion"], "resultado": "avanza" if exito else "pierde",
+			})
+
+			if exito:
+				posesion.racha += 1
+				posesion.avance += 1
+				if posesion.avance >= AVANCE_REQUERIDO:
+					posesion.avance = 0
+					zona = "final"
+			else:
+				posesion.racha = 0
+				posesion.avance = 0
+				posesion = rival
+				zona = "build"
+		else:
+			var ofensivos := posesion.jugadores_disponibles_por_posiciones(["EXT", "DC", "MCO"])
+			var marcadores := rival.jugadores_disponibles_por_posiciones(["DFC", "LAT"])
+
+			var atacante := _elegir(ofensivos, rng)
+			var defensor := _elegir(marcadores, rng)
+			var resultado := _duelo(atacante, "control", posesion, defensor, "quite", rival, rng, eventos, minuto, con_log, log)
+			var exito := Duel.gana_atacante(resultado, rng)
+
+			if con_log:
+				log.append("min %d - GAMBETA (%s) - %s (control %d) vs %s (quite %d) -> %.1f%% -> %s" % [
+					minuto, posesion.nombre, atacante["posicion"], atacante["atributos"]["control"],
+					defensor["posicion"], defensor["atributos"]["quite"],
+					resultado["final"], "tira" if exito else "pierde"
+				])
+			eventos.append({
+				"minuto": minuto, "tipo": "gambeta", "equipo": posesion.nombre, "rival": rival.nombre,
+				"jugador_posicion": atacante["posicion"], "resultado": "tira" if exito else "pierde",
+			})
+
+			if exito:
+				var tiro := _resolver_tiro(posesion, rival, atacante, rng, con_log, log, eventos, minuto)
+				if tiro["gol"]:
+					posesion.goles += 1
+					goles_log.append({"minuto": minuto, "equipo": posesion.nombre, "jugador_id": tiro["goleador_id"]})
+				posesion.racha = 0
+				posesion = rival
+				zona = "build"
+			else:
+				posesion.racha = 0
+				posesion = rival
+				zona = "build"
 
 
 ## eventos: Array de Dictionary siempre poblada (con_log solo controla el
@@ -94,76 +235,35 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_log:
 	var eventos := []
 
 	for mitad in range(2):
-		var posesion: Team = home if mitad == 0 else away
-		var zona := "build"
+		var equipo_inicial: Team = home if mitad == 0 else away
+		_jugar_periodo(equipo_inicial, home, away, TICKS_POR_MITAD, mitad * 45, 45.0, rng, con_log, log, goles_log, eventos)
 
-		for tick in range(TICKS_POR_MITAD):
-			var minuto: int = mitad * 45 + int(tick / (TICKS_POR_MITAD / 45.0)) + 1
-			var rival: Team = away if posesion == home else home
+	return {
+		"goles_local": home.goles,
+		"goles_visitante": away.goles,
+		"log": log,
+		"goles_log": goles_log,
+		"eventos": eventos,
+	}
 
-			if zona == "build":
-				var medios := posesion.jugadores_disponibles_por_posiciones(["MC", "MCO", "LAT"])
-				var marcadores := rival.jugadores_disponibles_por_posiciones(["DFC", "LAT", "MC"])
 
-				var atacante := _elegir(medios, rng)
-				var defensor := _elegir(marcadores, rng)
-				var resultado := _duelo(atacante, "pases", posesion, defensor, "quite", rival, rng)
-				var exito := Duel.gana_atacante(resultado, rng)
+## §8.7: tiempo suplementario — 2 tiempos de 15' cada uno, mismo motor que
+## el partido regular pero SIN resetear resistencia/goles/tarjetas: sigue
+## desde donde quedó el resultado regular (home.goles/away.goles ya
+## traen el marcador de los 90'). Solo se llama cuando terminó 90'
+## empatado (ver Copa.jugar_siguiente_ronda) — si después de esto sigue
+## empatado, se define por penales (core/penales.gd).
+const TICKS_POR_TIEMPO_ALARGUE := int(TICKS_POR_MITAD / 3.0)  # 15' de 45' reales
 
-				if con_log:
-					log.append("min %d - PASE (%s) - %s (pases %d) vs %s (quite %d) -> %.1f%% -> %s" % [
-						minuto, posesion.nombre, atacante["posicion"], atacante["atributos"]["pases"],
-						defensor["posicion"], defensor["atributos"]["quite"],
-						resultado["final"], "avanza" if exito else "pierde"
-					])
-				eventos.append({
-					"minuto": minuto, "tipo": "pase", "equipo": posesion.nombre, "rival": rival.nombre,
-					"jugador_posicion": atacante["posicion"], "resultado": "avanza" if exito else "pierde",
-				})
 
-				if exito:
-					posesion.racha += 1
-					posesion.avance += 1
-					if posesion.avance >= AVANCE_REQUERIDO:
-						posesion.avance = 0
-						zona = "final"
-				else:
-					posesion.racha = 0
-					posesion.avance = 0
-					posesion = rival
-					zona = "build"
-			else:
-				var ofensivos := posesion.jugadores_disponibles_por_posiciones(["EXT", "DC", "MCO"])
-				var marcadores := rival.jugadores_disponibles_por_posiciones(["DFC", "LAT"])
+static func simular_alargue(home: Team, away: Team, rng: RandomNumberGenerator, con_log: bool = false) -> Dictionary:
+	var log := []
+	var goles_log := []
+	var eventos := []
 
-				var atacante := _elegir(ofensivos, rng)
-				var defensor := _elegir(marcadores, rng)
-				var resultado := _duelo(atacante, "control", posesion, defensor, "quite", rival, rng)
-				var exito := Duel.gana_atacante(resultado, rng)
-
-				if con_log:
-					log.append("min %d - GAMBETA (%s) - %s (control %d) vs %s (quite %d) -> %.1f%% -> %s" % [
-						minuto, posesion.nombre, atacante["posicion"], atacante["atributos"]["control"],
-						defensor["posicion"], defensor["atributos"]["quite"],
-						resultado["final"], "tira" if exito else "pierde"
-					])
-				eventos.append({
-					"minuto": minuto, "tipo": "gambeta", "equipo": posesion.nombre, "rival": rival.nombre,
-					"jugador_posicion": atacante["posicion"], "resultado": "tira" if exito else "pierde",
-				})
-
-				if exito:
-					var tiro := _resolver_tiro(posesion, rival, atacante, rng, con_log, log, eventos, minuto)
-					if tiro["gol"]:
-						posesion.goles += 1
-						goles_log.append({"minuto": minuto, "equipo": posesion.nombre, "jugador_id": tiro["goleador_id"]})
-					posesion.racha = 0
-					posesion = rival
-					zona = "build"
-				else:
-					posesion.racha = 0
-					posesion = rival
-					zona = "build"
+	for tiempo in range(2):
+		var equipo_inicial: Team = home if tiempo == 0 else away
+		_jugar_periodo(equipo_inicial, home, away, TICKS_POR_TIEMPO_ALARGUE, 90 + tiempo * 15, 15.0, rng, con_log, log, goles_log, eventos)
 
 	return {
 		"goles_local": home.goles,

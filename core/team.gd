@@ -47,6 +47,15 @@ var fatiga_acumulada: Dictionary = {}  # jugador_id -> 0..1, 1 = totalmente desc
 var animo: Dictionary = {}  # jugador_id -> 0..100 (§3)
 var lesiones: Dictionary = {}  # jugador_id -> {"tipo":String, "dias_restantes":int}
 
+## Tarjetas (§8.7). amarillas_partido/expulsados_partido son SOLO del
+## partido en curso (reset_partido() los limpia); suspendidos persiste
+## entre partidos — lo decrementa Liga.jugar_fecha con un snapshot tomado
+## ANTES de jugar cada fecha, para que una expulsión de HOY no se sirva y
+## se borre sola en el mismo cierre en el que ocurrió.
+var amarillas_partido: Dictionary = {}  # jugador_id -> cantidad en el partido actual
+var expulsados_partido: Dictionary = {}  # jugador_id -> true, no disponible por el resto de ESTE partido
+var suspendidos: Dictionary = {}  # jugador_id -> partidos que todavia tiene que cumplir
+
 ## Fase 6: economía del club (§9.1).
 var caja: Dictionary = {}  # "fichajes"/"contratos"/"mejoras"/"mantenimiento" -> moneda
 ## Lo que se sumo a cada categoria en el ultimo cierre de temporada, y como
@@ -124,9 +133,15 @@ func todos_los_jugadores() -> Array:
 func jugadores_sanos_count() -> int:
 	var count := 0
 	for j in todos_los_jugadores():
-		if not esta_lesionado(j["id"]):
+		if puede_jugar(j["id"]):
 			count += 1
 	return count
+
+
+## §8.7: disponible para jugar AHORA — ni lesionado, ni expulsado en el
+## partido en curso, ni cumpliendo una suspensión por tarjetas.
+func puede_jugar(jugador_id: int) -> bool:
+	return not esta_lesionado(jugador_id) and not expulsados_partido.has(jugador_id) and suspendidos.get(jugador_id, 0) <= 0
 
 
 ## Da de alta a un jugador que se suma al plantel (fichaje, ascenso desde
@@ -230,6 +245,8 @@ func reset_partido() -> void:
 	avance = 0
 	goles = 0
 	resistencia.clear()
+	amarillas_partido.clear()
+	expulsados_partido.clear()
 	for j in todos_los_jugadores():
 		resistencia[j["id"]] = fatiga_acumulada.get(j["id"], 1.0)
 
@@ -243,40 +260,42 @@ func jugadores_por_posiciones(posiciones: Array) -> Array:
 
 
 ## Como jugadores_por_posiciones pero busca en titulares+banco (§14) y
-## descarta lesionados. Si no queda nadie sano en esas posiciones, cae a
-## cualquier sano del plantel; si NADIE está sano (con 18 sanos mínimo para
-## jugar no debería pasar en un partido real, ver Liga._resolver_forfeit),
-## devuelve la lista completa como último recurso.
+## descarta lesionados, expulsados (este partido) y suspendidos. Si no
+## queda nadie disponible en esas posiciones, cae a cualquiera disponible
+## del plantel; si NADIE está disponible (con el mínimo de Liga esto no
+## debería pasar en un partido real, ver Liga._resolver_forfeit), devuelve
+## la lista completa como último recurso.
 func jugadores_disponibles_por_posiciones(posiciones: Array) -> Array:
 	var en_posicion := []
-	var sanos := []
+	var disponibles := []
 	var todos := todos_los_jugadores()
 	for j in todos:
-		if esta_lesionado(j["id"]):
+		if not puede_jugar(j["id"]):
 			continue
-		sanos.append(j)
+		disponibles.append(j)
 		if posiciones.has(j["posicion"]):
 			en_posicion.append(j)
 	if not en_posicion.is_empty():
 		return en_posicion
-	if not sanos.is_empty():
-		return sanos
+	if not disponibles.is_empty():
+		return disponibles
 	return todos
 
 
-## El titular si está sano; si está lesionado, el suplente de banco (§14).
-## Si ninguno está sano, el titular igual (ver Liga._resolver_forfeit para
-## el caso de que falten demasiados jugadores para jugar el partido).
+## El titular si está disponible; si no (lesionado, expulsado o
+## suspendido), el suplente de banco (§14). Si ninguno está disponible, el
+## titular igual (ver Liga._resolver_forfeit para el caso de que falten
+## demasiados jugadores para jugar el partido).
 func arquero() -> Dictionary:
 	var titular: Dictionary = {}
 	for j in jugadores:
 		if j["posicion"] == "ARQ":
 			titular = j
 			break
-	if not titular.is_empty() and not esta_lesionado(titular["id"]):
+	if not titular.is_empty() and puede_jugar(titular["id"]):
 		return titular
 	for j in banco:
-		if j["posicion"] == "ARQ" and not esta_lesionado(j["id"]):
+		if j["posicion"] == "ARQ" and puede_jugar(j["id"]):
 			return j
 	return titular if not titular.is_empty() else jugadores[0]
 

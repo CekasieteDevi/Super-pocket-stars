@@ -7,9 +7,9 @@ extends RefCounted
 ## potencia de 2, la cantidad sobrante juega una ronda previa y el resto
 ## pasa con bye, para que de ahí en adelante el cuadro quede parejo.
 ##
-## Empates: el motor de alargue/penales (§8.7) todavía no existe, así que
-## en caso de empate gana el local — simplificación temporal, documentada,
-## no la regla final (que sería alargue + penales).
+## Empates: si 90' terminan igualados se juega el alargue (2x15',
+## MatchEngine.simular_alargue) y si sigue empatado se define por penales
+## (Penales.definir) — partido único a eliminación directa real (§8.7).
 
 var nombre: String
 var equipos_con_bye: Array = []  # Team, esperando a la ronda donde ya no hace falta bye
@@ -52,10 +52,31 @@ func jugar_siguiente_ronda(rng: RandomNumberGenerator) -> Array:
 		var home: Team = partido[0]
 		var away: Team = partido[1]
 		var r := MatchEngine.simular(home, away, rng, false)
-		var ganador: Team = home if r["goles_local"] >= r["goles_visitante"] else away
+		var gl: int = r["goles_local"]
+		var gv: int = r["goles_visitante"]
+		var definicion := "90 minutos"
+		var ganador: Team
+		var penales_texto := ""
+
+		if gl != gv:
+			ganador = home if gl > gv else away
+		else:
+			var r_alargue := MatchEngine.simular_alargue(home, away, rng, false)
+			gl = r_alargue["goles_local"]
+			gv = r_alargue["goles_visitante"]
+			definicion = "alargue"
+			if gl != gv:
+				ganador = home if gl > gv else away
+			else:
+				var pen := Penales.definir(home, away, rng)
+				definicion = "penales"
+				ganador = pen["ganador"]
+				penales_texto = " (%d-%d penales)" % [pen["goles_local"], pen["goles_visitante"]]
+
 		resultados.append({
 			"local": home.nombre, "visitante": away.nombre,
-			"gl": r["goles_local"], "gv": r["goles_visitante"], "ganador": ganador.nombre,
+			"gl": gl, "gv": gv, "ganador": ganador.nombre,
+			"definicion": definicion, "penales_texto": penales_texto,
 		})
 		ganadores.append(ganador)
 	historial.append(resultados)

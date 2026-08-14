@@ -856,7 +856,7 @@ func _on_jugar_fecha() -> void:
 
 	var texto_log := ""
 	for entry in GameState.ultimo_log:
-		if entry.find("GOL") != -1:
+		if entry.find("GOL") != -1 or entry.find("TARJETA") != -1:
 			texto_log += entry + "\n"
 	lista_log.text = texto_log
 	boton_ver_animado.disabled = GameState.ultimos_eventos.is_empty()
@@ -882,7 +882,7 @@ func _on_simular_temporada() -> void:
 
 	var texto_log := ""
 	for entry in GameState.ultimo_log:
-		if entry.find("GOL") != -1:
+		if entry.find("GOL") != -1 or entry.find("TARJETA") != -1:
 			texto_log += entry + "\n"
 	lista_log.text = texto_log
 	boton_ver_animado.disabled = GameState.ultimos_eventos.is_empty()
