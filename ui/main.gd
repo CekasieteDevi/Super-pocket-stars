@@ -1082,12 +1082,14 @@ func _on_simular_temporada() -> void:
 	else:
 		label_resultado.text = "[debug] Se jugaron las fechas que quedaban."
 
-	var texto_log := ""
-	for entry in GameState.ultimo_log:
-		if entry.find("GOL") != -1 or entry.find("TARJETA") != -1:
-			texto_log += entry + "\n"
-	lista_log.text = texto_log
-	boton_ver_animado.disabled = GameState.ultimos_eventos.is_empty()
+	# A diferencia de "jugar fecha", esto simula muchas fechas de una — no
+	# tiene sentido mostrar el log/animado de sólo el último partido
+	# jugado, como si fuera el único que pasó.
+	GameState.ultimo_resultado = {}
+	GameState.ultimo_log = []
+	GameState.ultimos_eventos = []
+	lista_log.text = ""
+	boton_ver_animado.disabled = true
 
 	_refrescar_tabla()
 	_refrescar_plantel()
