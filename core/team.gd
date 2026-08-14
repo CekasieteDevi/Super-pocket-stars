@@ -120,18 +120,21 @@ var prestados_propios: Dictionary = {}  # jugador_id -> {"club_dueno":Team, "tem
 ## mismo rango de ids, un fichaje puede pisar el registro de otro jugador.
 ## potencial_objetivo: ver PlayerGenerator.generate — lo usan los clubes del
 ## exterior (Fase 7, §10.5) para que el plantel ronde su fuerza_equipo.
-static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int = 0, potencial_objetivo: int = -1) -> Team:
+## pais (§10.1): pool de nombre/apellido de los jugadores generados — ver
+## PlayerGenerator.generate. "Uruguay" (default) para los 200 clubes de la
+## pirámide, el país real para los clubes del exterior.
+static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int = 0, potencial_objetivo: int = -1, pais: String = "Uruguay") -> Team:
 	var t := Team.new()
 	t.nombre = nombre
 	var next_id := id_inicial
 	for pos in FORMACION:
-		var jugador := PlayerGenerator.generate(next_id, rng, pos, potencial_objetivo)
+		var jugador := PlayerGenerator.generate(next_id, rng, pos, potencial_objetivo, pais)
 		next_id += 1
 		t.jugadores.append(jugador)
 		t._registrar_fichaje(jugador, ValorJugador.calcular(jugador, 50.0, 3), rng.randi_range(1, 5))
 		t.armonia += Personalidad.bonus_armonia(jugador)
 	for pos in BANCO_FORMACION:
-		var jugador := PlayerGenerator.generate(next_id, rng, pos, potencial_objetivo)
+		var jugador := PlayerGenerator.generate(next_id, rng, pos, potencial_objetivo, pais)
 		next_id += 1
 		t.banco.append(jugador)
 		t._registrar_fichaje(jugador, ValorJugador.calcular(jugador, 50.0, 3), rng.randi_range(1, 5))

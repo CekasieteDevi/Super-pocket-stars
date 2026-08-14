@@ -6,10 +6,9 @@ extends RefCounted
 ## hasta que el club se cruza con uno tuyo — generación perezosa, y una vez
 ## generados quedan guardados (no se vuelven a tirar cada vez).
 ##
-## Nombres reales de clubes: se usan plantillas simples por ahora (no las
-## plantillas creíbles por país del §10.1, que son puro contenido/nombres,
-## no lógica) — mismo pendiente que los 200 clubes uruguayos (Fix 10 del
-## GDD, generación del mundo horneada, todavía no se hizo para nadie).
+## Nombre del club (Confederacion.generar) y de sus jugadores (acá, al
+## materializar el plantel) salen del pool creíble por país del §10.1 —
+## ver core/generador_nombres_internacional.gd.
 
 var nombre: String
 var pais: String
@@ -52,7 +51,7 @@ static func cargar(datos: Dictionary) -> ClubExterior:
 ## Devuelve el Team materializado, generándolo la primera vez que se pide.
 func obtener_equipo(rng: RandomNumberGenerator) -> Team:
 	if _equipo == null:
-		_equipo = Team.generar(nombre, rng, id_base, int(round(fuerza_equipo)))
+		_equipo = Team.generar(nombre, rng, id_base, int(round(fuerza_equipo)), pais)
 	return _equipo
 
 

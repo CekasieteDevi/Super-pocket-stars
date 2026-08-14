@@ -1,0 +1,80 @@
+{
+  "Brasil": {
+    "formato_club": "{tipo} {ciudad}",
+    "tipos_club": ["Esporte Clube", "Sociedade Esportiva", "Grêmio", "Clube Atlético"],
+    "ciudades": ["Recife", "Fortaleza", "Curitiba", "Belém", "Manaus", "Goiânia", "Campinas", "Natal", "Maceió", "Uberlândia", "Joinville", "Sorocaba"],
+    "nombres_jugador": ["Gabriel", "Lucas", "Matheus", "Rafael", "Bruno", "Thiago", "Felipe", "Diego", "Vinícius", "Caio", "Igor", "Wesley", "Everton", "Nathan", "Kauã"],
+    "apellidos_jugador": ["Silva", "Santos", "Oliveira", "Souza", "Pereira", "Costa", "Ferreira", "Almeida", "Barbosa", "Ribeiro", "Carvalho", "Gomes", "Martins", "Araújo", "Nascimento"]
+  },
+  "Espana": {
+    "formato_club": "{tipo} {ciudad}",
+    "tipos_club": ["Real", "Atlético", "Deportivo", "CF"],
+    "ciudades": ["Alicante", "Murcia", "Zaragoza", "Valladolid", "Vigo", "Gijón", "Córdoba", "Granada", "Málaga", "Burgos", "Cádiz", "Salamanca"],
+    "nombres_jugador": ["Álvaro", "Pablo", "Sergio", "Iker", "Marc", "Adrián", "Hugo", "Rubén", "Diego", "Nacho", "Jordi", "Mario", "Iván", "Raúl", "Javier"],
+    "apellidos_jugador": ["García", "Fernández", "González", "Rodríguez", "López", "Martínez", "Sánchez", "Pérez", "Gómez", "Díaz", "Moreno", "Muñoz", "Álvarez", "Romero", "Navarro"]
+  },
+  "Inglaterra": {
+    "formato_club": "{ciudad} {tipo}",
+    "tipos_club": ["United", "City", "Rovers", "Wanderers", "Athletic"],
+    "ciudades": ["Preston", "Bolton", "Luton", "Ipswich", "Reading", "Derby", "Norwich", "Watford", "Sunderland", "Blackburn", "Swansea", "Bristol"],
+    "nombres_jugador": ["Harry", "Jack", "Oliver", "George", "Charlie", "James", "Thomas", "William", "Callum", "Ryan", "Connor", "Ben", "Josh", "Luke", "Aaron"],
+    "apellidos_jugador": ["Smith", "Taylor", "Brown", "Wilson", "Evans", "Thomas", "Roberts", "Walker", "Wright", "Robinson", "Hughes", "Edwards", "Green", "Hall", "Clarke"]
+  },
+  "Italia": {
+    "formato_club": "{tipo} {ciudad}",
+    "tipos_club": ["AC", "FC", "Inter", "Calcio"],
+    "ciudades": ["Bari", "Bologna", "Verona", "Palermo", "Cagliari", "Parma", "Brescia", "Salerno", "Catania", "Padova", "Livorno", "Foggia"],
+    "nombres_jugador": ["Matteo", "Lorenzo", "Andrea", "Federico", "Davide", "Alessandro", "Marco", "Luca", "Simone", "Riccardo", "Gianluca", "Stefano", "Nicolò", "Emanuele", "Antonio"],
+    "apellidos_jugador": ["Rossi", "Russo", "Ferrari", "Esposito", "Bianchi", "Romano", "Colombo", "Ricci", "Marino", "Greco", "Bruno", "Gallo", "Conti", "De Luca", "Mancini"]
+  },
+  "Alemania": {
+    "formato_club": "{tipo} {ciudad}{sufijo}",
+    "tipos_club": ["FC", "SV", "Borussia", "Eintracht"],
+    "sufijos_club": [" 04", " 09", " 1899", ""],
+    "ciudades": ["Bremen", "Leipzig", "Nürnberg", "Bochum", "Dresden", "Kiel", "Rostock", "Mainz", "Fürth", "Ulm", "Bielefeld", "Cottbus"],
+    "nombres_jugador": ["Lukas", "Jonas", "Finn", "Maximilian", "Niklas", "Tim", "Julian", "Leon", "Moritz", "Fabian", "Tobias", "Sebastian", "Felix", "Jan", "Marvin"],
+    "apellidos_jugador": ["Müller", "Schmidt", "Schneider", "Fischer", "Weber", "Meyer", "Wagner", "Becker", "Hoffmann", "Schulz", "Koch", "Richter", "Klein", "Wolf", "Neumann"]
+  },
+  "Francia": {
+    "formato_club": "{tipo} {ciudad}",
+    "tipos_club": ["Olympique", "Racing", "Stade", "AS"],
+    "ciudades": ["Nantes", "Rennes", "Toulouse", "Reims", "Metz", "Nancy", "Amiens", "Brest", "Lorient", "Sochaux", "Nîmes", "Caen"],
+    "nombres_jugador": ["Antoine", "Hugo", "Nathan", "Kylian", "Moussa", "Ibrahim", "Théo", "Enzo", "Mamadou", "Ousmane", "Lucas", "Baptiste", "Aly", "Karim", "Yanis"],
+    "apellidos_jugador": ["Dubois", "Lefèvre", "Moreau", "Girard", "Bernard", "Traoré", "Diallo", "Keita", "Bakary", "Fournier", "Rousseau", "Mercier", "Blanc", "Faye", "N'Diaye"]
+  },
+  "Argentina": {
+    "formato_club": "{tipo} {ciudad}",
+    "tipos_club": ["Club Atlético", "Deportivo", "Atlético", "Racing Club de"],
+    "ciudades": ["Rosario", "Córdoba", "Mendoza", "La Plata", "Tucumán", "Salta", "Bahía Blanca", "Santa Fe", "Neuquén", "Mar del Plata", "Resistencia", "Posadas"],
+    "nombres_jugador": ["Franco", "Nahuel", "Tomás", "Ezequiel", "Lautaro", "Gonzalo", "Facundo", "Matías", "Agustín", "Bautista", "Ramiro", "Ignacio", "Bruno", "Ian", "Joaquín"],
+    "apellidos_jugador": ["Gómez", "Fernández", "López", "Díaz", "Romero", "Torres", "Sosa", "Molina", "Ortiz", "Acosta", "Benítez", "Suárez", "Coronel", "Ledesma", "Villalba"]
+  },
+  "Portugal": {
+    "formato_club": "{tipo} {ciudad}",
+    "tipos_club": ["Sporting Clube de", "Vitória de", "União", "Grupo Desportivo de"],
+    "ciudades": ["Braga", "Coimbra", "Setúbal", "Faro", "Aveiro", "Évora", "Viseu", "Guimarães", "Leiria", "Beja", "Portimão", "Chaves"],
+    "nombres_jugador": ["João", "Tiago", "Rui", "Bernardo", "Gonçalo", "Duarte", "Guilherme", "Vasco", "André", "Nuno", "Ricardo", "Pedro", "Rodrigo", "Simão", "Afonso"],
+    "apellidos_jugador": ["Ferreira", "Costa", "Pereira", "Carvalho", "Rodrigues", "Martins", "Sousa", "Fonseca", "Marques", "Pinto", "Teixeira", "Neves", "Cardoso", "Correia", "Lopes"]
+  },
+  "Paises Bajos": {
+    "formato_club": "{tipo} {ciudad}",
+    "tipos_club": ["FC", "SC", "VV"],
+    "ciudades": ["Utrecht", "Groningen", "Tilburg", "Breda", "Nijmegen", "Arnhem", "Zwolle", "Heerenveen", "Almere", "Leiden", "Deventer", "Dordrecht"],
+    "nombres_jugador": ["Daan", "Sem", "Milan", "Luuk", "Bram", "Thijs", "Ruben", "Stijn", "Jesse", "Sven", "Niels", "Tim", "Joris", "Wouter", "Koen"],
+    "apellidos_jugador": ["de Jong", "Jansen", "de Vries", "van den Berg", "Bakker", "Visser", "Smit", "Meijer", "de Boer", "Mulder", "de Groot", "Bos", "Vos", "Peters", "Hendriks"]
+  },
+  "Mexico": {
+    "formato_club": "{tipo} {ciudad}",
+    "tipos_club": ["Club", "Deportivo", "Atlético", "Real"],
+    "ciudades": ["Puebla", "Toluca", "Querétaro", "Mérida", "Torreón", "Morelia", "Aguascalientes", "Culiacán", "Hermosillo", "Xalapa", "Tampico", "Chihuahua"],
+    "nombres_jugador": ["Santiago", "Emiliano", "Diego", "Ángel", "Leonardo", "Eduardo", "Ricardo", "Alejandro", "Jesús", "Rodrigo", "Iván", "Gerardo", "Osvaldo", "Uriel", "César"],
+    "apellidos_jugador": ["Hernández", "García", "Martínez", "Ramírez", "Torres", "Flores", "Vázquez", "Reyes", "Cruz", "Morales", "Gutiérrez", "Ortiz", "Chávez", "Mendoza", "Aguilar"]
+  },
+  "Colombia": {
+    "formato_club": "{tipo} {ciudad}",
+    "tipos_club": ["Deportivo", "Atlético", "Independiente", "Real"],
+    "ciudades": ["Cali", "Barranquilla", "Bucaramanga", "Cartagena", "Manizales", "Pereira", "Ibagué", "Cúcuta", "Pasto", "Montería", "Neiva", "Popayán"],
+    "nombres_jugador": ["Santiago", "Juan David", "Camilo", "Andrés", "Jhon", "Sebastián", "Cristian", "Yerson", "Duván", "Wílmar", "Édwin", "Yeison", "Kevin", "Brayan", "Deiver"],
+    "apellidos_jugador": ["Rodríguez", "Gómez", "Martínez", "Rojas", "Ramírez", "Vargas", "Castro", "Jiménez", "Moreno", "Ríos", "Cárdenas", "Zapata", "Arias", "Salazar", "Quintero"]
+  }
+}

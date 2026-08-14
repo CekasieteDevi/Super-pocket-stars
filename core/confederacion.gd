@@ -13,9 +13,11 @@ extends RefCounted
 ## (que resetea esa tabla para la temporada siguiente).
 ##
 ## Nombres de países reales, nunca clubes/escudos reales (aclarado en el
-## GDD). Nombres de club con plantilla simple por ahora — el pool de
-## nombres creíbles por país (§10.1) es contenido, no lógica, mismo
-## pendiente que el Fix 10 (mundo horneado) para los 200 clubes uruguayos.
+## GDD). Nombres de club y de jugador con pool creíble por país (§10.1,
+## core/generador_nombres_internacional.gd + data/nombres_internacional.json)
+## — Brasil/España/Inglaterra/Italia/Alemania/Francia/Países Bajos usan la
+## plantilla que da el GDD; Argentina/Portugal/México/Colombia (sin
+## plantilla explícita en el documento) se armaron con el mismo criterio.
 
 ## Orden de coeficiente inicial del GDD §10.1: los primeros 6 ponen 5
 ## plazas directas en Campeones ("alto"); del 7 al 12 ponen 2 y juegan la
@@ -36,6 +38,7 @@ static func generar(piramide: Piramide, rng: RandomNumberGenerator) -> Confedera
 	var c := Confederacion.new()
 	c.piramide = piramide
 	var siguiente_id := 100000  # separado del rango 0-2199 de los 200 clubes uruguayos
+	var nombres_usados := {}  # compartido entre países: formatos distintos hacen colisión rarísima, pero por las dudas
 	for i in range(PAISES_INICIALES.size()):
 		var nombre_pais: String = PAISES_INICIALES[i]
 		var es_uruguay := nombre_pais == "Uruguay"
@@ -49,7 +52,8 @@ static func generar(piramide: Piramide, rng: RandomNumberGenerator) -> Confedera
 			var fuerza_base: float = lerp(75.0, 45.0, float(i) / 10.0)
 			for j in range(CLUBES_POR_PAIS):
 				var fuerza: float = clamp(fuerza_base + rng.randf_range(-15.0, 15.0), 20.0, 95.0)
-				var club := ClubExterior.generar("%s FC %02d" % [nombre_pais, j + 1], nombre_pais, fuerza, siguiente_id)
+				var nombre_club := GeneradorNombresInternacional.nombre_club(nombre_pais, rng, nombres_usados)
+				var club := ClubExterior.generar(nombre_club, nombre_pais, fuerza, siguiente_id)
 				siguiente_id += Team.RANGO_IDS_RESERVADO
 				entry["clubes"].append(club)
 		c.paises.append(entry)

@@ -117,4 +117,4 @@ func _mejor_disponible(candidatos_por_posicion: Dictionary, posicion: String, us
 ## competitivo (ni tabla ni ascensos), es color — golear 17-0 en un
 ## amistoso no rompe la partida.
 static func generar_rival(nombre_pais: String, fuerza: float, rng: RandomNumberGenerator) -> Team:
-	return Team.generar("Selección %s" % nombre_pais, rng, ID_BASE_RIVAL, int(round(fuerza)))
+	return Team.generar("Selección %s" % nombre_pais, rng, ID_BASE_RIVAL, int(round(fuerza)), nombre_pais)

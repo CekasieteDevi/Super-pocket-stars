@@ -33,7 +33,10 @@ static func get_all_attributes() -> Array:
 ## (± variación) como potencial directamente — lo usan los clubes del
 ## exterior (Fase 7, §10.5) para que el plantel generado ronde su
 ## fuerza_equipo horneada en vez de la distribución calibrada para Uruguay.
-static func generate(id: int, rng: RandomNumberGenerator, forced_position: String = "", potencial_forzado: int = -1) -> Dictionary:
+## pais (§10.1): pool de nombre/apellido — "Uruguay" (default) usa
+## GeneradorNombres, cualquier otro país reconocido usa su propio pool
+## (GeneradorNombresInternacional), y un país sin pool cae al de Uruguay.
+static func generate(id: int, rng: RandomNumberGenerator, forced_position: String = "", potencial_forzado: int = -1, pais: String = "Uruguay") -> Dictionary:
 	var positions := get_weights().keys()
 	var position: String = forced_position if forced_position != "" else positions[rng.randi() % positions.size()]
 
@@ -53,7 +56,7 @@ static func generate(id: int, rng: RandomNumberGenerator, forced_position: Strin
 
 	var media_natural := compute_media(atributos, position)
 	var mejor := best_position(atributos)
-	var identidad := GeneradorNombres.nombre_jugador(rng)
+	var identidad: Dictionary = GeneradorNombres.nombre_jugador(rng) if pais == "Uruguay" else GeneradorNombresInternacional.nombre_jugador(pais, rng)
 
 	return {
 		"id": id,
