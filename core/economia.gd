@@ -6,10 +6,20 @@ extends RefCounted
 ## entradas + sponsor + premio por posición como ingreso, sueldos +
 ## mantenimiento como egreso, repartido en los 4 presupuestos fijos.
 
-## §15 decisión 2 / §9.1: Fichajes 60% / Contratos 20% / Mejoras 10% / Mantenimiento 10%.
+## §15 decisión 2 / §9.1: Fichajes 60% / Contratos 20% / Mejoras 10% del
+## NETO LIBRE (ingresos - sueldos - mantenimiento fijo), reescalado a que
+## sumen 100% entre estos tres — Mantenimiento salió del reparto (ver
+## RESERVA_MANTENIMIENTO más abajo): comprar jugadores más caros no debería
+## hacer que el presupuesto de mantenimiento del club se vaya a números
+## rojos, es un costo administrativo fijo (cancha, luz), no una inversión
+## que dependa de la actividad del mercado.
 const PRESUPUESTO_PORCENTAJES := {
-	"fichajes": 0.60, "contratos": 0.20, "mejoras": 0.10, "mantenimiento": 0.10,
+	"fichajes": 60.0 / 90.0, "contratos": 20.0 / 90.0, "mejoras": 10.0 / 90.0,
 }
+## Las 4 categorías reales de la caja del club — a diferencia de
+## PRESUPUESTO_PORCENTAJES (solo 3, las que se reparten del neto),
+## Mantenimiento se repone con RESERVA_MANTENIMIENTO, no con un porcentaje.
+const CATEGORIAS_CAJA := ["fichajes", "contratos", "mejoras", "mantenimiento"]
 
 ## Calibrado para que la masa salarial (sueldo ~15% del valor de mercado,
 ## ValorJugador.VALOR_BASE=50000) sea una fracción realista de los ingresos
@@ -19,6 +29,11 @@ const AFORO_BASE := 800
 const PRECIO_ENTRADA := 80.0
 const SPONSOR_BASE := 15000.0
 const MANTENIMIENTO_FIJO := 25000.0
+## Reserva de Mantenimiento que se repone CADA temporada, siempre igual —
+## a diferencia de los otros tres presupuestos, no depende del neto de la
+## temporada. La usan las multas de Liga por no presentarte con el mínimo
+## de jugadores disponibles (§14).
+const RESERVA_MANTENIMIENTO := 12500.0
 const PREMIO_POR_POSICION := {1: 50000.0, 2: 30000.0, 3: 15000.0}
 
 ## Si la caja total queda por debajo de -20% del valor del plantel, quiebra.
@@ -27,7 +42,7 @@ const UMBRAL_QUIEBRA := -0.2
 
 static func _fila_vacia_caja() -> Dictionary:
 	var c := {}
-	for categoria in PRESUPUESTO_PORCENTAJES:
+	for categoria in CATEGORIAS_CAJA:
 		c[categoria] = 0.0
 	return c
 
@@ -50,6 +65,11 @@ static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos:
 		var asignado: float = neto * PRESUPUESTO_PORCENTAJES[categoria]
 		equipo.caja[categoria] += asignado
 		equipo.presupuesto_temporada[categoria] = asignado
+	# Mantenimiento no sale del neto (que ya lo restó una vez como costo fijo
+	# más arriba, en egresos) — se repone con una reserva fija, siempre
+	# igual, para que gastar de más en sueldos no lo mande a números rojos.
+	equipo.caja["mantenimiento"] += RESERVA_MANTENIMIENTO
+	equipo.presupuesto_temporada["mantenimiento"] = RESERVA_MANTENIMIENTO
 	# Foto de la caja justo despues de repartir el ingreso y antes de que el
 	# mercado (que corre a continuacion en el mismo cierre) gaste nada —
 	# sirve para que la UI pueda mostrar cuanto se gasto de cada categoria

@@ -98,7 +98,7 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 	t.reputacion = clamp(t.media_equipo(), 20.0, 80.0)
 	t.scouts = [{"nivel": 1}]
 	t.instalaciones = Instalaciones.nivel_inicial()
-	for categoria in Economia.PRESUPUESTO_PORCENTAJES:
+	for categoria in Economia.CATEGORIAS_CAJA:
 		t.caja[categoria] = 0.0
 		t.presupuesto_temporada[categoria] = 0.0
 		t.caja_al_cierre[categoria] = 0.0
