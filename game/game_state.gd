@@ -39,7 +39,15 @@ var ultimo_informe_economico: Dictionary = {}  # ingresos/egresos/neto del ultim
 var ultima_posicion_final: Dictionary = {}  # {"posicion","total","division"} del cierre de temporada mas reciente
 
 
+## Si hay una partida guardada, arranca retomándola — si no, "guardar la
+## partida" no serviría de nada en la práctica (¿quién va a acordarse de
+## tocar "Cargar partida" cada vez que abre el juego?). El botón "Cargar
+## partida" sigue estando para descartar progreso reciente sin guardar y
+## volver al último guardado sin reiniciar la app entera.
 func _ready() -> void:
+	if hay_partida_guardada() and cargar_partida():
+		return
+
 	rng = RandomNumberGenerator.new()
 	rng.seed = 99
 
