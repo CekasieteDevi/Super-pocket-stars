@@ -53,7 +53,15 @@ func _test_oferta_exitosa(rng: RandomNumberGenerator) -> void:
 	var jugador_objetivo_id: int = vendedor.jugadores[idx_objetivo]["id"]
 	var jugador_saliente_id: int = comprador.jugadores[idx_saliente]["id"]
 
-	var resultado := Mercado.ofertar_por_jugador(comprador, vendedor, jugador_objetivo_id)
+	# resistencia_venta() puede rechazar una oferta común aunque la plata
+	# alcance -- reintenta unas cuantas veces (solo si el motivo fue
+	# resistencia, no otra cosa) para no volver el test dependiente de que
+	# la tirada probabilística caiga de un lado con este SEED en particular.
+	var resultado := {}
+	for intento in range(30):
+		resultado = Mercado.ofertar_por_jugador(comprador, vendedor, jugador_objetivo_id, rng)
+		if resultado["exito"] or not resultado.get("resistencia", false):
+			break
 
 	var comprador_banco_ids := []
 	for j in comprador.banco:
@@ -97,7 +105,7 @@ func _test_rechazo_no_es_mejor(rng: RandomNumberGenerator) -> void:
 			j["media"] = 70.0  # ya mejor que el objetivo
 
 	var jugador_objetivo_id: int = vendedor.jugadores[idx_objetivo]["id"]
-	var resultado := Mercado.ofertar_por_jugador(comprador, vendedor, jugador_objetivo_id)
+	var resultado := Mercado.ofertar_por_jugador(comprador, vendedor, jugador_objetivo_id, rng)
 
 	if not resultado["exito"]:
 		print("OK: se rechazo la oferta (%s)." % resultado["motivo"])
@@ -123,7 +131,7 @@ func _test_rechazo_sin_fondos(rng: RandomNumberGenerator) -> void:
 	comprador.caja["fichajes"] = 0.0
 
 	var jugador_objetivo_id: int = vendedor.jugadores[idx_objetivo]["id"]
-	var resultado := Mercado.ofertar_por_jugador(comprador, vendedor, jugador_objetivo_id)
+	var resultado := Mercado.ofertar_por_jugador(comprador, vendedor, jugador_objetivo_id, rng)
 
 	if not resultado["exito"] and resultado.has("diferencia"):
 		print("OK: se rechazo por falta de fondos (necesitaba %s)." % Economia.formato_dinero(resultado["diferencia"]))

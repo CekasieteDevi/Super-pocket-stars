@@ -11,6 +11,12 @@ extends RefCounted
 ## que vende promueve a su suplente de esa posición y el que llega a cambio
 ## entra al banco. El único que sale del club de verdad es a quien no le
 ## queda lugar en el banco.
+##
+## Extendido con resistencia de venta (resistencia_venta): una oferta común
+## (ofertar_por_jugador) puede ser rechazada aunque la plata alcance, si el
+## club no quiere desprenderse de esa pieza — para forzar la venta sin
+## resistencia existe la cláusula de rescisión (pagar_clausula), fijada al
+## fichar a cada jugador (Team.FACTOR_CLAUSULA).
 
 const UMBRAL_DIFERENCIA_MEDIA := 8.0
 const POSICIONES := ["ARQ", "DFC", "LAT", "MC", "MCO", "EXT", "DC"]
@@ -95,7 +101,35 @@ static func ejecutar_ventana(liga: Liga, rng: RandomNumberGenerator, equipo_prot
 ## cambio es siempre tu titular más débil en esa misma posición (pasa a tu
 ## banco, no se libera), y solo se permite si el objetivo es realmente
 ## mejor — si no, no tiene sentido la oferta.
-static func ofertar_por_jugador(comprador: Team, vendedor: Team, jugador_objetivo_id: int) -> Dictionary:
+## §9.3 extendido: cuánto le cuesta a un club de la IA desprenderse de un
+## jugador con una oferta común (no una cláusula) — 0.0 lo vende sin
+## problema, cerca de 1.0 casi nunca acepta. Más resistencia si es el
+## capitán, si es claramente su mejor jugador en esa posición (nadie
+## vende a su figura sin pelear), o si el club tiene buena reputación
+## (no necesita la plata tanto como uno de reputación baja).
+static func resistencia_venta(vendedor: Team, jugador: Dictionary) -> float:
+	var resistencia := 0.0
+	if jugador["id"] == vendedor.capitan_id:
+		resistencia += 0.25
+
+	# Contra todo el plantel (titulares+banco) en esa posición, no solo el
+	# titular: posiciones como ARQ o DC tienen un solo titular, así que
+	# comparar solo contra "el resto de titulares" nunca encontraría a
+	# nadie con quien comparar.
+	var media_resto := 0.0
+	var cuenta := 0
+	for j in vendedor.todos_los_jugadores():
+		if j["posicion"] == jugador["posicion"] and j["id"] != jugador["id"]:
+			media_resto += j["media"]
+			cuenta += 1
+	if cuenta > 0 and jugador["media"] - (media_resto / cuenta) >= 8.0:
+		resistencia += 0.3
+
+	resistencia += clamp(vendedor.reputacion / 100.0, 0.0, 1.0) * 0.3
+	return clamp(resistencia, 0.0, 0.85)
+
+
+static func ofertar_por_jugador(comprador: Team, vendedor: Team, jugador_objetivo_id: int, rng: RandomNumberGenerator) -> Dictionary:
 	var indice_objetivo := -1
 	for i in range(vendedor.jugadores.size()):
 		if vendedor.jugadores[i]["id"] == jugador_objetivo_id:
@@ -126,6 +160,13 @@ static func ofertar_por_jugador(comprador: Team, vendedor: Team, jugador_objetiv
 	if comprador.caja["fichajes"] < diferencia:
 		return {"exito": false, "motivo": "No te alcanza el presupuesto de Fichajes.", "diferencia": diferencia, "disponible": comprador.caja["fichajes"]}
 
+	var resistencia := resistencia_venta(vendedor, jugador_objetivo)
+	if rng.randf() < resistencia:
+		return {
+			"exito": false, "motivo": "El club no quiere desprenderse de esa pieza con una oferta común.",
+			"resistencia": true, "clausula": vendedor.clausulas.get(jugador_objetivo_id, 0.0),
+		}
+
 	comprador.caja["fichajes"] -= diferencia
 	vendedor.caja["fichajes"] += diferencia
 
@@ -144,6 +185,60 @@ static func ofertar_por_jugador(comprador: Team, vendedor: Team, jugador_objetiv
 	return {
 		"exito": true, "jugador_entra": jugador_objetivo, "jugador_sale": jugador_saliente,
 		"diferencia": diferencia, "posicion": posicion,
+	}
+
+
+## Paga la cláusula de rescisión completa: venta OBLIGATORIA, sin
+## resistencia_venta y sin comparar si el objetivo es "mejor" que tu
+## titular actual (pagar de más por alguien que no te mejora es una
+## decisión tuya, no algo que el sistema tenga que impedir). Todo el
+## monto sale de Fichajes — no hay "diferencia" con nadie porque no hay
+## intercambio de jugadores de por medio, solo la cláusula en efectivo.
+static func pagar_clausula(comprador: Team, vendedor: Team, jugador_objetivo_id: int) -> Dictionary:
+	var indice_objetivo := -1
+	for i in range(vendedor.jugadores.size()):
+		if vendedor.jugadores[i]["id"] == jugador_objetivo_id:
+			indice_objetivo = i
+			break
+	if indice_objetivo < 0:
+		return {"exito": false, "motivo": "Ese jugador ya no juega en ese club."}
+
+	var jugador_objetivo: Dictionary = vendedor.jugadores[indice_objetivo]
+	var posicion: String = jugador_objetivo["posicion"]
+	var clausula: float = vendedor.clausulas.get(
+		jugador_objetivo_id,
+		ValorJugador.calcular(jugador_objetivo, vendedor.animo.get(jugador_objetivo_id, 50.0), vendedor.contratos.get(jugador_objetivo_id, 1)) * Team.FACTOR_CLAUSULA
+	)
+
+	if comprador.caja["fichajes"] < clausula:
+		return {"exito": false, "motivo": "No te alcanza el presupuesto de Fichajes para pagar la cláusula.", "clausula": clausula, "disponible": comprador.caja["fichajes"]}
+
+	var indice_saliente := -1
+	for i in range(comprador.jugadores.size()):
+		if comprador.jugadores[i]["posicion"] == posicion:
+			if indice_saliente == -1 or comprador.jugadores[i]["media"] < comprador.jugadores[indice_saliente]["media"]:
+				indice_saliente = i
+	if indice_saliente < 0:
+		return {"exito": false, "motivo": "No tenés ningún jugador en esa posición para reemplazar."}
+
+	var jugador_saliente: Dictionary = comprador.jugadores[indice_saliente]
+	var valor_saliente := ValorJugador.calcular(jugador_saliente, comprador.animo.get(jugador_saliente["id"], 50.0), comprador.contratos.get(jugador_saliente["id"], 1))
+
+	comprador.caja["fichajes"] -= clausula
+	vendedor.caja["fichajes"] += clausula
+
+	comprador.jugadores[indice_saliente] = jugador_objetivo
+	comprador.recalcular_capitan()
+	vendedor.vender_titular(indice_objetivo, jugador_saliente)
+
+	comprador._registrar_fichaje(jugador_objetivo, clausula / Team.FACTOR_CLAUSULA)
+	vendedor._registrar_fichaje(jugador_saliente, valor_saliente)
+	comprador._limpiar_registro(jugador_saliente["id"])
+	vendedor._limpiar_registro(jugador_objetivo_id)
+
+	return {
+		"exito": true, "jugador_entra": jugador_objetivo, "jugador_sale": jugador_saliente,
+		"clausula": clausula, "posicion": posicion,
 	}
 
 

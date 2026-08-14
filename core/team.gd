@@ -66,6 +66,11 @@ var presupuesto_temporada: Dictionary = {}
 var caja_al_cierre: Dictionary = {}
 var sueldos: Dictionary = {}  # jugador_id -> sueldo anual
 var contratos: Dictionary = {}  # jugador_id -> años restantes
+## §9.3 extendido: pagando exactamente esto por un jugador, la venta es
+## obligatoria — sin la resistencia que tiene una oferta común (ver
+## Mercado.resistencia_venta). Se fija al ficharlo (_registrar_fichaje) y
+## no cambia mientras esté en el club.
+var clausulas: Dictionary = {}  # jugador_id -> monto de la cláusula
 var reputacion: float = 50.0  # 0-100, afecta entradas/sponsors (§10.5)
 var quebrado: bool = false
 var scouts: Array = []  # [{"nivel":int}], §9.4 — empieza con 1 al mínimo (§15 decisión 9)
@@ -144,14 +149,21 @@ func puede_jugar(jugador_id: int) -> bool:
 	return not esta_lesionado(jugador_id) and not expulsados_partido.has(jugador_id) and suspendidos.get(jugador_id, 0) <= 0
 
 
+## Cuánto más que el valor de mercado hace falta pagar para forzar una
+## venta sin resistencia (ver Mercado.pagar_clausula).
+const FACTOR_CLAUSULA := 1.8
+
+
 ## Da de alta a un jugador que se suma al plantel (fichaje, ascenso desde
-## cantera): sueldo, contrato, ánimo neutro, totalmente descansado.
+## cantera): sueldo, contrato, ánimo neutro, totalmente descansado,
+## cláusula de rescisión nueva.
 func _registrar_fichaje(jugador: Dictionary, valor: float, contrato_anios: int = 3) -> void:
 	var id: int = jugador["id"]
 	sueldos[id] = Economia.sueldo_sugerido(valor) * Personalidad.factor_sueldo(jugador)
 	contratos[id] = contrato_anios
 	animo[id] = 50.0
 	fatiga_acumulada[id] = 1.0
+	clausulas[id] = valor * FACTOR_CLAUSULA
 
 
 ## Da de baja a un jugador que se va del club (vendido, liberado).
@@ -161,6 +173,7 @@ func _limpiar_registro(id: int) -> void:
 	animo.erase(id)
 	fatiga_acumulada.erase(id)
 	lesiones.erase(id)
+	clausulas.erase(id)
 
 
 ## Mete a un jugador en el banco, en el puesto de BANCO_FORMACION que le
