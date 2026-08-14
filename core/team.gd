@@ -28,6 +28,7 @@ var jugadores: Array = []  # 11 dicts (PlayerGenerator.generate), uno por puesto
 var banco: Array = []  # 7 dicts, uno por puesto de BANCO_FORMACION (suplentes)
 var local: bool = false
 var estilo: String = ""  # Tiki taka/Contragolpe/Juego directo/Presión alta/Defensivo/Físico, ver core/estilos.gd
+var dt: Dictionary = {}  # {"nivel":1-10, "rasgo":Conservador/Loco/Cantera/Chequera}, ver core/dt.gd
 var armonia: float = 0.0  # placeholder hasta que exista §3 completo (vestuario real)
 ## §8.4 modificador 2 ("Forma, de -5 a +5 según los últimos 5 partidos"),
 ## bloque A. Sin historial de partidos recientes todavía, se aproxima con
@@ -126,6 +127,8 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 		t.armonia += Personalidad.bonus_armonia(jugador)
 	t.armonia += rng.randf_range(-3.0, 5.0)
 	t.estilo = Estilos.generar(rng)
+	t.dt = DT.generar(rng)
+	t.config_cambios = DT.config_cambios_de(t.dt["nivel"])
 	t.reputacion = clamp(t.media_equipo(), 20.0, 80.0)
 	t.scouts = [{"nivel": 1}]
 	t.instalaciones = Instalaciones.nivel_inicial()
@@ -166,7 +169,7 @@ func guardar() -> Dictionary:
 		}
 
 	return {
-		"nombre": nombre, "estilo": estilo, "jugadores": jugadores, "banco": banco, "cantera": cantera,
+		"nombre": nombre, "estilo": estilo, "dt": dt, "jugadores": jugadores, "banco": banco, "cantera": cantera,
 		"siguiente_id_cantera": siguiente_id_cantera, "capitan_id": capitan_id,
 		"fatiga_acumulada": _claves_a_texto(fatiga_acumulada),
 		"animo": _claves_a_texto(animo),
@@ -194,6 +197,13 @@ static func cargar(datos: Dictionary) -> Team:
 		var rng_migracion := RandomNumberGenerator.new()
 		rng_migracion.seed = hash(datos["nombre"])
 		t.estilo = Estilos.generar(rng_migracion)
+	if datos.has("dt"):
+		t.dt = datos["dt"]
+	else:
+		# Misma migracion que estilo, para guardados de antes de §8.6.4.
+		var rng_migracion_dt := RandomNumberGenerator.new()
+		rng_migracion_dt.seed = hash(datos["nombre"]) + 1  # +1 para no repetir la tirada de estilo
+		t.dt = DT.generar(rng_migracion_dt)
 	t.jugadores = _normalizar_jugadores(datos["jugadores"])
 	t.banco = _normalizar_jugadores(datos["banco"])
 	t.cantera = _normalizar_jugadores(datos["cantera"])

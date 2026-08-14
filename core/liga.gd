@@ -318,8 +318,11 @@ func _procesar_cantera(equipo: Team, rng: RandomNumberGenerator, es_protegido: b
 	var promovidos := []
 	var promovidos_a_titular := []
 	if not es_protegido:
-		promovidos = equipo.promover_automatico()
-		promovidos_a_titular = equipo.promover_banco_automatico()
+		# §8.6.4: un DT Cantera promueve con mucha menos exigencia, uno
+		# Chequera casi no lo hace (prefiere resolverlo en el mercado).
+		var umbral := 3.0 * DT.factor_umbral_cantera(equipo)
+		promovidos = equipo.promover_automatico(umbral)
+		promovidos_a_titular = equipo.promover_banco_automatico(umbral)
 	return {
 		"equipo": equipo.nombre, "liberados": liberados, "nuevos": nuevos,
 		"promovidos": promovidos, "promovidos_a_titular": promovidos_a_titular,

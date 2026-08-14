@@ -41,10 +41,11 @@ static func _elegir(jugadores: Array, rng: RandomNumberGenerator) -> Dictionary:
 
 ## §8.5: bloque A (forma del día, ver Team.forma_partido), bloque B
 ## (equipo/racha/armonía/capitán), bloque C (local + choque de estilos,
-## §8.6.3) y bloque D (personalidad + habilidad de ESE jugador en ESE
-## duelo, §6/§5 — Ansioso de visitante, Egoísta priorizando su propio tiro,
-## Cañón sumando en sus duelos de tiro si ya se manifestó).
-static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atributo: String) -> Dictionary:
+## §8.6.3 + rasgo del DT según el marcador, §8.6.4) y bloque D
+## (personalidad + habilidad de ESE jugador en ESE duelo, §6/§5 — Ansioso
+## de visitante, Egoísta priorizando su propio tiro, Cañón sumando en sus
+## duelos de tiro si ya se manifestó).
+static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atributo: String, minuto: int) -> Dictionary:
 	var jugador_id: int = jugador["id"]
 	var bloque_a := equipo.forma_partido
 	var bloque_b: float = equipo.armonia + clamp(float(equipo.racha), 0.0, 10.0)
@@ -52,6 +53,7 @@ static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atri
 		bloque_b += 2.0
 	var bloque_c := 5.0 if equipo.local else 0.0
 	bloque_c += Estilos.modificador(equipo.estilo, rival.estilo)
+	bloque_c += DT.modificador_partido(equipo, rival, atributo, minuto)
 	var bloque_d := Personalidad.modificador_partido(jugador, equipo.local, atributo) + Habilidades.modificador_partido(jugador, atributo)
 	return {"A": bloque_a, "B": bloque_b, "C": bloque_c, "D": bloque_d}
 
@@ -138,8 +140,8 @@ static func _duelo(atacante: Dictionary, atacante_attr: String, equipo_atacante:
 		equipo_defensor.resistencia_pct(defensor["id"]))
 	var resultado := Duel.resolver(
 		ata_eff, def_eff,
-		_bloques_equipo(equipo_atacante, equipo_defensor, atacante, atacante_attr),
-		_bloques_equipo(equipo_defensor, equipo_atacante, defensor, defensor_attr))
+		_bloques_equipo(equipo_atacante, equipo_defensor, atacante, atacante_attr, minuto),
+		_bloques_equipo(equipo_defensor, equipo_atacante, defensor, defensor_attr, minuto))
 	equipo_atacante.desgastar(atacante["id"], atacante["atributos"]["energia"])
 	equipo_defensor.desgastar(defensor["id"], defensor["atributos"]["energia"])
 	_chequear_lesion(atacante, equipo_atacante, rng)
@@ -379,7 +381,7 @@ static func _resolver_tiro(equipo_atacante: Team, equipo_defensor: Team, atacant
 
 	var arquero_attrs = arquero["atributos"]
 	var arquero_valor: float = arquero_attrs["reflejos"] * 0.5 + arquero_attrs["estirada"] * 0.3 + arquero_attrs["agarre"] * 0.2
-	var resultado := _duelo_tiro(atacante, float(tiro), equipo_atacante, arquero, arquero_valor, equipo_defensor, rng)
+	var resultado := _duelo_tiro(atacante, float(tiro), equipo_atacante, arquero, arquero_valor, equipo_defensor, rng, minuto)
 	var gol := Duel.gana_atacante(resultado, rng)
 
 	if con_log:
@@ -400,7 +402,7 @@ static func _resolver_tiro(equipo_atacante: Team, equipo_defensor: Team, atacant
 		var rebotadores := equipo_atacante.jugadores_disponibles_por_posiciones(["DC", "EXT", "MCO"])
 		var rematador := _elegir(rebotadores, rng)
 		var tiro_rebote: float = float(rematador["atributos"]["tiro"]) * 0.8
-		var resultado_rebote := _duelo_tiro(rematador, tiro_rebote, equipo_atacante, arquero, arquero_valor * 0.9, equipo_defensor, rng)
+		var resultado_rebote := _duelo_tiro(rematador, tiro_rebote, equipo_atacante, arquero, arquero_valor * 0.9, equipo_defensor, rng, minuto)
 		var gol_rebote := Duel.gana_atacante(resultado_rebote, rng)
 		if con_log:
 			log.append("min %d - REBOTE (%s) - %s (tiro %.0f) -> %.1f%% -> %s" % [
@@ -417,13 +419,13 @@ static func _resolver_tiro(equipo_atacante: Team, equipo_defensor: Team, atacant
 
 
 static func _duelo_tiro(atacante: Dictionary, tiro_valor: float, equipo_atacante: Team,
-		arquero: Dictionary, arquero_valor: float, equipo_defensor: Team, rng: RandomNumberGenerator) -> Dictionary:
+		arquero: Dictionary, arquero_valor: float, equipo_defensor: Team, rng: RandomNumberGenerator, minuto: int) -> Dictionary:
 	var ata_eff := Duel.atributo_efectivo(tiro_valor, "tecnico", equipo_atacante.resistencia_pct(atacante["id"]))
 	var def_eff := Duel.atributo_efectivo(arquero_valor, "tecnico", equipo_defensor.resistencia_pct(arquero["id"]))
 	var resultado := Duel.resolver(
 		ata_eff, def_eff,
-		_bloques_equipo(equipo_atacante, equipo_defensor, atacante, "tiro"),
-		_bloques_equipo(equipo_defensor, equipo_atacante, arquero, "reflejos"))
+		_bloques_equipo(equipo_atacante, equipo_defensor, atacante, "tiro", minuto),
+		_bloques_equipo(equipo_defensor, equipo_atacante, arquero, "reflejos", minuto))
 	equipo_atacante.desgastar(atacante["id"], atacante["atributos"]["energia"])
 	equipo_defensor.desgastar(arquero["id"], arquero["atributos"]["energia"])
 	_chequear_lesion(atacante, equipo_atacante, rng)

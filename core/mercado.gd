@@ -61,7 +61,11 @@ static func ejecutar_ventana(liga: Liga, rng: RandomNumberGenerator, equipo_prot
 		var peor_jugador: Dictionary = jugador_b if a_es_mejor else jugador_a
 		var peor_indice: int = indice_b if a_es_mejor else indice_a
 
-		if mejor_jugador["media"] - peor_jugador["media"] < UMBRAL_DIFERENCIA_MEDIA:
+		# §8.6.4: peor_club es el que compra (recibe a mejor_jugador) — un DT
+		# Chequera acepta comprar por una mejora bastante más chica, uno
+		# Cantera pide mucha más diferencia (prefiere su propia cantera).
+		var umbral_compra := UMBRAL_DIFERENCIA_MEDIA * DT.factor_umbral_fichaje(peor_club)
+		if mejor_jugador["media"] - peor_jugador["media"] < umbral_compra:
 			continue
 
 		var valor_mejor := ValorJugador.calcular(mejor_jugador, mejor_club.animo.get(mejor_jugador["id"], 50.0), mejor_club.contratos.get(mejor_jugador["id"], 1))
@@ -126,6 +130,7 @@ static func resistencia_venta(vendedor: Team, jugador: Dictionary) -> float:
 		resistencia += 0.3
 
 	resistencia += clamp(vendedor.reputacion / 100.0, 0.0, 1.0) * 0.3
+	resistencia += DT.ajuste_resistencia_venta(vendedor)  # §8.6.4: Chequera vende mas facil, Cantera protege mas
 	return clamp(resistencia, 0.0, 0.85)
 
 

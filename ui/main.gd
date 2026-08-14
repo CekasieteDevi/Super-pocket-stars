@@ -1183,7 +1183,10 @@ func _refrescar_informe_rival() -> void:
 		pista = " (tu estilo lo complica)"
 	elif mod < 0.0:
 		pista = " (su estilo te complica a vos)"
-	label_informe_rival.text = "Próximo rival: %s — estilo %s%s" % [rival.nombre, rival.estilo, pista]
+	var dt_texto := ""
+	if not rival.dt.is_empty():
+		dt_texto = " — DT: %d/10 (%s)" % [rival.dt["nivel"], rival.dt["rasgo"]]
+	label_informe_rival.text = "Próximo rival: %s — estilo %s%s%s" % [rival.nombre, rival.estilo, pista, dt_texto]
 
 
 func _on_estilo_seleccionado(idx: int) -> void:

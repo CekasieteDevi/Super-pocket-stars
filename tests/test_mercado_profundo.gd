@@ -111,9 +111,18 @@ func _test_oferta_comun_puede_ser_rechazada_por_resistencia(rng: RandomNumberGen
 			j["media"] = 30.0
 
 	var jugador_objetivo_id: int = vendedor.jugadores[idx_objetivo]["id"]
+	# rng propio y con seed fija (no el "rng" compartido de todo el archivo):
+	# este intento en particular se puede terminar en el primer tiro si le
+	# toca un randf() alto por casualidad (con resistencia ~0.85 pasa ~15%
+	# de las veces), y como una vez que se acepta la venta ya no hay forma
+	# de "reintentar" (el jugador se fue del club), usar el rng compartido
+	# lo hace flaky ante cualquier cambio en cuanto rng consume el resto
+	# del archivo antes de esta funcion (paso con Habilidades, con esto).
+	var rng_oferta := RandomNumberGenerator.new()
+	rng_oferta.seed = 555
 	var rechazado_por_resistencia := false
 	for intento in range(50):
-		var resultado := Mercado.ofertar_por_jugador(comprador, vendedor, jugador_objetivo_id, rng)
+		var resultado := Mercado.ofertar_por_jugador(comprador, vendedor, jugador_objetivo_id, rng_oferta)
 		if not resultado["exito"] and resultado.get("resistencia", false):
 			rechazado_por_resistencia = true
 			break
