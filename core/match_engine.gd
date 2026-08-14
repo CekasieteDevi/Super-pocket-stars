@@ -7,9 +7,13 @@ extends RefCounted
 ##
 ## Modificadores conectados en esta fase: local + choque de estilos (§8.3 y
 ## §8.6.3, bloque C) y racha de acciones exitosas + armonía + capitán
-## (bloque B). El resto de los 37 modificadores (§8.4) llega cuando existan
-## sus sistemas de origen: clima y calendario (fase 7), forma de partido a
-## partido (todavía no distinguida del ánimo de temporada), rasgos (fase 9).
+## (bloque B); DT según marcador (§8.6.4); clima, estado de la cancha,
+## árbitro y objetivo de directiva en riesgo (§8.4 #18/19/20/21/23/30). El
+## resto de los 37 modificadores (§8.4) llega cuando existan sus sistemas
+## de origen: calendario/rival directo/prensa (todavía no hay noción de
+## "clásico" ni de racha de prensa), forma de partido a partido (todavía
+## no distinguida del ánimo de temporada), rasgos de personalidad
+## decorativos (fase futura).
 ##
 ## §8.7: hay un "11 en cancha" real (Team.en_cancha) durante el partido, con
 ## hasta 5 cambios automáticos por lesión/cansancio en 3 ventanas
@@ -40,11 +44,13 @@ static func _elegir(jugadores: Array, rng: RandomNumberGenerator) -> Dictionary:
 
 
 ## §8.5: bloque A (forma del día, ver Team.forma_partido), bloque B
-## (equipo/racha/armonía/capitán), bloque C (local + choque de estilos,
-## §8.6.3 + rasgo del DT según el marcador, §8.6.4) y bloque D
-## (personalidad + habilidad de ESE jugador en ESE duelo, §6/§5 — Ansioso
-## de visitante, Egoísta priorizando su propio tiro, Cañón sumando en sus
-## duelos de tiro si ya se manifestó).
+## (equipo/racha/armonía/capitán), bloque C (local + choque de estilos
+## §8.6.3 + rasgo del DT según el marcador §8.6.4 + clima §8.4#18/20 +
+## estado de la cancha §8.4#21 + árbitro casero §8.4#23 + objetivo de
+## directiva en riesgo §8.4#30) y bloque D (personalidad + habilidad de
+## ESE jugador en ESE duelo, §6/§5 — Ansioso de visitante, Egoísta
+## priorizando su propio tiro, Cañón sumando en sus duelos de tiro si ya
+## se manifestó).
 static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atributo: String, minuto: int) -> Dictionary:
 	var jugador_id: int = jugador["id"]
 	var bloque_a := equipo.forma_partido
@@ -54,6 +60,12 @@ static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atri
 	var bloque_c := 5.0 if equipo.local else 0.0
 	bloque_c += Estilos.modificador(equipo.estilo, rival.estilo)
 	bloque_c += DT.modificador_partido(equipo, rival, atributo, minuto)
+	bloque_c += Clima.modificador(equipo.clima_partido, atributo)
+	var cancha_del_local: float = equipo.calidad_cancha if equipo.local else rival.calidad_cancha
+	bloque_c += EstadoCancha.modificador(cancha_del_local, atributo)
+	bloque_c += Arbitro.modificador(equipo.arbitro_partido, equipo.local)
+	if equipo.objetivo_en_riesgo:
+		bloque_c += Objetivos.MALUS_EN_RIESGO
 	var bloque_d := Personalidad.modificador_partido(jugador, equipo.local, atributo) + Habilidades.modificador_partido(jugador, atributo)
 	return {"A": bloque_a, "B": bloque_b, "C": bloque_c, "D": bloque_d}
 
@@ -94,13 +106,14 @@ static func _chequear_tarjeta(defensor: Dictionary, equipo_defensor: Team, rng: 
 	if equipo_defensor.expulsados_partido.has(id):
 		return
 
+	var factor_arbitro := Arbitro.factor_tarjetas(equipo_defensor.arbitro_partido)
 	var roll := rng.randf()
 	var es_roja := false
 	var doble_amarilla := false
 
-	if roll < CHANCE_ROJA_DIRECTA:
+	if roll < CHANCE_ROJA_DIRECTA * factor_arbitro:
 		es_roja = true
-	elif roll < CHANCE_AMARILLA:
+	elif roll < CHANCE_AMARILLA * factor_arbitro:
 		var actuales: int = equipo_defensor.amarillas_partido.get(id, 0) + 1
 		equipo_defensor.amarillas_partido[id] = actuales
 		if actuales >= 2:
@@ -302,6 +315,13 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_log:
 	away.local = false
 	home.forma_partido = clamp(rng.randfn(0.0, 4.0), -10.0, 10.0)
 	away.forma_partido = clamp(rng.randfn(0.0, 4.0), -10.0, 10.0)
+	# Clima y árbitro son del PARTIDO, no de un equipo — los dos comparten
+	# el mismo valor (ver Clima.modificador/EstadoCancha.modificador: el
+	# gancho ya se encarga de que no favorezcan a nadie por sí solos).
+	home.clima_partido = Clima.generar(rng)
+	away.clima_partido = home.clima_partido
+	home.arbitro_partido = Arbitro.generar(rng)
+	away.arbitro_partido = home.arbitro_partido
 
 	var log := []
 	var goles_log := []

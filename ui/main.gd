@@ -1100,6 +1100,15 @@ func _on_jugar_fecha() -> void:
 			GameState.fecha_actual, GameState.liga_jugador().fixture.size(),
 			r["local"], r["gl"], r["gv"], r["visitante"]
 		]
+		# GameState.ultimo_log vacio = fue un forfeit (Liga._resolver_forfeit
+		# no llama a MatchEngine.simular()), asi que equipo_jugador.clima_
+		# partido/arbitro_partido quedarian con lo que haya seteado el
+		# ULTIMO partido real jugado — mostrarlo seria mostrar informacion
+		# vieja de otra fecha.
+		if not GameState.ultimo_log.is_empty():
+			var clima: String = GameState.equipo_jugador.clima_partido
+			var clima_texto := "  (Clima: %s, árbitro %s)" % [clima, GameState.equipo_jugador.arbitro_partido] if clima != "" else "  (árbitro %s)" % GameState.equipo_jugador.arbitro_partido
+			label_resultado.text += clima_texto
 	if GameState.temporada_actual != temporada_antes:
 		label_resultado.text += _texto_cierre_temporada()
 

@@ -21,6 +21,7 @@ func _init() -> void:
 	_test_dos_incumplidos_seguidos_activan_game_over(rng)
 	_test_cumplir_resetea_el_contador(rng)
 	_test_persiste_en_guardado_y_migra_guardados_viejos(rng)
+	_test_en_riesgo_solo_en_las_ultimas_5_fechas(rng)
 
 	quit()
 
@@ -163,3 +164,24 @@ func _test_persiste_en_guardado_y_migra_guardados_viejos(rng: RandomNumberGenera
 		print("OK: round-trip preserva el objetivo (con posicion_maxima como int) y el contador; guardado viejo migra a vacio/0.")
 	else:
 		print("FALLA: cargado=%s incumplidos=%d viejo=%s" % [cargado.objetivo_temporada, cargado.objetivos_incumplidos_seguidos, cargado_viejo.objetivo_temporada])
+
+
+func _test_en_riesgo_solo_en_las_ultimas_5_fechas(rng: RandomNumberGenerator) -> void:
+	print("\n=== esta_en_riesgo(): §8.4 #30, solo pesa en las ultimas 5 fechas y si todavia no se cumple ===")
+	var objetivo := {"tipo": "mitad_superior", "descripcion": "x", "posicion_maxima": 10}
+	var total_fechas := 38
+
+	var ok := true
+	# Lejos del final, aunque vaya mal, no hay tension todavia.
+	ok = ok and Objetivos.esta_en_riesgo(objetivo, 15, 10, total_fechas) == false
+	# En las ultimas 5 (fecha 34 de 38, total-5=33 -> 34>=33), si no cumple: en riesgo.
+	ok = ok and Objetivos.esta_en_riesgo(objetivo, 15, 34, total_fechas) == true
+	# En las ultimas 5, pero ya cumple (11<=... espera, posicion 8 <= 10): no hay riesgo.
+	ok = ok and Objetivos.esta_en_riesgo(objetivo, 8, 34, total_fechas) == false
+	# Sin objetivo (club de la IA, o migracion): nunca hay riesgo.
+	ok = ok and Objetivos.esta_en_riesgo({}, 15, 37, total_fechas) == false
+
+	if ok:
+		print("OK: solo pesa en las ultimas 5 fechas, y solo si la posicion actual no cumple el objetivo.")
+	else:
+		print("FALLA")

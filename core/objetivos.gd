@@ -56,3 +56,19 @@ static func evaluar(objetivo: Dictionary, posicion_final: int) -> bool:
 	if objetivo.is_empty():
 		return true
 	return posicion_final <= objetivo["posicion_maxima"]
+
+
+## §8.4 #30 "Objetivo de directiva en riesgo — −2 (tensión)": solo entra
+## en las últimas FECHAS_TENSION fechas de la temporada (una reacción
+## tardía a la presión, no algo que pesa desde la fecha 1), y solo si la
+## posición actual todavía no cumple el objetivo.
+const FECHAS_TENSION := 5
+const MALUS_EN_RIESGO := -2.0
+
+
+static func esta_en_riesgo(objetivo: Dictionary, posicion_actual: int, fecha_actual: int, total_fechas: int) -> bool:
+	if objetivo.is_empty():
+		return false
+	if fecha_actual < total_fechas - FECHAS_TENSION:
+		return false
+	return posicion_actual > objetivo["posicion_maxima"]

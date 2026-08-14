@@ -85,6 +85,14 @@ func jugar_siguiente_fecha() -> void:
 	if juego_terminado or not hay_fecha_pendiente():
 		return
 
+	# §8.4 #30: se recalcula antes de jugar la fecha (no al cierre) para
+	# que el modificador de tensión pese en el partido de HOY si estás
+	# sobre la hora y todavía no cumplís.
+	var liga_del_jugador := liga_jugador()
+	var posicion_actual: int = liga_del_jugador.tabla_ordenada().find(equipo_jugador.nombre) + 1
+	equipo_jugador.objetivo_en_riesgo = Objetivos.esta_en_riesgo(
+		equipo_jugador.objetivo_temporada, posicion_actual, fecha_actual, liga_del_jugador.fixture.size())
+
 	for d in range(piramide.divisiones.size()):
 		var liga: Liga = piramide.divisiones[d]
 		if d == division_jugador:

@@ -29,6 +29,10 @@ var banco: Array = []  # 7 dicts, uno por puesto de BANCO_FORMACION (suplentes)
 var local: bool = false
 var estilo: String = ""  # Tiki taka/Contragolpe/Juego directo/Presión alta/Defensivo/Físico, ver core/estilos.gd
 var dt: Dictionary = {}  # {"nivel":1-10, "rasgo":Conservador/Loco/Cantera/Chequera}, ver core/dt.gd
+var calidad_cancha: float = 0.0  # -8..+3, ver core/estado_cancha.gd — rige cuando este club juega de local
+var clima_partido: String = ""  # transitorio, solo dentro de un partido — "" (normal) / Lluvia / Calor / Viento, ver core/clima.gd
+var arbitro_partido: String = ""  # transitorio, solo dentro de un partido — Estricto/Permisivo/Casero, ver core/arbitro.gd
+var objetivo_en_riesgo: bool = false  # transitorio, lo recalcula GameState antes de cada fecha — ver core/objetivos.gd
 var armonia: float = 0.0  # placeholder hasta que exista §3 completo (vestuario real)
 ## §8.4 modificador 2 ("Forma, de -5 a +5 según los últimos 5 partidos"),
 ## bloque A. Sin historial de partidos recientes todavía, se aproxima con
@@ -136,6 +140,7 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 	t.dt = DT.generar(rng)
 	t.config_cambios = DT.config_cambios_de(t.dt["nivel"])
 	t.reputacion = clamp(t.media_equipo(), 20.0, 80.0)
+	t.calidad_cancha = EstadoCancha.generar(t.reputacion, rng)
 	t.scouts = [{"nivel": 1}]
 	t.instalaciones = Instalaciones.nivel_inicial()
 	for categoria in Economia.CATEGORIAS_CAJA:
@@ -175,7 +180,8 @@ func guardar() -> Dictionary:
 		}
 
 	return {
-		"nombre": nombre, "estilo": estilo, "dt": dt, "jugadores": jugadores, "banco": banco, "cantera": cantera,
+		"nombre": nombre, "estilo": estilo, "dt": dt, "calidad_cancha": calidad_cancha,
+		"jugadores": jugadores, "banco": banco, "cantera": cantera,
 		"siguiente_id_cantera": siguiente_id_cantera, "capitan_id": capitan_id,
 		"fatiga_acumulada": _claves_a_texto(fatiga_acumulada),
 		"animo": _claves_a_texto(animo),
@@ -211,6 +217,13 @@ static func cargar(datos: Dictionary) -> Team:
 		var rng_migracion_dt := RandomNumberGenerator.new()
 		rng_migracion_dt.seed = hash(datos["nombre"]) + 1  # +1 para no repetir la tirada de estilo
 		t.dt = DT.generar(rng_migracion_dt)
+	if datos.has("calidad_cancha"):
+		t.calidad_cancha = datos["calidad_cancha"]
+	else:
+		# Misma migracion, para guardados de antes de §8.4/§8.6.2.
+		var rng_migracion_cancha := RandomNumberGenerator.new()
+		rng_migracion_cancha.seed = hash(datos["nombre"]) + 2  # +2 para no repetir estilo ni dt
+		t.calidad_cancha = EstadoCancha.generar(datos["reputacion"], rng_migracion_cancha)
 	t.jugadores = _normalizar_jugadores(datos["jugadores"])
 	t.banco = _normalizar_jugadores(datos["banco"])
 	t.cantera = _normalizar_jugadores(datos["cantera"])
@@ -522,9 +535,9 @@ func resistencia_pct(jugador_id: int) -> float:
 
 
 ## Desgaste simple por participación en un duelo. La resistencia nunca baja
-## de 0.55 dentro de un partido.
+## de 0.55 dentro de un partido. §8.4 #19: con Calor, un 30% más rápido.
 func desgastar(jugador_id: int, energia_attr: int) -> void:
-	var decay: float = 0.006 * (1.3 - float(energia_attr) / 100.0)
+	var decay: float = 0.006 * (1.3 - float(energia_attr) / 100.0) * Clima.factor_energia(clima_partido)
 	resistencia[jugador_id] = max(0.55, resistencia_pct(jugador_id) - decay)
 
 
