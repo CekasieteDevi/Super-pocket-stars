@@ -343,13 +343,16 @@ func _refrescar_economia() -> void:
 		texto += "    de los cuales mantenimiento: %s\n" % Economia.formato_dinero(informe["mantenimiento"])
 		texto += "  Neto                %s%s\n\n" % [Economia.formato_dinero(informe["neto"]), "  (en rojo)" if informe["neto"] < 0 else ""]
 
-	# "Restante" es lo que tenes disponible AHORA en cada presupuesto — no
-	# se puede gastar plata de Fichajes en Contratos ni viceversa, por eso
-	# no hay un "Total" (sumarlos no te dice cuanto podes gastar en nada
-	# concreto). "Usado" sale de comparar contra la foto de la caja justo
-	# despues del ultimo reparto, antes de que el mercado gastara nada.
-	texto += "Presupuestos (lo que se puede gastar de cada uno es independiente):\n"
-	texto += "  %-14s %14s %14s %14s\n" % ["Categoria", "Presupuesto", "Usado", "Restante"]
+	# "Restante" es lo que tenes disponible AHORA para gastar de cada
+	# categoria — la plata que no gastaste una temporada se ACUMULA para la
+	# siguiente en vez de perderse, asi que puede ser mayor que lo que se
+	# asigno esta temporada si venis ahorrando. No se puede gastar plata de
+	# Fichajes en Contratos ni viceversa, por eso no hay un "Total" (sumarlos
+	# no te dice cuanto podes gastar en nada concreto). "Usado" sale de
+	# comparar contra la foto de la caja justo despues del ultimo reparto,
+	# antes de que el mercado gastara nada.
+	texto += "Presupuestos (Restante = lo que podes gastar AHORA; puede ser mayor a lo Asignado esta temporada si venis ahorrando de antes):\n"
+	texto += "  %-14s %14s %14s %14s\n" % ["Categoria", "Asignado", "Usado", "Restante"]
 	for categoria in equipo.caja:
 		var presupuesto: float = equipo.presupuesto_temporada.get(categoria, 0.0)
 		var restante: float = equipo.caja[categoria]
