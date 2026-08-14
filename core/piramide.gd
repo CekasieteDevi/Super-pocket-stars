@@ -28,6 +28,44 @@ const EQUIPOS_POR_DIVISION := 20
 var divisiones: Array = []  # Liga, indice 0 = division 1 (mejor) .. 9 = division 10 (peor)
 
 
+## Guardado de partida — ver Team.guardar().
+func guardar() -> Dictionary:
+	var divisiones_datos := []
+	for l in divisiones:
+		divisiones_datos.append(l.guardar())
+	return {"divisiones": divisiones_datos}
+
+
+static func cargar(datos: Dictionary) -> Piramide:
+	var p := Piramide.new()
+	for ld in datos["divisiones"]:
+		p.divisiones.append(Liga.cargar(ld))
+	p.resolver_prestamos()
+	return p
+
+
+## Team.guardar() no puede serializar una referencia a otro Team (JSON no
+## entiende objetos) — guarda el NOMBRE del club en su lugar. Esta segunda
+## pasada, una vez que TODA la pirámide ya existe, reemplaza esos nombres
+## por la referencia real al Team correspondiente (buscando en las 10
+## divisiones, no solo en la propia — un préstamo puede haber cruzado
+## divisiones si el equipo prestado ascendió/descendió después).
+func resolver_prestamos() -> void:
+	var por_nombre := {}
+	for liga in divisiones:
+		for equipo in liga.equipos:
+			por_nombre[equipo.nombre] = equipo
+
+	for liga in divisiones:
+		for equipo in liga.equipos:
+			for id in equipo.prestados_afuera:
+				var info: Dictionary = equipo.prestados_afuera[id]
+				info["club"] = por_nombre.get(info["club"])
+			for id in equipo.prestados_propios:
+				var info: Dictionary = equipo.prestados_propios[id]
+				info["club_dueno"] = por_nombre.get(info["club_dueno"])
+
+
 static func generar(rng: RandomNumberGenerator) -> Piramide:
 	var p := Piramide.new()
 	var siguiente_id := 0

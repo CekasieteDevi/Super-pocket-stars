@@ -56,6 +56,38 @@ static func generar(piramide: Piramide, rng: RandomNumberGenerator) -> Confedera
 	return c
 
 
+## Guardado de partida — ver Team.guardar() / ClubExterior.guardar().
+## piramide no viaja en el JSON: se le pasa la que ya se cargó por
+## separado (GameState._cargar_partida la carga primero), porque
+## Confederacion.piramide es la misma instancia que GameState.piramide, no
+## una copia — guardarla dos veces sería redundante y desincronizable.
+func guardar() -> Dictionary:
+	var paises_datos := []
+	for entry in paises:
+		var clubes_datos := []
+		for c in entry["clubes"]:
+			clubes_datos.append(c.guardar())
+		paises_datos.append({
+			"nombre": entry["nombre"], "coeficiente_score": entry["coeficiente_score"],
+			"es_uruguay": entry["es_uruguay"], "clubes": clubes_datos,
+		})
+	return {"paises": paises_datos}
+
+
+static func cargar(datos: Dictionary, piramide_cargada: Piramide) -> Confederacion:
+	var c := Confederacion.new()
+	c.piramide = piramide_cargada
+	for entry in datos["paises"]:
+		var clubes := []
+		for cd in entry["clubes"]:
+			clubes.append(ClubExterior.cargar(cd))
+		c.paises.append({
+			"nombre": entry["nombre"], "coeficiente_score": entry["coeficiente_score"],
+			"clubes": clubes, "es_uruguay": entry["es_uruguay"],
+		})
+	return c
+
+
 func tier_de(indice: int) -> String:
 	return "alto" if indice < LIMITE_TIER_ALTO else "bajo"
 

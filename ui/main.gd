@@ -36,6 +36,9 @@ var contenedor_instalaciones_botones: VBoxContainer
 var label_instalaciones_estado: Label
 var lista_seleccion: RichTextLabel
 var label_cantera_mentor: Label
+var label_partida_estado: Label
+var boton_cargar_partida: Button
+var boton_borrar_partida: Button
 
 
 func _ready() -> void:
@@ -53,7 +56,7 @@ func _ready() -> void:
 		["Economia", "_mostrar_economia"], ["Mercado", "_mostrar_mercado"],
 		["Libres", "_mostrar_libres"], ["Prestamos", "_mostrar_prestamos"],
 		["Instalaciones", "_mostrar_instalaciones"], ["Seleccion", "_mostrar_seleccion"],
-		["Cantera", "_mostrar_cantera"], ["Noticias", "_mostrar_noticias"],
+		["Cantera", "_mostrar_cantera"], ["Noticias", "_mostrar_noticias"], ["Partida", "_mostrar_partida_panel"],
 	]:
 		var btn := Button.new()
 		btn.text = entrada[0]
@@ -77,6 +80,7 @@ func _ready() -> void:
 	_construir_panel_seleccion(contenedor)
 	_construir_panel_cantera(contenedor)
 	_construir_panel_noticias(contenedor)
+	_construir_panel_partida_guardado(contenedor)
 
 	_mostrar_plantel()
 
@@ -940,6 +944,77 @@ func _refrescar_noticias() -> void:
 	lista_noticias.text = "\n".join(GameState.noticias)
 
 
+## Guardado de partida (§12) — un solo slot: Guardar pisa lo que hubiera,
+## Cargar reemplaza TODO el estado en memoria por lo del archivo, Borrar
+## elimina el archivo (no toca la partida en curso). Cargar/Borrar quedan
+## deshabilitados si no hay ningun archivo guardado.
+func _construir_panel_partida_guardado(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	padre.add_child(panel)
+	paneles["partida_guardado"] = panel
+
+	var titulo := Label.new()
+	titulo.text = "Partida — guardado local (1 solo espacio)"
+	panel.add_child(titulo)
+
+	label_partida_estado = Label.new()
+	label_partida_estado.text = ""
+	panel.add_child(label_partida_estado)
+
+	var barra := HBoxContainer.new()
+	panel.add_child(barra)
+
+	var boton_guardar := Button.new()
+	boton_guardar.text = "Guardar partida"
+	boton_guardar.pressed.connect(_on_guardar_partida)
+	barra.add_child(boton_guardar)
+
+	boton_cargar_partida = Button.new()
+	boton_cargar_partida.text = "Cargar partida"
+	boton_cargar_partida.pressed.connect(_on_cargar_partida)
+	barra.add_child(boton_cargar_partida)
+
+	boton_borrar_partida = Button.new()
+	boton_borrar_partida.text = "Borrar partida guardada"
+	boton_borrar_partida.pressed.connect(_on_borrar_partida)
+	barra.add_child(boton_borrar_partida)
+
+
+func _refrescar_partida_guardado() -> void:
+	var hay_guardado := GameState.hay_partida_guardada()
+	boton_cargar_partida.disabled = not hay_guardado
+	boton_borrar_partida.disabled = not hay_guardado
+	if label_partida_estado.text == "":
+		label_partida_estado.text = "Hay una partida guardada." if hay_guardado else "No hay ninguna partida guardada todavia."
+
+
+func _on_guardar_partida() -> void:
+	GameState.guardar_partida()
+	label_partida_estado.text = "Partida guardada: temporada %d, division %d, %s." % [
+		GameState.temporada_actual, GameState.division_jugador + 1, GameState.equipo_jugador.nombre
+	]
+	_refrescar_partida_guardado()
+
+
+func _on_cargar_partida() -> void:
+	if GameState.cargar_partida():
+		label_partida_estado.text = "Partida cargada: temporada %d, division %d, %s." % [
+			GameState.temporada_actual, GameState.division_jugador + 1, GameState.equipo_jugador.nombre
+		]
+		_mostrar_plantel()
+	else:
+		label_partida_estado.text = "No se pudo cargar la partida (archivo corrupto o inexistente)."
+	_refrescar_partida_guardado()
+
+
+func _on_borrar_partida() -> void:
+	GameState.borrar_partida()
+	label_partida_estado.text = "Partida guardada borrada."
+	_refrescar_partida_guardado()
+
+
 ## Texto de cierre de temporada, con la posicion final — se usa tanto al
 ## jugar la ultima fecha a mano como al usar el boton de debug que simula
 ## el resto de la temporada de una.
@@ -1077,3 +1152,10 @@ func _mostrar_noticias() -> void:
 	_ocultar_todos()
 	paneles["noticias"].visible = true
 	_refrescar_noticias()
+
+
+func _mostrar_partida_panel() -> void:
+	_ocultar_todos()
+	paneles["partida_guardado"].visible = true
+	label_partida_estado.text = ""
+	_refrescar_partida_guardado()

@@ -21,6 +21,31 @@ var noticias: Array = []
 var agentes_libres: Array = []
 
 
+## Guardado de partida — ver Team.guardar() para el detalle de por qué se
+## puede guardar entero como JSON. fixture es una lista de [int,int]
+## planos, JSON-safe tal cual; tabla ya está indexada por nombre (String),
+## no necesita conversión de claves.
+func guardar() -> Dictionary:
+	var equipos_datos := []
+	for e in equipos:
+		equipos_datos.append(e.guardar())
+	return {
+		"equipos": equipos_datos, "tabla": tabla, "fixture": fixture,
+		"noticias": noticias, "agentes_libres": agentes_libres,
+	}
+
+
+static func cargar(datos: Dictionary) -> Liga:
+	var l := Liga.new()
+	for ed in datos["equipos"]:
+		l.equipos.append(Team.cargar(ed))
+	l.tabla = datos["tabla"]
+	l.fixture = datos["fixture"]
+	l.noticias = datos.get("noticias", [])
+	l.agentes_libres = datos.get("agentes_libres", [])
+	return l
+
+
 ## Sistema del círculo: fija el equipo 0 y rota el resto. Da n-1 fechas donde
 ## cada equipo juega una vez contra todos, sin repetir rival — la base que
 ## reutiliza FaseLiga (Fase 7) para las copas internacionales, que solo

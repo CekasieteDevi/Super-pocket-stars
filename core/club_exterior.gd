@@ -28,6 +28,27 @@ static func generar(nombre: String, pais: String, fuerza_equipo: float, id_base:
 	return c
 
 
+## Guardado de partida — si el club nunca se cruzó con el jugador (§10.5,
+## "generación perezosa"), _equipo sigue null y no hay plantel que guardar;
+## se recupera igual de perezoso la próxima vez que se cruce.
+func guardar() -> Dictionary:
+	var datos := {"nombre": nombre, "pais": pais, "fuerza_equipo": fuerza_equipo, "id_base": id_base}
+	if _equipo != null:
+		datos["equipo"] = _equipo.guardar()
+	return datos
+
+
+static func cargar(datos: Dictionary) -> ClubExterior:
+	var c := ClubExterior.new()
+	c.nombre = datos["nombre"]
+	c.pais = datos["pais"]
+	c.fuerza_equipo = datos["fuerza_equipo"]
+	c.id_base = datos["id_base"]
+	if datos.has("equipo"):
+		c._equipo = Team.cargar(datos["equipo"])
+	return c
+
+
 ## Devuelve el Team materializado, generándolo la primera vez que se pide.
 func obtener_equipo(rng: RandomNumberGenerator) -> Team:
 	if _equipo == null:

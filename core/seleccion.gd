@@ -20,6 +20,22 @@ var nombre: String = "Selección Uruguay"
 var convocatorias: Dictionary = {}  # jugador_id -> cantidad histórica de veces convocado
 
 
+## Guardado de partida.
+func guardar() -> Dictionary:
+	var convocatorias_datos := {}
+	for id in convocatorias:
+		convocatorias_datos[str(id)] = convocatorias[id]
+	return {"nombre": nombre, "convocatorias": convocatorias_datos}
+
+
+static func cargar(datos: Dictionary) -> Seleccion:
+	var s := Seleccion.new()
+	s.nombre = datos.get("nombre", "Selección Uruguay")
+	for id_str in datos.get("convocatorias", {}):
+		s.convocatorias[int(id_str)] = datos["convocatorias"][id_str]
+	return s
+
+
 ## Arma la convocatoria SIN registrarla en el historial (convocatorias) —
 ## para previsualizar "quién entraría hoy" (UI) tantas veces como haga
 ## falta sin inflar el contador de veces convocado de nadie.

@@ -121,6 +121,123 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 	return t
 
 
+## Guardado de partida (§12 del GDD, "guardado... y guardado incremental"
+## simplificado a JSON entero por ahora — ver game/game_state.gd). Todo lo
+## que persiste entre sesiones, MENOS el estado de un partido en curso
+## (resistencia, forma_partido, racha, avance, goles, amarillas_partido,
+## expulsados_partido): un guardado solo se hace entre fechas, nunca a
+## mitad de un partido, así que esos campos siempre están vacíos/en su
+## valor de reposo en ese momento — no hace falta guardarlos.
+##
+## prestados_afuera/prestados_propios guardan el NOMBRE del club en vez de
+## la referencia (JSON no puede serializar un Team) — Piramide.cargar()
+## hace una segunda pasada (resolver_prestamos) para convertir esos
+## nombres de vuelta en referencias reales, una vez que todos los equipos
+## de la pirámide ya existen.
+func guardar() -> Dictionary:
+	var prestados_afuera_datos := {}
+	for id in prestados_afuera:
+		var info: Dictionary = prestados_afuera[id]
+		prestados_afuera_datos[str(id)] = {
+			"club_nombre": info["club"].nombre, "temporada_retorno": info["temporada_retorno"], "desde_cantera": info["desde_cantera"],
+		}
+	var prestados_propios_datos := {}
+	for id in prestados_propios:
+		var info: Dictionary = prestados_propios[id]
+		prestados_propios_datos[str(id)] = {
+			"club_dueno_nombre": info["club_dueno"].nombre, "temporada_retorno": info["temporada_retorno"],
+		}
+
+	return {
+		"nombre": nombre, "jugadores": jugadores, "banco": banco, "cantera": cantera,
+		"siguiente_id_cantera": siguiente_id_cantera, "capitan_id": capitan_id,
+		"fatiga_acumulada": _claves_a_texto(fatiga_acumulada),
+		"animo": _claves_a_texto(animo),
+		"lesiones": _claves_a_texto(lesiones),
+		"suspendidos": _claves_a_texto(suspendidos),
+		"caja": caja, "presupuesto_temporada": presupuesto_temporada, "caja_al_cierre": caja_al_cierre,
+		"sueldos": _claves_a_texto(sueldos), "contratos": _claves_a_texto(contratos),
+		"clausulas": _claves_a_texto(clausulas),
+		"reputacion": reputacion, "quebrado": quebrado, "scouts": scouts, "instalaciones": instalaciones,
+		"prestados_afuera": prestados_afuera_datos, "prestados_propios": prestados_propios_datos,
+	}
+
+
+static func cargar(datos: Dictionary) -> Team:
+	var t := Team.new()
+	t.nombre = datos["nombre"]
+	t.jugadores = _normalizar_jugadores(datos["jugadores"])
+	t.banco = _normalizar_jugadores(datos["banco"])
+	t.cantera = _normalizar_jugadores(datos["cantera"])
+	t.siguiente_id_cantera = datos["siguiente_id_cantera"]
+	t.capitan_id = datos["capitan_id"]
+	t.fatiga_acumulada = _claves_a_entero(datos["fatiga_acumulada"])
+	t.animo = _claves_a_entero(datos["animo"])
+	t.lesiones = _claves_a_entero(datos["lesiones"])
+	t.suspendidos = _claves_a_entero(datos.get("suspendidos", {}))
+	t.caja = datos["caja"]
+	t.presupuesto_temporada = datos["presupuesto_temporada"]
+	t.caja_al_cierre = datos["caja_al_cierre"]
+	t.sueldos = _claves_a_entero(datos["sueldos"])
+	t.contratos = _claves_a_entero(datos["contratos"])
+	t.clausulas = _claves_a_entero(datos.get("clausulas", {}))
+	t.reputacion = datos["reputacion"]
+	t.quebrado = datos["quebrado"]
+	t.scouts = datos["scouts"]
+	t.instalaciones = datos["instalaciones"]
+
+	# Quedan con el NOMBRE del club (String) en la clave "club"/"club_dueno"
+	# en vez de la referencia real -- Piramide.resolver_prestamos() los
+	# reemplaza por el Team de verdad una vez que toda la pirámide está
+	# cargada (acá, en el medio de cargar UN equipo, los demás todavía ni
+	# existen).
+	t.prestados_afuera = {}
+	for id_str in datos.get("prestados_afuera", {}):
+		var info: Dictionary = datos["prestados_afuera"][id_str]
+		t.prestados_afuera[int(id_str)] = {
+			"club": info["club_nombre"], "temporada_retorno": info["temporada_retorno"], "desde_cantera": info["desde_cantera"],
+		}
+	t.prestados_propios = {}
+	for id_str in datos.get("prestados_propios", {}):
+		var info: Dictionary = datos["prestados_propios"][id_str]
+		t.prestados_propios[int(id_str)] = {
+			"club_dueno": info["club_dueno_nombre"], "temporada_retorno": info["temporada_retorno"],
+		}
+
+	return t
+
+
+static func _claves_a_texto(d: Dictionary) -> Dictionary:
+	var out := {}
+	for k in d:
+		out[str(k)] = d[k]
+	return out
+
+
+static func _claves_a_entero(d: Dictionary) -> Dictionary:
+	var out := {}
+	for k in d:
+		out[int(k)] = d[k]
+	return out
+
+
+## JSON no distingue int de float: TODO número vuelve como float al
+## parsear (JSON.parse). Sin esto, un jugador cargado tendría "id" en
+## 5.0 en vez de 5 — y como los Dictionary de Godot distinguen 5 (int) de
+## 5.0 (float) como claves DISTINTAS, cualquier dict.get(jugador["id"])
+## en todo el resto del motor (sueldos, contratos, ánimo, sueldos del
+## mercado, etc.) fallaría en silencio después de cargar una partida.
+static func _normalizar_jugadores(lista: Array) -> Array:
+	for j in lista:
+		j["id"] = int(j["id"])
+		j["edad"] = int(j["edad"])
+		j["potencial"] = int(j["potencial"])
+		j["propension_lesion"] = int(j["propension_lesion"])
+		for attr in j["atributos"]:
+			j["atributos"][attr] = int(j["atributos"][attr])
+	return lista
+
+
 func recalcular_capitan() -> void:
 	var mejor_media := -1.0
 	for j in jugadores:

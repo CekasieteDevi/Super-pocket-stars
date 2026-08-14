@@ -274,3 +274,94 @@ func _agregar_noticia(texto: String) -> void:
 	noticias.push_front(texto)
 	if noticias.size() > MAX_NOTICIAS_GUARDADAS:
 		noticias.resize(MAX_NOTICIAS_GUARDADAS)
+
+
+## Guardado de partida (§12 del GDD) — un solo slot por ahora (no pedido
+## multi-partida), en user:// como JSON: más fácil de depurar que binario,
+## y a esta escala (200 clubes, ~4000 jugadores) el tamaño/velocidad no es
+## un problema real. rng.state (no solo el seed) se guarda para que la
+## sim continúe exactamente donde estaba, no desde el mismo arranque de
+## siempre.
+const RUTA_PARTIDA := "user://partida.json"
+
+
+func hay_partida_guardada() -> bool:
+	return FileAccess.file_exists(RUTA_PARTIDA)
+
+
+func guardar_partida() -> void:
+	var datos := {
+		"version": 1,
+		"rng_seed": rng.seed,
+		"rng_state": rng.state,
+		"piramide": piramide.guardar(),
+		"confederacion": confederacion.guardar(),
+		"seleccion": seleccion.guardar(),
+		"division_jugador": division_jugador,
+		"equipo_jugador_nombre": equipo_jugador.nombre,
+		"fecha_actual": fecha_actual,
+		"temporada_actual": temporada_actual,
+		"noticias": noticias,
+		"ultimo_informe_economico": ultimo_informe_economico,
+		"ultima_posicion_final": ultima_posicion_final,
+	}
+	var file := FileAccess.open(RUTA_PARTIDA, FileAccess.WRITE)
+	file.store_string(JSON.stringify(datos))
+	file.close()
+
+
+## Devuelve true si pudo cargar. No toca nada del estado actual si falla
+## (archivo corrupto, versión futura, etc.) — la partida en curso sigue
+## intacta y jugable, simplemente no se reemplazó por nada.
+func cargar_partida() -> bool:
+	if not hay_partida_guardada():
+		return false
+
+	var file := FileAccess.open(RUTA_PARTIDA, FileAccess.READ)
+	var texto := file.get_as_text()
+	file.close()
+
+	var json := JSON.new()
+	if json.parse(texto) != OK:
+		return false
+	var datos: Dictionary = json.data
+
+	var nueva_piramide := Piramide.cargar(datos["piramide"])
+	var nuevo_equipo_jugador: Team = null
+	var nueva_division: int = datos["division_jugador"]
+	var nombre_buscado: String = datos["equipo_jugador_nombre"]
+	for e in nueva_piramide.divisiones[nueva_division].equipos:
+		if e.nombre == nombre_buscado:
+			nuevo_equipo_jugador = e
+			break
+	if nuevo_equipo_jugador == null:
+		return false  # guardado corrupto/incompatible: no se pudo relocalizar al equipo del jugador
+
+	rng = RandomNumberGenerator.new()
+	rng.seed = int(datos["rng_seed"])
+	rng.state = int(datos["rng_state"])
+
+	piramide = nueva_piramide
+	confederacion = Confederacion.cargar(datos["confederacion"], piramide)
+	seleccion = Seleccion.cargar(datos["seleccion"])
+	division_jugador = nueva_division
+	equipo_jugador = nuevo_equipo_jugador
+	fecha_actual = datos["fecha_actual"]
+	temporada_actual = datos["temporada_actual"]
+	noticias = datos["noticias"]
+	ultimo_informe_economico = datos["ultimo_informe_economico"]
+	ultima_posicion_final = datos["ultima_posicion_final"]
+
+	# Resultado/log/eventos del último partido son de la sesión anterior y
+	# ya no tienen mucho sentido mostrados sueltos (el jugador ni se
+	# acuerda de qué partido era) — se limpian, la próxima fecha los llena de nuevo.
+	ultimo_resultado = {}
+	ultimo_log = []
+	ultimos_eventos = []
+
+	return true
+
+
+func borrar_partida() -> void:
+	if hay_partida_guardada():
+		DirAccess.remove_absolute(RUTA_PARTIDA)
