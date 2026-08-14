@@ -19,6 +19,12 @@ const MAX_NOTICIAS_GUARDADAS := 200
 var rng: RandomNumberGenerator
 var piramide: Piramide
 var confederacion: Confederacion
+var seleccion: Seleccion
+
+## Rivales de amistoso de la selección: mismo criterio de fuerza que
+## Confederacion (lerp 75->45 según el orden), sin necesitar clubes del
+## exterior de por medio — un amistoso de selecciones, no de clubes.
+const PAISES_RIVALES_SELECCION := ["Brasil", "España", "Argentina", "Alemania", "Francia", "Portugal", "México", "Colombia"]
 
 var division_jugador: int = DIVISION_INICIAL
 var equipo_jugador: Team
@@ -39,6 +45,7 @@ func _ready() -> void:
 
 	piramide = Piramide.generar(rng)
 	confederacion = Confederacion.generar(piramide, rng)
+	seleccion = Seleccion.new()
 	equipo_jugador = piramide.divisiones[DIVISION_INICIAL].equipos[0]
 
 
@@ -122,6 +129,13 @@ func _cerrar_temporada() -> void:
 			_agregar_noticia(n)
 		liga.noticias.clear()
 
+	# Al final de todo: con 200 clubes generando noticias de rutina (fichajes
+	# libres, cantera, etc.) cada cierre, cualquier cosa agregada antes queda
+	# enterrada bajo el límite de MAX_NOTICIAS_GUARDADAS — el amistoso de la
+	# selección se agrega último para que sobreviva cerca del principio del
+	# feed (push_front) en vez de perderse en el ruido.
+	_jugar_amistoso_seleccion()
+
 	for d in range(piramide.divisiones.size()):
 		if piramide.divisiones[d].equipos.has(equipo_jugador):
 			division_jugador = d
@@ -129,6 +143,49 @@ func _cerrar_temporada() -> void:
 
 	temporada_actual += 1
 	fecha_actual = 0
+
+
+## Amistoso de la selección (una vez por cierre de temporada): convoca a
+## los mejores de toda la pirámide, arma un rival de fuerza pareja a un
+## país al azar, y juega. Si alguien se lesiona jugando para la selección,
+## la lesión se le devuelve a SU CLUB REAL (Team.lesionar) — irse a la
+## selección tiene un riesgo real, no es un paréntesis gratis. Si algún
+## convocado es del equipo del jugador humano, queda una noticia aparte
+## (es LA noticia que a un jugador de este juego le importa ver).
+func _jugar_amistoso_seleccion() -> void:
+	var convocatoria := seleccion.convocar(piramide)
+	var uruguay: Team = convocatoria["equipo"]
+	var clubes_por_jugador: Dictionary = convocatoria["clubes_por_jugador"]
+
+	var pais_rival: String = PAISES_RIVALES_SELECCION[rng.randi() % PAISES_RIVALES_SELECCION.size()]
+	var fuerza_rival: float = rng.randf_range(55.0, 85.0)
+	var rival := Seleccion.generar_rival(pais_rival, fuerza_rival, rng)
+
+	var local_es_uruguay := rng.randf() < 0.5
+	var home := uruguay if local_es_uruguay else rival
+	var away := rival if local_es_uruguay else uruguay
+	var r := MatchEngine.simular(home, away, rng, false)
+
+	var goles_uruguay: int = r["goles_local"] if local_es_uruguay else r["goles_visitante"]
+	var goles_rival: int = r["goles_visitante"] if local_es_uruguay else r["goles_local"]
+	_agregar_noticia("SELECCIÓN: Uruguay %d-%d %s (amistoso)" % [goles_uruguay, goles_rival, pais_rival])
+
+	for j in uruguay.todos_los_jugadores():
+		var id: int = j["id"]
+		if not uruguay.esta_lesionado(id):
+			continue
+		var club_real: Team = clubes_por_jugador.get(id)
+		if club_real == null:
+			continue
+		var info: Dictionary = uruguay.lesiones[id]
+		club_real.lesionar(id, info["tipo"], info["dias_restantes"])
+		_agregar_noticia("SELECCIÓN: %s de %s se lesiona jugando el amistoso (%s, %d días)." % [
+			j["posicion"], club_real.nombre, info["tipo"], info["dias_restantes"]
+		])
+
+	for j in uruguay.todos_los_jugadores():
+		if clubes_por_jugador.get(j["id"]) == equipo_jugador:
+			_agregar_noticia("SELECCIÓN: %s (%s) es convocado a la Selección Uruguay." % [j["posicion"], equipo_jugador.nombre])
 
 
 ## Oferta del jugador humano por un jugador de otro club (pantalla de

@@ -34,6 +34,7 @@ var contenedor_prestamos_pedir_botones: VBoxContainer
 var label_prestamos_estado: Label
 var contenedor_instalaciones_botones: VBoxContainer
 var label_instalaciones_estado: Label
+var lista_seleccion: RichTextLabel
 
 
 func _ready() -> void:
@@ -50,7 +51,7 @@ func _ready() -> void:
 		["Plantel", "_mostrar_plantel"], ["Tabla", "_mostrar_tabla"], ["Partido", "_mostrar_partido"],
 		["Economia", "_mostrar_economia"], ["Mercado", "_mostrar_mercado"],
 		["Libres", "_mostrar_libres"], ["Prestamos", "_mostrar_prestamos"],
-		["Instalaciones", "_mostrar_instalaciones"],
+		["Instalaciones", "_mostrar_instalaciones"], ["Seleccion", "_mostrar_seleccion"],
 		["Cantera", "_mostrar_cantera"], ["Noticias", "_mostrar_noticias"],
 	]:
 		var btn := Button.new()
@@ -72,6 +73,7 @@ func _ready() -> void:
 	_construir_panel_libres(contenedor)
 	_construir_panel_prestamos(contenedor)
 	_construir_panel_instalaciones(contenedor)
+	_construir_panel_seleccion(contenedor)
 	_construir_panel_cantera(contenedor)
 	_construir_panel_noticias(contenedor)
 
@@ -785,6 +787,55 @@ func _on_mejorar_instalacion(categoria: String) -> void:
 	_refrescar_economia()
 
 
+## Selección nacional — muestra la convocatoria actual (recalculada al
+## toque, en vivo: no hace falta esperar al amistoso de fin de temporada
+## para ver quién entraría hoy) con el club de origen de cada uno, y
+## resalta a los que son de tu propio equipo.
+func _construir_panel_seleccion(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	padre.add_child(panel)
+	paneles["seleccion"] = panel
+
+	var titulo := Label.new()
+	titulo.text = "Selección Uruguay — convocatoria actual (los mejores de TODA la piramide). Juega un amistoso al cerrar cada temporada."
+	panel.add_child(titulo)
+
+	lista_seleccion = RichTextLabel.new()
+	lista_seleccion.bbcode_enabled = true
+	lista_seleccion.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	lista_seleccion.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(lista_seleccion)
+
+
+func _refrescar_seleccion() -> void:
+	var convocatoria := GameState.seleccion.previsualizar(GameState.piramide)
+	var uruguay: Team = convocatoria["equipo"]
+	var clubes_por_jugador: Dictionary = convocatoria["clubes_por_jugador"]
+
+	var texto := "[b]Titulares (11)[/b]\n"
+	for j in uruguay.jugadores:
+		texto += _linea_convocado(j, clubes_por_jugador)
+	texto += "\n[b]Banco (7)[/b]\n"
+	for j in uruguay.banco:
+		texto += _linea_convocado(j, clubes_por_jugador)
+
+	lista_seleccion.text = texto
+
+
+func _linea_convocado(j: Dictionary, clubes_por_jugador: Dictionary) -> String:
+	var club: Team = clubes_por_jugador.get(j["id"])
+	var club_nombre: String = club.nombre if club != null else "?"
+	var veces: int = GameState.seleccion.convocatorias.get(j["id"], 0)
+	var linea := "%-4s  %-22s  %-20s  media %5.1f  (%d convocatoria%s)" % [
+		j["posicion"], _nombre_jugador(j), club_nombre, j["media"], veces, "s" if veces != 1 else ""
+	]
+	if club == GameState.equipo_jugador:
+		return "[color=yellow]%s  <- tu equipo[/color]\n" % linea
+	return linea + "\n"
+
+
 func _construir_panel_cantera(padre: Control) -> void:
 	var panel := VBoxContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -988,6 +1039,12 @@ func _mostrar_instalaciones() -> void:
 	paneles["instalaciones"].visible = true
 	label_instalaciones_estado.text = ""
 	_refrescar_instalaciones()
+
+
+func _mostrar_seleccion() -> void:
+	_ocultar_todos()
+	paneles["seleccion"].visible = true
+	_refrescar_seleccion()
 
 
 func _mostrar_cantera() -> void:
