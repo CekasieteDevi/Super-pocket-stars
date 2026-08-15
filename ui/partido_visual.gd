@@ -27,7 +27,11 @@ const ZONA_X_POR_TIPO := {
 
 signal terminado
 
-const INTERVALO_BASE := 0.12  # segundos entre eventos a velocidad x1
+## A velocidad x1: MatchEngine.TICKS_POR_MITAD=90 duelos de armado/gambeta
+## por tiempo, más los tiros que salgan de las gambetas ganadas — unos
+## 100-130 eventos por tiempo en la práctica. A 1.0s/evento un tiempo dura
+## cerca de los 2 minutos reales acordados; x2/x4 quedan para acelerar.
+const INTERVALO_BASE := 1.0  # segundos entre eventos a velocidad x1
 
 var eventos: Array = []
 var indice: int = 0
@@ -123,6 +127,8 @@ func iniciar(local: String, visitante: String, lista_eventos: Array) -> void:
 	cancha.resaltado_visitante = ""
 	cancha.empuje_local = 0.0
 	cancha.empuje_visitante = 0.0
+	cancha._render_local.clear()
+	cancha._render_visitante.clear()
 	cancha.queue_redraw()
 	_refrescar_marcador()
 	_mover_pelota_instant(cancha.size / 2.0)

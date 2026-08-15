@@ -7,11 +7,19 @@ extends Control
 ## partido (solo zona de la jugada + la posición del que participa), así
 ## que lo que se ve acá es una aproximación: una FORMACIÓN FIJA por equipo
 ## (11 sprites cada uno, según FORMACION_SLOTS) que se ESTIRA/COMPACTA como
-## bloque según la zona de la jugada actual — el equipo que ataca empuja
-## su línea hacia adelante, el que defiende retrocede — y el jugador que
-## participa de la jugada actual se resalta más grande. No son 22
-## muñequitos con movimiento individual real, es la mejor aproximación de
-## "dónde se para el equipo" con los datos que da el motor.
+## bloque según la zona de la jugada actual — el equipo que ataca empuja su
+## línea hacia adelante, el que defiende retrocede.
+##
+## Cada uno de los 22 sprites tiene una posición "renderizada" persistente
+## (_render_local/_render_visitante) que en cada frame CAMINA hacia su
+## objetivo actual en vez de aparecer ahí de golpe: el jugador que
+## participa de la jugada camina hasta el punto exacto de la pelota (se
+## dibuja más grande mientras tanto) y, en cuanto deja de participar,
+## camina de vuelta a su lugar en la formación — así se ve continuidad
+## ("sube al área, espera el pase, remata, vuelve") en vez de que los
+## puntos salten de una posición a otra como piezas de ajedrez. No son 22
+## muñequitos con movimiento individual real (el motor no calcula eso),
+## es la mejor aproximación posible con los datos que da.
 
 ## Coordenadas normalizadas (0..1) del lado local, atacando hacia la
 ## derecha; el visitante espeja x (1-x) y ataca hacia la izquierda. Sigue
@@ -45,25 +53,32 @@ const ANCHO_SPRITE_RESALTADO := 30.0
 
 const MAX_EMPUJE := 0.14  # cuánto puede correrse la línea, en x normalizado (0..1)
 const RETROCESO_RIVAL := 0.5  # el que defiende retrocede a esta fracción del empuje rival
-const VELOCIDAD_EMPUJE := 5.0  # qué tan rápido el bloque alcanza su nueva posición (por segundo)
+const VELOCIDAD_EMPUJE := 5.0  # qué tan rápido el bloque alcanza su nueva forma (por segundo)
+const VELOCIDAD_JUGADOR := 4.0  # qué tan rápido cada sprite camina a su objetivo (por segundo)
+const DISTANCIA_MINIMA := 0.5  # px — por debajo de esto se considera "llegó", no sigue redibujando
 
-## Posición cuyo sprite se dibuja más grande — "" si ninguna — y el punto
-## exacto (screen-space) donde se dibuja, que es el mismo que usa la
-## pelota (Cancha.punto_en) para que el sprite agrandado y la pelota
-## coincidan siempre: así se ve claro quién tiene la pelota. Los pone
-## PartidoVisual según el evento actual (equipo + jugador_posicion).
+## Posición cuyo sprite se dibuja más grande — "" si ninguna. Lo pone
+## PartidoVisual según el evento actual (equipo + jugador_posicion); el
+## punto exacto (screen-space) es el mismo que usa la pelota (punto_en),
+## para que el sprite agrandado y la pelota siempre coincidan.
 var resaltado_local: String = ""
 var resaltado_visitante: String = ""
 var punto_resaltado_local: Vector2 = Vector2.ZERO
 var punto_resaltado_visitante: Vector2 = Vector2.ZERO
 
-## Empuje actual (animado) de cada equipo, ya aplicado con PESO_LINEA en
-## el dibujo — positivo = corrido hacia el arco rival, negativo = hacia el
-## propio arco.
+## Empuje actual (animado) de cada equipo — positivo = corrido hacia el
+## arco rival, negativo = hacia el propio arco. Define el objetivo de los
+## sprites que NO están participando de la jugada actual.
 var empuje_local: float = 0.0
 var empuje_visitante: float = 0.0
 var _objetivo_empuje_local: float = 0.0
 var _objetivo_empuje_visitante: float = 0.0
+
+## Posición renderizada (screen-space) de cada sprite, clave "POS_indice"
+## (ej. "DFC_0") — persiste entre frames y camina hacia su objetivo en
+## _process, en vez de recalcularse de cero en cada _draw.
+var _render_local: Dictionary = {}
+var _render_visitante: Dictionary = {}
 
 var _tex_local: ImageTexture
 var _tex_visitante: ImageTexture
@@ -101,17 +116,56 @@ func punto_en(x_local: float, jugador_posicion: String, invertido: bool) -> Vect
 	return Vector2(size.x * x, size.y * slot["y"])
 
 
+func _punto_formacion(pos: String, slot: Dictionary, invertido: bool, empuje: float) -> Vector2:
+	var peso: float = PESO_LINEA.get(pos, 0.7)
+	var x_local: float = clampf(slot["x"] + peso * empuje, 0.03, 0.97)
+	var x: float = (1.0 - x_local) if invertido else x_local
+	return Vector2(size.x * x, size.y * slot["y"])
+
+
 func _process(delta: float) -> void:
-	var t := clampf(delta * VELOCIDAD_EMPUJE, 0.0, 1.0)
-	var cambio := false
-	if not is_equal_approx(empuje_local, _objetivo_empuje_local):
-		empuje_local = lerpf(empuje_local, _objetivo_empuje_local, t)
-		cambio = true
-	if not is_equal_approx(empuje_visitante, _objetivo_empuje_visitante):
-		empuje_visitante = lerpf(empuje_visitante, _objetivo_empuje_visitante, t)
-		cambio = true
+	if size.x <= 0.0:
+		return
+
+	var t_bloque := clampf(delta * VELOCIDAD_EMPUJE, 0.0, 1.0)
+	empuje_local = lerpf(empuje_local, _objetivo_empuje_local, t_bloque)
+	empuje_visitante = lerpf(empuje_visitante, _objetivo_empuje_visitante, t_bloque)
+
+	var t_jugador := clampf(delta * VELOCIDAD_JUGADOR, 0.0, 1.0)
+	var cambio := _actualizar_render(_render_local, false, resaltado_local, punto_resaltado_local, empuje_local, t_jugador)
+	cambio = _actualizar_render(_render_visitante, true, resaltado_visitante, punto_resaltado_visitante, empuje_visitante, t_jugador) or cambio
 	if cambio:
 		queue_redraw()
+
+
+## Mueve cada sprite del equipo un paso hacia su objetivo actual (el punto
+## de la jugada si es el que participa, si no su lugar en la formación) y
+## devuelve true si algo se movió (para saber si hace falta redibujar).
+func _actualizar_render(render: Dictionary, invertido: bool, resaltado_pos: String, punto_resaltado: Vector2, empuje: float, t: float) -> bool:
+	var cambio := false
+	var ya_uso_resaltado := false
+	for pos in FORMACION_SLOTS:
+		var slots: Array = FORMACION_SLOTS[pos]
+		for i in range(slots.size()):
+			var clave := "%s_%d" % [pos, i]
+			var es_resaltado: bool = pos == resaltado_pos and not ya_uso_resaltado
+			var objetivo: Vector2
+			if es_resaltado:
+				objetivo = punto_resaltado
+				ya_uso_resaltado = true
+			else:
+				objetivo = _punto_formacion(pos, slots[i], invertido, empuje)
+
+			if not render.has(clave):
+				render[clave] = objetivo
+				cambio = true
+				continue
+
+			var actual: Vector2 = render[clave]
+			if actual.distance_to(objetivo) > DISTANCIA_MINIMA:
+				render[clave] = actual.lerp(objetivo, t)
+				cambio = true
+	return cambio
 
 
 func _draw() -> void:
@@ -128,8 +182,8 @@ func _draw() -> void:
 	draw_rect(Rect2(Vector2(0, (h - area_h) / 2.0), Vector2(area_w, area_h)), Color.WHITE, false, 2.0)
 	draw_rect(Rect2(Vector2(w - area_w, (h - area_h) / 2.0), Vector2(area_w, area_h)), Color.WHITE, false, 2.0)
 
-	_dibujar_formacion(false, _tex_local, resaltado_local, empuje_local, punto_resaltado_local)
-	_dibujar_formacion(true, _tex_visitante, resaltado_visitante, empuje_visitante, punto_resaltado_visitante)
+	_dibujar_formacion(_render_local, _tex_local, resaltado_local)
+	_dibujar_formacion(_render_visitante, _tex_visitante, resaltado_visitante)
 
 
 func _dibujar_cesped(w: float, h: float) -> void:
@@ -139,21 +193,18 @@ func _dibujar_cesped(w: float, h: float) -> void:
 		draw_rect(Rect2(Vector2(i * ancho_banda, 0), Vector2(ancho_banda + 1.0, h)), color)
 
 
-func _dibujar_formacion(invertido: bool, textura: ImageTexture, resaltado_pos: String, empuje: float, punto_resaltado: Vector2) -> void:
+func _dibujar_formacion(render: Dictionary, textura: ImageTexture, resaltado_pos: String) -> void:
+	var ya_uso_resaltado := false
 	for pos in FORMACION_SLOTS:
 		var slots: Array = FORMACION_SLOTS[pos]
-		var peso: float = PESO_LINEA.get(pos, 0.7)
-		var ya_uso_resaltado := false
-		for slot in slots:
+		for i in range(slots.size()):
+			var clave := "%s_%d" % [pos, i]
+			if not render.has(clave):
+				continue
+			var punto: Vector2 = render[clave]
 			var resaltado: bool = pos == resaltado_pos and not ya_uso_resaltado
-			var punto: Vector2
 			if resaltado:
-				punto = punto_resaltado
 				ya_uso_resaltado = true
-			else:
-				var x_local: float = clampf(slot["x"] + peso * empuje, 0.03, 0.97)
-				var x: float = (1.0 - x_local) if invertido else x_local
-				punto = Vector2(size.x * x, size.y * slot["y"])
 			var ancho: float = ANCHO_SPRITE_RESALTADO if resaltado else ANCHO_SPRITE_NORMAL
 			var alto: float = ancho * (textura.get_height() / float(textura.get_width()))
 			var rect := Rect2(punto - Vector2(ancho, alto) / 2.0, Vector2(ancho, alto))
