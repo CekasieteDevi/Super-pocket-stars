@@ -46,12 +46,12 @@ static func _elegir(jugadores: Array, rng: RandomNumberGenerator) -> Dictionary:
 ## §8.5: bloque A (forma del día, ver Team.forma_partido), bloque B
 ## (equipo/racha/armonía/capitán), bloque C (local + choque de estilos
 ## §8.6.3 + rasgo del DT según el marcador §8.6.4 + clima §8.4#18/20 +
-## estado de la cancha §8.4#21 + árbitro casero §8.4#23 + objetivo de
-## directiva en riesgo §8.4#30) y bloque D (personalidad + habilidad de
-## ESE jugador en ESE duelo, §6/§5 — Ansioso de visitante, Egoísta
-## priorizando su propio tiro, Cañón sumando en sus duelos de tiro si ya
-## se manifestó).
-static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atributo: String, minuto: int) -> Dictionary:
+## estado de la cancha §8.4#21 + árbitro casero §8.4#23 + público §8.4#22
+## + varianza de clásico §8.4#14 + objetivo de directiva en riesgo
+## §8.4#30) y bloque D (personalidad + habilidad de ESE jugador en ESE
+## duelo, §6/§5 — Ansioso de visitante, Egoísta priorizando su propio
+## tiro, Cañón sumando en sus duelos de tiro si ya se manifestó).
+static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atributo: String, minuto: int, rng: RandomNumberGenerator) -> Dictionary:
 	var jugador_id: int = jugador["id"]
 	var bloque_a := equipo.forma_partido
 	var bloque_b: float = equipo.armonia + clamp(float(equipo.racha), 0.0, 10.0)
@@ -64,6 +64,9 @@ static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atri
 	var cancha_del_local: float = equipo.calidad_cancha if equipo.local else rival.calidad_cancha
 	bloque_c += EstadoCancha.modificador(cancha_del_local, atributo)
 	bloque_c += Arbitro.modificador(equipo.arbitro_partido, equipo.local)
+	if equipo.local:
+		bloque_c += Publico.modificador(equipo.fans)
+	bloque_c += Rivalidad.variacion(Rivalidad.es_clasico(equipo, rival), rng)
 	if equipo.objetivo_en_riesgo:
 		bloque_c += Objetivos.MALUS_EN_RIESGO
 	var bloque_d := Personalidad.modificador_partido(jugador, equipo.local, atributo, minuto) + Habilidades.modificador_partido(jugador, atributo)
@@ -100,20 +103,21 @@ const CHANCE_ROJA_DIRECTA := 0.0004
 const CHANCE_AMARILLA := 0.02
 
 
-static func _chequear_tarjeta(defensor: Dictionary, equipo_defensor: Team, rng: RandomNumberGenerator,
+static func _chequear_tarjeta(defensor: Dictionary, equipo_defensor: Team, equipo_atacante: Team, rng: RandomNumberGenerator,
 		eventos: Array, minuto: int, con_log: bool = false, log: Array = []) -> void:
 	var id: int = defensor["id"]
 	if equipo_defensor.expulsados_partido.has(id):
 		return
 
 	var factor_arbitro := Arbitro.factor_tarjetas(equipo_defensor.arbitro_partido)
+	var factor_clasico := Rivalidad.factor_tarjetas(Rivalidad.es_clasico(equipo_defensor, equipo_atacante))
 	var roll := rng.randf()
 	var es_roja := false
 	var doble_amarilla := false
 
-	if roll < CHANCE_ROJA_DIRECTA * factor_arbitro * Personalidad.factor_roja(defensor):
+	if roll < CHANCE_ROJA_DIRECTA * factor_arbitro * factor_clasico * Personalidad.factor_roja(defensor):
 		es_roja = true
-	elif roll < CHANCE_AMARILLA * factor_arbitro * Personalidad.factor_amarilla(defensor):
+	elif roll < CHANCE_AMARILLA * factor_arbitro * factor_clasico * Personalidad.factor_amarilla(defensor):
 		var actuales: int = equipo_defensor.amarillas_partido.get(id, 0) + 1
 		equipo_defensor.amarillas_partido[id] = actuales
 		if actuales >= 2:
@@ -153,14 +157,14 @@ static func _duelo(atacante: Dictionary, atacante_attr: String, equipo_atacante:
 		equipo_defensor.resistencia_pct(defensor["id"]))
 	var resultado := Duel.resolver(
 		ata_eff, def_eff,
-		_bloques_equipo(equipo_atacante, equipo_defensor, atacante, atacante_attr, minuto),
-		_bloques_equipo(equipo_defensor, equipo_atacante, defensor, defensor_attr, minuto))
+		_bloques_equipo(equipo_atacante, equipo_defensor, atacante, atacante_attr, minuto, rng),
+		_bloques_equipo(equipo_defensor, equipo_atacante, defensor, defensor_attr, minuto, rng))
 	equipo_atacante.desgastar(atacante["id"], atacante["atributos"]["energia"])
 	equipo_defensor.desgastar(defensor["id"], defensor["atributos"]["energia"])
 	_chequear_lesion(atacante, equipo_atacante, rng)
 	_chequear_lesion(defensor, equipo_defensor, rng)
 	if defensor_attr == "quite":
-		_chequear_tarjeta(defensor, equipo_defensor, rng, eventos, minuto, con_log, log)
+		_chequear_tarjeta(defensor, equipo_defensor, equipo_atacante, rng, eventos, minuto, con_log, log)
 	return resultado
 
 
@@ -444,8 +448,8 @@ static func _duelo_tiro(atacante: Dictionary, tiro_valor: float, equipo_atacante
 	var def_eff := Duel.atributo_efectivo(arquero_valor, "tecnico", equipo_defensor.resistencia_pct(arquero["id"]))
 	var resultado := Duel.resolver(
 		ata_eff, def_eff,
-		_bloques_equipo(equipo_atacante, equipo_defensor, atacante, "tiro", minuto),
-		_bloques_equipo(equipo_defensor, equipo_atacante, arquero, "reflejos", minuto))
+		_bloques_equipo(equipo_atacante, equipo_defensor, atacante, "tiro", minuto, rng),
+		_bloques_equipo(equipo_defensor, equipo_atacante, arquero, "reflejos", minuto, rng))
 	equipo_atacante.desgastar(atacante["id"], atacante["atributos"]["energia"])
 	equipo_defensor.desgastar(arquero["id"], arquero["atributos"]["energia"])
 	_chequear_lesion(atacante, equipo_atacante, rng)

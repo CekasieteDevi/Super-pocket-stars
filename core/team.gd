@@ -34,6 +34,13 @@ var clima_partido: String = ""  # transitorio, solo dentro de un partido — "" 
 var arbitro_partido: String = ""  # transitorio, solo dentro de un partido — Estricto/Permisivo/Casero, ver core/arbitro.gd
 var objetivo_en_riesgo: bool = false  # transitorio, lo recalcula GameState antes de cada fecha — ver core/objetivos.gd
 var foco_individual: Dictionary = {}  # jugador_id -> atributo (String), foco de ESTA temporada — ver core/entrenamiento.gd
+## Fans (§8.4 #22, ver core/fans.gd) — a diferencia de estilo/DT/cancha,
+## arranca en 0 para todos ("no va nadie al estadio") y evoluciona con
+## resultados/ascensos. racha_sin_ganar es un contador AUXILIAR entre
+## partidos (distinto de "racha" de arriba, que es DENTRO de un partido).
+var fans: float = 0.0
+var racha_sin_ganar: int = 0
+var rival_directo: String = ""  # nombre del clásico horneado (§8.4 #14) — ver core/rivalidad.gd
 var armonia: float = 0.0  # placeholder hasta que exista §3 completo (vestuario real)
 ## §8.4 modificador 2 ("Forma, de -5 a +5 según los últimos 5 partidos"),
 ## bloque A. Sin historial de partidos recientes todavía, se aproxima con
@@ -198,6 +205,7 @@ func guardar() -> Dictionary:
 		"config_cambios": config_cambios,
 		"objetivo_temporada": objetivo_temporada, "objetivos_incumplidos_seguidos": objetivos_incumplidos_seguidos,
 		"foco_individual": _claves_a_texto(foco_individual),
+		"fans": fans, "racha_sin_ganar": racha_sin_ganar, "rival_directo": rival_directo,
 		"prestados_afuera": prestados_afuera_datos, "prestados_propios": prestados_propios_datos,
 	}
 
@@ -258,6 +266,9 @@ static func cargar(datos: Dictionary) -> Team:
 		t.objetivo_temporada["posicion_maxima"] = int(t.objetivo_temporada["posicion_maxima"])
 	t.objetivos_incumplidos_seguidos = int(datos.get("objetivos_incumplidos_seguidos", 0))
 	t.foco_individual = _claves_a_entero(datos.get("foco_individual", {}))
+	t.fans = datos.get("fans", 0.0)
+	t.racha_sin_ganar = int(datos.get("racha_sin_ganar", 0))
+	t.rival_directo = datos.get("rival_directo", "")
 
 	# Quedan con el NOMBRE del club (String) en la clave "club"/"club_dueno"
 	# en vez de la referencia real -- Piramide.resolver_prestamos() los

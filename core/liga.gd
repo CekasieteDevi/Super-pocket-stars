@@ -229,6 +229,8 @@ func _actualizar_estado_jugadores(home: Team, away: Team, r: Dictionary) -> void
 			goleadores_visitante.append(gol["jugador_id"])
 	home.actualizar_post_partido(r["goles_local"], r["goles_visitante"], goleadores_local)
 	away.actualizar_post_partido(r["goles_visitante"], r["goles_local"], goleadores_visitante)
+	Fans.actualizar_por_resultado(home, r["goles_local"], r["goles_visitante"])
+	Fans.actualizar_por_resultado(away, r["goles_visitante"], r["goles_local"])
 
 
 ## Entre fecha y fecha: recupera fatiga, hace derivar el ánimo y cuenta los

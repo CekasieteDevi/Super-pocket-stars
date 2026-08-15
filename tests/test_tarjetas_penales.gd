@@ -46,6 +46,7 @@ func _test_aparecen_tarjetas_en_muchos_partidos(rng: RandomNumberGenerator) -> v
 func _test_doble_amarilla_es_roja(rng: RandomNumberGenerator) -> void:
 	print("\n=== Segunda amarilla en el mismo partido = roja automatica ===")
 	var equipo := Team.generar("ClubTarjetas", rng, 10000)
+	var rival := Team.generar("RivalTarjetas", rng, 10500)
 	var jugador: Dictionary = equipo.jugadores[0]
 	var id: int = jugador["id"]
 	equipo.reset_partido()
@@ -57,7 +58,7 @@ func _test_doble_amarilla_es_roja(rng: RandomNumberGenerator) -> void:
 	for i in range(3000):
 		if equipo.expulsados_partido.has(id):
 			break
-		MatchEngine._chequear_tarjeta(jugador, equipo, rng, eventos, 10)
+		MatchEngine._chequear_tarjeta(jugador, equipo, rival, rng, eventos, 10)
 
 	var ok: bool = equipo.expulsados_partido.has(id) and equipo.suspendidos.get(id, 0) == 1
 

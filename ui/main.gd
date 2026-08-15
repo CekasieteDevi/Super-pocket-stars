@@ -335,7 +335,8 @@ func _construir_panel_economia(padre: Control) -> void:
 
 func _refrescar_economia() -> void:
 	var equipo := GameState.equipo_jugador
-	var texto := "Reputacion: %.1f / 100%s\n\n" % [equipo.reputacion, "  (EN QUIEBRA)" if equipo.quebrado else ""]
+	var texto := "Reputacion: %.1f / 100%s\n" % [equipo.reputacion, "  (EN QUIEBRA)" if equipo.quebrado else ""]
+	texto += "Hinchas: %.1f / 100 (racha sin ganar: %d)  — suman ganando, se pierden con una racha larga sin ganar, y ascender/descender pesa fuerte.\n\n" % [equipo.fans, equipo.racha_sin_ganar]
 
 	var sueldos_totales := 0.0
 	for id in equipo.sueldos:
@@ -1334,7 +1335,10 @@ func _refrescar_informe_rival() -> void:
 	var dt_texto := ""
 	if not rival.dt.is_empty():
 		dt_texto = " — DT: %d/10 (%s)" % [rival.dt["nivel"], rival.dt["rasgo"]]
-	label_informe_rival.text = "Próximo rival: %s — estilo %s%s%s" % [rival.nombre, rival.estilo, pista, dt_texto]
+	var clasico_texto := ""
+	if Rivalidad.es_clasico(GameState.equipo_jugador, rival):
+		clasico_texto = " — ⚔ ¡ES TU CLÁSICO! (más tarjetas, más caos)"
+	label_informe_rival.text = "Próximo rival: %s — estilo %s%s%s%s" % [rival.nombre, rival.estilo, pista, dt_texto, clasico_texto]
 
 
 func _on_estilo_seleccionado(idx: int) -> void:

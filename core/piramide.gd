@@ -41,6 +41,22 @@ static func cargar(datos: Dictionary) -> Piramide:
 	for ld in datos["divisiones"]:
 		p.divisiones.append(Liga.cargar(ld))
 	p.resolver_prestamos()
+
+	# Migración de guardados de antes de §8.4 #14 (clásicos): si nadie de
+	# una división tiene rival_directo todavía, se hornea recién ahora —
+	# el pareo depende del orden de equipos.size() de ESA división en
+	# particular (ascensos/descensos ya movieron equipos entre divisiones
+	# desde que se creó la partida), así que no se puede resolver por
+	# nombre de club como estilo/DT/cancha.
+	for liga in p.divisiones:
+		var alguien_con_clasico := false
+		for equipo in liga.equipos:
+			if equipo.rival_directo != "":
+				alguien_con_clasico = true
+				break
+		if not alguien_con_clasico:
+			Rivalidad.hornear_clasicos(liga.equipos)
+
 	return p
 
 
@@ -76,6 +92,7 @@ static func generar(rng: RandomNumberGenerator) -> Piramide:
 			nombres.append(GeneradorNombres.nombre_club(rng, nombres_usados))
 		var liga := Liga.new()
 		liga.inicializar(nombres, rng, siguiente_id)
+		Rivalidad.hornear_clasicos(liga.equipos)
 		siguiente_id += EQUIPOS_POR_DIVISION * Team.RANGO_IDS_RESERVADO
 		p.divisiones.append(liga)
 	return p
@@ -129,6 +146,7 @@ func _ejecutar_ascensos_y_descensos(ordenes: Array, rng: RandomNumberGenerator) 
 			var equipo: Team = orden_peor[i]
 			peor.equipos.erase(equipo)
 			mejor.equipos.append(equipo)
+			Fans.actualizar_por_movimiento_de_division(equipo, true)
 			movimientos.append({"equipo": equipo.nombre, "tipo": "ascenso directo", "de_division": limite + 2, "a_division": limite + 1})
 
 		var candidato: Team = orden_peor[2]
@@ -139,6 +157,8 @@ func _ejecutar_ascensos_y_descensos(ordenes: Array, rng: RandomNumberGenerator) 
 			mejor.equipos.append(candidato)
 			mejor.equipos.erase(defensor)
 			peor.equipos.append(defensor)
+			Fans.actualizar_por_movimiento_de_division(candidato, true)
+			Fans.actualizar_por_movimiento_de_division(defensor, false)
 			movimientos.append({"equipo": candidato.nombre, "tipo": "ascenso por playoff", "de_division": limite + 2, "a_division": limite + 1})
 			movimientos.append({"equipo": defensor.nombre, "tipo": "descenso por playoff", "de_division": limite + 1, "a_division": limite + 2})
 
@@ -146,6 +166,7 @@ func _ejecutar_ascensos_y_descensos(ordenes: Array, rng: RandomNumberGenerator) 
 			var equipo: Team = orden_mejor[i]
 			mejor.equipos.erase(equipo)
 			peor.equipos.append(equipo)
+			Fans.actualizar_por_movimiento_de_division(equipo, false)
 			movimientos.append({"equipo": equipo.nombre, "tipo": "descenso directo", "de_division": limite + 1, "a_division": limite + 2})
 
 	return movimientos
