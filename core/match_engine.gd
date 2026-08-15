@@ -27,6 +27,14 @@ const TICKS_POR_MITAD := 90
 ## Sin esto, con ~50% de éxito por duelo parejo se genera un tiro casi cada
 ## 2 ticks y el marcador se dispara a números de básquet. Simula la posesión
 ## sostenida real en vez de un solo pase mágico que atraviesa la cancha.
+##
+## Se probó (tests/_diag_estilos_goles.gd) hacer que esto varíe por Estilo
+## para que Tiki taka construya con más toques — se descartó: la
+## probabilidad de encadenar N pases exitosos es ~p^N, así que hasta ±1
+## alrededor de la base (Tiki taka=4, Contragolpe=2) triplicaba los
+## goles/partido de Contragolpe respecto a Tiki taka. Es una palanca
+## demasiado sensible para usarla como diferenciador de estilo sin romper
+## el balance de goles ya calibrado — queda fija para los 6 estilos.
 const AVANCE_REQUERIDO := 3
 
 const GRUPO_POR_ATRIBUTO := {

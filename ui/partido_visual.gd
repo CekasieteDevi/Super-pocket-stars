@@ -40,6 +40,8 @@ var pausado: bool = false
 
 var equipo_local: String
 var equipo_visitante: String
+var estilo_local: String = ""
+var estilo_visitante: String = ""
 var goles_local: int = 0
 var goles_visitante: int = 0
 
@@ -112,9 +114,11 @@ func _ready() -> void:
 	add_child(timer)
 
 
-func iniciar(local: String, visitante: String, lista_eventos: Array) -> void:
+func iniciar(local: String, visitante: String, lista_eventos: Array, estilo_local_: String = "", estilo_visitante_: String = "") -> void:
 	equipo_local = local
 	equipo_visitante = visitante
+	estilo_local = estilo_local_
+	estilo_visitante = estilo_visitante_
 	eventos = lista_eventos
 	goles_local = 0
 	goles_visitante = 0
@@ -200,7 +204,10 @@ func _aplicar_evento(evento: Dictionary) -> void:
 		cancha.resaltado_visitante = evento["jugador_posicion"]
 		cancha.punto_resaltado_visitante = punto
 		cancha.resaltado_local = ""
-	cancha.fijar_posesion(es_local, (zona_x - 0.5) * 2.0)
+	# El que defiende retrocede según SU propio estilo (Presión alta va a
+	# buscar la pelota en vez de replegarse — ver Estilos.retroceso_sin_pelota).
+	var estilo_defensor: String = estilo_visitante if es_local else estilo_local
+	cancha.fijar_posesion(es_local, (zona_x - 0.5) * 2.0, Estilos.retroceso_sin_pelota(estilo_defensor))
 	cancha.queue_redraw()
 	_mover_pelota(punto)
 

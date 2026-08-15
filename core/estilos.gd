@@ -41,3 +41,20 @@ static func modificador(mio: String, rival: String) -> float:
 	if entrada["pierde_contra"].has(rival):
 		return -BONUS
 	return 0.0
+
+
+## Solo visual (ui/cancha.gd) — cuánto retrocede el bloque de un equipo
+## cuando NO tiene la pelota, como fracción del empuje que hace el rival
+## que ataca. 0.5 es el comportamiento "neutro" (retrocede a la mitad de
+## lo que el rival avanza). Negativo significa que en vez de retroceder
+## empuja hacia adelante — Presión alta va a buscar la pelota en vez de
+## replegarse. No afecta al resultado del partido, solo a cómo se ve.
+const RETROCESO_SIN_PELOTA := {
+	"Presión alta": -0.5, "Tiki taka": 0.35, "Juego directo": 0.5,
+	"Físico": 0.5, "Contragolpe": 0.65, "Defensivo": 0.8,
+}
+const RETROCESO_DEFAULT := 0.5
+
+
+static func retroceso_sin_pelota(estilo: String) -> float:
+	return RETROCESO_SIN_PELOTA.get(estilo, RETROCESO_DEFAULT)

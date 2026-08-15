@@ -52,7 +52,6 @@ const ANCHO_SPRITE_NORMAL := 20.0
 const ANCHO_SPRITE_RESALTADO := 30.0
 
 const MAX_EMPUJE := 0.14  # cuánto puede correrse la línea, en x normalizado (0..1)
-const RETROCESO_RIVAL := 0.5  # el que defiende retrocede a esta fracción del empuje rival
 const VELOCIDAD_EMPUJE := 5.0  # qué tan rápido el bloque alcanza su nueva forma (por segundo)
 const VELOCIDAD_JUGADOR := 4.0  # qué tan rápido cada sprite camina a su objetivo (por segundo)
 const DISTANCIA_MINIMA := 0.5  # px — por debajo de esto se considera "llegó", no sigue redibujando
@@ -91,17 +90,19 @@ func _ready() -> void:
 
 
 ## Llamado por PartidoVisual en cada evento: qué equipo tiene la pelota
-## (es_local_con_pelota) y qué tan lejos de su propio arco está la jugada
-## (intensidad, -1..1 — cerca de 1 es último tercio rival). El equipo con
-## la pelota empuja su bloque hacia adelante; el rival retrocede.
-func fijar_posesion(es_local_con_pelota: bool, intensidad: float) -> void:
+## (es_local_con_pelota), qué tan lejos de su propio arco está la jugada
+## (intensidad, -1..1 — cerca de 1 es último tercio rival) y cuánto
+## retrocede el que NO tiene la pelota (retroceso_rival — ver
+## Estilos.retroceso_sin_pelota; negativo = presiona hacia adelante en vez
+## de replegarse). El equipo con la pelota siempre empuja hacia adelante.
+func fijar_posesion(es_local_con_pelota: bool, intensidad: float, retroceso_rival: float = 0.5) -> void:
 	var i := clampf(intensidad, -1.0, 1.0)
 	if es_local_con_pelota:
 		_objetivo_empuje_local = i * MAX_EMPUJE
-		_objetivo_empuje_visitante = -i * MAX_EMPUJE * RETROCESO_RIVAL
+		_objetivo_empuje_visitante = -i * MAX_EMPUJE * retroceso_rival
 	else:
 		_objetivo_empuje_visitante = i * MAX_EMPUJE
-		_objetivo_empuje_local = -i * MAX_EMPUJE * RETROCESO_RIVAL
+		_objetivo_empuje_local = -i * MAX_EMPUJE * retroceso_rival
 
 
 ## Punto de cancha (screen-space) donde debería estar la pelota: x_local
