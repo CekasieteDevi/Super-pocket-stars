@@ -55,9 +55,24 @@ static func _fila_vacia_caja() -> Dictionary:
 	return c
 
 
+## §8.4 #22 extendido a la economía: Team.fans (core/fans.gd, arranca en 0
+## para todos y crece con resultados/ascensos) suma HASTA +30% de
+## ocupación ENCIMA de la base de reputación — nunca la reduce. En
+## temporada 1, con fans=0 en absolutamente todos los clubes, esto da
+## exactamente la misma ocupación que antes de que existiera Fans (la
+## fórmula vieja, ya calibrada con cuidado — ver PRECIO_ENTRADA más
+## abajo), así que no hay riesgo de repetir la ola de quiebras de la
+## calibración anterior. Con el tiempo, un club que se gana una hinchada
+## de verdad llena más la cancha que uno con la misma reputación pero sin
+## bancada — la recompensa es real pero acotada (clamp a 100% de aforo).
+const BONUS_OCUPACION_FANS := 0.3
+
+
 ## Procesa una temporada terminada para un club. posicion_tabla es 1-indexado.
 static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos: int) -> Dictionary:
-	var asistencia: float = AFORO_BASE * Instalaciones.factor_aforo(equipo) * (0.3 + clamp(equipo.reputacion, 0.0, 100.0) / 100.0 * 0.7)
+	var ocupacion_base: float = 0.3 + clamp(equipo.reputacion, 0.0, 100.0) / 100.0 * 0.7
+	var ocupacion: float = clamp(ocupacion_base + equipo.fans / 100.0 * BONUS_OCUPACION_FANS, 0.0, 1.0)
+	var asistencia: float = AFORO_BASE * Instalaciones.factor_aforo(equipo) * ocupacion
 	var ingreso_entradas: float = PARTIDOS_DE_LOCAL * asistencia * PRECIO_ENTRADA
 	var ingreso_sponsor: float = SPONSOR_BASE + (total_equipos - posicion_tabla) * 1000.0
 	var premio: float = PREMIO_POR_POSICION.get(posicion_tabla, 0.0)

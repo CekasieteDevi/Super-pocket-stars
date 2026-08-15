@@ -15,6 +15,7 @@ func _init() -> void:
 
 	_test_ingreso_division_baja_no_es_desproporcionado(rng)
 	_test_quiebra_no_es_masiva_en_la_primera_temporada(rng)
+	_test_fans_suma_ingresos_sin_bajar_lo_que_ya_habia(rng)
 
 	quit()
 
@@ -72,3 +73,21 @@ func _test_quiebra_no_es_masiva_en_la_primera_temporada(rng: RandomNumberGenerat
 		print("OK: %d/%d clubes (%.0f%%) en quiebra tras la primera temporada -- antes eran ~120/200 (61%%)." % [quebrados, total, proporcion * 100.0])
 	else:
 		print("FALLA: %d/%d clubes (%.0f%%) en quiebra -- deberia ser menos del 15%%." % [quebrados, total, proporcion * 100.0])
+
+
+func _test_fans_suma_ingresos_sin_bajar_lo_que_ya_habia(rng: RandomNumberGenerator) -> void:
+	print("\n=== Fans (§8.4 #22) suma ingresos por encima de lo que ya habia con reputacion sola, nunca los baja ===")
+	var equipo := Team.generar("ClubFansIngresos", rng, 0)
+
+	equipo.fans = 0.0
+	var ingresos_sin_fans: float = Economia.procesar_temporada(equipo, 10, 20)["ingresos"]
+
+	equipo.fans = 100.0
+	var ingresos_con_fans: float = Economia.procesar_temporada(equipo, 10, 20)["ingresos"]
+
+	if ingresos_con_fans > ingresos_sin_fans:
+		print("OK: 0 fans -> %s, 100 fans -> %s (mismo club, misma reputacion, misma posicion)." % [
+			Economia.formato_dinero(ingresos_sin_fans), Economia.formato_dinero(ingresos_con_fans)
+		])
+	else:
+		print("FALLA: sin_fans=%s con_fans=%s" % [Economia.formato_dinero(ingresos_sin_fans), Economia.formato_dinero(ingresos_con_fans)])
