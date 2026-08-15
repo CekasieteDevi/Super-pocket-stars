@@ -1,15 +1,14 @@
 class_name Cancha
 extends Control
 
-## Cancha dibujada por código — Fase 8, pulida con 22 posiciones fijas
-## (Fase de pulido del partido animado). Sin pixel art (eso sigue
-## pendiente) ni movimiento real de jugadores: el motor sigue sin calcular
-## posiciones x/y por jugador durante el partido, solo zona de la jugada
-## (armado/último tercio) y la posición del que participa. Lo que se
-## dibuja acá es una FORMACIÓN FIJA por equipo (11 puntos cada uno, según
-## FORMACION_SLOTS) para que la cancha se sienta poblada — el que participa
-## de la jugada actual se resalta más grande, en vez de mover los 22 de
-## verdad.
+## Cancha dibujada por código — Fase 8, pulida con 22 posiciones fijas y
+## sprites pixel-art (PixelArt.jugador_textura). Sin movimiento real de
+## jugadores: el motor sigue sin calcular posiciones x/y por jugador
+## durante el partido, solo zona de la jugada (armado/último tercio) y la
+## posición del que participa. Lo que se dibuja acá es una FORMACIÓN FIJA
+## por equipo (11 sprites cada uno, según FORMACION_SLOTS) para que la
+## cancha se sienta poblada — el que participa de la jugada actual se
+## resalta más grande, en vez de mover los 22 de verdad.
 
 ## Coordenadas normalizadas (0..1) del lado local, atacando hacia la
 ## derecha; el visitante espeja x (1-x) y ataca hacia la izquierda. Sigue
@@ -27,20 +26,32 @@ const FORMACION_SLOTS := {
 
 const COLOR_LOCAL := Color(0.95, 0.75, 0.15)
 const COLOR_VISITANTE := Color(0.35, 0.65, 0.95)
-const RADIO_NORMAL := 7.0
-const RADIO_RESALTADO := 12.0
+const COLOR_CESPED_CLARO := Color(0.14, 0.5, 0.16)
+const COLOR_CESPED_OSCURO := Color(0.11, 0.44, 0.13)
+const BANDAS_CESPED := 10
+const ANCHO_SPRITE_NORMAL := 20.0
+const ANCHO_SPRITE_RESALTADO := 30.0
 
-## Posición cuyo círculo se dibuja más grande — "" si ninguna. Los pone
+## Posición cuyo sprite se dibuja más grande — "" si ninguna. Los pone
 ## PartidoVisual según el evento actual (equipo + jugador_posicion).
 var resaltado_local: String = ""
 var resaltado_visitante: String = ""
+
+var _tex_local: ImageTexture
+var _tex_visitante: ImageTexture
+
+
+func _ready() -> void:
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_tex_local = PixelArt.jugador_textura(COLOR_LOCAL)
+	_tex_visitante = PixelArt.jugador_textura(COLOR_VISITANTE)
 
 
 func _draw() -> void:
 	var w := size.x
 	var h := size.y
 
-	draw_rect(Rect2(Vector2.ZERO, size), Color(0.11, 0.45, 0.13))
+	_dibujar_cesped(w, h)
 	draw_rect(Rect2(Vector2.ZERO, size), Color.WHITE, false, 2.0)
 	draw_line(Vector2(w / 2.0, 0), Vector2(w / 2.0, h), Color.WHITE, 2.0)
 	draw_arc(Vector2(w / 2.0, h / 2.0), h * 0.16, 0, TAU, 32, Color.WHITE, 2.0)
@@ -50,19 +61,28 @@ func _draw() -> void:
 	draw_rect(Rect2(Vector2(0, (h - area_h) / 2.0), Vector2(area_w, area_h)), Color.WHITE, false, 2.0)
 	draw_rect(Rect2(Vector2(w - area_w, (h - area_h) / 2.0), Vector2(area_w, area_h)), Color.WHITE, false, 2.0)
 
-	_dibujar_formacion(false, COLOR_LOCAL, resaltado_local)
-	_dibujar_formacion(true, COLOR_VISITANTE, resaltado_visitante)
+	_dibujar_formacion(false, _tex_local, resaltado_local)
+	_dibujar_formacion(true, _tex_visitante, resaltado_visitante)
 
 
-func _dibujar_formacion(invertido: bool, color: Color, resaltado_pos: String) -> void:
+func _dibujar_cesped(w: float, h: float) -> void:
+	var ancho_banda := w / float(BANDAS_CESPED)
+	for i in range(BANDAS_CESPED):
+		var color := COLOR_CESPED_CLARO if i % 2 == 0 else COLOR_CESPED_OSCURO
+		draw_rect(Rect2(Vector2(i * ancho_banda, 0), Vector2(ancho_banda + 1.0, h)), color)
+
+
+func _dibujar_formacion(invertido: bool, textura: ImageTexture, resaltado_pos: String) -> void:
 	for pos in FORMACION_SLOTS:
 		var slots: Array = FORMACION_SLOTS[pos]
 		for slot in slots:
 			var x: float = (1.0 - slot["x"]) if invertido else slot["x"]
 			var punto := Vector2(size.x * x, size.y * slot["y"])
-			var radio: float = RADIO_RESALTADO if pos == resaltado_pos else RADIO_NORMAL
-			draw_circle(punto, radio, color)
-			draw_circle(punto, radio, Color.BLACK, false, 1.5)
+			var resaltado: bool = pos == resaltado_pos
+			var ancho: float = ANCHO_SPRITE_RESALTADO if resaltado else ANCHO_SPRITE_NORMAL
+			var alto: float = ancho * (textura.get_height() / float(textura.get_width()))
+			var rect := Rect2(punto - Vector2(ancho, alto) / 2.0, Vector2(ancho, alto))
+			draw_texture_rect(textura, rect, false)
 
 
 func _notification(what: int) -> void:
