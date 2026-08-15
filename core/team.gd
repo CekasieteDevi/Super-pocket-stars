@@ -319,6 +319,10 @@ static func _normalizar_jugadores(lista: Array) -> Array:
 		j["propension_lesion"] = int(j["propension_lesion"])
 		if j.has("foco_temporadas_consecutivas"):
 			j["foco_temporadas_consecutivas"] = int(j["foco_temporadas_consecutivas"])
+		if j.has("partidos_seguidos_titular"):
+			j["partidos_seguidos_titular"] = int(j["partidos_seguidos_titular"])
+		if j.has("partidos_seguidos_banco"):
+			j["partidos_seguidos_banco"] = int(j["partidos_seguidos_banco"])
 		for attr in j["atributos"]:
 			j["atributos"][attr] = int(j["atributos"][attr])
 	return lista

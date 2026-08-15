@@ -12,16 +12,22 @@ extends RefCounted
 ## una" para las comunes y dejan las fuertes genuinamente raras, que es
 ## la intención explícita del texto ("raras").
 ##
-## De los ~30 rasgos, quedan sin conectar los que piden un sistema que el
-## motor todavía no tiene (offside, consistencia por duelo, calendario
-## denso, convocatoria separada del plantel, racha de titular/banco) — ver
-## el docstring de modificador_partido() para el detalle exacto. El resto
-## ya engancha en algún lado real: bloque D del duelo
-## (modificador_partido), penales (bonus_penal, ver Penales.gd), tarjetas
-## (factor_amarilla/factor_roja, ver MatchEngine._chequear_tarjeta), ánimo
-## post-partido (ajustar_delta_animo, ver Team.actualizar_post_partido),
-## entrenamiento/lesión/sueldo/armonía (funciones más abajo) y mentores
-## (core/mentores.gd, vía Progresion.aplicar_temporada).
+## De los ~30 rasgos, quedan sin conectar 5 que piden un sistema que el
+## motor todavía no tiene en absoluto: Enfocado (no hay offside modelado),
+## Adaptable (no hay penalización de "fuera de posición" que cancelar),
+## Metódico (no hay variación de consistencia por duelo — no existe un
+## "forma del día" por JUGADOR, solo por equipo), Madrugador (no hay
+## noción de calendario denso/días entre partidos en el motor), Pie
+## preferido (no se modela pierna dominante por acción). El resto ya
+## engancha en algún lado real: bloque D del duelo (modificador_partido —
+## incluye Protagonista, Dependiente e Impuntual), penales (bonus_penal,
+## ver Penales.gd), tarjetas (factor_amarilla/factor_roja, ver
+## MatchEngine._chequear_tarjeta), ánimo post-partido (ajustar_delta_animo,
+## ver Team.actualizar_post_partido, incluye Rencoroso), crecimiento
+## bloqueado por Comodón (ver Progresion.aplicar_temporada), multas de
+## Impuntual (ver Liga — fin de temporada), entrenamiento/lesión/sueldo/
+## armonía (funciones más abajo) y mentores (core/mentores.gd, vía
+## Progresion.aplicar_temporada).
 
 const DATA_PATH := "res://data/personalidades.json"
 const P_CON_PERSONALIDAD := 0.70
@@ -119,17 +125,13 @@ static func bonus_armonia(jugador: Dictionary) -> float:
 ## castiga los primeros 15'; Se apaga y Clutch/Frágil mental se reparten
 ## los últimos 15'/10' (Clutch y Frágil mental también entran en penales,
 ## ver Penales.gd → bonus_penal); Creador y Nunca rendirse dan un bonus
-## pasivo en su atributo de firma (pases/quite) todo el partido.
-##
-## Pendientes reales (necesitan contexto que el motor todavía no
-## distingue): Protagonista (fuerza relativa del rival jugador a jugador),
-## Enfocado (no hay offside modelado), Adaptable (no hay penalización de
-## "fuera de posición" que cancelar), Metódico (no hay variación de
-## consistencia por duelo), Madrugador (no hay noción de calendario denso
-## en el motor), Comodón/Rencoroso (necesitan contar partidos seguidos
-## como titular/en el banco), Impuntual (no hay paso de "convocatoria"
-## separado del plantel), Dependiente (definir "compañero clave" es
-## ambiguo), Pie preferido (no se modela pierna dominante por acción).
+## pasivo en su atributo de firma (pases/quite) todo el partido; Protagonista
+## rinde mejor cuanto más jugadores de mayor media tenga el plantel RIVAL;
+## Dependiente rinde peor si su capitán (la única "figura" que el motor
+## distingue, ver ajustar_delta_animo) no está en cancha; Impuntual tiene
+## un malus chico y parejo todo el partido (aproxima "llega descentrado" —
+## la parte de "queda afuera de la convocatoria" queda para las multas de
+## fin de temporada, ver Liga).
 const UMBRAL_ARRANQUE := 15
 const UMBRAL_ULTIMOS_15 := 75
 const UMBRAL_ULTIMOS_10 := 80
@@ -140,9 +142,23 @@ const MALUS_FRAGIL_MENTAL_PARTIDO := 8.0
 const BONUS_CREADOR := 3.0
 const BONUS_NUNCA_RENDIRSE := 3.0
 
+## Protagonista (§6 fuertes): escala según cuántos jugadores del plantel
+## RIVAL (titulares+banco) tienen media mayor a la suya.
+const BONUS_PROTAGONISTA_BAJO := 2.0  # 1-2 mejores
+const BONUS_PROTAGONISTA_MEDIO := 4.0  # 3-5 mejores
+const BONUS_PROTAGONISTA_ALTO := 6.0  # 6 o más mejores
 
-static func modificador_partido(jugador: Dictionary, es_local: bool, atributo: String, minuto: int = 0) -> float:
+const MALUS_DEPENDIENTE := 4.0
+const MALUS_IMPUNTUAL_PARTIDO := 2.0
+
+## Comodón (ver Progresion.aplicar_temporada): partidos SEGUIDOS de
+## titular antes de que el crecimiento se congele esta temporada.
+const UMBRAL_COMODON := 15
+
+
+static func modificador_partido(jugador: Dictionary, equipo: Team, rival: Team, atributo: String, minuto: int = 0) -> float:
 	var mod := 0.0
+	var es_local := equipo.local
 	if tiene(jugador, "Ansioso") and not es_local:
 		mod -= 4.0
 	if tiene(jugador, "Egoista") and atributo == "tiro":
@@ -159,6 +175,21 @@ static func modificador_partido(jugador: Dictionary, es_local: bool, atributo: S
 		mod += BONUS_CREADOR
 	if tiene(jugador, "Nunca rendirse") and atributo == "quite":
 		mod += BONUS_NUNCA_RENDIRSE
+	if tiene(jugador, "Protagonista"):
+		var mejores := 0
+		for j in rival.todos_los_jugadores():
+			if j["media"] > jugador["media"]:
+				mejores += 1
+		if mejores >= 6:
+			mod += BONUS_PROTAGONISTA_ALTO
+		elif mejores >= 3:
+			mod += BONUS_PROTAGONISTA_MEDIO
+		elif mejores >= 1:
+			mod += BONUS_PROTAGONISTA_BAJO
+	if tiene(jugador, "Dependiente") and equipo.capitan_id != -1 and not equipo.en_cancha.has(equipo.capitan_id):
+		mod -= MALUS_DEPENDIENTE
+	if tiene(jugador, "Impuntual"):
+		mod -= MALUS_IMPUNTUAL_PARTIDO
 	return mod
 
 
@@ -239,3 +270,29 @@ static func ajustar_delta_animo(jugador: Dictionary, delta: float, es_capitan: b
 	if tiene(jugador, "Egolatra") and not es_capitan:
 		delta -= MALUS_EGOLATRA
 	return delta
+
+
+## §6 (Liga — ver _actualizar_rachas_titular_banco): Rencoroso "pide irse"
+## si lo dejan en el banco 5 partidos SEGUIDOS. Se aproxima con un golpe
+## de ánimo — un sistema completo de "pedido de transferencia" no existe
+## en el mercado todavía. Dispara UNA sola vez por racha (justo al cruzar
+## el umbral), no de nuevo cada partido que sigue en el banco.
+const UMBRAL_RENCOROSO := 5
+const MALUS_RENCOROSO := 6.0
+
+
+static func cruza_umbral_rencoroso(jugador: Dictionary) -> bool:
+	return tiene(jugador, "Rencoroso") and int(jugador.get("partidos_seguidos_banco", 0)) == UMBRAL_RENCOROSO
+
+
+## §6 (Liga — cierre de temporada): Impuntual, "multas, chance de quedar
+## fuera de la convocatoria". La multa se tira una vez por temporada por
+## jugador; "quedar afuera" se aproxima en modificador_partido con un
+## malus chico y parejo en vez de una ausencia completa (no hay un paso
+## de "convocatoria" separado del plantel de partido).
+const CHANCE_MULTA_IMPUNTUAL := 0.15
+const MULTA_IMPUNTUAL := 3000.0
+
+
+static func tirar_multa_impuntual(jugador: Dictionary, rng: RandomNumberGenerator) -> bool:
+	return tiene(jugador, "Impuntual") and rng.randf() < CHANCE_MULTA_IMPUNTUAL

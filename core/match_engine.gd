@@ -69,7 +69,7 @@ static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atri
 	bloque_c += Rivalidad.variacion(Rivalidad.es_clasico(equipo, rival), rng)
 	if equipo.objetivo_en_riesgo:
 		bloque_c += Objetivos.MALUS_EN_RIESGO
-	var bloque_d := Personalidad.modificador_partido(jugador, equipo.local, atributo, minuto) + Habilidades.modificador_partido(jugador, atributo)
+	var bloque_d := Personalidad.modificador_partido(jugador, equipo, rival, atributo, minuto) + Habilidades.modificador_partido(jugador, atributo)
 	return {"A": bloque_a, "B": bloque_b, "C": bloque_c, "D": bloque_d}
 
 

@@ -231,6 +231,28 @@ func _actualizar_estado_jugadores(home: Team, away: Team, r: Dictionary) -> void
 	away.actualizar_post_partido(r["goles_visitante"], r["goles_local"], goleadores_visitante)
 	Fans.actualizar_por_resultado(home, r["goles_local"], r["goles_visitante"])
 	Fans.actualizar_por_resultado(away, r["goles_visitante"], r["goles_local"])
+	_actualizar_rachas_titular_banco(home)
+	_actualizar_rachas_titular_banco(away)
+
+
+## §6: racha de partidos SEGUIDOS de titular (Comodón, ver Progresion.
+## aplicar_temporada) y de banco (Rencoroso, dispara UNA vez al cruzar el
+## umbral — ver Personalidad.cruza_umbral_rencoroso). Jugar de titular
+## corta cualquier racha de banco y viceversa; la cantera no cuenta para
+## ninguna de las dos (no es parte del plantel de partido).
+func _actualizar_rachas_titular_banco(equipo: Team) -> void:
+	for j in equipo.jugadores:
+		j["partidos_seguidos_titular"] = int(j.get("partidos_seguidos_titular", 0)) + 1
+		j["partidos_seguidos_banco"] = 0
+	for j in equipo.banco:
+		j["partidos_seguidos_titular"] = 0
+		j["partidos_seguidos_banco"] = int(j.get("partidos_seguidos_banco", 0)) + 1
+		if Personalidad.cruza_umbral_rencoroso(j):
+			var id: int = j["id"]
+			equipo.animo[id] = clamp(equipo.animo.get(id, 50.0) - Personalidad.MALUS_RENCOROSO, 0.0, 100.0)
+			noticias.append("%s: un %s lleva %d partidos seguidos en el banco y esta descontento, pide salir." % [
+				equipo.nombre, j["posicion"], Personalidad.UMBRAL_RENCOROSO
+			])
 
 
 ## Entre fecha y fecha: recupera fatiga, hace derivar el ánimo y cuenta los
@@ -307,6 +329,11 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 			var aprendida := Aprendizaje.procesar_jugador(jugador, equipo, temporada_actual, rng)
 			if not aprendida.is_empty():
 				noticias.append("APRENDIZAJE: un %s de %s aprende %s (bronce)." % [jugador["posicion"], equipo.nombre, aprendida["nombre"]])
+			if Personalidad.tirar_multa_impuntual(jugador, rng):
+				equipo.caja["mantenimiento"] -= Personalidad.MULTA_IMPUNTUAL
+				noticias.append("%s: multan a un %s por llegar tarde a los entrenamientos (%s)." % [
+					equipo.nombre, jugador["posicion"], Economia.formato_dinero(Personalidad.MULTA_IMPUNTUAL)
+				])
 
 		var reporte := _procesar_cantera(equipo, rng, equipo == equipo_protegido, bonus_mentor, temporada_actual)
 		reporte_cantera.append(reporte)

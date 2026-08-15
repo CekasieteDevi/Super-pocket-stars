@@ -75,21 +75,30 @@ static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator, m
 	var mult_tier: float = VELOCIDAD_POR_TIER.get(jugador["genetica_tier"], 1.0)
 	var mult_personalidad: float = Personalidad.factor_entrenamiento(jugador)
 
+	# §6 Comodón: "si es titular fijo 15 partidos, deja de crecer" — se
+	# congela del todo el crecimiento de esta temporada (ni siquiera el
+	# ruido aleatorio), no solo se lo reduce. El declive de veteranos NO
+	# se ve afectado (esta bandera solo pesa en la rama de crecimiento).
+	var congelado_por_comodon: bool = Personalidad.tiene(jugador, "Comodon") and \
+		int(jugador.get("partidos_seguidos_titular", 0)) >= Personalidad.UMBRAL_COMODON
+
 	for attr in jugador["atributos"].keys():
 		var valor_actual: float = jugador["atributos"][attr]
 		var cambio := 0.0
 
 		if mult_edad >= 0.0:
-			var distancia: float = float(jugador["potencial"]) - valor_actual
-			if distancia > 0.0:
-				var mult_foco: float = MULTIPLICADOR_FOCO if attr == foco_atributo else 1.0
-				cambio = distancia * 0.12 * mult_edad * mult_tier * mult_personalidad * mult_mentor * mult_entrenamiento * mult_foco
+			if not congelado_por_comodon:
+				var distancia: float = float(jugador["potencial"]) - valor_actual
+				if distancia > 0.0:
+					var mult_foco: float = MULTIPLICADOR_FOCO if attr == foco_atributo else 1.0
+					cambio = distancia * 0.12 * mult_edad * mult_tier * mult_personalidad * mult_mentor * mult_entrenamiento * mult_foco
+				cambio += rng.randfn(0.0, 0.6)
 		else:
 			var grupo := _grupo_de_atributo(attr)
 			var factor_declive: float = DECLIVE_POR_GRUPO.get(grupo, 0.5)
 			cambio = -factor_declive * (1.0 + rng.randf() * 0.5)
+			cambio += rng.randfn(0.0, 0.6)
 
-		cambio += rng.randfn(0.0, 0.6)
 		jugador["atributos"][attr] = clamp(round(valor_actual + cambio), 0, 100)
 
 	jugador["media"] = PlayerGenerator.compute_media(jugador["atributos"], jugador["posicion"])

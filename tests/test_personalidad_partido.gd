@@ -1,8 +1,9 @@
 extends SceneTree
 
 ## Rasgos de personalidad conectados al partido (§6/§8.4/§8.7) — bloque D
-## atado al minuto, penales, tarjetas, y ánimo post-partido. Correr con:
-## godot --headless --script tests/test_personalidad_partido.gd
+## atado al minuto/marcador/plantel rival, penales, tarjetas, ánimo
+## post-partido, crecimiento (Comodón) y multas (Impuntual).
+## Correr con: godot --headless --script tests/test_personalidad_partido.gd
 
 const SEED := 6363
 
@@ -17,11 +18,18 @@ func _init() -> void:
 	_test_fragil_mental_castiga_los_ultimos_10(rng)
 	_test_creador_y_nunca_rendirse_son_pasivos_todo_el_partido(rng)
 	_test_sin_rasgos_relevantes_no_hay_modificador(rng)
+	_test_protagonista_escala_con_la_cantidad_de_mejores_en_el_rival(rng)
+	_test_dependiente_solo_castiga_si_el_capitan_no_esta_en_cancha(rng)
+	_test_impuntual_malus_parejo_todo_el_partido(rng)
 	_test_bonus_penal(rng)
 	_test_factor_amarilla_se_van_multiplicando(rng)
 	_test_factor_roja(rng)
 	_test_ajustar_delta_animo_positivo_bajon_egolatra(rng)
+	_test_cruza_umbral_rencoroso(rng)
+	_test_tirar_multa_impuntual(rng)
+	_test_comodon_congela_el_crecimiento(rng)
 	_test_integracion_tarjetas_usa_el_factor_de_personalidad(rng)
+	_test_integracion_rachas_persisten_y_se_actualizan_jugando_de_verdad(rng)
 
 	quit()
 
@@ -32,12 +40,24 @@ func _jugador_con(rng: RandomNumberGenerator, positiva: String = "", negativa: S
 	return j
 
 
+## Par de equipos minimos para probar modificador_partido (que ahora pide
+## equipo/rival, no solo un bool "es_local") sin generar planteles enteros
+## en cada test.
+func _par_equipos(rng: RandomNumberGenerator) -> Dictionary:
+	var home := Team.generar("HomeTest", rng, 0)
+	var away := Team.generar("AwayTest", rng, 100)
+	home.local = true
+	away.local = false
+	return {"home": home, "away": away}
+
+
 func _test_lento_de_arranque_castiga_los_primeros_15(rng: RandomNumberGenerator) -> void:
 	print("=== Lento de arranque: malus solo en los primeros 15' ===")
+	var eq := _par_equipos(rng)
 	var j := _jugador_con(rng, "", "Lento de arranque")
 	var ok := true
-	ok = ok and is_equal_approx(Personalidad.modificador_partido(j, true, "pases", 10), -Personalidad.MALUS_ARRANQUE)
-	ok = ok and is_equal_approx(Personalidad.modificador_partido(j, true, "pases", 16), 0.0)
+	ok = ok and is_equal_approx(Personalidad.modificador_partido(j, eq["home"], eq["away"], "pases", 10), -Personalidad.MALUS_ARRANQUE)
+	ok = ok and is_equal_approx(Personalidad.modificador_partido(j, eq["home"], eq["away"], "pases", 16), 0.0)
 	if ok:
 		print("OK: -%.1f en minuto 10, 0 en minuto 16." % Personalidad.MALUS_ARRANQUE)
 	else:
@@ -46,10 +66,11 @@ func _test_lento_de_arranque_castiga_los_primeros_15(rng: RandomNumberGenerator)
 
 func _test_se_apaga_castiga_los_ultimos_15(rng: RandomNumberGenerator) -> void:
 	print("\n=== Se apaga: malus solo desde el minuto 75 ===")
+	var eq := _par_equipos(rng)
 	var j := _jugador_con(rng, "", "Se apaga")
 	var ok := true
-	ok = ok and is_equal_approx(Personalidad.modificador_partido(j, true, "pases", 70), 0.0)
-	ok = ok and is_equal_approx(Personalidad.modificador_partido(j, true, "pases", 80), -Personalidad.MALUS_SE_APAGA)
+	ok = ok and is_equal_approx(Personalidad.modificador_partido(j, eq["home"], eq["away"], "pases", 70), 0.0)
+	ok = ok and is_equal_approx(Personalidad.modificador_partido(j, eq["home"], eq["away"], "pases", 80), -Personalidad.MALUS_SE_APAGA)
 	if ok:
 		print("OK: 0 en minuto 70, -%.1f en minuto 80." % Personalidad.MALUS_SE_APAGA)
 	else:
@@ -58,10 +79,11 @@ func _test_se_apaga_castiga_los_ultimos_15(rng: RandomNumberGenerator) -> void:
 
 func _test_clutch_favorece_los_ultimos_15(rng: RandomNumberGenerator) -> void:
 	print("\n=== Clutch: bonus solo desde el minuto 75 ===")
+	var eq := _par_equipos(rng)
 	var j := _jugador_con(rng, "Clutch", "")
 	var ok := true
-	ok = ok and is_equal_approx(Personalidad.modificador_partido(j, true, "tiro", 60), 0.0)
-	ok = ok and is_equal_approx(Personalidad.modificador_partido(j, true, "tiro", 85), Personalidad.BONUS_CLUTCH_PARTIDO)
+	ok = ok and is_equal_approx(Personalidad.modificador_partido(j, eq["home"], eq["away"], "tiro", 60), 0.0)
+	ok = ok and is_equal_approx(Personalidad.modificador_partido(j, eq["home"], eq["away"], "tiro", 85), Personalidad.BONUS_CLUTCH_PARTIDO)
 	if ok:
 		print("OK: 0 en minuto 60, +%.1f en minuto 85." % Personalidad.BONUS_CLUTCH_PARTIDO)
 	else:
@@ -70,10 +92,11 @@ func _test_clutch_favorece_los_ultimos_15(rng: RandomNumberGenerator) -> void:
 
 func _test_fragil_mental_castiga_los_ultimos_10(rng: RandomNumberGenerator) -> void:
 	print("\n=== Fragil mental: malus solo desde el minuto 80 ===")
+	var eq := _par_equipos(rng)
 	var j := _jugador_con(rng, "", "Fragil mental")
 	var ok := true
-	ok = ok and is_equal_approx(Personalidad.modificador_partido(j, true, "tiro", 77), 0.0)
-	ok = ok and is_equal_approx(Personalidad.modificador_partido(j, true, "tiro", 82), -Personalidad.MALUS_FRAGIL_MENTAL_PARTIDO)
+	ok = ok and is_equal_approx(Personalidad.modificador_partido(j, eq["home"], eq["away"], "tiro", 77), 0.0)
+	ok = ok and is_equal_approx(Personalidad.modificador_partido(j, eq["home"], eq["away"], "tiro", 82), -Personalidad.MALUS_FRAGIL_MENTAL_PARTIDO)
 	if ok:
 		print("OK: 0 en minuto 77, -%.1f en minuto 82." % Personalidad.MALUS_FRAGIL_MENTAL_PARTIDO)
 	else:
@@ -82,13 +105,14 @@ func _test_fragil_mental_castiga_los_ultimos_10(rng: RandomNumberGenerator) -> v
 
 func _test_creador_y_nunca_rendirse_son_pasivos_todo_el_partido(rng: RandomNumberGenerator) -> void:
 	print("\n=== Creador (+pases) y Nunca rendirse (+quite) valen todo el partido, sin importar el minuto ===")
+	var eq := _par_equipos(rng)
 	var creador := _jugador_con(rng, "Creador", "")
 	var nunca_rendirse := _jugador_con(rng, "Nunca rendirse", "")
 	var ok := true
-	ok = ok and is_equal_approx(Personalidad.modificador_partido(creador, true, "pases", 1), Personalidad.BONUS_CREADOR)
-	ok = ok and is_equal_approx(Personalidad.modificador_partido(creador, true, "pases", 89), Personalidad.BONUS_CREADOR)
-	ok = ok and is_equal_approx(Personalidad.modificador_partido(creador, true, "tiro", 45), 0.0)  # solo en pases
-	ok = ok and is_equal_approx(Personalidad.modificador_partido(nunca_rendirse, true, "quite", 45), Personalidad.BONUS_NUNCA_RENDIRSE)
+	ok = ok and is_equal_approx(Personalidad.modificador_partido(creador, eq["home"], eq["away"], "pases", 1), Personalidad.BONUS_CREADOR)
+	ok = ok and is_equal_approx(Personalidad.modificador_partido(creador, eq["home"], eq["away"], "pases", 89), Personalidad.BONUS_CREADOR)
+	ok = ok and is_equal_approx(Personalidad.modificador_partido(creador, eq["home"], eq["away"], "tiro", 45), 0.0)  # solo en pases
+	ok = ok and is_equal_approx(Personalidad.modificador_partido(nunca_rendirse, eq["home"], eq["away"], "quite", 45), Personalidad.BONUS_NUNCA_RENDIRSE)
 	if ok:
 		print("OK: Creador +%.1f en pases (cualquier minuto), Nunca rendirse +%.1f en quite." % [Personalidad.BONUS_CREADOR, Personalidad.BONUS_NUNCA_RENDIRSE])
 	else:
@@ -97,10 +121,72 @@ func _test_creador_y_nunca_rendirse_son_pasivos_todo_el_partido(rng: RandomNumbe
 
 func _test_sin_rasgos_relevantes_no_hay_modificador(rng: RandomNumberGenerator) -> void:
 	print("\n=== Un jugador sin personalidad (o sin rasgos de partido) no suma nada ===")
+	var eq := _par_equipos(rng)
 	var j := PlayerGenerator.generate(0, rng, "MC")
 	j["personalidades"] = {}
-	if is_equal_approx(Personalidad.modificador_partido(j, true, "pases", 44), 0.0):
+	if is_equal_approx(Personalidad.modificador_partido(j, eq["home"], eq["away"], "pases", 44), 0.0):
 		print("OK: 0.0")
+	else:
+		print("FALLA")
+
+
+func _test_protagonista_escala_con_la_cantidad_de_mejores_en_el_rival(rng: RandomNumberGenerator) -> void:
+	print("\n=== Protagonista: escala segun cuantos jugadores del RIVAL tienen mas media que el ===")
+	var eq := _par_equipos(rng)
+	var home: Team = eq["home"]
+	var away: Team = eq["away"]
+	var j := _jugador_con(rng, "Protagonista", "")
+	j["media"] = 60.0
+
+	for jr in away.todos_los_jugadores():
+		jr["media"] = 30.0  # nadie mejor -> sin bonus
+	var sin_mejores := Personalidad.modificador_partido(j, home, away, "pases", 10)
+
+	for i in range(2):
+		away.todos_los_jugadores()[i]["media"] = 90.0
+	var con_2_mejores := Personalidad.modificador_partido(j, home, away, "pases", 10)
+
+	for i in range(6):
+		away.todos_los_jugadores()[i]["media"] = 90.0
+	var con_6_mejores := Personalidad.modificador_partido(j, home, away, "pases", 10)
+
+	var ok := true
+	ok = ok and is_equal_approx(sin_mejores, 0.0)
+	ok = ok and is_equal_approx(con_2_mejores, Personalidad.BONUS_PROTAGONISTA_BAJO)
+	ok = ok and is_equal_approx(con_6_mejores, Personalidad.BONUS_PROTAGONISTA_ALTO)
+
+	if ok:
+		print("OK: 0 sin mejores, +%.1f con 2 mejores, +%.1f con 6 mejores." % [Personalidad.BONUS_PROTAGONISTA_BAJO, Personalidad.BONUS_PROTAGONISTA_ALTO])
+	else:
+		print("FALLA: sin=%.1f con2=%.1f con6=%.1f" % [sin_mejores, con_2_mejores, con_6_mejores])
+
+
+func _test_dependiente_solo_castiga_si_el_capitan_no_esta_en_cancha(rng: RandomNumberGenerator) -> void:
+	print("\n=== Dependiente: malus solo si el capitan NO esta en cancha ===")
+	var eq := _par_equipos(rng)
+	var home: Team = eq["home"]
+	home.reset_partido()
+	var j := _jugador_con(rng, "", "Dependiente")
+
+	var con_capitan := Personalidad.modificador_partido(j, home, eq["away"], "pases", 10)
+	home.en_cancha.erase(home.capitan_id)
+	var sin_capitan := Personalidad.modificador_partido(j, home, eq["away"], "pases", 10)
+
+	if is_equal_approx(con_capitan, 0.0) and is_equal_approx(sin_capitan, -Personalidad.MALUS_DEPENDIENTE):
+		print("OK: 0 con el capitan en cancha, -%.1f sin el." % Personalidad.MALUS_DEPENDIENTE)
+	else:
+		print("FALLA: con_capitan=%.1f sin_capitan=%.1f" % [con_capitan, sin_capitan])
+
+
+func _test_impuntual_malus_parejo_todo_el_partido(rng: RandomNumberGenerator) -> void:
+	print("\n=== Impuntual: malus chico y parejo, sin importar minuto/atributo ===")
+	var eq := _par_equipos(rng)
+	var j := _jugador_con(rng, "", "Impuntual")
+	var ok := true
+	ok = ok and is_equal_approx(Personalidad.modificador_partido(j, eq["home"], eq["away"], "pases", 1), -Personalidad.MALUS_IMPUNTUAL_PARTIDO)
+	ok = ok and is_equal_approx(Personalidad.modificador_partido(j, eq["home"], eq["away"], "tiro", 89), -Personalidad.MALUS_IMPUNTUAL_PARTIDO)
+	if ok:
+		print("OK: -%.1f siempre." % Personalidad.MALUS_IMPUNTUAL_PARTIDO)
 	else:
 		print("FALLA")
 
@@ -162,6 +248,75 @@ func _test_ajustar_delta_animo_positivo_bajon_egolatra(rng: RandomNumberGenerato
 		print("FALLA")
 
 
+func _test_cruza_umbral_rencoroso(rng: RandomNumberGenerator) -> void:
+	print("\n=== cruza_umbral_rencoroso: true SOLO justo al llegar al umbral, no antes ni despues ===")
+	var j := _jugador_con(rng, "", "Rencoroso")
+	var ok := true
+	for n in range(0, Personalidad.UMBRAL_RENCOROSO):
+		j["partidos_seguidos_banco"] = n
+		if Personalidad.cruza_umbral_rencoroso(j):
+			ok = false
+	j["partidos_seguidos_banco"] = Personalidad.UMBRAL_RENCOROSO
+	ok = ok and Personalidad.cruza_umbral_rencoroso(j)
+	j["partidos_seguidos_banco"] = Personalidad.UMBRAL_RENCOROSO + 1
+	ok = ok and not Personalidad.cruza_umbral_rencoroso(j)  # ya paso, no vuelve a disparar
+
+	if ok:
+		print("OK: dispara solo exactamente en el partido %d." % Personalidad.UMBRAL_RENCOROSO)
+	else:
+		print("FALLA")
+
+
+func _test_tirar_multa_impuntual(rng: RandomNumberGenerator) -> void:
+	print("\n=== tirar_multa_impuntual: solo con el rasgo, y respeta la chance en el agregado ===")
+	var no_impuntual := _jugador_con(rng, "", "")
+	if Personalidad.tirar_multa_impuntual(no_impuntual, rng):
+		print("FALLA: nunca deberia tirar sin el rasgo.")
+		return
+
+	var impuntual := _jugador_con(rng, "", "Impuntual")
+	var multas := 0
+	var intentos := 2000
+	for i in range(intentos):
+		if Personalidad.tirar_multa_impuntual(impuntual, rng):
+			multas += 1
+	var proporcion: float = float(multas) / float(intentos)
+	if proporcion > Personalidad.CHANCE_MULTA_IMPUNTUAL * 0.5 and proporcion < Personalidad.CHANCE_MULTA_IMPUNTUAL * 1.5:
+		print("OK: %.1f%% de multas en %d intentos (esperado ~%.0f%%)." % [proporcion * 100.0, intentos, Personalidad.CHANCE_MULTA_IMPUNTUAL * 100.0])
+	else:
+		print("FALLA: proporcion=%.1f%%" % (proporcion * 100.0))
+
+
+func _test_comodon_congela_el_crecimiento(rng: RandomNumberGenerator) -> void:
+	print("\n=== Comodon: si es titular fijo 15 partidos, deja de crecer esa temporada ===")
+	var joven := PlayerGenerator.generate(0, rng, "MC")
+	joven["potencial"] = 90
+	joven["edad"] = 20
+	for attr in joven["atributos"]:
+		joven["atributos"][attr] = 40
+	joven["personalidades"] = {"positiva": "", "negativa": "Comodon"}
+
+	var sin_racha: Dictionary = joven.duplicate(true)
+	var con_racha: Dictionary = joven.duplicate(true)
+	con_racha["partidos_seguidos_titular"] = Personalidad.UMBRAL_COMODON
+
+	var rng_a := RandomNumberGenerator.new()
+	rng_a.seed = 222
+	var rng_b := RandomNumberGenerator.new()
+	rng_b.seed = 222
+
+	Progresion.aplicar_temporada(sin_racha, rng_a)
+	Progresion.aplicar_temporada(con_racha, rng_b)
+
+	var crecio_normal: bool = sin_racha["atributos"]["tiro"] > 40
+	var congelado: bool = con_racha["atributos"]["tiro"] == 40
+
+	if crecio_normal and congelado:
+		print("OK: sin racha crecio a %d, con 15 partidos seguidos de titular se quedo en 40." % sin_racha["atributos"]["tiro"])
+	else:
+		print("FALLA: sin_racha=%d con_racha=%d" % [sin_racha["atributos"]["tiro"], con_racha["atributos"]["tiro"]])
+
+
 func _test_integracion_tarjetas_usa_el_factor_de_personalidad(rng: RandomNumberGenerator) -> void:
 	print("\n=== Integracion: un defensor Calenton junta mas tarjetas en el motor real que uno Canchero ===")
 	var home := Team.generar("HomeTarjetas", rng, 0)
@@ -201,3 +356,40 @@ func _test_integracion_tarjetas_usa_el_factor_de_personalidad(rng: RandomNumberG
 		print("OK: Calenton=%d tarjetas en %d partidos, Canchero=%d." % [tarjetas_calenton, muestras, tarjetas_canchero])
 	else:
 		print("FALLA: calenton=%d canchero=%d" % [tarjetas_calenton, tarjetas_canchero])
+
+
+func _test_integracion_rachas_persisten_y_se_actualizan_jugando_de_verdad(rng: RandomNumberGenerator) -> void:
+	print("\n=== Integracion: jugar fechas reales sube partidos_seguidos_titular/banco, y sobrevive un guardado ===")
+	var liga := Liga.new()
+	liga.inicializar(["HomeRachas", "AwayRachas"], rng, 0)
+	var home: Team = liga.equipos[0]
+	var titular_id: int = home.jugadores[0]["id"]
+	var suplente_id: int = home.banco[0]["id"]
+
+	var n_fechas: int = liga.fixture.size()  # 2 equipos = ida y vuelta, 2 fechas
+	for fecha in range(n_fechas):
+		liga.jugar_fecha(fecha, rng)
+		liga.avanzar_dias(7)
+
+	var titular: Dictionary = home.jugadores[0]
+	var suplente: Dictionary = home.banco[0]
+	var ok := true
+	ok = ok and int(titular.get("partidos_seguidos_titular", 0)) == n_fechas
+	ok = ok and int(suplente.get("partidos_seguidos_banco", 0)) == n_fechas
+
+	var datos := home.guardar()
+	var cargado := Team.cargar(JSON.parse_string(JSON.stringify(datos)))
+	var titular_cargado := {}
+	for j in cargado.jugadores:
+		if j["id"] == titular_id:
+			titular_cargado = j
+			break
+	ok = ok and int(titular_cargado.get("partidos_seguidos_titular", -1)) == n_fechas
+	ok = ok and typeof(titular_cargado["partidos_seguidos_titular"]) == TYPE_INT
+
+	if ok:
+		print("OK: %d fechas jugadas -> titular=%d, banco=%d, y sobrevive el guardado (como int)." % [n_fechas, n_fechas, n_fechas])
+	else:
+		print("FALLA: titular=%d banco=%d titular_cargado=%s" % [
+			titular.get("partidos_seguidos_titular", -1), suplente.get("partidos_seguidos_banco", -1), titular_cargado.get("partidos_seguidos_titular", "?")
+		])
