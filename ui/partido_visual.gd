@@ -2,17 +2,28 @@ class_name PartidoVisual
 extends Control
 
 ## Visualización de partido — Fase 8 (GDD roadmap §13, §11), pulida con
-## formaciones fijas (Cancha.FORMACION_SLOTS). Reproduce la lista de
-## "eventos" estructurados que ya devuelve MatchEngine.simular() a un
-## ritmo controlable: 22 puntos en cancha (11 por equipo, en su posición
-## de formación) y una pelota que se mueve en X e Y según la zona de la
-## jugada y el carril de la posición que participa — el punto del que
-## está en juego se agranda.
+## formaciones dinámicas (Cancha.fijar_posesion) y sprites pixel-art.
+## Reproduce la lista de "eventos" estructurados que ya devuelve
+## MatchEngine.simular() a un ritmo controlable: la pelota se mueve al
+## punto exacto del jugador que participa en cada evento (Cancha.punto_en,
+## usando su carril de formación) y el bloque completo del equipo con la
+## pelota empuja hacia adelante mientras el rival retrocede
+## (Cancha.fijar_posesion), así los otros 21 sprites también reaccionan a
+## la jugada en vez de quedarse fijos.
 ##
-## Sigue siendo abstracto: el motor no calcula movimiento real de
-## jugadores durante el partido (solo zona de la jugada + la posición del
-## que participa), así que los 22 puntos son una formación fija, no 22
-## muñequitos corriendo. Pixel art / arte real sigue pendiente.
+## Sigue siendo una aproximación: el motor no calcula posiciones x/y por
+## jugador durante el partido, solo la zona de la jugada (armado/último
+## tercio) y la posición del que participa — no hay 22 muñequitos con
+## movimiento individual real, sino un bloque que se estira/compacta según
+## esos dos datos.
+
+## Cuán lejos del propio arco ocurre cada tipo de jugada (0 = propio arco,
+## 1 = arco rival) — decide tanto dónde va la pelota como cuánto empuja el
+## bloque del equipo (Cancha.fijar_posesion usa esto convertido a -1..1).
+const ZONA_X_POR_TIPO := {
+	"pase": 0.30, "tarjeta": 0.30, "gambeta": 0.55,
+	"tiro": 0.85, "tiro_puerta": 0.88, "rebote": 0.88,
+}
 
 signal terminado
 
@@ -110,9 +121,11 @@ func iniciar(local: String, visitante: String, lista_eventos: Array) -> void:
 	label_minuto.text = "Min 0"
 	cancha.resaltado_local = ""
 	cancha.resaltado_visitante = ""
+	cancha.empuje_local = 0.0
+	cancha.empuje_visitante = 0.0
 	cancha.queue_redraw()
 	_refrescar_marcador()
-	_mover_pelota_instant(Vector2(0.5, 0.5))
+	_mover_pelota_instant(cancha.size / 2.0)
 	_procesar_siguiente()
 
 
@@ -136,7 +149,7 @@ func _saltar() -> void:
 		_aplicar_evento(eventos[indice])
 		indice += 1
 	timer.stop()
-	_mover_pelota_instant(Vector2(0.5, 0.5))
+	_mover_pelota_instant(cancha.size / 2.0)
 	label_evento.text = "Final del partido."
 	terminado.emit()
 
@@ -161,15 +174,29 @@ func _aplicar_evento(evento: Dictionary) -> void:
 	label_evento.text = _texto_evento(evento)
 
 	var es_local: bool = evento["equipo"] == equipo_local
+	# En un cambio no hay pelota en juego que mostrar: se deja la
+	# formación normal, sin resaltar a nadie ni mover el bloque.
+	if evento["tipo"] == "cambio":
+		cancha.resaltado_local = ""
+		cancha.resaltado_visitante = ""
+		cancha.queue_redraw()
+		return
+
+	var zona_x: float = ZONA_X_POR_TIPO.get(evento["tipo"], 0.5)
+	# El mismo punto que recibe la pelota es el que dibuja el sprite
+	# agrandado (Cancha._dibujar_formacion), para que siempre coincidan.
+	var punto := cancha.punto_en(zona_x, evento["jugador_posicion"], not es_local)
 	if es_local:
 		cancha.resaltado_local = evento["jugador_posicion"]
+		cancha.punto_resaltado_local = punto
 		cancha.resaltado_visitante = ""
 	else:
 		cancha.resaltado_visitante = evento["jugador_posicion"]
+		cancha.punto_resaltado_visitante = punto
 		cancha.resaltado_local = ""
+	cancha.fijar_posesion(es_local, (zona_x - 0.5) * 2.0)
 	cancha.queue_redraw()
-
-	_mover_pelota(_posicion(evento))
+	_mover_pelota(punto)
 
 	if evento["resultado"] == "gol":
 		if evento["equipo"] == equipo_local:
@@ -179,43 +206,13 @@ func _aplicar_evento(evento: Dictionary) -> void:
 		_refrescar_marcador()
 
 
-## Sin coordenadas x/y por jugador de verdad, se aproxima la posición de la
-## pelota con la zona de la jugada para X ("pase"/"tarjeta" = zona de
-## armado del equipo que participa, el resto = último tercio cerca del
-## arco rival) y con el carril típico de la posición para Y (Cancha.
-## FORMACION_SLOTS — un LAT/EXT tira por una punta al azar, el resto va
-## centrado).
-func _posicion(evento: Dictionary) -> Vector2:
-	return Vector2(_posicion_x(evento), _posicion_y(evento))
-
-
-func _posicion_x(evento: Dictionary) -> float:
-	var ataca_local: bool = evento["equipo"] == equipo_local
-	if evento["tipo"] == "pase" or evento["tipo"] == "tarjeta":
-		return 0.35 if ataca_local else 0.65
-	return 0.85 if ataca_local else 0.15
-
-
-func _posicion_y(evento: Dictionary) -> float:
-	var slots: Array = Cancha.FORMACION_SLOTS.get(evento["jugador_posicion"], [{"y": 0.5}])
-	var slot: Dictionary = slots[randi() % slots.size()]
-	return slot["y"]
-
-
-func _mover_pelota(normalizado: Vector2) -> void:
-	var destino := _punto_cancha(normalizado)
+func _mover_pelota(destino: Vector2) -> void:
 	var tween := create_tween()
-	tween.tween_property(pelota, "position", destino, max(0.02, (INTERVALO_BASE / velocidad) * 0.85))
+	tween.tween_property(pelota, "position", destino - pelota.size / 2.0, max(0.02, (INTERVALO_BASE / velocidad) * 0.85))
 
 
-func _mover_pelota_instant(normalizado: Vector2) -> void:
-	pelota.position = _punto_cancha(normalizado)
-
-
-func _punto_cancha(normalizado: Vector2) -> Vector2:
-	var ancho: float = cancha.size.x
-	var alto: float = cancha.size.y
-	return Vector2(ancho * normalizado.x - pelota.size.x / 2.0, alto * normalizado.y - pelota.size.y / 2.0)
+func _mover_pelota_instant(destino: Vector2) -> void:
+	pelota.position = destino - pelota.size / 2.0
 
 
 func _texto_evento(evento: Dictionary) -> String:
