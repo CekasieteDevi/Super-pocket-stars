@@ -61,7 +61,7 @@ func _ready() -> void:
 	seleccion = Seleccion.new()
 	equipo_jugador = piramide.divisiones[DIVISION_INICIAL].equipos[0]
 	equipo_jugador.objetivo_temporada = Objetivos.generar(
-		equipo_jugador, _es_ultima_division(DIVISION_INICIAL), liga_jugador().equipos.size())
+		equipo_jugador, _es_ultima_division(DIVISION_INICIAL), liga_jugador().equipos.size(), rng)
 
 
 func liga_jugador() -> Liga:
@@ -125,11 +125,56 @@ func _cerrar_temporada() -> void:
 		equipo_jugador.nombre, posicion_final, tabla_final.size(), division_jugador + 1
 	])
 
+	var copa_nacional := Copas.jugar_copa_nacional(piramide, rng)
+	var copas_division := Copas.jugar_copas_de_division(piramide, rng)
+	var resultado_internacional := confederacion.jugar_temporada_internacional(rng)
+
+	_agregar_noticia("COPA NACIONAL: campeón %s" % copa_nacional.campeon.nombre)
+	for i in range(copas_division.size()):
+		_agregar_noticia("COPA DIVISIÓN %d: campeón %s" % [i + 1, copas_division[i].campeon.nombre])
+	for copa_nombre in ["campeones", "guerreros", "emergentes"]:
+		var campeon: Team = resultado_internacional[copa_nombre]["campeon"]
+		if campeon != null:
+			_agregar_noticia("INTERNACIONAL (%s): campeón %s" % [copa_nombre.capitalize(), campeon.nombre])
+
+	# division_jugador todavia apunta a la division donde jugo esta
+	# temporada — fin_de_temporada() es lo que procesa cantera (necesario
+	# para el objetivo de categoria "cantera" mas abajo) ademas de
+	# economia/mercado/progresion y ascensos/descensos.
+	var resultado_piramide := piramide.fin_de_temporada(rng, equipo_jugador, temporada_actual)
+	for m in resultado_piramide["movimientos"]:
+		if m["equipo"] == equipo_jugador.nombre:
+			_agregar_noticia("%s: %s (división %d → división %d)" % [equipo_jugador.nombre, m["tipo"], m["de_division"], m["a_division"]])
+
+	# El informe economico y el reporte de cantera de CADA division se
+	# calcularon antes de mover a nadie, con la composicion vieja.
+	var informes_economia_division: Array = resultado_piramide["informes_por_division"][division_jugador][0]
+	for informe in informes_economia_division:
+		if informe["equipo"] == equipo_jugador.nombre:
+			ultimo_informe_economico = informe
+			break
+
+	# Team.promociones_temporada (ver core/team.gd) cuenta tanto las
+	# promociones manuales del jugador humano como las automáticas de la
+	# IA (el incremento vive dentro de Team.promover_juvenil/
+	# promover_a_titular) — a diferencia del reporte de _procesar_cantera,
+	# que para el equipo del jugador siempre viene vacío (es_protegido
+	# salta el auto-promotor, la decisión es suya desde la UI).
+	var promociones_cantera: int = equipo_jugador.promociones_temporada
+	equipo_jugador.promociones_temporada = 0
+
 	# §10.5/§15: evalua el objetivo que la directiva pidio para la
 	# temporada que recien termino (se asigno la vez anterior que paso por
 	# aca, o al arrancar la partida) ANTES de sortear el de la temporada
-	# que viene.
-	var objetivo_cumplido := Objetivos.evaluar(equipo_jugador.objetivo_temporada, posicion_final)
+	# que viene. El contexto trae los tres datos posibles (posicion, copa,
+	# cantera) — evaluar() solo usa el que corresponde a la categoria real
+	# del objetivo.
+	var contexto_objetivo := {
+		"posicion_final": posicion_final,
+		"rondas_copa": copa_nacional.rondas_ganadas(equipo_jugador),
+		"promociones_cantera": promociones_cantera,
+	}
+	var objetivo_cumplido := Objetivos.evaluar(equipo_jugador.objetivo_temporada, contexto_objetivo)
 	if objetivo_cumplido:
 		equipo_jugador.objetivos_incumplidos_seguidos = 0
 		if not equipo_jugador.objetivo_temporada.is_empty():
@@ -143,32 +188,6 @@ func _cerrar_temporada() -> void:
 			juego_terminado = true
 			motivo_fin_partida = "La directiva te destituyó: %d temporadas seguidas sin cumplir el objetivo." % equipo_jugador.objetivos_incumplidos_seguidos
 			_agregar_noticia("DIRECTIVA: te destituyen. Fin de la partida.")
-
-	var copa_nacional := Copas.jugar_copa_nacional(piramide, rng)
-	var copas_division := Copas.jugar_copas_de_division(piramide, rng)
-	var resultado_internacional := confederacion.jugar_temporada_internacional(rng)
-
-	_agregar_noticia("COPA NACIONAL: campeón %s" % copa_nacional.campeon.nombre)
-	for i in range(copas_division.size()):
-		_agregar_noticia("COPA DIVISIÓN %d: campeón %s" % [i + 1, copas_division[i].campeon.nombre])
-	for copa_nombre in ["campeones", "guerreros", "emergentes"]:
-		var campeon: Team = resultado_internacional[copa_nombre]["campeon"]
-		if campeon != null:
-			_agregar_noticia("INTERNACIONAL (%s): campeón %s" % [copa_nombre.capitalize(), campeon.nombre])
-
-	var resultado_piramide := piramide.fin_de_temporada(rng, equipo_jugador, temporada_actual)
-	for m in resultado_piramide["movimientos"]:
-		if m["equipo"] == equipo_jugador.nombre:
-			_agregar_noticia("%s: %s (división %d → división %d)" % [equipo_jugador.nombre, m["tipo"], m["de_division"], m["a_division"]])
-
-	# El informe economico de CADA division se calculo antes de mover a
-	# nadie, con la composicion vieja — division_jugador todavia apunta a
-	# la division donde jugo esta temporada.
-	var informes_economia_division: Array = resultado_piramide["informes_por_division"][division_jugador][0]
-	for informe in informes_economia_division:
-		if informe["equipo"] == equipo_jugador.nombre:
-			ultimo_informe_economico = informe
-			break
 
 	for liga in piramide.divisiones:
 		for n in liga.noticias:
@@ -192,7 +211,7 @@ func _cerrar_temporada() -> void:
 
 	if not juego_terminado:
 		equipo_jugador.objetivo_temporada = Objetivos.generar(
-			equipo_jugador, _es_ultima_division(division_jugador), liga_jugador().equipos.size())
+			equipo_jugador, _es_ultima_division(division_jugador), liga_jugador().equipos.size(), rng)
 
 
 ## Amistoso de la selección (una vez por cierre de temporada): convoca a

@@ -93,6 +93,22 @@ func jugar_siguiente_ronda(rng: RandomNumberGenerator) -> Array:
 	return resultados
 
 
+## §10.5/§15 (Objetivos de directiva, ver core/objetivos.gd): cuántas
+## rondas ganó este equipo en total en esta copa — 0 si perdió su primer
+## partido, historial.size() si salió campeón. Un bye (ronda en la que no
+## aparece en ningún partido porque le tocó pasar directo) no suma ni
+## resta, simplemente no cuenta esa ronda.
+func rondas_ganadas(equipo: Team) -> int:
+	var rondas := 0
+	for ronda in historial:
+		for partido in ronda:
+			if partido["local"] == equipo.nombre or partido["visitante"] == equipo.nombre:
+				if partido["ganador"] == equipo.nombre:
+					rondas += 1
+				break
+	return rondas
+
+
 static func _armar_pares(equipos: Array) -> Array:
 	var pares := []
 	for i in range(0, equipos.size(), 2):

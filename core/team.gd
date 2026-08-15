@@ -41,6 +41,14 @@ var foco_individual: Dictionary = {}  # jugador_id -> atributo (String), foco de
 var fans: float = 0.0
 var racha_sin_ganar: int = 0
 var rival_directo: String = ""  # nombre del clásico horneado (§8.4 #14) — ver core/rivalidad.gd
+## §10.5/§15 (objetivo de directiva categoría "cantera", ver core/
+## objetivos.gd): cuántas veces se promovió a un canterano (cantera->banco
+## o banco->titular, ver promover_juvenil/promover_a_titular más abajo)
+## en la temporada en curso — cuenta tanto las manuales del jugador humano
+## como las automáticas de la IA, porque el incremento vive DENTRO de esas
+## dos funciones, no en el llamador. Se resetea a 0 en GameState al cerrar
+## cada temporada, después de leerlo para evaluar el objetivo.
+var promociones_temporada: int = 0
 var armonia: float = 0.0  # placeholder hasta que exista §3 completo (vestuario real)
 ## §8.4 modificador 2 ("Forma, de -5 a +5 según los últimos 5 partidos"),
 ## bloque A. Sin historial de partidos recientes todavía, se aproxima con
@@ -206,6 +214,7 @@ func guardar() -> Dictionary:
 		"objetivo_temporada": objetivo_temporada, "objetivos_incumplidos_seguidos": objetivos_incumplidos_seguidos,
 		"foco_individual": _claves_a_texto(foco_individual),
 		"fans": fans, "racha_sin_ganar": racha_sin_ganar, "rival_directo": rival_directo,
+		"promociones_temporada": promociones_temporada,
 		"prestados_afuera": prestados_afuera_datos, "prestados_propios": prestados_propios_datos,
 	}
 
@@ -269,6 +278,7 @@ static func cargar(datos: Dictionary) -> Team:
 	t.fans = datos.get("fans", 0.0)
 	t.racha_sin_ganar = int(datos.get("racha_sin_ganar", 0))
 	t.rival_directo = datos.get("rival_directo", "")
+	t.promociones_temporada = int(datos.get("promociones_temporada", 0))
 
 	# Quedan con el NOMBRE del club (String) en la clave "club"/"club_dueno"
 	# en vez de la referencia real -- Piramide.resolver_prestamos() los
@@ -433,6 +443,7 @@ func promover_a_titular(jugador_banco_id: int) -> Dictionary:
 	jugadores[idx_titular] = entrante
 	banco[idx_banco] = saliente
 	recalcular_capitan()
+	promociones_temporada += 1
 	return {"entra": entrante, "sale": saliente}
 
 
@@ -678,6 +689,7 @@ func promover_juvenil(jugador_id: int) -> Dictionary:
 
 	_registrar_fichaje(juvenil, ValorJugador.calcular(juvenil, 50.0, 3))
 	_limpiar_registro(liberado["id"])
+	promociones_temporada += 1
 
 	return {"promovido": juvenil, "saliente": liberado}
 
