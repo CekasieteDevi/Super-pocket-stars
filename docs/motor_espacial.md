@@ -1,8 +1,8 @@
 # Motor espacial de partido — documento de diseño
 
-Estado: **propuesta, sin implementar**. No hay código de este motor en el repo
-todavía — este documento es lo que hay que aprobar antes de escribir la
-primera línea.
+Estado: **diseño aprobado, sin implementar**. No hay código de este motor en
+el repo todavía — las 5 decisiones abiertas ya están tomadas (§8) y el
+siguiente paso es construir el MVP (§7).
 
 Alcance: reemplazar cómo se resuelve el partido que el jugador humano
 efectivamente juega (liga propia + el que sigue en pantalla), por una
@@ -10,6 +10,34 @@ simulación con coordenadas reales y jugadores que deciden qué hacer con la
 pelota, en vez de la cadena de duelos abstractos por zona que hay hoy. Las
 demás ligas de la pirámide siguen resolviéndose como hasta ahora — no se
 tocan.
+
+## Decisiones tomadas
+
+| # | Decisión | Elegido |
+| --- | --- | --- |
+| 1 | Estructura de estado | **`Dictionary` puro** (consistente con el resto del core) |
+| 2 | `TICK_SEG` de arranque | **0.25s** — el extremo fluido, se ajusta si medir da mal |
+| 3 | Softmax en el MVP | **Sí, desde el MVP** (no determinístico) |
+| 4 | Log | **Separado**: `eventos` (compatible) + `fotogramas` (nuevo) |
+| 5 | Convivencia de motores | **Permanente, no transición** — ver abajo |
+
+### Sobre la decisión 5 — los dos motores conviven para siempre
+
+`match_engine.gd` **no es código heredado a reemplazar**: es el motor
+definitivo para todos los partidos que el jugador no juega (las otras 9
+divisiones, cada fecha, todas las temporadas). Funciona bien, es rápido y
+está calibrado — no se toca ni se deprecia.
+
+El motor espacial es **solo** para los partidos del club del jugador. Y
+todos ellos, incluso los que se saltean con "simular toda la temporada" sin
+mirar la animación: un solo motor para tus partidos significa que las
+estadísticas, objetivos y fans salen siempre del mismo cálculo, mires o no
+mires. Cuando no se anima, simplemente no se generan los `fotogramas`
+(§6) — las decisiones y el resultado son idénticos.
+
+Consecuencia de diseño: **la profundidad de simulación es deliberadamente
+asimétrica**. Tu partido se simula jugador por jugador; los de los demás,
+con una cadena de duelos por zona. Es intencional, no una deuda técnica.
 
 ---
 
@@ -382,9 +410,15 @@ semántico de siempre — **no se mezclan**:
 
 ## 6. Presupuesto de rendimiento (estimado, no medido)
 
-Con `TICK_SEG = 0.4s` (punto medio del rango pedido): 90 minutos = 5400s
-de juego → **13.500 ticks por partido**, contra los ~180 "duelos" que
-resuelve el motor abstracto hoy — un salto de ~75× en cantidad de ticks.
+Con `TICK_SEG = 0.25s` (decisión 2 — el extremo fluido del rango pedido):
+90 minutos = 5400s de juego → **21.600 ticks por partido**, contra los
+~180 "duelos" que resuelve el motor abstracto hoy: un salto de ~120× en
+cantidad de ticks.
+
+Nota sobre la elección: 0.25s duplica el costo respecto de los 0.4s que
+estimaba el borrador de este documento. Es la decisión correcta para que
+se vea fluido, pero **es la variable con más impacto en rendimiento de
+todo el diseño** y la primera palanca a mover si medir da mal.
 
 La diferencia clave: en el motor viejo, CADA tick hacía un
 `Duel.resolver` completo. Acá, el trabajo por tick se divide en:
@@ -392,27 +426,36 @@ La diferencia clave: en el motor viejo, CADA tick hacía un
 - **21 jugadores sin pelota**: barato (suma de vectores), como exige la
   restricción de rendimiento.
 - **El poseedor**: como casi todos los ticks tienen poseedor (la pelota
-  está "en vuelo" solo 1-3 ticks por pase/tiro), la evaluación de
-  utilidad (8-12 opciones × unos pocos términos cada una) se ejecuta en
-  **la gran mayoría de los 13.500 ticks**, no ocasionalmente. Esto es más
-  trabajo por partido que hoy, no menos, aunque cada operación individual
-  sea barata.
+  está "en vuelo" solo 2-5 ticks por pase/tiro a esta resolución), la
+  evaluación de utilidad (8-12 opciones × unos pocos términos cada una) +
+  el softmax se ejecutan en **la gran mayoría de los 21.600 ticks**, no
+  ocasionalmente. Esto es más trabajo por partido que hoy, no menos,
+  aunque cada operación individual sea barata.
 
-Estimación a mano (sin medir todavía): del orden de 10-15M operaciones
+Estimación a mano (sin medir todavía): del orden de 20-30M operaciones
 float simples por partido simulado sin renderizar. Es plausible que ronde
-1-3 segundos por partido en un celular gama media, pero **es una
+2-6 segundos por partido en un celular gama media, pero **es una
 estimación, no una medición** — con la decisión ya tomada de que TODOS los
 partidos del jugador (incluso los salteados con "simular toda la
-temporada") corren el motor completo, 30-40 fechas podrían tardar
-30-120 segundos en el peor caso.
+temporada") corren el motor completo, una temporada de 30-40 fechas
+podría tardar del orden de 1-4 minutos en el peor caso. Si eso pasa, hay
+que actuar: nadie espera 4 minutos para saltear una temporada.
 
-Palanca de emergencia si medir da mal, sin cambiar de arquitectura:
-- Subir `TICK_SEG` a 0.5-0.6s (menos ticks).
-- No generar `fotogramas` para partidos que no se van a animar (mismo RNG,
-  mismas decisiones, se ahorra la allocación de Vector2 por tick — el
-  resultado no cambia, solo se descarta el detalle visual).
-- Recortar cuántas opciones de utilidad se evalúan por tick si el perfil
-  muestra que ahí está el costo.
+Palancas de emergencia si medir da mal, en orden de preferencia y sin
+cambiar de arquitectura:
+1. **No generar `fotogramas` para partidos que no se van a animar** —
+   mismo RNG, mismas decisiones, mismo resultado; se ahorra toda la
+   allocación de 22 Vector2 por tick (~475.000 Vector2 por partido). Esta
+   es gratis y hay que hacerla igual, dé bien o mal la medición.
+2. **Subir `TICK_SEG`** a 0.3-0.5s. Cada escalón recorta proporcional:
+   0.5s es la mitad del trabajo de 0.25s. El costo es fluidez de la
+   animación, así que se sube solo lo mínimo necesario.
+3. **Cachear la evaluación de utilidad entre ticks consecutivos** cuando
+   el contexto casi no cambió (mismo poseedor, presión parecida,
+   rivales sin moverse mucho) — reevaluar cada 2-3 ticks en vez de todos.
+4. **Recortar cuántas opciones se evalúan** por tick si el perfil muestra
+   que ahí está el costo (ej. no considerar los 10 pases posibles, solo
+   los 4 mejor ubicados).
 
 **Esto se mide recién con el MVP** (§7) — todo lo de esta sección es
 cálculo de servilleta, no un compromiso de rendimiento.
@@ -434,11 +477,16 @@ Recorte del MVP:
   otras ligas siguen igual).
 - `EstadoJugador`/`EstadoPelota`/`EstadoPartido` tal como en §2.
 - Loop de tick con **3 acciones para el poseedor**: conducir (hacia el
-  arco si hay espacio), pasar (a un compañero concreto — elegido por una
-  utilidad simple: mejor combinación de progreso/seguridad entre los
-  visibles, **sin softmax todavía**, la mejor opción gana directo — ver
-  decisión #3 en §8), tirar (si está dentro de un radio del área,
-  geometría real de distancia/ángulo).
+  arco si hay espacio), pasar (a un compañero concreto, elegido por
+  progreso/seguridad entre los visibles), tirar (si está dentro de un
+  radio del área, geometría real de distancia/ángulo).
+- **Softmax con temperatura desde el MVP** (decisión 3): la elección entre
+  esas 3 acciones ya pasa por `P(acción) = exp(u/T) / Σ exp(u/T)`, con `T`
+  modulada por `vision`/`inteligencia`/presión (§4.2). Implica que si algo
+  se ve raro en el MVP hay que distinguir dos causas posibles — geometría/
+  arquitectura mal, o `T` mal calibrada — así que el harness de debug tiene
+  que **mostrar las utilidades y la `T` de cada decisión** desde el primer
+  día, no solo el resultado. Sin eso, el MVP no es diagnosticable.
 - Movimiento sin pelota: solo atracción a la pelota + posición base de
   formación — sin desmarque ni offside todavía.
 - Sin cambios/lesiones/tarjetas en el MVP (ya existen, se enganchan
@@ -460,14 +508,16 @@ nada más encima.
 
 ---
 
-## 8. Riesgos y decisiones pendientes
+## 8. Riesgos
 
 ### Riesgos
 
 1. **Rendimiento no medido**: la estimación de §6 es cálculo a mano. Puede
-   que 13.500+ ticks con utility en casi todos sea lento en GDScript puro
-   para "simular toda la temporada" en un celular gama media. Mitigación:
-   medir con el MVP; hay palancas de emergencia sin cambiar arquitectura.
+   que 21.600+ ticks con utility y softmax en casi todos sea lento en
+   GDScript puro para "simular toda la temporada" en un celular gama media.
+   Es el riesgo número uno y lo agrava la decisión 2 (0.25s duplica los
+   ticks frente a 0.4s). Mitigación: medir con el MVP antes de construir
+   nada encima; hay 4 palancas de emergencia (§6) sin cambiar arquitectura.
 2. **RNG-shift multiplicado**: con miles de ticks en vez de cientos, un
    solo cambio futuro (agregar una opción de utilidad, por ejemplo) corre
    TODO el resto de los números aleatorios de esa partida — el mismo
@@ -480,10 +530,14 @@ nada más encima.
 3. **Balance de cero**: meses de calibración del motor de duelos (goles/
    partido, tarjetas, lesiones — todo lo que sostiene Fans/Economía/
    Objetivos) no tienen por qué seguir sirviendo el día 1 del motor
-   espacial. Mitigación: el motor viejo queda intacto para todo lo demás
-   (ya es requisito duro); hay que re-correr los diagnósticos de balance
-   contra el nuevo motor antes de que reemplace al viejo en el partido del
-   jugador.
+   espacial. Y como los partidos del jugador pasan a resolverse con OTRO
+   motor que los del resto de la pirámide (decisión 5), hay que vigilar
+   que los dos produzcan números comparables: si el motor espacial da 4.5
+   goles por partido y el abstracto 2.8, el jugador tendría una liga con
+   estadísticas distintas a las demás sin ninguna razón de diseño.
+   Mitigación: re-correr los diagnósticos de balance contra el nuevo motor
+   y **compararlos explícitamente contra los del abstracto** antes de
+   engancharlo al juego real.
 4. **Alcance real es grande**: el sistema completo (8 acciones, softmax,
    desmarque, offside, JSON tuneable) es varias sesiones de trabajo, no
    una. El MVP recorta deliberadamente para validar la sensación antes de
@@ -491,30 +545,12 @@ nada más encima.
 5. **Complejidad por tick**: si desmarque/presión/offside se escriben sin
    cuidado (cada jugador comparando contra los 21 restantes cada tick), el
    costo sube rápido — hay que vigilar esto desde el MVP, no después.
-
-### Decisiones que necesito que tomes
-
-1. **`Dictionary` puro vs `RefCounted` tipado** para
-   `EstadoJugador`/`EstadoPelota`. Recomiendo `Dictionary`, por
-   consistencia con el resto del core (100% Dictionary hoy) — la
-   sensibilidad de rendimiento está más en la CANTIDAD de ticks que en el
-   overhead de acceso a campos.
-2. **`TICK_SEG` de arranque**: ¿0.4s (punto medio, mi recomendación para
-   el MVP) o preferís empezar directo en un extremo (0.5s más barato /
-   0.25s más fluido) y ajustar después de medir?
-3. **¿Softmax con temperatura entra en el MVP, o el MVP elige siempre la
-   mejor opción (determinístico)?** Recomiendo MVP determinístico —
-   softmax mal calibrado puede hacer que el MVP "se vea tonto" y mezcle un
-   problema de calibración con uno de arquitectura justo cuando estás
-   evaluando si la arquitectura sirve.
-4. **¿`eventos` y `fotogramas` como arrays separados** (mi recomendación,
-   §5) **o una sola estructura enriquecida**? Separarlos mantiene a
-   Estadísticas/Objetivos/Fans/Noticias completamente ajenos al cambio.
-5. **Convivencia a largo plazo**: ¿el motor espacial y `match_engine.gd`
-   conviven indefinidamente (uno para el partido seguido del jugador, otro
-   para el resto de la pirámide), o es una etapa de transición hacia
-   reemplazar todo eventualmente? No cambia el MVP, pero cambia cómo se
-   documenta la arquitectura de acá en adelante.
+6. **Softmax mal calibrado en el MVP** (consecuencia de la decisión 3): si
+   el MVP se ve raro, la causa puede ser la arquitectura O la temperatura,
+   y son dos problemas muy distintos. Mitigación obligatoria: el harness
+   de debug muestra utilidades y `T` por decisión desde el primer día
+   (§7), para poder separar las dos causas mirando números en vez de
+   adivinando.
 
 ---
 
