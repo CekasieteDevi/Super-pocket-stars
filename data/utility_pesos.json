@@ -16,7 +16,7 @@
 
   "tiro": {
     "base": 0.00,
-    "geometria": 1.10
+    "geometria": 0.42
   },
 
   "_tiro_resolucion": "Calibrado contra un partido real: ~35% de los remates van al arco y de esos entra alrededor de 1 de cada 3. calidad = tiro*peso_atributo + geometria*peso_geometria.",
@@ -26,7 +26,7 @@
     "porteria_base": 0.10,
     "porteria_calidad": 0.40,
     "palo": 0.05,
-    "fuerza_base": 0.45
+    "fuerza_base": 0.34
   },
 
   "temperatura": {
@@ -66,6 +66,8 @@
     "geometria_minima_tiro": 0.30,
     "_ticks_cooldown_robo": "Un tackle lleva su tiempo. Sin cooldown se intenta un quite cada 0.25s y la pelota rebota entre atacante y defensor sin que el juego avance.",
     "ticks_cooldown_robo": 6,
+    "_prob_evento_fisico": "Fraccion de los duelos que se chequean por tarjeta y lesion. Este motor disputa la pelota ~2600 veces por partido; el motor abstracto resuelve ~180 duelos y es sobre ESE numero que estan calibradas CHANCE_AMARILLA y las lesiones. Sin este factor salian ~50 amarillas por partido.",
+    "prob_evento_fisico": 0.07,
     "rebote_min": 6.0,
     "rebote_max": 14.0
   }

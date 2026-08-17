@@ -153,6 +153,7 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 	var resultado_seguido = null
 	var log_seguido := []
 	var eventos_seguido := []
+	var fotogramas_seguido := []
 
 	for partido in fecha:
 		var home: Team = equipos[partido[0]]
@@ -173,8 +174,15 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 		var r: Dictionary
 		if home_corto or away_corto:
 			r = _resolver_forfeit(home, away, home_corto, away_corto)
+		elif con_log:
+			# El partido del jugador se simula con el motor espacial
+			# (coordenadas reales, 22 jugadores, utility AI). Los demás
+			# siguen con el motor abstracto, que es más rápido y alcanza:
+			# la profundidad asimétrica es deliberada, ver
+			# docs/motor_espacial.md.
+			r = MotorEspacial.simular(home, away, rng, true)
 		else:
-			r = MatchEngine.simular(home, away, rng, con_log)
+			r = MatchEngine.simular(home, away, rng, false)
 
 		_servir_suspensiones(home, suspendidos_previos_home)
 		_servir_suspensiones(away, suspendidos_previos_away)
@@ -186,10 +194,12 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 			resultado_seguido = {"local": home.nombre, "visitante": away.nombre, "gl": r["goles_local"], "gv": r["goles_visitante"]}
 			log_seguido = r["log"]
 			eventos_seguido = r["eventos"]
+			fotogramas_seguido = r.get("fotogramas", [])
 
 	return {
 		"resultados_texto": resultados_texto, "resultado_seguido": resultado_seguido,
 		"log_seguido": log_seguido, "eventos_seguido": eventos_seguido,
+		"fotogramas_seguido": fotogramas_seguido,
 	}
 
 

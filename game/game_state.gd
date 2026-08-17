@@ -34,6 +34,10 @@ var temporada_actual: int = 1
 var ultimo_resultado: Dictionary = {}
 var ultimo_log: Array = []
 var ultimos_eventos: Array = []
+## Posiciones tick a tick de los 22 + la pelota del último partido propio
+## (MotorEspacial). Solo lo consume la animación — no se guarda en el save
+## (son ~21.600 fotogramas) y se pierde al cerrar el juego, igual que el log.
+var ultimos_fotogramas: Array = []
 var noticias: Array = []
 var ultimo_informe_economico: Dictionary = {}  # ingresos/egresos/neto del ultimo cierre de temporada
 var ultima_posicion_final: Dictionary = {}  # {"posicion","total","division"} del cierre de temporada mas reciente
@@ -101,6 +105,7 @@ func jugar_siguiente_fecha() -> void:
 				ultimo_resultado = r["resultado_seguido"]
 				ultimo_log = r["log_seguido"]
 				ultimos_eventos = r["eventos_seguido"]
+				ultimos_fotogramas = r.get("fotogramas_seguido", [])
 		else:
 			liga.jugar_fecha(fecha_actual, rng)
 		liga.avanzar_dias(DIAS_ENTRE_FECHAS)
@@ -431,6 +436,7 @@ func cargar_partida() -> bool:
 	ultimo_resultado = {}
 	ultimo_log = []
 	ultimos_eventos = []
+	ultimos_fotogramas = []
 
 	return true
 

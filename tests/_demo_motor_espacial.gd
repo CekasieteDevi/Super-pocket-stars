@@ -6,7 +6,7 @@ extends SceneTree
 ## rendimiento de §6, que hasta ahora era cálculo a mano.
 
 const SEED := 20260816
-const N_PARTIDOS := 10
+const N_PARTIDOS := 20
 
 
 func _init() -> void:
@@ -28,6 +28,10 @@ func _init() -> void:
 	var robos_int := 0
 	var robos_gan := 0
 	var pase_det := {}
+	var goles_partido := []
+	var amarillas := 0
+	var rojas := 0
+	var cambios := 0
 
 	for i in range(N_PARTIDOS):
 		var home := Team.generar("Home%d" % i, rng)
@@ -40,6 +44,7 @@ func _init() -> void:
 		var gl: int = r["goles_local"]
 		var gv: int = r["goles_visitante"]
 		total_goles += gl + gv
+		goles_partido.append(gl + gv)
 		var s: Dictionary = r["stats"]
 		total_tiros += int(s["tiros"]["home"]) + int(s["tiros"]["away"])
 		total_pases += int(s["pases"]["home"]) + int(s["pases"]["away"])
@@ -48,6 +53,14 @@ func _init() -> void:
 		for k in s["decisiones"]:
 			decisiones[k] = decisiones.get(k, 0) + int(s["decisiones"][k])
 		dists.append_array(s["dist_tiros"])
+		for ev in r["eventos"]:
+			if ev["tipo"] == "tarjeta":
+				if ev["resultado"] == "amarilla":
+					amarillas += 1
+				else:
+					rojas += 1
+			elif ev["tipo"] == "cambio":
+				cambios += 1
 		robos_int += int(s["robos"]["intentos"])
 		robos_gan += int(s["robos"]["ganados"])
 		for k in s["pase_detalle"]:
@@ -62,10 +75,15 @@ func _init() -> void:
 
 	print("\n--- Balance ---")
 	print("Goles por partido (los dos equipos): %.2f" % (float(total_goles) / N_PARTIDOS))
+	goles_partido.sort()
+	print("  mediana %d, minimo %d, maximo %d (objetivo real: ~2.8 de media)" % [
+		goles_partido[goles_partido.size() / 2], goles_partido[0], goles_partido[-1]])
 	print("Tiros por partido: %.1f" % (float(total_tiros) / N_PARTIDOS))
 	print("Pases completados por partido: %.1f" % (float(total_pases) / N_PARTIDOS))
 	if posesion_total > 0:
 		print("Posesion local: %.1f%%" % (float(posesion_home) / posesion_total * 100.0))
+	print("Tarjetas por partido: %.1f amarillas, %.2f rojas (real: ~3.5 y ~0.1). Cambios: %.1f" % [
+		float(amarillas) / N_PARTIDOS, float(rojas) / N_PARTIDOS, float(cambios) / N_PARTIDOS])
 	print("Pases: %s" % str(pase_det))
 	print("Quites intentados por partido: %.1f (ganados %.1f, %.0f%%)" % [
 		float(robos_int) / N_PARTIDOS, float(robos_gan) / N_PARTIDOS,

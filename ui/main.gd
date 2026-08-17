@@ -1354,16 +1354,11 @@ func _mostrar_partido_animado() -> void:
 	_ocultar_todos()
 	paneles["partido_animado"].visible = true
 	var r: Dictionary = GameState.ultimo_resultado
-	var jugador := GameState.equipo_jugador
-	var nombre_rival: String = r["visitante"] if r["local"] == jugador.nombre else r["local"]
-	var estilo_rival := ""
-	for e in GameState.liga_jugador().equipos:
-		if e.nombre == nombre_rival:
-			estilo_rival = e.estilo
-			break
-	var estilo_local: String = jugador.estilo if r["local"] == jugador.nombre else estilo_rival
-	var estilo_visitante: String = estilo_rival if r["local"] == jugador.nombre else jugador.estilo
-	partido_visual.iniciar(r["local"], r["visitante"], GameState.ultimos_eventos, estilo_local, estilo_visitante)
+	# El estilo del rival ya no hace falta acá: dejó de ser un ajuste
+	# visual y pasó a mover a los jugadores dentro del propio motor
+	# (MotorEspacial._objetivo_sin_pelota), así que llega en las
+	# coordenadas de cada fotograma.
+	partido_visual.iniciar(r["local"], r["visitante"], GameState.ultimos_fotogramas)
 
 
 func _mostrar_economia() -> void:

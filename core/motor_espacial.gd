@@ -489,6 +489,9 @@ static func _duelo_simple(atacante: Dictionary, attr_a: String, eq_a: Team,
 		MatchEngine._bloques_equipo(eq_d, eq_a, defensor, attr_d, minuto, rng))
 	eq_a.desgastar(atacante["id"], atacante["atributos"]["energia"])
 	eq_d.desgastar(defensor["id"], defensor["atributos"]["energia"])
+	if rng.randf() < float(pesos()["fisica"]["prob_evento_fisico"]):
+		MatchEngine._chequear_lesion(atacante, eq_a, rng)
+		MatchEngine._chequear_lesion(defensor, eq_d, rng)
 	return Duel.gana_atacante(res, rng)
 
 
@@ -569,11 +572,16 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 		"minuto": minuto, "tipo": "tiro_puerta", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 		"jugador_posicion": poseedor["rol"], "resultado": "gol" if gol else "atajada",
 	})
+	var dist: float = poseedor["pos"].distance_to(arco_rival(es_local))
 	if gol:
 		eq_a.goles += 1
 		estado["goles_log"].append({"minuto": minuto, "equipo": eq_a.nombre, "jugador_id": jugador["id"]})
+		estado["log"].append("min %d - GOL de %s %s (%s) desde %.0f m" % [
+			minuto, jugador["nombre"], jugador["apellido"], eq_a.nombre, dist])
 		_reiniciar_desde_medio(estado, not es_local)
 	else:
+		estado["log"].append("min %d - %s (%s) remata desde %.0f m, ataja el arquero" % [
+			minuto, poseedor["rol"], eq_a.nombre, dist])
 		_dar_pelota_al_arquero(estado, not es_local)
 
 
@@ -615,7 +623,7 @@ static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: i
 
 static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 	var pelota: Dictionary = estado["pelota"]
-	var rng: RandomNumberGenerator = estado["rng"]
+	var eventos_antes: int = estado["eventos"].size()
 
 	# 1. Pelota en vuelo: avanza, y alguien puede controlarla o interceptarla.
 	if pelota["en_vuelo"]:
@@ -680,8 +688,15 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 
 	estado["tick"] += 1
 	estado["minuto"] += TICK_SEG / 60.0
+	# Cada 5 segundos de juego se saca de la cancha a los expulsados (una
+	# roja puede caer en cualquier tick, no solo en una ventana de cambio).
+	if estado["tick"] % 20 == 0:
+		_sincronizar_cambios(estado)
 	if con_fotogramas:
-		_push_fotograma(estado)
+		var nuevo = null
+		if estado["eventos"].size() > eventos_antes:
+			nuevo = estado["eventos"][estado["eventos"].size() - 1]
+		_push_fotograma(estado, nuevo)
 
 
 static func _avanzar_pelota(estado: Dictionary) -> void:
@@ -787,6 +802,47 @@ static func _soltar_pelota(estado: Dictionary, desde: Vector2, era_local: bool) 
 	pelota["es_pase"] = false
 	pelota["origen_pos"] = desde
 	pelota["ticks_con_pelota"] = 0
+
+
+## Sincroniza los 22 del estado espacial con quién está realmente en
+## cancha según Team: entran los que ingresaron por un cambio, salen los
+## sustituidos y los expulsados. Sin esto, un jugador que ya salió seguiría
+## corriendo en la simulación y un expulsado jugaría igual.
+static func _sincronizar_cambios(estado: Dictionary) -> void:
+	for es_local in [true, false]:
+		var equipo := _equipo_de(estado, es_local)
+		var deben_estar := {}
+		for j in equipo.jugadores_en_cancha():
+			if equipo.expulsados_partido.has(j["id"]):
+				continue
+			deben_estar[clave_de(j["id"], es_local)] = j
+
+		var libres := []  # posiciones que dejaron los que salieron
+		for clave in estado["jugadores"].keys():
+			var e: Dictionary = estado["jugadores"][clave]
+			if e["equipo_local"] != es_local:
+				continue
+			if not deben_estar.has(clave):
+				libres.append(e["pos"])
+				if estado["pelota"]["poseedor_id"] == clave:
+					_dar_pelota_al_arquero(estado, not es_local)
+				estado["jugadores"].erase(clave)
+
+		for clave in deben_estar:
+			if estado["jugadores"].has(clave):
+				continue
+			var j: Dictionary = deben_estar[clave]
+			var rol: String = j["posicion"]
+			var slots: Array = BASE_FORMACION.get(rol, BASE_FORMACION["MC"])
+			var base: Vector2 = slots[0]
+			if not es_local:
+				base = Vector2(-base.x, base.y)
+			var pos: Vector2 = libres.pop_back() if not libres.is_empty() else base
+			estado["jugadores"][clave] = {
+				"clave": clave, "jugador_id": j["id"], "equipo_local": es_local,
+				"rol": rol, "base": base, "pos": pos, "vel": Vector2.ZERO,
+				"objetivo": base, "vel_max": _vel_max(j),
+			}
 
 
 static func _entregar_pelota(estado: Dictionary, clave: int) -> void:
@@ -931,6 +987,17 @@ static func _intentar_robo(estado: Dictionary) -> void:
 	var minuto := _minuto_int(estado)
 	# El poseedor defiende su pelota con `control` contra el `quite` del rival.
 	var aguanta := _duelo_simple(jug_a, "control", eq_a, jug_d, "quite", eq_d, minuto, estado["rng"])
+	# Mismas tarjetas que el motor abstracto: si el partido del jugador no
+	# generara amarillas ni rojas, su equipo nunca tendría suspendidos
+	# mientras el resto de la liga sí — un desbalance grave, no cosmético.
+	#
+	# Pero la FRECUENCIA hay que corregirla: este motor disputa la pelota
+	# ~2.600 veces por partido contra los ~180 duelos del abstracto, donde
+	# CHANCE_AMARILLA=0.02 está calibrado. Aplicado tal cual daban ~50
+	# amarillas por partido y los equipos terminaban diezmados. Solo una
+	# fracción chica de los quites se disputa con riesgo de falta.
+	if estado["rng"].randf() < float(f["prob_evento_fisico"]):
+		MatchEngine._chequear_tarjeta(jug_d, eq_d, eq_a, estado["rng"], estado["eventos"], minuto, true, estado["log"])
 	if not aguanta:
 		estado["robos"]["ganados"] += 1
 		# La pelota queda SUELTA, no pasa limpia al que la quitó: si el
@@ -944,7 +1011,7 @@ static func _intentar_robo(estado: Dictionary) -> void:
 		})
 
 
-static func _push_fotograma(estado: Dictionary) -> void:
+static func _push_fotograma(estado: Dictionary, evento_del_tick = null) -> void:
 	var jugadores := []
 	for id in estado["jugadores"]:
 		var e: Dictionary = estado["jugadores"][id]
@@ -961,6 +1028,12 @@ static func _push_fotograma(estado: Dictionary) -> void:
 		},
 		"jugadores": jugadores,
 		"decision": estado.get("ultima_decision", null),
+		# El evento semántico que ocurrió EN ESTE tick (o null). Es lo que
+		# le permite a la animación mostrar el relato y el marcador en el
+		# momento exacto, sin tener que cruzar por minuto contra el array
+		# de eventos, que tiene otra granularidad.
+		"evento": evento_del_tick,
+		"goles": {"home": estado["home"].goles, "away": estado["away"].goles},
 	})
 
 
@@ -991,11 +1064,18 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 
 	var estado := crear_estado(home, away, rng)
 
+	# Mismas ventanas de cambio que MatchEngine (§8.7): entretiempo, 60' y
+	# 75'. Se reusa _procesar_cambios sin tocarlo.
+	var ventanas := [45, 60, 75]
 	for mitad in range(2):
 		_reiniciar_desde_medio(estado, mitad == 0)
 		estado["minuto"] = MINUTOS_POR_MITAD * mitad
 		for t in range(TICKS_POR_MITAD):
 			_tick(estado, con_fotogramas)
+			if not ventanas.is_empty() and estado["minuto"] >= ventanas[0]:
+				var minuto_ventana: int = ventanas.pop_front()
+				MatchEngine._procesar_cambios(home, away, minuto_ventana, true, estado["log"], estado["eventos"])
+				_sincronizar_cambios(estado)
 
 	return {
 		"goles_local": home.goles,
