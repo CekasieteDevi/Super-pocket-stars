@@ -14,11 +14,22 @@ extends Control
 
 signal terminado
 
-## Ticks de juego que se muestran por segundo real, a velocidad x1. El
-## motor simula a 0.25s por tick, o sea 21.600 ticks por partido: a 90
-## ticks/seg reales el partido completo dura 4 minutos, ~2 por tiempo,
-## que es el ritmo que acordamos.
-const TICKS_POR_SEGUNDO := 90.0
+## Ticks de juego por segundo real a velocidad x1. El motor simula a 0.25s
+## por tick, asi que 4 ticks/seg es TIEMPO REAL de futbol: un pase tarda lo
+## que tarda un pase, y se entiende quien tiene la pelota y que hace.
+##
+## Antes esto valia 90 (todo el partido en 4 minutos), o sea 22 veces la
+## velocidad real: pasaban diez cosas por segundo y era imposible seguir la
+## jugada. Un partido entero a x1 dura los 90 minutos de verdad — para eso
+## estan los multiplicadores y el boton de saltar al resultado.
+const TICKS_POR_SEGUNDO := 4.0
+
+## A 4 ticks/seg las posiciones se actualizan solo 4 veces por segundo: sin
+## interpolar entre fotograma y fotograma se veria a saltos. Si dos
+## fotogramas seguidos ponen a alguien mas lejos que esto, es un salto de
+## verdad (saque del medio despues de un gol, cambio) y ahi NO se
+## interpola, se corta seco.
+const SALTO_MAXIMO_M := 12.0
 
 var fotogramas: Array = []
 var posicion: float = 0.0
@@ -65,7 +76,9 @@ func _ready() -> void:
 	barra.alignment = BoxContainer.ALIGNMENT_CENTER
 	raiz.add_child(barra)
 
-	for etiqueta in ["x1", "x2", "x4"]:
+	# x1 es tiempo real de fútbol; los multiplicadores altos estan para
+	# pasar rapido los tramos en que no pasa nada.
+	for etiqueta in ["x1", "x2", "x4", "x8", "x16"]:
 		var btn := Button.new()
 		btn.text = etiqueta
 		var v := float(etiqueta.substr(1))
@@ -119,13 +132,59 @@ func _process(delta: float) -> void:
 				label_evento.text = texto
 
 	var f: Dictionary = fotogramas[hasta]
-	cancha.mostrar(f)
+	cancha.mostrar(_interpolado(hasta, posicion - float(hasta)))
 	label_minuto.text = "Min %d" % int(f["minuto"])
 	var g: Dictionary = f["goles"]
 	_refrescar_marcador(int(g["home"]), int(g["away"]))
 
 	if int(posicion) >= fotogramas.size() - 1:
 		_finalizar()
+
+
+## Mezcla el fotograma `idx` con el siguiente segun la fraccion `t`, para
+## que a velocidad real (4 fotogramas por segundo) el movimiento se vea
+## continuo y no a saltos.
+func _interpolado(idx: int, t: float) -> Dictionary:
+	var a: Dictionary = fotogramas[idx]
+	if idx + 1 >= fotogramas.size() or t <= 0.0:
+		return a
+	var b: Dictionary = fotogramas[idx + 1]
+
+	var destino := {}
+	for j in b["jugadores"]:
+		destino[j["id"]] = j
+
+	var jugadores := []
+	for j in a["jugadores"]:
+		var d = destino.get(j["id"], null)
+		var x: float = j["x"]
+		var y: float = j["y"]
+		if d != null:
+			var dx: float = d["x"] - x
+			var dy: float = d["y"] - y
+			if dx * dx + dy * dy <= SALTO_MAXIMO_M * SALTO_MAXIMO_M:
+				x += dx * t
+				y += dy * t
+		jugadores.append({
+			"id": j["id"], "equipo_local": j["equipo_local"], "rol": j["rol"],
+			"x": x, "y": y,
+		})
+
+	var pa: Dictionary = a["pelota"]
+	var pb: Dictionary = b["pelota"]
+	var bx: float = pa["x"]
+	var by: float = pa["y"]
+	var pdx: float = pb["x"] - bx
+	var pdy: float = pb["y"] - by
+	if pdx * pdx + pdy * pdy <= SALTO_MAXIMO_M * SALTO_MAXIMO_M:
+		bx += pdx * t
+		by += pdy * t
+
+	return {
+		"tick": a["tick"], "minuto": a["minuto"], "goles": a["goles"],
+		"jugadores": jugadores,
+		"pelota": {"x": bx, "y": by, "poseedor_id": pa["poseedor_id"]},
+	}
 
 
 func _refrescar_marcador(gl: int, gv: int) -> void:
