@@ -5,7 +5,7 @@ extends SceneTree
 ## a distintas medias de plantel, y ademas con equipos DESPAREJOS, que es
 ## el caso que mas se da en una liga real.
 
-const N := 20
+const N := 60
 
 
 func _init() -> void:

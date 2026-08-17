@@ -3,7 +3,7 @@
     "pases": ["Pase rápido", "Teledirigido", "6to sentido"],
     "control": ["Bailarín", "Cohete"],
     "tiro": ["Cañón", "Chanfle", "Francotirador", "Tiro rápido"],
-    "quite": ["Ladrón", "Barredora", "Profeta"]
+    "quite": ["Ladrón", "Barredora", "Profeta", "Recuperación"]
   },
   "arquero": {
     "reflejos": ["Reflejo felino", "Interceptor", "Súper golpe"],

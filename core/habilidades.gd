@@ -34,6 +34,12 @@ const BONUS_DUELO := {1: 2.0, 2: 4.0, 3: 6.0}
 ## en Penales.gd (escala 0..1), no son puntos porcentuales de duelo.
 const BONUS_ATAJAPENALES := {1: 0.05, 2: 0.09, 3: 0.13}
 
+## Recuperación también trabaja distinto: no empuja un duelo, acorta el
+## tiempo que un jugador queda fuera de juego después de perder la pelota
+## o de fallar un quite (ver MotorEspacial). Un jugador con esta habilidad
+## se rehace y vuelve a la jugada antes que el resto.
+const FACTOR_RECUPERACION := {1: 0.75, 2: 0.55, 3: 0.35}
+
 static var _datos_cache: Dictionary = {}
 static var _atributo_por_nombre_cache: Dictionary = {}
 
@@ -97,6 +103,18 @@ static func modificador_partido(jugador: Dictionary, atributo: String) -> float:
 	if jugador["media"] < MEDIA_MINIMA.get(h["nivel"], 999.0):
 		return 0.0
 	return BONUS_DUELO.get(h["nivel"], 0.0)
+
+
+## Multiplicador del cooldown que arrastra un jugador tras perder la
+## pelota o fallar un quite (MotorEspacial). 1.0 = sin habilidad, valores
+## menores = vuelve antes a la jugada.
+static func factor_cooldown_recuperacion(jugador: Dictionary) -> float:
+	var h: Dictionary = jugador.get("habilidad", {})
+	if h.get("nombre", "") != "Recuperación":
+		return 1.0
+	if jugador["media"] < MEDIA_MINIMA.get(h.get("nivel", 1), 999.0):
+		return 1.0
+	return FACTOR_RECUPERACION.get(h["nivel"], 1.0)
 
 
 ## Cuánto le resta a la chance de convertir del PATEADOR el arquero con

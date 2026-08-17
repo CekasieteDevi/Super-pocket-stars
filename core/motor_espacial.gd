@@ -210,7 +210,7 @@ static func crear_estado(home: Team, away: Team, rng: RandomNumberGenerator) -> 
 		"fotogramas": [],
 		"robo_cooldown": {},
 		"robos": {"intentos": 0, "ganados": 0},
-		"divididas": {},
+		"cooldown": {},
 		"pase_detalle": {"intentos": 0, "interceptado_vuelo": 0, "rival_llego_antes": 0, "fuera": 0},
 		"linea_offside": {"local": LIMITE_X, "away": -LIMITE_X},
 		"dist_tiros": [],
@@ -809,11 +809,6 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 	if mejor_id != -1:
 		if bool(pelota.get("es_pase", false)):
 			estado["pase_detalle"]["interceptado_vuelo"] += 1
-		else:
-			# Pelota dividida agarrada en el camino: por construcción solo
-			# la puede tomar el equipo que la quitó (el otro es el que la
-			# perdió, y para él esto no es una intercepción).
-			estado["divididas"]["se la queda quien robo"] = int(estado["divididas"].get("se la queda quien robo", 0)) + 1
 		_entregar_pelota(estado, mejor_id)
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "pase", "equipo": _equipo_de(estado, pasador_local).nombre,
@@ -833,12 +828,6 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 		_dar_pelota_al_arquero(estado, not pasador_local)
 		return
 	var e_receptor: Dictionary = estado["jugadores"][receptor]
-	# Quién termina quedándose las pelotas divididas de un quite: sirve
-	# para verificar que un robo no genere un ping-pong entre los mismos
-	# dos jugadores.
-	if not bool(pelota.get("es_pase", false)):
-		var clave_div := "la recupera quien la perdio" if e_receptor["equipo_local"] == pasador_local else "se la queda quien robo"
-		estado["divididas"][clave_div] = int(estado["divididas"].get(clave_div, 0)) + 1
 	_entregar_pelota(estado, receptor)
 	if e_receptor["equipo_local"] == pasador_local:
 		if bool(pelota.get("es_pase", false)):
@@ -857,31 +846,12 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 		})
 
 
-## Pelota dividida tras un quite: sale despedida unos metros hacia el
-## lado del que defendía y la agarra el que llegue. `pasador_local` queda
-## en el equipo que la PERDIÓ, así que para el que la quitó cuenta como
-## intercepción (es decir, tiene ventaja para recuperarla, pero no es
-## automático — puede quedar para cualquiera).
-static func _soltar_pelota(estado: Dictionary, desde: Vector2, era_local: bool) -> void:
-	var f: Dictionary = pesos()["fisica"]
-	var rng: RandomNumberGenerator = estado["rng"]
-	var hacia_atras := -1.0 if era_local else 1.0
-	var dir := Vector2(hacia_atras * rng.randf_range(0.3, 1.0), rng.randf_range(-1.0, 1.0)).normalized()
-	var largo: float = rng.randf_range(float(f["rebote_min"]), float(f["rebote_max"]))
-	var destino := Vector2(
-		clampf(desde.x + dir.x * largo, -LIMITE_X, LIMITE_X),
-		clampf(desde.y + dir.y * largo, -MEDIO_ANCHO + 1.0, MEDIO_ANCHO - 1.0))
-	var pelota: Dictionary = estado["pelota"]
-	pelota["poseedor_id"] = -1
-	pelota["en_vuelo"] = true
-	pelota["pos"] = desde
-	pelota["vel"] = (destino - desde).normalized() * float(f["vel_pelota_pase"]) * 0.6
-	pelota["destino_pos"] = destino
-	pelota["destino_id"] = -1
-	pelota["pasador_local"] = era_local
-	pelota["es_pase"] = false
-	pelota["origen_pos"] = desde
-	pelota["ticks_con_pelota"] = 0
+## NOTA: acá vivía _soltar_pelota, que tras un quite ganado mandaba la
+## pelota a rebotar unos metros en vez de dársela al que la quitó. Era un
+## parche para el loop de duelos, no fútbol: si le sacás la pelota a
+## alguien, te la quedás en los pies. El loop se resuelve con la
+## penalización por perder el duelo (ver _penalizar). Los rebotes en un
+## quite ganado son una mecánica aparte, pendiente.
 
 
 ## Sincroniza los 22 del estado espacial con quién está realmente en
@@ -985,6 +955,8 @@ static func _perseguidores(estado: Dictionary, equipo_con_pelota_local: bool) ->
 		var e: Dictionary = estado["jugadores"][id]
 		if e["equipo_local"] == equipo_con_pelota_local or e["rol"] == "ARQ":
 			continue
+		if _en_cooldown(estado, id):
+			continue  # quedó mal parado, no sale a perseguir todavía
 		var d: float = pelota_pos.distance_to(e["pos"])
 		if d < d1:
 			d2 = d1
@@ -1055,6 +1027,24 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 			_resolver_tiro(estado, poseedor, jugador)
 
 
+## Deja a un jugador fuera de la disputa un rato: es la penalización por
+## perder la pelota o por ir al quite y fallar. Sin esto, los mismos dos
+## se enfrentan tick tras tick en el mismo metro cuadrado y el partido se
+## vuelve un loop de duelos (la primera versión, que además entregaba
+## posesión instantánea, terminó un partido 340-0).
+##
+## La habilidad Recuperación acorta esta espera: el jugador se rehace
+## antes y vuelve a la jugada mientras el resto todavía está mal parado.
+static func _penalizar(estado: Dictionary, clave: int, jugador: Dictionary) -> void:
+	var f: Dictionary = pesos()["fisica"]
+	var ticks: float = float(f["ticks_penalizacion_duelo"]) * Habilidades.factor_cooldown_recuperacion(jugador)
+	estado["cooldown"][clave] = estado["tick"] + int(round(maxf(ticks, 1.0)))
+
+
+static func _en_cooldown(estado: Dictionary, clave: int) -> bool:
+	return estado["tick"] < int(estado["cooldown"].get(clave, -1))
+
+
 ## Avanzar con la pelota hacia el arco rival. Más lento que correr libre
 ## (avance_conducir < 1): si no, nadie alcanza nunca al que la lleva.
 static func _conducir(estado: Dictionary, poseedor: Dictionary) -> void:
@@ -1078,12 +1068,11 @@ static func _intentar_robo(estado: Dictionary) -> void:
 	var es_local: bool = poseedor["equipo_local"]
 	var radio: float = f["radio_tackle"]
 
-	# El cooldown es de LA DISPUTA, no de cada defensor: una pelota se
-	# disputa cada tanto, no cuatro veces por segundo por cada rival que
-	# ande cerca. Con cooldown por jugador y 10 rivales alrededor salían
-	# 9.026 quites por partido (un partido real tiene del orden de 40) y
-	# la posesión cambiaba 5.000 veces: puro ping-pong, no fútbol.
-	if estado["tick"] - int(estado.get("ultimo_robo_tick", -999)) < int(f["ticks_cooldown_robo"]):
+	# Al que acaba de ganar la pelota no se la disputan en el mismo
+	# instante: tiene un momento para acomodarla. Sin esta gracia, apenas
+	# uno la recuperaba ya lo estaba atacando el siguiente rival y salían
+	# 118 quites por partido en vez de ~55.
+	if int(pelota.get("ticks_con_pelota", 99)) < int(f["ticks_gracia_posesion"]):
 		return
 
 	var mejor_id := -1
@@ -1092,13 +1081,14 @@ static func _intentar_robo(estado: Dictionary) -> void:
 		var e: Dictionary = estado["jugadores"][id]
 		if e["equipo_local"] == es_local:
 			continue
+		if _en_cooldown(estado, id):
+			continue  # todavía se está rehaciendo de la anterior
 		var d: float = poseedor["pos"].distance_to(e["pos"])
 		if d < mejor_dist:
 			mejor_dist = d
 			mejor_id = id
 	if mejor_id == -1:
 		return
-	estado["ultimo_robo_tick"] = estado["tick"]
 	estado["robos"]["intentos"] += 1
 
 	var eq_a := _equipo_de(estado, es_local)
@@ -1128,17 +1118,22 @@ static func _intentar_robo(estado: Dictionary) -> void:
 	# disputa para igualar la tasa por PARTIDO, que es lo que importa.
 	for i in range(int(f["chequeos_tarjeta_por_quite"])):
 		MatchEngine._chequear_tarjeta(jug_d, eq_d, eq_a, estado["rng"], estado["eventos"], minuto, true, estado["log"])
+	# Quite resuelto como en el fútbol: o se la saca y se la queda en los
+	# pies, o falla y el otro sigue con la pelota. Lo que evita el loop no
+	# es que la pelota salga volando, sino que PERDER EL DUELO SE PAGA: el
+	# que queda mal —el que la perdió, o el que fue a quitarla y no
+	# pudo— arrastra un cooldown en el que no puede volver a ir por ella.
+	# (Rebotes en un quite ganado: pendiente, ver docs.)
 	if not aguanta:
 		estado["robos"]["ganados"] += 1
-		# La pelota queda SUELTA, no pasa limpia al que la quitó: si el
-		# quite entregara posesión instantánea, atacante y defensor se la
-		# roban mutuamente en el mismo metro cuadrado y el partido se
-		# convierte en un ping-pong (medido: 340 goles en un partido).
-		_soltar_pelota(estado, poseedor["pos"], es_local)
+		_entregar_pelota(estado, mejor_id)
+		_penalizar(estado, poseedor["clave"], jug_a)
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "gambeta", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 			"jugador_posicion": poseedor["rol"], "resultado": "pierde",
 		})
+	else:
+		_penalizar(estado, mejor_id, jug_d)
 
 
 static func _push_fotograma(estado: Dictionary, evento_del_tick = null) -> void:
@@ -1220,7 +1215,7 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 			"tiros": estado["tiros"],
 			"dist_tiros": estado["dist_tiros"],
 			"robos": estado["robos"],
-			"divididas": estado["divididas"],
+			"cooldown_activos": estado["cooldown"].size(),
 			"pase_detalle": estado["pase_detalle"],
 			"pases": estado["pases"],
 			"decisiones": estado["decisiones"],

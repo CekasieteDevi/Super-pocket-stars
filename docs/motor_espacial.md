@@ -806,41 +806,51 @@ actual sí lo haría. Es el requisito que habilita centros de verdad.
 
 ---
 
-## 14. Qué pasa después de un quite (y por qué no se hace un loop)
+## 14. Qué pasa después de un quite
 
-Cuando un defensor gana la disputa, la pelota **no pasa directo a sus
-pies**: queda **dividida**. Sale despedida entre 6 y 14 metros en una
-dirección semialeatoria, sesgada hacia el lado al que ataca el equipo que
-la recuperó — o sea, un despeje. Los dos jugadores tienen que ir a
-buscarla.
+Un quite se resuelve **como en el fútbol**: o se la saca y se la queda en
+los pies, o falla y el otro sigue con la pelota. No hay estados
+intermedios.
 
-El que la perdió deja de ser poseedor y pasa a ser un jugador sin pelota
-como cualquier otro. Puede salir a buscarla, y de hecho es candidato
-natural a ser uno de los dos perseguidores (los dos más cercanos a la
-pelota del equipo que no la tiene).
+### El loop y por qué NO se arregla con pelotas divididas
 
-### Medido (`tests/_diag_robos.gd`)
+La primera versión entregaba la pelota al que ganaba el quite y ahí mismo
+volvían a disputarla, tick tras tick, en el mismo metro cuadrado: un
+partido de prueba terminó **340-0**. El parche fue mandar la pelota a
+rebotar unos metros tras cada quite ganado — y era un parche, no fútbol:
+si le sacás la pelota a alguien, te la quedás.
 
-| | Por partido |
+Lo que evita el loop de verdad es que **perder el duelo se pague**:
+
+| Quién | Qué le pasa |
 | --- | --- |
-| Quites intentados | 57,1 |
-| Quites ganados (pelota dividida) | 32,0 |
-| Divididas que quedan para el que la quitó | 27,1 (85%) |
-| Divididas que recupera el que la perdió | 4,8 (15%) |
+| El que pierde la pelota | queda fuera de la disputa `ticks_penalizacion_duelo` (26 ticks ≈ 6,5 s de juego) |
+| El que va al quite y falla | lo mismo: quedó pasado |
+| El que gana el quite | se lleva la pelota, sin penalización |
 
-### Los tres frenos al loop
+Mientras está penalizado, un jugador **ni intenta quitar ni sale a
+perseguir la pelota** — está mal parado, rehaciéndose. Sin esa segunda
+parte volvería corriendo detrás del que lo pasó y el loop seguiría igual.
 
-1. La pelota se **aleja de los dos**, así que es una carrera y no un
-   duelo nuevo en el mismo lugar.
-2. Hay un **cooldown de 12 ticks (3 segundos de juego) sobre LA DISPUTA**,
-   no sobre cada jugador: después de un quite nadie puede intentar otro
-   por 3 segundos.
-3. El despeje va hacia el lado **contrario** al que atacaba el que la
-   perdió, así que la jugada se aleja de la zona.
+Además, el que acaba de ganar la pelota tiene `ticks_gracia_posesion` (6
+ticks ≈ 1,5 s) sin que se la puedan disputar, para acomodarla. Sin esa
+gracia, apenas uno la recuperaba ya lo estaba atacando el siguiente rival:
+salían 118 quites por partido en vez de ~50.
 
-Esto no es una precaución teórica. La primera versión entregaba posesión
-limpia e instantánea al que ganaba el quite, y atacante y defensor se
-robaban la pelota mutuamente en el mismo metro cuadrado tick tras tick: un
-partido de prueba terminó **340-0**. Las pelotas divididas y el cooldown
-existen para arreglar exactamente eso, y por eso conviene no tocarlos sin
-volver a medir.
+### Habilidad nueva: Recuperación
+
+Habilidad de campo atada a `quite` (`data/habilidades.json`). No empuja
+ningún duelo: **acorta el cooldown** de quedar fuera de la jugada, así que
+el jugador se rehace y vuelve mientras el resto todavía está mal parado.
+
+| Nivel | Multiplicador del cooldown |
+| --- | --- |
+| Bronce | ×0,75 |
+| Plata | ×0,55 |
+| Oro | ×0,35 |
+
+### Pendiente
+
+**Rebotes en un quite ganado**: hoy el quite es binario, se la lleva o no.
+La idea de que a veces la toque pero quede dividida para cualquiera es una
+mecánica aparte, todavía sin implementar.
