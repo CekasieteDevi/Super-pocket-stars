@@ -854,3 +854,45 @@ el jugador se rehace y vuelve mientras el resto todavía está mal parado.
 **Rebotes en un quite ganado**: hoy el quite es binario, se la lleva o no.
 La idea de que a veces la toque pero quede dividida para cualquiera es una
 mecánica aparte, todavía sin implementar.
+
+---
+
+## 15. Desde dónde patea cada jugador
+
+El atributo `tiro` no entraba en la DECISIÓN de rematar, solo en el
+resultado: un jugador de media 20 evaluaba pegarle desde 25 metros
+exactamente igual que un crack, y después la erraba. Medido, el 23% de
+los remates de un plantel de media 27 salían desde más de 20 metros.
+
+Ahora `tiro` define el **alcance**: hasta dónde le da para patear
+(`rango_tiro_malo` 16,5m → `rango_tiro_bueno` 34m, en
+`data/utility_pesos.json`). Más lejos de su alcance, la utilidad de
+rematar se le cae a cero y el jugador prefiere seguir metiéndose o
+pasarla — que es lo que hace un jugador limitado en la vida real.
+
+### Medido (60 partidos por nivel)
+
+| Media de plantel | Remates | Distancia media | Desde +20m |
+| --- | --- | --- | --- |
+| 27 | 7,9 | 13,0 m | **15%** |
+| 39 | 9,7 | 13,8 m | 17% |
+| 50 | 11,4 | 14,7 m | 23% |
+| 62 | 12,6 | 17,0 m | **33%** |
+
+Un plantel flojo la busca de cerca; uno bueno se anima de media distancia.
+
+### Nota sobre la paridad entre motores
+
+Con equipos naturales —los que genera el juego— la paridad se mantiene:
+**3,08 goles contra 3,17** del abstracto. Pero si se fuerza a los dos
+equipos a un potencial uniforme (`potencial_objetivo`), el espacial queda
+sistemáticamente por debajo: 1,95 contra 2,95 con potencial 40.
+
+No es un error de calibración: es que **al motor espacial le importa la
+composición del plantel y al abstracto no**. Un equipo natural tiene
+algunas figuras que se llevan los remates; uno de potencial uniforme no
+tiene a nadie que se destaque, y este motor lo castiga porque cada acción
+la ejecuta un jugador concreto, mientras que el abstracto samplea del
+pool. Es una consecuencia deseable de simular jugador por jugador — pero
+conviene tenerla presente al medir: **la comparación válida es con equipos
+naturales**, no con potenciales forzados.

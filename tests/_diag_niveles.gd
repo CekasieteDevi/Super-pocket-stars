@@ -101,6 +101,7 @@ func _probar(rng: RandomNumberGenerator, pot_home: int, pot_away: int) -> void:
 	var intentos := 0
 	var media_h := 0.0
 	var media_a := 0.0
+	var dists := []
 	for i in range(N):
 		var home := Team.generar("H%d" % i, rng, 0, pot_home)
 		var away := Team.generar("A%d" % i, rng, 1000, pot_away)
@@ -113,8 +114,16 @@ func _probar(rng: RandomNumberGenerator, pot_home: int, pot_away: int) -> void:
 		tiros += int(s["tiros"]["home"]) + int(s["tiros"]["away"])
 		pases += int(s["pases"]["home"]) + int(s["pases"]["away"])
 		intentos += int(s["pase_detalle"]["intentos"])
+		dists.append_array(s["dist_tiros"])
 	var acierto: float = float(pases) / maxf(intentos, 1) * 100.0
-	print("  media %.0f vs %.0f -> %.2f-%.2f goles (%.2f total) | %.1f remates | %.0f pases al %.0f%%" % [
-		media_h / N, media_a / N,
-		float(goles_h) / N, float(goles_a) / N, float(goles_h + goles_a) / N,
-		float(tiros) / N, float(pases) / N, acierto])
+	var media_dist := 0.0
+	var lejanos := 0
+	for d in dists:
+		media_dist += d
+		if d > 20.0:
+			lejanos += 1
+	media_dist = media_dist / maxf(dists.size(), 1)
+	print("  media %.0f vs %.0f -> %.2f goles | %.1f remates a %.1fm (%.0f%% desde +20m) | %.0f pases al %.0f%%" % [
+		media_h / N, media_a / N, float(goles_h + goles_a) / N,
+		float(tiros) / N, media_dist, float(lejanos) / maxf(dists.size(), 1) * 100.0,
+		float(pases) / N, acierto])

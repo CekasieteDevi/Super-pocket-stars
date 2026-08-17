@@ -142,12 +142,23 @@ static func valor_posicion(pos: Vector2, equipo_local: bool) -> float:
 ## miraba el atributo `tiro`. Un remate de 30 metros con ángulo cerrado
 ## ahora es peor que uno de frente al área chica aunque el atributo sea el
 ## mismo — que es justamente lo que antes no existía.
-static func factor_geometria(pos: Vector2, equipo_local: bool) -> float:
+## `jugador` define el ALCANCE: hasta dónde le da para patear. Un jugador
+## de tiro flojo solo ve chance cerca del área — más lejos la utilidad de
+## rematar se le cae a cero y prefiere seguir metiéndose o pasarla, que es
+## lo que hace un jugador limitado en la vida real. Uno de tiro alto sí
+## valora el remate de media distancia. Sin esto, un media 20 evaluaba
+## pegarle desde 25 metros exactamente igual que un crack (medido: 23% de
+## sus remates salían desde más de 20m).
+static func factor_geometria(pos: Vector2, equipo_local: bool, jugador: Dictionary = {}) -> float:
+	var f: Dictionary = pesos()["fisica"]
 	var arco := arco_rival(equipo_local)
 	var dist := pos.distance_to(arco)
 	var dx: float = maxf(absf(arco.x - pos.x), 1.0)
 	var dy: float = absf(pos.y)
-	var f_dist: float = clampf(1.0 - (dist - 5.0) / 30.0, 0.0, 1.0)
+	var rango: float = float(f["rango_tiro_medio"])
+	if not jugador.is_empty():
+		rango = _por_atributo(jugador, "tiro", f["rango_tiro_malo"], f["rango_tiro_bueno"])
+	var f_dist: float = clampf(1.0 - (dist - 5.0) / rango, 0.0, 1.0)
 	var f_angulo: float = clampf(1.0 - (dy / dx) / 1.5, 0.0, 1.0)
 	return f_dist * f_angulo
 
@@ -308,7 +319,7 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 	})
 
 	# --- Tirar --------------------------------------------------------
-	var geo := factor_geometria(pos, es_local)
+	var geo := factor_geometria(pos, es_local, jugador)
 	if geo > float(f["geometria_minima_tiro"]):
 		var wt: Dictionary = w["tiro"]
 		var u_tiro: float = wt["base"] + wt["geometria"] * geo
@@ -564,7 +575,7 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	var eq_d := _equipo_de(estado, not es_local)
 	var rng: RandomNumberGenerator = estado["rng"]
 	var minuto := _minuto_int(estado)
-	var geo := factor_geometria(poseedor["pos"], es_local)
+	var geo := factor_geometria(poseedor["pos"], es_local, jugador)
 	var clave := "home" if es_local else "away"
 	estado["tiros"][clave] += 1
 	estado["dist_tiros"].append(poseedor["pos"].distance_to(arco_rival(es_local)))
