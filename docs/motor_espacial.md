@@ -896,3 +896,41 @@ la ejecuta un jugador concreto, mientras que el abstracto samplea del
 pool. Es una consecuencia deseable de simular jugador por jugador — pero
 conviene tenerla presente al medir: **la comparación válida es con equipos
 naturales**, no con potenciales forzados.
+
+---
+
+## 16. Saque del medio y salida del arquero
+
+### Saque del medio: todos en su mitad
+
+Las posiciones base de los de arriba están en campo rival (EXT en x=8, DC
+en x=14) — correctas durante el juego, **no para un saque**. Al reiniciar
+desde el medio se usaban tal cual, así que se veían tres rivales parados
+adentro de tu campo antes de que la pelota se moviera, en contra de la
+regla. Ahora `_reiniciar_desde_medio` repliega a todos a su propia mitad.
+
+### Salida del arquero: no está cableada
+
+El arquero no tiene lógica especial: es un poseedor más y elige con la
+misma utilidad que cualquiera. A quién le llega, medido sobre 290 salidas
+en 30 partidos (`tests/_diag_arquero.gd`):
+
+| Receptor | % de las salidas que llegan a un compañero |
+| --- | --- |
+| MC | 38% |
+| DFC | 33% |
+| LAT | 25% |
+| MCO | 3% |
+| EXT | 1% |
+
+O sea que el destinatario más frecuente es un volante central, no un
+defensor, aunque entre DFC y LAT se llevan el 58%. Y su alcance depende de
+su propio atributo `pases` (30m con `pases` 20, 42m con 80), así que un
+arquero con buen pie llega más lejos.
+
+**Dato a vigilar**: el 42% de las salidas del arquero termina en un rival.
+Es alto para lo que sería un saque de arco real. Puede ser aceptable como
+"salida jugada bajo presión en divisiones bajas", pero si alguna vez se
+implementan los saques de arco como jugada aparte (hoy no existen: la
+pelota simplemente aparece en los pies del arquero), este es el número a
+corregir.

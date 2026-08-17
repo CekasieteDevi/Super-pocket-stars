@@ -551,9 +551,16 @@ static func _duelo_simple(atacante: Dictionary, attr_a: String, eq_a: Team,
 
 ## Saque del medio después de un gol (o al empezar cada tiempo).
 static func _reiniciar_desde_medio(estado: Dictionary, saca_local: bool) -> void:
+	# En un saque del medio TODOS tienen que estar en su propia mitad. Las
+	# posiciones base de los de arriba (EXT en x=8, DC en x=14) están en
+	# campo rival —correctas durante el juego, no para un saque—, así que
+	# hay que replegarlos: si no, se ve a tres rivales parados adentro de
+	# tu campo antes de que la pelota se mueva.
 	for id in estado["jugadores"]:
 		var e: Dictionary = estado["jugadores"][id]
-		e["pos"] = e["base"]
+		var base: Vector2 = e["base"]
+		var x: float = minf(base.x, -1.0) if e["equipo_local"] else maxf(base.x, 1.0)
+		e["pos"] = Vector2(x, base.y)
 		e["vel"] = Vector2.ZERO
 	estado["pelota"]["pos"] = Vector2.ZERO
 	estado["pelota"]["vel"] = Vector2.ZERO
