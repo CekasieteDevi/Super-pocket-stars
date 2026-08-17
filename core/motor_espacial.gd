@@ -605,21 +605,16 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	# ¿Se cruza un defensor en el camino? Un remate bloqueado no llega
 	# nunca al arquero, y muchas veces sale desviado al córner: es una de
 	# las fuentes reales de córners.
-	# Estar en la línea del remate da la CHANCE de bloquear, no el bloqueo
-	# asegurado: con el bloqueo determinista se comía el 63% de los
-	# remates (en un partido real se bloquea del orden del 25%).
+	# Meterse en la línea del remate da la OPORTUNIDAD; que el bloqueo
+	# salga o no lo decide un duelo (ver _gana_bloqueo), así que un
+	# defensor flojo no le tapa el remate a un delantero de élite.
 	var bloqueador := _bloqueador_de_tiro(estado, poseedor["pos"], es_local)
-	if bloqueador != -1 and rng.randf() >= float(pesos()["fisica"]["prob_bloqueo"]):
-		bloqueador = -1
-	if bloqueador != -1:
+	if bloqueador != -1 and _gana_bloqueo(estado, bloqueador, jugador, eq_a, eq_d, poseedor["pos"], es_local, minuto):
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "tiro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 			"jugador_posicion": poseedor["rol"], "resultado": "bloqueado",
 		})
-		if rng.randf() < float(pesos()["fisica"]["prob_bloqueo_afuera"]):
-			_desviar_afuera(estado, estado["jugadores"][bloqueador]["pos"], not es_local)
-		else:
-			_entregar_pelota(estado, bloqueador)
+		_resolver_rebote(estado, estado["jugadores"][bloqueador]["pos"], not es_local)
 		return
 
 	# §4.6: el destino ya no depende solo del atributo, también de dónde
@@ -796,6 +791,72 @@ static func _saque_de_esquina(estado: Dictionary, ataca_local: bool, lado_arriba
 ## La pelota sale desviada desde `desde`, tocada por el equipo `toco_local`.
 ## Busca el borde más cercano (costado o fondo) para que el reinicio caiga
 ## donde tiene sentido según dónde ocurrió la jugada.
+## ¿El defensor que se metió en la línea llega a tapar el remate? Duelo
+## `tiro` del que patea contra el bloqueo del defensor, que sale de
+## `barrida` (tirarse a taparla) y `agilidad` (la reacción) — no hay un
+## atributo "bloqueo" en el GDD, y esos dos son los que describen el gesto.
+## Con los bloques A/B/C/D de siempre, así que personalidad y habilidades
+## entran igual que en cualquier duelo.
+##
+## La distancia pesa: de lejos el defensor tiene tiempo de leer el remate y
+## meter el cuerpo; a quemarropa le pasa por al lado antes de reaccionar.
+static func _gana_bloqueo(estado: Dictionary, clave_def: int, rematador: Dictionary,
+		eq_a: Team, eq_d: Team, pos_remate: Vector2, es_local: bool, minuto: int) -> bool:
+	var f: Dictionary = pesos()["fisica"]
+	var defensor := _dict_jugador(estado, eq_d, estado["jugadores"][clave_def]["jugador_id"])
+	if defensor.is_empty():
+		return false
+
+	var attrs: Dictionary = defensor["atributos"]
+	var bloqueo: float = float(attrs["barrida"]) * 0.6 + float(attrs["agilidad"]) * 0.4
+	var dist: float = pos_remate.distance_to(arco_rival(es_local))
+	var tiempo_para_reaccionar: float = clampf(dist / float(f["dist_bloqueo_comodo"]), 0.0, 1.0)
+	bloqueo *= float(f["bloqueo_a_quemarropa"]) + (1.0 - float(f["bloqueo_a_quemarropa"])) * tiempo_para_reaccionar
+
+	var ata := Duel.atributo_efectivo(
+		float(rematador["atributos"]["tiro"]), "tecnico", eq_a.resistencia_pct(rematador["id"]))
+	var def := Duel.atributo_efectivo(bloqueo, "defensivo", eq_d.resistencia_pct(defensor["id"]))
+	var res := Duel.resolver(ata, def,
+		MatchEngine._bloques_equipo(eq_a, eq_d, rematador, "tiro", minuto, estado["rng"]),
+		MatchEngine._bloques_equipo(eq_d, eq_a, defensor, "barrida", minuto, estado["rng"]))
+	# gana_atacante = el remate pasa. Si el atacante pierde, lo bloquearon.
+	return not Duel.gana_atacante(res, estado["rng"])
+
+
+## Adónde va la pelota después de un bloqueo: afuera (córner o lateral),
+## controlada por el que bloqueó, o rebotada a cualquier lado de la cancha
+## para que la pelee el que llegue.
+static func _resolver_rebote(estado: Dictionary, desde: Vector2, toco_local: bool) -> void:
+	var f: Dictionary = pesos()["fisica"]
+	var rng: RandomNumberGenerator = estado["rng"]
+	var roll := rng.randf()
+	if roll < float(f["rebote_afuera"]):
+		_desviar_afuera(estado, desde, toco_local)
+		return
+	if roll < float(f["rebote_afuera"]) + float(f["rebote_controlado"]):
+		var suyo := _mas_cercano_del_equipo(estado, desde, toco_local)
+		if suyo != -1:
+			_entregar_pelota(estado, suyo)
+			return
+	# Rebote suelto: sale despedida y la agarra el que llegue.
+	var dir := Vector2(rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0)).normalized()
+	var largo: float = rng.randf_range(float(f["rebote_largo_min"]), float(f["rebote_largo_max"]))
+	var destino := Vector2(
+		clampf(desde.x + dir.x * largo, -LIMITE_X, LIMITE_X),
+		clampf(desde.y + dir.y * largo, -MEDIO_ANCHO + 1.0, MEDIO_ANCHO - 1.0))
+	var pelota: Dictionary = estado["pelota"]
+	pelota["poseedor_id"] = -1
+	pelota["en_vuelo"] = true
+	pelota["pos"] = desde
+	pelota["vel"] = (destino - desde).normalized() * float(f["vel_pase_min"])
+	pelota["destino_pos"] = destino
+	pelota["destino_id"] = -1
+	pelota["pasador_local"] = toco_local
+	pelota["es_pase"] = false
+	pelota["origen_pos"] = desde
+	pelota["ticks_con_pelota"] = 0
+
+
 ## ¿Hay un defensor metido en la línea del remate? Devuelve su clave, o -1.
 ## Es la misma idea que la intercepción de un pase, pero contra el camino
 ## al arco.

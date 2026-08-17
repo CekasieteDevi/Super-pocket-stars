@@ -1003,23 +1003,55 @@ pero el partido dura 4 minutos, no 90: la referencia no es el conteo real
 sino que aparezcan lo suficiente para verse sin frenar el juego. Los
 laterales son tiempo muerto, así que conviene que sean pocos.
 
-### Trampa: el bloqueo no puede ser determinista
+### El bloqueo es un duelo, no una probabilidad fija
 
-La primera versión bloqueaba siempre que hubiera un defensor en la línea
-del remate, y se comía el **63% de los remates** (en un partido real se
-bloquea del orden del 25%): los goles se derrumbaron a 0,90 por partido.
-Estar en la línea da la CHANCE de bloquear (40%), no el bloqueo asegurado,
-y además el defensor tiene que estar **encima** del que remata (a menos de
-6m), no a veinte metros en la trayectoria.
+Meterse en la línea del remate da la OPORTUNIDAD; que el bloqueo salga o
+no lo decide un duelo, igual que todo lo demás en el motor:
 
-Después de esto hubo que recalibrar la conversión, porque los bloqueos
-sacan remates de circulación: paridad con el motor abstracto **3,27 contra
-3,58**, medida ahora sobre 120 partidos porque con 40 el ruido tapaba el
-efecto de los ajustes.
+- **Ataca**: el `tiro` del que patea.
+- **Defiende**: `barrida` × 0,6 + `agilidad` × 0,4. No hay atributo
+  "bloqueo" en el GDD; esos dos son los que describen el gesto (tirarse a
+  taparla y reaccionar a tiempo).
+- **Distancia**: de lejos el defensor tiene tiempo de leer el remate y
+  meter el cuerpo; a quemarropa le pasa por al lado antes de reaccionar
+  (×0,45 pegado al arco, ×1,0 pasados 22 metros).
+- Con los bloques A/B/C/D de siempre, así que personalidad y habilidades
+  entran igual que en cualquier duelo.
+
+Medido (`tests/_diag_bloqueo.gd`), % de remates bloqueados:
+
+| | defensa 30 | defensa 55 | defensa 85 |
+| --- | --- | --- | --- |
+| **tiro 30** | 22% | 42% | 57% |
+| **tiro 60** | 2% | 15% | 36% |
+| **tiro 90** | **0%** | 2% | 11% |
+
+Un delantero de élite no es tapado casi nunca por un defensa flojo, que es
+exactamente lo que se buscaba.
+
+### Después del bloqueo
+
+La pelota no queda siempre en el mismo lado:
+
+| Destino | Chance |
+| --- | --- |
+| Sale (córner o lateral) | 35% |
+| La controla el que bloqueó | 30% |
+| Rebote suelto a cualquier lado, la pelea el que llegue | 35% |
+
+### Nota histórica sobre el bloqueo determinista
+
+La primera versión bloqueaba SIEMPRE que hubiera un defensor en la línea y
+se comía el **63% de los remates** (en un partido real se bloquea ~25%):
+los goles se derrumbaron a 0,90 por partido. La segunda lo hizo una
+probabilidad fija del 40%, que arreglaba el número pero dejaba a un
+defensa de 32 tapándole el remate a un delantero de 90 igual de seguido
+que a uno de 30. El duelo resuelve las dos cosas a la vez.
+
+Paridad con el motor abstracto después del cambio: **3,42 contra 3,58**,
+medida sobre 120 partidos.
 
 ### Todavía pendiente
 
 Un córner se ejecuta como un pase normal, no como un centro: el centro
-necesita altura de pelota (`z`), que sigue sin existir. Y no hay
-diferencia entre un córner y un lateral en cuanto a cómo se pone la pelota
-en juego, más allá de dónde se para la gente.
+necesita altura de pelota (`z`), que sigue sin existir.
