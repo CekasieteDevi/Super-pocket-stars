@@ -210,6 +210,7 @@ static func crear_estado(home: Team, away: Team, rng: RandomNumberGenerator) -> 
 		"fotogramas": [],
 		"robo_cooldown": {},
 		"robos": {"intentos": 0, "ganados": 0},
+		"divididas": {},
 		"pase_detalle": {"intentos": 0, "interceptado_vuelo": 0, "rival_llego_antes": 0, "fuera": 0},
 		"linea_offside": {"local": LIMITE_X, "away": -LIMITE_X},
 		"dist_tiros": [],
@@ -808,6 +809,11 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 	if mejor_id != -1:
 		if bool(pelota.get("es_pase", false)):
 			estado["pase_detalle"]["interceptado_vuelo"] += 1
+		else:
+			# Pelota dividida agarrada en el camino: por construcción solo
+			# la puede tomar el equipo que la quitó (el otro es el que la
+			# perdió, y para él esto no es una intercepción).
+			estado["divididas"]["se la queda quien robo"] = int(estado["divididas"].get("se la queda quien robo", 0)) + 1
 		_entregar_pelota(estado, mejor_id)
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "pase", "equipo": _equipo_de(estado, pasador_local).nombre,
@@ -827,6 +833,12 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 		_dar_pelota_al_arquero(estado, not pasador_local)
 		return
 	var e_receptor: Dictionary = estado["jugadores"][receptor]
+	# Quién termina quedándose las pelotas divididas de un quite: sirve
+	# para verificar que un robo no genere un ping-pong entre los mismos
+	# dos jugadores.
+	if not bool(pelota.get("es_pase", false)):
+		var clave_div := "la recupera quien la perdio" if e_receptor["equipo_local"] == pasador_local else "se la queda quien robo"
+		estado["divididas"][clave_div] = int(estado["divididas"].get(clave_div, 0)) + 1
 	_entregar_pelota(estado, receptor)
 	if e_receptor["equipo_local"] == pasador_local:
 		if bool(pelota.get("es_pase", false)):
@@ -1208,6 +1220,7 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 			"tiros": estado["tiros"],
 			"dist_tiros": estado["dist_tiros"],
 			"robos": estado["robos"],
+			"divididas": estado["divididas"],
 			"pase_detalle": estado["pase_detalle"],
 			"pases": estado["pases"],
 			"decisiones": estado["decisiones"],

@@ -803,3 +803,44 @@ Hoy la pelota es 2D: no hay coordenada `z`. Cuando se implementen los
 centros hay que agregarla, porque un centro que pasa cinco metros por
 encima de un defensor no lo puede interceptar nadie, y con el modelo
 actual sí lo haría. Es el requisito que habilita centros de verdad.
+
+---
+
+## 14. Qué pasa después de un quite (y por qué no se hace un loop)
+
+Cuando un defensor gana la disputa, la pelota **no pasa directo a sus
+pies**: queda **dividida**. Sale despedida entre 6 y 14 metros en una
+dirección semialeatoria, sesgada hacia el lado al que ataca el equipo que
+la recuperó — o sea, un despeje. Los dos jugadores tienen que ir a
+buscarla.
+
+El que la perdió deja de ser poseedor y pasa a ser un jugador sin pelota
+como cualquier otro. Puede salir a buscarla, y de hecho es candidato
+natural a ser uno de los dos perseguidores (los dos más cercanos a la
+pelota del equipo que no la tiene).
+
+### Medido (`tests/_diag_robos.gd`)
+
+| | Por partido |
+| --- | --- |
+| Quites intentados | 57,1 |
+| Quites ganados (pelota dividida) | 32,0 |
+| Divididas que quedan para el que la quitó | 27,1 (85%) |
+| Divididas que recupera el que la perdió | 4,8 (15%) |
+
+### Los tres frenos al loop
+
+1. La pelota se **aleja de los dos**, así que es una carrera y no un
+   duelo nuevo en el mismo lugar.
+2. Hay un **cooldown de 12 ticks (3 segundos de juego) sobre LA DISPUTA**,
+   no sobre cada jugador: después de un quite nadie puede intentar otro
+   por 3 segundos.
+3. El despeje va hacia el lado **contrario** al que atacaba el que la
+   perdió, así que la jugada se aleja de la zona.
+
+Esto no es una precaución teórica. La primera versión entregaba posesión
+limpia e instantánea al que ganaba el quite, y atacante y defensor se
+robaban la pelota mutuamente en el mismo metro cuadrado tick tras tick: un
+partido de prueba terminó **340-0**. Las pelotas divididas y el cooldown
+existen para arreglar exactamente eso, y por eso conviene no tocarlos sin
+volver a medir.
