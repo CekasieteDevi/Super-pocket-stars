@@ -351,6 +351,15 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 	var attr_alcance := "golpe" if jugador.get("posicion", "") == "ARQ" else "pases"
 	var max_dist: float = _por_atributo(jugador, attr_alcance, f["max_dist_pase_malo"], f["max_dist_pase_bueno"])
 	var sesgo_pase: float = float(sesgos["creador_pase"]) if Personalidad.tiene(jugador, "Creador") else 1.0
+	# El pase al hueco hay que VERLO: si el jugador no tiene la visión, la
+	# opción ni le aparece. Es lo que separa a un armador de un jugador que
+	# solo la toca al de al lado.
+	var wh: Dictionary = w["pase_hueco"]
+	var vision_jugador: float = float(jugador["atributos"]["vision"])
+	var umbral_vision: float = float(f["vision_minima_hueco"])
+	var ve_el_hueco: bool = vision_jugador >= umbral_vision
+	var factor_vision: float = 1.0 + float(f["hueco_por_vision"]) \
+		* clampf((vision_jugador - umbral_vision) / maxf(100.0 - umbral_vision, 1.0), 0.0, 1.0)
 	for id in estado["jugadores"]:
 		var comp: Dictionary = estado["jugadores"][id]
 		if comp["equipo_local"] != es_local or id == poseedor["clave"]:
@@ -364,13 +373,51 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 			+ wp["progreso"] * progreso \
 			+ wp["seguridad"] * (1.0 - riesgo) \
 			- wp["distancia"] * (dist / max_dist)
-		u_pase *= sesgo_pase
 		opciones.append({
 			"tipo": "pase", "utilidad": u_pase, "objetivo_id": id,
 			"detalle": {"progreso": progreso, "riesgo": riesgo, "dist": dist},
 		})
 
+		# --- Pase al hueco -------------------------------------------
+		# No va a los pies: va al espacio POR DELANTE del compañero, que
+		# tiene que salir a buscarlo. Rompe la línea de fondo rival, pero
+		# la pelota viaja más y por una zona más disputada, así que la
+		# chance de que la corten es bastante mayor.
+		if not ve_el_hueco:
+			continue
+		var punto := _punto_al_hueco(comp, es_local)
+		var dist_hueco: float = pos.distance_to(punto)
+		if dist_hueco > max_dist:
+			continue
+		var progreso_hueco: float = valor_posicion(punto, es_local) - mi_valor
+		var riesgo_hueco := riesgo_linea(estado, pos, punto, es_local)
+		var u_hueco: float = wh["base"] \
+			+ wh["progreso"] * progreso_hueco \
+			+ wh["seguridad"] * (1.0 - riesgo_hueco) \
+			- wh["distancia"] * (dist_hueco / max_dist)
+		# La visión no solo HABILITA el hueco: cuanta más tiene, más lo ve
+		# y más lo intenta. Con el umbral solo, un jugador de visión 90
+		# tiraba exactamente los mismos huecos que uno de 46.
+		u_hueco *= sesgo_pase * factor_vision
+		opciones.append({
+			"tipo": "pase_hueco", "utilidad": u_hueco, "objetivo_id": id, "punto": punto,
+			"detalle": {"progreso": progreso_hueco, "riesgo": riesgo_hueco, "dist": dist_hueco},
+		})
+
 	return opciones
+
+
+## Adónde tirar el hueco: por delante del compañero, hacia el arco rival.
+## Cuanto más rápido es el que lo va a buscar, más largo se lo puede tirar.
+static func _punto_al_hueco(comp: Dictionary, es_local: bool) -> Vector2:
+	var f: Dictionary = pesos()["fisica"]
+	var arco := arco_rival(es_local)
+	var dir: Vector2 = (arco - comp["pos"]).normalized()
+	var largo: float = float(f["hueco_min"]) + (float(f["hueco_max"]) - float(f["hueco_min"])) \
+		* clampf((float(comp["vel_max"]) - float(f["vel_min"])) / maxf(float(f["vel_max"]) - float(f["vel_min"]), 0.01), 0.0, 1.0)
+	return Vector2(
+		clampf(comp["pos"].x + dir.x * largo, -MEDIO_LARGO + 2.0, MEDIO_LARGO - 2.0),
+		clampf(comp["pos"].y + dir.y * largo, -MEDIO_ANCHO + 2.0, MEDIO_ANCHO - 2.0))
 
 
 ## §4.2: temperatura del softmax. Baja = decide bien y consistente; alta =
@@ -926,10 +973,13 @@ static func _despejar_area(estado: Dictionary, arquero_local: bool) -> void:
 ## no en una dirección infinita: si no, con 18 m/s y ticks de 0.25s la
 ## pelota avanza 4.5m por tick, pasa de largo por encima del receptor
 ## (radio de control 1.6m) y se va del campo sin que nadie la toque.
-static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: int, jugador: Dictionary) -> void:
+## `punto` distinto de null = pase al hueco: la pelota no va a los pies del
+## compañero sino al espacio por delante, y él sale a buscarla.
+static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: int, jugador: Dictionary, punto = null) -> void:
 	var f: Dictionary = pesos()["fisica"]
 	var destino: Dictionary = estado["jugadores"][destino_id]
-	var dir: Vector2 = (destino["pos"] - poseedor["pos"]).normalized()
+	var objetivo: Vector2 = punto if punto != null else destino["pos"]
+	var dir: Vector2 = (objetivo - poseedor["pos"]).normalized()
 	var pelota: Dictionary = estado["pelota"]
 	estado["pase_detalle"]["intentos"] += 1
 	pelota["poseedor_id"] = -1
@@ -937,12 +987,12 @@ static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: i
 	# La pelota sale más fuerte cuanto mejor pega el que la toca: un pase
 	# flojo tarda más en llegar y le da tiempo al rival a meterse. En el
 	# arquero el atributo que manda es el suyo (pies/golpe), no `pases`.
-	var attr := atributo_pase(jugador, poseedor["pos"].distance_to(destino["pos"]))
+	var attr := atributo_pase(jugador, poseedor["pos"].distance_to(objetivo))
 	pelota["vel"] = dir * _por_atributo(jugador, attr, f["vel_pase_min"], f["vel_pase_max"])
 	pelota["pases_pasador"] = float(jugador["atributos"][attr])
 	pelota["attr_pasador"] = attr
 	pelota["pasador_id"] = int(jugador["id"])
-	pelota["destino_pos"] = destino["pos"]
+	pelota["destino_pos"] = objetivo
 	pelota["destino_id"] = destino_id
 	pelota["pasador_local"] = poseedor["equipo_local"]
 	pelota["es_pase"] = true
@@ -1313,6 +1363,8 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 			_conducir(estado, poseedor)
 		"pase":
 			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador)
+		"pase_hueco":
+			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador, elegida["punto"])
 		"tiro":
 			_resolver_tiro(estado, poseedor, jugador)
 

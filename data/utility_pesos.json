@@ -14,6 +14,14 @@
     "distancia": 0.15
   },
 
+  "_pase_hueco": "Pase al espacio por delante del companero, no a los pies. Progreso alto y riesgo alto: rompe la linea rival pero la pelota viaja mas y por zona disputada. Solo lo ve quien tiene vision suficiente.",
+  "pase_hueco": {
+    "base": 0.10,
+    "progreso": 1.30,
+    "seguridad": 0.30,
+    "distancia": 0.20
+  },
+
   "tiro": {
     "base": 0.00,
     "geometria": 4.40
@@ -23,7 +31,7 @@
   "tiro_resolucion": {
     "peso_atributo": 0.6,
     "peso_geometria": 0.4,
-    "porteria_base": 0.575,
+    "porteria_base": 0.505,
     "porteria_calidad": 0.50,
     "palo": 0.05,
     "fuerza_base": 0.80
@@ -54,6 +62,11 @@
     "vel_min": 3.6,
     "vel_max": 9.2,
     "vel_pase_min": 11.0,
+    "_hueco": "Cuanto por delante del companero se tira el hueco. Escala con la velocidad del que lo va a buscar: a un rapido se lo podes tirar mas largo.",
+    "hueco_min": 6.0,
+    "hueco_max": 15.0,
+    "vision_minima_hueco": 45.0,
+    "hueco_por_vision": 0.45,
     "vel_pase_max": 24.0,
     "vel_pelota_pase": 18.0,
     "radio_control": 1.6,

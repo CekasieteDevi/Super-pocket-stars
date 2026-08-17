@@ -1055,3 +1055,53 @@ medida sobre 120 partidos.
 
 Un córner se ejecuta como un pase normal, no como un centro: el centro
 necesita altura de pelota (`z`), que sigue sin existir.
+
+---
+
+## 18. Pase al hueco
+
+Primera de las jugadas que faltaban del diseño original. No va a los pies:
+va al **espacio por delante** del compañero, que sale a buscarlo. Rompe la
+línea rival, pero la pelota viaja más y por una zona más disputada.
+
+### Quién lo ve
+
+Es la única acción con un **umbral de atributo**: si el jugador no llega a
+`vision` 45, la opción **ni le aparece** en la lista. Es lo que separa a un
+armador de alguien que solo la toca al de al lado.
+
+Por encima del umbral la visión sigue pesando: cuanta más tiene, más lo
+intenta. Con el umbral solo, un jugador de visión 90 tiraba exactamente
+los mismos huecos que uno de 46, lo cual no tenía sentido.
+
+Medido (`tests/_diag_hueco.gd`), por partido:
+
+| `vision` del equipo | Pases al hueco | Pases normales | Goles |
+| --- | --- | --- | --- |
+| 25 | **0** | 67,3 | 3,08 |
+| 45 | 29,9 | 39,7 | 3,28 |
+| 65 | 30,5 | 37,5 | 3,40 |
+| 90 | **32,1** | 36,7 | 3,72 |
+
+### Dónde cae
+
+El punto se calcula por delante del receptor, hacia el arco rival, y el
+largo escala con la **velocidad del que lo va a buscar** (6m para un lento,
+15m para un rápido): a un delantero veloz se lo podés tirar más largo.
+
+### Efecto medido
+
+- Se elige en ~18% de las decisiones.
+- Aparecen pases donde **el rival llega antes** (55 por cada 20 partidos,
+  antes 0): es exactamente el riesgo de tirar al espacio en vez de a los
+  pies.
+- El acierto de pase de los equipos buenos **baja** (de 83% a ~75%), porque
+  usan más el hueco. Es correcto: un equipo que juega incisivo completa
+  menos pases que uno que la toca de costado.
+
+Paridad con el motor abstracto: **3,69 contra 3,58**.
+
+### Todavía faltan
+
+Gambeta, pase largo y pared. Y el centro, que sigue bloqueado por la
+altura de pelota.
