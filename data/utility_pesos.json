@@ -75,6 +75,7 @@
     "hueco_max": 15.0,
     "vision_minima_hueco": 45.0,
     "_gambeta_geo": "A quien se puede encarar: cerca y DELANTE (cono frontal), no al costado ni atras. gambeta_avance es cuanto queda mas alla del defensor al pasarlo.",
+    "control_minimo_gambeta": 50.0,
     "radio_gambeta": 8.0,
     "gambeta_cono_frontal": -0.10,
     "gambeta_avance": 3.0,

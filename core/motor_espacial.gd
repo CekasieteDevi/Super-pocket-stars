@@ -233,7 +233,7 @@ static func crear_estado(home: Team, away: Team, rng: RandomNumberGenerator) -> 
 		"fotogramas": [],
 		"robo_cooldown": {},
 		"robos": {"intentos": 0, "ganados": 0},
-		"gambetas": {},
+		"gambetas": {"home": {"intentos": 0, "ganadas": 0}, "away": {"intentos": 0, "ganadas": 0}},
 		"reinicios": {},
 		"cooldown": {},
 		"pase_detalle": {"intentos": 0, "interceptado_vuelo": 0, "rival_llego_antes": 0, "fuera": 0},
@@ -348,7 +348,13 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 	# A diferencia de conducir (llevarla y ver qué pasa), acá ELIGE ir
 	# contra un rival puntual. Solo aparece si hay alguien a quien encarar:
 	# gambetear al aire no significa nada.
-	var rival_a_encarar := _rival_a_encarar(estado, pos, es_local)
+	# Encarar hay que SABER hacerlo: por debajo de este control la opción
+	# ni aparece, igual que el pase al hueco con la visión. Sin el umbral,
+	# un jugador de control 30 encaraba más seguido que uno de 60 —
+	# elegía gambeta por descarte, porque sus otras opciones eran peores
+	# todavía, y la perdía casi siempre.
+	var sabe_gambetear: bool = float(jugador["atributos"]["control"]) >= float(f["control_minimo_gambeta"])
+	var rival_a_encarar := _rival_a_encarar(estado, pos, es_local) if sabe_gambetear else -1
 	if rival_a_encarar != -1:
 		var wg: Dictionary = w["gambeta"]
 		var e_rival: Dictionary = estado["jugadores"][rival_a_encarar]
@@ -479,7 +485,8 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 		return
 
 	var minuto := _minuto_int(estado)
-	estado["gambetas"]["intentos"] = int(estado["gambetas"].get("intentos", 0)) + 1
+	var lado_g := "home" if es_local else "away"
+	estado["gambetas"][lado_g]["intentos"] += 1
 
 	var att_a: Dictionary = jugador["atributos"]
 	var att_d: Dictionary = defensor["atributos"]
@@ -496,7 +503,7 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 		MatchEngine._chequear_tarjeta(defensor, eq_d, eq_a, estado["rng"], estado["eventos"], minuto, true, estado["log"])
 
 	if Duel.gana_atacante(res, estado["rng"]):
-		estado["gambetas"]["ganadas"] = int(estado["gambetas"].get("ganadas", 0)) + 1
+		estado["gambetas"][lado_g]["ganadas"] += 1
 		# Se lo saca de encima: queda más allá del defensor, y el defensor
 		# pasado unos segundos.
 		var arco := arco_rival(es_local)

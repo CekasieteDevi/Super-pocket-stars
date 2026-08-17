@@ -1129,35 +1129,48 @@ habilidades de `control` (Bailarín, Cohete) empujan solas, sin cablearlas.
 - La gambeta **reemplaza el quite automático** de ese tick: es el mismo
   duelo por la misma pelota, visto desde el otro lado.
 
-### Medido (`tests/_diag_gambeta.gd`)
+### Quién encara: hace falta saber
 
-Gambetas ganadas, y entre paréntesis intentos por partido:
+Igual que el pase al hueco pide `vision`, la gambeta pide **`control` 50**:
+por debajo de eso la opción ni aparece. Y la utilidad no mira lo bueno que
+sos en abstracto sino **si a ESE lo podés pasar** (la diferencia entre tu
+`control` y su `quite`).
+
+Medido (`tests/_diag_gambeta.gd`) — ganadas, y entre paréntesis intentos
+por partido:
 
 | | quite 30 | quite 55 | quite 85 |
 | --- | --- | --- | --- |
-| **control 30** | 1% (18,4) | 0% (30,4) | 0% (28,8) |
-| **control 60** | 79% (8,7) | 22% (9,1) | 1% (10,7) |
-| **control 90** | **96%** (22,5) | 94% (14,1) | 56% (5,8) |
+| **control 30** | 0% (0,0) | 0% (0,0) | 0% (0,0) |
+| **control 60** | 95% (6,6) | 56% (1,9) | 7% (1,1) |
+| **control 90** | 96% (**21,2**) | 97% (14,0) | 63% (4,5) |
 
-### Lo que decide encarar es el DUELO, no lo bueno que sos
+Un `control` 90 encara 21 veces al mismo defensor que un `control` 60
+encara 6, y los dos bajan la frecuencia contra un rival difícil.
 
-La primera versión miraba solo el `control` propio, y un jugador de
-control 30 encaraba 20-30 veces por partido perdiéndolas todas,
-simplemente porque sus otras opciones eran peores. Ni siquiera elevar el
-término al cuadrado lo arregló.
+### Dos trampas de MEDICIÓN que costaron caro
 
-Lo que sirvió fue mirar **contra quién**: la utilidad pesa la diferencia
-entre tu `control` y el `quite` de ESE rival. Se ve en la fila de abajo de
-la tabla: control 90 encara 22,5 veces a un defensa de 30 y solo 5,8 veces
-a uno de 85. No se encara a quien no se puede pasar.
+1. **El evento `"gambeta"` no significa gambeta.** Un quite perdido emite
+   un evento de tipo `"gambeta"` con resultado `"pierde"` (herencia del
+   motor abstracto, ver `MatchEngine`). Contando eventos, los tackles
+   perdidos se mezclaban con las gambetas falladas y parecía que un
+   jugador de `control` 30 encaraba 30 veces por partido perdiéndolas
+   todas. **Para medir gambetas hay que usar `stats.gambetas`, no los
+   eventos.**
+2. **El contador tiene que ser por equipo.** La primera versión sumaba los
+   dos, así que un equipo al que se le fijaba `control` 30 igual mostraba
+   ~2 gambetas por partido: eran las del rival.
 
-Queda un resto: en el test sintético los de control 30 siguen intentando
-de más. Es en buena medida un artefacto del test (baja solo `control` y
-deja el resto natural, así que son buenos pasadores con pies de madera);
-con equipos naturales, donde los atributos correlacionan, no se ve.
+Las dos me llevaron a conclusiones equivocadas sobre el comportamiento del
+motor antes de mirar los números bien.
 
-Paridad con el motor abstracto: **3,67 contra 3,58**.
+### Nota sobre el sesgo estructural del softmax
 
-### Todavía faltan
+Hay **una sola** opción de gambeta pero **una de pase por cada compañero
+alcanzable** (5-8). En un softmax, ocho opciones de puntaje medio pesan
+juntas más que una sola de puntaje alto, así que la gambeta necesita pesos
+altos para aparecer. Si alguna vez hay que subir o bajar su frecuencia,
+esa es la palanca real — o agrupar los pases para que compitan como una
+categoría.
 
-Pase largo y pared. Y el centro, bloqueado por la altura de pelota.
+Paridad con el motor abstracto: **3,65 contra 3,58**.

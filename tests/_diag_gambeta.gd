@@ -33,11 +33,12 @@ func _medir(control: int, quite: int) -> Array:
 			j["atributos"]["quite"] = quite
 			j["atributos"]["agilidad"] = quite
 		var r := MotorEspacial.simular(h, a, rng, false)
-		for ev in r["eventos"]:
-			if ev["tipo"] == "gambeta" and ev["equipo"] == h.nombre:
-				if ev["resultado"] == "pasa":
-					ganadas += 1
-					intentos += 1
-				elif ev["resultado"] == "pierde":
-					intentos += 1
+		# OJO: contar los eventos de tipo "gambeta" NO sirve — un quite
+		# perdido emite un evento con ese mismo tipo (herencia del motor
+		# abstracto), asi que se mezclarian tackles perdidos con gambetas
+		# falladas y pareceria que los malos encaran muchisimo. Hay que
+		# usar el contador propio.
+		var g: Dictionary = r["stats"]["gambetas"]["home"]
+		intentos += int(g.get("intentos", 0))
+		ganadas += int(g.get("ganadas", 0))
 	return [float(ganadas) / maxf(intentos, 1) * 100.0, float(intentos) / N]
