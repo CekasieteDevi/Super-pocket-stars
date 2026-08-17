@@ -175,6 +175,18 @@ static func _por_atributo(jugador: Dictionary, atributo: String, en_0: float, en
 	return en_0 + v * (en_100 - en_0)
 
 
+## Con qué atributo ejecuta un pase este jugador. Un jugador de campo usa
+## `pases`; el arquero usa los suyos, que hasta ahora no los leía nadie:
+## `pies` para la salida corta (jugar desde el fondo) y `golpe` para el
+## saque largo. Así un arquero con buen pie saca jugando y uno que solo
+## tiene pierna revienta la pelota — y de eso depende que el saque de arco
+## termine en un compañero o en un rival.
+static func atributo_pase(jugador: Dictionary, distancia: float) -> String:
+	if jugador.get("posicion", "") != "ARQ":
+		return "pases"
+	return "golpe" if distancia > float(pesos()["fisica"]["dist_saque_largo"]) else "pies"
+
+
 static func _vel_max(jugador: Dictionary) -> float:
 	var f: Dictionary = pesos()["fisica"]
 	return _por_atributo(jugador, "velocidad", f["vel_min"], f["vel_max"])
@@ -333,8 +345,10 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 	# --- Pasar a cada compañero alcanzable ----------------------------
 	var wp: Dictionary = w["pase"]
 	# Hasta dónde llega su pase: un central de división 10 no cambia el
-	# frente de juego de 45 metros.
-	var max_dist: float = _por_atributo(jugador, "pases", f["max_dist_pase_malo"], f["max_dist_pase_bueno"])
+	# frente de juego de 45 metros. El arquero se mide por `golpe`, que es
+	# lo que define hasta dónde le llega el saque.
+	var attr_alcance := "golpe" if jugador.get("posicion", "") == "ARQ" else "pases"
+	var max_dist: float = _por_atributo(jugador, attr_alcance, f["max_dist_pase_malo"], f["max_dist_pase_bueno"])
 	var sesgo_pase: float = float(sesgos["creador_pase"]) if Personalidad.tiene(jugador, "Creador") else 1.0
 	for id in estado["jugadores"]:
 		var comp: Dictionary = estado["jugadores"][id]
@@ -601,14 +615,14 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 			"minuto": minuto, "tipo": "tiro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 			"jugador_posicion": poseedor["rol"], "resultado": "afuera",
 		})
-		_dar_pelota_al_arquero(estado, not es_local)
+		_dar_pelota_al_arquero(estado, not es_local, true)  # se fue al fondo: saque de arco
 		return
 	if roll > chance_porteria:
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "tiro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 			"jugador_posicion": poseedor["rol"], "resultado": "palo",
 		})
-		_dar_pelota_al_arquero(estado, not es_local)
+		_dar_pelota_al_arquero(estado, not es_local, true)
 		return
 
 	# El remate se debilita según desde dónde salió: un tiro de 30 metros
@@ -647,16 +661,49 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 		_dar_pelota_al_arquero(estado, not es_local)
 
 
-static func _dar_pelota_al_arquero(estado: Dictionary, arquero_local: bool) -> void:
+## La pelota vuelve al arquero. Si es un SAQUE DE ARCO (la pelota salió
+## por la línea de fondo) los rivales tienen que estar fuera del área,
+## como manda la regla: sin eso quedaban parados adentro esperando el
+## saque, y el 42% de las salidas del arquero terminaba en un rival.
+## Cuando el arquero simplemente ataja, no se despeja el área.
+static func _dar_pelota_al_arquero(estado: Dictionary, arquero_local: bool, saque_de_arco: bool = false) -> void:
+	var arquero_clave := -1
 	for id in estado["jugadores"]:
 		var e: Dictionary = estado["jugadores"][id]
 		if e["equipo_local"] == arquero_local and e["rol"] == "ARQ":
-			estado["pelota"]["poseedor_id"] = id
-			estado["pelota"]["pos"] = e["pos"]
-			estado["pelota"]["vel"] = Vector2.ZERO
-			estado["pelota"]["en_vuelo"] = false
-			estado["pelota"]["ticks_con_pelota"] = 0
-			return
+			arquero_clave = id
+			break
+	if arquero_clave == -1:
+		return
+
+	if saque_de_arco:
+		_despejar_area(estado, arquero_local)
+		estado["eventos"].append({
+			"minuto": _minuto_int(estado), "tipo": "saque_arco",
+			"equipo": _equipo_de(estado, arquero_local).nombre,
+			"rival": _equipo_de(estado, not arquero_local).nombre,
+			"jugador_posicion": "ARQ", "resultado": "saque",
+		})
+
+	var arq: Dictionary = estado["jugadores"][arquero_clave]
+	estado["pelota"]["poseedor_id"] = arquero_clave
+	estado["pelota"]["pos"] = arq["pos"]
+	estado["pelota"]["vel"] = Vector2.ZERO
+	estado["pelota"]["en_vuelo"] = false
+	estado["pelota"]["ticks_con_pelota"] = 0
+
+
+## Saca a los rivales del área grande del que va a sacar (16,5m de fondo,
+## 40,32m de ancho — medidas reglamentarias).
+static func _despejar_area(estado: Dictionary, arquero_local: bool) -> void:
+	var borde_x: float = -MEDIO_LARGO + 16.5 if arquero_local else MEDIO_LARGO - 16.5
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		if e["equipo_local"] == arquero_local:
+			continue
+		var dentro: bool = (e["pos"].x < borde_x) if arquero_local else (e["pos"].x > borde_x)
+		if dentro and absf(e["pos"].y) < 20.16:
+			e["pos"] = Vector2(borde_x + (1.0 if arquero_local else -1.0), e["pos"].y)
 
 
 ## Un pase va A UN PUNTO (donde está el compañero al momento de pegarle),
@@ -672,9 +719,12 @@ static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: i
 	pelota["poseedor_id"] = -1
 	pelota["en_vuelo"] = true
 	# La pelota sale más fuerte cuanto mejor pega el que la toca: un pase
-	# flojo tarda más en llegar y le da tiempo al rival a meterse.
-	pelota["vel"] = dir * _por_atributo(jugador, "pases", f["vel_pase_min"], f["vel_pase_max"])
-	pelota["pases_pasador"] = float(jugador["atributos"]["pases"])
+	# flojo tarda más en llegar y le da tiempo al rival a meterse. En el
+	# arquero el atributo que manda es el suyo (pies/golpe), no `pases`.
+	var attr := atributo_pase(jugador, poseedor["pos"].distance_to(destino["pos"]))
+	pelota["vel"] = dir * _por_atributo(jugador, attr, f["vel_pase_min"], f["vel_pase_max"])
+	pelota["pases_pasador"] = float(jugador["atributos"][attr])
+	pelota["attr_pasador"] = attr
 	pelota["pasador_id"] = int(jugador["id"])
 	pelota["destino_pos"] = destino["pos"]
 	pelota["destino_id"] = destino_id
@@ -843,7 +893,7 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 	# un defensor llegó antes, se la queda él).
 	var receptor := _mas_cercano_a(estado, hasta)
 	if receptor == -1:
-		_dar_pelota_al_arquero(estado, not pasador_local)
+		_dar_pelota_al_arquero(estado, not pasador_local, true)
 		return
 	var e_receptor: Dictionary = estado["jugadores"][receptor]
 	_entregar_pelota(estado, receptor)
@@ -941,8 +991,14 @@ static func _gana_intercepcion(estado: Dictionary, clave_def: int, dist: float, 
 	var largo: float = clampf(recorrido / float(f["recorrido_pase_largo"]), 0.0, 1.0)
 	lectura *= float(f["lectura_pase_corto"]) + (float(f["lectura_pase_largo"]) - float(f["lectura_pase_corto"])) * largo
 
+	# El atributo con el que se ejecutó el pase, que en el arquero es
+	# `pies` o `golpe` y no `pases` (ver atributo_pase). Sin esto el duelo
+	# de intercepción de un saque de arco se resolvía con el `pases` del
+	# arquero, un número que en un arquero no significa nada, y la tasa de
+	# saques completados no dependía de él.
+	var attr_pas: String = str(estado["pelota"].get("attr_pasador", "pases"))
 	var ata := Duel.atributo_efectivo(
-		float(pasador["atributos"]["pases"]), "tecnico", eq_pas.resistencia_pct(pasador["id"]))
+		float(pasador["atributos"][attr_pas]), "tecnico", eq_pas.resistencia_pct(pasador["id"]))
 	var def := Duel.atributo_efectivo(lectura, "defensivo", eq_def.resistencia_pct(defensor["id"]))
 	var res := Duel.resolver(ata, def,
 		MatchEngine._bloques_equipo(eq_pas, eq_def, pasador, "pases", minuto, estado["rng"]),

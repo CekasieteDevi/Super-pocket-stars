@@ -237,6 +237,8 @@ func _texto_evento(evento: Dictionary) -> String:
 			return "%s: TARJETA ROJA para %s%s" % [evento["equipo"], pos, " (doble amarilla)" if evento["resultado"] == "roja_doble_amarilla" else ""]
 		"cambio":
 			return "%s: CAMBIO — sale %s (%s)" % [evento["equipo"], pos, evento["resultado"]]
+		"saque_arco":
+			return "%s: saque de arco" % evento["equipo"]
 	# Los pases son la enorme mayoría de los eventos: narrarlos todos
 	# taparía el relato de lo que importa.
 	return ""

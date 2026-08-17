@@ -70,6 +70,8 @@
     "radio_tackle": 2.0,
     "max_dist_pase_malo": 26.0,
     "max_dist_pase_bueno": 46.0,
+    "_dist_saque_largo": "A partir de esta distancia el arquero saca con `golpe` (pelotazo) en vez de `pies` (salida jugada). Son los dos atributos de arquero que antes no leia nadie.",
+    "dist_saque_largo": 28.0,
     "_avance_conducir": "Fraccion de su velocidad a la que corre el que lleva la pelota. Menor a 1 porque conducir es mas lento que correr libre: si fuera 1 nadie lo alcanza nunca.",
     "avance_conducir": 0.60,
     "_ticks_control": "Ticks que el poseedor conduce/aguanta antes de poder pasar o tirar. Sin esto decide cada 0.25s y la pelota circula 3-4 veces mas rapido que en un partido real.",

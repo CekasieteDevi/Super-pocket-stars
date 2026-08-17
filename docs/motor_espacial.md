@@ -909,28 +909,53 @@ desde el medio se usaban tal cual, así que se veían tres rivales parados
 adentro de tu campo antes de que la pelota se moviera, en contra de la
 regla. Ahora `_reiniciar_desde_medio` repliega a todos a su propia mitad.
 
-### Salida del arquero: no está cableada
+### A quién se la da el arquero: no está cableado
 
-El arquero no tiene lógica especial: es un poseedor más y elige con la
-misma utilidad que cualquiera. A quién le llega, medido sobre 290 salidas
-en 30 partidos (`tests/_diag_arquero.gd`):
+No tiene lógica especial para elegir destinatario — es un poseedor más y
+decide con la misma utilidad que cualquiera. Medido sobre 290 salidas, de
+las que llegan a un compañero: MC 38%, DFC 33%, LAT 25%, MCO 3%, EXT 1%.
+O sea que el destinatario más frecuente es un volante central, aunque
+entre los dos tipos de defensor se llevan el 58%.
 
-| Receptor | % de las salidas que llegan a un compañero |
+### Saque de arco
+
+Ya existe como jugada propia. Cuando la pelota sale por la línea de fondo
+(remate afuera, al palo, o pase que se va), se cobra saque de arco: los
+rivales salen del área grande como manda la regla, se emite un evento
+`saque_arco` y el arquero pone la pelota en juego.
+
+Lo ejecuta con **sus** atributos, que hasta entonces no los leía nadie:
+
+| Distancia del saque | Atributo |
 | --- | --- |
-| MC | 38% |
-| DFC | 33% |
-| LAT | 25% |
-| MCO | 3% |
-| EXT | 1% |
+| Hasta 28 m (salida jugada) | `pies` |
+| Más de 28 m (pelotazo) | `golpe` |
 
-O sea que el destinatario más frecuente es un volante central, no un
-defensor, aunque entre DFC y LAT se llevan el 58%. Y su alcance depende de
-su propio atributo `pases` (30m con `pases` 20, 42m con 80), así que un
-arquero con buen pie llega más lejos.
+Ese atributo define la velocidad de la pelota, el alcance, y —lo que
+importa— entra como valor del pasador en el duelo de intercepción. De ahí
+que la probabilidad de que el saque llegue a un compañero dependa del
+arquero, medido con `tests/_diag_arquero.gd`:
 
-**Dato a vigilar**: el 42% de las salidas del arquero termina en un rival.
-Es alto para lo que sería un saque de arco real. Puede ser aceptable como
-"salida jugada bajo presión en divisiones bajas", pero si alguna vez se
-implementan los saques de arco como jugada aparte (hoy no existen: la
-pelota simplemente aparece en los pies del arquero), este es el número a
-corregir.
+| `pies`/`golpe` del arquero | Saques completados |
+| --- | --- |
+| 20 | 53% |
+| 45 | 65% |
+| 70 | 69% |
+| 95 | 67% |
+
+Se aplana arriba porque un arquero mejor también intenta salidas más
+largas y arriesgadas, que es un rendimiento decreciente razonable.
+
+**Trampa que costó encontrar**: al principio la tasa no dependía del
+arquero (71/71/64/76, puro ruido). El atributo correcto se usaba para la
+velocidad y el radio de intercepción, pero el DUELO de intercepción seguía
+leyendo `pases` — un número que en un arquero no significa nada. Si se
+agregan más ejecutores con atributos propios (un especialista en tiros
+libres, por ejemplo), hay que acordarse de que el atributo viaja en la
+pelota (`attr_pasador`), no se re-deduce en el duelo.
+
+### Todavía pendiente
+
+**Laterales y córners**: hoy una pelota que sale por los costados no
+existe como jugada; se resuelve dándosela al arquero. Y un remate que se
+va al fondo debería ser córner si la tocó un defensor.
