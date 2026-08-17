@@ -44,7 +44,7 @@ func _init() -> void:
 	var ga := 0
 	var te := 0
 	var ta := 0
-	for i in range(40):
+	for i in range(120):
 		var s := 7000 + i
 		var r1 := RandomNumberGenerator.new()
 		r1.seed = s
@@ -61,7 +61,7 @@ func _init() -> void:
 		var ra := MatchEngine.simular(h2, a2, r2, false)
 		ga += int(ra["goles_local"]) + int(ra["goles_visitante"])
 	print("  espacial %.2f goles (%.1f remates) | abstracto %.2f goles" % [
-		float(ge) / 40.0, float(te) / 40.0, float(ga) / 40.0])
+		float(ge) / 120.0, float(te) / 120.0, float(ga) / 120.0])
 
 	print("\n=== Espacial vs abstracto (mismos equipos, misma semilla) ===")
 	for objetivo in [40, 55, 70]:

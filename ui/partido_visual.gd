@@ -239,6 +239,10 @@ func _texto_evento(evento: Dictionary) -> String:
 			return "%s: CAMBIO — sale %s (%s)" % [evento["equipo"], pos, evento["resultado"]]
 		"saque_arco":
 			return "%s: saque de arco" % evento["equipo"]
+		"corner":
+			return "%s: CÓRNER" % evento["equipo"]
+		"lateral":
+			return "%s: saca de lateral" % evento["equipo"]
 	# Los pases son la enorme mayoría de los eventos: narrarlos todos
 	# taparía el relato de lo que importa.
 	return ""

@@ -233,6 +233,7 @@ static func crear_estado(home: Team, away: Team, rng: RandomNumberGenerator) -> 
 		"fotogramas": [],
 		"robo_cooldown": {},
 		"robos": {"intentos": 0, "ganados": 0},
+		"reinicios": {},
 		"cooldown": {},
 		"pase_detalle": {"intentos": 0, "interceptado_vuelo": 0, "rival_llego_antes": 0, "fuera": 0},
 		"linea_offside": {"local": LIMITE_X, "away": -LIMITE_X},
@@ -601,6 +602,26 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	estado["tiros"][clave] += 1
 	estado["dist_tiros"].append(poseedor["pos"].distance_to(arco_rival(es_local)))
 
+	# ¿Se cruza un defensor en el camino? Un remate bloqueado no llega
+	# nunca al arquero, y muchas veces sale desviado al córner: es una de
+	# las fuentes reales de córners.
+	# Estar en la línea del remate da la CHANCE de bloquear, no el bloqueo
+	# asegurado: con el bloqueo determinista se comía el 63% de los
+	# remates (en un partido real se bloquea del orden del 25%).
+	var bloqueador := _bloqueador_de_tiro(estado, poseedor["pos"], es_local)
+	if bloqueador != -1 and rng.randf() >= float(pesos()["fisica"]["prob_bloqueo"]):
+		bloqueador = -1
+	if bloqueador != -1:
+		estado["eventos"].append({
+			"minuto": minuto, "tipo": "tiro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
+			"jugador_posicion": poseedor["rol"], "resultado": "bloqueado",
+		})
+		if rng.randf() < float(pesos()["fisica"]["prob_bloqueo_afuera"]):
+			_desviar_afuera(estado, estado["jugadores"][bloqueador]["pos"], not es_local)
+		else:
+			_entregar_pelota(estado, bloqueador)
+		return
+
 	# §4.6: el destino ya no depende solo del atributo, también de dónde
 	# está parado el que remata. Calibrado contra un partido real: ~35% de
 	# los remates van al arco, y de esos entra ~1 de cada 3.
@@ -622,7 +643,8 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 			"minuto": minuto, "tipo": "tiro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 			"jugador_posicion": poseedor["rol"], "resultado": "palo",
 		})
-		_dar_pelota_al_arquero(estado, not es_local, true)
+		# Del palo suele salir rebote al córner.
+		_desviar_afuera(estado, arco_rival(es_local), not es_local)
 		return
 
 	# El remate se debilita según desde dónde salió: un tiro de 30 metros
@@ -658,7 +680,13 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	else:
 		estado["log"].append("min %d - %s (%s) remata desde %.0f m, ataja el arquero" % [
 			minuto, poseedor["rol"], eq_a.nombre, dist])
-		_dar_pelota_al_arquero(estado, not es_local)
+		# El arquero no siempre la retiene: si la manotea, sale al córner.
+		# Cuanto mejor su agarre, más veces la queda.
+		var agarre: float = float(arquero["atributos"]["agarre"]) / 100.0
+		if rng.randf() > agarre:
+			_desviar_afuera(estado, arco_rival(es_local), not es_local)
+		else:
+			_dar_pelota_al_arquero(estado, not es_local)
 
 
 ## La pelota vuelve al arquero. Si es un SAQUE DE ARCO (la pelota salió
@@ -691,6 +719,133 @@ static func _dar_pelota_al_arquero(estado: Dictionary, arquero_local: bool, saqu
 	estado["pelota"]["vel"] = Vector2.ZERO
 	estado["pelota"]["en_vuelo"] = false
 	estado["pelota"]["ticks_con_pelota"] = 0
+
+
+## La pelota se fue de la cancha. Decide qué se cobra según por dónde
+## salió y quién la tocó último, igual que el reglamento:
+##  - por el costado -> lateral para el que NO la tocó
+##  - por el fondo, tocada por el que defiende ese arco -> córner
+##  - por el fondo, tocada por el que ataca -> saque de arco
+static func _pelota_fuera(estado: Dictionary, punto: Vector2, toco_local: bool) -> void:
+	if absf(punto.y) >= MEDIO_ANCHO:
+		_lateral(estado, punto, not toco_local)
+		return
+	# ¿De qué arco es esta línea de fondo? La de +x la defiende el visitante.
+	var linea_del_local: bool = punto.x < 0.0
+	if toco_local == linea_del_local:
+		_saque_de_esquina(estado, not linea_del_local, punto.y >= 0.0)
+	else:
+		_dar_pelota_al_arquero(estado, linea_del_local, true)
+
+
+## Lateral: la pone en juego el equipo al que se le concede, desde el
+## punto por donde salió.
+static func _lateral(estado: Dictionary, punto: Vector2, saca_local: bool) -> void:
+	var pos := Vector2(clampf(punto.x, -MEDIO_LARGO + 1.0, MEDIO_LARGO - 1.0),
+		clampf(punto.y, -MEDIO_ANCHO + 0.5, MEDIO_ANCHO - 0.5))
+	var ejecutor := _mas_cercano_del_equipo(estado, pos, saca_local)
+	if ejecutor == -1:
+		_dar_pelota_al_arquero(estado, saca_local, true)
+		return
+	estado["jugadores"][ejecutor]["pos"] = pos
+	_entregar_pelota(estado, ejecutor)
+	estado["reinicios"]["lateral"] = int(estado["reinicios"].get("lateral", 0)) + 1
+	estado["eventos"].append({
+		"minuto": _minuto_int(estado), "tipo": "lateral",
+		"equipo": _equipo_de(estado, saca_local).nombre,
+		"rival": _equipo_de(estado, not saca_local).nombre,
+		"jugador_posicion": estado["jugadores"][ejecutor]["rol"], "resultado": "saque",
+	})
+
+
+## Córner: pelota al banderín, la ejecuta el atacante más cercano, y los
+## dos equipos se meten al área — que es lo que hace peligroso un córner.
+static func _saque_de_esquina(estado: Dictionary, ataca_local: bool, lado_arriba: bool) -> void:
+	var arco := arco_rival(ataca_local)
+	var esquina := Vector2(arco.x - (1.0 if arco.x > 0.0 else -1.0),
+		(MEDIO_ANCHO - 0.5) * (1.0 if lado_arriba else -1.0))
+	var ejecutor := _mas_cercano_del_equipo(estado, esquina, ataca_local)
+	if ejecutor == -1:
+		_dar_pelota_al_arquero(estado, not ataca_local, true)
+		return
+
+	var rng: RandomNumberGenerator = estado["rng"]
+	var dentro_x: float = arco.x - (11.0 if arco.x > 0.0 else -11.0)
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		if id == ejecutor or e["rol"] == "ARQ":
+			continue
+		# Suben al área los de arriba del que ataca y toda la defensa del
+		# que defiende; el resto se queda cubriendo.
+		var sube: bool = ROLES_QUE_ATACAN.has(e["rol"]) if e["equipo_local"] == ataca_local else true
+		if sube:
+			e["pos"] = Vector2(dentro_x + rng.randf_range(-5.0, 5.0), rng.randf_range(-14.0, 14.0))
+			e["vel"] = Vector2.ZERO
+
+	estado["jugadores"][ejecutor]["pos"] = esquina
+	_entregar_pelota(estado, ejecutor)
+	estado["reinicios"]["corner"] = int(estado["reinicios"].get("corner", 0)) + 1
+	estado["eventos"].append({
+		"minuto": _minuto_int(estado), "tipo": "corner",
+		"equipo": _equipo_de(estado, ataca_local).nombre,
+		"rival": _equipo_de(estado, not ataca_local).nombre,
+		"jugador_posicion": estado["jugadores"][ejecutor]["rol"], "resultado": "saque",
+	})
+
+
+## La pelota sale desviada desde `desde`, tocada por el equipo `toco_local`.
+## Busca el borde más cercano (costado o fondo) para que el reinicio caiga
+## donde tiene sentido según dónde ocurrió la jugada.
+## ¿Hay un defensor metido en la línea del remate? Devuelve su clave, o -1.
+## Es la misma idea que la intercepción de un pase, pero contra el camino
+## al arco.
+static func _bloqueador_de_tiro(estado: Dictionary, desde: Vector2, es_local: bool) -> int:
+	var f: Dictionary = pesos()["fisica"]
+	var arco := arco_rival(es_local)
+	var radio: float = f["radio_bloqueo_tiro"]
+	var mejor := -1
+	var mejor_d: float = radio
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		if e["equipo_local"] == es_local or e["rol"] == "ARQ":
+			continue
+		# Un bloqueo se produce ENCIMA del que remata, no a veinte metros:
+		# el defensor tiene que estar cerca y delante. Sin ese límite,
+		# cualquiera parado en la línea al arco bloqueaba y los goles se
+		# caían a 0.9 por partido.
+		var dist_al_rematador: float = desde.distance_to(e["pos"])
+		if dist_al_rematador > float(f["dist_max_bloqueo"]) or dist_al_rematador > desde.distance_to(arco):
+			continue
+		var d := _dist_a_segmento(e["pos"], desde, arco)
+		if d < mejor_d:
+			mejor_d = d
+			mejor = id
+	return mejor
+
+
+static func _desviar_afuera(estado: Dictionary, desde: Vector2, toco_local: bool) -> void:
+	var dist_costado: float = MEDIO_ANCHO - absf(desde.y)
+	var dist_fondo: float = MEDIO_LARGO - absf(desde.x)
+	var punto: Vector2
+	if dist_costado <= dist_fondo:
+		punto = Vector2(desde.x, MEDIO_ANCHO * signf(desde.y if desde.y != 0.0 else 1.0))
+	else:
+		punto = Vector2(MEDIO_LARGO * signf(desde.x if desde.x != 0.0 else 1.0), desde.y)
+	_pelota_fuera(estado, punto, toco_local)
+
+
+static func _mas_cercano_del_equipo(estado: Dictionary, punto: Vector2, es_local: bool) -> int:
+	var mejor := -1
+	var mejor_d: float = INF
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		if e["equipo_local"] != es_local or e["rol"] == "ARQ":
+			continue
+		var d: float = punto.distance_to(e["pos"])
+		if d < mejor_d:
+			mejor_d = d
+			mejor = id
+	return mejor
 
 
 ## Saca a los rivales del área grande del que va a sacar (16,5m de fondo,
@@ -1198,6 +1353,13 @@ static func _intentar_robo(estado: Dictionary) -> void:
 	# que queda mal —el que la perdió, o el que fue a quitarla y no
 	# pudo— arrastra un cooldown en el que no puede volver a ir por ella.
 	# (Rebotes en un quite ganado: pendiente, ver docs.)
+	# Un quite no siempre queda limpio: a veces la pelota sale desviada al
+	# lateral o al córner. Es lo que hace que existan esos reinicios.
+	if estado["rng"].randf() < float(f["prob_desvio_al_lateral"]):
+		_penalizar(estado, poseedor["clave"], jug_a)
+		_desviar_afuera(estado, poseedor["pos"], es_local)
+		return
+
 	if not aguanta:
 		estado["robos"]["ganados"] += 1
 		_entregar_pelota(estado, mejor_id)
@@ -1289,6 +1451,7 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 			"tiros": estado["tiros"],
 			"dist_tiros": estado["dist_tiros"],
 			"robos": estado["robos"],
+			"reinicios": estado["reinicios"],
 			"cooldown_activos": estado["cooldown"].size(),
 			"pase_detalle": estado["pase_detalle"],
 			"pases": estado["pases"],

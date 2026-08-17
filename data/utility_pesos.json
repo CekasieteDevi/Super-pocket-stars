@@ -16,14 +16,14 @@
 
   "tiro": {
     "base": 0.00,
-    "geometria": 3.10
+    "geometria": 4.40
   },
 
   "_tiro_resolucion": "Calibrado contra un partido real: ~35% de los remates van al arco y de esos entra alrededor de 1 de cada 3. calidad = tiro*peso_atributo + geometria*peso_geometria.",
   "tiro_resolucion": {
     "peso_atributo": 0.6,
     "peso_geometria": 0.4,
-    "porteria_base": 0.275,
+    "porteria_base": 0.575,
     "porteria_calidad": 0.50,
     "palo": 0.05,
     "fuerza_base": 0.80
@@ -72,6 +72,12 @@
     "max_dist_pase_bueno": 46.0,
     "_dist_saque_largo": "A partir de esta distancia el arquero saca con `golpe` (pelotazo) en vez de `pies` (salida jugada). Son los dos atributos de arquero que antes no leia nadie.",
     "dist_saque_largo": 28.0,
+    "_reinicios": "Formas de que la pelota salga de la cancha, para que corners y laterales tengan de donde salir.",
+    "prob_desvio_al_lateral": 0.10,
+    "radio_bloqueo_tiro": 1.2,
+    "prob_bloqueo": 0.40,
+    "dist_max_bloqueo": 6.0,
+    "prob_bloqueo_afuera": 0.45,
     "_avance_conducir": "Fraccion de su velocidad a la que corre el que lleva la pelota. Menor a 1 porque conducir es mas lento que correr libre: si fuera 1 nadie lo alcanza nunca.",
     "avance_conducir": 0.60,
     "_ticks_control": "Ticks que el poseedor conduce/aguanta antes de poder pasar o tirar. Sin esto decide cada 0.25s y la pelota circula 3-4 veces mas rapido que en un partido real.",

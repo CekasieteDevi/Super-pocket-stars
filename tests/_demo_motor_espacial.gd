@@ -32,6 +32,7 @@ func _init() -> void:
 	var amarillas := 0
 	var rojas := 0
 	var cambios := 0
+	var reinicios := {}
 
 	for i in range(N_PARTIDOS):
 		var home := Team.generar("Home%d" % i, rng)
@@ -53,6 +54,8 @@ func _init() -> void:
 		for k in s["decisiones"]:
 			decisiones[k] = decisiones.get(k, 0) + int(s["decisiones"][k])
 		dists.append_array(s["dist_tiros"])
+		for k in s["reinicios"]:
+			reinicios[k] = float(reinicios.get(k, 0.0)) + float(s["reinicios"][k]) / N_PARTIDOS
 		for ev in r["eventos"]:
 			if ev["tipo"] == "tarjeta":
 				if ev["resultado"] == "amarilla":
@@ -85,6 +88,7 @@ func _init() -> void:
 	print("Tarjetas por partido: %.1f amarillas, %.2f rojas (real: ~3.5 y ~0.1). Cambios: %.1f" % [
 		float(amarillas) / N_PARTIDOS, float(rojas) / N_PARTIDOS, float(cambios) / N_PARTIDOS])
 	print("Pases: %s" % str(pase_det))
+	print("Reinicios por partido: %s" % str(reinicios))
 	print("Quites intentados por partido: %.1f (ganados %.1f, %.0f%%)" % [
 		float(robos_int) / N_PARTIDOS, float(robos_gan) / N_PARTIDOS,
 		float(robos_gan) / maxf(robos_int, 1) * 100.0])

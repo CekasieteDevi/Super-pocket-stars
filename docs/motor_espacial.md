@@ -959,3 +959,67 @@ pelota (`attr_pasador`), no se re-deduce en el duelo.
 **Laterales y córners**: hoy una pelota que sale por los costados no
 existe como jugada; se resuelve dándosela al arquero. Y un remate que se
 va al fondo debería ser córner si la tocó un defensor.
+
+---
+
+## 17. Córners y laterales
+
+Hasta acá **la pelota nunca salía de la cancha**: los pases apuntan a un
+jugador y los jugadores están siempre adentro, así que no había de dónde
+sacar un lateral ni un córner. Primero hubo que crear las formas de que
+salga, y recién después los reinicios tienen sentido.
+
+### Cómo sale la pelota
+
+| Fuente | Qué pasa |
+| --- | --- |
+| Quite | 10% de las disputas termina con la pelota desviada afuera |
+| Remate bloqueado | un defensor cerca y en la línea del remate lo tapa; 45% de esos bloqueos sale afuera |
+| Remate al palo | rebota y sale |
+| Atajada | el arquero no siempre la retiene: si falla el roll de `agarre`, la manotea al córner |
+| Remate desviado | se va al fondo (saque de arco, ya existía) |
+
+### Qué se cobra
+
+Igual que el reglamento, según por dónde salió y **quién la tocó último**:
+
+- por el costado → **lateral** para el que no la tocó, desde ese punto
+- por el fondo, tocada por el que defiende ese arco → **córner**
+- por el fondo, tocada por el que ataca → **saque de arco**
+
+En el córner la pelota va al banderín, la ejecuta el atacante más cercano,
+y los dos equipos se meten al área — que es lo que hace peligroso un
+córner. Después el ejecutor decide con la utilidad de siempre.
+
+### Medido
+
+| | Por partido |
+| --- | --- |
+| Córners | 3,95 |
+| Laterales | 2,9 |
+
+Son pocos comparados con un partido real (~10 córners y ~40 laterales),
+pero el partido dura 4 minutos, no 90: la referencia no es el conteo real
+sino que aparezcan lo suficiente para verse sin frenar el juego. Los
+laterales son tiempo muerto, así que conviene que sean pocos.
+
+### Trampa: el bloqueo no puede ser determinista
+
+La primera versión bloqueaba siempre que hubiera un defensor en la línea
+del remate, y se comía el **63% de los remates** (en un partido real se
+bloquea del orden del 25%): los goles se derrumbaron a 0,90 por partido.
+Estar en la línea da la CHANCE de bloquear (40%), no el bloqueo asegurado,
+y además el defensor tiene que estar **encima** del que remata (a menos de
+6m), no a veinte metros en la trayectoria.
+
+Después de esto hubo que recalibrar la conversión, porque los bloqueos
+sacan remates de circulación: paridad con el motor abstracto **3,27 contra
+3,58**, medida ahora sobre 120 partidos porque con 40 el ruido tapaba el
+efecto de los ajustes.
+
+### Todavía pendiente
+
+Un córner se ejecuta como un pase normal, no como un centro: el centro
+necesita altura de pelota (`z`), que sigue sin existir. Y no hay
+diferencia entre un córner y un lateral en cuanto a cómo se pone la pelota
+en juego, más allá de dónde se para la gente.
