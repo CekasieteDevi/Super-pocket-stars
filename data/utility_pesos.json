@@ -1,0 +1,72 @@
+{
+  "_comentario": "Pesos de la utility AI del motor espacial (docs/motor_espacial.md §4). Tuneables sin recompilar. Las utilidades se normalizan 0..1 por termino y se suman pesadas; despues pasan por softmax con temperatura.",
+
+  "conducir": {
+    "base": 0.30,
+    "espacio": 0.50,
+    "progreso": 0.30
+  },
+
+  "pase": {
+    "base": 0.25,
+    "progreso": 0.60,
+    "seguridad": 0.45,
+    "distancia": 0.30
+  },
+
+  "tiro": {
+    "base": 0.00,
+    "geometria": 1.10
+  },
+
+  "_tiro_resolucion": "Calibrado contra un partido real: ~35% de los remates van al arco y de esos entra alrededor de 1 de cada 3. calidad = tiro*peso_atributo + geometria*peso_geometria.",
+  "tiro_resolucion": {
+    "peso_atributo": 0.6,
+    "peso_geometria": 0.4,
+    "porteria_base": 0.10,
+    "porteria_calidad": 0.40,
+    "palo": 0.05,
+    "fuerza_base": 0.45
+  },
+
+  "temperatura": {
+    "base": 0.55,
+    "k_vision": 0.25,
+    "k_inteligencia": 0.15,
+    "k_presion": 0.40,
+    "min": 0.08,
+    "max": 1.20
+  },
+
+  "presion": {
+    "radio": 7.0,
+    "factor_frente": 1.5,
+    "normalizador": 2.5
+  },
+
+  "sesgos_personalidad": {
+    "egoista_tiro": 1.40,
+    "creador_pase": 1.30
+  },
+
+  "fisica": {
+    "vel_min": 4.5,
+    "vel_max": 8.5,
+    "vel_pelota_pase": 18.0,
+    "radio_control": 1.6,
+    "radio_intercepcion": 1.8,
+    "_min_dist_intercepcion_origen": "Un rival mas cerca que esto del punto desde donde sale el pase no lo intercepta: es el que estaba marcando al pasador, y la pelota le sale de los pies pasandolo. Su chance de robarla es el quite, no la interceptacion.",
+    "min_dist_intercepcion_origen": 4.0,
+    "radio_tackle": 2.0,
+    "max_dist_pase": 45.0,
+    "_avance_conducir": "Fraccion de su velocidad a la que corre el que lleva la pelota. Menor a 1 porque conducir es mas lento que correr libre: si fuera 1 nadie lo alcanza nunca.",
+    "avance_conducir": 0.60,
+    "_ticks_control": "Ticks que el poseedor conduce/aguanta antes de poder pasar o tirar. Sin esto decide cada 0.25s y la pelota circula 3-4 veces mas rapido que en un partido real.",
+    "ticks_control": 6,
+    "geometria_minima_tiro": 0.30,
+    "_ticks_cooldown_robo": "Un tackle lleva su tiempo. Sin cooldown se intenta un quite cada 0.25s y la pelota rebota entre atacante y defensor sin que el juego avance.",
+    "ticks_cooldown_robo": 6,
+    "rebote_min": 6.0,
+    "rebote_max": 14.0
+  }
+}

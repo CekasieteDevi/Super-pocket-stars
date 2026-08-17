@@ -1,8 +1,9 @@
 # Motor espacial de partido — documento de diseño
 
-Estado: **diseño aprobado, sin implementar**. No hay código de este motor en
-el repo todavía — las 5 decisiones abiertas ya están tomadas (§8) y el
-siguiente paso es construir el MVP (§7).
+Estado: **MVP implementado** (`core/motor_espacial.gd`,
+`data/utility_pesos.json`, `tests/_demo_motor_espacial.gd`). Corre aislado:
+todavía no lo usa ni `GameState` ni `Liga` ni la UI. Ver §10 para lo que la
+implementación validó y lo que quedó pendiente.
 
 Alcance: reemplazar cómo se resuelve el partido que el jugador humano
 efectivamente juega (liga propia + el que sigue en pantalla), por una
@@ -562,3 +563,82 @@ allá del recorte del MVP), desmarque real, offside, JSON de balance
 completo, reinicio de jugadas (lateral/córner/saque de arco animados en
 vez de instantáneos), y la decisión de si Copa/internacional alguna vez
 usan este motor (hoy ni siquiera se animan, quedan fuera).
+
+---
+
+## 10. Resultados del MVP (medidos, no estimados)
+
+### Rendimiento — mejor de lo estimado
+
+| Medición | Estimado en §6 | Real |
+| --- | --- | --- |
+| Un partido, sin animar | 2-6 s | **~1,5 s** |
+| Temporada de 38 fechas | 1-4 min | **~57 s** |
+| Un partido generando fotogramas | — | ~2,2 s (21.600 fotogramas) |
+
+El riesgo #1 del documento (rendimiento) **queda descartado**: hay margen
+de sobra, incluso con la decisión de 0.25s por tick. No hizo falta ninguna
+de las 4 palancas de emergencia de §6.
+
+### Lo que quedó validado
+
+- Coordenadas reales, movimiento por tick, y la animación **leyendo**
+  posiciones del motor en vez de inventarlas (verificado con capturas en
+  4 instantes distintos de un partido: los equipos toman formas distintas
+  y plausibles, no un amontonamiento).
+- Utility AI + softmax con temperatura funcionando: el pase apunta a un
+  compañero concreto y el tiro depende de distancia y ángulo reales.
+- Pases: ~874 por partido con **77% de acierto** — números de partido real.
+- Posesión ~50/50, sin sesgo estructural.
+- Distancia de remate: mediana 14-18m, realista.
+
+### Lo que NO quedó validado — el balance
+
+| Métrica | Partido real | MVP |
+| --- | --- | --- |
+| Goles por partido | ~2,8 | **~8** |
+| Remates por partido | ~25 | **~51** |
+
+Además la varianza entre partidos es enorme (aparecen resultados tipo
+4-28). El riesgo #3 del documento ("balance de cero") **se confirmó y
+sigue abierto**: el motor produce fútbol reconocible pero no calibrado.
+
+### Bugs de fondo que encontró la implementación
+
+Vale la pena dejarlos anotados porque ninguno era obvio desde el diseño, y
+todos se encontraron **midiendo**, no leyendo el código:
+
+1. **Claves de jugador colisionando entre equipos**: los ids de jugador son
+   únicos dentro de un club pero no entre clubes, así que indexar el
+   estado por id hacía que un equipo pisara literalmente al otro (quedaban
+   18 jugadores, todos del visitante). De ahí `OFFSET_VISITANTE`.
+2. **Pases que pasaban de largo**: con la pelota a 18 m/s y ticks de
+   0.25s, avanza 4,5m por tick contra un radio de control de 1,6m — la
+   pelota saltaba por encima del receptor y se iba del campo. Un pase
+   necesita un punto de destino, no una dirección.
+3. **El que marca interceptaba todo**: el rival que presiona está a ~2m
+   del pasador, o sea automáticamente dentro del corredor de intercepción
+   apenas sale la pelota. Interceptaba el **96,5%** de los pases. Su
+   chance de robar es el quite, no la intercepción.
+4. **Ping-pong de posesión**: sin cooldown, un defensor a 2m disputa la
+   pelota 4 veces por segundo — 9.026 quites por partido (real: ~40) y
+   5.000 cambios de posesión. El cooldown tiene que ser de la disputa, no
+   de cada defensor.
+5. **Sin offside, los delanteros acampan en el arco**: la mediana de
+   remate se iba a 2,5m. El offside como INFRACCIÓN sigue fuera de
+   alcance, pero la conducta de mantenerse habilitado no es opcional.
+6. **Replegar a los 11 mata el juego**: meter a todo el equipo detrás de
+   la pelota hace que ningún pase hacia adelante se complete. Los de
+   arriba tienen que quedar como salida.
+7. **Decidir cada tick no es decidir**: reconsiderar 4 veces por segundo
+   acumulaba cientos de tiradas de "tirar" por posesión. Hay que separar
+   la cadencia de decisión del tick de simulación.
+
+### Próximo paso propuesto
+
+Una pasada de calibración dedicada, con el diagnóstico ya instrumentado
+(`tests/_demo_motor_espacial.gd` mide goles, remates, distancia de
+remate, pases intentados/interceptados/completados, quites y reparto de
+decisiones). Todas las palancas están en `data/utility_pesos.json`, así
+que es trabajo de tuneo sin recompilar. Recién con el balance en rango
+tiene sentido engancharlo a `GameState`/`Liga`/UI.
