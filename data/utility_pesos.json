@@ -14,6 +14,14 @@
     "distancia": 0.15
   },
 
+  "_gambeta": "Encarar a un rival puntual. base bajo porque no deberia ser la opcion por defecto; habilidad la hace atractiva para los buenos de control; presion la desalienta cuando hay varios encima.",
+  "gambeta": {
+    "base": 0.12,
+    "habilidad": 1.60,
+    "progreso": 0.25,
+    "presion": 0.40
+  },
+
   "_pase_hueco": "Pase al espacio por delante del companero, no a los pies. Progreso alto y riesgo alto: rompe la linea rival pero la pelota viaja mas y por zona disputada. Solo lo ve quien tiene vision suficiente.",
   "pase_hueco": {
     "base": 0.10,
@@ -66,6 +74,10 @@
     "hueco_min": 6.0,
     "hueco_max": 15.0,
     "vision_minima_hueco": 45.0,
+    "_gambeta_geo": "A quien se puede encarar: cerca y DELANTE (cono frontal), no al costado ni atras. gambeta_avance es cuanto queda mas alla del defensor al pasarlo.",
+    "radio_gambeta": 8.0,
+    "gambeta_cono_frontal": -0.10,
+    "gambeta_avance": 3.0,
     "hueco_por_vision": 0.45,
     "vel_pase_max": 24.0,
     "vel_pelota_pase": 18.0,
@@ -116,6 +128,6 @@
     "_chequeos_tarjeta_por_quite": "Cuantas veces se tira la chance de tarjeta por disputa. CHANCE_AMARILLA esta calibrado sobre los ~180 duelos del motor abstracto y este motor disputa ~50 veces por partido: con una sola tirada el equipo del jugador juntaria muchas menos suspensiones que sus rivales.",
     "chequeos_tarjeta_por_quite": 3,
     "_multiplicador_desgaste": "Cuanto pesa cada duelo en la resistencia. Team.desgastar esta calibrado sobre los ~180 duelos del motor abstracto; este motor resuelve otra cantidad, y con 1.0 los 22 jugadores terminaban en el piso de resistencia antes del entretiempo.",
-    "multiplicador_desgaste": 8.0,
+    "multiplicador_desgaste": 8.0
   }
 }

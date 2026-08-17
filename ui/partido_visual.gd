@@ -230,6 +230,8 @@ func _texto_evento(evento: Dictionary) -> String:
 		"tiro_puerta":
 			return "%s: REMATE de %s... %s" % [evento["equipo"], pos, "¡GOOOL!" if evento["resultado"] == "gol" else "ataja el arquero"]
 		"gambeta":
+			if evento["resultado"] == "pasa":
+				return "%s: %s se saca uno de encima" % [evento["equipo"], pos]
 			return "%s: le quitan la pelota a %s" % [evento["equipo"], pos]
 		"tarjeta":
 			if evento["resultado"] == "amarilla":

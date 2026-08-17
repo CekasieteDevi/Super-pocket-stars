@@ -1105,3 +1105,59 @@ Paridad con el motor abstracto: **3,69 contra 3,58**.
 
 Gambeta, pase largo y pared. Y el centro, que sigue bloqueado por la
 altura de pelota.
+
+---
+
+## 19. Gambeta
+
+Segunda jugada del diseño original. La diferencia con conducir es quién
+toma la iniciativa: conducir es llevarla y ver qué pasa (si un rival se
+acerca, el motor dispara un quite y vos te defendés); **gambetear es
+ELEGIR ir contra un rival puntual**.
+
+### Cómo se resuelve
+
+Duelo `control`×0,7 + `agilidad`×0,3 del que encara, contra `quite`×0,7 +
+`agilidad`×0,3 del que marca, con los bloques A/B/C/D — así las
+habilidades de `control` (Bailarín, Cohete) empujan solas, sin cablearlas.
+
+- **Si gana**: queda más allá del defensor **y el defensor se come el
+  cooldown de "quedó pasado"** que ya existía para el quite. Eso es
+  exactamente lo que hace una gambeta real: sacarte un hombre de encima
+  por unos segundos.
+- **Si pierde**: el defensor se lleva la pelota y el cooldown lo come él.
+- La gambeta **reemplaza el quite automático** de ese tick: es el mismo
+  duelo por la misma pelota, visto desde el otro lado.
+
+### Medido (`tests/_diag_gambeta.gd`)
+
+Gambetas ganadas, y entre paréntesis intentos por partido:
+
+| | quite 30 | quite 55 | quite 85 |
+| --- | --- | --- | --- |
+| **control 30** | 1% (18,4) | 0% (30,4) | 0% (28,8) |
+| **control 60** | 79% (8,7) | 22% (9,1) | 1% (10,7) |
+| **control 90** | **96%** (22,5) | 94% (14,1) | 56% (5,8) |
+
+### Lo que decide encarar es el DUELO, no lo bueno que sos
+
+La primera versión miraba solo el `control` propio, y un jugador de
+control 30 encaraba 20-30 veces por partido perdiéndolas todas,
+simplemente porque sus otras opciones eran peores. Ni siquiera elevar el
+término al cuadrado lo arregló.
+
+Lo que sirvió fue mirar **contra quién**: la utilidad pesa la diferencia
+entre tu `control` y el `quite` de ESE rival. Se ve en la fila de abajo de
+la tabla: control 90 encara 22,5 veces a un defensa de 30 y solo 5,8 veces
+a uno de 85. No se encara a quien no se puede pasar.
+
+Queda un resto: en el test sintético los de control 30 siguen intentando
+de más. Es en buena medida un artefacto del test (baja solo `control` y
+deja el resto natural, así que son buenos pasadores con pies de madera);
+con equipos naturales, donde los atributos correlacionan, no se ve.
+
+Paridad con el motor abstracto: **3,67 contra 3,58**.
+
+### Todavía faltan
+
+Pase largo y pared. Y el centro, bloqueado por la altura de pelota.

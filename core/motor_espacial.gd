@@ -233,6 +233,7 @@ static func crear_estado(home: Team, away: Team, rng: RandomNumberGenerator) -> 
 		"fotogramas": [],
 		"robo_cooldown": {},
 		"robos": {"intentos": 0, "ganados": 0},
+		"gambetas": {},
 		"reinicios": {},
 		"cooldown": {},
 		"pase_detalle": {"intentos": 0, "interceptado_vuelo": 0, "rival_llego_antes": 0, "fuera": 0},
@@ -343,6 +344,33 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 			"detalle": {"geometria": geo},
 		})
 
+	# --- Gambetear al rival que le tapa el camino ---------------------
+	# A diferencia de conducir (llevarla y ver qué pasa), acá ELIGE ir
+	# contra un rival puntual. Solo aparece si hay alguien a quien encarar:
+	# gambetear al aire no significa nada.
+	var rival_a_encarar := _rival_a_encarar(estado, pos, es_local)
+	if rival_a_encarar != -1:
+		var wg: Dictionary = w["gambeta"]
+		var e_rival: Dictionary = estado["jugadores"][rival_a_encarar]
+		# Lo que decide encarar no es lo bueno que sos, sino si a ESE lo
+		# podés pasar: pesa la diferencia entre tu control y su quite. Con
+		# la utilidad mirando solo el control propio, un jugador de control
+		# 30 igual encaraba 20-30 veces por partido y las perdía todas,
+		# porque sus otras opciones eran peores todavía.
+		var eq_rival := _equipo_de(estado, not es_local)
+		var rival_dict := _dict_jugador(estado, eq_rival, e_rival["jugador_id"])
+		var quite_rival: float = float(rival_dict["atributos"]["quite"]) if not rival_dict.is_empty() else 50.0
+		var ventaja: float = clampf(
+			(float(jugador["atributos"]["control"]) - quite_rival) / 100.0 + 0.5, 0.0, 1.0)
+		var u_gambeta: float = wg["base"] \
+			+ wg["habilidad"] * ventaja * ventaja \
+			+ wg["progreso"] * (1.0 - mi_valor) \
+			- wg["presion"] * presion
+		opciones.append({
+			"tipo": "gambeta", "utilidad": u_gambeta, "objetivo_id": rival_a_encarar,
+			"detalle": {"rival": e_rival["rol"], "presion": presion},
+		})
+
 	# --- Pasar a cada compañero alcanzable ----------------------------
 	var wp: Dictionary = w["pase"]
 	# Hasta dónde llega su pase: un central de división 10 no cambia el
@@ -405,6 +433,90 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 		})
 
 	return opciones
+
+
+## ¿A quién tiene enfrente para encarar? El rival más cercano que esté
+## cerca Y entre él y el arco: no se gambetea a alguien que quedó atrás.
+static func _rival_a_encarar(estado: Dictionary, pos: Vector2, es_local: bool) -> int:
+	var f: Dictionary = pesos()["fisica"]
+	var arco := arco_rival(es_local)
+	var dir_ataque := (arco - pos).normalized()
+	var radio: float = f["radio_gambeta"]
+	var mejor := -1
+	var mejor_d: float = radio
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		if e["equipo_local"] == es_local or e["rol"] == "ARQ":
+			continue
+		if _en_cooldown(estado, id):
+			continue  # ya lo pasó, no hay a quién encarar
+		var hacia: Vector2 = e["pos"] - pos
+		var d: float = hacia.length()
+		if d >= mejor_d or d < 0.5:
+			continue
+		# Tiene que estar DELANTE, no al costado ni atrás.
+		if dir_ataque.dot(hacia.normalized()) < float(f["gambeta_cono_frontal"]):
+			continue
+		mejor_d = d
+		mejor = id
+	return mejor
+
+
+## Resuelve una gambeta: `control`+`agilidad` del que encara contra
+## `quite`+`agilidad` del que marca, con los bloques de siempre (así las
+## habilidades de control como Bailarín o Cohete empujan solas). El que
+## pierde queda pasado — reusa la misma penalización del quite, que es
+## exactamente lo que hace una gambeta real: sacarte un hombre de encima
+## por unos segundos.
+static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador: Dictionary, clave_rival: int) -> void:
+	var f: Dictionary = pesos()["fisica"]
+	var es_local: bool = poseedor["equipo_local"]
+	var eq_a := _equipo_de(estado, es_local)
+	var eq_d := _equipo_de(estado, not es_local)
+	var e_rival: Dictionary = estado["jugadores"][clave_rival]
+	var defensor := _dict_jugador(estado, eq_d, e_rival["jugador_id"])
+	if defensor.is_empty():
+		return
+
+	var minuto := _minuto_int(estado)
+	estado["gambetas"]["intentos"] = int(estado["gambetas"].get("intentos", 0)) + 1
+
+	var att_a: Dictionary = jugador["atributos"]
+	var att_d: Dictionary = defensor["atributos"]
+	var habilidad: float = float(att_a["control"]) * 0.7 + float(att_a["agilidad"]) * 0.3
+	var marca: float = float(att_d["quite"]) * 0.7 + float(att_d["agilidad"]) * 0.3
+
+	var ata := Duel.atributo_efectivo(habilidad, "tecnico", eq_a.resistencia_pct(jugador["id"]))
+	var def := Duel.atributo_efectivo(marca, "defensivo", eq_d.resistencia_pct(defensor["id"]))
+	var res := Duel.resolver(ata, def,
+		MatchEngine._bloques_equipo(eq_a, eq_d, jugador, "control", minuto, estado["rng"]),
+		MatchEngine._bloques_equipo(eq_d, eq_a, defensor, "quite", minuto, estado["rng"]))
+	# Encarar es exponerse: la falta se chequea igual que en un quite.
+	for i in range(int(f["chequeos_tarjeta_por_quite"])):
+		MatchEngine._chequear_tarjeta(defensor, eq_d, eq_a, estado["rng"], estado["eventos"], minuto, true, estado["log"])
+
+	if Duel.gana_atacante(res, estado["rng"]):
+		estado["gambetas"]["ganadas"] = int(estado["gambetas"].get("ganadas", 0)) + 1
+		# Se lo saca de encima: queda más allá del defensor, y el defensor
+		# pasado unos segundos.
+		var arco := arco_rival(es_local)
+		var dir: Vector2 = (arco - poseedor["pos"]).normalized()
+		var salida: Vector2 = e_rival["pos"] + dir * float(f["gambeta_avance"])
+		poseedor["pos"] = Vector2(
+			clampf(salida.x, -MEDIO_LARGO + 1.0, MEDIO_LARGO - 1.0),
+			clampf(salida.y, -MEDIO_ANCHO + 1.0, MEDIO_ANCHO - 1.0))
+		_penalizar(estado, clave_rival, defensor)
+		estado["eventos"].append({
+			"minuto": minuto, "tipo": "gambeta", "equipo": eq_a.nombre, "rival": eq_d.nombre,
+			"jugador_posicion": poseedor["rol"], "resultado": "pasa",
+		})
+	else:
+		_entregar_pelota(estado, clave_rival)
+		_penalizar(estado, poseedor["clave"], jugador)
+		estado["eventos"].append({
+			"minuto": minuto, "tipo": "gambeta", "equipo": eq_a.nombre, "rival": eq_d.nombre,
+			"jugador_posicion": poseedor["rol"], "resultado": "pierde",
+		})
 
 
 ## Adónde tirar el hueco: por delante del compañero, hacia el arco rival.
@@ -1060,7 +1172,9 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 		_mover_hacia(e, _objetivo_sin_pelota(estado, e, equipo, mi_equipo_tiene))
 
 	# 4. Intento de robo: el rival más cercano al poseedor puede quitársela.
-	if pelota["poseedor_id"] != -1:
+	# Salvo que este tick ya se haya resuelto una gambeta, que es el mismo
+	# duelo visto desde el otro lado.
+	if pelota["poseedor_id"] != -1 and int(estado.get("gambeta_este_tick", -1)) != estado["tick"]:
 		_intentar_robo(estado)
 
 	# 5. La pelota sigue al poseedor.
@@ -1365,6 +1479,12 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador)
 		"pase_hueco":
 			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador, elegida["punto"])
+		"gambeta":
+			_resolver_gambeta(estado, poseedor, jugador, elegida["objetivo_id"])
+			# La gambeta YA es el duelo por la pelota de este tick: si
+			# además corriera el quite automático, la misma jugada se
+			# resolvería dos veces.
+			estado["gambeta_este_tick"] = estado["tick"]
 		"tiro":
 			_resolver_tiro(estado, poseedor, jugador)
 
@@ -1564,6 +1684,7 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 			"tiros": estado["tiros"],
 			"dist_tiros": estado["dist_tiros"],
 			"robos": estado["robos"],
+			"gambetas": estado["gambetas"],
 			"reinicios": estado["reinicios"],
 			"cooldown_activos": estado["cooldown"].size(),
 			"pase_detalle": estado["pase_detalle"],
