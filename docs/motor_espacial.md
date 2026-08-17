@@ -700,3 +700,48 @@ Ese es el número que hay que vigilar si en el futuro se toca
 `data/utility_pesos.json`: no "¿da 2,8 goles como el fútbol real?" sino
 **"¿da lo mismo que `match_engine.gd`?"**, porque es contra ese motor que
 están calibrados la economía, los objetivos y los fans.
+
+---
+
+## 12. El partido cambia de aspecto según el nivel del plantel
+
+Objetivo pedido: que en división 10 se vea lento y trabado, y que a
+medida que el club sube y los jugadores mejoran, se vea más rápido y
+asociado — pasar de un partido de barrio a un Madrid-Barça.
+
+Antes, varias cosas eran **iguales para todos** por más que cambiaran los
+atributos: la pelota viajaba a 18 m/s la pegara quien la pegara, todos
+controlaban en el mismo tiempo, cualquiera podía tirar un pase de 45
+metros, y la intercepción era pura geometría — un gran pasador completaba
+exactamente los mismos pases que uno malo. Ahora todo eso sale de los
+atributos (los pares min/max viven en `data/utility_pesos.json`):
+
+| Qué | Atributo | Jugador malo | Jugador de élite |
+| --- | --- | --- | --- |
+| Velocidad al correr | `velocidad` | 3,6 m/s | 9,2 m/s |
+| Fuerza del pase | `pases` | 11 m/s | 24 m/s |
+| Alcance del pase | `pases` | 26 m | 46 m |
+| Tiempo para acomodarla | `control` | 9 ticks | 2 ticks |
+| Qué tan interceptable es su pase | `pases` | ×1,45 | ×0,42 |
+| Criterio al decidir (temperatura) | `vision`, `inteligencia` | errático | consistente |
+
+### Resultado medido (`tests/_diag_niveles.gd`)
+
+| Media de plantel | Goles | Remates | Pases |
+| --- | --- | --- | --- |
+| 27 | 2,65 | 8,9 | 36 |
+| 39 | 2,90 | 10,9 | 44 |
+| 50 | ~3,0 | 13,6 | 52 |
+| 62 | 3,70 | 13,1 | 54 |
+
+Un plantel de élite juega **50% más pases** y genera bastante más peligro
+que uno de división 10, con el mismo motor y el mismo tiempo de partido.
+
+### Efecto secundario a vigilar
+
+La curva de calidad del motor espacial quedó **más empinada** que la del
+abstracto: con potencial 40 da 2,45 goles contra 2,80 del abstracto, y con
+potencial 70 da 3,75 contra 3,55. Es deliberado (es justamente lo que se
+pedía), pero significa que la paridad entre motores es exacta en el medio
+de la tabla y se afloja en los extremos. Con equipos naturales —el caso
+real— queda en 3,33 contra 3,17, que sigue siendo cerca.

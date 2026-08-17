@@ -156,10 +156,17 @@ static func factor_geometria(pos: Vector2, equipo_local: bool) -> float:
 # Armado del estado inicial
 # ---------------------------------------------------------------------------
 
+## Interpola entre dos valores segun un atributo 0-100. Es la base de que
+## el partido CAMBIE de aspecto con el nivel del plantel: en división 10 se
+## ve lento y trabado, y con jugadores de élite se ve rápido y asociado.
+static func _por_atributo(jugador: Dictionary, atributo: String, en_0: float, en_100: float) -> float:
+	var v: float = clampf(float(jugador["atributos"][atributo]) / 100.0, 0.0, 1.0)
+	return en_0 + v * (en_100 - en_0)
+
+
 static func _vel_max(jugador: Dictionary) -> float:
 	var f: Dictionary = pesos()["fisica"]
-	var v: float = float(jugador["atributos"]["velocidad"]) / 100.0
-	return f["vel_min"] + v * (f["vel_max"] - f["vel_min"])
+	return _por_atributo(jugador, "velocidad", f["vel_min"], f["vel_max"])
 
 
 ## Reparte los 11 de un equipo en los slots de BASE_FORMACION. Si un
@@ -313,7 +320,9 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 
 	# --- Pasar a cada compañero alcanzable ----------------------------
 	var wp: Dictionary = w["pase"]
-	var max_dist: float = f["max_dist_pase"]
+	# Hasta dónde llega su pase: un central de división 10 no cambia el
+	# frente de juego de 45 metros.
+	var max_dist: float = _por_atributo(jugador, "pases", f["max_dist_pase_malo"], f["max_dist_pase_bueno"])
 	var sesgo_pase: float = float(sesgos["creador_pase"]) if Personalidad.tiene(jugador, "Creador") else 1.0
 	for id in estado["jugadores"]:
 		var comp: Dictionary = estado["jugadores"][id]
@@ -635,7 +644,7 @@ static func _dar_pelota_al_arquero(estado: Dictionary, arquero_local: bool) -> v
 ## no en una dirección infinita: si no, con 18 m/s y ticks de 0.25s la
 ## pelota avanza 4.5m por tick, pasa de largo por encima del receptor
 ## (radio de control 1.6m) y se va del campo sin que nadie la toque.
-static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: int) -> void:
+static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: int, jugador: Dictionary) -> void:
 	var f: Dictionary = pesos()["fisica"]
 	var destino: Dictionary = estado["jugadores"][destino_id]
 	var dir: Vector2 = (destino["pos"] - poseedor["pos"]).normalized()
@@ -643,7 +652,10 @@ static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: i
 	estado["pase_detalle"]["intentos"] += 1
 	pelota["poseedor_id"] = -1
 	pelota["en_vuelo"] = true
-	pelota["vel"] = dir * float(f["vel_pelota_pase"])
+	# La pelota sale más fuerte cuanto mejor pega el que la toca: un pase
+	# flojo tarda más en llegar y le da tiempo al rival a meterse.
+	pelota["vel"] = dir * _por_atributo(jugador, "pases", f["vel_pase_min"], f["vel_pase_max"])
+	pelota["pases_pasador"] = float(jugador["atributos"]["pases"])
 	pelota["destino_pos"] = destino["pos"]
 	pelota["destino_id"] = destino_id
 	pelota["pasador_local"] = poseedor["equipo_local"]
@@ -762,7 +774,11 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 	# no se completaba prácticamente ninguno. La pelota le sale de los
 	# pies pasándolo; su oportunidad de robarla es el quite, no esto.
 	var origen: Vector2 = pelota.get("origen_pos", desde)
-	var radio_inter: float = f["radio_intercepcion"]
+	# Un pase preciso pasa entre líneas; uno flojo se lo comen. Sin esto la
+	# intercepción era pura geometría y un gran pasador completaba
+	# exactamente los mismos pases que uno malo.
+	var calidad_pase: float = clampf(float(pelota.get("pases_pasador", 50.0)) / 100.0, 0.0, 1.0)
+	var radio_inter: float = float(f["radio_intercepcion"]) * (float(f["intercepcion_pase_malo"]) - (float(f["intercepcion_pase_malo"]) - float(f["intercepcion_pase_bueno"])) * calidad_pase)
 	var minimo_desde_origen: float = f["min_dist_intercepcion_origen"]
 	var mejor_id := -1
 	var mejor_d: float = radio_inter
@@ -943,8 +959,14 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 	# un tramo y recién ahí vuelve a evaluar. Sin esto, una posesión larga
 	# cerca del área acumulaba cientos de tiradas para "tirar" (278
 	# remates por partido, contra los ~25 de un partido real).
+	# Cuánto tarda en acomodarla antes de decidir: un jugador de buen
+	# control la toca y sigue, uno malo la pelea y frena el juego. Es lo
+	# que hace que una división 10 se vea trabada y un partido de élite
+	# fluya.
+	var ticks_control: int = int(round(_por_atributo(jugador, "control", f["ticks_control_malo"], f["ticks_control_bueno"])))
+	ticks_control = maxi(ticks_control, 1)
 	var ticks: int = int(pelota.get("ticks_con_pelota", 0))
-	if ticks == 0 or ticks % int(f["ticks_control"]) != 0:
+	if ticks == 0 or ticks % ticks_control != 0:
 		_conducir(estado, poseedor)
 		return
 
@@ -965,7 +987,7 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 		"conducir":
 			_conducir(estado, poseedor)
 		"pase":
-			_lanzar_pase(estado, poseedor, elegida["objetivo_id"])
+			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador)
 		"tiro":
 			_resolver_tiro(estado, poseedor, jugador)
 

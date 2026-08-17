@@ -97,6 +97,8 @@ func _probar(rng: RandomNumberGenerator, pot_home: int, pot_away: int) -> void:
 	var goles_h := 0
 	var goles_a := 0
 	var tiros := 0
+	var pases := 0
+	var intentos := 0
 	var media_h := 0.0
 	var media_a := 0.0
 	for i in range(N):
@@ -109,7 +111,10 @@ func _probar(rng: RandomNumberGenerator, pot_home: int, pot_away: int) -> void:
 		goles_a += int(r["goles_visitante"])
 		var s: Dictionary = r["stats"]
 		tiros += int(s["tiros"]["home"]) + int(s["tiros"]["away"])
-	print("  pot %d (media %.0f) vs pot %d (media %.0f) -> %.2f - %.2f goles  (%.2f total, %.1f remates)" % [
-		pot_home, media_h / N, pot_away, media_a / N,
-		float(goles_h) / N, float(goles_a) / N,
-		float(goles_h + goles_a) / N, float(tiros) / N])
+		pases += int(s["pases"]["home"]) + int(s["pases"]["away"])
+		intentos += int(s["pase_detalle"]["intentos"])
+	var acierto: float = float(pases) / maxf(intentos, 1) * 100.0
+	print("  media %.0f vs %.0f -> %.2f-%.2f goles (%.2f total) | %.1f remates | %.0f pases al %.0f%%" % [
+		media_h / N, media_a / N,
+		float(goles_h) / N, float(goles_a) / N, float(goles_h + goles_a) / N,
+		float(tiros) / N, float(pases) / N, acierto])
