@@ -1,9 +1,15 @@
 # Motor espacial de partido — documento de diseño
 
-Estado: **MVP implementado** (`core/motor_espacial.gd`,
-`data/utility_pesos.json`, `tests/_demo_motor_espacial.gd`). Corre aislado:
-todavía no lo usa ni `GameState` ni `Liga` ni la UI. Ver §10 para lo que la
-implementación validó y lo que quedó pendiente.
+Estado: **en producción**. `Liga.jugar_fecha` resuelve el partido del
+jugador con `MotorEspacial` y la pantalla de partido animado dibuja sus
+fotogramas. Ver §10 (resultados del MVP) y §11 (con qué equipos está
+calibrado y por qué el número a vigilar es la paridad con
+`match_engine.gd`, no el realismo).
+
+Un partido dura **960 ticks = 4 minutos reales** (2 por tiempo) y el reloj
+marca 0-90 como ficción: ver el comentario de `TICKS_POR_MITAD` en
+`core/motor_espacial.gd` para por qué no hay alternativa si se quiere ver
+el partido completo con movimiento creíble.
 
 Alcance: reemplazar cómo se resuelve el partido que el jugador humano
 efectivamente juega (liga propia + el que sigue en pantalla), por una
@@ -642,3 +648,55 @@ remate, pases intentados/interceptados/completados, quites y reparto de
 decisiones). Todas las palancas están en `data/utility_pesos.json`, así
 que es trabajo de tuneo sin recompilar. Recién con el balance en rango
 tiene sentido engancharlo a `GameState`/`Liga`/UI.
+
+---
+
+## 11. ¿Con qué equipos está calibrado? (medido)
+
+Pregunta legítima, porque una calibración hecha sobre un solo nivel de
+plantel puede romperse en el resto. Se mide con
+`tests/_diag_niveles.gd`.
+
+Los equipos del demo son exactamente los que arma `Liga.inicializar` para
+**cualquier** división (usa el mismo `Team.generar` sin forzar nivel):
+media de plantel **47,0** de promedio, entre 37,6 y 52,5.
+
+### Goles según el nivel de los dos equipos
+
+| Media de plantel | Goles/partido | Remates |
+| --- | --- | --- |
+| 27 | 1,70 | 6,3 |
+| 39 | 1,75 | 8,1 |
+| 50 | 2,40 | 9,7 |
+| 62 | 2,60 | 10,8 |
+
+Sube con la calidad, que es lo esperable, y sin saltos raros.
+
+### Equipos desparejos
+
+| Enfrentamiento | Resultado promedio |
+| --- | --- |
+| media 35 vs 51 | 0,25 - 3,05 |
+| media 31 vs 58 | 0,20 - 4,95 |
+
+Una diferencia grande de plantel produce goleadas. Es coherente con la
+decisión de diseño ya tomada de que quedarse quieto se paga caro, pero
+conviene tenerlo presente: los cruces entre divisiones (copa nacional)
+van a dar resultados abultados.
+
+### Lo importante: espacial vs abstracto
+
+Los partidos del jugador los resuelve el motor espacial y los del resto de
+la pirámide el abstracto. Si dan escalas de goles distintas, la liga del
+jugador queda descalibrada respecto del mundo: sus delanteros no compiten
+en la tabla de goleadores y su diferencia de gol tiene otra escala que la
+de sus rivales.
+
+Medido con los MISMOS equipos y la MISMA semilla, el espacial daba **2,48
+goles contra 3,17 del abstracto** (78%). Se corrigió subiendo remates y
+conversión hasta **3,08 vs 3,17**, que es paridad dentro del ruido.
+
+Ese es el número que hay que vigilar si en el futuro se toca
+`data/utility_pesos.json`: no "¿da 2,8 goles como el fútbol real?" sino
+**"¿da lo mismo que `match_engine.gd`?"**, porque es contra ese motor que
+están calibrados la economía, los objetivos y los fans.
