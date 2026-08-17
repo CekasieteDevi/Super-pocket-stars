@@ -389,6 +389,10 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 	# opción ni le aparece. Es lo que separa a un armador de un jugador que
 	# solo la toca al de al lado.
 	var wh: Dictionary = w["pase_hueco"]
+	# El pelotazo llega tan lejos como la pierna del que la pega, no como
+	# su técnica: por eso un equipo malo igual lo tiene disponible.
+	var wl: Dictionary = w["pase_largo"]
+	var max_largo: float = _por_atributo(jugador, "fuerza", f["max_pelotazo_debil"], f["max_pelotazo_fuerte"])
 	var vision_jugador: float = float(jugador["atributos"]["vision"])
 	var umbral_vision: float = float(f["vision_minima_hueco"])
 	var ve_el_hueco: bool = vision_jugador >= umbral_vision
@@ -399,7 +403,27 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 		if comp["equipo_local"] != es_local or id == poseedor["clave"]:
 			continue
 		var dist: float = pos.distance_to(comp["pos"])
-		if dist > max_dist or dist < 2.0:
+		if dist < 2.0:
+			continue
+
+		# --- Pelotazo ------------------------------------------------
+		# Para los que están MÁS LEJOS de lo que llega un pase normal. No
+		# hace falta ser buen pasador: el alcance sale de `fuerza`, así
+		# que un equipo limitado que no puede salir jugando igual la
+		# puede reventar hacia adelante. Que sea de baja efectividad sale
+		# solo del motor: una pelota que viaja mucho es más fácil de leer
+		# (ver lectura_pase_largo en _gana_intercepcion).
+		if dist > max_dist:
+			if dist > max_largo or progreso_hacia(comp, pos, es_local) <= 0.0:
+				continue
+			var u_largo: float = wl["base"] \
+				+ wl["progreso"] * (valor_posicion(comp["pos"], es_local) - mi_valor) \
+				+ wl["presion"] * presion \
+				+ wl["salida"] * (1.0 - mi_valor)
+			opciones.append({
+				"tipo": "pase_largo", "utilidad": u_largo, "objetivo_id": id,
+				"detalle": {"dist": dist, "presion": presion},
+			})
 			continue
 		var progreso: float = valor_posicion(comp["pos"], es_local) - mi_valor
 		var riesgo := riesgo_linea(estado, pos, comp["pos"], es_local)
@@ -524,6 +548,12 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 			"minuto": minuto, "tipo": "gambeta", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 			"jugador_posicion": poseedor["rol"], "resultado": "pierde",
 		})
+
+
+## Cuánto terreno gana mandarla a este compañero. Negativo = está más
+## atrás que yo, o sea que el pelotazo no tendría sentido.
+static func progreso_hacia(comp: Dictionary, desde: Vector2, es_local: bool) -> float:
+	return valor_posicion(comp["pos"], es_local) - valor_posicion(desde, es_local)
 
 
 ## Adónde tirar el hueco: por delante del compañero, hacia el arco rival.
@@ -1094,7 +1124,11 @@ static func _despejar_area(estado: Dictionary, arquero_local: bool) -> void:
 ## (radio de control 1.6m) y se va del campo sin que nadie la toque.
 ## `punto` distinto de null = pase al hueco: la pelota no va a los pies del
 ## compañero sino al espacio por delante, y él sale a buscarla.
-static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: int, jugador: Dictionary, punto = null) -> void:
+## `es_pelotazo` = la pega con la pierna, no con la técnica: el atributo
+## que manda pasa a ser `fuerza`. Es lo que le permite a un jugador
+## limitado mandarla lejos igual, a costa de que llegue mucho más
+## interceptable.
+static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: int, jugador: Dictionary, punto = null, es_pelotazo: bool = false) -> void:
 	var f: Dictionary = pesos()["fisica"]
 	var destino: Dictionary = estado["jugadores"][destino_id]
 	var objetivo: Vector2 = punto if punto != null else destino["pos"]
@@ -1106,7 +1140,7 @@ static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: i
 	# La pelota sale más fuerte cuanto mejor pega el que la toca: un pase
 	# flojo tarda más en llegar y le da tiempo al rival a meterse. En el
 	# arquero el atributo que manda es el suyo (pies/golpe), no `pases`.
-	var attr := atributo_pase(jugador, poseedor["pos"].distance_to(objetivo))
+	var attr := "fuerza" if es_pelotazo else atributo_pase(jugador, poseedor["pos"].distance_to(objetivo))
 	pelota["vel"] = dir * _por_atributo(jugador, attr, f["vel_pase_min"], f["vel_pase_max"])
 	pelota["pases_pasador"] = float(jugador["atributos"][attr])
 	pelota["attr_pasador"] = attr
@@ -1486,6 +1520,8 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador)
 		"pase_hueco":
 			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador, elegida["punto"])
+		"pase_largo":
+			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador, null, true)
 		"gambeta":
 			_resolver_gambeta(estado, poseedor, jugador, elegida["objetivo_id"])
 			# La gambeta YA es el duelo por la pelota de este tick: si

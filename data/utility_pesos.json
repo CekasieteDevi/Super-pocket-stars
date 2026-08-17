@@ -22,6 +22,14 @@
     "presion": 0.40
   },
 
+  "_pase_largo": "Pelotazo hacia adelante, para companeros mas lejos de lo que llega un pase normal. Se elige cuando hay presion y estas metido en tu campo: es la salida del equipo que no puede jugar corto. Su baja efectividad sale sola de que la pelota viaja mucho y es facil de leer.",
+  "pase_largo": {
+    "base": 0.20,
+    "progreso": 0.70,
+    "presion": 0.55,
+    "salida": 0.45
+  },
+
   "_pase_hueco": "Pase al espacio por delante del companero, no a los pies. Progreso alto y riesgo alto: rompe la linea rival pero la pelota viaja mas y por zona disputada. Solo lo ve quien tiene vision suficiente.",
   "pase_hueco": {
     "base": 0.10,
@@ -32,14 +40,14 @@
 
   "tiro": {
     "base": 0.00,
-    "geometria": 4.40
+    "geometria": 5.30
   },
 
   "_tiro_resolucion": "Calibrado contra un partido real: ~35% de los remates van al arco y de esos entra alrededor de 1 de cada 3. calidad = tiro*peso_atributo + geometria*peso_geometria.",
   "tiro_resolucion": {
     "peso_atributo": 0.6,
     "peso_geometria": 0.4,
-    "porteria_base": 0.505,
+    "porteria_base": 0.565,
     "porteria_calidad": 0.50,
     "palo": 0.05,
     "fuerza_base": 0.80
@@ -96,6 +104,9 @@
     "radio_tackle": 2.0,
     "max_dist_pase_malo": 26.0,
     "max_dist_pase_bueno": 46.0,
+    "_pelotazo": "Alcance del pelotazo segun `fuerza`: la pierna, no la tecnica. Por eso un equipo limitado igual lo tiene disponible.",
+    "max_pelotazo_debil": 42.0,
+    "max_pelotazo_fuerte": 72.0,
     "_dist_saque_largo": "A partir de esta distancia el arquero saca con `golpe` (pelotazo) en vez de `pies` (salida jugada). Son los dos atributos de arquero que antes no leia nadie.",
     "dist_saque_largo": 28.0,
     "_reinicios": "Formas de que la pelota salga de la cancha, para que corners y laterales tengan de donde salir.",
@@ -127,8 +138,8 @@
     "_prob_evento_fisico": "Fraccion de los duelos que se chequean por tarjeta y lesion. Este motor disputa la pelota ~2600 veces por partido; el motor abstracto resuelve ~180 duelos y es sobre ESE numero que estan calibradas CHANCE_AMARILLA y las lesiones. Sin este factor salian ~50 amarillas por partido.",
     "prob_evento_fisico": 0.55,
     "_chequeos_tarjeta_por_quite": "Cuantas veces se tira la chance de tarjeta por disputa. CHANCE_AMARILLA esta calibrado sobre los ~180 duelos del motor abstracto y este motor disputa ~50 veces por partido: con una sola tirada el equipo del jugador juntaria muchas menos suspensiones que sus rivales.",
-    "chequeos_tarjeta_por_quite": 3,
+    "chequeos_tarjeta_por_quite": 6,
     "_multiplicador_desgaste": "Cuanto pesa cada duelo en la resistencia. Team.desgastar esta calibrado sobre los ~180 duelos del motor abstracto; este motor resuelve otra cantidad, y con 1.0 los 22 jugadores terminaban en el piso de resistencia antes del entretiempo.",
-    "multiplicador_desgaste": 8.0
+    "multiplicador_desgaste": 12.0
   }
 }

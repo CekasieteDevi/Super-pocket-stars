@@ -1174,3 +1174,64 @@ esa es la palanca real — o agrupar los pases para que compitan como una
 categoría.
 
 Paridad con el motor abstracto: **3,65 contra 3,58**.
+
+---
+
+## 20. Pelotazo (pase largo)
+
+Tercera jugada del diseño original, y la que existe para un motivo
+concreto: **darle un repertorio propio al equipo malo**.
+
+Medido antes de agregarla, el reparto de decisiones de un plantel de media
+27 era **92,4% conducir o pasar** — gambeta 0%, pase al hueco 0,5%. No
+porque el motor estuviera mal, sino porque las jugadas ricas están detrás
+de umbrales de atributo (`control` 50 para gambeta, `vision` 45 para el
+hueco) que un equipo de división 10 no alcanza.
+
+El pelotazo no es una jugada *mejor*, es una **distinta**: la que hace un
+equipo que no puede salir jugando.
+
+### Cómo funciona
+
+- **Alcance por `fuerza`**, no por técnica (42m a 72m): la pierna, no el
+  pie. Por eso un equipo limitado igual lo tiene disponible.
+- **Se elige** cuando hay presión encima y estás metido en tu campo — o
+  sea, cuando salir jugando no es opción.
+- **Solo hacia adelante**: si el compañero lejano está más atrás que vos,
+  la opción no aparece.
+- **Su baja efectividad sale sola del motor**, sin reglas nuevas: una
+  pelota que viaja mucho es más fácil de leer (`lectura_pase_largo` en el
+  duelo de intercepción, ×1,30 pasados 30 metros).
+
+### Efecto medido
+
+| Media plantel | conducir | pase | **pelotazo** | gambeta | hueco | tiro |
+| --- | --- | --- | --- | --- | --- | --- |
+| 27 | 23,3% | 56,7% | **13,3%** | 0,0% | 0,5% | 6,2% |
+| 39 | 20,0% | 51,6% | 11,4% | 1,0% | 7,4% | 8,5% |
+| 50 | 17,4% | 41,9% | 9,9% | 2,3% | 20,2% | 8,4% |
+| 62 | 15,4% | 34,9% | 10,4% | 2,6% | 26,5% | 10,1% |
+
+El equipo de media 27 pasó de 92,4% a 80% en conducir+pase. Lo usa más que
+el de media 62 (13,3% contra 10,4%), aunque la diferencia es moderada: la
+distingue más el hueco (0,5% contra 26,5%) que el pelotazo.
+
+### Recalibración que hizo falta
+
+El pelotazo baja la efectividad general (es de baja probabilidad, como
+debe ser), así que hubo que subir el apetito de remate para recuperar la
+paridad. Y bajó los duelos cuerpo a cuerpo de ~48 a 33 por partido —
+menos quites significa **menos tarjetas y menos desgaste**, que rompía la
+paridad de suspensiones con el resto de la liga. Se compensó con
+`chequeos_tarjeta_por_quite` y `multiplicador_desgaste`.
+
+Es un patrón que ya apareció varias veces: **cualquier cambio que mueva
+cuántos duelos hay por partido mueve también tarjetas, lesiones y
+cambios**, porque están calibrados sobre esa cantidad.
+
+Paridad final: **3,51 contra 3,58**. Por partido: 3,6 amarillas, 6,3
+cambios.
+
+### Todavía falta
+
+La pared. Y el centro, bloqueado por la altura de pelota.
