@@ -745,3 +745,61 @@ potencial 70 da 3,75 contra 3,55. Es deliberado (es justamente lo que se
 pedía), pero significa que la paridad entre motores es exacta en el medio
 de la tabla y se afloja en los extremos. Con equipos naturales —el caso
 real— queda en 3,33 contra 3,17, que sigue siendo cerca.
+
+---
+
+## 13. Cómo se resuelve una intercepción
+
+Antes era **puramente geométrica y determinista**: si un rival entraba en
+el radio de la trayectoria, la pelota era suya, sin tirar un solo dado. Un
+marcador con `quite` 95 interceptaba exactamente igual que uno con 20 — el
+único atributo que contaba era el `pases` del que la pegó. Ahora la
+geometría decide **quién tiene la chance y qué tan buena es**, y un duelo
+decide **si la corta**.
+
+### Quién puede interceptar
+
+Todos los rivales, no un jugador designado. En cada tick de vuelo se mide
+la distancia perpendicular de cada rival al **segmento que recorrió la
+pelota ese tick** (no al punto final: con pasos de ~4,5m, mirar solo el
+punto final dejaría pasar la pelota a través de un defensor). El más
+cercano dentro del radio es el que tiene la chance.
+
+Excepción: el rival que está a menos de 4m del punto de origen del pase no
+intercepta. Es el que estaba marcando al pasador y queda dentro del
+corredor apenas sale la pelota; su oportunidad de robarla es el quite, no
+esto. Sin esa excepción interceptaba el 96,5% de los pases.
+
+### El duelo
+
+No existe un atributo "intercepción" en el GDD — los defensivos son
+`quite` y `barrida`, y los mentales `vision` e `inteligencia`. Se usa el
+mismo compuesto con que el GDD pondera a un DFC (`quite 18, fuerza 14,
+inteligencia 14`): **`quite` × 0,6 + `inteligencia` × 0,4**, o sea marca
+más lectura de juego. Contra eso va el `pases` del que la tocó, con los
+bloques A/B/C/D de siempre (§8.5), así que personalidad, habilidades,
+clima y todo lo demás entran igual que en cualquier otro duelo.
+
+Dos factores modulan la lectura del defensor:
+
+| Factor | Efecto |
+| --- | --- |
+| **Centralidad** — qué tan metido está en la trayectoria | ×0,45 en el borde del radio, ×1,0 justo en el camino |
+| **Distancia ya recorrida** por la pelota | ×0,70 en un toque corto, ×1,30 pasados 30m |
+
+El segundo es pedido explícito: un toque corto y seco no se corta, pero un
+pase largo cruzando la cancha le da al rival tiempo de sobra para medirlo.
+
+### Nota: habilidades relacionadas
+
+- **Profeta** (habilidad de campo atada a `quite`) ahora sí sirve para
+  cortar pases, porque el duelo pasa por el bloque D.
+- **Interceptor** es una habilidad de ARQUERO, atada a `reflejos` — es
+  salir a cortar, no leer un pase en el medio.
+
+### Pendiente: altura de la pelota
+
+Hoy la pelota es 2D: no hay coordenada `z`. Cuando se implementen los
+centros hay que agregarla, porque un centro que pasa cinco metros por
+encima de un defensor no lo puede interceptar nadie, y con el modelo
+actual sí lo haría. Es el requisito que habilita centros de verdad.

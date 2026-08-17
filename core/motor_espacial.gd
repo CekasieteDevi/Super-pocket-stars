@@ -656,6 +656,7 @@ static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: i
 	# flojo tarda más en llegar y le da tiempo al rival a meterse.
 	pelota["vel"] = dir * _por_atributo(jugador, "pases", f["vel_pase_min"], f["vel_pase_max"])
 	pelota["pases_pasador"] = float(jugador["atributos"]["pases"])
+	pelota["pasador_id"] = int(jugador["id"])
 	pelota["destino_pos"] = destino["pos"]
 	pelota["destino_id"] = destino_id
 	pelota["pasador_local"] = poseedor["equipo_local"]
@@ -792,6 +793,18 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 		if d < mejor_d:
 			mejor_d = d
 			mejor_id = id
+	# La geometría decide QUIÉN tiene la chance y qué tan buena es; el
+	# DUELO decide si la corta. Antes esto era determinista: si entrabas en
+	# el radio, la pelota era tuya, con lo cual un marcador con quite 95
+	# interceptaba exactamente igual que uno con quite 20 — el único
+	# atributo que contaba era el `pases` del que la pegó. No existe un
+	# atributo "intercepción" en el GDD (los defensivos son quite y
+	# barrida), así que se usa el mismo compuesto con que el GDD pondera a
+	# un DFC: quite + inteligencia, o sea marca y lectura de juego.
+	if mejor_id != -1 and bool(pelota.get("es_pase", false)):
+		if not _gana_intercepcion(estado, mejor_id, mejor_d, radio_inter, pasador_local, minuto):
+			mejor_id = -1
+
 	if mejor_id != -1:
 		if bool(pelota.get("es_pase", false)):
 			estado["pase_detalle"]["interceptado_vuelo"] += 1
@@ -898,6 +911,44 @@ static func _sincronizar_cambios(estado: Dictionary) -> void:
 				"rol": rol, "base": base, "pos": pos, "vel": Vector2.ZERO,
 				"objetivo": base, "vel_max": _vel_max(j),
 			}
+
+
+## ¿El defensor que se metió en la línea de pase llega a cortarla? Duelo
+## `pases` del pasador contra `quite`+`inteligencia` del que intercepta,
+## con los bloques A/B/C/D del GDD igual que cualquier otro duelo del
+## motor. La cercanía a la trayectoria pesa: el que la roza tiene mucha
+## menos chance que el que se le para justo en el camino.
+static func _gana_intercepcion(estado: Dictionary, clave_def: int, dist: float, radio: float,
+		pasador_local: bool, minuto: int) -> bool:
+	var eq_pas := _equipo_de(estado, pasador_local)
+	var eq_def := _equipo_de(estado, not pasador_local)
+	var pasador := _dict_jugador(estado, eq_pas, int(estado["pelota"].get("pasador_id", -1)))
+	var defensor := _dict_jugador(estado, eq_def, estado["jugadores"][clave_def]["jugador_id"])
+	if pasador.is_empty() or defensor.is_empty():
+		return true
+
+	var f: Dictionary = pesos()["fisica"]
+	var attrs: Dictionary = defensor["atributos"]
+	var lectura: float = float(attrs["quite"]) * 0.6 + float(attrs["inteligencia"]) * 0.4
+	# Centrado en la trayectoria = corte limpio; al borde del radio, apenas
+	# la roza.
+	var centralidad: float = 1.0 - clampf(dist / maxf(radio, 0.01), 0.0, 1.0)
+	lectura *= 0.45 + 0.55 * centralidad
+	# Cuanto más lejos viajó ya la pelota, más fácil de leer: un toque
+	# corto y seco no se corta, un pase largo cruzando la cancha le da al
+	# rival tiempo de sobra para medirlo y meter la pierna.
+	var recorrido: float = float(estado["pelota"].get("origen_pos", Vector2.ZERO).distance_to(estado["pelota"]["pos"]))
+	var largo: float = clampf(recorrido / float(f["recorrido_pase_largo"]), 0.0, 1.0)
+	lectura *= float(f["lectura_pase_corto"]) + (float(f["lectura_pase_largo"]) - float(f["lectura_pase_corto"])) * largo
+
+	var ata := Duel.atributo_efectivo(
+		float(pasador["atributos"]["pases"]), "tecnico", eq_pas.resistencia_pct(pasador["id"]))
+	var def := Duel.atributo_efectivo(lectura, "defensivo", eq_def.resistencia_pct(defensor["id"]))
+	var res := Duel.resolver(ata, def,
+		MatchEngine._bloques_equipo(eq_pas, eq_def, pasador, "pases", minuto, estado["rng"]),
+		MatchEngine._bloques_equipo(eq_def, eq_pas, defensor, "quite", minuto, estado["rng"]))
+	# gana_atacante = el pase pasa. Si el atacante pierde, hay intercepción.
+	return not Duel.gana_atacante(res, estado["rng"])
 
 
 static func _entregar_pelota(estado: Dictionary, clave: int) -> void:

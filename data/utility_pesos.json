@@ -23,7 +23,7 @@
   "tiro_resolucion": {
     "peso_atributo": 0.6,
     "peso_geometria": 0.4,
-    "porteria_base": 0.335,
+    "porteria_base": 0.305,
     "porteria_calidad": 0.50,
     "palo": 0.05,
     "fuerza_base": 0.80
@@ -57,7 +57,12 @@
     "vel_pase_max": 24.0,
     "vel_pelota_pase": 18.0,
     "radio_control": 1.6,
-    "radio_intercepcion": 1.8,
+    "_radio_intercepcion": "Radio geometrico: define QUIEN tiene la chance de cortar. Que la corte o no lo decide un duelo pases vs quite+inteligencia (ver _gana_intercepcion), no la geometria sola.",
+    "radio_intercepcion": 3.2,
+    "_recorrido_pase_largo": "A partir de cuantos metros recorridos un pase se considera largo y por lo tanto facil de leer. Pedido explicito: la distancia que ya viajo la pelota entra en el duelo.",
+    "recorrido_pase_largo": 30.0,
+    "lectura_pase_corto": 0.70,
+    "lectura_pase_largo": 1.30,
     "intercepcion_pase_malo": 1.45,
     "intercepcion_pase_bueno": 0.42,
     "_min_dist_intercepcion_origen": "Un rival mas cerca que esto del punto desde donde sale el pase no lo intercepta: es el que estaba marcando al pasador, y la pelota le sale de los pies pasandolo. Su chance de robarla es el quite, no la interceptacion.",
