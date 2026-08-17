@@ -570,8 +570,13 @@ func resistencia_pct(jugador_id: int) -> float:
 
 ## Desgaste simple por participación en un duelo. La resistencia nunca baja
 ## de 0.55 dentro de un partido. §8.4 #19: con Calor, un 30% más rápido.
-func desgastar(jugador_id: int, energia_attr: int) -> void:
-	var decay: float = 0.006 * (1.3 - float(energia_attr) / 100.0) * Clima.factor_energia(clima_partido)
+## multiplicador: cuánto pesa ESTE duelo en el desgaste. MatchEngine usa
+## 1.0 (está calibrado sobre sus ~180 duelos por partido); MotorEspacial
+## pasa otro valor porque resuelve una cantidad de duelos completamente
+## distinta y, con 1.0, dejaba a los 22 jugadores en el piso de
+## resistencia antes del entretiempo.
+func desgastar(jugador_id: int, energia_attr: int, multiplicador: float = 1.0) -> void:
+	var decay: float = 0.006 * (1.3 - float(energia_attr) / 100.0) * Clima.factor_energia(clima_partido) * multiplicador
 	resistencia[jugador_id] = max(0.55, resistencia_pct(jugador_id) - decay)
 
 

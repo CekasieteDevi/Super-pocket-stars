@@ -31,23 +31,10 @@ const TICKS_POR_SEGUNDO := 4.0
 ## interpola, se corta seco.
 const SALTO_MAXIMO_M := 12.0
 
-## No se muestran los 90 minutos: se muestran las jugadas que importan, a
-## ritmo real, y se saltea el relleno — un resumen, como en la tele. Es la
-## unica forma de tener las dos cosas a la vez: que se entienda lo que
-## pasa (tiempo real) y que un tiempo dure 2 minutos.
-##
-## A 4 ticks/seg, 2 minutos son 480 ticks de los 10.800 que tiene cada
-## tiempo: se muestra alrededor del 4% del partido, el que tiene algo.
-const PRESUPUESTO_TICKS_POR_TIEMPO := 480
-const TICKS_ANTES := 24  # 6 segundos de como se armo la jugada
-const TICKS_DESPUES := 8  # 2 segundos de la reaccion
-
-## Que jugadas merecen entrar al resumen, de mas a menos importante. Si no
-## entran todas en el presupuesto, se cortan las de abajo.
-const PRIORIDAD_EVENTO := {"gol": 0, "tiro_puerta": 1, "tarjeta": 2, "tiro": 3}
-
-var segmentos: Array = []  # [{"inicio": int, "fin": int}, ...] ya ordenados
-var segmento_actual: int = 0
+## Se reproduce el partido COMPLETO, sin cortes ni resúmenes: el motor ya
+## simula un partido de 480 ticks por tiempo (MotorEspacial.TICKS_POR_MITAD),
+## o sea 2 minutos reales a 4 fotogramas por segundo. No hace falta saltear
+## nada porque no sobra nada.
 
 var fotogramas: Array = []
 var posicion: float = 0.0
@@ -126,11 +113,9 @@ func iniciar(local: String, visitante: String, lista_fotogramas: Array) -> void:
 	label_evento.text = "Arranca el partido..."
 	label_minuto.text = "Min 0"
 	_refrescar_marcador(0, 0)
-	_armar_segmentos()
-	segmento_actual = 0
-	posicion = float(segmentos[0]["inicio"]) if not segmentos.is_empty() else 0.0
+	posicion = 0.0
 	if not fotogramas.is_empty():
-		cancha.mostrar(fotogramas[int(posicion)])
+		cancha.mostrar(fotogramas[0])
 
 
 func _process(delta: float) -> void:
@@ -139,16 +124,6 @@ func _process(delta: float) -> void:
 
 	var desde: int = int(posicion)
 	posicion += delta * TICKS_POR_SEGUNDO * velocidad
-
-	# Se terminó este tramo del resumen: se corta a la próxima jugada.
-	if segmento_actual < segmentos.size() and int(posicion) > int(segmentos[segmento_actual]["fin"]):
-		segmento_actual += 1
-		if segmento_actual >= segmentos.size():
-			_saltar()
-			return
-		posicion = float(segmentos[segmento_actual]["inicio"])
-		desde = int(posicion)
-
 	var hasta: int = mini(int(posicion), fotogramas.size() - 1)
 
 	# Entre un frame de pantalla y el siguiente pasan varios ticks de
@@ -167,61 +142,8 @@ func _process(delta: float) -> void:
 	var g: Dictionary = f["goles"]
 	_refrescar_marcador(int(g["home"]), int(g["away"]))
 
-
-## Elige qué tramos del partido entran al resumen: cada jugada importante
-## con unos segundos de cómo se armó y de la reacción, hasta llenar el
-## presupuesto de cada tiempo. Se prioriza por tipo de jugada (un gol
-## nunca queda afuera; un remate desviado sí, si no hay lugar).
-func _armar_segmentos() -> void:
-	segmentos = []
-	if fotogramas.is_empty():
-		return
-	var mitad: int = fotogramas.size() / 2
-
-	for parte in range(2):
-		var desde_tick: int = parte * mitad
-		var hasta_tick: int = fotogramas.size() if parte == 1 else mitad
-
-		var candidatos := []
-		for i in range(desde_tick, hasta_tick):
-			var ev = fotogramas[i].get("evento", null)
-			if ev == null:
-				continue
-			var clave: String = "gol" if ev.get("resultado", "") == "gol" else str(ev["tipo"])
-			if not PRIORIDAD_EVENTO.has(clave):
-				continue
-			candidatos.append({"tick": i, "prioridad": int(PRIORIDAD_EVENTO[clave])})
-
-		# Por importancia, y a igual importancia por orden de partido.
-		candidatos.sort_custom(func(a, b):
-			if a["prioridad"] != b["prioridad"]:
-				return a["prioridad"] < b["prioridad"]
-			return a["tick"] < b["tick"])
-
-		var elegidos := []
-		var gastado := 0
-		for c in candidatos:
-			if gastado + TICKS_ANTES + TICKS_DESPUES > PRESUPUESTO_TICKS_POR_TIEMPO:
-				break
-			elegidos.append(c["tick"])
-			gastado += TICKS_ANTES + TICKS_DESPUES
-
-		# Si el tiempo no tuvo ninguna jugada digna, igual se muestra el
-		# arranque para que no quede un tiempo en blanco.
-		if elegidos.is_empty():
-			segmentos.append({"inicio": desde_tick, "fin": mini(desde_tick + PRESUPUESTO_TICKS_POR_TIEMPO, hasta_tick - 1)})
-			continue
-
-		elegidos.sort()
-		for tick in elegidos:
-			var inicio: int = maxi(tick - TICKS_ANTES, desde_tick)
-			var fin: int = mini(tick + TICKS_DESPUES, hasta_tick - 1)
-			# Jugadas encadenadas (rebote, segundo remate) se funden en un
-			# solo tramo continuo en vez de mostrarse dos veces.
-			if not segmentos.is_empty() and inicio <= int(segmentos[-1]["fin"]) + 1:
-				segmentos[-1]["fin"] = maxi(int(segmentos[-1]["fin"]), fin)
-			else:
-				segmentos.append({"inicio": inicio, "fin": fin})
+	if int(posicion) >= fotogramas.size() - 1:
+		_finalizar()
 
 
 ## Mezcla el fotograma `idx` con el siguiente segun la fraccion `t`, para

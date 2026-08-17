@@ -21,10 +21,26 @@ extends RefCounted
 
 const PESOS_PATH := "res://data/utility_pesos.json"
 
-## Decisión 2 del doc: 0.25s de juego por tick. 90' = 21.600 ticks.
+## Decisión 2 del doc: 0.25s por tick.
 const TICK_SEG := 0.25
-const MINUTOS_POR_MITAD := 45.0
-const TICKS_POR_MITAD := int(MINUTOS_POR_MITAD * 60.0 / TICK_SEG)
+
+## Un partido dura 2 minutos REALES por tiempo, jugados a velocidad real
+## (la UI reproduce 4 fotogramas por segundo, o sea 1 seg de pantalla = 1
+## seg de simulación). Eso son 480 ticks por tiempo.
+##
+## No se puede mostrar 90 minutos en 4 sin acelerar 22 veces, y a 22x un
+## jugador que corre a 7 m/s se ve corriendo a 157: ilegible. Tampoco sirve
+## acelerar solo el relleno (las jugadas importantes a velocidad real ya
+## consumen los 4 minutos enteros) ni mostrar un resumen con cortes. La
+## única salida que deja ver el partido COMPLETO, sin cortes y con
+## movimiento creíble, es que el partido dure de verdad 4 minutos y que el
+## reloj marque 0-90 como ficción — como en Pocket League Story, que es la
+## referencia del GDD ("presentación por encima de profundidad").
+##
+## Costo asumido: al haber 4 minutos de juego en vez de 90, las llegadas
+## son más seguidas que en un partido real. Se ve arcade, no televisado.
+const TICKS_POR_MITAD := 480
+const MINUTOS_MOSTRADOS_POR_MITAD := 45.0
 
 ## Cancha reglamentaria, origen en el centro. El equipo LOCAL ataca hacia
 ## +X (arco rival en +52.5), el visitante hacia -X.
@@ -75,6 +91,10 @@ const LIMITE_X := 43.5
 ## Quiénes se meten detrás de la pelota cuando el equipo no la tiene. Los
 ## de arriba quedan afuera a propósito: son la salida del equipo.
 const ROLES_QUE_REPLIEGAN := ["DFC", "LAT", "MC"]
+
+## Los de arriba: atacando se paran en el hombro del último defensor rival
+## (ver _objetivo_sin_pelota), que es de donde salen los goles.
+const ROLES_QUE_ATACAN := ["MCO", "EXT", "DC"]
 
 ## estado["jugadores"] se indexa por CLAVE, no por jugador_id: los ids de
 ## jugador son únicos dentro de un club pero NO entre clubes (los dos
@@ -403,6 +423,18 @@ static func _objetivo_sin_pelota(estado: Dictionary, e: Dictionary, equipo: Team
 		else:
 			objetivo_x = maxf(objetivo_x, pelota_pos.x - 1.0)
 
+	# Atacando, los de arriba se paran EN EL HOMBRO del último defensor en
+	# vez de quedarse en su casillero. Sin esto un 9 con la pelota en campo
+	# rival se quedaba a 24 metros del arco pudiendo estar a 10, el equipo
+	# nunca entraba al área y todos los remates salían de afuera (mediana
+	# 23m, casi ningún gol).
+	if tiene_pelota_mi_equipo and ROLES_QUE_ATACAN.has(rol):
+		var linea_ataque: Dictionary = estado["linea_offside"]
+		if e["equipo_local"]:
+			objetivo_x = maxf(objetivo_x, float(linea_ataque["local"]) - 1.0)
+		else:
+			objetivo_x = minf(objetivo_x, float(linea_ataque["away"]) + 1.0)
+
 	# Mantenerse habilitado: nadie se adelanta al último defensor rival.
 	# El offside como infracción queda fuera del MVP, pero la CONDUCTA de
 	# no irse en offside no es opcional — sin ella los delanteros acampan
@@ -487,8 +519,9 @@ static func _duelo_simple(atacante: Dictionary, attr_a: String, eq_a: Team,
 	var res := Duel.resolver(ata, def,
 		MatchEngine._bloques_equipo(eq_a, eq_d, atacante, attr_a, minuto, rng),
 		MatchEngine._bloques_equipo(eq_d, eq_a, defensor, attr_d, minuto, rng))
-	eq_a.desgastar(atacante["id"], atacante["atributos"]["energia"])
-	eq_d.desgastar(defensor["id"], defensor["atributos"]["energia"])
+	var mult: float = float(pesos()["fisica"]["multiplicador_desgaste"])
+	eq_a.desgastar(atacante["id"], atacante["atributos"]["energia"], mult)
+	eq_d.desgastar(defensor["id"], defensor["atributos"]["energia"], mult)
 	if rng.randf() < float(pesos()["fisica"]["prob_evento_fisico"]):
 		MatchEngine._chequear_lesion(atacante, eq_a, rng)
 		MatchEngine._chequear_lesion(defensor, eq_d, rng)
@@ -565,8 +598,9 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	var res := Duel.resolver(ata, def,
 		MatchEngine._bloques_equipo(eq_a, eq_d, jugador, "tiro", minuto, rng),
 		MatchEngine._bloques_equipo(eq_d, eq_a, arquero, "reflejos", minuto, rng))
-	eq_a.desgastar(jugador["id"], jugador["atributos"]["energia"])
-	eq_d.desgastar(arquero["id"], arq_attrs["energia"])
+	var mult_tiro: float = float(pesos()["fisica"]["multiplicador_desgaste"])
+	eq_a.desgastar(jugador["id"], jugador["atributos"]["energia"], mult_tiro)
+	eq_d.desgastar(arquero["id"], arq_attrs["energia"], mult_tiro)
 	var gol := Duel.gana_atacante(res, rng)
 	estado["eventos"].append({
 		"minuto": minuto, "tipo": "tiro_puerta", "equipo": eq_a.nombre, "rival": eq_d.nombre,
@@ -687,7 +721,12 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 		pelota["ticks_con_pelota"] = int(pelota.get("ticks_con_pelota", 0)) + 1
 
 	estado["tick"] += 1
-	estado["minuto"] += TICK_SEG / 60.0
+	# El reloj MOSTRADO avanza 90 minutos a lo largo de los 960 ticks del
+	# partido: es la ficción de "esto son 90 minutos". Todo lo que depende
+	# del minuto (rasgos como Lento de arranque o Se apaga, el DT según el
+	# marcador, las ventanas de cambio) lee este reloj, así que conserva
+	# exactamente la semántica del GDD.
+	estado["minuto"] += MINUTOS_MOSTRADOS_POR_MITAD / float(TICKS_POR_MITAD)
 	# Cada 5 segundos de juego se saca de la cancha a los expulsados (una
 	# roja puede caer en cualquier tick, no solo en una ventana de cambio).
 	if estado["tick"] % 20 == 0:
@@ -996,7 +1035,13 @@ static func _intentar_robo(estado: Dictionary) -> void:
 	# CHANCE_AMARILLA=0.02 está calibrado. Aplicado tal cual daban ~50
 	# amarillas por partido y los equipos terminaban diezmados. Solo una
 	# fracción chica de los quites se disputa con riesgo de falta.
-	if estado["rng"].randf() < float(f["prob_evento_fisico"]):
+	# CHANCE_AMARILLA (2%) está calibrado sobre los ~180 duelos por partido
+	# del motor abstracto. Este motor disputa la pelota ~50 veces, así que
+	# aplicado una vez por quite daría 1 amarilla por partido contra las
+	# ~3,6 del resto de la liga, y el equipo del jugador juntaría muchas
+	# menos suspensiones que sus rivales. Se chequea varias veces por
+	# disputa para igualar la tasa por PARTIDO, que es lo que importa.
+	for i in range(int(f["chequeos_tarjeta_por_quite"])):
 		MatchEngine._chequear_tarjeta(jug_d, eq_d, eq_a, estado["rng"], estado["eventos"], minuto, true, estado["log"])
 	if not aguanta:
 		estado["robos"]["ganados"] += 1
@@ -1069,7 +1114,7 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 	var ventanas := [45, 60, 75]
 	for mitad in range(2):
 		_reiniciar_desde_medio(estado, mitad == 0)
-		estado["minuto"] = MINUTOS_POR_MITAD * mitad
+		estado["minuto"] = MINUTOS_MOSTRADOS_POR_MITAD * mitad
 		for t in range(TICKS_POR_MITAD):
 			_tick(estado, con_fotogramas)
 			if not ventanas.is_empty() and estado["minuto"] >= ventanas[0]:
