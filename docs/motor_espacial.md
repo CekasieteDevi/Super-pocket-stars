@@ -1285,3 +1285,69 @@ remate. Falta solo el **centro**, que sigue bloqueado por la altura de
 pelota (`z`).
 
 Paridad con el motor abstracto: **3,57 contra 3,58**.
+
+---
+
+## 22. Centros y altura de pelota
+
+Esto estuvo bloqueado varias secciones: **la pelota era 2D**, así que un
+centro por encima de todos habría sido interceptable por cualquiera
+parado abajo.
+
+### La altura
+
+Cada pase lleva ahora una `altura_max`, y la `z` sale de una parábola
+simple según cuánto lleva recorrido. Los pases rasos llevan `altura_max`
+0, así que **para todo lo que ya funcionaba no cambia nada** — es
+aditivo. Por encima de `z_inalcanzable` (2,5m) el chequeo de intercepción
+se saltea: los de abajo no la alcanzan.
+
+La `z` viaja en el fotograma, así que la animación puede mostrarla cuando
+la UI lo soporte (hoy dibuja en 2D y la ignora).
+
+### El centro
+
+Se ofrece si el jugador está **abierto y adelantado**, sabe pegarle
+(`centros` ≥ 40) y hay un compañero **dentro del área**. Vuela a 6 metros
+de altura, o sea que no se corta en el camino: **se define al caer**.
+
+### El duelo aéreo
+
+Ataca `cabezazo`×0,6 + `salto`×0,4. Defiende `salto`×0,5 +
+`cabezazo`×0,3 + `fuerza`×0,2. Y antes que ellos, **el arquero puede salir
+a descolgarla** con `achique` si cae en su zona.
+
+Medido (`tests/_diag_centro.gd`), duelos ganados por el atacante:
+
+| | def 30 | def 60 | def 90 |
+| --- | --- | --- | --- |
+| **ata 30** | 43% | 0% | 4% |
+| **ata 60** | 98% | 63% | 15% |
+| **ata 90** | 97% | 97% | 73% |
+
+**Sesgo conocido**: con atributos iguales el atacante gana ~73%, no 50%.
+Es porque el atacante se mide como `tecnico` y el defensor como `fisico`,
+y el castigo por energía baja es mucho mayor en los físicos (0,35 contra
+0,15 en `Duel.ENERGIA_K`). O sea que **un defensor cansado salta mucho
+peor**. Es defendible como realismo, pero conviene saberlo: los centros
+favorecen al que ataca, sobre todo tarde en el partido.
+
+### Cuatro atributos que no leía nadie
+
+`centros`, `cabezazo`, `salto` y `achique` existían en el GDD desde
+siempre y ningún motor los usaba. Ahora los cuatro deciden algo.
+
+### Frecuencia
+
+2,5% de las decisiones, unos 2,3 centros por partido. Parece poco contra
+los ~15 de un partido real, pero en proporción da igual: 15 centros sobre
+~1000 pases reales es también ~1,5%.
+
+Paridad con el motor abstracto: **3,70 contra 3,58**.
+
+### Lo que la altura desbloquea a futuro
+
+Ahora que existe `z`, quedan al alcance el córner como centro de verdad
+(hoy se ejecuta como pase raso), el cabezazo al arco como remate propio
+(hoy el que gana el duelo aéreo simplemente se queda la pelota), y los
+despejes largos por arriba.

@@ -22,6 +22,13 @@
     "presion": 0.40
   },
 
+  "_centro": "Colgarla al area desde la banda. Vuela por encima de todos (altura_centro) asi que no se corta en el camino: se define en el duelo aereo al caer. Usa `centros`, `cabezazo`, `salto` y `achique`, cuatro atributos del GDD que no leia nadie.",
+  "centro": {
+    "base": 0.55,
+    "punteria": 1.30,
+    "progreso": 0.60
+  },
+
   "_pared": "Se la da al companero y sale corriendo a recibirla del otro lado del marcador. Son DOS pases encadenados, o sea dos chances de que se la corten: por eso pide `pases` y es jugada de los que saben tocar.",
   "pared": {
     "base": 0.25,
@@ -91,6 +98,14 @@
     "vision_minima_hueco": 45.0,
     "_pared_geo": "El mismo `pases` que la habilita define su tamano: mejor pie, muro mas lejos y carrera mas larga.",
     "pases_minimo_pared": 40.0,
+    "_centro_geo": "Hay que estar abierto (banda) y adelantado para centrar. z_inalcanzable es la altura por encima de la cual los de abajo no la alcanzan.",
+    "centros_minimo": 40.0,
+    "banda_para_centrar": 11.0,
+    "avance_para_centrar": 0.55,
+    "altura_centro": 6.0,
+    "z_inalcanzable": 2.5,
+    "radio_achique": 7.0,
+    "achique_eficacia": 0.55,
     "pared_muro_cerca": 6.0,
     "pared_muro_lejos": 17.0,
     "pared_avance_min": 5.0,

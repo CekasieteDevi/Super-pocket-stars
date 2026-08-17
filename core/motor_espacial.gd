@@ -235,6 +235,7 @@ static func crear_estado(home: Team, away: Team, rng: RandomNumberGenerator) -> 
 		"robos": {"intentos": 0, "ganados": 0},
 		"gambetas": {"home": {"intentos": 0, "ganadas": 0}, "away": {"intentos": 0, "ganadas": 0}},
 		"paredes": {},
+		"centros": {},
 		"reinicios": {},
 		"cooldown": {},
 		"pase_detalle": {"intentos": 0, "interceptado_vuelo": 0, "rival_llego_antes": 0, "fuera": 0},
@@ -402,6 +403,11 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 	# La pared la habilita `pases`, y ese mismo atributo define su tamaño:
 	# el que la toca mejor puede jugarla con un compañero más lejos y salir
 	# a recibirla más adelante.
+	# Centrar: hay que estar abierto y adelantado, y saber pegarle. Usa
+	# `centros`, que existía en el GDD y no lo leía nadie.
+	var puede_centrar: bool = float(jugador["atributos"]["centros"]) >= float(f["centros_minimo"]) \
+		and absf(pos.y) >= float(f["banda_para_centrar"]) \
+		and valor_posicion(pos, es_local) >= float(f["avance_para_centrar"])
 	var wpa: Dictionary = w["pared"]
 	var pases_jugador: float = float(jugador["atributos"]["pases"])
 	var sabe_pared: bool = pases_jugador >= float(f["pases_minimo_pared"])
@@ -449,6 +455,20 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 			"tipo": "pase", "utilidad": u_pase, "objetivo_id": id,
 			"detalle": {"progreso": progreso, "riesgo": riesgo, "dist": dist},
 		})
+
+		# --- Centro --------------------------------------------------
+		# Desde la banda y adelantado, colgarla al área. Vuela por encima
+		# de todos (ver altura_max), así que no se corta en el camino: se
+		# define en el duelo aéreo al caer.
+		if puede_centrar and _en_el_area(comp["pos"], es_local):
+			var wce: Dictionary = w["centro"]
+			var u_centro: float = wce["base"] \
+				+ wce["punteria"] * (float(jugador["atributos"]["centros"]) / 100.0) \
+				+ wce["progreso"] * (valor_posicion(comp["pos"], es_local) - mi_valor)
+			opciones.append({
+				"tipo": "centro", "utilidad": u_centro, "objetivo_id": id,
+				"detalle": {"centros": jugador["atributos"]["centros"]},
+			})
 
 		# --- Pared ---------------------------------------------------
 		# Se la da al compañero y sale corriendo a recibirla del otro lado
@@ -576,6 +596,83 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "gambeta", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 			"jugador_posicion": poseedor["rol"], "resultado": "pierde",
+		})
+
+
+## ¿Está dentro del área grande rival? (16,5m de fondo, 40,32m de ancho).
+static func _en_el_area(punto: Vector2, es_local: bool) -> bool:
+	var arco := arco_rival(es_local)
+	return absf(arco.x - punto.x) <= 16.5 and absf(punto.y) <= 20.16
+
+
+## Cuando cae un centro: se lo disputan por arriba. Ataca `cabezazo` +
+## `salto`; defiende `salto` + `fuerza`. Y el arquero puede salir a
+## descolgarla si cae cerca suyo, con `achique` — otro atributo del GDD
+## que no leía nadie.
+static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bool, minuto: int) -> void:
+	var f: Dictionary = pesos()["fisica"]
+	var rng: RandomNumberGenerator = estado["rng"]
+	var eq_a := _equipo_de(estado, ataca_local)
+	var eq_d := _equipo_de(estado, not ataca_local)
+	estado["centros"]["caidos"] = int(estado["centros"].get("caidos", 0)) + 1
+
+	# El arquero primero: si cae en su zona, sale a descolgarla.
+	var arq_clave := -1
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		if e["equipo_local"] != ataca_local and e["rol"] == "ARQ":
+			arq_clave = id
+			break
+	if arq_clave != -1:
+		var arq_e: Dictionary = estado["jugadores"][arq_clave]
+		if punto.distance_to(arq_e["pos"]) <= float(f["radio_achique"]):
+			var arq := eq_d.arquero()
+			var chance: float = float(arq["atributos"]["achique"]) / 100.0 * float(f["achique_eficacia"])
+			if rng.randf() < chance:
+				estado["centros"]["descolgado"] = int(estado["centros"].get("descolgado", 0)) + 1
+				_entregar_pelota(estado, arq_clave)
+				estado["eventos"].append({
+					"minuto": minuto, "tipo": "centro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
+					"jugador_posicion": "ARQ", "resultado": "descuelga",
+				})
+				return
+
+	var atacante := _mas_cercano_del_equipo(estado, punto, ataca_local)
+	var defensor := _mas_cercano_del_equipo(estado, punto, not ataca_local)
+	if atacante == -1:
+		_pelota_fuera(estado, punto, ataca_local)
+		return
+	if defensor == -1:
+		_entregar_pelota(estado, atacante)
+		return
+
+	var j_a := _dict_jugador(estado, eq_a, estado["jugadores"][atacante]["jugador_id"])
+	var j_d := _dict_jugador(estado, eq_d, estado["jugadores"][defensor]["jugador_id"])
+	if j_a.is_empty() or j_d.is_empty():
+		_entregar_pelota(estado, atacante)
+		return
+
+	var ata: float = float(j_a["atributos"]["cabezazo"]) * 0.6 + float(j_a["atributos"]["salto"]) * 0.4
+	var def: float = float(j_d["atributos"]["salto"]) * 0.5 + float(j_d["atributos"]["cabezazo"]) * 0.3 \
+		+ float(j_d["atributos"]["fuerza"]) * 0.2
+	var res := Duel.resolver(
+		Duel.atributo_efectivo(ata, "tecnico", eq_a.resistencia_pct(j_a["id"])),
+		Duel.atributo_efectivo(def, "fisico", eq_d.resistencia_pct(j_d["id"])),
+		MatchEngine._bloques_equipo(eq_a, eq_d, j_a, "cabezazo", minuto, rng),
+		MatchEngine._bloques_equipo(eq_d, eq_a, j_d, "salto", minuto, rng))
+
+	if Duel.gana_atacante(res, rng):
+		estado["centros"]["ganados"] = int(estado["centros"].get("ganados", 0)) + 1
+		_entregar_pelota(estado, atacante)
+		estado["eventos"].append({
+			"minuto": minuto, "tipo": "centro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
+			"jugador_posicion": estado["jugadores"][atacante]["rol"], "resultado": "gana",
+		})
+	else:
+		_entregar_pelota(estado, defensor)
+		estado["eventos"].append({
+			"minuto": minuto, "tipo": "centro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
+			"jugador_posicion": estado["jugadores"][defensor]["rol"], "resultado": "despeja",
 		})
 
 
@@ -1308,6 +1405,14 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 	# excepción el que te presiona interceptaba el 96,5% de los pases y
 	# no se completaba prácticamente ninguno. La pelota le sale de los
 	# pies pasándolo; su oportunidad de robarla es el quite, no esto.
+	# Altura: parábola simple según cuánto lleva recorrido. Los pases rasos
+	# llevan altura_max 0, así que para ellos esto no cambia nada.
+	var altura_max: float = float(pelota.get("altura_max", 0.0))
+	var origen_z: Vector2 = pelota.get("origen_pos", desde)
+	var total: float = origen_z.distance_to(destino)
+	var avanzado: float = clampf(origen_z.distance_to(hasta) / maxf(total, 0.01), 0.0, 1.0)
+	pelota["z"] = altura_max * 4.0 * avanzado * (1.0 - avanzado)
+
 	var origen: Vector2 = pelota.get("origen_pos", desde)
 	# Un pase preciso pasa entre líneas; uno flojo se lo comen. Sin esto la
 	# intercepción era pura geometría y un gran pasador completaba
@@ -1315,18 +1420,21 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 	var calidad_pase: float = clampf(float(pelota.get("pases_pasador", 50.0)) / 100.0, 0.0, 1.0)
 	var radio_inter: float = float(f["radio_intercepcion"]) * (float(f["intercepcion_pase_malo"]) - (float(f["intercepcion_pase_malo"]) - float(f["intercepcion_pase_bueno"])) * calidad_pase)
 	var minimo_desde_origen: float = f["min_dist_intercepcion_origen"]
+	# Volando por encima de la cabeza no la agarra nadie: es lo que hace
+	# que un centro sea un centro y no un pase raso con más recorrido.
 	var mejor_id := -1
 	var mejor_d: float = radio_inter
-	for id in estado["jugadores"]:
-		var e: Dictionary = estado["jugadores"][id]
-		if e["equipo_local"] == pasador_local:
-			continue
-		if e["pos"].distance_to(origen) < minimo_desde_origen:
-			continue
-		var d := _dist_a_segmento(e["pos"], desde, hasta)
-		if d < mejor_d:
-			mejor_d = d
-			mejor_id = id
+	if float(pelota.get("z", 0.0)) <= float(f["z_inalcanzable"]):
+		for id in estado["jugadores"]:
+			var e: Dictionary = estado["jugadores"][id]
+			if e["equipo_local"] == pasador_local:
+				continue
+			if e["pos"].distance_to(origen) < minimo_desde_origen:
+				continue
+			var d := _dist_a_segmento(e["pos"], desde, hasta)
+			if d < mejor_d:
+				mejor_d = d
+				mejor_id = id
 	# La geometría decide QUIÉN tiene la chance y qué tan buena es; el
 	# DUELO decide si la corta. Antes esto era determinista: si entrabas en
 	# el radio, la pelota era tuya, con lo cual un marcador con quite 95
@@ -1356,6 +1464,14 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 	# La pelota llegó a destino: la toma el más cercano de cualquier
 	# equipo (el receptor se movió un poco desde que salió el pase, y si
 	# un defensor llegó antes, se la queda él).
+	# Un centro no lo "recibe" nadie de una: se disputa por arriba.
+	if bool(pelota.get("es_centro", false)):
+		pelota["es_centro"] = false
+		pelota["altura_max"] = 0.0
+		pelota["z"] = 0.0
+		_resolver_centro(estado, hasta, bool(pelota.get("centro_de", pasador_local)), minuto)
+		return
+
 	var receptor := _mas_cercano_a(estado, hasta)
 	if receptor == -1:
 		_dar_pelota_al_arquero(estado, not pasador_local, true)
@@ -1581,6 +1697,13 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador, elegida["punto"])
 		"pase_largo":
 			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador, null, true)
+		"centro":
+			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador)
+			# Va por arriba: no se corta en el camino, se define al caer.
+			estado["pelota"]["altura_max"] = float(f["altura_centro"])
+			estado["pelota"]["es_centro"] = true
+			estado["pelota"]["centro_de"] = es_local
+			estado["centros"]["intentos"] = int(estado["centros"].get("intentos", 0)) + 1
 		"pared":
 			# Primer pase al muro. La devolución se dispara sola cuando el
 			# muro la recibe (ver _avanzar_pelota), y mientras tanto el que
@@ -1745,6 +1868,10 @@ static func _push_fotograma(estado: Dictionary, evento_del_tick = null) -> void:
 		"minuto": estado["minuto"],
 		"pelota": {
 			"x": estado["pelota"]["pos"].x, "y": estado["pelota"]["pos"].y,
+			# Altura en metros: hoy la animación la ignora (dibuja en 2D),
+			# pero sale del motor para poder mostrar el centro por arriba
+			# cuando la UI lo soporte.
+			"z": float(estado["pelota"].get("z", 0.0)),
 			"poseedor_id": estado["pelota"]["poseedor_id"],
 		},
 		"jugadores": jugadores,
@@ -1813,6 +1940,7 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 			"robos": estado["robos"],
 			"gambetas": estado["gambetas"],
 			"paredes": estado["paredes"],
+			"centros": estado["centros"],
 			"reinicios": estado["reinicios"],
 			"cooldown_activos": estado["cooldown"].size(),
 			"pase_detalle": estado["pase_detalle"],

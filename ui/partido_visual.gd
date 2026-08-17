@@ -239,6 +239,14 @@ func _texto_evento(evento: Dictionary) -> String:
 			return "%s: TARJETA ROJA para %s%s" % [evento["equipo"], pos, " (doble amarilla)" if evento["resultado"] == "roja_doble_amarilla" else ""]
 		"cambio":
 			return "%s: CAMBIO — sale %s (%s)" % [evento["equipo"], pos, evento["resultado"]]
+		"centro":
+			match evento["resultado"]:
+				"gana":
+					return "%s: centro y la gana de arriba %s" % [evento["equipo"], pos]
+				"descuelga":
+					return "%s: centro, pero sale el arquero y la descuelga" % evento["equipo"]
+				_:
+					return "%s: centro al área, despeja %s" % [evento["equipo"], pos]
 		"saque_arco":
 			return "%s: saque de arco" % evento["equipo"]
 		"corner":
