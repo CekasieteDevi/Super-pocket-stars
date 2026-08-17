@@ -1351,3 +1351,55 @@ Ahora que existe `z`, quedan al alcance el córner como centro de verdad
 (hoy se ejecuta como pase raso), el cabezazo al arco como remate propio
 (hoy el que gana el duelo aéreo simplemente se queda la pelota), y los
 despejes largos por arriba.
+
+---
+
+## 23. Lo que desbloqueó la altura
+
+Tres cosas que estaban esperando la coordenada `z`.
+
+### El córner ahora es un centro de verdad
+
+Antes se ejecutaba como pase raso y por eso rendía tan poco. Ahora el
+ejecutor la cuelga al área buscando al compañero de mejor `cabezazo` +
+`salto` que esté adentro, y se define en el duelo aéreo.
+
+### Cabezazo al arco
+
+El que ganaba el duelo aéreo simplemente **se quedaba la pelota** — por
+eso un centro ganado casi nunca terminaba en gol. Ahora, si lo gana
+dentro del área, cabecea: `_resolver_tiro` acepta un atributo alternativo
+y el remate se resuelve con `cabezazo` en vez de `tiro`. Un cabezazo
+tampoco se bloquea con el cuerpo (viene por arriba y ya se disputó en el
+aire).
+
+Circuito completo medido, por partido:
+
+| | |
+| --- | --- |
+| Centros intentados | 3,45 |
+| Caen al área | 3,1 |
+| Los gana el atacante | 1,65 |
+| Terminan en cabezazo al arco | **1,0** |
+| Los descuelga el arquero | 0,35 |
+
+### Despeje
+
+Metido en tu campo y con gente encima: reventarla arriba y lejos. A
+diferencia del pelotazo **no busca a nadie** — es sacarla de la zona de
+peligro, y por eso no pide ningún atributo técnico (el alcance sale de
+`fuerza`). Va alta a propósito, así que no se corta en el camino: se
+disputa donde cae.
+
+Medido: 3,0 despejes por partido, 3,5% de las decisiones.
+
+### Nota de método
+
+En la calibración final bajé la conversión y los goles **subieron**. Eso
+no es un efecto, es ruido: con 120 partidos la banda de varianza es del
+orden de ±0,2 goles, más grande que un ajuste chico. Hay que mover el
+parámetro de forma decisiva y aceptar el resultado, en vez de perseguir
+diferencias que están dentro del ruido — es el mismo error que ya había
+cometido antes con una muestra de 20.
+
+Paridad con el motor abstracto: **3,61 contra 3,58**.

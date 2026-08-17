@@ -22,6 +22,13 @@
     "presion": 0.40
   },
 
+  "_despeje": "Reventarla arriba y lejos sin destinatario, cuando estas metido en tu campo y con gente encima. No pide ningun atributo tecnico: es sacarla de la zona de peligro.",
+  "despeje": {
+    "base": 0.15,
+    "presion": 0.85,
+    "zona": 0.55
+  },
+
   "_centro": "Colgarla al area desde la banda. Vuela por encima de todos (altura_centro) asi que no se corta en el camino: se define en el duelo aereo al caer. Usa `centros`, `cabezazo`, `salto` y `achique`, cuatro atributos del GDD que no leia nadie.",
   "centro": {
     "base": 0.55,
@@ -61,7 +68,7 @@
   "tiro_resolucion": {
     "peso_atributo": 0.6,
     "peso_geometria": 0.4,
-    "porteria_base": 0.565,
+    "porteria_base": 0.47,
     "porteria_calidad": 0.50,
     "palo": 0.05,
     "fuerza_base": 0.80
@@ -104,6 +111,11 @@
     "avance_para_centrar": 0.55,
     "altura_centro": 6.0,
     "z_inalcanzable": 2.5,
+    "zona_despeje": 0.42,
+    "presion_despeje": 0.45,
+    "despeje_corto": 30.0,
+    "despeje_largo": 55.0,
+    "altura_despeje": 8.0,
     "radio_achique": 7.0,
     "achique_eficacia": 0.55,
     "pared_muro_cerca": 6.0,

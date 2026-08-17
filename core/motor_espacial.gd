@@ -346,6 +346,18 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 			"detalle": {"geometria": geo},
 		})
 
+	# --- Despeje ------------------------------------------------------
+	# Metido en tu campo y con gente encima: reventarla arriba y lejos. A
+	# diferencia del pelotazo no busca a nadie — es sacarla de la zona de
+	# peligro, y por eso no pide ningún atributo técnico.
+	if mi_valor <= float(f["zona_despeje"]) and presion >= float(f["presion_despeje"]):
+		var wd: Dictionary = w["despeje"]
+		opciones.append({
+			"tipo": "despeje",
+			"utilidad": wd["base"] + wd["presion"] * presion + wd["zona"] * (1.0 - mi_valor),
+			"detalle": {"presion": presion, "mi_valor": mi_valor},
+		})
+
 	# --- Gambetear al rival que le tapa el camino ---------------------
 	# A diferencia de conducir (llevarla y ver qué pasa), acá ELIGE ir
 	# contra un rival puntual. Solo aparece si hay alguien a quien encarar:
@@ -668,6 +680,12 @@ static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bo
 			"minuto": minuto, "tipo": "centro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 			"jugador_posicion": estado["jugadores"][atacante]["rol"], "resultado": "gana",
 		})
+		# Ganó de arriba dentro del área: cabecea al arco. Antes se
+		# quedaba la pelota y seguía jugando, que es lo que hacía que un
+		# centro ganado no terminara casi nunca en gol.
+		if _en_el_area(punto, ataca_local):
+			estado["centros"]["cabezazos"] = int(estado["centros"].get("cabezazos", 0)) + 1
+			_resolver_tiro(estado, estado["jugadores"][atacante], j_a, "cabezazo")
 	else:
 		_entregar_pelota(estado, defensor)
 		estado["eventos"].append({
@@ -922,7 +940,9 @@ static func _reiniciar_desde_medio(estado: Dictionary, saca_local: bool) -> void
 	estado["pelota"]["poseedor_id"] = -1
 
 
-static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Dictionary) -> void:
+## `attr_remate` permite rematar con otro atributo que no sea `tiro`: un
+## cabezazo tras un centro se resuelve con `cabezazo`, no con el pie.
+static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Dictionary, attr_remate: String = "tiro") -> void:
 	var es_local: bool = poseedor["equipo_local"]
 	var eq_a := _equipo_de(estado, es_local)
 	var eq_d := _equipo_de(estado, not es_local)
@@ -939,7 +959,9 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	# Meterse en la línea del remate da la OPORTUNIDAD; que el bloqueo
 	# salga o no lo decide un duelo (ver _gana_bloqueo), así que un
 	# defensor flojo no le tapa el remate a un delantero de élite.
-	var bloqueador := _bloqueador_de_tiro(estado, poseedor["pos"], es_local)
+	# Un cabezazo no se bloquea con el cuerpo: viene por arriba y ya se
+	# disputo en el duelo aereo.
+	var bloqueador := -1 if attr_remate == "cabezazo" else _bloqueador_de_tiro(estado, poseedor["pos"], es_local)
 	if bloqueador != -1 and _gana_bloqueo(estado, bloqueador, jugador, eq_a, eq_d, poseedor["pos"], es_local, minuto):
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "tiro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
@@ -952,7 +974,7 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	# está parado el que remata. Calibrado contra un partido real: ~35% de
 	# los remates van al arco, y de esos entra ~1 de cada 3.
 	var r: Dictionary = pesos()["tiro_resolucion"]
-	var calidad: float = float(jugador["atributos"]["tiro"]) / 100.0 * float(r["peso_atributo"]) + geo * float(r["peso_geometria"])
+	var calidad: float = float(jugador["atributos"][attr_remate]) / 100.0 * float(r["peso_atributo"]) + geo * float(r["peso_geometria"])
 	var chance_porteria: float = clampf(float(r["porteria_base"]) + calidad * float(r["porteria_calidad"]), 0.05, 0.85)
 	var chance_palo: float = float(r["palo"]) * calidad
 	var roll := rng.randf()
@@ -982,11 +1004,11 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	var arquero := eq_d.arquero()
 	var arq_attrs: Dictionary = arquero["atributos"]
 	var arquero_valor: float = arq_attrs["reflejos"] * 0.5 + arq_attrs["estirada"] * 0.3 + arq_attrs["agarre"] * 0.2
-	var tiro_efectivo: float = float(jugador["atributos"]["tiro"]) * (float(r["fuerza_base"]) + (1.0 - float(r["fuerza_base"])) * geo)
+	var tiro_efectivo: float = float(jugador["atributos"][attr_remate]) * (float(r["fuerza_base"]) + (1.0 - float(r["fuerza_base"])) * geo)
 	var ata := Duel.atributo_efectivo(tiro_efectivo, "tecnico", eq_a.resistencia_pct(jugador["id"]))
 	var def := Duel.atributo_efectivo(arquero_valor, "tecnico", eq_d.resistencia_pct(arquero["id"]))
 	var res := Duel.resolver(ata, def,
-		MatchEngine._bloques_equipo(eq_a, eq_d, jugador, "tiro", minuto, rng),
+		MatchEngine._bloques_equipo(eq_a, eq_d, jugador, attr_remate, minuto, rng),
 		MatchEngine._bloques_equipo(eq_d, eq_a, arquero, "reflejos", minuto, rng))
 	var mult_tiro: float = float(pesos()["fisica"]["multiplicador_desgaste"])
 	eq_a.desgastar(jugador["id"], jugador["atributos"]["energia"], mult_tiro)
@@ -1111,6 +1133,19 @@ static func _saque_de_esquina(estado: Dictionary, ataca_local: bool, lado_arriba
 	estado["jugadores"][ejecutor]["pos"] = esquina
 	_entregar_pelota(estado, ejecutor)
 	estado["reinicios"]["corner"] = int(estado["reinicios"].get("corner", 0)) + 1
+
+	# El córner se cuelga al área, no se juega raso: ahora que la pelota
+	# tiene altura se ejecuta como el centro que es, y se define en el
+	# duelo aéreo. Antes era un pase más y por eso rendía tan poco.
+	var e_ejecutor: Dictionary = estado["jugadores"][ejecutor]
+	var jug_ejecutor := _dict_jugador(estado, _equipo_de(estado, ataca_local), e_ejecutor["jugador_id"])
+	var objetivo := _mejor_en_el_area(estado, ataca_local, ejecutor)
+	if objetivo != -1 and not jug_ejecutor.is_empty():
+		_lanzar_pase(estado, e_ejecutor, objetivo, jug_ejecutor)
+		estado["pelota"]["altura_max"] = float(pesos()["fisica"]["altura_centro"])
+		estado["pelota"]["es_centro"] = true
+		estado["pelota"]["centro_de"] = ataca_local
+		estado["centros"]["intentos"] = int(estado["centros"].get("intentos", 0)) + 1
 	estado["eventos"].append({
 		"minuto": _minuto_int(estado), "tipo": "corner",
 		"equipo": _equipo_de(estado, ataca_local).nombre,
@@ -1224,6 +1259,28 @@ static func _desviar_afuera(estado: Dictionary, desde: Vector2, toco_local: bool
 	else:
 		punto = Vector2(MEDIO_LARGO * signf(desde.x if desde.x != 0.0 else 1.0), desde.y)
 	_pelota_fuera(estado, punto, toco_local)
+
+
+## El compañero mejor plantado dentro del área para cabecear un centro:
+## el de mejor `cabezazo` de los que están ahí.
+static func _mejor_en_el_area(estado: Dictionary, es_local: bool, excluir: int) -> int:
+	var equipo := _equipo_de(estado, es_local)
+	var mejor := -1
+	var mejor_val: float = -1.0
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		if e["equipo_local"] != es_local or id == excluir or e["rol"] == "ARQ":
+			continue
+		if not _en_el_area(e["pos"], es_local):
+			continue
+		var j := _dict_jugador(estado, equipo, e["jugador_id"])
+		if j.is_empty():
+			continue
+		var val: float = float(j["atributos"]["cabezazo"]) * 0.6 + float(j["atributos"]["salto"]) * 0.4
+		if val > mejor_val:
+			mejor_val = val
+			mejor = id
+	return mejor
 
 
 static func _mas_cercano_del_equipo(estado: Dictionary, punto: Vector2, es_local: bool) -> int:
@@ -1712,6 +1769,8 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 			estado["pelota"]["pared_a"] = poseedor["clave"]
 			estado["pelota"]["pared_destino"] = elegida["punto"]
 			estado["paredes"]["intentos"] = int(estado["paredes"].get("intentos", 0)) + 1
+		"despeje":
+			_despejar(estado, poseedor, jugador)
 		"gambeta":
 			_resolver_gambeta(estado, poseedor, jugador, elegida["objetivo_id"])
 			# La gambeta YA es el duelo por la pelota de este tick: si
@@ -1756,6 +1815,36 @@ static func _penalizar(estado: Dictionary, clave: int, jugador: Dictionary) -> v
 
 static func _en_cooldown(estado: Dictionary, clave: int) -> bool:
 	return estado["tick"] < int(estado["cooldown"].get(clave, -1))
+
+
+## Reventarla arriba y lejos, sin destinatario: la agarra el que llegue.
+## Va alta a propósito, así nadie la corta en el camino — un despeje se
+## disputa donde cae, no en el medio.
+static func _despejar(estado: Dictionary, poseedor: Dictionary, jugador: Dictionary) -> void:
+	var f: Dictionary = pesos()["fisica"]
+	var rng: RandomNumberGenerator = estado["rng"]
+	var es_local: bool = poseedor["equipo_local"]
+	var dir: Vector2 = (arco_rival(es_local) - poseedor["pos"]).normalized()
+	var largo: float = _por_atributo(jugador, "fuerza", f["despeje_corto"], f["despeje_largo"])
+	var destino := Vector2(
+		clampf(poseedor["pos"].x + dir.x * largo, -LIMITE_X, LIMITE_X),
+		clampf(poseedor["pos"].y + dir.y * largo + rng.randf_range(-10.0, 10.0),
+			-MEDIO_ANCHO + 1.0, MEDIO_ANCHO - 1.0))
+
+	var pelota: Dictionary = estado["pelota"]
+	pelota["poseedor_id"] = -1
+	pelota["en_vuelo"] = true
+	pelota["pos"] = poseedor["pos"]
+	pelota["vel"] = (destino - poseedor["pos"]).normalized() * float(f["vel_pase_max"])
+	pelota["destino_pos"] = destino
+	pelota["destino_id"] = -1
+	pelota["pasador_local"] = es_local
+	pelota["es_pase"] = false
+	pelota["es_centro"] = false
+	pelota["origen_pos"] = poseedor["pos"]
+	pelota["altura_max"] = float(f["altura_despeje"])
+	pelota["ticks_con_pelota"] = 0
+	estado["despejes"] = int(estado.get("despejes", 0)) + 1
 
 
 ## Avanzar con la pelota hacia el arco rival. Más lento que correr libre
@@ -1941,6 +2030,7 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 			"gambetas": estado["gambetas"],
 			"paredes": estado["paredes"],
 			"centros": estado["centros"],
+			"despejes": estado.get("despejes", 0),
 			"reinicios": estado["reinicios"],
 			"cooldown_activos": estado["cooldown"].size(),
 			"pase_detalle": estado["pase_detalle"],
