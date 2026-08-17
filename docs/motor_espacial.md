@@ -1235,3 +1235,53 @@ cambios.
 ### Todavía falta
 
 La pared. Y el centro, bloqueado por la altura de pelota.
+
+---
+
+## 21. Pared
+
+Última jugada del diseño original. Se la da al compañero y **sale
+corriendo a recibirla del otro lado** del que lo marca. Está modelada como
+lo que es: **dos pases encadenados con una carrera en el medio**, o sea
+dos oportunidades de que se la corten.
+
+### La habilita `pases`, y ese mismo atributo la agranda
+
+| `pases` | Paredes/partido | Muro a | Carrera |
+| --- | --- | --- | --- |
+| 25 | **0** | — | — |
+| 40 | 2,2 | 10,4 m | 8,6 m |
+| 60 | 2,3 | 12,6 m | 10,4 m |
+| 90 | **3,4** | 15,9 m | 13,1 m |
+
+Con esto queda un atributo por jugada creativa: gambeta → `control`,
+pase al hueco → `vision`, pared → `pases`.
+
+### Bug que casi se cuela: la pared exigía saber gambetear
+
+Las dos jugadas necesitan saber quién te está tapando el camino, y esa
+consulta estaba escrita adentro del umbral de gambeta. La pared terminaba
+pidiendo `control` 50 sin que nadie lo hubiera decidido — **justo al
+revés** de lo que debe ser, porque la pared es el recurso del que NO puede
+pasarlo por sí solo.
+
+### Otro arreglo: una entrada, una tarjeta
+
+`CHANCE_AMARILLA` está calibrado sobre los ~180 duelos del motor abstracto
+y este resuelve muchos menos, así que se tira varias veces por disputa
+para igualar la tasa por partido. Pero encadenadas sin corte, **el mismo
+jugador podía sacar dos amarillas en la misma entrada y quedar expulsado
+en el acto** — 1,10 rojas por partido contra las ~0,4 del abstracto. Ahora
+se corta en la primera tarjeta.
+
+Quedó: 3,4 amarillas y 0,45 rojas por partido, contra ~3,6 y ~0,4 del
+motor abstracto.
+
+### Estado del repertorio
+
+Con la pared quedan implementadas **las cinco jugadas** del diseño
+original: conducir, gambeta, pase, pase al hueco, pelotazo y pared, más el
+remate. Falta solo el **centro**, que sigue bloqueado por la altura de
+pelota (`z`).
+
+Paridad con el motor abstracto: **3,57 contra 3,58**.

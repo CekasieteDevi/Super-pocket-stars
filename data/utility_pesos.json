@@ -22,6 +22,13 @@
     "presion": 0.40
   },
 
+  "_pared": "Se la da al companero y sale corriendo a recibirla del otro lado del marcador. Son DOS pases encadenados, o sea dos chances de que se la corten: por eso pide `pases` y es jugada de los que saben tocar.",
+  "pared": {
+    "base": 0.25,
+    "progreso": 1.10,
+    "seguridad": 0.50
+  },
+
   "_pase_largo": "Pelotazo hacia adelante, para companeros mas lejos de lo que llega un pase normal. Se elige cuando hay presion y estas metido en tu campo: es la salida del equipo que no puede jugar corto. Su baja efectividad sale sola de que la pelota viaja mucho y es facil de leer.",
   "pase_largo": {
     "base": 0.20,
@@ -82,6 +89,12 @@
     "hueco_min": 6.0,
     "hueco_max": 15.0,
     "vision_minima_hueco": 45.0,
+    "_pared_geo": "El mismo `pases` que la habilita define su tamano: mejor pie, muro mas lejos y carrera mas larga.",
+    "pases_minimo_pared": 40.0,
+    "pared_muro_cerca": 6.0,
+    "pared_muro_lejos": 17.0,
+    "pared_avance_min": 5.0,
+    "pared_avance_max": 14.0,
     "_gambeta_geo": "A quien se puede encarar: cerca y DELANTE (cono frontal), no al costado ni atras. gambeta_avance es cuanto queda mas alla del defensor al pasarlo.",
     "control_minimo_gambeta": 50.0,
     "radio_gambeta": 8.0,

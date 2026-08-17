@@ -234,6 +234,7 @@ static func crear_estado(home: Team, away: Team, rng: RandomNumberGenerator) -> 
 		"robo_cooldown": {},
 		"robos": {"intentos": 0, "ganados": 0},
 		"gambetas": {"home": {"intentos": 0, "ganadas": 0}, "away": {"intentos": 0, "ganadas": 0}},
+		"paredes": {},
 		"reinicios": {},
 		"cooldown": {},
 		"pase_detalle": {"intentos": 0, "interceptado_vuelo": 0, "rival_llego_antes": 0, "fuera": 0},
@@ -353,8 +354,13 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 	# un jugador de control 30 encaraba más seguido que uno de 60 —
 	# elegía gambeta por descarte, porque sus otras opciones eran peores
 	# todavía, y la perdía casi siempre.
+	# Quién le tapa el camino: lo necesitan TANTO la gambeta como la pared,
+	# así que se calcula aparte del umbral de gambetear. Atarlo al umbral
+	# dejaba la pared exigiendo `control` 50 sin querer — justo al revés,
+	# porque la pared es el recurso del que NO puede pasarlo por sí solo.
+	var rival_delante := _rival_a_encarar(estado, pos, es_local)
 	var sabe_gambetear: bool = float(jugador["atributos"]["control"]) >= float(f["control_minimo_gambeta"])
-	var rival_a_encarar := _rival_a_encarar(estado, pos, es_local) if sabe_gambetear else -1
+	var rival_a_encarar := rival_delante if sabe_gambetear else -1
 	if rival_a_encarar != -1:
 		var wg: Dictionary = w["gambeta"]
 		var e_rival: Dictionary = estado["jugadores"][rival_a_encarar]
@@ -393,6 +399,14 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 	# su técnica: por eso un equipo malo igual lo tiene disponible.
 	var wl: Dictionary = w["pase_largo"]
 	var max_largo: float = _por_atributo(jugador, "fuerza", f["max_pelotazo_debil"], f["max_pelotazo_fuerte"])
+	# La pared la habilita `pases`, y ese mismo atributo define su tamaño:
+	# el que la toca mejor puede jugarla con un compañero más lejos y salir
+	# a recibirla más adelante.
+	var wpa: Dictionary = w["pared"]
+	var pases_jugador: float = float(jugador["atributos"]["pases"])
+	var sabe_pared: bool = pases_jugador >= float(f["pases_minimo_pared"])
+	var dist_max_muro: float = _por_atributo(jugador, "pases", f["pared_muro_cerca"], f["pared_muro_lejos"])
+	var avance_pared: float = _por_atributo(jugador, "pases", f["pared_avance_min"], f["pared_avance_max"])
 	var vision_jugador: float = float(jugador["atributos"]["vision"])
 	var umbral_vision: float = float(f["vision_minima_hueco"])
 	var ve_el_hueco: bool = vision_jugador >= umbral_vision
@@ -435,6 +449,22 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 			"tipo": "pase", "utilidad": u_pase, "objetivo_id": id,
 			"detalle": {"progreso": progreso, "riesgo": riesgo, "dist": dist},
 		})
+
+		# --- Pared ---------------------------------------------------
+		# Se la da al compañero y sale corriendo a recibirla del otro lado
+		# del que lo marca. Son DOS pases encadenados, así que hay dos
+		# chances de que se la corten: por eso es una jugada de los que
+		# saben pasar, no de cualquiera.
+		if sabe_pared and dist <= dist_max_muro and rival_delante != -1:
+			var retorno := _punto_retorno_pared(pos, es_local, avance_pared)
+			var riesgo_muro := riesgo_linea(estado, pos, comp["pos"], es_local)
+			var u_pared: float = wpa["base"] \
+				+ wpa["progreso"] * (valor_posicion(retorno, es_local) - mi_valor) \
+				+ wpa["seguridad"] * (1.0 - riesgo_muro)
+			opciones.append({
+				"tipo": "pared", "utilidad": u_pared, "objetivo_id": id, "punto": retorno,
+				"detalle": {"riesgo_muro": riesgo_muro, "avance": avance_pared},
+			})
 
 		# --- Pase al hueco -------------------------------------------
 		# No va a los pies: va al espacio POR DELANTE del compañero, que
@@ -523,8 +553,7 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 		MatchEngine._bloques_equipo(eq_a, eq_d, jugador, "control", minuto, estado["rng"]),
 		MatchEngine._bloques_equipo(eq_d, eq_a, defensor, "quite", minuto, estado["rng"]))
 	# Encarar es exponerse: la falta se chequea igual que en un quite.
-	for i in range(int(f["chequeos_tarjeta_por_quite"])):
-		MatchEngine._chequear_tarjeta(defensor, eq_d, eq_a, estado["rng"], estado["eventos"], minuto, true, estado["log"])
+	_chequear_tarjeta_repetido(estado, defensor, eq_d, eq_a, minuto)
 
 	if Duel.gana_atacante(res, estado["rng"]):
 		estado["gambetas"][lado_g]["ganadas"] += 1
@@ -548,6 +577,15 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 			"minuto": minuto, "tipo": "gambeta", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 			"jugador_posicion": poseedor["rol"], "resultado": "pierde",
 		})
+
+
+## Adónde sale a recibir el que juega la pared: por delante suyo, hacia el
+## arco rival. La distancia la da su `pases` (ver avance_pared).
+static func _punto_retorno_pared(desde: Vector2, es_local: bool, avance: float) -> Vector2:
+	var dir: Vector2 = (arco_rival(es_local) - desde).normalized()
+	return Vector2(
+		clampf(desde.x + dir.x * avance, -MEDIO_LARGO + 2.0, MEDIO_LARGO - 2.0),
+		clampf(desde.y + dir.y * avance, -MEDIO_ANCHO + 2.0, MEDIO_ANCHO - 2.0))
 
 
 ## Cuánto terreno gana mandarla a este compañero. Negativo = está más
@@ -1197,11 +1235,17 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 	var esperando := -1
 	if pelota["en_vuelo"]:
 		esperando = int(pelota.get("destino_id", -1))
+	# El que jugó la pared sale corriendo a recibirla del otro lado, sin
+	# esperar a que el muro se la devuelva.
+	var corredor_pared: int = int(pelota.get("pared_a", -1))
 
 	for id in estado["jugadores"]:
 		if id == poseedor_id:
 			continue
 		var e: Dictionary = estado["jugadores"][id]
+		if id == corredor_pared:
+			_mover_hacia(e, pelota.get("pared_destino", pelota["pos"]))
+			continue
 		if id == esperando:
 			_mover_hacia(e, pelota.get("destino_pos", pelota["pos"]))
 			continue
@@ -1317,6 +1361,21 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 		_dar_pelota_al_arquero(estado, not pasador_local, true)
 		return
 	var e_receptor: Dictionary = estado["jugadores"][receptor]
+
+	# Si esto era el primer pase de una pared y llegó a un compañero, el
+	# muro NO se queda con la pelota: la devuelve de primera al que salió
+	# corriendo. Esa devolución es un segundo pase, con su propio riesgo de
+	# que la corten.
+	var pared_a: int = int(pelota.get("pared_a", -1))
+	if pared_a != -1 and e_receptor["equipo_local"] == pasador_local and estado["jugadores"].has(pared_a):
+		var muro := _dict_jugador(estado, _equipo_de(estado, pasador_local), e_receptor["jugador_id"])
+		pelota.erase("pared_a")
+		if not muro.is_empty():
+			estado["paredes"]["muro_ok"] = int(estado["paredes"].get("muro_ok", 0)) + 1
+			_entregar_pelota(estado, receptor)
+			_lanzar_pase(estado, e_receptor, pared_a, muro, pelota.get("pared_destino", null))
+			return
+
 	_entregar_pelota(estado, receptor)
 	if e_receptor["equipo_local"] == pasador_local:
 		if bool(pelota.get("es_pase", false)):
@@ -1522,6 +1581,14 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador, elegida["punto"])
 		"pase_largo":
 			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador, null, true)
+		"pared":
+			# Primer pase al muro. La devolución se dispara sola cuando el
+			# muro la recibe (ver _avanzar_pelota), y mientras tanto el que
+			# la jugó sale corriendo al punto de retorno.
+			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador)
+			estado["pelota"]["pared_a"] = poseedor["clave"]
+			estado["pelota"]["pared_destino"] = elegida["punto"]
+			estado["paredes"]["intentos"] = int(estado["paredes"].get("intentos", 0)) + 1
 		"gambeta":
 			_resolver_gambeta(estado, poseedor, jugador, elegida["objetivo_id"])
 			# La gambeta YA es el duelo por la pelota de este tick: si
@@ -1530,6 +1597,24 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 			estado["gambeta_este_tick"] = estado["tick"]
 		"tiro":
 			_resolver_tiro(estado, poseedor, jugador)
+
+
+## CHANCE_AMARILLA está calibrado sobre los ~180 duelos por partido del
+## motor abstracto; este resuelve muchos menos, así que se tira varias
+## veces por disputa para igualar la tasa por PARTIDO.
+##
+## Pero hay que CORTAR en la primera tarjeta: si no, el mismo jugador
+## puede sacar dos amarillas en la misma entrada y quedar expulsado en el
+## acto, que no existe en el fútbol. Con las tiradas encadenadas sin corte
+## salían 1,10 rojas por partido contra las ~0,4 del motor abstracto.
+static func _chequear_tarjeta_repetido(estado: Dictionary, defensor: Dictionary,
+		eq_d: Team, eq_a: Team, minuto: int) -> void:
+	var veces := int(pesos()["fisica"]["chequeos_tarjeta_por_quite"])
+	for i in range(veces):
+		var antes: int = estado["eventos"].size()
+		MatchEngine._chequear_tarjeta(defensor, eq_d, eq_a, estado["rng"], estado["eventos"], minuto, true, estado["log"])
+		if estado["eventos"].size() > antes:
+			return  # ya cobró: una entrada, una tarjeta
 
 
 ## Deja a un jugador fuera de la disputa un rato: es la penalización por
@@ -1621,8 +1706,7 @@ static func _intentar_robo(estado: Dictionary) -> void:
 	# ~3,6 del resto de la liga, y el equipo del jugador juntaría muchas
 	# menos suspensiones que sus rivales. Se chequea varias veces por
 	# disputa para igualar la tasa por PARTIDO, que es lo que importa.
-	for i in range(int(f["chequeos_tarjeta_por_quite"])):
-		MatchEngine._chequear_tarjeta(jug_d, eq_d, eq_a, estado["rng"], estado["eventos"], minuto, true, estado["log"])
+	_chequear_tarjeta_repetido(estado, jug_d, eq_d, eq_a, minuto)
 	# Quite resuelto como en el fútbol: o se la saca y se la queda en los
 	# pies, o falla y el otro sigue con la pelota. Lo que evita el loop no
 	# es que la pelota salga volando, sino que PERDER EL DUELO SE PAGA: el
@@ -1728,6 +1812,7 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 			"dist_tiros": estado["dist_tiros"],
 			"robos": estado["robos"],
 			"gambetas": estado["gambetas"],
+			"paredes": estado["paredes"],
 			"reinicios": estado["reinicios"],
 			"cooldown_activos": estado["cooldown"].size(),
 			"pase_detalle": estado["pase_detalle"],
