@@ -162,7 +162,10 @@ func _dibujar_cuerpo(ent: Dictionary) -> void:
 		draw_texture_rect(_tex_pelota, Rect2(punto - Vector2(d, d) * 0.5, Vector2(d, d)), false)
 		return
 
-	var tex := SpritesPartido.jugador(ent["color"])
+	var tex := SpritesPartido.jugador(
+		ent["color"],
+		int(ent.get("direccion", SpritesPartido.ABAJO)),
+		str(ent.get("pose", SpritesPartido.QUIETO)))
 	var ancho := ANCHO_SPRITE_PX * escala
 	var alto := ancho * (float(tex.get_height()) / float(tex.get_width()))
 	# El sprite se apoya en el punto: los pies quedan en el piso.

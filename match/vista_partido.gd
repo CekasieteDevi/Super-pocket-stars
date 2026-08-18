@@ -130,11 +130,21 @@ func _mostrar(idx: int, t: float) -> void:
 	var ents: Array = []
 	for j in a["jugadores"]:
 		var p := Vector2(j["x"], j["y"])
+		var avance := Vector2.ZERO
 		if not destino.is_empty() and destino.has(j["id"]):
-			p = _mezclar(p, Vector2(destino[j["id"]]["x"], destino[j["id"]]["y"]), t)
+			var siguiente := Vector2(destino[j["id"]]["x"], destino[j["id"]]["y"])
+			p = _mezclar(p, siguiente, t)
+			avance = siguiente - Vector2(j["x"], j["y"])
+		elif b != null:
+			for jb in b["jugadores"]:
+				if jb["id"] == j["id"]:
+					avance = Vector2(jb["x"], jb["y"]) - Vector2(j["x"], j["y"])
+					break
 		ents.append({
 			"tipo": "jugador", "z": 0.0, "pos": p,
 			"color": color_local if j["equipo_local"] else color_visitante,
+			"direccion": _direccion(avance),
+			"pose": _pose(avance, idx),
 		})
 
 	var pa: Dictionary = a["pelota"]
@@ -161,6 +171,27 @@ func _mostrar(idx: int, t: float) -> void:
 	var poseedor_id := int(pa.get("poseedor_id", -1))
 	hud.poseedor = str(nombres.get(poseedor_id, "")) if poseedor_id != -1 else ""
 	hud.queue_redraw()
+
+
+## Velocidad (m/s) a partir de la cual se considera que está corriendo y
+## no parado. Por debajo se queda en la pose quieta y no vibra.
+const VELOCIDAD_CORRIENDO := 1.6
+
+## Cada cuántos ticks alterna la zancada. A 4 ticks/seg, 2 ticks es un
+## paso cada medio segundo: se lee sin marearse.
+const TICKS_POR_ZANCADA := 2
+
+
+static func _direccion(avance: Vector2) -> int:
+	if avance.length_squared() < 0.0004:
+		return SpritesPartido.ABAJO
+	return SpritesPartido.direccion_desde(ProyeccionPartido.direccion_pantalla(avance))
+
+
+static func _pose(avance: Vector2, idx: int) -> String:
+	if avance.length() / MotorEspacial.TICK_SEG < VELOCIDAD_CORRIENDO:
+		return SpritesPartido.QUIETO
+	return SpritesPartido.CORRE_A if (idx / TICKS_POR_ZANCADA) % 2 == 0 else SpritesPartido.CORRE_B
 
 
 static func _mezclar(a: Vector2, b: Vector2, t: float) -> Vector2:

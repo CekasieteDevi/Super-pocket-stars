@@ -60,6 +60,16 @@ static func metros_visibles(tamano_pantalla: Vector2, px_por_metro: float) -> Ve
 		tamano_pantalla.y / (px_por_metro * COMPRESION_Y))
 
 
+## Un desplazamiento de cancha convertido a desplazamiento EN PANTALLA.
+## Es la parte lineal de la proyección (sin cámara ni zoom), y es lo que
+## hace falta para elegir hacia qué lado mira un sprite: moverse en +y de
+## cancha se ve como bajar, no como ir a un costado.
+static func direccion_pantalla(delta_sim: Vector2) -> Vector2:
+	return Vector2(
+		delta_sim.x + delta_sim.y * SHEAR_X,
+		delta_sim.y * COMPRESION_Y)
+
+
 ## Profundidad para el Y-sort: el que está más abajo en pantalla se dibuja
 ## después (adelante). Se ordena por la Y de simulación, que es el eje que
 ## se aleja de la cámara.
