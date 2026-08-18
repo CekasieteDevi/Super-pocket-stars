@@ -174,7 +174,7 @@
     "_prob_evento_fisico": "Fraccion de los duelos que se chequean por tarjeta y lesion. Este motor disputa la pelota ~2600 veces por partido; el motor abstracto resuelve ~180 duelos y es sobre ESE numero que estan calibradas CHANCE_AMARILLA y las lesiones. Sin este factor salian ~50 amarillas por partido.",
     "prob_evento_fisico": 0.55,
     "_chequeos_tarjeta_por_quite": "Cuantas veces se tira la chance de tarjeta POR FALTA, cortando en la primera. CHANCE_AMARILLA=0.02 esta calibrado sobre un partido de 90 minutos con ~40 faltas; este dura 4 y tiene ~9, asi que cada falta tiene que ser mucho mas probable de ser amonestada para llegar a la misma tasa POR PARTIDO, que es lo que importa para las suspensiones.",
-    "chequeos_tarjeta_por_quite": 26,
+    "chequeos_tarjeta_por_quite": 29,
     "_multiplicador_desgaste": "Cuanto pesa cada duelo en la resistencia. Team.desgastar esta calibrado sobre los ~180 duelos del motor abstracto; este motor resuelve otra cantidad, y con 1.0 los 22 jugadores terminaban en el piso de resistencia antes del entretiempo.",
     "multiplicador_desgaste": 12.0,
     "dist_libre_al_area": 38.0,

@@ -1863,3 +1863,57 @@ que tocar `porteria_base` habría hecho quedar mal a todos los arqueros.
 Paridad final contra el motor abstracto, 200 partidos: goles 3,03 vs
 3,26, amarillas 3,38 vs 3,17, rojas 0,66 vs 0,61. (Ojo con medir esto con
 el demo de 20 partidos: ahí las amarillas daban 3,0 y parecían rotas.)
+
+## 32. Dos bugs que destapó el vuelo del remate
+
+### El arquero no se movía: la pelota le aparecía en las manos
+
+El remate volaba a un punto del arco elegido con un `randf()` suelto, y
+el arquero se quedaba clavado en su posición. Cuando la atajaba, la
+pelota llegaba a la línea y en el tick siguiente se teletransportaba a
+sus manos.
+
+La causa de fondo es que el destino del remate y la reacción del arquero
+se decidían por separado. Ahora **el alcance del arquero decide adónde va
+la pelota**: se calcula cuánto puede desplazarse mientras el remate viaja
+(su velocidad × los ticks de vuelo, más 2 m de estirada) y con eso
+
+- una **atajada** va a un punto que él alcanza, y él sale a cruzarse en
+  la trayectoria; los dos llegan al mismo lugar al mismo tiempo, sin
+  teletransporte. Además termina 0,8 m DELANTE de la línea, que es donde
+  están las manos, no adentro del arco;
+- un **gol** va a un punto fuera de su alcance (y si tiene el arco entero
+  cubierto, se la metieron igual y se elige libre). El arquero se tira
+  igual y no llega, que es exactamente lo que se quiere ver.
+
+### Los jugadores retrocedían antes de saber si era gol
+
+El posicionamiento leía `poseedor_id != -1 and equipo == pos_local` para
+saber si tu equipo tiene la pelota. Con la pelota EN EL AIRE no hay
+poseedor, así que durante cada vuelo **los dos equipos se replegaban como
+si la hubieran perdido**. En un pase de 2-3 ticks no se notaba; con el
+remate volando quedó a la vista: pateaban al arco y arrancaban a
+retroceder antes de que la pelota llegara.
+
+Se corrigió leyendo `equipo_con_pelota`, que ya existía tres líneas más
+arriba y ya contemplaba el caso del vuelo (cae en `pelota.pasador_local`).
+El bug estaba en usar una condición distinta y peor para lo mismo.
+
+Y el tick que PARA el juego (gol, falta, córner) ya no mueve a nadie más:
+si no, el arquero que se acaba de tirar se levantaba y trotaba a su
+posición en el mismo fotograma en que la pelota entraba.
+
+### Lo que movió en el balance
+
+El equipo que ataca ahora se queda adelantado durante los vuelos en vez
+de replegarse, así que los pases son más largos y más disputados: los
+completados bajan de 33 a 29 por partido y la intercepción sube de 23% a
+26%. Los goles no se movieron (3,00, contra 3,26 del abstracto).
+
+Las TARJETAS sí: menos quites por partido (28,6 → 23,5) las dejó en 2,90
+amarillas contra 3,17 del motor abstracto, o sea el equipo del jugador
+juntaba menos suspensiones que el resto de la liga. Se compensó subiendo
+`chequeos_tarjeta_por_quite` de 26 a 29 y quedaron en 3,25 vs 3,17,
+rojas 0,61 vs 0,61. Es la enésima vez que pasa lo mismo: **cualquier
+cambio en cuántos duelos hay por partido mueve las tarjetas**, porque
+están calibradas sobre ese número.

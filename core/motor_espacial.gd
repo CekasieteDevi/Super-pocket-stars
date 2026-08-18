@@ -105,6 +105,10 @@ const FACTOR_TROTE_PARADO := 0.45
 ## saber dónde termina la portería y dónde empieza el afuera.
 const ARCO_MEDIO_ANCHO := 3.66
 
+## Metros extra que cubre un arquero tirándose, por encima de lo que
+## alcanza a correr mientras la pelota viaja.
+const ALCANCE_ESTIRADA := 2.0
+
 ## Cuántos ticks queda detenido el juego según lo que se cobró. Un tick
 ## son 0,25 s, así que 10 ticks son 2,5 segundos de reloj de partido: lo
 ## suficiente para que se vea que el juego paró y que la gente se acomoda,
@@ -1220,15 +1224,41 @@ static func _lanzar_remate(estado: Dictionary, poseedor: Dictionary, datos: Dict
 	var es_local: bool = bool(datos["es_local"])
 	var arco := arco_rival(es_local)
 	var lado: float = 1.0 if arco.x > 0.0 else -1.0
+	var tipo := str(datos["tipo"])
+
+	# Hasta dónde llega el arquero mientras la pelota viaja. Es lo que
+	# decide ADÓNDE va el remate: una atajada tiene que ir a un punto que
+	# el arquero alcance, y un gol a uno que no. Antes el destino salía de
+	# un randf() suelto y el arquero se quedaba clavado, así que la pelota
+	# llegaba a la línea y después se teletransportaba a sus manos.
+	var arq_clave := _clave_arquero(estado, not es_local)
+	var arq_pos := Vector2(arco.x, 0.0)
+	var alcance := 3.66
+	if arq_clave != -1:
+		var e_arq: Dictionary = estado["jugadores"][arq_clave]
+		arq_pos = e_arq["pos"]
+		var vel_remate: float = float(pesos()["fisica"]["vel_remate"])
+		var ticks_vuelo: float = maxf(poseedor["pos"].distance_to(arco) / (vel_remate * TICK_SEG), 1.0)
+		alcance = float(e_arq["vel_max"]) * TICK_SEG * ticks_vuelo + ALCANCE_ESTIRADA
+
 	var y_destino := 0.0
 	var altura := 0.9
-
-	match str(datos["tipo"]):
-		"gol":
-			y_destino = rng.randf_range(-3.0, 3.0)
+	match tipo:
 		"atajada":
-			# Va al arco pero a donde el arquero llega: por eso vuela.
-			y_destino = rng.randf_range(-3.4, 3.4)
+			# Va a donde el arquero LLEGA: por eso la ataja.
+			y_destino = clampf(rng.randf_range(-3.4, 3.4),
+				arq_pos.y - alcance, arq_pos.y + alcance)
+		"gol":
+			# Va a donde NO llega. Si tiene el arco entero cubierto, se la
+			# metieron igual y no hay adónde mandarla: se elige libre.
+			y_destino = rng.randf_range(-3.0, 3.0)
+			if alcance < 3.0:
+				var izq: float = arq_pos.y - alcance
+				var der: float = arq_pos.y + alcance
+				if absf(-3.0 - izq) > absf(3.0 - der):
+					y_destino = rng.randf_range(-3.0, minf(izq, -0.1))
+				else:
+					y_destino = rng.randf_range(maxf(der, 0.1), 3.0)
 		"palo":
 			y_destino = ARCO_MEDIO_ANCHO * (1.0 if rng.randf() < 0.5 else -1.0)
 		_:
@@ -1236,7 +1266,10 @@ static func _lanzar_remate(estado: Dictionary, poseedor: Dictionary, datos: Dict
 			y_destino = rng.randf_range(4.5, 9.0) * (1.0 if rng.randf() < 0.5 else -1.0)
 			altura = 3.4
 
-	var destino := Vector2(arco.x + lado * 1.2,
+	# La atajada termina DELANTE de la línea, que es donde están las manos
+	# del arquero; todo lo demás termina adentro o pasando el arco.
+	var x_destino: float = arco.x - lado * 0.8 if tipo == "atajada" else arco.x + lado * 1.2
+	var destino := Vector2(x_destino,
 		clampf(y_destino, -MEDIO_ANCHO + 1.0, MEDIO_ANCHO - 1.0))
 	var pelota: Dictionary = estado["pelota"]
 	pelota["poseedor_id"] = -1
@@ -1256,9 +1289,13 @@ static func _lanzar_remate(estado: Dictionary, poseedor: Dictionary, datos: Dict
 	var dir: Vector2 = (destino - poseedor["pos"]).normalized()
 	pelota["vel"] = dir * float(pesos()["fisica"]["vel_remate"])
 
-	# El arquero se tira mientras la pelota viaja, no cuando ya entró.
-	if str(datos["tipo"]) in ["gol", "atajada", "palo"]:
-		_accion(estado, _clave_arquero(estado, not es_local), ACCION_VUELA)
+	# El arquero se tira mientras la pelota viaja, no cuando ya entró, y
+	# se MUEVE hacia la trayectoria (ver el paso 3 de _tick). En la
+	# atajada llega justo; en el gol se estira y no alcanza.
+	if tipo in ["gol", "atajada", "palo"] and arq_clave != -1:
+		_accion(estado, arq_clave, ACCION_VUELA)
+		datos["arquero"] = arq_clave
+		datos["destino_arquero"] = destino
 
 
 ## Gol: la pelota se queda EN LA RED y los jugadores vuelven caminando al
@@ -1672,6 +1709,13 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 	elif pelota["poseedor_id"] != -1:
 		_decidir_y_ejecutar(estado)
 
+	# El tick que PARÓ el juego (gol, falta, córner) no mueve a nadie más:
+	# si no, el arquero que se acaba de tirar se levanta y trota a su
+	# posición en el mismo fotograma en que entró la pelota.
+	if int(estado.get("detenido", 0)) > 0:
+		_cerrar_tick(estado, con_fotogramas, eventos_antes)
+		return
+
 	# 3. Los que no tienen la pelota se reposicionan (barato).
 	_calcular_linea_offside(estado)
 	var poseedor_id: int = pelota["poseedor_id"]
@@ -1705,6 +1749,9 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 	# El que jugó la pared sale corriendo a recibirla del otro lado, sin
 	# esperar a que el muro se la devuelva.
 	var corredor_pared: int = int(pelota.get("pared_a", -1))
+	var arquero_al_remate := -1
+	if bool(pelota.get("es_remate", false)):
+		arquero_al_remate = int(pelota.get("remate", {}).get("arquero", -1))
 
 	for id in estado["jugadores"]:
 		if id == poseedor_id:
@@ -1716,11 +1763,21 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 		if id == esperando:
 			_mover_hacia(e, pelota.get("destino_pos", pelota["pos"]))
 			continue
+		# El arquero sale a cruzarse en la trayectoria del remate. Sin
+		# esto se quedaba parado y la pelota le aparecía en las manos.
+		if id == arquero_al_remate:
+			_mover_hacia(e, pelota["remate"]["destino_arquero"])
+			continue
 		if perseguidores.has(id):
 			_mover_hacia(e, pelota["pos"])
 			continue
 		var equipo := _equipo_de(estado, e["equipo_local"])
-		var mi_equipo_tiene: bool = poseedor_id != -1 and e["equipo_local"] == pos_local
+		# Con la pelota EN EL AIRE no hay poseedor, pero el equipo que la
+		# jugó sigue atacando: usar `poseedor_id != -1` hacía que durante
+		# cada vuelo los dos equipos se replegaran como si hubieran
+		# perdido la pelota. En un remate se veía clarísimo — pateaban al
+		# arco y arrancaban a retroceder antes de saber si era gol.
+		var mi_equipo_tiene: bool = e["equipo_local"] == equipo_con_pelota
 		_mover_hacia(e, _objetivo_sin_pelota(estado, e, equipo, mi_equipo_tiene))
 
 	# 4. Intento de robo: el rival más cercano al poseedor puede quitársela.
