@@ -1917,3 +1917,44 @@ juntaba menos suspensiones que el resto de la liga. Se compensó subiendo
 rojas 0,61 vs 0,61. Es la enésima vez que pasa lo mismo: **cualquier
 cambio en cuántos duelos hay por partido mueve las tarjetas**, porque
 están calibradas sobre ese número.
+
+## 33. El arquero no podía pararse en el arco
+
+Su base estaba en x = −48 (4,5 m por delante de la línea) y, peor, el
+posicionamiento le aplicaba `LIMITE_X` como a cualquier jugador de campo.
+Ese límite existe para que defensores y delanteros no se planten adentro
+del área chica, y son 9 metros antes de la línea de fondo — o sea que
+**el arquero no podía retroceder más allá de 9 metros de su propio arco.
+La posición "parado en el arco" literalmente no existía**, y como su base
+ya estaba adelantada, terminaba viviendo en el área grande. Un remate le
+entraba con el arquero dos metros por delante del arco, mirando.
+
+Ahora tiene su propio corral: `ARQUERO_X_MIN` (51,8, casi la línea) y
+`ARQUERO_X_MAX` (36, el borde del área). Entre esos dos se mueve con la
+misma `ATRACCION_X` de siempre, que es lo que le da el comportamiento
+correcto solo. Medido en un partido:
+
+| Dónde está la pelota | X medio del arquero | Más adelantado |
+|---|---|---|
+| En su propio tercio | −51,7 | −50,5 |
+| En el mediocampo | −50,3 | −47,5 |
+| En el tercio rival | −47,1 | −42,6 |
+
+Achica cuando el juego está lejos y vuelve a la línea cuando la pelota se
+le viene encima, sin salir nunca del área. Balance sin cambios: goles
+3,10 vs 3,26 del abstracto, amarillas 3,29 vs 3,17.
+
+**Y ahora se distingue.** Con los 22 de dos colores no había forma de
+saber cuál de los del fondo era el arquero. `ColoresClub.arqueros()`
+elige de una paleta RESERVADA (verde flúor, negro, rosa, turquesa) que no
+comparte ningún color con la de campo, y busca uno que no se parezca ni a
+las dos camisetas ni al otro arquero. Se eligió una paleta aparte en vez
+de calcular un tinte desde el color del club porque con cuatro colores
+reservados siempre hay alguno libre, y así no hay que preocuparse de que
+un tono calculado caiga cerca de algo que ya está en cancha.
+
+De paso, un bug de HUD: la columna de velocidades se centraba leyendo
+`_columna.size.y`, que el VBox no reporta hasta que corre el layout. Con
+el valor viejo quedaba mal centrada y el botón "Saltar" terminaba abajo
+de todo, pisando el cartel del poseedor y medio fuera de pantalla. Ahora
+el alto se calcula de la cantidad de botones.

@@ -53,7 +53,7 @@ const MEDIO_ANCHO := 34.0
 ## usa las mismas espejadas en X. Sigue la formación real de
 ## Team.FORMACION: 1 ARQ, 2 DFC, 2 LAT, 2 MC, 1 MCO, 2 EXT, 1 DC.
 const BASE_FORMACION := {
-	"ARQ": [Vector2(-48.0, 0.0)],
+	"ARQ": [Vector2(-50.5, 0.0)],
 	"DFC": [Vector2(-35.0, -9.0), Vector2(-35.0, 9.0)],
 	"LAT": [Vector2(-30.0, -24.0), Vector2(-30.0, 24.0)],
 	"MC": [Vector2(-14.0, -10.0), Vector2(-14.0, 10.0)],
@@ -86,7 +86,21 @@ const ATRACCION_Y := {
 ## (52.5) sino ~9 metros antes: si se permite llegar al fondo, defensores
 ## y delanteros se plantan DENTRO del área chica y todos los remates salen
 ## desde 3 metros. El que conduce sí puede pasar de acá (ver _conducir).
+##
+## AL ARQUERO NO SE LE APLICA. Con este límite no podía retroceder más
+## allá de 9 metros de su propia línea: literalmente no existía la
+## posición "parado en el arco", y como su base estaba en −48 terminaba
+## viviendo en el área grande. Un remate le entraba con el arquero dos
+## metros por delante del arco, mirando.
 const LIMITE_X := 43.5
+
+## Lo que sí limita al arquero: no se mete adentro del arco ni se va más
+## allá del borde del área grande. Entre esos dos extremos se mueve según
+## dónde esté la pelota (ver ATRACCION_X), que es lo que le da el
+## comportamiento de achicar cuando el juego está lejos y volver a la
+## línea cuando la pelota se le viene encima.
+const ARQUERO_X_MIN := 51.8
+const ARQUERO_X_MAX := 36.0
 
 ## Quiénes se meten detrás de la pelota cuando el equipo no la tiene. Los
 ## de arriba quedan afuera a propósito: son la salida del equipo.
@@ -955,8 +969,16 @@ static func _objetivo_sin_pelota(estado: Dictionary, e: Dictionary, equipo: Team
 		var retroceso: float = Estilos.retroceso_sin_pelota(equipo.estilo)
 		ax *= clampf(1.0 - retroceso, 0.3, 1.6)
 
-	var objetivo_x: float = clampf(base.x + pelota_pos.x * ax, -LIMITE_X, LIMITE_X)
+	var objetivo_x: float = base.x + pelota_pos.x * ax
 	var objetivo_y: float = base.y + (pelota_pos.y - base.y) * ay
+	if rol == "ARQ":
+		# Su propio corral: entre la línea y el borde del área.
+		if e["equipo_local"]:
+			objetivo_x = clampf(objetivo_x, -ARQUERO_X_MIN, -ARQUERO_X_MAX)
+		else:
+			objetivo_x = clampf(objetivo_x, ARQUERO_X_MAX, ARQUERO_X_MIN)
+		return Vector2(objetivo_x, clampf(objetivo_y, -ARCO_MEDIO_ANCHO * 2.2, ARCO_MEDIO_ANCHO * 2.2))
+	objetivo_x = clampf(objetivo_x, -LIMITE_X, LIMITE_X)
 
 	# Marca del lado del arco: defendiendo, la línea de atrás y los
 	# volantes centrales no se quedan por delante de la pelota. Sin esto

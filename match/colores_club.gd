@@ -46,3 +46,39 @@ static func par(local: String, visitante: String) -> Array:
 
 static func _parecidos(a: Color, b: Color) -> bool:
 	return absf(a.r - b.r) + absf(a.g - b.g) + absf(a.b - b.b) < 0.55
+
+
+## Camisetas de arquero. Son colores que NO están en la paleta de campo,
+## a propósito: el arquero tiene que distinguirse de los 20 de campo de un
+## vistazo, y si compartiera paleta tarde o temprano coincidiría con
+## alguno de los dos equipos.
+const PALETA_ARQUERO := [
+	Color(0.55, 0.85, 0.15),  # verde flúor
+	Color(0.15, 0.18, 0.22),  # negro
+	Color(0.98, 0.55, 0.75),  # rosa
+	Color(0.35, 0.90, 0.85),  # turquesa
+]
+
+
+## Los dos arqueros del partido, distintos entre sí y distintos de las dos
+## camisetas de campo. Se resuelve buscando en la paleta en vez de
+## derivarlo del color del club: con cuatro colores reservados siempre hay
+## alguno libre, y así no hay que preocuparse de que un tinte calculado
+## caiga cerca de algo que ya está en cancha.
+static func arqueros(c_local: Color, c_visitante: Color) -> Array:
+	var usados := [c_local, c_visitante]
+	var salida := []
+	for _i in range(2):
+		var elegido: Color = PALETA_ARQUERO[0]
+		for c in PALETA_ARQUERO:
+			var libre := true
+			for u in usados:
+				if _parecidos(c, u):
+					libre = false
+					break
+			if libre:
+				elegido = c
+				break
+		usados.append(elegido)
+		salida.append(elegido)
+	return salida

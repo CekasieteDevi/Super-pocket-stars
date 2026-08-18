@@ -20,6 +20,8 @@ signal menu_pedido
 ## Mínimo táctil recomendado en Android. No bajar de acá.
 const TOQUE_MIN := 48.0
 const MARGEN := 14.0
+const ANCHO_BOTON := 62.0
+const SEPARACION_BOTONES := 6.0
 const COLOR_PANEL := Color(0.07, 0.08, 0.10, 0.78)
 const COLOR_TEXTO := Color(0.96, 0.96, 0.98)
 const COLOR_TENUE := Color(0.72, 0.74, 0.78)
@@ -55,14 +57,14 @@ func _ready() -> void:
 
 	# Velocidades: columna en el borde izquierdo, a media altura.
 	_columna = VBoxContainer.new()
-	_columna.add_theme_constant_override("separation", 6)
+	_columna.add_theme_constant_override("separation", int(SEPARACION_BOTONES))
 	add_child(_columna)
 	for etiqueta in ["x1", "x2", "x4", "x8", "x16"]:
 		var v := float(etiqueta.substr(1))
-		_columna.add_child(_boton(etiqueta, 62.0, func(): velocidad_pedida.emit(v)))
-	_boton_pausa = _boton("Pausa", 62.0, func(): pausa_pedida.emit())
+		_columna.add_child(_boton(etiqueta, ANCHO_BOTON, func(): velocidad_pedida.emit(v)))
+	_boton_pausa = _boton("Pausa", ANCHO_BOTON, func(): pausa_pedida.emit())
 	_columna.add_child(_boton_pausa)
-	_columna.add_child(_boton("Saltar", 62.0, func(): saltar_pedido.emit()))
+	_columna.add_child(_boton("Saltar", ANCHO_BOTON, func(): saltar_pedido.emit()))
 
 	_boton_menu = _boton("Menú", 76.0, func(): menu_pedido.emit())
 	add_child(_boton_menu)
@@ -89,7 +91,19 @@ func _notification(que: int) -> void:
 func _reubicar() -> void:
 	if _columna == null:
 		return
-	_columna.position = Vector2(MARGEN, (size.y - _columna.size.y) * 0.5)
+	# Centrada, pero sin pisar el reloj arriba ni el cartel del poseedor
+	# abajo. El alto se CALCULA a partir de la cantidad de botones en vez
+	# de leer `_columna.size.y`: el VBox no reporta su alto real hasta que
+	# el layout corre, y con ese valor viejo la columna se centraba mal y
+	# el último botón terminaba abajo de todo, debajo del cartel del
+	# poseedor y medio fuera de pantalla.
+	var n := float(_columna.get_child_count())
+	var alto_columna: float = n * TOQUE_MIN + maxf(n - 1.0, 0.0) * SEPARACION_BOTONES
+	_columna.size = Vector2(ANCHO_BOTON, alto_columna)
+	_columna.position = Vector2(MARGEN, clampf(
+		(size.y - alto_columna) * 0.5,
+		MARGEN + 60.0,
+		maxf(size.y - alto_columna - 92.0, MARGEN + 60.0)))
 	_boton_menu.position = Vector2(size.x - _boton_menu.size.x - MARGEN, MARGEN)
 
 

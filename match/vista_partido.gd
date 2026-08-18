@@ -35,6 +35,10 @@ var pausado := false
 
 var color_local := Color.WHITE
 var color_visitante := Color.WHITE
+## El arquero va de otro color, como en la cancha: con los 22 de dos
+## colores no había forma de saber cuál de los del fondo era el arquero.
+var color_arquero_local := Color.WHITE
+var color_arquero_visitante := Color.WHITE
 var _terminado := false
 
 ## Cuántos segundos REALES se sostiene el relato según la importancia del
@@ -102,6 +106,9 @@ func iniciar(lista: Array, c_local: Color, c_visitante: Color,
 	fotogramas = lista
 	color_local = c_local
 	color_visitante = c_visitante
+	var arqueros := ColoresClub.arqueros(c_local, c_visitante)
+	color_arquero_local = arqueros[0]
+	color_arquero_visitante = arqueros[1]
 	nombres = tabla_nombres
 	vista.estado_cancha = estado_cancha
 	hud.nombre_local = nombre_local
@@ -299,7 +306,7 @@ func _mostrar(idx: int, t: float) -> void:
 			pose = _pose(avance, idx)
 		var ent := {
 			"tipo": "jugador", "z": 0.0, "pos": p,
-			"color": color_local if j["equipo_local"] else color_visitante,
+			"color": _color_de(j),
 			"direccion": _direccion(avance),
 			"pose": pose,
 		}
@@ -382,6 +389,12 @@ func _acciones_activas(idx: int) -> Dictionary:
 			if idx - i < int(DURACION_ACCION.get(accion, 1)):
 				activas[a["clave"]] = POSE_DE_ACCION.get(accion, SpritesPartido.QUIETO)
 	return activas
+
+
+func _color_de(j: Dictionary) -> Color:
+	if str(j.get("rol", "")) == "ARQ":
+		return color_arquero_local if j["equipo_local"] else color_arquero_visitante
+	return color_local if j["equipo_local"] else color_visitante
 
 
 static func _direccion(avance: Vector2) -> int:
