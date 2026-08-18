@@ -99,6 +99,12 @@ const LIMITE_X := 43.5
 ## dónde esté la pelota (ver ATRACCION_X), que es lo que le da el
 ## comportamiento de achicar cuando el juego está lejos y volver a la
 ## línea cuando la pelota se le viene encima.
+## Cuánto se comprime la formación para que entre en la propia mitad en
+## el saque del medio. La base más adelantada (el DC, en x=14) está a 66,5
+## m del arco propio y tiene que caber en los 51,5 m de la mitad.
+const COMPRESION_SAQUE := 0.775
+const RADIO_CIRCULO := 9.15
+
 const ARQUERO_X_MIN := 51.8
 const ARQUERO_X_MAX := 36.0
 
@@ -116,8 +122,10 @@ const ROLES_QUE_ATACAN := ["MCO", "EXT", "DC"]
 const FACTOR_TROTE_PARADO := 0.45
 
 ## Qué parte de la interrupción se pasa completamente quieto antes de que
-## los jugadores empiecen a acomodarse.
-const FRACCION_QUIETOS := 0.4
+## los jugadores empiecen a acomodarse. Es lo que hace que se LEA que el
+## juego se cortó: con poco tiempo quieto, los 22 arrancan a trotar casi
+## enseguida y desde afuera parece que la jugada nunca se detuvo.
+const FRACCION_QUIETOS := 0.6
 
 ## Cuántos metros más allá de la línea sigue la pelota antes de darla por
 ## afuera. Frenarla justo encima de la cal no se lee como que salió.
@@ -135,7 +143,7 @@ const ALCANCE_ESTIRADA := 2.0
 ## son 0,25 s, así que 10 ticks son 2,5 segundos de reloj de partido: lo
 ## suficiente para que se vea que el juego paró y que la gente se acomoda,
 ## sin que aburra a x1.
-const TICKS_DETENIDO := {"falta": 8, "corner": 10, "gol": 10, "saque_inicial": 4, "lateral": 5, "saque_arco": 6}
+const TICKS_DETENIDO := {"falta": 12, "corner": 13, "gol": 10, "saque_inicial": 4, "lateral": 7, "saque_arco": 8}
 
 ## Cuánto le achica el margen de error de desmarque el rasgo Enfocado.
 ## No es cero: hasta el delantero más atento se va alguna vez, y ponerlo
@@ -1175,22 +1183,48 @@ static func _duelo_simple(atacante: Dictionary, attr_a: String, eq_a: Team,
 
 ## Saque del medio después de un gol (o al empezar cada tiempo).
 static func _reiniciar_desde_medio(estado: Dictionary, saca_local: bool) -> void:
+	# Quién la saca: el MCO del equipo que corresponde.
+	var sacador := -1
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		if e["equipo_local"] == saca_local and e["rol"] == "MCO":
+			sacador = id
+			break
+
 	# En un saque del medio TODOS tienen que estar en su propia mitad. Las
 	# posiciones base de los de arriba (EXT en x=8, DC en x=14) están en
-	# campo rival —correctas durante el juego, no para un saque—, así que
-	# hay que replegarlos: si no, se ve a tres rivales parados adentro de
-	# tu campo antes de que la pelota se mueva.
+	# campo rival, así que hay que traerlos. Antes se los CLAMPEABA a x=±1,
+	# y como el DC y el MCO comparten y=0, terminaban tres o cuatro
+	# jugadores amontonados arriba del círculo central: apenas arrancaba el
+	# partido ya estaban todos disputando la pelota.
+	#
+	# Ahora la formación se COMPRIME dentro de la propia mitad en vez de
+	# aplastarse contra la línea, que además da la foto correcta de un
+	# saque del medio: arquero en su arco, línea de fondo, mediocampo y los
+	# de arriba sobre el círculo.
 	for id in estado["jugadores"]:
 		var e: Dictionary = estado["jugadores"][id]
 		var base: Vector2 = e["base"]
-		var x: float = minf(base.x, -1.0) if e["equipo_local"] else maxf(base.x, 1.0)
-		e["pos"] = Vector2(x, base.y)
+		# Se mide la profundidad desde el arco PROPIO y se comprime. No se
+		# puede usar el signo de base.x para saber de qué lado va: la base
+		# del delantero está en campo rival, así que el signo miente.
+		var propio: float = -MEDIO_LARGO if e["equipo_local"] else MEDIO_LARGO
+		var hacia: float = 1.0 if e["equipo_local"] else -1.0
+		var x: float = propio + hacia * absf(base.x - propio) * COMPRESION_SAQUE
+		var p := Vector2(x, base.y)
+		# Fuera del círculo central: la pelota la toca UNO solo. Es la
+		# regla real y es lo que hace que el saque se lea como un saque.
+		if id != sacador and p.length() < RADIO_CIRCULO + 0.5:
+			var dir: Vector2 = p.normalized() if p.length() > 0.01 else Vector2(-1.0 if e["equipo_local"] else 1.0, 0.0)
+			p = dir * (RADIO_CIRCULO + 0.5)
+		e["pos"] = p
 		e["vel"] = Vector2.ZERO
 		e["rapidez"] = 0.0
 		# La marca se resetea a donde quedó parado: si arrastrara la del
 		# balón parado anterior, en el saque del medio los 22 arrancarían
 		# caminando hacia la última falta en vez de esperar la pelota.
-		e["marca"] = e["pos"]
+		e["marca"] = p
+
 	estado["pelota"]["pos"] = Vector2.ZERO
 	estado["pelota"]["vel"] = Vector2.ZERO
 	estado["pelota"]["en_vuelo"] = false
@@ -1198,19 +1232,19 @@ static func _reiniciar_desde_medio(estado: Dictionary, saca_local: bool) -> void
 	estado["pelota"]["altura_max"] = 0.0
 	estado["pelota"]["z"] = 0.0
 	estado["pelota"]["ticks_con_pelota"] = 0
+	estado["pelota"].erase("saliendo")
 	# El saque del medio cancela cualquier balón parado pendiente: si un
 	# tiempo termina con el juego detenido, el siguiente no puede arrancar
 	# esperando una falta que ya no existe.
 	estado["detenido"] = 0
 	estado["quietos"] = 0
 	estado.erase("balon_parado")
-	# la saca el MCO del equipo que corresponde
-	for id in estado["jugadores"]:
-		var e: Dictionary = estado["jugadores"][id]
-		if e["equipo_local"] == saca_local and e["rol"] == "MCO":
-			estado["pelota"]["poseedor_id"] = id
-			e["pos"] = Vector2.ZERO
-			return
+
+	if sacador != -1:
+		estado["jugadores"][sacador]["pos"] = Vector2.ZERO
+		estado["jugadores"][sacador]["marca"] = Vector2.ZERO
+		estado["pelota"]["poseedor_id"] = sacador
+		return
 	estado["pelota"]["poseedor_id"] = -1
 
 
@@ -1431,7 +1465,7 @@ static func _aplicar_remate(estado: Dictionary, datos: Dictionary) -> void:
 			_dar_pelota_al_arquero(estado, not es_local, true)
 		else:
 			# Del palo suele salir rebote al córner.
-			_desviar_afuera(estado, arco_rival(es_local), not es_local)
+			_manotear_al_corner(estado, es_local)
 		return
 
 	var gol: bool = tipo == "gol"
@@ -1455,7 +1489,7 @@ static func _aplicar_remate(estado: Dictionary, datos: Dictionary) -> void:
 	# El arquero no siempre la retiene: si la manotea, sale al córner.
 	# Cuanto mejor su agarre, más veces la queda.
 	if rng.randf() > float(datos.get("agarre", 0.5)):
-		_desviar_afuera(estado, arco_rival(es_local), not es_local)
+		_manotear_al_corner(estado, es_local)
 	else:
 		_dar_pelota_al_arquero(estado, not es_local)
 
@@ -1695,6 +1729,20 @@ static func _bloqueador_de_tiro(estado: Dictionary, desde: Vector2, es_local: bo
 	return mejor
 
 
+## La manotea al córner: la pelota sale POR AL LADO del arco, desviada a
+## un costado, no derecho para atrás. Antes esto usaba _desviar_afuera con
+## el centro del arco como origen, y como ahí la salida más cercana es la
+## propia línea de fondo, la pelota viajaba tres metros hacia atrás
+## metiéndose en la red — se veía quedar en las manos del arquero y de
+## golpe se cobraba un córner que nunca se vio salir.
+static func _manotear_al_corner(estado: Dictionary, es_local_ataca: bool) -> void:
+	var rng: RandomNumberGenerator = estado["rng"]
+	var arco := arco_rival(es_local_ataca)
+	var lado: float = 1.0 if rng.randf() < 0.5 else -1.0
+	var y: float = (ARCO_MEDIO_ANCHO + 1.0 + rng.randf() * 4.0) * lado
+	_pelota_fuera(estado, Vector2(arco.x, y), not es_local_ataca)
+
+
 static func _desviar_afuera(estado: Dictionary, desde: Vector2, toco_local: bool) -> void:
 	var dist_costado: float = MEDIO_ANCHO - absf(desde.y)
 	var dist_fondo: float = MEDIO_LARGO - absf(desde.x)
@@ -1856,6 +1904,12 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 			for id in estado["jugadores"]:
 				estado["jugadores"][id]["vel"] = Vector2.ZERO
 				estado["jugadores"][id]["rapidez"] = 0.0
+			if int(estado["quietos"]) == 0:
+				# Se terminó de ver dónde quedó: ahora sí se acomoda para
+				# el saque y la gente empieza a moverse.
+				var bp_pos: Dictionary = estado.get("balon_parado", {})
+				if bp_pos.has("pos"):
+					pelota["pos"] = bp_pos["pos"]
 		else:
 			for id in estado["jugadores"]:
 				var e_p: Dictionary = estado["jugadores"][id]
@@ -2561,7 +2615,12 @@ static func _elegir_ejecutor(estado: Dictionary, pos: Vector2, ataca_local: bool
 static func _detener_juego(estado: Dictionary, pos: Vector2, ataca_local: bool,
 		ejecutor: int, tipo: String, ticks: int) -> void:
 	var pelota: Dictionary = estado["pelota"]
-	pelota["pos"] = pos
+	# La pelota NO se pone en el punto todavía: se queda DONDE QUEDÓ
+	# —afuera de la cancha, en las manos del arquero, donde fue la falta—
+	# durante toda la parte quieta, y recién se acomoda cuando los
+	# jugadores empiezan a moverse. Sin esto la pelota cruzaba la línea y
+	# al fotograma siguiente ya aparecía puesta para el lateral: nunca se
+	# llegaba a ver que se había ido.
 	pelota["vel"] = Vector2.ZERO
 	pelota["en_vuelo"] = false
 	pelota["poseedor_id"] = -1

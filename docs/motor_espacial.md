@@ -2138,3 +2138,62 @@ partidos hay ~150 por punto y del resto diez veces más.
 **Y una advertencia para no volver a asustarse**: tres partidos sueltos
 no dicen nada. Tres pruebas de humo seguidas dieron 4, 9 y 8 goles con
 una media real de 3,2. La cola de esta distribución es larga.
+
+## 38. Por qué las interrupciones seguían sin leerse
+
+Tres cosas medidas después de que el usuario dijera que seguía sin ver
+nada de esto.
+
+### La pelota cruzaba la línea y volvía en el fotograma siguiente
+
+La salida SÍ estaba implementada, pero duraba **un solo fotograma**: la
+pelota viaja ~2,75 m por tick y el margen fuera de la línea era 3 m, así
+que cruzaba y al tick siguiente ya estaba puesta para el lateral. 0,25
+segundos.
+
+Ahora `_detener_juego` **no mueve la pelota al punto del saque**: la deja
+donde quedó —afuera de la cancha, en las manos del arquero, donde fue la
+falta— durante toda la parte quieta, y recién la acomoda cuando los
+jugadores empiezan a caminar. Medido: la pelota cruza la línea y se queda
+afuera 5 fotogramas (1,25 s) con los 22 congelados, después vuelve al
+punto del lateral y se ejecuta.
+
+### El córner salía por adentro del arco
+
+La atajada manoteada llamaba a `_desviar_afuera` con el CENTRO DEL ARCO
+como origen, y desde ahí la salida más cercana es su propia línea de
+fondo: la pelota viajaba tres metros hacia atrás, metiéndose en la red.
+Se veía quedar en las manos del arquero y de golpe había un córner que
+nunca se vio salir. Ahora `_manotear_al_corner` la manda **por al lado
+del palo** (4,7 a 8,7 m del centro del arco), que es el gesto real.
+
+### El saque del medio amontonaba cuatro jugadores en el círculo
+
+Las posiciones base de los de arriba (EXT en x=8, DC en x=14) están en
+campo rival, y el saque del medio las CLAMPEABA a x=±1. Como el DC y el
+MCO comparten y=0, terminaban tres o cuatro jugadores encima de la
+pelota, entrando en duelo apenas arrancaba el partido.
+
+Ahora la formación se **comprime** dentro de la propia mitad (×0,775
+sobre la profundidad medida desde el arco propio) en vez de aplastarse
+contra la línea, y todos menos el que saca quedan fuera del círculo
+central — que además es la regla. La foto queda como la de un saque de
+verdad: arquero en su arco, línea de fondo a −39, mediocampo a −23, los
+de arriba sobre el círculo y UNO solo con la pelota.
+
+Ojo con el signo: no se puede usar `base.x < 0` para saber de qué lado va
+cada uno, porque la base del delantero está en campo rival y el signo
+miente. Se mide la profundidad desde el arco propio.
+
+### Y la quietud, más larga
+
+`FRACCION_QUIETOS` pasó de 0,4 a 0,6 y las interrupciones se alargaron
+(falta 8 → 12 ticks, córner 10 → 13, lateral 5 → 7, saque de arco 6 → 8).
+Una falta ahora son 3 segundos, de los cuales **1,75 con los 22
+absolutamente inmóviles**. Verificado contando jugadores que se movieron
+entre fotogramas: 0 de 22 durante siete fotogramas seguidos.
+
+Balance tras todo esto: goles 3,23 vs 3,26 del abstracto, amarillas 3,29
+vs 3,17. **No hizo falta tocar nada**: las faltas bajaron de 6,7 a 6,3 y
+el presupuesto de tarjetas por tiempo (§36) absorbió el cambio solo, que
+era exactamente para lo que se hizo.
