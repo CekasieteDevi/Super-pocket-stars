@@ -113,7 +113,7 @@ const ALCANCE_ESTIRADA := 2.0
 ## son 0,25 s, así que 10 ticks son 2,5 segundos de reloj de partido: lo
 ## suficiente para que se vea que el juego paró y que la gente se acomoda,
 ## sin que aburra a x1.
-const TICKS_DETENIDO := {"falta": 8, "corner": 10, "gol": 10}
+const TICKS_DETENIDO := {"falta": 8, "corner": 10, "gol": 10, "saque_inicial": 4}
 
 ## Cuánto le achica el margen de error de desmarque el rasgo Enfocado.
 ## No es cero: hasta el delantero más atento se va alguna vez, y ponerlo
@@ -2402,6 +2402,16 @@ static func _ejecutar_balon_parado(estado: Dictionary) -> void:
 	if str(bp["tipo"]) == "saque_medio":
 		_reiniciar_desde_medio(estado, bool(bp["saca_local"]))
 		return
+	if str(bp["tipo"]) == "saque_inicial":
+		# La pelota ya está en el círculo con su ejecutor desde que se
+		# armó la mitad: acá solo se anuncia que arrancó.
+		estado["eventos"].append({
+			"minuto": _minuto_int(estado), "tipo": "saque_inicial",
+			"equipo": _equipo_de(estado, bool(bp["saca_local"])).nombre,
+			"rival": _equipo_de(estado, not bool(bp["saca_local"])).nombre,
+			"jugador_posicion": "", "resultado": str(bp["mitad"]),
+		})
+		return
 	var ejecutor := int(bp["ejecutor"])
 	if not estado["jugadores"].has(ejecutor):
 		_dar_pelota_al_arquero(estado, not bool(bp["ataca_local"]), true)
@@ -2645,6 +2655,14 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 	for mitad in range(2):
 		_reiniciar_desde_medio(estado, mitad == 0)
 		estado["minuto"] = MINUTOS_MOSTRADOS_POR_MITAD * mitad
+		# Un segundo quieto antes de poner la pelota en juego. La cámara
+		# viene de otra parte de la cancha y salta al círculo central: sin
+		# esta pausa el arranque de cada tiempo se ve como un tirón de
+		# cámara y no se entiende qué pasó.
+		estado["balon_parado"] = {
+			"tipo": "saque_inicial", "saca_local": mitad == 0, "mitad": mitad + 1,
+		}
+		estado["detenido"] = int(TICKS_DETENIDO["saque_inicial"])
 		for t in range(TICKS_POR_MITAD):
 			_tick(estado, con_fotogramas)
 			if not ventanas.is_empty() and estado["minuto"] >= ventanas[0]:

@@ -34,6 +34,8 @@ static func importancia(evento) -> int:
 			return NOTABLE
 		"tiro":
 			return MENOR if res == "afuera" else NOTABLE
+		"saque_inicial":
+			return NOTABLE
 		"offside", "corner":
 			return MENOR
 		"falta":
@@ -68,6 +70,8 @@ static func linea(evento: Dictionary, nombres: Dictionary) -> String:
 				"bloqueado": return "Se la bloquean a %s" % quien
 				"palo": return "¡Al palo el remate de %s!" % quien
 				_: return "Remata %s y se va afuera" % quien
+		"saque_inicial":
+			return "¡Arranca el partido!" if res == "1" else "Arranca el segundo tiempo"
 		"offside":
 			return "Offside de %s" % quien
 		"corner":
