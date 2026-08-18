@@ -2377,17 +2377,42 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 			_resolver_tiro(estado, poseedor, jugador)
 
 
-## CHANCE_AMARILLA está calibrado sobre los ~180 duelos por partido del
-## motor abstracto; este resuelve muchos menos, así que se tira varias
-## veces por disputa para igualar la tasa por PARTIDO.
+## Cuántas veces se tira la tarjeta en ESTA infracción. NO es una
+## constante: el presupuesto de tiradas se acumula con el TIEMPO y cada
+## infracción se lleva lo acumulado desde la anterior.
 ##
-## Pero hay que CORTAR en la primera tarjeta: si no, el mismo jugador
-## puede sacar dos amarillas en la misma entrada y quedar expulsado en el
-## acto, que no existe en el fútbol. Con las tiradas encadenadas sin corte
+## El problema que resuelve: CHANCE_AMARILLA está calibrado sobre los
+## ~180 duelos por partido del motor abstracto, y este motor resuelve
+## muchos menos, así que cada infracción tiene que tirar varias veces para
+## llegar a la misma tasa POR PARTIDO — que es lo que importa, porque de
+## ahí salen las suspensiones. Con una constante, CADA cambio que movía
+## cuántas infracciones hay —el tiempo muerto del balón parado, la
+## aceleración, la presión al arquero— desajustaba las tarjetas y había
+## que recalibrarla a mano. Pasó tres veces seguidas.
+##
+## Acumular por tiempo lo vuelve invariante: el total esperado es
+## `tiradas_por_tick × ticks del partido` sin importar CUÁNTAS
+## infracciones haya. Si hay menos, cada una carga con más presupuesto.
+## En términos de fútbol también se sostiene: en un partido cortado, cada
+## falta pesa más.
+##
+## Se acota por arriba para que una sequía larga no convierta a la
+## siguiente falta en una amarilla automática.
+static func _chequeos_tarjeta(estado: Dictionary) -> int:
+	var f: Dictionary = pesos()["fisica"]
+	var transcurridos: int = maxi(int(estado["tick"]) - int(estado.get("tick_ultima_tarjeta", 0)), 1)
+	estado["tick_ultima_tarjeta"] = int(estado["tick"])
+	var tiradas: float = float(f["tiradas_tarjeta_por_partido"]) 		/ float(TICKS_POR_MITAD * 2) * float(transcurridos)
+	return clampi(int(round(tiradas)), 1, int(f["tiradas_tarjeta_tope"]))
+
+
+## Hay que CORTAR en la primera tarjeta: si no, el mismo jugador puede
+## sacar dos amarillas en la misma entrada y quedar expulsado en el acto,
+## que no existe en el fútbol. Con las tiradas encadenadas sin corte
 ## salían 1,10 rojas por partido contra las ~0,4 del motor abstracto.
 static func _chequear_tarjeta_repetido(estado: Dictionary, defensor: Dictionary,
 		eq_d: Team, eq_a: Team, minuto: int) -> void:
-	var veces := int(pesos()["fisica"]["chequeos_tarjeta_por_quite"])
+	var veces := _chequeos_tarjeta(estado)
 	for i in range(veces):
 		var antes: int = estado["eventos"].size()
 		MatchEngine._chequear_tarjeta(defensor, eq_d, eq_a, estado["rng"], estado["eventos"], minuto, true, estado["log"])

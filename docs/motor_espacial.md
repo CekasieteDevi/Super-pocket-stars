@@ -2061,3 +2061,51 @@ amarillas volvieron a caer con los quites (`chequeos_tarjeta_por_quite`
 29 → 31, quedan 3,26 vs 3,17). Es la tercera vez que hay que ajustar ese
 número por lo mismo, y va a pasar de nuevo cada vez que cambie cuánto
 tiempo la pelota está en juego.
+
+## 36. Las tarjetas se calibran solas (hasta donde se puede)
+
+`chequeos_tarjeta_por_quite` era una constante que hubo que recalibrar a
+mano TRES veces seguidas — con el tiempo muerto del balón parado, con la
+aceleración y con la presión al arquero — porque cada uno de esos cambios
+movía cuántas infracciones hay por partido, y las tarjetas están
+calibradas sobre ese número.
+
+Ahora el presupuesto de tiradas **se acumula con el tiempo** y cada
+infracción se lleva lo acumulado desde la anterior. El total esperado es
+`tiradas_por_partido` sin importar cuántas infracciones haya: si hay
+menos, cada una carga con más presupuesto. En términos de fútbol también
+se sostiene — en un partido cortado, cada falta pesa más.
+
+**Primer intento, descartado**: proyectar los quites del partido en curso
+(`quites × ticks_totales / tick`). Al principio del partido esa
+proyección es puro ruido —con un quite en el tick 10 proyecta un partido
+de 96— y como arranca sobreestimando, sale sesgada para abajo: daba 2,90
+amarillas contra las 3,26 de la constante. Acumular por tiempo no tiene
+ese problema porque no proyecta nada: mide lo que ya pasó.
+
+### Hasta dónde llega la corrección
+
+Se midió forzando el `ticks_gracia_posesion` para mover las infracciones
+a propósito, 150 partidos por punto:
+
+| Faltas/partido | Amarillas |
+|---|---|
+| 11,3 | 4,07 |
+| 6,7 (el valor real) | 3,28 |
+| 4,0 | 2,53 |
+| 3,1 | 2,29 |
+
+O sea que **no es invariante del todo**, y no puede serlo: una falta no
+puede dar más de una tarjeta, así que con 3 faltas por partido el techo
+son 3 amarillas por más presupuesto que se acumule. Subir el tope de
+tiradas de 90 a 250 casi no cambió nada (2,29 → 2,42) justamente por eso:
+con ~90 tiradas la chance de amonestar ya es del 85% y lo que satura es
+el modelo, no el tope.
+
+Lo que sí hace es amortiguar: una caída del 54% en las faltas se traduce
+en una del 30% en las tarjetas en vez de ser proporcional. Para las
+derivas que aparecen en la práctica (±30%) alcanza para no tener que
+tocar nada.
+
+Paridad final contra el motor abstracto, 200 partidos: goles 3,24 vs
+3,26, amarillas 3,28 vs 3,17, rojas 0,52 vs 0,61.
