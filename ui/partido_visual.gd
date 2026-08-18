@@ -241,6 +241,8 @@ func _texto_evento(evento: Dictionary) -> String:
 			return "%s: CAMBIO — sale %s (%s)" % [evento["equipo"], pos, evento["resultado"]]
 		"falta":
 			return "%s: falta" % evento["equipo"]
+		"offside":
+			return "%s: OFFSIDE de %s" % [evento["equipo"], pos]
 		"penal":
 			return "%s: PENAL... %s" % [evento["equipo"], "¡GOOOL!" if evento["resultado"] == "gol" else "lo ataja el arquero"]
 		"centro":

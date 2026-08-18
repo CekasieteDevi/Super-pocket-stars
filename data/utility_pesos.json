@@ -111,6 +111,8 @@
     "avance_para_centrar": 0.55,
     "altura_centro": 6.0,
     "z_inalcanzable": 2.5,
+    "_offside": "Margen de error al medir el desmarque: un delantero inteligente se queda al filo de la linea, uno limitado se pasa. Sin margen nadie se iria nunca en offside y la infraccion no existiria.",
+    "offside_margen_torpe": 5.5,
     "_faltas": "Las tarjetas cuelgan de las faltas, no de cada quite: antes se amonestaba sin que hubiera infraccion. prob_falta se calibra para que las amarillas por partido queden a la par del motor abstracto.",
     "prob_falta": 0.42,
     "prob_falta_en_quite_ganado": 0.10,

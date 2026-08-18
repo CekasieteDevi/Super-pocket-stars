@@ -1461,3 +1461,53 @@ el tiempo. Es realista, pero conviene tenerlo presente porque va en contra
 de la progresión buscada.
 
 Paridad con el motor abstracto: **3,74 contra 3,58**.
+
+---
+
+## 25. Offside como infracción
+
+Existía solo como comportamiento: nadie se adelantaba al último defensor,
+así que no había nada que cobrar. Ahora se cobra, y lo que lo hace posible
+es que **los delanteros puedan equivocarse**.
+
+### De dónde salen los offsides
+
+La posición se juzga **en el momento del pase**, no cuando la recibe: se
+marca al lanzar y se cobra al llegar. La línea ya incluye la posición de
+la pelota, así que estar más allá significa estar por delante del último
+defensor Y de la pelota.
+
+Pero para que eso ocurra alguna vez, los atacantes tienen que fallar el
+desmarque. El offset respecto de la línea depende de `inteligencia`: el
+que la mide bien se queda ~1,5m detrás, el que no la calcula se pasa
+varios metros y queda habilitando.
+
+| `inteligencia` del equipo | Offsides/partido |
+| --- | --- |
+| 25 | 1,1 |
+| 50 | 0,4 |
+| 75 | 0,9 |
+| 95 | **0,1** |
+
+Los extremos muestran el efecto con claridad; los valores del medio son
+ruidosos con 20 partidos de muestra, así que no hay que leerlos como una
+curva fina.
+
+### El detalle que costó encontrar
+
+La primera versión no producía **ni un solo offside**. El margen de error
+que había agregado no servía de nada porque los delanteros apuntaban
+deliberadamente a *un metro por detrás* de la línea (`linea - 1.0`, puesto
+cuando se implementó que subieran al hombro del último defensor). Ese
+offset fijo era el que impedía la infracción: mientras estuviera ahí, por
+más margen que se agregara nadie se iba nunca. Convertirlo en función de
+`inteligencia` fue lo que la habilitó.
+
+Paridad con el motor abstracto: **3,60 contra 3,58**.
+
+### Estado del motor
+
+Con esto queda cubierto todo lo que el documento de diseño listaba como
+pendiente del motor: las seis jugadas, centros y altura de pelota,
+córners, laterales, saques de arco, faltas, tiros libres, penales y
+offside.

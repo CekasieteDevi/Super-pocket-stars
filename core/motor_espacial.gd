@@ -216,6 +216,9 @@ static func _armar_jugadores(equipo: Team, es_local: bool, estado: Dictionary) -
 			"vel": Vector2.ZERO,
 			"objetivo": base,
 			"vel_max": _vel_max(j),
+			# Se copia acá para no tener que buscar el dict del jugador en
+			# cada tick solo para medir el desmarque (ver offside).
+			"inteligencia": float(j["atributos"]["inteligencia"]),
 		}
 
 
@@ -776,6 +779,7 @@ static func elegir_softmax(opciones: Array, temp: float, rng: RandomNumberGenera
 ## decide cuánto persigue la pelota cuando NO la tiene (Presión alta la va
 ## a buscar de verdad, Defensivo se repliega).
 static func _objetivo_sin_pelota(estado: Dictionary, e: Dictionary, equipo: Team, tiene_pelota_mi_equipo: bool) -> Vector2:
+	var f: Dictionary = pesos()["fisica"]
 	var pelota_pos: Vector2 = estado["pelota"]["pos"]
 	var rol: String = e["rol"]
 	var base: Vector2 = e["base"]
@@ -815,10 +819,17 @@ static func _objetivo_sin_pelota(estado: Dictionary, e: Dictionary, equipo: Team
 	# 23m, casi ningún gol).
 	if tiene_pelota_mi_equipo and ROLES_QUE_ATACAN.has(rol):
 		var linea_ataque: Dictionary = estado["linea_offside"]
+		# Dónde se para respecto de la línea: el que mide bien el
+		# desmarque se queda un metro detrás, el que no la calcula se pasa
+		# y queda habilitando el offside. Este offset ES la fuente de los
+		# offsides — con un "siempre un metro detrás" fijo, nadie se iba
+		# nunca y la infracción no ocurría jamás.
+		var intel: float = clampf(float(e.get("inteligencia", 50.0)) / 100.0, 0.0, 1.0)
+		var offset: float = lerpf(float(f["offside_margen_torpe"]), -1.5, intel)
 		if e["equipo_local"]:
-			objetivo_x = maxf(objetivo_x, float(linea_ataque["local"]) - 1.0)
+			objetivo_x = maxf(objetivo_x, float(linea_ataque["local"]) + offset)
 		else:
-			objetivo_x = minf(objetivo_x, float(linea_ataque["away"]) + 1.0)
+			objetivo_x = minf(objetivo_x, float(linea_ataque["away"]) - offset)
 
 	# Mantenerse habilitado: nadie se adelanta al último defensor rival.
 	# El offside como infracción queda fuera del MVP, pero la CONDUCTA de
@@ -828,10 +839,15 @@ static func _objetivo_sin_pelota(estado: Dictionary, e: Dictionary, equipo: Team
 	# chica. Es además mucho más barato que modelar la infracción.
 	if rol != "ARQ":
 		var linea: Dictionary = estado["linea_offside"]
+		# Margen de error al medir el desmarque: un delantero inteligente
+		# se queda al filo, uno limitado se pasa. Sin este margen nadie se
+		# iba nunca en offside y la infracción no existiría en la práctica.
+		var margen: float = float(f["offside_margen_torpe"]) \
+			* (1.0 - clampf(float(e.get("inteligencia", 50.0)) / 100.0, 0.0, 1.0))
 		if e["equipo_local"]:
-			objetivo_x = minf(objetivo_x, float(linea["local"]))
+			objetivo_x = minf(objetivo_x, float(linea["local"]) + margen)
 		else:
-			objetivo_x = maxf(objetivo_x, float(linea["away"]))
+			objetivo_x = maxf(objetivo_x, float(linea["away"]) - margen)
 
 	return Vector2(objetivo_x, clampf(objetivo_y, -MEDIO_ANCHO + 1.0, MEDIO_ANCHO - 1.0))
 
@@ -1343,6 +1359,20 @@ static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: i
 	pelota["es_pase"] = true
 	pelota["origen_pos"] = poseedor["pos"]
 
+	# Offside: se juzga la posición del receptor EN EL MOMENTO DEL PASE, no
+	# cuando la recibe — por eso se marca acá y se cobra al llegar. La
+	# línea ya incluye la posición de la pelota, así que estar más allá
+	# significa estar por delante del último defensor Y de la pelota.
+	var e_dest: Dictionary = estado["jugadores"][destino_id]
+	var adelantado := false
+	if e_dest["rol"] != "ARQ":
+		var linea: Dictionary = estado["linea_offside"]
+		if poseedor["equipo_local"]:
+			adelantado = e_dest["pos"].x > float(linea["local"]) + 0.2
+		else:
+			adelantado = e_dest["pos"].x < float(linea["away"]) - 0.2
+	pelota["offside"] = adelantado
+
 
 # ---------------------------------------------------------------------------
 # Loop de tick (§3)
@@ -1550,6 +1580,20 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 			return
 
 	_entregar_pelota(estado, receptor)
+	# Estaba adelantado cuando le pegaron y la recibió: offside. Tiro libre
+	# para el que defiende, desde donde estaba.
+	if bool(pelota.get("offside", false)) and receptor == int(pelota.get("destino_id", -1)) \
+			and e_receptor["equipo_local"] == pasador_local:
+		pelota["offside"] = false
+		estado["offsides"] = int(estado.get("offsides", 0)) + 1
+		estado["eventos"].append({
+			"minuto": minuto, "tipo": "offside", "equipo": _equipo_de(estado, pasador_local).nombre,
+			"rival": _equipo_de(estado, not pasador_local).nombre,
+			"jugador_posicion": e_receptor["rol"], "resultado": "offside",
+		})
+		_tiro_libre(estado, hasta, not pasador_local, minuto)
+		return
+
 	if e_receptor["equipo_local"] == pasador_local:
 		if bool(pelota.get("es_pase", false)):
 			estado["pases"]["home" if pasador_local else "away"] += 1
@@ -2167,6 +2211,7 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 			"faltas": estado.get("faltas", 0),
 			"penales": estado.get("penales", 0),
 			"libres_directos": estado.get("libres_directos", 0),
+			"offsides": estado.get("offsides", 0),
 			"reinicios": estado["reinicios"],
 			"cooldown_activos": estado["cooldown"].size(),
 			"pase_detalle": estado["pase_detalle"],
