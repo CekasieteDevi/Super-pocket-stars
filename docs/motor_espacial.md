@@ -1403,3 +1403,61 @@ diferencias que están dentro del ruido — es el mismo error que ya había
 cometido antes con una muestra de 20.
 
 Paridad con el motor abstracto: **3,61 contra 3,58**.
+
+---
+
+## 24. Faltas, tiros libres y penales
+
+Había tarjetas pero **ninguna infracción que cortara el juego**: se
+amonestaba sin que se viera una falta. Ahora las tarjetas cuelgan de las
+faltas, que es como debió ser desde el principio.
+
+### Cómo se cobra
+
+Un quite fallado es la situación típica (llegó tarde), y un quite ganado
+también puede serlo con menor probabilidad. Si hay falta: se corta el
+juego, se chequea tarjeta y se reanuda con tiro libre — o **penal** si fue
+adentro del área.
+
+El tiro libre lo patea el de mejor `tiros_libres` si está a tiro de arco
+(otro atributo del GDD que no leía nadie); si no, se pone en juego y sigue
+el partido. El penal lo patea el de mejor `tiro`, con una ventaja grande
+sobre el arquero e incluyendo el bonus de personalidad que ya existía en
+`Penales.gd` (Pícaro, Clutch, Frágil mental).
+
+### Medido, por partido
+
+| | |
+| --- | --- |
+| Faltas | 9,7 |
+| Penales | 0,30 |
+| Tiros libres directos | 0,5 |
+| Amarillas | 3,3 |
+| Rojas | 0,35 |
+
+### Dos ajustes que la medición obligó a hacer
+
+**Recalibrar las tarjetas de cero.** Antes colgaban de cada quite (~35 por
+partido) y ahora de las faltas (~9), así que la tasa se derrumbó a 1,3
+amarillas. Cada falta tiene que ser mucho más probable de ser amonestada
+para llegar a la misma tasa POR PARTIDO, que es lo que importa para las
+suspensiones.
+
+**La falta no puede premiar dos veces.** La primera versión, además de
+devolver la pelota, dejaba al infractor con el cooldown de "quedó pasado"
+y alejaba a los rivales 9,15m en TODAS las faltas. Entre las dos cosas, un
+plantel de media 27 saltaba de 1,57 a 2,83 goles por partido: **la
+diferencia entre equipos buenos y malos se aplanaba**, que es justo lo que
+no se quería. Ahora no hay cooldown por falta y la barrera solo se arma en
+los tiros libres que se patean al arco; en una falta lejana el juego se
+reanuda y las líneas se reacomodan solas.
+
+### Efecto que queda, y es inherente
+
+Aun corregido, las faltas achatan un poco la curva por calidad (media 27
+pasó de 1,57 a 2,57 goles). Es inherente: una falta **devuelve la posesión
+al que atacaba**, y eso beneficia sobre todo al equipo que la perdía todo
+el tiempo. Es realista, pero conviene tenerlo presente porque va en contra
+de la progresión buscada.
+
+Paridad con el motor abstracto: **3,74 contra 3,58**.

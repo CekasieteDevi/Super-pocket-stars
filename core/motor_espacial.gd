@@ -1817,6 +1817,127 @@ static func _en_cooldown(estado: Dictionary, clave: int) -> bool:
 	return estado["tick"] < int(estado["cooldown"].get(clave, -1))
 
 
+## Se cobra la infracción: para el juego, se amonesta al infractor y se
+## reanuda con tiro libre — o penal si fue adentro del área.
+static func _cobrar_falta(estado: Dictionary, punto: Vector2, victima_local: bool,
+		infractor: Dictionary, eq_infractor: Team, eq_victima: Team, minuto: int) -> void:
+	estado["faltas"] = int(estado.get("faltas", 0)) + 1
+	_chequear_tarjeta_repetido(estado, infractor, eq_infractor, eq_victima, minuto)
+	estado["eventos"].append({
+		"minuto": minuto, "tipo": "falta", "equipo": eq_infractor.nombre,
+		"rival": eq_victima.nombre, "jugador_posicion": "", "resultado": "falta",
+	})
+
+	# ¿Adentro del área que defiende el infractor? Penal.
+	var arco_infractor := arco_propio(not victima_local)
+	if absf(arco_infractor.x - punto.x) <= 16.5 and absf(punto.y) <= 20.16:
+		_cobrar_penal(estado, victima_local, minuto)
+		return
+	_tiro_libre(estado, punto, victima_local, minuto)
+
+
+## Penal: lo patea el de mejor `tiro` del equipo, contra el arquero. Se
+## resuelve con el mismo duelo de siempre pero con una ventaja grande para
+## el pateador, que es lo que es un penal.
+static func _cobrar_penal(estado: Dictionary, ataca_local: bool, minuto: int) -> void:
+	var f: Dictionary = pesos()["fisica"]
+	var eq_a := _equipo_de(estado, ataca_local)
+	var eq_d := _equipo_de(estado, not ataca_local)
+	estado["penales"] = int(estado.get("penales", 0)) + 1
+
+	var pateador := {}
+	for j in eq_a.jugadores_en_cancha():
+		if pateador.is_empty() or j["atributos"]["tiro"] > pateador["atributos"]["tiro"]:
+			pateador = j
+	var arquero := eq_d.arquero()
+	if pateador.is_empty() or arquero.is_empty():
+		_dar_pelota_al_arquero(estado, not ataca_local, true)
+		return
+
+	var arq_attrs: Dictionary = arquero["atributos"]
+	var valor_arq: float = arq_attrs["reflejos"] * 0.5 + arq_attrs["estirada"] * 0.3 + arq_attrs["agarre"] * 0.2
+	# La ventaja del pateador incluye el bonus de personalidad de penales
+	# que ya existía en Penales.gd (Pícaro, Clutch, Frágil mental).
+	var ventaja: float = float(f["ventaja_penal"]) * (1.0 + Personalidad.bonus_penal(pateador))
+	var res := Duel.resolver(
+		Duel.atributo_efectivo(float(pateador["atributos"]["tiro"]) + ventaja, "tecnico", eq_a.resistencia_pct(pateador["id"])),
+		Duel.atributo_efectivo(valor_arq, "tecnico", eq_d.resistencia_pct(arquero["id"])),
+		MatchEngine._bloques_equipo(eq_a, eq_d, pateador, "tiro", minuto, estado["rng"]),
+		MatchEngine._bloques_equipo(eq_d, eq_a, arquero, "reflejos", minuto, estado["rng"]))
+	var gol := Duel.gana_atacante(res, estado["rng"])
+
+	estado["eventos"].append({
+		"minuto": minuto, "tipo": "penal", "equipo": eq_a.nombre, "rival": eq_d.nombre,
+		"jugador_posicion": pateador["posicion"], "resultado": "gol" if gol else "atajado",
+	})
+	if gol:
+		eq_a.goles += 1
+		estado["goles_log"].append({"minuto": minuto, "equipo": eq_a.nombre, "jugador_id": pateador["id"]})
+		estado["log"].append("min %d - PENAL: gol de %s %s (%s)" % [
+			minuto, pateador["nombre"], pateador["apellido"], eq_a.nombre])
+		_reiniciar_desde_medio(estado, not ataca_local)
+	else:
+		estado["log"].append("min %d - PENAL: lo ataja el arquero de %s" % [minuto, eq_d.nombre])
+		_dar_pelota_al_arquero(estado, not ataca_local)
+
+
+## Tiro libre: la pone el mejor ejecutante disponible, los rivales se
+## alejan la distancia reglamentaria, y si está a tiro de arco se remata
+## con `tiros_libres` — otro atributo del GDD que no leía nadie. Si está
+## lejos o muy escorado, se cuelga al área.
+static func _tiro_libre(estado: Dictionary, punto: Vector2, ataca_local: bool, minuto: int) -> void:
+	var f: Dictionary = pesos()["fisica"]
+	var eq_a := _equipo_de(estado, ataca_local)
+	var pos := Vector2(
+		clampf(punto.x, -MEDIO_LARGO + 2.0, MEDIO_LARGO - 2.0),
+		clampf(punto.y, -MEDIO_ANCHO + 2.0, MEDIO_ANCHO - 2.0))
+
+	# ¿Está para pegarle al arco? Lo patea el de mejor `tiros_libres`.
+	var geo := factor_geometria(pos, ataca_local)
+
+	# La barrera solo en los que se patean al arco. Aplicarla en TODAS las
+	# faltas le regalaba espacio libre al que ataca unas nueve veces por
+	# partido, y eso aplanaba la diferencia entre equipos: un plantel de
+	# media 27 saltaba de 1,57 a 2,83 goles. En una falta lejana el juego
+	# se reanuda y las líneas se reacomodan solas.
+	if geo >= float(f["geometria_minima_tiro_libre"]):
+		for id in estado["jugadores"]:
+			var e: Dictionary = estado["jugadores"][id]
+			if e["equipo_local"] == ataca_local or e["rol"] == "ARQ":
+				continue
+			var d: float = pos.distance_to(e["pos"])
+			if d < 9.15:
+				e["pos"] = pos + (e["pos"] - pos).normalized() * 9.15
+	var ejecutor := -1
+	if geo >= float(f["geometria_minima_tiro_libre"]):
+		var mejor: float = -1.0
+		for id in estado["jugadores"]:
+			var e: Dictionary = estado["jugadores"][id]
+			if e["equipo_local"] != ataca_local or e["rol"] == "ARQ":
+				continue
+			var j := _dict_jugador(estado, eq_a, e["jugador_id"])
+			if j.is_empty():
+				continue
+			if float(j["atributos"]["tiros_libres"]) > mejor:
+				mejor = float(j["atributos"]["tiros_libres"])
+				ejecutor = id
+		if ejecutor != -1:
+			var e_ej: Dictionary = estado["jugadores"][ejecutor]
+			e_ej["pos"] = pos
+			_entregar_pelota(estado, ejecutor)
+			estado["libres_directos"] = int(estado.get("libres_directos", 0)) + 1
+			_resolver_tiro(estado, e_ej, _dict_jugador(estado, eq_a, e_ej["jugador_id"]), "tiros_libres")
+			return
+
+	# Lejos: la pone en juego el más cercano y sigue el partido.
+	ejecutor = _mas_cercano_del_equipo(estado, pos, ataca_local)
+	if ejecutor == -1:
+		_dar_pelota_al_arquero(estado, ataca_local, true)
+		return
+	estado["jugadores"][ejecutor]["pos"] = pos
+	_entregar_pelota(estado, ejecutor)
+
+
 ## Reventarla arriba y lejos, sin destinatario: la agarra el que llegue.
 ## Va alta a propósito, así nadie la corta en el camino — un despeje se
 ## disputa donde cae, no en el medio.
@@ -1903,6 +2024,19 @@ static func _intentar_robo(estado: Dictionary) -> void:
 	var minuto := _minuto_int(estado)
 	# El poseedor defiende su pelota con `control` contra el `quite` del rival.
 	var aguanta := _duelo_simple(jug_a, "control", eq_a, jug_d, "quite", eq_d, minuto, estado["rng"])
+
+	# ¿Fue falta? Un quite fallado es la situación típica: llegó tarde. Las
+	# TARJETAS cuelgan de acá, no del quite en sí — antes se amonestaba sin
+	# que hubiera ninguna infracción, que era raro de ver.
+	if not aguanta or estado["rng"].randf() < float(f["prob_falta_en_quite_ganado"]):
+		if estado["rng"].randf() < float(f["prob_falta"]):
+			# Sin cooldown al que hizo la falta: la infracción YA frenó la
+			# jugada y devolvió la pelota. Dejarlo además fuera de juego
+			# unos segundos era premiar dos veces al que la recibió, y
+			# aplanaba la diferencia entre equipos buenos y malos (un
+			# plantel flojo pasaba de 1,57 a 2,87 goles por partido).
+			_cobrar_falta(estado, poseedor["pos"], es_local, jug_d, eq_d, eq_a, minuto)
+			return
 	# Mismas tarjetas que el motor abstracto: si el partido del jugador no
 	# generara amarillas ni rojas, su equipo nunca tendría suspendidos
 	# mientras el resto de la liga sí — un desbalance grave, no cosmético.
@@ -1918,7 +2052,6 @@ static func _intentar_robo(estado: Dictionary) -> void:
 	# ~3,6 del resto de la liga, y el equipo del jugador juntaría muchas
 	# menos suspensiones que sus rivales. Se chequea varias veces por
 	# disputa para igualar la tasa por PARTIDO, que es lo que importa.
-	_chequear_tarjeta_repetido(estado, jug_d, eq_d, eq_a, minuto)
 	# Quite resuelto como en el fútbol: o se la saca y se la queda en los
 	# pies, o falla y el otro sigue con la pelota. Lo que evita el loop no
 	# es que la pelota salga volando, sino que PERDER EL DUELO SE PAGA: el
@@ -2031,6 +2164,9 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 			"paredes": estado["paredes"],
 			"centros": estado["centros"],
 			"despejes": estado.get("despejes", 0),
+			"faltas": estado.get("faltas", 0),
+			"penales": estado.get("penales", 0),
+			"libres_directos": estado.get("libres_directos", 0),
 			"reinicios": estado["reinicios"],
 			"cooldown_activos": estado["cooldown"].size(),
 			"pase_detalle": estado["pase_detalle"],

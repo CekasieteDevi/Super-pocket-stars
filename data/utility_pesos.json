@@ -68,7 +68,7 @@
   "tiro_resolucion": {
     "peso_atributo": 0.6,
     "peso_geometria": 0.4,
-    "porteria_base": 0.47,
+    "porteria_base": 0.425,
     "porteria_calidad": 0.50,
     "palo": 0.05,
     "fuerza_base": 0.80
@@ -111,6 +111,11 @@
     "avance_para_centrar": 0.55,
     "altura_centro": 6.0,
     "z_inalcanzable": 2.5,
+    "_faltas": "Las tarjetas cuelgan de las faltas, no de cada quite: antes se amonestaba sin que hubiera infraccion. prob_falta se calibra para que las amarillas por partido queden a la par del motor abstracto.",
+    "prob_falta": 0.42,
+    "prob_falta_en_quite_ganado": 0.10,
+    "ventaja_penal": 45.0,
+    "geometria_minima_tiro_libre": 0.14,
     "zona_despeje": 0.42,
     "presion_despeje": 0.45,
     "despeje_corto": 30.0,
@@ -177,8 +182,8 @@
     "ticks_gracia_posesion": 6,
     "_prob_evento_fisico": "Fraccion de los duelos que se chequean por tarjeta y lesion. Este motor disputa la pelota ~2600 veces por partido; el motor abstracto resuelve ~180 duelos y es sobre ESE numero que estan calibradas CHANCE_AMARILLA y las lesiones. Sin este factor salian ~50 amarillas por partido.",
     "prob_evento_fisico": 0.55,
-    "_chequeos_tarjeta_por_quite": "Cuantas veces se tira la chance de tarjeta por disputa. CHANCE_AMARILLA esta calibrado sobre los ~180 duelos del motor abstracto y este motor disputa ~50 veces por partido: con una sola tirada el equipo del jugador juntaria muchas menos suspensiones que sus rivales.",
-    "chequeos_tarjeta_por_quite": 6,
+    "_chequeos_tarjeta_por_quite": "Cuantas veces se tira la chance de tarjeta POR FALTA, cortando en la primera. CHANCE_AMARILLA=0.02 esta calibrado sobre un partido de 90 minutos con ~40 faltas; este dura 4 y tiene ~9, asi que cada falta tiene que ser mucho mas probable de ser amonestada para llegar a la misma tasa POR PARTIDO, que es lo que importa para las suspensiones.",
+    "chequeos_tarjeta_por_quite": 26,
     "_multiplicador_desgaste": "Cuanto pesa cada duelo en la resistencia. Team.desgastar esta calibrado sobre los ~180 duelos del motor abstracto; este motor resuelve otra cantidad, y con 1.0 los 22 jugadores terminaban en el piso de resistencia antes del entretiempo.",
     "multiplicador_desgaste": 12.0
   }
