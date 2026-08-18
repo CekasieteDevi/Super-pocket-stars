@@ -1,10 +1,10 @@
 class_name SpritesPartido
 extends RefCounted
 
-## Sprites del partido, generados por código (no hay asset pack). Viven
-## acá y no en ui/pixel_art.gd para que la vista nueva sea independiente
-## de la actual: si más adelante entran PNG de verdad, este es el único
-## archivo a reemplazar.
+## Sprites del partido, generados por código (no hay asset pack). Si más
+## adelante entran PNG de verdad, este es el único archivo a reemplazar:
+## el resto de /match pide texturas por (dirección, pose, color) y no
+## sabe cómo están hechas.
 ##
 ## Los jugadores son billboards: se proyecta su posición al piso, pero el
 ## sprite se dibuja siempre vertical y sin deformar.

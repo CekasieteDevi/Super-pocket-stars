@@ -28,7 +28,7 @@ var label_informe_rival: Label
 
 const OPCIONES_CAMBIOS := ["equilibrado", "descanso", "rendimiento"]
 const ETIQUETAS_CAMBIOS := {"equilibrado": "Equilibrado", "descanso": "Priorizar descanso", "rendimiento": "Priorizar rendimiento"}
-var partido_visual: PartidoVisual
+var vista_partido: VistaPartido
 var lista_economia: RichTextLabel
 var lista_cantera: RichTextLabel
 var contenedor_cantera_botones: VBoxContainer
@@ -296,24 +296,21 @@ func _construir_panel_partido(padre: Control) -> void:
 	panel.add_child(boton_simular_temporada)
 
 
-## Fase 8: reproduce los eventos del ultimo partido jugado con una pelota
-## placeholder (sin pixel art ni posiciones por jugador todavia).
+## Reproduce el último partido propio con la vista de /match: proyección
+## oblicua, cámara que sigue la pelota, estadio y relato. El panel no
+## lleva barra de "Volver" propia porque la vista trae su botón Menú
+## arriba a la derecha — la pantalla es toda cancha, que es el punto.
 func _construir_panel_partido_animado(padre: Control) -> void:
-	var panel := VBoxContainer.new()
+	var panel := Control.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	panel.visible = false
 	padre.add_child(panel)
 	paneles["partido_animado"] = panel
 
-	var btn_volver := Button.new()
-	btn_volver.text = "< Volver"
-	btn_volver.pressed.connect(_mostrar_partido)
-	panel.add_child(btn_volver)
-
-	var escena: PackedScene = load("res://ui/partido_visual.tscn")
-	partido_visual = escena.instantiate()
-	partido_visual.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	panel.add_child(partido_visual)
+	vista_partido = VistaPartido.new()
+	vista_partido.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.add_child(vista_partido)
+	vista_partido.hud.menu_pedido.connect(_mostrar_partido)
 
 
 func _construir_panel_economia(padre: Control) -> void:
@@ -1358,7 +1355,29 @@ func _mostrar_partido_animado() -> void:
 	# visual y pasó a mover a los jugadores dentro del propio motor
 	# (MotorEspacial._objetivo_sin_pelota), así que llega en las
 	# coordenadas de cada fotograma.
-	partido_visual.iniciar(r["local"], r["visitante"], GameState.ultimos_fotogramas)
+	#
+	# GameState guarda el resultado con los NOMBRES de los equipos, pero la
+	# vista necesita los Team: las claves de los fotogramas se resuelven a
+	# apellidos con el plantel, y la textura de la cancha sale de la
+	# calidad de cancha del local. Se buscan en la liga del jugador, que es
+	# donde se jugó el partido.
+	var local: Team = _equipo_de_la_liga(str(r["local"]))
+	var visitante: Team = _equipo_de_la_liga(str(r["visitante"]))
+	if local == null or visitante == null:
+		return
+	var colores := ColoresClub.par(local.nombre, visitante.nombre)
+	vista_partido.iniciar(
+		GameState.ultimos_fotogramas, colores[0], colores[1],
+		local.nombre, visitante.nombre,
+		VistaPartido.construir_nombres(local, visitante),
+		VistaCancha.estado_desde_calidad(local.calidad_cancha))
+
+
+func _equipo_de_la_liga(nombre: String) -> Team:
+	for e in GameState.liga_jugador().equipos:
+		if e.nombre == nombre:
+			return e
+	return null
 
 
 func _mostrar_economia() -> void:

@@ -1665,3 +1665,28 @@ cada uno llevara su propio reloj se desincronizarían. Las tarjetas se
 guardan por clave y no por posición, así el cartelito acompaña al que la
 vio mientras camina, y se dibujan al final sin Y-sort: son información,
 y taparlas con un jugador que pasa por delante sería perderlas.
+
+## 29. La vista nueva enchufada
+
+`ui/main.gd` abre `VistaPartido` en vez de `PartidoVisual`. Dos cosas que
+hubo que resolver:
+
+**GameState guarda el resultado con los NOMBRES de los equipos**, pero la
+vista necesita los `Team`: las claves de los fotogramas se resuelven a
+apellidos con el plantel, y la textura de la cancha sale de la
+`calidad_cancha` del local. Se buscan por nombre en la liga del jugador,
+que es donde se jugó el partido. Alternativa descartada: meter la tabla
+de apellidos en `resultado_seguido` desde `Liga` — el core no tiene por
+qué saber que alguien va a mostrar apellidos.
+
+**Godot sigue llamando `_process` en un nodo invisible.** Sin un
+`is_visible_in_tree()` al principio, el partido se seguía jugando de
+fondo mientras el usuario está en otra pantalla, y al volver ya estaba
+terminado.
+
+El panel perdió su barra de "< Volver": la vista trae su botón Menú
+arriba a la derecha y la pantalla es toda cancha, que es el punto.
+
+Se borraron `ui/partido_visual.gd`, `ui/cancha.gd` y `ui/pixel_art.gd`,
+que quedaron sin usar. La única referencia que sobrevivía era un
+comentario en `sprites_partido.gd`.

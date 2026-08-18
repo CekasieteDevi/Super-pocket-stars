@@ -148,7 +148,11 @@ func saltar_al_final() -> void:
 
 
 func _process(delta: float) -> void:
-	if _terminado or fotogramas.is_empty():
+	# Con el panel oculto el partido NO corre. Godot sigue llamando
+	# _process en un nodo invisible, así que sin esto el partido seguía
+	# jugándose de fondo mientras el usuario está en otra pantalla y al
+	# volver ya estaba terminado.
+	if not is_visible_in_tree() or _terminado or fotogramas.is_empty():
 		return
 	if pausado:
 		return
