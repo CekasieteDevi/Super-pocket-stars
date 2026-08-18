@@ -37,6 +37,11 @@ const CORRE_B := "corre_b"
 const PATEA := "patea"
 const BARRIDA := "barrida"
 
+## No es una pose de piernas: el arquero volando es un sprite entero
+## aparte (horizontal). Se nombra acá para que la vista pueda tratarlo
+## como una pose más y decidir con un solo campo.
+const VUELA := "vuela"
+
 ## De frente: se le ven los ojos.
 const CUERPO_ABAJO := [
 	"....HHHH....",
@@ -161,18 +166,27 @@ const PIERNAS := {
 		"..BBB.......",
 		"............",
 	],
-	# Tirado, las dos piernas al costado.
-	BARRIDA: [
-		"..DDDDDD....",
-		"..DDDDDD....",
-		"..DDMMMMMM..",
-		"....MMMMMMMM",
-		"....BBB..BBB",
-		"............",
-		"............",
-		"............",
-	],
 }
+
+## La barrida y el arquero volando NO salen de componer cuerpo y piernas:
+## son cuerpos tendidos, horizontales, y pegarles las piernas de un
+## jugador parado daba un tipo de pie con las patas al costado. Van como
+## sprite entero, y con dos orientaciones alcanza — tirado en el piso lo
+## único que se lee es hacia qué lado se fue.
+const BARRIDA_TENDIDA := [
+	"....................",
+	"....................",
+	"....................",
+	"....................",
+	"..HHHH..............",
+	".HSSSSH.............",
+	".SSoSSJJJJJJb.......",
+	"..SSSJJJJJJJJb......",
+	"....JJJJJJJDDDD.....",
+	".......DDDDDDMMMM...",
+	"..........MMMMMMBBB.",
+	".............BBB....",
+]
 
 ## El arquero volando es otro sprite, horizontal: no sale de componer
 ## cuerpo y piernas.
@@ -216,6 +230,10 @@ static func jugador(color_camiseta: Color, direccion: int = ABAJO, pose: String 
 		return _cache[clave]
 
 	var espejo := direccion in [ABAJO_IZQ, IZQUIERDA, ARRIBA_IZQ]
+	if pose == BARRIDA:
+		var tendida := _construir(BARRIDA_TENDIDA, _paleta(color_camiseta), espejo)
+		_cache[clave] = tendida
+		return tendida
 	var base := direccion
 	match direccion:
 		ABAJO_IZQ: base = ABAJO_DER

@@ -111,6 +111,40 @@ static func clave_de(jugador_id: int, es_local: bool) -> int:
 	return jugador_id if es_local else jugador_id + OFFSET_VISITANTE
 
 
+# ---------------------------------------------------------------------------
+# Acciones físicas (dato de animación, no de simulación)
+# ---------------------------------------------------------------------------
+
+## Actos físicos que la vista puede animar. NADA del motor los lee: son un
+## canal aparte de los eventos semánticos, porque los eventos no sirven
+## para animar. Un pase se registra como evento cuando LLEGA (o cuando lo
+## cortan), y para animar la patada hace falta saberlo cuando SALE; y el
+## evento trae el ROL del que la jugó, no su clave, así que no alcanza
+## para saber a cuál de los 22 mover.
+const ACCION_PATEA := "patea"
+const ACCION_BARRIDA := "barrida"
+const ACCION_VUELA := "vuela"
+
+
+## Registra que `clave` hizo `accion` en el tick actual. Solo cuesta algo
+## cuando se están generando fotogramas: en el resto de la liga, que
+## simula sin animación, es un `return` inmediato.
+static func _accion(estado: Dictionary, clave: int, accion: String) -> void:
+	if not bool(estado.get("con_fotogramas", false)):
+		return
+	if clave == -1:
+		return
+	estado["acciones_tick"].append({"clave": clave, "accion": accion})
+
+
+static func _clave_arquero(estado: Dictionary, es_local: bool) -> int:
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		if e["equipo_local"] == es_local and e["rol"] == "ARQ":
+			return id
+	return -1
+
+
 static func pesos() -> Dictionary:
 	if _pesos_cache.is_empty():
 		_pesos_cache = DataLoader.load_json(PESOS_PATH)
@@ -234,6 +268,9 @@ static func crear_estado(home: Team, away: Team, rng: RandomNumberGenerator) -> 
 		"goles_log": [],
 		"eventos": [],
 		"fotogramas": [],
+		# Ver _accion: actos físicos del tick en curso, para la animación.
+		"con_fotogramas": false,
+		"acciones_tick": [],
 		"robo_cooldown": {},
 		"robos": {"intentos": 0, "ganados": 0},
 		"gambetas": {"home": {"intentos": 0, "ganadas": 0}, "away": {"intentos": 0, "ganadas": 0}},
@@ -576,6 +613,8 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 	var minuto := _minuto_int(estado)
 	var lado_g := "home" if es_local else "away"
 	estado["gambetas"][lado_g]["intentos"] += 1
+	# El que va a ser encarado se tira a cortarla.
+	_accion(estado, clave_rival, ACCION_BARRIDA)
 
 	var att_a: Dictionary = jugador["atributos"]
 	var att_d: Dictionary = defensor["atributos"]
@@ -966,6 +1005,9 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	var minuto := _minuto_int(estado)
 	var geo := factor_geometria(poseedor["pos"], es_local, jugador)
 	var clave := "home" if es_local else "away"
+	# Un cabezazo no es una patada; por ahora no hay sprite propio, así que
+	# se anima igual que un remate de pie.
+	_accion(estado, int(poseedor["clave"]), ACCION_PATEA)
 	estado["tiros"][clave] += 1
 	estado["dist_tiros"].append(poseedor["pos"].distance_to(arco_rival(es_local)))
 
@@ -979,6 +1021,7 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	# disputo en el duelo aereo.
 	var bloqueador := -1 if attr_remate == "cabezazo" else _bloqueador_de_tiro(estado, poseedor["pos"], es_local)
 	if bloqueador != -1 and _gana_bloqueo(estado, bloqueador, jugador, eq_a, eq_d, poseedor["pos"], es_local, minuto):
+		_accion(estado, bloqueador, ACCION_BARRIDA)
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "tiro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 			"jugador_posicion": poseedor["rol"], "resultado": "bloqueado",
@@ -1030,6 +1073,8 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	eq_a.desgastar(jugador["id"], jugador["atributos"]["energia"], mult_tiro)
 	eq_d.desgastar(arquero["id"], arq_attrs["energia"], mult_tiro)
 	var gol := Duel.gana_atacante(res, rng)
+	# El remate va al arco: el arquero vuela, le llegue o no.
+	_accion(estado, _clave_arquero(estado, not es_local), ACCION_VUELA)
 	estado["eventos"].append({
 		"minuto": minuto, "tipo": "tiro_puerta", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 		"jugador_posicion": poseedor["rol"], "resultado": "gol" if gol else "atajada",
@@ -1343,6 +1388,7 @@ static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: i
 	var dir: Vector2 = (objetivo - poseedor["pos"]).normalized()
 	var pelota: Dictionary = estado["pelota"]
 	estado["pase_detalle"]["intentos"] += 1
+	_accion(estado, int(poseedor["clave"]), ACCION_PATEA)
 	pelota["poseedor_id"] = -1
 	pelota["en_vuelo"] = true
 	# La pelota sale más fuerte cuanto mejor pega el que la toca: un pase
@@ -1381,6 +1427,8 @@ static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: i
 static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 	var pelota: Dictionary = estado["pelota"]
 	var eventos_antes: int = estado["eventos"].size()
+	if con_fotogramas:
+		estado["acciones_tick"] = []
 
 	# 1. Pelota en vuelo: avanza, y alguien puede controlarla o interceptarla.
 	if pelota["en_vuelo"]:
@@ -1910,6 +1958,8 @@ static func _cobrar_penal(estado: Dictionary, ataca_local: bool, minuto: int) ->
 		MatchEngine._bloques_equipo(eq_d, eq_a, arquero, "reflejos", minuto, estado["rng"]))
 	var gol := Duel.gana_atacante(res, estado["rng"])
 
+	_accion(estado, clave_de(int(pateador["id"]), ataca_local), ACCION_PATEA)
+	_accion(estado, clave_de(int(arquero["id"]), not ataca_local), ACCION_VUELA)
 	estado["eventos"].append({
 		"minuto": minuto, "tipo": "penal", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 		"jugador_posicion": pateador["posicion"], "resultado": "gol" if gol else "atajado",
@@ -1997,6 +2047,7 @@ static func _despejar(estado: Dictionary, poseedor: Dictionary, jugador: Diction
 			-MEDIO_ANCHO + 1.0, MEDIO_ANCHO - 1.0))
 
 	var pelota: Dictionary = estado["pelota"]
+	_accion(estado, int(poseedor["clave"]), ACCION_PATEA)
 	pelota["poseedor_id"] = -1
 	pelota["en_vuelo"] = true
 	pelota["pos"] = poseedor["pos"]
@@ -2066,6 +2117,8 @@ static func _intentar_robo(estado: Dictionary) -> void:
 		return
 
 	var minuto := _minuto_int(estado)
+	# Se tira al piso a quitarla, le salga o no.
+	_accion(estado, mejor_id, ACCION_BARRIDA)
 	# El poseedor defiende su pelota con `control` contra el `quite` del rival.
 	var aguanta := _duelo_simple(jug_a, "control", eq_a, jug_d, "quite", eq_d, minuto, estado["rng"])
 
@@ -2147,6 +2200,10 @@ static func _push_fotograma(estado: Dictionary, evento_del_tick = null) -> void:
 		# momento exacto, sin tener que cruzar por minuto contra el array
 		# de eventos, que tiene otra granularidad.
 		"evento": evento_del_tick,
+		# Actos físicos de este tick: [{"clave": int, "accion": "patea"}].
+		# A diferencia de "evento", vienen con la clave del jugador, que es
+		# lo que la vista necesita para animar al que corresponde.
+		"acciones": estado["acciones_tick"],
 		"goles": {"home": estado["home"].goles, "away": estado["away"].goles},
 	})
 
@@ -2177,6 +2234,7 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 	away.arbitro_partido = home.arbitro_partido
 
 	var estado := crear_estado(home, away, rng)
+	estado["con_fotogramas"] = con_fotogramas
 
 	# Mismas ventanas de cambio que MatchEngine (§8.7): entretiempo, 60' y
 	# 75'. Se reusa _procesar_cambios sin tocarlo.

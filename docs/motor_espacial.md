@@ -1511,3 +1511,48 @@ Con esto queda cubierto todo lo que el documento de diseño listaba como
 pendiente del motor: las seis jugadas, centros y altura de pelota,
 córners, laterales, saques de arco, faltas, tiros libres, penales y
 offside.
+
+## 26. Acciones físicas para la animación
+
+La vista tenía los sprites de patear, barrida y arquero volando, pero no
+podía dispararlos. El motor exponía el `evento` del tick y el evento trae
+`jugador_posicion` — el ROL, `"DC"` o `"ARQ"` — así que no había forma de
+saber a **cuál** de los 22 animar. Y aunque hubiera traído la clave,
+tampoco alcanzaba: los eventos son semánticos y su timing no es el del
+gesto. Un pase se registra como evento cuando **llega** (o cuando lo
+cortan), varios ticks después de la patada; animar ahí sería patear en el
+momento equivocado.
+
+Por eso las acciones van por un canal aparte, no colgadas del evento:
+
+```gdscript
+"acciones": [{"clave": 100007, "accion": "patea"}]
+```
+
+Un array por fotograma, casi siempre vacío o de un elemento. Se registra
+en el momento del gesto (`_lanzar_pase`, `_despejar`, `_resolver_tiro`,
+`_intentar_robo`, `_resolver_gambeta`, `_cobrar_penal`) con `_accion()`,
+que hace `return` inmediato si el partido se simula sin fotogramas: el
+resto de la liga no paga nada. Verificado que el resultado es idéntico
+con y sin fotogramas.
+
+Un partido medido: 79 patadas, 34 barridas, 4 vuelos del arquero sobre
+960 fotogramas, repartidos entre 26 jugadores distintos.
+
+**Duración.** El motor registra la acción en UN tick, pero un tick son
+250 ms y mostrar la pose un solo fotograma queda como un parpadeo. La
+vista la sostiene: 2 ticks patear, 3 la barrida, 4 el arquero tendido.
+Se resuelve mirando hacia atrás (`_acciones_activas`) en vez de guardar
+estado, así funciona igual reproduciendo, pausando o saltando a cualquier
+punto de la línea de tiempo.
+
+**Los cuerpos tendidos no se componen.** El resto de los sprites salen de
+pegar un cuerpo (dirección) a un juego de piernas (pose). La barrida no:
+pegarle piernas abiertas a un torso parado daba un tipo de pie con las
+patas al costado, y encima flotando sobre su sombra, porque las filas
+vacías del sprite quedaban abajo y el sprite se apoya por el borde
+inferior. Barrida y arquero volando son sprites enteros, horizontales, y
+con dos orientaciones alcanza: tirado en el piso lo único que se lee es
+hacia qué lado se fue. El ancho de dibujo se deriva del ancho del sprite
+en vez de ser fijo, así esos dos —que son más anchos que altos— salen con
+píxeles del mismo tamaño que los demás y no aplastados.

@@ -127,6 +127,15 @@ func _mostrar(idx: int, t: float) -> void:
 		for j in b["jugadores"]:
 			destino[j["id"]] = j
 
+	var acciones := _acciones_activas(idx)
+	var pa: Dictionary = a["pelota"]
+	var pos_pelota := Vector2(pa["x"], pa["y"])
+	var z: float = float(pa.get("z", 0.0))
+	if b != null and t > 0.0:
+		var pb: Dictionary = b["pelota"]
+		pos_pelota = _mezclar(pos_pelota, Vector2(pb["x"], pb["y"]), t)
+		z = lerpf(z, float(pb.get("z", 0.0)), t)
+
 	var ents: Array = []
 	for j in a["jugadores"]:
 		var p := Vector2(j["x"], j["y"])
@@ -140,20 +149,24 @@ func _mostrar(idx: int, t: float) -> void:
 				if jb["id"] == j["id"]:
 					avance = Vector2(jb["x"], jb["y"]) - Vector2(j["x"], j["y"])
 					break
-		ents.append({
+		# Lo que el jugador HIZO manda sobre lo que se mueve: si está
+		# pateando o tirándose, esa pose gana a la de correr.
+		var pose: String = str(acciones.get(j["id"], ""))
+		if pose.is_empty():
+			pose = _pose(avance, idx)
+		var ent := {
 			"tipo": "jugador", "z": 0.0, "pos": p,
 			"color": color_local if j["equipo_local"] else color_visitante,
 			"direccion": _direccion(avance),
-			"pose": _pose(avance, idx),
-		})
+			"pose": pose,
+		}
+		if pose == SpritesPartido.VUELA:
+			# Se tira hacia donde está la pelota, medido EN PANTALLA: el
+			# sprite del arquero volando es horizontal, así que lo único
+			# que puede expresar es a qué costado se estiró.
+			ent["espejo"] = ProyeccionPartido.direccion_pantalla(pos_pelota - p).x < 0.0
+		ents.append(ent)
 
-	var pa: Dictionary = a["pelota"]
-	var pos_pelota := Vector2(pa["x"], pa["y"])
-	var z: float = float(pa.get("z", 0.0))
-	if b != null and t > 0.0:
-		var pb: Dictionary = b["pelota"]
-		pos_pelota = _mezclar(pos_pelota, Vector2(pb["x"], pb["y"]), t)
-		z = lerpf(z, float(pb.get("z", 0.0)), t)
 	ents.append({"tipo": "pelota", "color": Color.WHITE, "z": z, "pos": pos_pelota})
 
 	vista.entidades = ents
@@ -180,6 +193,39 @@ const VELOCIDAD_CORRIENDO := 1.6
 ## Cada cuántos ticks alterna la zancada. A 4 ticks/seg, 2 ticks es un
 ## paso cada medio segundo: se lee sin marearse.
 const TICKS_POR_ZANCADA := 2
+
+
+## Cuántos ticks se sostiene cada acción. El motor la registra en UN tick
+## (el instante en que patea o se tira), pero un tick son 250 ms: mostrar
+## la pose un solo fotograma la deja como un parpadeo. Tirarse al piso
+## dura más que pegarle a la pelota, y el arquero queda tendido.
+const DURACION_ACCION := {
+	MotorEspacial.ACCION_PATEA: 2,
+	MotorEspacial.ACCION_BARRIDA: 3,
+	MotorEspacial.ACCION_VUELA: 4,
+}
+
+const POSE_DE_ACCION := {
+	MotorEspacial.ACCION_PATEA: SpritesPartido.PATEA,
+	MotorEspacial.ACCION_BARRIDA: SpritesPartido.BARRIDA,
+	MotorEspacial.ACCION_VUELA: SpritesPartido.VUELA,
+}
+
+
+## clave -> pose, para las acciones que siguen vigentes en el fotograma
+## `idx`. Se calcula mirando hacia atrás en vez de guardar estado, así
+## funciona igual reproduciendo, pausando o saltando a cualquier punto.
+func _acciones_activas(idx: int) -> Dictionary:
+	var activas := {}
+	var maximo := 0
+	for d in DURACION_ACCION.values():
+		maximo = maxi(maximo, int(d))
+	for i in range(maxi(0, idx - maximo + 1), idx + 1):
+		for a in fotogramas[i].get("acciones", []):
+			var accion := str(a["accion"])
+			if idx - i < int(DURACION_ACCION.get(accion, 1)):
+				activas[a["clave"]] = POSE_DE_ACCION.get(accion, SpritesPartido.QUIETO)
+	return activas
 
 
 static func _direccion(avance: Vector2) -> int:

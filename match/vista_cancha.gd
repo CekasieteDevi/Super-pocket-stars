@@ -162,11 +162,16 @@ func _dibujar_cuerpo(ent: Dictionary) -> void:
 		draw_texture_rect(_tex_pelota, Rect2(punto - Vector2(d, d) * 0.5, Vector2(d, d)), false)
 		return
 
-	var tex := SpritesPartido.jugador(
-		ent["color"],
-		int(ent.get("direccion", SpritesPartido.ABAJO)),
-		str(ent.get("pose", SpritesPartido.QUIETO)))
-	var ancho := ANCHO_SPRITE_PX * escala
+	var pose := str(ent.get("pose", SpritesPartido.QUIETO))
+	var tex: ImageTexture
+	if pose == SpritesPartido.VUELA:
+		tex = SpritesPartido.arquero_volando(ent["color"], bool(ent.get("espejo", false)))
+	else:
+		tex = SpritesPartido.jugador(ent["color"], int(ent.get("direccion", SpritesPartido.ABAJO)), pose)
+	# El ancho se deriva del ancho del sprite y no es fijo: así el arquero
+	# volando (que es más ancho que alto) se dibuja con píxeles del mismo
+	# tamaño que los demás en vez de aplastado al ancho de un jugador.
+	var ancho := ANCHO_SPRITE_PX * escala * (float(tex.get_width()) / float(SpritesPartido.ANCHO))
 	var alto := ancho * (float(tex.get_height()) / float(tex.get_width()))
 	# El sprite se apoya en el punto: los pies quedan en el piso.
 	draw_texture_rect(tex, Rect2(punto - Vector2(ancho * 0.5, alto), Vector2(ancho, alto)), false)
