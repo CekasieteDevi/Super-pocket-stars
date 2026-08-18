@@ -2004,3 +2004,60 @@ tiempo muerto (`tiro.geometria` 6,9 → 6,2) y quedó en **3,34 goles vs
 También se corrigió el alcance del arquero en el remate, que estimaba con
 la velocidad punta: con rampa eso le daba un alcance que no tiene. Ahora
 usa `_alcance_en`, que integra la rampa desde su velocidad actual.
+
+## 35. Que las interrupciones se VEAN
+
+Tres cosas que seguían pasando en cero tiempo o en el lugar equivocado.
+
+### El arquero se tiraba adentro del arco
+
+El remate le pasaba al arquero el destino CRUDO de la pelota como punto
+al que ir, y para un gol ese destino está 1,2 m adentro de la red. O sea
+que el arquero se metía al arco tratando de tapar. Ahora se le arma su
+propio destino: **toma el costado al que va la pelota, pero su X se queda
+en la línea**. Se tira sobre la línea, que es lo que hace un arquero.
+Medido en 10 partidos: nunca pasa la línea de fondo (lo más adentro que
+llega es 0,70 m por delante).
+
+### La pelota no se veía irse afuera
+
+`_pelota_fuera` cobraba el saque en el mismo tick en que decidía que
+salía, así que el lateral aparecía cobrado sin que nunca se viera salir
+la pelota. Ahora es en dos fases, igual que el remate: la pelota **vuela
+hasta 3 metros más allá de la línea** —frenarla justo sobre la cal no se
+lee como que salió— y el saque se cobra recién cuando cruza. Medido: la
+pelota viaja 6 fotogramas (1,5 s) antes de que se cobre el lateral.
+
+Y el lateral y el saque de arco pasaron a ser interrupciones con pausa,
+como ya lo eran la falta y el córner. El saque de arco además deja de
+teletransportar rivales fuera del área: ahora se les cambia la marca y
+**salen caminando** durante la pausa.
+
+### Los delanteros se pegaban al arquero
+
+`_perseguidores` mandaba a los dos rivales más cercanos directamente a la
+pelota, siempre. Con la pelota en las manos del arquero adentro de su
+área eso son dos delanteros encima suyo, que no pasa nunca en una cancha.
+Ahora, en esa situación puntual, el que sale a presionar **se planta en el
+borde del área** en vez de entrar. Medido: el rival más cercano queda a
+7,9 m de media (el mínimo de 0,7 es la cola: un delantero que ya estaba
+ahí porque acababa de rematar).
+
+### Y un beat de quietud
+
+Toda interrupción arranca con un 40% de sus ticks en que **nadie se
+mueve**. Suena el silbato y el juego se corta en seco; recién después la
+gente se acomoda. Sin eso, el momento en que para el juego no se leía —
+la jugada seguía fluyendo hacia otro lado y parecía que nunca hubo
+interrupción. En el saque del medio, además, la marca de cada jugador se
+resetea a donde quedó parado: si arrastrara la del balón parado anterior,
+los 22 arrancarían caminando hacia la última falta en vez de esperar la
+pelota.
+
+### Balance
+
+Más tiempo muerto otra vez. Goles 3,18 contra 3,26 del abstracto, y las
+amarillas volvieron a caer con los quites (`chequeos_tarjeta_por_quite`
+29 → 31, quedan 3,26 vs 3,17). Es la tercera vez que hay que ajustar ese
+número por lo mismo, y va a pasar de nuevo cada vez que cambie cuánto
+tiempo la pelota está en juego.
