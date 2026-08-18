@@ -1690,3 +1690,96 @@ arriba a la derecha y la pantalla es toda cancha, que es el punto.
 Se borraron `ui/partido_visual.gd`, `ui/cancha.gd` y `ui/pixel_art.gd`,
 que quedaron sin usar. La única referencia que sobrevivía era un
 comentario en `sprites_partido.gd`.
+
+## 30. Los tres rasgos que el motor espacial desbloqueó
+
+De los ~30 rasgos de personalidad quedaban 5 sin conectar por falta de
+un sistema donde engancharlos. El motor espacial dio ese sistema para
+tres. Siguen sin conectar **Adaptable** (no hay penalización de "fuera de
+posición" que cancelar) y **Madrugador** (no hay noción de calendario
+denso ni de días entre partidos).
+
+### Enfocado — no se va en offside
+
+Corrige **dos cosas distintas**, y hace falta que sean dos:
+
+1. **Dónde se para.** El margen de error al medir el desmarque se
+   multiplica por 0,2.
+2. **Cuándo arranca.** Al juzgar la infracción se le dan 1,6 m de gracia.
+
+Con solo lo primero el rasgo casi no se notaba: 0,86 → 0,79 offsides por
+partido, un 8%. La razón es que el offside no lo causa solo el mal
+posicionamiento — la línea defensiva SE MUEVE, y un delantero puede
+quedar pasado sin haberse movido él. Contra la trampa del offside,
+pararse mejor no alcanza.
+
+La tolerancia no es hacer trampa con el reglamento. El motor juzga la
+posición en el tick del pase, o sea con 0,25 s de grano, y un desmarque
+bien cronometrado es exactamente lo que pasa DENTRO de ese cuarto de
+segundo: arranca habilitado y para cuando la pelota sale ya está pasando.
+Esa sincronización es lo que el rasgo describe y es lo único que la
+resolución del tick no puede representar sola.
+
+Medido, 300 partidos: **0,74 → 0,37 offsides por partido** (la mitad),
+goles 2,00 → 2,03 (sin cambios). Es un rasgo de no perder la pelota, no
+de convertir más.
+
+### Metódico — juega al libro
+
+Baja la temperatura del softmax: menos temperatura = elige más seguido la
+opción de mayor utilidad en vez de probar cosas. Va sobre el valor ya
+calculado y no sobre la base, así también le come parte del nerviosismo
+por presión, que es justamente lo que se supone que hace ser metódico.
+
+**Hubo que calibrarlo con cuidado y el motivo es interesante.** Con
+factor 0,6 el rasgo valía **+0,43 goles por partido** — un 25% más, un
+disparate para un rasgo común (~8% del pool). Eso no es un bug del rasgo:
+es que la temperatura existe para dar variedad y, con la función de
+utilidad ya afinada, explorar es un costo neto. Cualquier cosa que
+reduzca la exploración es un buff. La sensibilidad además es muy alta:
+0,85 → +0,00, 0,80 → +0,11, 0,75 → +0,34. Quedó en **0,80**: un rasgo de
+estilo con un plus chico, no de poder. Se ve en la mezcla de decisiones
+(conducir +1,8 pts, pase −2,2, tiro +0,8).
+
+### Pie preferido — le cuesta el lado malo
+
+Tiene **dos mitades y las dos hacen falta**:
+
+1. **Sesgo de decisión**: la utilidad de jugar hacia su lado malo baja
+   proporcionalmente a cuánto cruza (hasta −0,25).
+2. **Penalización de ejecución**: si igual la juega, sale peor — el pase
+   más lento y más fácil de leer, el remate con menos atributo efectivo
+   (×0,80 en el cruce total).
+
+Con solo la primera mitad el rasgo **no costaba nada**: medido, esquivar
+el lado malo hasta le mejoraba el rendimiento (+0,07 goles). Y un rasgo
+negativo que no se paga no es un rasgo. Es la excepción a la regla de
+§4.1 —"las personalidades son sesgos de decisión, no porcentajes
+sueltos"— y tiene que serlo: el sesgo modela que la EVITA, pero lo que
+hace negativo al rasgo es que cuando no le queda otra, la pega peor.
+
+Medido, 300 partidos: **2,00 → 1,85 goles por partido**.
+
+El lado bueno se mide contra el eje transversal de la cancha orientado al
+ataque, que es la única referencia estable que hay: el motor no modela
+hacia dónde mira el cuerpo. Una consecuencia linda y gratis: un diestro
+abierto por la izquierda tiene el arco hacia su derecha, o sea del lado
+bueno — el rasgo castiga la posición incómoda, no la banda, que es como
+funciona de verdad.
+
+**El pie sale del id del jugador**, no de un campo: no existe `pie` en el
+jugador y derivarlo del id lo hace estable entre partidos y entre
+guardados (un zurdo lo es siempre), sin migración de saves. Uno de cada
+cuatro, que es la proporción real. `Personalidad.pie_preferido` lee un
+campo `pie` si algún día existe, así que reemplazarlo es cambiar una
+función.
+
+### Sobre medir esto
+
+El efecto que se busca y la banda de ruido tienen el mismo tamaño. Con
+120 partidos la banda es ~±0,2 goles y con 300 baja a ~±0,13, así que
+todo lo de arriba está medido a 300. Y ojo con una trampa: **cambiar el
+motor mueve también el brazo de control**, porque los planteles generados
+naturalmente ya traen ~3,5% de jugadores con Pie preferido, y en una
+simulación caótica alcanza con que uno pegue un pase más lento para que
+el partido entero diverja. El control no es un valor fijo entre corridas.

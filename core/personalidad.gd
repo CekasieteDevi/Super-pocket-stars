@@ -12,13 +12,15 @@ extends RefCounted
 ## una" para las comunes y dejan las fuertes genuinamente raras, que es
 ## la intención explícita del texto ("raras").
 ##
-## De los ~30 rasgos, quedan sin conectar 5 que piden un sistema que el
-## motor todavía no tiene en absoluto: Enfocado (no hay offside modelado),
-## Adaptable (no hay penalización de "fuera de posición" que cancelar),
-## Metódico (no hay variación de consistencia por duelo — no existe un
-## "forma del día" por JUGADOR, solo por equipo), Madrugador (no hay
-## noción de calendario denso/días entre partidos en el motor), Pie
-## preferido (no se modela pierna dominante por acción). El resto ya
+## De los ~30 rasgos quedan sin conectar 2, que piden un sistema que el
+## motor todavía no tiene en absoluto: Adaptable (no hay penalización de
+## "fuera de posición" que cancelar) y Madrugador (no hay noción de
+## calendario denso ni de días entre partidos). Los otros tres que
+## estaban pendientes los desbloqueó el motor espacial y ya están
+## conectados: Enfocado (mide mejor el desmarque y casi no se va en
+## offside), Metódico (baja la temperatura del softmax — juega al libro y
+## no improvisa) y Pie preferido (le baja las ganas de jugar hacia su
+## lado malo), los tres en core/motor_espacial.gd. El resto ya
 ## engancha en algún lado real: bloque D del duelo (modificador_partido —
 ## incluye Protagonista, Dependiente e Impuntual), penales (bonus_penal,
 ## ver Penales.gd), tarjetas (factor_amarilla/factor_roja, ver
@@ -65,6 +67,22 @@ static func generar(rng: RandomNumberGenerator) -> Dictionary:
 static func tiene(jugador: Dictionary, nombre: String) -> bool:
 	var p: Dictionary = jugador.get("personalidades", {})
 	return p.get("positiva", "") == nombre or p.get("negativa", "") == nombre
+
+
+## +1 diestro, −1 zurdo. Lo usa el rasgo Pie preferido para saber cuál es
+## el lado malo (ver MotorEspacial._aplicar_pie_preferido).
+##
+## Todavía no existe un campo `pie` en el jugador, así que se deriva del
+## id: es estable entre partidos y entre guardados, o sea que un zurdo lo
+## es siempre y no cambia de pie de un tick al otro. Uno de cada cuatro,
+## que es aproximadamente la proporción real. Si algún día se genera un
+## `pie` de verdad, esta función lo lee primero y no hay nada más que
+## tocar.
+static func pie_preferido(jugador: Dictionary) -> int:
+	var pie := str(jugador.get("pie", ""))
+	if pie != "":
+		return -1 if pie == "izquierda" else 1
+	return -1 if int(jugador.get("id", 0)) % 4 == 0 else 1
 
 
 ## §7.4/§6: Trabajador +10%, Vago -40% de ganancia en entrenamiento.

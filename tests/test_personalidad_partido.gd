@@ -28,6 +28,9 @@ func _init() -> void:
 	_test_cruza_umbral_rencoroso(rng)
 	_test_tirar_multa_impuntual(rng)
 	_test_comodon_congela_el_crecimiento(rng)
+	_test_metodico_baja_la_temperatura(rng)
+	_test_pie_preferido_castiga_el_lado_malo(rng)
+	_test_enfocado_afina_el_desmarque(rng)
 	_test_integracion_tarjetas_usa_el_factor_de_personalidad(rng)
 	_test_integracion_rachas_persisten_y_se_actualizan_jugando_de_verdad(rng)
 
@@ -393,3 +396,138 @@ func _test_integracion_rachas_persisten_y_se_actualizan_jugando_de_verdad(rng: R
 		print("FALLA: titular=%d banco=%d titular_cargado=%s" % [
 			titular.get("partidos_seguidos_titular", -1), suplente.get("partidos_seguidos_banco", -1), titular_cargado.get("partidos_seguidos_titular", "?")
 		])
+
+
+# ---------------------------------------------------------------------------
+# Los tres rasgos que desbloqueo el motor espacial (ver docs/motor_espacial.md)
+# ---------------------------------------------------------------------------
+
+## Metodico juega al libro: menos temperatura en el softmax = elige mas
+## seguido la opcion de mayor utilidad en vez de probar cosas.
+func _test_metodico_baja_la_temperatura(rng: RandomNumberGenerator) -> void:
+	print("
+=== Metodico baja la temperatura del softmax ===")
+	var equipo := Team.generar("ClubT", rng, 60)
+	var jugador: Dictionary = equipo.jugadores[5].duplicate(true)
+	jugador["personalidades"] = {}
+	var t_normal := MotorEspacial.temperatura(jugador, 0.4)
+	jugador["personalidades"] = {"positiva": "Metodico", "negativa": ""}
+	var t_metodico := MotorEspacial.temperatura(jugador, 0.4)
+
+	# Tambien tiene que comerse parte del nerviosismo por presion: bajo
+	# presion alta la brecha entre los dos crece, no se mantiene igual.
+	jugador["personalidades"] = {}
+	var t_normal_presion := MotorEspacial.temperatura(jugador, 1.0)
+	jugador["personalidades"] = {"positiva": "Metodico", "negativa": ""}
+	var t_metodico_presion := MotorEspacial.temperatura(jugador, 1.0)
+
+	var ok: bool = t_metodico < t_normal
+	ok = ok and (t_normal_presion - t_metodico_presion) > (t_normal - t_metodico)
+
+	if ok:
+		print("OK: temperatura %.3f -> %.3f (presion baja), %.3f -> %.3f (presion alta)." % [
+			t_normal, t_metodico, t_normal_presion, t_metodico_presion])
+	else:
+		print("FALLA: %.3f/%.3f y %.3f/%.3f" % [
+			t_normal, t_metodico, t_normal_presion, t_metodico_presion])
+
+
+## Pie preferido le baja las GANAS de jugar hacia su lado malo, no la
+## calidad: dos opciones identicas salvo por el lado quedan con distinta
+## utilidad, y la del lado bueno no se toca.
+func _test_pie_preferido_castiga_el_lado_malo(rng: RandomNumberGenerator) -> void:
+	print("
+=== Pie preferido castiga las jugadas hacia el lado malo ===")
+	var local := Team.generar("ClubP", rng, 60)
+	var visita := Team.generar("RivalP", rng, 60)
+	local.reset_partido()
+	visita.reset_partido()
+	local.local = true
+	visita.local = false
+	var estado := MotorEspacial.crear_estado(local, visita, rng)
+	MotorEspacial._armar_jugadores(local, true, estado)
+	MotorEspacial._armar_jugadores(visita, false, estado)
+
+	# Un poseedor en el medio, y dos companeros espejados en y: la unica
+	# diferencia entre las dos opciones es hacia que lado va la pelota.
+	var claves: Array = estado["jugadores"].keys()
+	var poseedor: Dictionary = {}
+	var arriba: Dictionary = {}
+	var abajo: Dictionary = {}
+	for c in claves:
+		var e: Dictionary = estado["jugadores"][c]
+		if not e["equipo_local"] or e["rol"] == "ARQ":
+			continue
+		if poseedor.is_empty():
+			poseedor = e
+		elif arriba.is_empty():
+			arriba = e
+		elif abajo.is_empty():
+			abajo = e
+	poseedor["pos"] = Vector2(0.0, 0.0)
+	arriba["pos"] = Vector2(10.0, -12.0)
+	abajo["pos"] = Vector2(10.0, 12.0)
+
+	var jugador := MotorEspacial._dict_jugador(estado, local, poseedor["jugador_id"])
+	jugador["personalidades"] = {}
+	var sin_rasgo := _utilidades_por_objetivo(estado, poseedor, jugador)
+	jugador["personalidades"] = {"positiva": "", "negativa": "Pie preferido"}
+	var con_rasgo := _utilidades_por_objetivo(estado, poseedor, jugador)
+
+	var pie := Personalidad.pie_preferido(jugador)
+	# El poseedor es local (ataca hacia +x), asi que el lado "y positivo"
+	# es el mismo signo que devuelve pie_preferido.
+	var clave_buena: int = abajo["clave"] if pie > 0 else arriba["clave"]
+	var clave_mala: int = arriba["clave"] if pie > 0 else abajo["clave"]
+
+	var ok: bool = con_rasgo.has(clave_mala) and sin_rasgo.has(clave_mala)
+	ok = ok and con_rasgo[clave_mala] < sin_rasgo[clave_mala]
+	ok = ok and is_equal_approx(con_rasgo.get(clave_buena, 0.0), sin_rasgo.get(clave_buena, 0.0))
+
+	if ok:
+		print("OK: lado malo %.3f -> %.3f, lado bueno sin cambios (%.3f)." % [
+			sin_rasgo[clave_mala], con_rasgo[clave_mala], con_rasgo[clave_buena]])
+	else:
+		print("FALLA: malo %s->%s bueno %s->%s" % [
+			sin_rasgo.get(clave_mala), con_rasgo.get(clave_mala),
+			sin_rasgo.get(clave_buena), con_rasgo.get(clave_buena)])
+
+
+func _utilidades_por_objetivo(estado: Dictionary, poseedor: Dictionary, jugador: Dictionary) -> Dictionary:
+	var out := {}
+	for o in MotorEspacial.evaluar_opciones(estado, poseedor, jugador):
+		if str(o["tipo"]) == "pase" and o.has("objetivo_id"):
+			out[int(o["objetivo_id"])] = float(o["utilidad"])
+	return out
+
+
+## Enfocado corrige dos cosas: donde se para (margen) y cuando arranca el
+## desmarque (tolerancia al juzgar la infraccion).
+func _test_enfocado_afina_el_desmarque(rng: RandomNumberGenerator) -> void:
+	print("
+=== Enfocado afina el desmarque ===")
+	var local := Team.generar("ClubE", rng, 60)
+	var visita := Team.generar("RivalE", rng, 60)
+	local.reset_partido()
+	visita.reset_partido()
+	for j in local.jugadores_en_cancha():
+		j["personalidades"] = {"positiva": "Enfocado", "negativa": ""}
+	var estado := MotorEspacial.crear_estado(local, visita, rng)
+	MotorEspacial._armar_jugadores(local, true, estado)
+	MotorEspacial._armar_jugadores(visita, false, estado)
+
+	var con_margen := 0
+	var sin_margen := 0
+	for c in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][c]
+		if is_equal_approx(float(e["margen_offside"]), MotorEspacial.FACTOR_OFFSIDE_ENFOCADO) 				and is_equal_approx(float(e["tolerancia_offside"]), MotorEspacial.TOLERANCIA_OFFSIDE_ENFOCADO):
+			con_margen += 1
+		elif is_equal_approx(float(e["margen_offside"]), 1.0) 				and is_equal_approx(float(e["tolerancia_offside"]), 0.0):
+			sin_margen += 1
+
+	var ok: bool = con_margen == 11 and sin_margen == 11
+	if ok:
+		print("OK: los 11 con el rasgo llevan margen %.2f y tolerancia %.1f m; los 11 rivales, ninguna." % [
+			MotorEspacial.FACTOR_OFFSIDE_ENFOCADO, MotorEspacial.TOLERANCIA_OFFSIDE_ENFOCADO])
+	else:
+		print("FALLA: con=%d sin=%d (se esperaban 11 y 11)" % [con_margen, sin_margen])

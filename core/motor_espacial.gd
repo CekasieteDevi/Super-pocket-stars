@@ -96,6 +96,17 @@ const ROLES_QUE_REPLIEGAN := ["DFC", "LAT", "MC"]
 ## (ver _objetivo_sin_pelota), que es de donde salen los goles.
 const ROLES_QUE_ATACAN := ["MCO", "EXT", "DC"]
 
+## Cuánto le achica el margen de error de desmarque el rasgo Enfocado.
+## No es cero: hasta el delantero más atento se va alguna vez, y ponerlo
+## en cero convertiría al rasgo en una inmunidad, que no es lo que dice
+## el GDD.
+const FACTOR_OFFSIDE_ENFOCADO := 0.2
+
+## Metros de gracia al juzgar la infracción para el que tiene Enfocado.
+## Ver el comentario en _lanzar_pase: es el desmarque cronometrado que no
+## entra en un tick de 0,25 s, no una excepción al reglamento.
+const TOLERANCIA_OFFSIDE_ENFOCADO := 1.6
+
 ## estado["jugadores"] se indexa por CLAVE, no por jugador_id: los ids de
 ## jugador son únicos dentro de un club pero NO entre clubes (los dos
 ## equipos de un partido pueden tener un jugador con id 0), así que
@@ -253,6 +264,14 @@ static func _armar_jugadores(equipo: Team, es_local: bool, estado: Dictionary) -
 			# Se copia acá para no tener que buscar el dict del jugador en
 			# cada tick solo para medir el desmarque (ver offside).
 			"inteligencia": float(j["atributos"]["inteligencia"]),
+			# Enfocado (§6): "no se va en offside". No se modela como
+			# inteligencia extra —eso le mejoraría también la lectura del
+			# pase— sino como un factor propio sobre el margen de error al
+			# medir el desmarque.
+			# Enfocado corrige DOS cosas distintas: dónde se para (margen)
+			# y cuándo arranca el desmarque (tolerancia).
+			"margen_offside": FACTOR_OFFSIDE_ENFOCADO if Personalidad.tiene(j, "Enfocado") else 1.0,
+			"tolerancia_offside": TOLERANCIA_OFFSIDE_ENFOCADO if Personalidad.tiene(j, "Enfocado") else 0.0,
 		}
 
 
@@ -564,7 +583,84 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 			"detalle": {"progreso": progreso_hueco, "riesgo": riesgo_hueco, "dist": dist_hueco},
 		})
 
+	_aplicar_pie_preferido(estado, opciones, poseedor, jugador, es_local,
+		float(sesgos["pie_preferido_penalizacion"]))
 	return opciones
+
+
+## Adónde va la pelota si elige esta opción, o null si la opción no manda
+## la pelota a ningún lado concreto (conducir, gambeta, despeje).
+static func _destino_de_opcion(estado: Dictionary, opcion: Dictionary, es_local: bool):
+	var tipo := str(opcion["tipo"])
+	if tipo == "tiro":
+		return arco_rival(es_local)
+	# El pase al hueco NO va a los pies del compañero sino al espacio por
+	# delante, así que ahí manda el punto; en la pared, en cambio, `punto`
+	# es adónde sale a correr ÉL y la pelota va al compañero.
+	if tipo == "pase_hueco" and opcion.has("punto"):
+		return opcion["punto"]
+	if opcion.has("objetivo_id") and estado["jugadores"].has(int(opcion["objetivo_id"])):
+		return estado["jugadores"][int(opcion["objetivo_id"])]["pos"]
+	return null
+
+
+## Pie preferido (§6): le cuesta jugar hacia el lado de su pie malo.
+##
+## Baja las GANAS, no la calidad de ejecución: es un sesgo de decisión
+## como el resto de los rasgos que toca este motor (ver §4.1 del doc). Un
+## diestro con el rasgo se la juega menos veces hacia su izquierda; si
+## igual la juega, la pega tan bien como siempre.
+##
+## Se mide contra el eje transversal de la cancha orientado al ataque,
+## que es la única referencia estable disponible: el motor no modela
+## hacia dónde mira el cuerpo, así que "a su izquierda" tiene que salir
+## del sentido en que ataca su equipo. Y se RESTA en vez de multiplicar
+## porque las utilidades pueden ser negativas, y multiplicar una utilidad
+## negativa por un factor menor a 1 la MEJORA.
+## Cuánto de su lado malo tiene jugar hacia `destino`: 0 si va hacia su
+## pie bueno, hasta 1 si cruza del todo hacia el malo. Devuelve 0 para
+## cualquiera que no tenga el rasgo, así el resto del motor no paga nada
+## por consultarlo.
+##
+## Se mide contra el eje transversal de la cancha orientado al ataque,
+## que es la única referencia estable disponible: el motor no modela
+## hacia dónde mira el cuerpo, así que "a su izquierda" tiene que salir
+## del sentido en que ataca su equipo.
+static func _cruce_al_pie_malo(jugador: Dictionary, desde: Vector2, destino: Vector2, es_local: bool) -> float:
+	if not Personalidad.tiene(jugador, "Pie preferido"):
+		return 0.0
+	var d: Vector2 = destino - desde
+	if d.length_squared() < 0.01:
+		return 0.0
+	var lateral: float = d.normalized().y * (1.0 if es_local else -1.0)
+	if lateral * float(Personalidad.pie_preferido(jugador)) >= 0.0:
+		return 0.0
+	return absf(lateral)
+
+
+## Cuánto le rinde el atributo técnico en una acción hacia `destino`. Es
+## la CONTRACARA del sesgo de decisión: el jugador evita jugar hacia su
+## lado malo, pero cuando no le queda otra, además la pega peor. Sin esta
+## mitad el rasgo no costaba nada —esquivar el lado malo hasta le mejoraba
+## el juego— y un rasgo negativo que no se paga no es un rasgo.
+static func factor_pie(jugador: Dictionary, desde: Vector2, destino: Vector2, es_local: bool) -> float:
+	var cruce := _cruce_al_pie_malo(jugador, desde, destino, es_local)
+	if cruce <= 0.0:
+		return 1.0
+	return lerpf(1.0, float(pesos()["sesgos_personalidad"]["pie_preferido_ejecucion"]), cruce)
+
+
+static func _aplicar_pie_preferido(estado: Dictionary, opciones: Array, poseedor: Dictionary,
+		jugador: Dictionary, es_local: bool, penalizacion: float) -> void:
+	if not Personalidad.tiene(jugador, "Pie preferido"):
+		return
+	for o in opciones:
+		var destino = _destino_de_opcion(estado, o, es_local)
+		if destino == null:
+			continue
+		var cruce := _cruce_al_pie_malo(jugador, poseedor["pos"], destino, es_local)
+		if cruce > 0.0:
+			o["utilidad"] -= penalizacion * cruce
 
 
 ## ¿A quién tiene enfrente para encarar? El rival más cercano que esté
@@ -775,6 +871,14 @@ static func temperatura(jugador: Dictionary, presion: float) -> float:
 		- float(t["k_vision"]) * (float(attrs["vision"]) / 100.0) \
 		- float(t["k_inteligencia"]) * (float(attrs["inteligencia"]) / 100.0) \
 		+ float(t["k_presion"]) * presion
+	# Metódico (§6): juega al libro. Con menos temperatura el softmax se
+	# vuelve más determinista, o sea elige casi siempre la opción de mayor
+	# utilidad en vez de probar cosas. Va sobre el valor ya calculado y no
+	# sobre la base, así el rasgo también le come parte del nerviosismo
+	# por presión — que es justamente lo que se supone que hace ser
+	# metódico.
+	if Personalidad.tiene(jugador, "Metodico"):
+		valor *= float(t["factor_metodico"])
 	return clampf(valor, float(t["min"]), float(t["max"]))
 
 
@@ -864,7 +968,7 @@ static func _objetivo_sin_pelota(estado: Dictionary, e: Dictionary, equipo: Team
 		# offsides — con un "siempre un metro detrás" fijo, nadie se iba
 		# nunca y la infracción no ocurría jamás.
 		var intel: float = clampf(float(e.get("inteligencia", 50.0)) / 100.0, 0.0, 1.0)
-		var offset: float = lerpf(float(f["offside_margen_torpe"]), -1.5, intel)
+		var offset: float = lerpf(float(f["offside_margen_torpe"]), -1.5, intel) * float(e.get("margen_offside", 1.0))
 		if e["equipo_local"]:
 			objetivo_x = maxf(objetivo_x, float(linea_ataque["local"]) + offset)
 		else:
@@ -882,7 +986,8 @@ static func _objetivo_sin_pelota(estado: Dictionary, e: Dictionary, equipo: Team
 		# se queda al filo, uno limitado se pasa. Sin este margen nadie se
 		# iba nunca en offside y la infracción no existiría en la práctica.
 		var margen: float = float(f["offside_margen_torpe"]) \
-			* (1.0 - clampf(float(e.get("inteligencia", 50.0)) / 100.0, 0.0, 1.0))
+			* (1.0 - clampf(float(e.get("inteligencia", 50.0)) / 100.0, 0.0, 1.0)) \
+			* float(e.get("margen_offside", 1.0))
 		if e["equipo_local"]:
 			objetivo_x = minf(objetivo_x, float(linea["local"]) + margen)
 		else:
@@ -1033,7 +1138,13 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	# está parado el que remata. Calibrado contra un partido real: ~35% de
 	# los remates van al arco, y de esos entra ~1 de cada 3.
 	var r: Dictionary = pesos()["tiro_resolucion"]
-	var calidad: float = float(jugador["atributos"][attr_remate]) / 100.0 * float(r["peso_atributo"]) + geo * float(r["peso_geometria"])
+	# Pie preferido: rematar cruzando hacia su lado malo le sale peor. Un
+	# diestro abierto por la izquierda tiene el arco hacia su derecha, o
+	# sea del lado bueno — el rasgo castiga la posición incómoda, no la
+	# banda, que es como funciona de verdad.
+	var f_pie := factor_pie(jugador, poseedor["pos"], arco_rival(es_local), es_local)
+	var remate_efectivo: float = float(jugador["atributos"][attr_remate]) * f_pie
+	var calidad: float = remate_efectivo / 100.0 * float(r["peso_atributo"]) + geo * float(r["peso_geometria"])
 	var chance_porteria: float = clampf(float(r["porteria_base"]) + calidad * float(r["porteria_calidad"]), 0.05, 0.85)
 	var chance_palo: float = float(r["palo"]) * calidad
 	var roll := rng.randf()
@@ -1063,7 +1174,7 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	var arquero := eq_d.arquero()
 	var arq_attrs: Dictionary = arquero["atributos"]
 	var arquero_valor: float = arq_attrs["reflejos"] * 0.5 + arq_attrs["estirada"] * 0.3 + arq_attrs["agarre"] * 0.2
-	var tiro_efectivo: float = float(jugador["atributos"][attr_remate]) * (float(r["fuerza_base"]) + (1.0 - float(r["fuerza_base"])) * geo)
+	var tiro_efectivo: float = remate_efectivo * (float(r["fuerza_base"]) + (1.0 - float(r["fuerza_base"])) * geo)
 	var ata := Duel.atributo_efectivo(tiro_efectivo, "tecnico", eq_a.resistencia_pct(jugador["id"]))
 	var def := Duel.atributo_efectivo(arquero_valor, "tecnico", eq_d.resistencia_pct(arquero["id"]))
 	var res := Duel.resolver(ata, def,
@@ -1398,8 +1509,11 @@ static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: i
 	# flojo tarda más en llegar y le da tiempo al rival a meterse. En el
 	# arquero el atributo que manda es el suyo (pies/golpe), no `pases`.
 	var attr := "fuerza" if es_pelotazo else atributo_pase(jugador, poseedor["pos"].distance_to(objetivo))
-	pelota["vel"] = dir * _por_atributo(jugador, attr, f["vel_pase_min"], f["vel_pase_max"])
-	pelota["pases_pasador"] = float(jugador["atributos"][attr])
+	# Pie preferido: si la juega hacia su lado malo, le sale peor — pelota
+	# más lenta y más fácil de leer para el que va a cortarla.
+	var f_pie := factor_pie(jugador, poseedor["pos"], objetivo, poseedor["equipo_local"])
+	pelota["vel"] = dir * _por_atributo(jugador, attr, f["vel_pase_min"], f["vel_pase_max"]) * f_pie
+	pelota["pases_pasador"] = float(jugador["atributos"][attr]) * f_pie
 	pelota["attr_pasador"] = attr
 	pelota["pasador_id"] = int(jugador["id"])
 	pelota["destino_pos"] = objetivo
@@ -1416,10 +1530,18 @@ static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: i
 	var adelantado := false
 	if e_dest["rol"] != "ARQ":
 		var linea: Dictionary = estado["linea_offside"]
+		# La tolerancia no es hacer trampa con el reglamento: el motor
+		# juzga la posición en el tick del pase, o sea con 0,25 s de
+		# grano, y un desmarque bien cronometrado es exactamente lo que
+		# pasa DENTRO de ese cuarto de segundo — arranca habilitado y para
+		# cuando la pelota sale ya está pasando. Esa sincronización es lo
+		# que el rasgo Enfocado describe y es lo único que la resolución
+		# del tick no puede representar sola.
+		var tol: float = 0.2 + float(e_dest.get("tolerancia_offside", 0.0))
 		if poseedor["equipo_local"]:
-			adelantado = e_dest["pos"].x > float(linea["local"]) + 0.2
+			adelantado = e_dest["pos"].x > float(linea["local"]) + tol
 		else:
-			adelantado = e_dest["pos"].x < float(linea["away"]) - 0.2
+			adelantado = e_dest["pos"].x < float(linea["away"]) - tol
 	pelota["offside"] = adelantado
 
 
