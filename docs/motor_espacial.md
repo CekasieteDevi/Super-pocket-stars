@@ -2109,3 +2109,32 @@ tocar nada.
 
 Paridad final contra el motor abstracto, 200 partidos: goles 3,24 vs
 3,26, amarillas 3,28 vs 3,17, rojas 0,52 vs 0,61.
+
+## 37. Medir la paridad en la liga de verdad
+
+Toda la calibración de este motor se hizo contra `Team.generar` suelto, y
+está bien para comparar cambio contra cambio. Pero no reproduce los
+planteles que arma la pirámide ni el reparto de niveles de una liga real,
+así que no contesta la pregunta que importa: **jugando de verdad, ¿mis
+partidos tienen más goles que los del resto de la liga?** Si los tuvieran,
+la economía, los objetivos y los fans quedarían mal calibrados solo para
+el jugador, que es el único cuyos partidos usa este motor.
+
+`tests/_diag_paridad_liga.gd` juega temporadas completas de la pirámide
+real en tres divisiones distintas y compara los partidos del equipo
+seguido (MotorEspacial) contra el resto de la liga (MatchEngine), sacando
+los goles del resto de la tabla:
+
+| División | Mis partidos | Resto de la liga |
+|---|---|---|
+| 10 | 3,05 | 3,48 |
+| 5 | 3,41 | 3,01 |
+| 1 | 3,00 | 3,15 |
+
+Sin sesgo sistemático: 3,15 contra 3,21 en promedio, y el signo cambia
+según la división. La dispersión por división es esperable — de mis
+partidos hay ~150 por punto y del resto diez veces más.
+
+**Y una advertencia para no volver a asustarse**: tres partidos sueltos
+no dicen nada. Tres pruebas de humo seguidas dieron 4, 9 y 8 goles con
+una media real de 3,2. La cola de esta distribución es larga.
