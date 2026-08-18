@@ -21,6 +21,12 @@ const SALTO_MAXIMO_M := 12.0
 
 var vista: VistaCancha
 var minimapa: Minimapa
+var hud: HudPartido
+
+## clave del motor -> "MC Pérez". El fotograma trae la clave y el rol pero
+## NO el apellido, así que la tabla la arma quien conoce los planteles
+## (ver construir_nombres).
+var nombres: Dictionary = {}
 
 var fotogramas: Array = []
 var posicion := 0.0
@@ -39,14 +45,40 @@ func _ready() -> void:
 	add_child(vista)
 	minimapa = Minimapa.new()
 	add_child(minimapa)
+	hud = HudPartido.new()
+	add_child(hud)
+	hud.velocidad_pedida.connect(func(v: float): velocidad = v)
+	hud.pausa_pedida.connect(func():
+		pausado = not pausado
+		hud.marcar_pausa(pausado))
+	hud.saltar_pedido.connect(saltar_al_final)
 	set_process(true)
 
 
-func iniciar(lista: Array, c_local: Color, c_visitante: Color, estado_cancha: String = "regular") -> void:
+## Tabla clave -> "ROL Apellido" para el cartel de quién tiene la pelota.
+## Se arma acá y no en el motor porque es un dato de presentación: el motor
+## no tiene por qué saber que alguien va a mostrar apellidos.
+static func construir_nombres(local: Team, visitante: Team) -> Dictionary:
+	var tabla := {}
+	for par in [[local, true], [visitante, false]]:
+		var equipo: Team = par[0]
+		for j in equipo.todos_los_jugadores():
+			tabla[MotorEspacial.clave_de(j["id"], par[1])] = "%s %s" % [j["posicion"], j["apellido"]]
+	return tabla
+
+
+func iniciar(lista: Array, c_local: Color, c_visitante: Color,
+		nombre_local: String = "", nombre_visitante: String = "",
+		tabla_nombres: Dictionary = {}, estado_cancha: String = "regular") -> void:
 	fotogramas = lista
 	color_local = c_local
 	color_visitante = c_visitante
+	nombres = tabla_nombres
 	vista.estado_cancha = estado_cancha
+	hud.nombre_local = nombre_local
+	hud.nombre_visitante = nombre_visitante
+	hud.color_local = c_local
+	hud.color_visitante = c_visitante
 	posicion = 0.0
 	pausado = false
 	_terminado = false
@@ -121,6 +153,14 @@ func _mostrar(idx: int, t: float) -> void:
 	minimapa.entidades = ents
 	minimapa.encuadre = vista.camara.encuadre_metros(size)
 	minimapa.queue_redraw()
+
+	var g: Dictionary = a["goles"]
+	hud.goles_local = int(g["home"])
+	hud.goles_visitante = int(g["away"])
+	hud.minuto = int(a["minuto"])
+	var poseedor_id := int(pa.get("poseedor_id", -1))
+	hud.poseedor = str(nombres.get(poseedor_id, "")) if poseedor_id != -1 else ""
+	hud.queue_redraw()
 
 
 static func _mezclar(a: Vector2, b: Vector2, t: float) -> Vector2:
