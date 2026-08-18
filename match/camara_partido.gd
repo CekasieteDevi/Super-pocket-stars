@@ -28,8 +28,12 @@ const ANTICIPACION := 0.45
 const SUAVIZADO := 3.2
 const SUAVIZADO_ZOOM := 2.5
 
-## Margen de cancha que sí se puede mostrar: da aire para las tribunas.
-const MARGEN_M := 2.0
+## Margen fuera de la línea de cal que sí se puede mostrar. Estaba en 2 m
+## cuando afuera de la cancha no había nada y asomarse mostraba un vacío
+## negro; ahora que hay pista, muro y tribunas, dejar ver 12 m es lo que
+## pone al partido adentro de un estadio en vez de sobre un rectángulo
+## verde flotando.
+const MARGEN_M := 12.0
 
 var centro := Vector2.ZERO
 var px_por_metro := PX_POR_METRO_BASE

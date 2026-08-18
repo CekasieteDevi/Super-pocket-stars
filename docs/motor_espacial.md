@@ -1556,3 +1556,61 @@ con dos orientaciones alcanza: tirado en el piso lo único que se lee es
 hacia qué lado se fue. El ancho de dibujo se deriva del ancho del sprite
 en vez de ser fijo, así esos dos —que son más anchos que altos— salen con
 píxeles del mismo tamaño que los demás y no aplastados.
+
+## 27. El estadio (etapa 6 de la vista)
+
+Todo el decorado se dibuja como **polígonos proyectados con textura y
+UV**, no como sprites pegados en pantalla: `draw_colored_polygon` con los
+cuatro vértices pasados por `sim_a_pantalla` y los UV derivados del
+tamaño REAL en metros del panel. Consecuencia: la proyección inclina el
+estadio sola, un tile conserva su escala lo use donde lo use, y el día
+que cambien las constantes de `ProyeccionPartido` se mueve todo junto.
+Cuesta cuatro llamadas de dibujo por tribuna, no una por ladrillo.
+
+**Los arcos tienen profundidad de verdad y entran al Y-sort en dos
+pedazos.** La red, el techo, el lateral lejano y el poste de atrás van
+con la profundidad del poste lejano; el lateral cercano, el poste de acá
+y el travesaño, con la del cercano. Así una pelota que entra al arco
+queda por delante de la red pero por detrás del palo cercano, un arquero
+parado en la línea tapa la red, y una pelota que se va desviada pasa por
+detrás de toda la estructura. Un arco dibujado de una sola pieza no
+puede hacer las tres cosas.
+
+**La textura de la cancha sale de `calidad_cancha`**, el mismo número
+−8..+3 del GDD que ya castiga `pases` y `control` en el duelo
+(`EstadoCancha.modificador`). `VistaCancha.estado_desde_calidad` lo parte
+en potrero / regular / híbrido, y cada uno trae su propia aspereza de
+pasto: el potrero es tierra irregular, el híbrido verde parejo. Si la
+cancha complica el juego, ahora se ve que lo complica.
+
+### Tres trampas de la proyección oblicua
+
+**La tribuna tiene que ser mucho más alta que profunda.** La proyección
+aplasta la profundidad a 0,52 y estira la altura a 0,85. Una tribuna de
+20 m de fondo y 14 de alto sube 262 px por altura pero baja 229 px por
+fondo: neta, una franja de 30 px arriba de todo. Con 14 de fondo y 22 de
+alto queda una tribuna. Por lo mismo, la tribuna de ESTE lado no puede
+levantarse: está entre la cámara y la cancha, y si sube más de lo que
+avanza se acuesta sobre el campo y tapa el partido. Va baja, y funciona
+como borde inferior del cuadro.
+
+**Una brizna de pasto no puede medir un tile de alto.** El césped es una
+textura tileada cada 3 m con variación sutil. Darle a cada columna un
+tono propio parece razonable mirando el tile suelto, pero al repetirlo
+las columnas se empalman entre tiles y la cancha sale rayada de punta a
+punta. Las briznas van de tres píxeles.
+
+**El público a escala de píxel es estática de TV.** Con celdas de 0,27 m
+la tribuna se veía como ruido de televisor, y con colores saturados,
+como confeti. Cada hincha ocupa medio metro (unos 5-10 px en pantalla),
+la paleta es chica y apagada, y las tribunas van tinteadas hacia abajo
+—las laterales y la cercana más que la de enfrente— para que el público
+no tire más contraste que los jugadores y el ojo se quede en la pelota.
+
+**El margen de cámara pasó de 2 a 12 metros.** Estaba en 2 porque
+asomarse fuera de la línea de cal mostraba un vacío negro. Ahora que hay
+pista, muro y tribunas, dejar ver 12 m es lo que pone al partido adentro
+de un estadio. Con el zoom de juego la tribuna de enfrente aparece
+cuando la jugada se va contra esa banda y las cabeceras cuando se juega
+en un área: en el mediocampo la cancha ocupa la pantalla entera, que es
+lo que hace una cámara que sigue la pelota de cerca.
