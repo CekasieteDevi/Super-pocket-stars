@@ -1958,3 +1958,49 @@ De paso, un bug de HUD: la columna de velocidades se centraba leyendo
 el valor viejo quedaba mal centrada y el botón "Saltar" terminaba abajo
 de todo, pisando el cartel del poseedor y medio fuera de pantalla. Ahora
 el alto se calcula de la cantidad de botones.
+
+## 34. Aceleración: nadie sale a velocidad punta
+
+Hasta acá `velocidad` decidía todo el movimiento y **`aceleracion` no la
+leía nadie** — solo pesaba en la media del jugador vía
+`position_weights.json`. Y el movimiento era instantáneo: un jugador
+parado pasaba a su velocidad punta en el primer tick.
+
+Ahora cada entidad lleva una **velocidad escalar actual** (`rapidez`) que
+sube `aceleracion` m/s² por segundo hasta su tope. `aceleracion` se
+interpola entre 2,4 y 5,2 m/s², que es el rango real de un futbolista.
+
+| velocidad / aceleración | Punta | Tiempo hasta punta | Cubre en 2 s |
+|---|---|---|---|
+| 20 / 20 | 4,7 m/s | 1,75 s | 5,7 m |
+| 20 / 90 | 4,7 m/s | 1,00 s | **7,2 m** |
+| 90 / 20 | 8,6 m/s | 3,00 s | 5,9 m |
+| 90 / 90 | 8,6 m/s | 2,00 s | **9,7 m** |
+
+Lo interesante es la comparación del medio: **en los primeros dos
+segundos, un lento explosivo (20/90) cubre más terreno que un rápido
+pesado (90/20)**. Ese es exactamente el trade-off que se quería, y es
+donde se define un mano a mano.
+
+**Girar también cuesta.** A 8 m/s no se cambia de sentido sin frenar: la
+velocidad se multiplica por cuánto se parece el rumbo nuevo al viejo, con
+piso en 0,35. Un cambio chico de rumbo casi no paga (el coseno vale ~1),
+pero darse vuelta del todo deja al jugador casi parado — y ahí la
+aceleración vuelve a decidir cuánto tarda en relanzarse.
+
+**Verificado que el atributo hace algo**: dos planteles idénticos salvo
+`aceleracion` (90 contra 20), 300 partidos alternando localía → 1,92
+goles a favor contra 1,52, y 140 partidos ganados contra 91.
+
+### Lo que movió
+
+Defender se volvió más caro (cuesta arrancar y cuesta girar), así que los
+atacantes llegan más cerca: la mediana de remate bajó de 18,5 a 15,8 m y
+los goles se fueron a 3,51 contra los 3,26 del motor abstracto. Se
+devolvió parte de la disposición a rematar que se había subido por el
+tiempo muerto (`tiro.geometria` 6,9 → 6,2) y quedó en **3,34 goles vs
+3,26, amarillas 3,17 vs 3,17**. Rendimiento: 62 → 68 ms por partido.
+
+También se corrigió el alcance del arquero en el remate, que estimaba con
+la velocidad punta: con rampa eso le daba un alcance que no tiene. Ahora
+usa `_alcance_en`, que integra la rampa desde su velocidad actual.

@@ -52,7 +52,7 @@
   },
   "tiro": {
     "base": 0.0,
-    "geometria": 6.9
+    "geometria": 6.2
   },
   "_tiro_resolucion": "Calibrado contra un partido real: ~35% de los remates van al arco y de esos entra alrededor de 1 de cada 3. calidad = tiro*peso_atributo + geometria*peso_geometria.",
   "tiro_resolucion": {
@@ -178,6 +178,9 @@
     "_multiplicador_desgaste": "Cuanto pesa cada duelo en la resistencia. Team.desgastar esta calibrado sobre los ~180 duelos del motor abstracto; este motor resuelve otra cantidad, y con 1.0 los 22 jugadores terminaban en el piso de resistencia antes del entretiempo.",
     "multiplicador_desgaste": 12.0,
     "dist_libre_al_area": 38.0,
-    "vel_remate": 26.0
+    "vel_remate": 26.0,
+    "acel_min": 2.4,
+    "acel_max": 5.2,
+    "freno_giro": 0.35
   }
 }

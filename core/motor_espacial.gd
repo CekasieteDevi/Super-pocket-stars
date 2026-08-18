@@ -270,6 +270,33 @@ static func _vel_max(jugador: Dictionary) -> float:
 	return _por_atributo(jugador, "velocidad", f["vel_min"], f["vel_max"])
 
 
+## Cuántos m/s² gana por segundo. Nadie pasa de parado a su velocidad
+## punta en un tick: hay una rampa, y `aceleracion` es lo que decide cuán
+## corta es. Un jugador de aceleración 90 llega a punta en ~1,7 s y uno de
+## 20 tarda casi el doble, que en los primeros metros —donde se define un
+## mano a mano— es la diferencia entre llegar y no llegar.
+##
+## Hasta ahora `aceleracion` no la leía NADIE: solo pesaba en la media del
+## jugador vía position_weights.json.
+static func _aceleracion(jugador: Dictionary) -> float:
+	var f: Dictionary = pesos()["fisica"]
+	return _por_atributo(jugador, "aceleracion", f["acel_min"], f["acel_max"])
+
+
+## Cuánto terreno cubre desde su velocidad ACTUAL en `segundos`, con la
+## rampa incluida. Lo usa el remate para saber hasta dónde llega el
+## arquero mientras la pelota viaja: con aceleración, estimar con la
+## velocidad punta le daba un alcance que no tiene.
+static func _alcance_en(e: Dictionary, segundos: float) -> float:
+	var v0: float = float(e.get("rapidez", 0.0))
+	var a: float = float(e.get("aceleracion", 3.0))
+	var vmax: float = float(e["vel_max"])
+	var t_rampa: float = maxf(vmax - v0, 0.0) / maxf(a, 0.01)
+	if segundos <= t_rampa:
+		return v0 * segundos + 0.5 * a * segundos * segundos
+	return v0 * t_rampa + 0.5 * a * t_rampa * t_rampa + vmax * (segundos - t_rampa)
+
+
 ## Reparte los 11 de un equipo en los slots de BASE_FORMACION. Si un
 ## equipo viene con una composición rara (más de 2 DFC, por ejemplo,
 ## porque hubo cambios o rojas), los que no entran en ningún slot caen al
@@ -294,6 +321,10 @@ static func _armar_jugadores(equipo: Team, es_local: bool, estado: Dictionary) -
 			"vel": Vector2.ZERO,
 			"objetivo": base,
 			"vel_max": _vel_max(j),
+			"aceleracion": _aceleracion(j),
+			# Velocidad ESCALAR actual. Arranca en cero: nadie sale
+			# lanzado desde el saque del medio.
+			"rapidez": 0.0,
 			# Se copia acá para no tener que buscar el dict del jugador en
 			# cada tick solo para medir el desmarque (ver offside).
 			"inteligencia": float(j["atributos"]["inteligencia"]),
@@ -1062,14 +1093,34 @@ static func _calcular_linea_offside(estado: Dictionary) -> void:
 
 static func _mover_hacia(e: Dictionary, objetivo: Vector2, factor: float = 1.0) -> void:
 	var delta: Vector2 = objetivo - e["pos"]
-	var paso: float = e["vel_max"] * TICK_SEG * factor
-	if delta.length() <= paso:
+	var dist: float = delta.length()
+	if dist < 0.01:
+		e["vel"] = Vector2.ZERO
+		e["rapidez"] = 0.0
+		return
+	var dir: Vector2 = delta / dist
+	var rapidez: float = float(e.get("rapidez", 0.0))
+
+	# Girar cuesta velocidad: a 8 m/s no se cambia de sentido sin frenar.
+	# Un cambio chico de rumbo casi no paga (el coseno vale ~1), pero
+	# darse vuelta del todo deja al jugador casi parado, y ahí la
+	# aceleración vuelve a decidir cuánto tarda en relanzarse.
+	if e["vel"].length_squared() > 0.01:
+		var alineacion: float = dir.dot(e["vel"].normalized())
+		rapidez *= clampf((alineacion + 1.0) * 0.5,
+			float(pesos()["fisica"]["freno_giro"]), 1.0)
+
+	var tope: float = float(e["vel_max"]) * factor
+	rapidez = minf(rapidez + float(e.get("aceleracion", 3.0)) * TICK_SEG, tope)
+	var paso: float = rapidez * TICK_SEG
+	if paso >= dist:
 		e["pos"] = objetivo
 		e["vel"] = Vector2.ZERO
-	else:
-		var dir := delta.normalized()
-		e["pos"] = e["pos"] + dir * paso
-		e["vel"] = dir * e["vel_max"]
+		e["rapidez"] = 0.0
+		return
+	e["pos"] = e["pos"] + dir * paso
+	e["vel"] = dir * rapidez
+	e["rapidez"] = rapidez
 
 
 # ---------------------------------------------------------------------------
@@ -1260,8 +1311,8 @@ static func _lanzar_remate(estado: Dictionary, poseedor: Dictionary, datos: Dict
 		var e_arq: Dictionary = estado["jugadores"][arq_clave]
 		arq_pos = e_arq["pos"]
 		var vel_remate: float = float(pesos()["fisica"]["vel_remate"])
-		var ticks_vuelo: float = maxf(poseedor["pos"].distance_to(arco) / (vel_remate * TICK_SEG), 1.0)
-		alcance = float(e_arq["vel_max"]) * TICK_SEG * ticks_vuelo + ALCANCE_ESTIRADA
+		var segundos_vuelo: float = maxf(poseedor["pos"].distance_to(arco) / vel_remate, TICK_SEG)
+		alcance = _alcance_en(e_arq, segundos_vuelo) + ALCANCE_ESTIRADA
 
 	var y_destino := 0.0
 	var altura := 0.9
@@ -2038,6 +2089,7 @@ static func _sincronizar_cambios(estado: Dictionary) -> void:
 				"clave": clave, "jugador_id": j["id"], "equipo_local": es_local,
 				"rol": rol, "base": base, "pos": pos, "vel": Vector2.ZERO,
 				"objetivo": base, "vel_max": _vel_max(j),
+				"aceleracion": _aceleracion(j), "rapidez": 0.0,
 			}
 
 
@@ -2501,14 +2553,16 @@ static func _conducir(estado: Dictionary, poseedor: Dictionary) -> void:
 	var f: Dictionary = pesos()["fisica"]
 	var arco := arco_rival(poseedor["equipo_local"])
 	var dir: Vector2 = (arco - poseedor["pos"]).normalized()
-	var paso: float = poseedor["vel_max"] * TICK_SEG * float(f["avance_conducir"])
-	var nueva: Vector2 = poseedor["pos"] + dir * paso
+	# Un punto bien por delante para que nunca "llegue" y frene: conducir
+	# es avanzar, no ir a un destino. Pasa por _mover_hacia para que el que
+	# lleva la pelota también arranque con rampa y no salga disparado.
+	_mover_hacia(poseedor, poseedor["pos"] + dir * 20.0, float(f["avance_conducir"]))
 	# El que lleva la pelota sí puede meterse en el área (a diferencia de
 	# los que se posicionan sin ella, ver LIMITE_X), pero no atravesar la
 	# línea de fondo.
 	poseedor["pos"] = Vector2(
-		clampf(nueva.x, -MEDIO_LARGO + 1.0, MEDIO_LARGO - 1.0),
-		clampf(nueva.y, -MEDIO_ANCHO + 1.0, MEDIO_ANCHO - 1.0))
+		clampf(poseedor["pos"].x, -MEDIO_LARGO + 1.0, MEDIO_LARGO - 1.0),
+		clampf(poseedor["pos"].y, -MEDIO_ANCHO + 1.0, MEDIO_ANCHO - 1.0))
 
 
 static func _intentar_robo(estado: Dictionary) -> void:
