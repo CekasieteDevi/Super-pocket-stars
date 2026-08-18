@@ -81,6 +81,16 @@ const ALTO_TRIBUNA_CERCA := 3.5
 var camara := CamaraPartido.new()
 var estado_cancha := "regular"
 
+## Tarjetas flotando sobre el infractor: [{"pos": Vector2 (metros),
+## "roja": bool, "avance": float 0..1}]. Las arma VistaPartido, que es
+## quien sabe qué jugador cometió la falta.
+var tarjetas: Array = []
+
+## Euforia de la tribuna, 0 a 1. La misma señal que el festejo del HUD.
+## El público se levanta y se aclara; sin esto un gol lo festeja el
+## cartel solo y el estadio se queda quieto.
+var euforia := 0.0
+
 ## Cada entidad: {"pos": Vector2 (metros), "z": float, "tipo": "jugador"/"pelota",
 ## "color": Color}. La vista las ordena por profundidad y las dibuja.
 var entidades: Array = []
@@ -124,6 +134,7 @@ func _draw() -> void:
 	_dibujar_cesped(pal)
 	_dibujar_lineas(pal)
 	_dibujar_entidades()
+	_dibujar_tarjetas()
 
 
 # ---------------------------------------------------------------------------
@@ -154,10 +165,22 @@ func _plano(p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3, c: Color) -> voi
 	]), c)
 
 
+## Cuánto se levanta la tribuna en el pico del festejo, en metros. Chico
+## a propósito: es un salto, no un terremoto.
+const SALTO_EUFORIA := 0.9
+
+
 func _dibujar_estadio() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), COLOR_CIELO)
 	var L := ProyeccionPartido.MEDIO_LARGO
 	var A := ProyeccionPartido.MEDIO_ANCHO
+	# El salto se aplica a la ALTURA de las tribunas, no a su posición: el
+	# frente queda clavado en el muro y solo se mueve el mar de gente.
+	var salto: float = 0.0
+	var luz := Color.WHITE
+	if euforia > 0.01:
+		salto = sin(Time.get_ticks_msec() / 55.0) * SALTO_EUFORIA * euforia
+		luz = Color(1.0 + euforia * 0.55, 1.0 + euforia * 0.55, 1.0 + euforia * 0.45)
 
 	# Pista: la banda entre la línea de cal y el muro.
 	_plano(Vector3(-L - PISTA, -A - PISTA, 0), Vector3(L + PISTA, -A - PISTA, 0),
@@ -171,8 +194,8 @@ func _dibujar_estadio() -> void:
 	# 1. Tribuna de enfrente. Sube alejándose de la cancha, así que en
 	# pantalla crece hacia arriba y hace de fondo del partido.
 	_panel(Vector3(xa, -A - PISTA, 0), Vector3(xb, -A - PISTA, 0),
-		Vector3(xb, ya, ALTO_TRIBUNA), Vector3(xa, ya, ALTO_TRIBUNA),
-		_tex_publico, METROS_TILE_PUBLICO, TINTE_TRIBUNA)
+		Vector3(xb, ya, ALTO_TRIBUNA + salto), Vector3(xa, ya, ALTO_TRIBUNA + salto),
+		_tex_publico, METROS_TILE_PUBLICO, TINTE_TRIBUNA * luz)
 	_plano(Vector3(xa, ya, ALTO_TRIBUNA), Vector3(xb, ya, ALTO_TRIBUNA),
 		Vector3(xb, ya - 3.0, ALTO_TRIBUNA + 5.0), Vector3(xa, ya - 3.0, ALTO_TRIBUNA + 5.0),
 		COLOR_TECHO)
@@ -182,8 +205,8 @@ func _dibujar_estadio() -> void:
 		var x0: float = lado * (L + PISTA)
 		var x1: float = lado * (L + PISTA + PROF_TRIBUNA)
 		_panel(Vector3(x0, ya, 0), Vector3(x0, yb, 0),
-			Vector3(x1, yb, ALTO_TRIBUNA), Vector3(x1, ya, ALTO_TRIBUNA),
-			_tex_publico, METROS_TILE_PUBLICO, TINTE_TRIBUNA_LATERAL)
+			Vector3(x1, yb, ALTO_TRIBUNA + salto), Vector3(x1, ya, ALTO_TRIBUNA + salto),
+			_tex_publico, METROS_TILE_PUBLICO, TINTE_TRIBUNA_LATERAL * luz)
 
 	# 3. Muro perimetral: la pared baja que separa la pista del público.
 	# Va después de las tribunas porque está por delante de ellas.
@@ -197,8 +220,8 @@ func _dibujar_estadio() -> void:
 	# 4. Tribuna de este lado, la última porque es la más cercana.
 	_panel(Vector3(xa, A + PISTA, 0), Vector3(xb, A + PISTA, 0),
 		Vector3(xb, A + PISTA + PROF_TRIBUNA_CERCA, ALTO_TRIBUNA_CERCA),
-		Vector3(xa, A + PISTA + PROF_TRIBUNA_CERCA, ALTO_TRIBUNA_CERCA),
-		_tex_publico, METROS_TILE_PUBLICO, TINTE_TRIBUNA_CERCA)
+		Vector3(xa, A + PISTA + PROF_TRIBUNA_CERCA, ALTO_TRIBUNA_CERCA + salto),
+		_tex_publico, METROS_TILE_PUBLICO, TINTE_TRIBUNA_CERCA * luz)
 
 
 ## Las franjas siguen la proyección: son paralelogramos, no rectángulos
@@ -377,3 +400,24 @@ func _dibujar_cuerpo(ent: Dictionary) -> void:
 	var alto := ancho * (float(tex.get_height()) / float(tex.get_width()))
 	# El sprite se apoya en el punto: los pies quedan en el piso.
 	draw_texture_rect(tex, Rect2(punto - Vector2(ancho * 0.5, alto), Vector2(ancho, alto)), false)
+
+
+const COLOR_AMARILLA := Color(0.98, 0.83, 0.16)
+const COLOR_ROJA := Color(0.84, 0.16, 0.16)
+
+## La tarjeta sube desde la cabeza del infractor y se desvanece arriba.
+## Va después de todo, sin Y-sort: es información, no un objeto de la
+## cancha, y taparla con un jugador que pasa por delante sería perderla.
+func _dibujar_tarjetas() -> void:
+	var escala: float = camara.px_por_metro / CamaraPartido.PX_POR_METRO_BASE
+	for t in tarjetas:
+		var avance: float = float(t["avance"])
+		var altura: float = 2.2 + avance * 1.6
+		var punto := _p(t["pos"].x, t["pos"].y, altura)
+		var an := 11.0 * escala
+		var al := 15.0 * escala
+		var alfa: float = clampf((1.0 - avance) * 3.0, 0.0, 1.0)
+		var r := Rect2(punto - Vector2(an, al) * 0.5, Vector2(an, al))
+		draw_rect(Rect2(r.position + Vector2(1.5, 1.5), r.size), Color(0, 0, 0, 0.45 * alfa))
+		var c: Color = COLOR_ROJA if bool(t["roja"]) else COLOR_AMARILLA
+		draw_rect(r, Color(c.r, c.g, c.b, alfa))

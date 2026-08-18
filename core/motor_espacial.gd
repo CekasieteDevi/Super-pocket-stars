@@ -1024,7 +1024,7 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 		_accion(estado, bloqueador, ACCION_BARRIDA)
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "tiro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
-			"jugador_posicion": poseedor["rol"], "resultado": "bloqueado",
+			"jugador_posicion": poseedor["rol"], "clave": poseedor["clave"], "resultado": "bloqueado",
 		})
 		_resolver_rebote(estado, estado["jugadores"][bloqueador]["pos"], not es_local)
 		return
@@ -1041,14 +1041,14 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	if roll > chance_porteria + chance_palo:
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "tiro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
-			"jugador_posicion": poseedor["rol"], "resultado": "afuera",
+			"jugador_posicion": poseedor["rol"], "clave": poseedor["clave"], "resultado": "afuera",
 		})
 		_dar_pelota_al_arquero(estado, not es_local, true)  # se fue al fondo: saque de arco
 		return
 	if roll > chance_porteria:
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "tiro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
-			"jugador_posicion": poseedor["rol"], "resultado": "palo",
+			"jugador_posicion": poseedor["rol"], "clave": poseedor["clave"], "resultado": "palo",
 		})
 		# Del palo suele salir rebote al córner.
 		_desviar_afuera(estado, arco_rival(es_local), not es_local)
@@ -1077,7 +1077,8 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	_accion(estado, _clave_arquero(estado, not es_local), ACCION_VUELA)
 	estado["eventos"].append({
 		"minuto": minuto, "tipo": "tiro_puerta", "equipo": eq_a.nombre, "rival": eq_d.nombre,
-		"jugador_posicion": poseedor["rol"], "resultado": "gol" if gol else "atajada",
+		"jugador_posicion": poseedor["rol"], "clave": poseedor["clave"],
+		"resultado": "gol" if gol else "atajada",
 	})
 	var dist: float = poseedor["pos"].distance_to(arco_rival(es_local))
 	if gol:
@@ -1119,7 +1120,7 @@ static func _dar_pelota_al_arquero(estado: Dictionary, arquero_local: bool, saqu
 			"minuto": _minuto_int(estado), "tipo": "saque_arco",
 			"equipo": _equipo_de(estado, arquero_local).nombre,
 			"rival": _equipo_de(estado, not arquero_local).nombre,
-			"jugador_posicion": "ARQ", "resultado": "saque",
+			"jugador_posicion": "ARQ", "clave": arquero_clave, "resultado": "saque",
 		})
 
 	var arq: Dictionary = estado["jugadores"][arquero_clave]
@@ -1163,7 +1164,8 @@ static func _lateral(estado: Dictionary, punto: Vector2, saca_local: bool) -> vo
 		"minuto": _minuto_int(estado), "tipo": "lateral",
 		"equipo": _equipo_de(estado, saca_local).nombre,
 		"rival": _equipo_de(estado, not saca_local).nombre,
-		"jugador_posicion": estado["jugadores"][ejecutor]["rol"], "resultado": "saque",
+		"jugador_posicion": estado["jugadores"][ejecutor]["rol"], "clave": ejecutor,
+		"resultado": "saque",
 	})
 
 
@@ -1211,7 +1213,8 @@ static func _saque_de_esquina(estado: Dictionary, ataca_local: bool, lado_arriba
 		"minuto": _minuto_int(estado), "tipo": "corner",
 		"equipo": _equipo_de(estado, ataca_local).nombre,
 		"rival": _equipo_de(estado, not ataca_local).nombre,
-		"jugador_posicion": estado["jugadores"][ejecutor]["rol"], "resultado": "saque",
+		"jugador_posicion": estado["jugadores"][ejecutor]["rol"], "clave": ejecutor,
+		"resultado": "saque",
 	})
 
 
@@ -1511,10 +1514,10 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 	if estado["tick"] % 20 == 0:
 		_sincronizar_cambios(estado)
 	if con_fotogramas:
-		var nuevo = null
-		if estado["eventos"].size() > eventos_antes:
-			nuevo = estado["eventos"][estado["eventos"].size() - 1]
-		_push_fotograma(estado, nuevo)
+		# TODOS los eventos del tick, no solo el último: una entrada fuerte
+		# emite la tarjeta y después la falta, y quedarse con el último
+		# hacía desaparecer las tarjetas del relato.
+		_push_fotograma(estado, estado["eventos"].slice(eventos_antes))
 
 
 static func _avanzar_pelota(estado: Dictionary) -> void:
@@ -1637,7 +1640,7 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "offside", "equipo": _equipo_de(estado, pasador_local).nombre,
 			"rival": _equipo_de(estado, not pasador_local).nombre,
-			"jugador_posicion": e_receptor["rol"], "resultado": "offside",
+			"jugador_posicion": e_receptor["rol"], "clave": e_receptor["clave"], "resultado": "offside",
 		})
 		_tiro_libre(estado, hasta, not pasador_local, minuto)
 		return
@@ -1917,7 +1920,8 @@ static func _cobrar_falta(estado: Dictionary, punto: Vector2, victima_local: boo
 	_chequear_tarjeta_repetido(estado, infractor, eq_infractor, eq_victima, minuto)
 	estado["eventos"].append({
 		"minuto": minuto, "tipo": "falta", "equipo": eq_infractor.nombre,
-		"rival": eq_victima.nombre, "jugador_posicion": "", "resultado": "falta",
+		"rival": eq_victima.nombre, "jugador_posicion": infractor["posicion"],
+		"clave": clave_de(int(infractor["id"]), not victima_local), "resultado": "falta",
 	})
 
 	# ¿Adentro del área que defiende el infractor? Penal.
@@ -1962,7 +1966,9 @@ static func _cobrar_penal(estado: Dictionary, ataca_local: bool, minuto: int) ->
 	_accion(estado, clave_de(int(arquero["id"]), not ataca_local), ACCION_VUELA)
 	estado["eventos"].append({
 		"minuto": minuto, "tipo": "penal", "equipo": eq_a.nombre, "rival": eq_d.nombre,
-		"jugador_posicion": pateador["posicion"], "resultado": "gol" if gol else "atajado",
+		"jugador_posicion": pateador["posicion"],
+		"clave": clave_de(int(pateador["id"]), ataca_local),
+		"resultado": "gol" if gol else "atajado",
 	})
 	if gol:
 		eq_a.goles += 1
@@ -2174,7 +2180,7 @@ static func _intentar_robo(estado: Dictionary) -> void:
 		_penalizar(estado, mejor_id, jug_d)
 
 
-static func _push_fotograma(estado: Dictionary, evento_del_tick = null) -> void:
+static func _push_fotograma(estado: Dictionary, eventos_del_tick: Array = []) -> void:
 	var jugadores := []
 	for id in estado["jugadores"]:
 		var e: Dictionary = estado["jugadores"][id]
@@ -2199,7 +2205,10 @@ static func _push_fotograma(estado: Dictionary, evento_del_tick = null) -> void:
 		# le permite a la animación mostrar el relato y el marcador en el
 		# momento exacto, sin tener que cruzar por minuto contra el array
 		# de eventos, que tiene otra granularidad.
-		"evento": evento_del_tick,
+		# El último evento del tick, que es lo que consume la vista vieja.
+		"evento": eventos_del_tick[-1] if not eventos_del_tick.is_empty() else null,
+		# Todos los del tick, en orden.
+		"eventos": eventos_del_tick,
 		# Actos físicos de este tick: [{"clave": int, "accion": "patea"}].
 		# A diferencia de "evento", vienen con la clave del jugador, que es
 		# lo que la vista necesita para animar al que corresponde.

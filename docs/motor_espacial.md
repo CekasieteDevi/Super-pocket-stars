@@ -1614,3 +1614,54 @@ de un estadio. Con el zoom de juego la tribuna de enfrente aparece
 cuando la jugada se va contra esa banda y las cabeceras cuando se juega
 en un área: en el mediocampo la cancha ocupa la pantalla entera, que es
 lo que hace una cámara que sigue la pelota de cerca.
+
+## 28. Relato, tarjetas y festejo (etapa 7 de la vista)
+
+Sin chispas en los duelos: estaba en el pedido original pero se sacó a
+propósito. El feedback del duelo lo da el relato.
+
+**El motor tuvo que emitir dos cosas nuevas.** Primero, `"clave"` en los
+eventos que se narran (remate, gol, penal, falta, offside, córner,
+lateral, saque de arco): sin eso el relato decía "Remata DC" en vez de
+"Remata DC Ferreira", porque el evento traía el rol y no el jugador. Las
+tarjetas salen de `MatchEngine`, que es compartido con el motor
+abstracto y no sabe de claves espaciales, así que ahí se agregó
+`jugador_id` y la vista lo traduce cruzando con el nombre del equipo.
+
+Segundo, el fotograma ahora trae **todos** los eventos del tick
+(`"eventos"`) y no solo el último. Una entrada fuerte emite la tarjeta y
+después la falta; quedarse con el último hacía desaparecer las tarjetas
+del relato. `"evento"` sigue existiendo con el último, porque lo consume
+la vista vieja.
+
+**No se narra todo.** El motor emite un evento por pase completado y por
+quite: narrarlos sería un teletipo a cuatro líneas por segundo.
+`RelatoPartido.importancia` filtra, y de paso decide cuánto se sostiene
+cada línea. Medido: 20 líneas por partido, una cada 48 fotogramas —unos
+12 segundos de reproducción a x1—, todas con apellido real, ninguna
+cayendo al rol.
+
+**Los tiempos del relato van en segundos REALES, no en ticks.** Son
+tiempo de lectura, no tiempo de partido: a x16 el partido vuela pero el
+ojo no. Por lo mismo, en pausa no corre nada, ni el relato — si alguien
+para el partido es justamente para leer.
+
+**El festejo congela la reproducción**, la única pausa automática que
+tiene el partido, y dura `2,2 / velocidad` segundos: a x16 es un
+instante y no le arruina el apuro a nadie. Saltar al resultado no narra
+ni festeja: adelanta el índice de narración sin pasar por él.
+
+**El fotograma que se congela es el ANTERIOR al del gol.** El motor
+manda a todos al círculo central en el mismo tick en que valida el gol,
+así que congelar el fotograma del gol muestra el saque del medio, no la
+jugada. Uno atrás todavía tiene al delantero con la pelota en el área.
+Como contrapartida el marcador de ese fotograma todavía va 0-0, así que
+durante el festejo el tanteador se toma del fotograma del gol — si no,
+el cartel dice "¡GOL!" arriba de un 0-0.
+
+**El festejo es UNA señal para tres cosas**: el cartel del HUD, la
+apertura de cámara y el salto de la tribuna leen el mismo valor 0..1. Si
+cada uno llevara su propio reloj se desincronizarían. Las tarjetas se
+guardan por clave y no por posición, así el cartelito acompaña al que la
+vio mientras camina, y se dibujan al final sin Y-sort: son información,
+y taparlas con un jugador que pasa por delante sería perderlas.

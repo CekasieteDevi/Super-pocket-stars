@@ -136,7 +136,7 @@ static func _chequear_tarjeta(defensor: Dictionary, equipo_defensor: Team, equip
 				log.append("min %d - TARJETA AMARILLA (%s) - %s" % [minuto, equipo_defensor.nombre, defensor["posicion"]])
 			eventos.append({
 				"minuto": minuto, "tipo": "tarjeta", "equipo": equipo_defensor.nombre, "rival": "",
-				"jugador_posicion": defensor["posicion"], "resultado": "amarilla",
+				"jugador_posicion": defensor["posicion"], "jugador_id": id, "resultado": "amarilla",
 			})
 	else:
 		return
@@ -150,7 +150,8 @@ static func _chequear_tarjeta(defensor: Dictionary, equipo_defensor: Team, equip
 			])
 		eventos.append({
 			"minuto": minuto, "tipo": "tarjeta", "equipo": equipo_defensor.nombre, "rival": "",
-			"jugador_posicion": defensor["posicion"], "resultado": "roja_doble_amarilla" if doble_amarilla else "roja",
+			"jugador_posicion": defensor["posicion"], "jugador_id": id,
+			"resultado": "roja_doble_amarilla" if doble_amarilla else "roja",
 		})
 
 

@@ -33,6 +33,17 @@ var goles_visitante := 0
 var minuto := 0
 var poseedor := ""
 
+## Relato: una línea por momento importante. La pone VistaPartido y la
+## sostiene unos segundos; `relato_alfa` la desvanece al final en vez de
+## cortarla de golpe.
+var relato := ""
+var relato_alfa := 0.0
+
+## Festejo de gol: 0 a 1. Es la MISMA señal que abre la cámara y sacude
+## la tribuna, así que el cartel, el zoom y el público van sincronizados
+## sin que ninguno lleve su propio reloj.
+var festejo := 0.0
+
 var _columna: VBoxContainer
 var _boton_pausa: Button
 var _boton_menu: Button
@@ -88,6 +99,8 @@ func _draw() -> void:
 	_dibujar_marcador(fuente)
 	_dibujar_reloj(fuente)
 	_dibujar_poseedor(fuente)
+	_dibujar_relato(fuente)
+	_dibujar_festejo(fuente)
 
 
 ## Banner: camiseta, nombre, resultado, nombre, camiseta.
@@ -138,3 +151,36 @@ func _dibujar_poseedor(fuente: Font) -> void:
 	var r := Rect2(Vector2(MARGEN, size.y - 44 - MARGEN), Vector2(an + 22, 34))
 	draw_rect(r, COLOR_PANEL)
 	draw_string(fuente, r.position + Vector2(11, 23), poseedor, HORIZONTAL_ALIGNMENT_LEFT, -1, tam, COLOR_TEXTO)
+
+
+## Debajo del marcador: es el único lugar del borde superior que queda
+## libre, y no pelea con el poseedor (abajo izquierda) ni con el minimapa
+## (abajo derecha).
+func _dibujar_relato(fuente: Font) -> void:
+	if relato == "" or relato_alfa <= 0.01:
+		return
+	var tam := 18
+	var an := fuente.get_string_size(relato, HORIZONTAL_ALIGNMENT_LEFT, -1, tam).x
+	var r := Rect2(Vector2((size.x - an - 26.0) * 0.5, MARGEN + 42.0 + 8.0),
+		Vector2(an + 26.0, 32.0))
+	draw_rect(r, Color(COLOR_PANEL.r, COLOR_PANEL.g, COLOR_PANEL.b, COLOR_PANEL.a * relato_alfa))
+	draw_string(fuente, r.position + Vector2(13, 22), relato, HORIZONTAL_ALIGNMENT_LEFT, -1, tam,
+		Color(COLOR_TEXTO.r, COLOR_TEXTO.g, COLOR_TEXTO.b, relato_alfa))
+
+
+## El cartel de gol entra creciendo. Arranca chico y llega a tamaño en el
+## primer tramo del festejo: si apareciera ya grande se leería como un
+## error de dibujo, no como un golpe.
+func _dibujar_festejo(fuente: Font) -> void:
+	if festejo <= 0.01:
+		return
+	var entrada: float = clampf(festejo * 4.0, 0.0, 1.0)
+	var tam: int = int(lerpf(30.0, 76.0, entrada))
+	var texto := "¡GOL!"
+	var an := fuente.get_string_size(texto, HORIZONTAL_ALIGNMENT_LEFT, -1, tam).x
+	var centro := Vector2((size.x - an) * 0.5, size.y * 0.42)
+	var alfa: float = clampf(festejo * 3.0, 0.0, 1.0)
+	draw_string(fuente, centro + Vector2(3, 3), texto, HORIZONTAL_ALIGNMENT_LEFT, -1, tam,
+		Color(0, 0, 0, 0.55 * alfa))
+	draw_string(fuente, centro, texto, HORIZONTAL_ALIGNMENT_LEFT, -1, tam,
+		Color(1.0, 0.90, 0.35, alfa))
