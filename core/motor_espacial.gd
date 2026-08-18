@@ -96,6 +96,21 @@ const ROLES_QUE_REPLIEGAN := ["DFC", "LAT", "MC"]
 ## (ver _objetivo_sin_pelota), que es de donde salen los goles.
 const ROLES_QUE_ATACAN := ["MCO", "EXT", "DC"]
 
+## Con el juego detenido nadie corre: se acomodan trotando. Además de que
+## es lo que se ve en una cancha, sirve para que el reacomodo se lea como
+## un movimiento y no como un salto de un fotograma al otro.
+const FACTOR_TROTE_PARADO := 0.45
+
+## Medio ancho del arco (7,32 m reglamentarios). Lo usa el remate para
+## saber dónde termina la portería y dónde empieza el afuera.
+const ARCO_MEDIO_ANCHO := 3.66
+
+## Cuántos ticks queda detenido el juego según lo que se cobró. Un tick
+## son 0,25 s, así que 10 ticks son 2,5 segundos de reloj de partido: lo
+## suficiente para que se vea que el juego paró y que la gente se acomoda,
+## sin que aburra a x1.
+const TICKS_DETENIDO := {"falta": 8, "corner": 10, "gol": 10}
+
 ## Cuánto le achica el margen de error de desmarque el rasgo Enfocado.
 ## No es cero: hasta el delantero más atento se va alguna vez, y ponerlo
 ## en cero convertiría al rasgo en una inmunidad, que no es lo que dice
@@ -1019,9 +1034,9 @@ static func _calcular_linea_offside(estado: Dictionary) -> void:
 	}
 
 
-static func _mover_hacia(e: Dictionary, objetivo: Vector2) -> void:
+static func _mover_hacia(e: Dictionary, objetivo: Vector2, factor: float = 1.0) -> void:
 	var delta: Vector2 = objetivo - e["pos"]
-	var paso: float = e["vel_max"] * TICK_SEG
+	var paso: float = e["vel_max"] * TICK_SEG * factor
 	if delta.length() <= paso:
 		e["pos"] = objetivo
 		e["vel"] = Vector2.ZERO
@@ -1089,7 +1104,15 @@ static func _reiniciar_desde_medio(estado: Dictionary, saca_local: bool) -> void
 	estado["pelota"]["pos"] = Vector2.ZERO
 	estado["pelota"]["vel"] = Vector2.ZERO
 	estado["pelota"]["en_vuelo"] = false
+	estado["pelota"]["es_remate"] = false
+	estado["pelota"]["altura_max"] = 0.0
+	estado["pelota"]["z"] = 0.0
 	estado["pelota"]["ticks_con_pelota"] = 0
+	# El saque del medio cancela cualquier balón parado pendiente: si un
+	# tiempo termina con el juego detenido, el siguiente no puede arrancar
+	# esperando una falta que ya no existe.
+	estado["detenido"] = 0
+	estado.erase("balon_parado")
 	# la saca el MCO del equipo que corresponde
 	for id in estado["jugadores"]:
 		var e: Dictionary = estado["jugadores"][id]
@@ -1149,20 +1172,11 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	var chance_palo: float = float(r["palo"]) * calidad
 	var roll := rng.randf()
 
-	if roll > chance_porteria + chance_palo:
-		estado["eventos"].append({
-			"minuto": minuto, "tipo": "tiro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
-			"jugador_posicion": poseedor["rol"], "clave": poseedor["clave"], "resultado": "afuera",
-		})
-		_dar_pelota_al_arquero(estado, not es_local, true)  # se fue al fondo: saque de arco
-		return
 	if roll > chance_porteria:
-		estado["eventos"].append({
-			"minuto": minuto, "tipo": "tiro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
-			"jugador_posicion": poseedor["rol"], "clave": poseedor["clave"], "resultado": "palo",
+		_lanzar_remate(estado, poseedor, {
+			"tipo": "afuera" if roll > chance_porteria + chance_palo else "palo",
+			"es_local": es_local, "clave": poseedor["clave"], "rol": poseedor["rol"],
 		})
-		# Del palo suele salir rebote al córner.
-		_desviar_afuera(estado, arco_rival(es_local), not es_local)
 		return
 
 	# El remate se debilita según desde dónde salió: un tiro de 30 metros
@@ -1184,30 +1198,136 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	eq_a.desgastar(jugador["id"], jugador["atributos"]["energia"], mult_tiro)
 	eq_d.desgastar(arquero["id"], arq_attrs["energia"], mult_tiro)
 	var gol := Duel.gana_atacante(res, rng)
-	# El remate va al arco: el arquero vuela, le llegue o no.
-	_accion(estado, _clave_arquero(estado, not es_local), ACCION_VUELA)
+	_lanzar_remate(estado, poseedor, {
+		"tipo": "gol" if gol else "atajada",
+		"es_local": es_local, "clave": poseedor["clave"], "rol": poseedor["rol"],
+		"jugador": jugador, "agarre": float(arquero["atributos"]["agarre"]) / 100.0,
+		"dist": poseedor["pos"].distance_to(arco_rival(es_local)),
+	})
+
+
+## El remate SALE y tarda en llegar. El resultado ya está decidido —lo
+## decidió _resolver_tiro con sus duelos y sus tiradas— pero aplicarlo en
+## el mismo tick hacía que el gol apareciera de la nada: no se veía la
+## pelota yendo al arco, ni al arquero tirándose, ni el remate en sí.
+## Todo el partido pasaba de "remata" a "sacan del medio" en 0,25 s.
+##
+## Ojo: esto ALARGA el partido en ticks muertos (unos 3 por remate, ~25
+## remates), así que corre goles y pases hacia abajo. Es un costo
+## aceptado a cambio de que la jugada más importante del juego se vea.
+static func _lanzar_remate(estado: Dictionary, poseedor: Dictionary, datos: Dictionary) -> void:
+	var rng: RandomNumberGenerator = estado["rng"]
+	var es_local: bool = bool(datos["es_local"])
+	var arco := arco_rival(es_local)
+	var lado: float = 1.0 if arco.x > 0.0 else -1.0
+	var y_destino := 0.0
+	var altura := 0.9
+
+	match str(datos["tipo"]):
+		"gol":
+			y_destino = rng.randf_range(-3.0, 3.0)
+		"atajada":
+			# Va al arco pero a donde el arquero llega: por eso vuela.
+			y_destino = rng.randf_range(-3.4, 3.4)
+		"palo":
+			y_destino = ARCO_MEDIO_ANCHO * (1.0 if rng.randf() < 0.5 else -1.0)
+		_:
+			# Afuera: o muy abierta o por arriba del travesaño.
+			y_destino = rng.randf_range(4.5, 9.0) * (1.0 if rng.randf() < 0.5 else -1.0)
+			altura = 3.4
+
+	var destino := Vector2(arco.x + lado * 1.2,
+		clampf(y_destino, -MEDIO_ANCHO + 1.0, MEDIO_ANCHO - 1.0))
+	var pelota: Dictionary = estado["pelota"]
+	pelota["poseedor_id"] = -1
+	pelota["en_vuelo"] = true
+	pelota["es_pase"] = false
+	pelota["es_centro"] = false
+	pelota["es_remate"] = true
+	pelota["remate"] = datos
+	pelota["pos"] = poseedor["pos"]
+	pelota["origen_pos"] = poseedor["pos"]
+	pelota["destino_pos"] = destino
+	pelota["destino_id"] = -1
+	pelota["pasador_local"] = es_local
+	pelota["altura_max"] = altura
+	pelota["ticks_con_pelota"] = 0
+	pelota.erase("pared_a")
+	var dir: Vector2 = (destino - poseedor["pos"]).normalized()
+	pelota["vel"] = dir * float(pesos()["fisica"]["vel_remate"])
+
+	# El arquero se tira mientras la pelota viaja, no cuando ya entró.
+	if str(datos["tipo"]) in ["gol", "atajada", "palo"]:
+		_accion(estado, _clave_arquero(estado, not es_local), ACCION_VUELA)
+
+
+## Gol: la pelota se queda EN LA RED y los jugadores vuelven caminando al
+## medio. Antes el gol y el saque del medio pasaban en el mismo tick, o
+## sea que la pelota nunca llegaba a verse adentro del arco: se pasaba de
+## "remata" a "los 22 en el círculo central" sin nada en el medio.
+static func _festejar_gol(estado: Dictionary, saca_local: bool) -> void:
+	var pelota: Dictionary = estado["pelota"]
+	pelota["poseedor_id"] = -1
+	pelota["en_vuelo"] = false
+	pelota["vel"] = Vector2.ZERO
+	pelota["es_remate"] = false
+	pelota["altura_max"] = 0.0
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		var base: Vector2 = e["base"]
+		# Mismas marcas que el saque del medio: todos en su propia mitad.
+		e["marca"] = Vector2(minf(base.x, -1.0) if e["equipo_local"] else maxf(base.x, 1.0), base.y)
+	estado["balon_parado"] = {"tipo": "saque_medio", "saca_local": saca_local}
+	estado["detenido"] = int(TICKS_DETENIDO["gol"])
+
+
+## Llegó: recién ahora se cuenta el gol, se reanuda o saca el arquero.
+static func _aplicar_remate(estado: Dictionary, datos: Dictionary) -> void:
+	if datos.is_empty():
+		return
+	var es_local: bool = bool(datos["es_local"])
+	var eq_a := _equipo_de(estado, es_local)
+	var eq_d := _equipo_de(estado, not es_local)
+	var rng: RandomNumberGenerator = estado["rng"]
+	var minuto := _minuto_int(estado)
+	var tipo := str(datos["tipo"])
+
+	if tipo == "afuera" or tipo == "palo":
+		estado["eventos"].append({
+			"minuto": minuto, "tipo": "tiro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
+			"jugador_posicion": datos["rol"], "clave": datos["clave"], "resultado": tipo,
+		})
+		if tipo == "afuera":
+			_dar_pelota_al_arquero(estado, not es_local, true)
+		else:
+			# Del palo suele salir rebote al córner.
+			_desviar_afuera(estado, arco_rival(es_local), not es_local)
+		return
+
+	var gol: bool = tipo == "gol"
 	estado["eventos"].append({
 		"minuto": minuto, "tipo": "tiro_puerta", "equipo": eq_a.nombre, "rival": eq_d.nombre,
-		"jugador_posicion": poseedor["rol"], "clave": poseedor["clave"],
+		"jugador_posicion": datos["rol"], "clave": datos["clave"],
 		"resultado": "gol" if gol else "atajada",
 	})
-	var dist: float = poseedor["pos"].distance_to(arco_rival(es_local))
+	var jugador: Dictionary = datos.get("jugador", {})
+	var dist: float = float(datos.get("dist", 0.0))
 	if gol:
 		eq_a.goles += 1
-		estado["goles_log"].append({"minuto": minuto, "equipo": eq_a.nombre, "jugador_id": jugador["id"]})
+		estado["goles_log"].append({"minuto": minuto, "equipo": eq_a.nombre, "jugador_id": jugador.get("id", -1)})
 		estado["log"].append("min %d - GOL de %s %s (%s) desde %.0f m" % [
-			minuto, jugador["nombre"], jugador["apellido"], eq_a.nombre, dist])
-		_reiniciar_desde_medio(estado, not es_local)
+			minuto, jugador.get("nombre", ""), jugador.get("apellido", ""), eq_a.nombre, dist])
+		_festejar_gol(estado, not es_local)
+		return
+
+	estado["log"].append("min %d - %s (%s) remata desde %.0f m, ataja el arquero" % [
+		minuto, datos["rol"], eq_a.nombre, dist])
+	# El arquero no siempre la retiene: si la manotea, sale al córner.
+	# Cuanto mejor su agarre, más veces la queda.
+	if rng.randf() > float(datos.get("agarre", 0.5)):
+		_desviar_afuera(estado, arco_rival(es_local), not es_local)
 	else:
-		estado["log"].append("min %d - %s (%s) remata desde %.0f m, ataja el arquero" % [
-			minuto, poseedor["rol"], eq_a.nombre, dist])
-		# El arquero no siempre la retiene: si la manotea, sale al córner.
-		# Cuanto mejor su agarre, más veces la queda.
-		var agarre: float = float(arquero["atributos"]["agarre"]) / 100.0
-		if rng.randf() > agarre:
-			_desviar_afuera(estado, arco_rival(es_local), not es_local)
-		else:
-			_dar_pelota_al_arquero(estado, not es_local)
+		_dar_pelota_al_arquero(estado, not es_local)
 
 
 ## La pelota vuelve al arquero. Si es un SAQUE DE ARCO (la pelota salió
@@ -1286,40 +1406,15 @@ static func _saque_de_esquina(estado: Dictionary, ataca_local: bool, lado_arriba
 	var arco := arco_rival(ataca_local)
 	var esquina := Vector2(arco.x - (1.0 if arco.x > 0.0 else -1.0),
 		(MEDIO_ANCHO - 0.5) * (1.0 if lado_arriba else -1.0))
-	var ejecutor := _mas_cercano_del_equipo(estado, esquina, ataca_local)
+	var ejecutor := _elegir_ejecutor(estado, esquina, ataca_local, "corner")
 	if ejecutor == -1:
 		_dar_pelota_al_arquero(estado, not ataca_local, true)
 		return
-
-	var rng: RandomNumberGenerator = estado["rng"]
-	var dentro_x: float = arco.x - (11.0 if arco.x > 0.0 else -11.0)
-	for id in estado["jugadores"]:
-		var e: Dictionary = estado["jugadores"][id]
-		if id == ejecutor or e["rol"] == "ARQ":
-			continue
-		# Suben al área los de arriba del que ataca y toda la defensa del
-		# que defiende; el resto se queda cubriendo.
-		var sube: bool = ROLES_QUE_ATACAN.has(e["rol"]) if e["equipo_local"] == ataca_local else true
-		if sube:
-			e["pos"] = Vector2(dentro_x + rng.randf_range(-5.0, 5.0), rng.randf_range(-14.0, 14.0))
-			e["vel"] = Vector2.ZERO
-
-	estado["jugadores"][ejecutor]["pos"] = esquina
-	_entregar_pelota(estado, ejecutor)
 	estado["reinicios"]["corner"] = int(estado["reinicios"].get("corner", 0)) + 1
-
-	# El córner se cuelga al área, no se juega raso: ahora que la pelota
-	# tiene altura se ejecuta como el centro que es, y se define en el
-	# duelo aéreo. Antes era un pase más y por eso rendía tan poco.
-	var e_ejecutor: Dictionary = estado["jugadores"][ejecutor]
-	var jug_ejecutor := _dict_jugador(estado, _equipo_de(estado, ataca_local), e_ejecutor["jugador_id"])
-	var objetivo := _mejor_en_el_area(estado, ataca_local, ejecutor)
-	if objetivo != -1 and not jug_ejecutor.is_empty():
-		_lanzar_pase(estado, e_ejecutor, objetivo, jug_ejecutor)
-		estado["pelota"]["altura_max"] = float(pesos()["fisica"]["altura_centro"])
-		estado["pelota"]["es_centro"] = true
-		estado["pelota"]["centro_de"] = ataca_local
-		estado["centros"]["intentos"] = int(estado["centros"].get("intentos", 0)) + 1
+	# El córner también para el juego: antes los dos equipos aparecían de
+	# golpe adentro del área y la pelota salía en el mismo tick. Ahora se
+	# ve cómo suben.
+	_detener_juego(estado, esquina, ataca_local, ejecutor, "corner", int(TICKS_DETENIDO["corner"]))
 	estado["eventos"].append({
 		"minuto": _minuto_int(estado), "tipo": "corner",
 		"equipo": _equipo_de(estado, ataca_local).nombre,
@@ -1555,6 +1650,21 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 	if con_fotogramas:
 		estado["acciones_tick"] = []
 
+	# 0. Juego detenido: falta cobrada, córner concedido. La pelota está
+	# quieta en el punto y los jugadores CAMINAN a sus marcas. Antes esto
+	# no existía y el balón parado se resolvía en el mismo tick en que se
+	# cobraba: la falta no se veía nunca, la jugada seguía como si nada y
+	# los jugadores aparecían teletransportados en sus posiciones.
+	if int(estado.get("detenido", 0)) > 0:
+		estado["detenido"] = int(estado["detenido"]) - 1
+		for id in estado["jugadores"]:
+			var e_p: Dictionary = estado["jugadores"][id]
+			_mover_hacia(e_p, e_p.get("marca", e_p["pos"]), FACTOR_TROTE_PARADO)
+		if int(estado["detenido"]) == 0:
+			_ejecutar_balon_parado(estado)
+		_cerrar_tick(estado, con_fotogramas, eventos_antes)
+		return
+
 	# 1. Pelota en vuelo: avanza, y alguien puede controlarla o interceptarla.
 	if pelota["en_vuelo"]:
 		_avanzar_pelota(estado)
@@ -1624,6 +1734,13 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 		pelota["pos"] = estado["jugadores"][pelota["poseedor_id"]]["pos"]
 		pelota["ticks_con_pelota"] = int(pelota.get("ticks_con_pelota", 0)) + 1
 
+	_cerrar_tick(estado, con_fotogramas, eventos_antes)
+
+
+## Cierre común de un tick: reloj, cambios y fotograma. Está factorizado
+## porque el juego detenido hace un tick reducido pero tiene que avanzar
+## el reloj y emitir su fotograma igual que cualquier otro.
+static func _cerrar_tick(estado: Dictionary, con_fotogramas: bool, eventos_antes: int) -> void:
 	estado["tick"] += 1
 	# El reloj MOSTRADO avanza 90 minutos a lo largo de los 960 ticks del
 	# partido: es la ficción de "esto son 90 minutos". Todo lo que depende
@@ -1672,6 +1789,18 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 	var total: float = origen_z.distance_to(destino)
 	var avanzado: float = clampf(origen_z.distance_to(hasta) / maxf(total, 0.01), 0.0, 1.0)
 	pelota["z"] = altura_max * 4.0 * avanzado * (1.0 - avanzado)
+
+	# Un remate en vuelo no se intercepta ni se va afuera por el camino:
+	# ya está resuelto (ver _lanzar_remate), lo único que falta es que
+	# llegue. Es lo que hace que se VEA la pelota yendo al arco en vez de
+	# que el gol aparezca de la nada.
+	if bool(pelota.get("es_remate", false)):
+		if llego:
+			pelota["es_remate"] = false
+			pelota["altura_max"] = 0.0
+			pelota["z"] = 0.0
+			_aplicar_remate(estado, pelota.get("remate", {}))
+		return
 
 	var origen: Vector2 = pelota.get("origen_pos", desde)
 	# Un pase preciso pasa entre líneas; uno flojo se lo comen. Sin esto la
@@ -2107,57 +2236,143 @@ static func _cobrar_penal(estado: Dictionary, ataca_local: bool, minuto: int) ->
 ## alejan la distancia reglamentaria, y si está a tiro de arco se remata
 ## con `tiros_libres` — otro atributo del GDD que no leía nadie. Si está
 ## lejos o muy escorado, se cuelga al área.
-static func _tiro_libre(estado: Dictionary, punto: Vector2, ataca_local: bool, minuto: int) -> void:
+static func _tiro_libre(estado: Dictionary, punto: Vector2, ataca_local: bool, _minuto: int) -> void:
 	var f: Dictionary = pesos()["fisica"]
-	var eq_a := _equipo_de(estado, ataca_local)
 	var pos := Vector2(
 		clampf(punto.x, -MEDIO_LARGO + 2.0, MEDIO_LARGO - 2.0),
 		clampf(punto.y, -MEDIO_ANCHO + 2.0, MEDIO_ANCHO - 2.0))
 
-	# ¿Está para pegarle al arco? Lo patea el de mejor `tiros_libres`.
-	var geo := factor_geometria(pos, ataca_local)
+	# Qué clase de tiro libre es lo decide DÓNDE fue la falta, y eso es lo
+	# que después decide quién sube al área y quién se queda.
+	var tipo := "corto"
+	if factor_geometria(pos, ataca_local) >= float(f["geometria_minima_tiro_libre"]):
+		tipo = "directo"
+	elif pos.distance_to(arco_rival(ataca_local)) <= float(f["dist_libre_al_area"]):
+		tipo = "centro"
 
-	# La barrera solo en los que se patean al arco. Aplicarla en TODAS las
-	# faltas le regalaba espacio libre al que ataca unas nueve veces por
-	# partido, y eso aplanaba la diferencia entre equipos: un plantel de
-	# media 27 saltaba de 1,57 a 2,83 goles. En una falta lejana el juego
-	# se reanuda y las líneas se reacomodan solas.
-	if geo >= float(f["geometria_minima_tiro_libre"]):
-		for id in estado["jugadores"]:
-			var e: Dictionary = estado["jugadores"][id]
-			if e["equipo_local"] == ataca_local or e["rol"] == "ARQ":
-				continue
-			var d: float = pos.distance_to(e["pos"])
-			if d < 9.15:
-				e["pos"] = pos + (e["pos"] - pos).normalized() * 9.15
-	var ejecutor := -1
-	if geo >= float(f["geometria_minima_tiro_libre"]):
-		var mejor: float = -1.0
-		for id in estado["jugadores"]:
-			var e: Dictionary = estado["jugadores"][id]
-			if e["equipo_local"] != ataca_local or e["rol"] == "ARQ":
-				continue
-			var j := _dict_jugador(estado, eq_a, e["jugador_id"])
-			if j.is_empty():
-				continue
-			if float(j["atributos"]["tiros_libres"]) > mejor:
-				mejor = float(j["atributos"]["tiros_libres"])
-				ejecutor = id
-		if ejecutor != -1:
-			var e_ej: Dictionary = estado["jugadores"][ejecutor]
-			e_ej["pos"] = pos
-			_entregar_pelota(estado, ejecutor)
-			estado["libres_directos"] = int(estado.get("libres_directos", 0)) + 1
-			_resolver_tiro(estado, e_ej, _dict_jugador(estado, eq_a, e_ej["jugador_id"]), "tiros_libres")
-			return
-
-	# Lejos: la pone en juego el más cercano y sigue el partido.
-	ejecutor = _mas_cercano_del_equipo(estado, pos, ataca_local)
+	var ejecutor := _elegir_ejecutor(estado, pos, ataca_local, tipo)
 	if ejecutor == -1:
 		_dar_pelota_al_arquero(estado, ataca_local, true)
 		return
-	estado["jugadores"][ejecutor]["pos"] = pos
+	_detener_juego(estado, pos, ataca_local, ejecutor, tipo, int(TICKS_DETENIDO["falta"]))
+
+
+## Quién la ejecuta. En el tiro libre directo manda `tiros_libres`; en el
+## que se cuelga al área, `centros`; en el corto, el que está más cerca,
+## que es lo que hace que el juego se reanude rápido.
+static func _elegir_ejecutor(estado: Dictionary, pos: Vector2, ataca_local: bool, tipo: String) -> int:
+	if tipo == "corto":
+		return _mas_cercano_del_equipo(estado, pos, ataca_local)
+	var atributo := "tiros_libres" if tipo == "directo" else "centros"
+	var equipo := _equipo_de(estado, ataca_local)
+	var mejor := -1.0
+	var elegido := -1
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		if e["equipo_local"] != ataca_local or e["rol"] == "ARQ":
+			continue
+		var j := _dict_jugador(estado, equipo, e["jugador_id"])
+		if j.is_empty():
+			continue
+		if float(j["atributos"][atributo]) > mejor:
+			mejor = float(j["atributos"][atributo])
+			elegido = id
+	return elegido if elegido != -1 else _mas_cercano_del_equipo(estado, pos, ataca_local)
+
+
+## Para el juego, deja la pelota en el punto y le da a cada uno su marca.
+## Los jugadores NO se teletransportan: durante los ticks de pausa trotan
+## hasta ahí (ver el paso 0 de _tick), así se ve cómo el área se llena.
+static func _detener_juego(estado: Dictionary, pos: Vector2, ataca_local: bool,
+		ejecutor: int, tipo: String, ticks: int) -> void:
+	var pelota: Dictionary = estado["pelota"]
+	pelota["pos"] = pos
+	pelota["vel"] = Vector2.ZERO
+	pelota["en_vuelo"] = false
+	pelota["poseedor_id"] = -1
+	pelota["es_centro"] = false
+	pelota["altura_max"] = 0.0
+	pelota["z"] = 0.0
+	pelota.erase("pared_a")
+	_marcar_posiciones(estado, pos, ataca_local, ejecutor, tipo)
+	estado["balon_parado"] = {"tipo": tipo, "pos": pos, "ataca_local": ataca_local, "ejecutor": ejecutor}
+	estado["detenido"] = ticks
+
+
+## Adónde va cada uno mientras el juego está parado. Es la parte que hace
+## que un tiro libre en zona rival se VEA distinto a uno en campo propio:
+## en el que se cuelga al área suben los de arriba y baja toda la defensa
+## rival, y en uno lejano cada uno vuelve a su casillero de formación.
+static func _marcar_posiciones(estado: Dictionary, pos: Vector2, ataca_local: bool,
+		ejecutor: int, tipo: String) -> void:
+	var rng: RandomNumberGenerator = estado["rng"]
+	var arco := arco_rival(ataca_local)
+	var dentro_x: float = arco.x - (11.0 if arco.x > 0.0 else -11.0)
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		if id == ejecutor:
+			e["marca"] = pos
+			continue
+		if e["rol"] == "ARQ":
+			e["marca"] = e["base"]
+			continue
+
+		if tipo == "centro" or tipo == "corner":
+			# Sube el que ataca de arriba y baja TODA la defensa rival: es
+			# el mismo reparto del córner, porque es la misma jugada.
+			var sube: bool = ROLES_QUE_ATACAN.has(e["rol"]) if e["equipo_local"] == ataca_local else true
+			if sube:
+				e["marca"] = Vector2(dentro_x + rng.randf_range(-5.0, 5.0), rng.randf_range(-14.0, 14.0))
+				continue
+			e["marca"] = e["base"]
+			continue
+
+		if tipo == "directo" and e["equipo_local"] != ataca_local:
+			# Barrera: los rivales que están encima se corren a la
+			# distancia reglamentaria en vez de aparecer ya corridos.
+			var d: float = pos.distance_to(e["pos"])
+			e["marca"] = pos + (e["pos"] - pos).normalized() * 9.15 if d < 9.15 else e["pos"]
+			continue
+		e["marca"] = e["base"]
+
+
+## Se reanuda: el ejecutor toca la pelota y la jugada arranca.
+static func _ejecutar_balon_parado(estado: Dictionary) -> void:
+	var bp: Dictionary = estado.get("balon_parado", {})
+	estado.erase("balon_parado")
+	if bp.is_empty():
+		return
+	if str(bp["tipo"]) == "saque_medio":
+		_reiniciar_desde_medio(estado, bool(bp["saca_local"]))
+		return
+	var ejecutor := int(bp["ejecutor"])
+	if not estado["jugadores"].has(ejecutor):
+		_dar_pelota_al_arquero(estado, not bool(bp["ataca_local"]), true)
+		return
+	var e_ej: Dictionary = estado["jugadores"][ejecutor]
+	var ataca_local: bool = bool(bp["ataca_local"])
+	e_ej["pos"] = bp["pos"]
 	_entregar_pelota(estado, ejecutor)
+	var equipo := _equipo_de(estado, ataca_local)
+	var jugador := _dict_jugador(estado, equipo, e_ej["jugador_id"])
+	if jugador.is_empty():
+		return
+
+	match str(bp["tipo"]):
+		"directo":
+			estado["libres_directos"] = int(estado.get("libres_directos", 0)) + 1
+			_resolver_tiro(estado, e_ej, jugador, "tiros_libres")
+		"centro", "corner":
+			var objetivo := _mejor_en_el_area(estado, ataca_local, ejecutor)
+			if objetivo == -1:
+				return  # nadie llegó al área: sigue jugando en corto
+			_lanzar_pase(estado, e_ej, objetivo, jugador)
+			estado["pelota"]["altura_max"] = float(pesos()["fisica"]["altura_centro"])
+			estado["pelota"]["es_centro"] = true
+			estado["pelota"]["centro_de"] = ataca_local
+			estado["centros"]["intentos"] = int(estado["centros"].get("intentos", 0)) + 1
+		_:
+			pass  # corto: la pone en juego y sigue el partido
 
 
 ## Reventarla arriba y lejos, sin destinatario: la agarra el que llegue.

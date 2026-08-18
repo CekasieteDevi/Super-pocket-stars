@@ -1783,3 +1783,83 @@ motor mueve también el brazo de control**, porque los planteles generados
 naturalmente ya traen ~3,5% de jugadores con Pie preferido, y en una
 simulación caótica alcanza con que uno pegue un pase más lento para que
 el partido entero diverja. El control no es un valor fijo entre corridas.
+
+## 31. El tiempo muerto: remate en vuelo y balón parado
+
+Dos cosas que el motor resolvía en CERO tiempo y por eso no se veían
+nunca: el remate y la falta. El partido pasaba de "remata" a "sacan del
+medio" en 0,25 s, y una falta se cobraba y se reanudaba en el mismo tick
+— no había interrupción, los jugadores aparecían ya acomodados y recién
+ahí salía el tiro libre.
+
+### El remate ahora vuela
+
+El resultado se sigue decidiendo igual (los mismos duelos, las mismas
+tiradas, en `_resolver_tiro`), pero **aplicarlo se posterga**: la pelota
+sale hacia un punto del arco a 26 m/s y el gol, la atajada, el palo o el
+afuera ocurren cuando LLEGA, unos 3 ticks después. Un remate en vuelo no
+se intercepta ni se va afuera por el camino: ya está resuelto, lo único
+que falta es que llegue.
+
+Adónde apunta depende del resultado ya decidido: el gol a ±3 m del
+centro, la atajada a ±3,4 (donde el arquero llega, por eso vuela), el
+palo justo al poste, y el afuera a 4,5-9 m del centro y por arriba. El
+arquero se tira **mientras la pelota viaja**, no cuando ya entró.
+
+**Y el gol no saca del medio en el mismo tick.** La pelota se queda en la
+red y los 22 vuelven CAMINANDO a su mitad durante 10 ticks. Sin eso la
+pelota nunca llegaba a verse adentro del arco. De paso simplificó la
+vista: el festejo ahora congela el fotograma DEL gol (que ya tiene la
+pelota en la red, a los 22 donde estaban y el marcador actualizado) en
+vez del anterior, y desapareció el parche que le pasaba el marcador por
+separado.
+
+### El balón parado para el juego
+
+`_detener_juego` deja la pelota quieta en el punto, le da a cada uno una
+**marca** y para el juego N ticks (8 la falta, 10 el córner y el gol).
+Durante esos ticks el paso 0 de `_tick` hace un tick reducido: los
+jugadores TROTAN hacia su marca (45% de su velocidad) y nada más. Al
+terminar se ejecuta la jugada.
+
+**Qué clase de tiro libre es lo decide dónde fue la falta, y eso decide
+quién sube:**
+
+| Dónde | Qué se juega | Quién se mueve |
+|---|---|---|
+| A tiro de arco | Remate con `tiros_libres` | Barrera a 9,15 m, el resto a su casillero |
+| Zona rival, a menos de 38 m | Centro al área | Suben los de arriba del que ataca y baja TODA la defensa rival |
+| Lejos | Se pone en juego corto | Cada uno a su casillero |
+
+El reparto del centro es literalmente el mismo del córner, porque es la
+misma jugada. Y el ejecutor se elige por atributo: `tiros_libres` en el
+directo, `centros` en el que se cuelga, el más cercano en el corto.
+
+El córner pasó a usar el mismo mecanismo: antes los dos equipos aparecían
+de golpe adentro del área y la pelota salía en el mismo tick.
+
+### Lo que costó, y cómo se recuperó
+
+El tiempo muerto son ~15% de los ticks del partido (unos 8 por falta ×9,
+10 por córner ×2, 10 por gol ×3, 3 por remate ×9). Medido a 200 partidos,
+antes → después:
+
+| | Antes | Después | Final |
+|---|---|---|---|
+| Goles | 3,27 | 2,85 | 3,03 |
+| Tiros | 9,9 | 8,5 | 9,6 |
+| Pases | 41,6 | 34,0 | 33,1 |
+
+Los pases bajan y **eso es el costo aceptado**: hay menos partido jugado
+por partido. Los goles no podían bajar, porque la referencia es la
+PARIDAD con `match_engine.gd` —la economía, los objetivos y los fans
+están calibrados contra él— y el abstracto da 3,26. Se recuperaron
+subiendo la disposición a rematar (`tiro.geometria` 5,3 → 6,9) en vez de
+la conversión: con menos tiempo en juego, los equipos definen antes. Se
+eligió ese lado porque mantiene intacto el porcentaje de conversión y
+mueve la mediana de distancia de remate apenas (17,8 → 18,5 m), mientras
+que tocar `porteria_base` habría hecho quedar mal a todos los arqueros.
+
+Paridad final contra el motor abstracto, 200 partidos: goles 3,03 vs
+3,26, amarillas 3,38 vs 3,17, rojas 0,66 vs 0,61. (Ojo con medir esto con
+el demo de 20 partidos: ahí las amarillas daban 3,0 y parecían rotas.)

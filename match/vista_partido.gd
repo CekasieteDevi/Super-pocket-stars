@@ -59,15 +59,12 @@ var _festejo_restante := 0.0
 var _festejo_total := 1.0
 var _tarjetas: Array = []          # [{"clave": int, "restante": float}]
 var _idx_narrado := 0
-## Fotograma que se sostiene durante el festejo, o -1. Es el ANTERIOR al
-## del gol: el motor manda a todos al círculo central en el mismo tick en
-## que valida el gol, así que congelar el fotograma del gol muestra el
-## saque del medio. Uno atrás todavía tiene la jugada.
+## Fotograma que se sostiene durante el festejo, o -1. Es EL del gol: el
+## motor deja la pelota en la red y recién unos ticks después manda a
+## todos al círculo central (ver MotorEspacial._festejar_gol), así que ese
+## fotograma tiene la pelota adentro del arco, a los 22 donde estaban y el
+## marcador ya actualizado.
 var _idx_congelado := -1
-## El marcador YA con el gol adentro. El fotograma congelado es el de
-## antes, así que si el tanteador saliera de ahí el cartel diría "¡GOL!"
-## arriba de un 0-0.
-var _goles_festejo = null
 
 
 func _ready() -> void:
@@ -117,7 +114,6 @@ func iniciar(lista: Array, c_local: Color, c_visitante: Color,
 	_relato_restante = 0.0
 	_festejo_restante = 0.0
 	_idx_congelado = -1
-	_goles_festejo = null
 	_tarjetas.clear()
 	_idx_narrado = 0
 	hud.relato = ""
@@ -141,7 +137,6 @@ func saltar_al_final() -> void:
 	_relato_restante = 0.0
 	_festejo_restante = 0.0
 	_idx_congelado = -1
-	_goles_festejo = null
 	_tarjetas.clear()
 	_mostrar(fotogramas.size() - 1, 0.0)
 	_finalizar()
@@ -189,7 +184,6 @@ func _avanzar_efectos(delta: float) -> void:
 		_festejo_restante = maxf(_festejo_restante - delta, 0.0)
 		if _festejo_restante == 0.0:
 			_idx_congelado = -1
-			_goles_festejo = null
 	hud.festejo = _festejo_restante / _festejo_total if _festejo_restante > 0.0 else 0.0
 	vista.euforia = hud.festejo
 	var vivas: Array = []
@@ -229,8 +223,7 @@ func _narrar(idx: int) -> void:
 	if _es_gol(mejor):
 		_festejo_total = maxf(SEG_FESTEJO / maxf(velocidad, 1.0), 0.15)
 		_festejo_restante = _festejo_total
-		_idx_congelado = maxi(idx - 1, 0)
-		_goles_festejo = fotogramas[idx]["goles"]
+		_idx_congelado = idx
 
 
 static func _es_gol(ev: Dictionary) -> bool:
@@ -340,7 +333,7 @@ func _mostrar(idx: int, t: float) -> void:
 	minimapa.encuadre = vista.camara.encuadre_metros(size)
 	minimapa.queue_redraw()
 
-	var g: Dictionary = _goles_festejo if _goles_festejo != null else a["goles"]
+	var g: Dictionary = a["goles"]
 	hud.goles_local = int(g["home"])
 	hud.goles_visitante = int(g["away"])
 	hud.minuto = int(a["minuto"])
