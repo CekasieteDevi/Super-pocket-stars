@@ -13,6 +13,7 @@ const COLOR_LOCAL := Color(0.93, 0.74, 0.16)
 const COLOR_VISITANTE := Color(0.30, 0.56, 0.92)
 
 var vista: VistaCancha
+var minimapa: Minimapa
 var _t := 0.0
 var _base_local: Array = []
 var _base_visitante: Array = []
@@ -35,8 +36,17 @@ func _ready() -> void:
 		_base_local.append(p)
 		_base_visitante.append(Vector2(-p.x, p.y))
 
+	minimapa = Minimapa.new()
+	add_child(minimapa)
+	minimapa.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+
 	vista.camara.saltar_a(Vector2.ZERO, size)
 	set_process(true)
+
+
+func _notification(que: int) -> void:
+	if que == NOTIFICATION_RESIZED and minimapa != null:
+		minimapa.position = size - minimapa.size - Vector2.ONE * Minimapa.MARGEN_PX
 
 
 func _process(delta: float) -> void:
@@ -63,6 +73,11 @@ func _process(delta: float) -> void:
 	vista.camara.fijar_encuadre(absf(pelota.x) > 36.0, false)
 	vista.camara.seguir(pelota, vel, size, delta)
 	vista.queue_redraw()
+
+	minimapa.position = size - minimapa.size - Vector2.ONE * Minimapa.MARGEN_PX
+	minimapa.entidades = ents
+	minimapa.encuadre = vista.camara.encuadre_metros(size)
+	minimapa.queue_redraw()
 
 
 func _vaiven(i: int, signo: float) -> Vector2:

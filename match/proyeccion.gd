@@ -27,6 +27,14 @@ const SHEAR_X := 0.10
 ## que hace legible que un centro va por arriba.
 const ESCALA_Z := 0.85
 
+## PEDIDO PENDIENTE: poder cambiar entre distintos ángulos de cámara.
+## No hace falta rehacer nada — estas tres constantes SON el ángulo, y
+## como toda la conversión pasa por sim_a_pantalla, alcanza con volverlas
+## un preset seleccionable (por ejemplo: "lateral" con SHEAR 0 y
+## compresión baja, "isométrico" con SHEAR alto, "cenital" con compresión
+## 1.0). Lo único a cuidar es que la cámara relee metros_visibles(), así
+## que el clamp se ajusta solo.
+
 
 ## La conversión. `centro_cam` es el punto de la cancha (en metros) que
 ## queda en el centro de la pantalla; `px_por_metro` es el zoom.

@@ -69,6 +69,13 @@ func _clampear(tamano_pantalla: Vector2) -> void:
 	centro.y = clampf(centro.y, -limite_y, limite_y) if limite_y > 0.0 else 0.0
 
 
+## Qué parte de la cancha está mostrando, en metros. Lo usa el minimapa
+## para dibujar el recuadro de "acá estás mirando".
+func encuadre_metros(tamano_pantalla: Vector2) -> Rect2:
+	var visible := ProyeccionPartido.metros_visibles(tamano_pantalla, px_por_metro)
+	return Rect2(centro - visible * 0.5, visible)
+
+
 func saltar_a(objetivo: Vector2, tamano_pantalla: Vector2) -> void:
 	centro = objetivo
 	px_por_metro = _objetivo_zoom
