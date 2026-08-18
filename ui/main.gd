@@ -777,7 +777,7 @@ const NOMBRES_INSTALACIONES := {
 	"medica": "Medica (menos lesiones, recupera mas rapido)",
 	"juveniles": "Juveniles (camada de cantera mas grande)",
 	"scouting": "Scouting (reportes de potencial mas precisos)",
-	"entrenamiento": "Entrenamiento (mas cupos de foco individual, crecimiento mas rapido)",
+	"entrenamiento": "Entrenamiento (mas cupos de foco individual hasta 3, crecimiento mas rapido)",
 }
 
 
@@ -840,10 +840,14 @@ func _refrescar_instalaciones() -> void:
 	_refrescar_foco_individual(equipo)
 
 
-## §7.4 punto 3 / §5: hasta N jugadores (N = nivel de Entrenamiento) con
-## foco en un atributo, x2 de crecimiento esta temporada — y la vía de
-## entrada para aprender una habilidad de bronce (2 temporadas seguidas
-## en el mismo atributo, con ese atributo en 65+).
+## §7.4 punto 3 / §5: hasta N jugadores (N = nivel de Entrenamiento con
+## tope de 3) con foco en un atributo, que esta temporada crece más
+## rápido — y la vía de entrada para aprender una habilidad de bronce (2
+## temporadas seguidas en el mismo atributo, con ese atributo en 65+).
+##
+## Cuánto más rápido depende de si el atributo es propio del puesto (ver
+## Progresion.multiplicador_foco), así que el multiplicador se muestra
+## por jugador: es la información con la que se decide a quién enfocar.
 func _refrescar_foco_individual(equipo: Team) -> void:
 	var titulo_foco := Label.new()
 	titulo_foco.text = "\nFoco individual (%d/%d cupos usados) — el atributo elegido crece x2 esta temporada. 2 temporadas seguidas en el mismo atributo (con ese atributo en 65+) puede hacerle aprender una habilidad de bronce." % [
@@ -859,8 +863,10 @@ func _refrescar_foco_individual(equipo: Team) -> void:
 		var racha: int = jugador.get("foco_temporadas_consecutivas", 0)
 		var fila := HBoxContainer.new()
 		var label := Label.new()
-		label.text = "%-22s %-5s foco: %-10s (racha: %d temporada%s)" % [
-			_nombre_jugador(jugador), jugador["posicion"], atributo, racha, "" if racha == 1 else "s"
+		label.text = "%-22s %-5s foco: %-10s x%.2f (racha: %d temporada%s)" % [
+			_nombre_jugador(jugador), jugador["posicion"], atributo,
+			Progresion.multiplicador_foco(jugador["posicion"], atributo),
+			racha, "" if racha == 1 else "s"
 		]
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		fila.add_child(label)

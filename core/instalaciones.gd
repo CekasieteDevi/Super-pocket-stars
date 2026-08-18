@@ -88,8 +88,16 @@ static func cantidad_camada(equipo: Team) -> int:
 
 ## §9.5/§7.4 entrenamiento: cuántos jugadores pueden estar en foco
 ## individual a la vez (ver core/entrenamiento.gd).
+## Tope duro de jugadores en foco individual a la vez. Las instalaciones
+## mandan hasta el nivel 3; del 4 en adelante no dan más cupos, y siguen
+## valiendo por el +% de crecimiento general que da factor_entrenamiento.
+## Con el nivel a secas se podían enfocar 5 jugadores y el foco dejaba de
+## ser una decisión: entraba medio plantel.
+const MAXIMO_FOCO_INDIVIDUAL := 3
+
+
 static func limite_foco_individual(equipo: Team) -> int:
-	return equipo.instalaciones.get("entrenamiento", 1)
+	return mini(int(equipo.instalaciones.get("entrenamiento", 1)), MAXIMO_FOCO_INDIVIDUAL)
 
 
 ## §9.5/§7.1 entrenamiento: +1% de crecimiento por nivel arriba del 1

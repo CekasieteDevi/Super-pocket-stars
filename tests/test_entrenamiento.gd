@@ -12,7 +12,8 @@ func _init() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = SEED
 
-	_test_limite_sigue_el_nivel_de_instalaciones(rng)
+	_test_limite_sigue_el_nivel_hasta_el_tope(rng)
+	_test_foco_escala_con_la_posicion(rng)
 	_test_asignar_respeta_el_cupo(rng)
 	_test_reasignar_el_mismo_jugador_no_gasta_cupo_extra(rng)
 	_test_quitar(rng)
@@ -24,17 +25,45 @@ func _init() -> void:
 	quit()
 
 
-func _test_limite_sigue_el_nivel_de_instalaciones(rng: RandomNumberGenerator) -> void:
-	print("=== limite() sigue el nivel de instalaciones de entrenamiento ===")
+func _test_limite_sigue_el_nivel_hasta_el_tope(rng: RandomNumberGenerator) -> void:
+	print("=== limite() sigue el nivel de instalaciones, con tope duro de 3 ===")
 	var equipo := Team.generar("ClubA", rng, 0)
 	equipo.instalaciones["entrenamiento"] = 1
 	var limite1 := Entrenamiento.limite(equipo)
+	equipo.instalaciones["entrenamiento"] = 3
+	var limite3 := Entrenamiento.limite(equipo)
 	equipo.instalaciones["entrenamiento"] = 5
 	var limite5 := Entrenamiento.limite(equipo)
-	if limite1 == 1 and limite5 == 5:
-		print("OK: nivel 1 -> 1 cupo, nivel 5 -> 5 cupos.")
+	if limite1 == 1 and limite3 == 3 and limite5 == 3:
+		print("OK: nivel 1 -> 1 cupo, nivel 3 -> 3, nivel 5 -> 3 (tope).")
 	else:
-		print("FALLA: limite1=%d limite5=%d" % [limite1, limite5])
+		print("FALLA: limite1=%d limite3=%d limite5=%d" % [limite1, limite3, limite5])
+
+
+## El foco rinde segun que tan propio del puesto sea el atributo: un DC
+## entrenando `tiro` (su atributo de mas peso) saca el multiplicador
+## completo, y un DFC entrenando `volea` --que ni figura en los pesos de
+## DFC-- saca el piso. Sin piso la reconversion de puesto seria
+## imposible, que es justamente por lo que existe.
+func _test_foco_escala_con_la_posicion(_rng: RandomNumberGenerator) -> void:
+	print("
+=== El foco individual escala con el peso del atributo en la posicion ===")
+	var dc_tiro := Progresion.multiplicador_foco("DC", "tiro")
+	var dc_pases := Progresion.multiplicador_foco("DC", "pases")
+	var dfc_quite := Progresion.multiplicador_foco("DFC", "quite")
+	var dfc_volea := Progresion.multiplicador_foco("DFC", "volea")
+
+	var ok: bool = is_equal_approx(dc_tiro, Progresion.MULTIPLICADOR_FOCO)
+	ok = ok and is_equal_approx(dfc_quite, Progresion.MULTIPLICADOR_FOCO)
+	ok = ok and is_equal_approx(dfc_volea, Progresion.MULTIPLICADOR_FOCO_MINIMO)
+	ok = ok and dc_pases > Progresion.MULTIPLICADOR_FOCO_MINIMO and dc_pases < dc_tiro
+
+	if ok:
+		print("OK: DC tiro %.2fx, DC pases %.2fx, DFC quite %.2fx, DFC volea %.2fx (piso)." % [
+			dc_tiro, dc_pases, dfc_quite, dfc_volea])
+	else:
+		print("FALLA: DC tiro %.2f DC pases %.2f DFC quite %.2f DFC volea %.2f" % [
+			dc_tiro, dc_pases, dfc_quite, dfc_volea])
 
 
 func _test_asignar_respeta_el_cupo(rng: RandomNumberGenerator) -> void:

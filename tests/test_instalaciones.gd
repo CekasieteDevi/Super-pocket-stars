@@ -120,15 +120,21 @@ func _test_entrenamiento_escala_cupos_y_crecimiento(rng: RandomNumberGenerator) 
 
 	var cupos_nivel1 := Instalaciones.limite_foco_individual(equipo)
 	var factor_nivel1 := Instalaciones.factor_entrenamiento(equipo)
+	equipo.instalaciones["entrenamiento"] = 3
+	var cupos_nivel3 := Instalaciones.limite_foco_individual(equipo)
 	equipo.instalaciones["entrenamiento"] = 5
 	var cupos_nivel5 := Instalaciones.limite_foco_individual(equipo)
 	var factor_nivel5 := Instalaciones.factor_entrenamiento(equipo)
 
-	var ok: bool = cupos_nivel1 == 1 and cupos_nivel5 == 5
+	# El cupo sube con el nivel hasta 3 y ahi se planta: del 4 en adelante
+	# las instalaciones siguen valiendo por el +% de crecimiento, no por
+	# mas jugadores en foco.
+	var ok: bool = cupos_nivel1 == 1 and cupos_nivel3 == 3 and cupos_nivel5 == 3
 	ok = ok and is_equal_approx(factor_nivel1, 1.0)
 	ok = ok and is_equal_approx(factor_nivel5, 1.04)
 
 	if ok:
-		print("OK: cupos 1->5, factor de crecimiento 1.00x->1.04x.")
+		print("OK: cupos 1->3->3 (tope duro), factor de crecimiento 1.00x->1.04x.")
 	else:
-		print("FALLA: cupos %d->%d factor %.3f->%.3f" % [cupos_nivel1, cupos_nivel5, factor_nivel1, factor_nivel5])
+		print("FALLA: cupos %d/%d/%d factor %.3f->%.3f" % [
+			cupos_nivel1, cupos_nivel3, cupos_nivel5, factor_nivel1, factor_nivel5])

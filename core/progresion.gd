@@ -63,9 +63,40 @@ static func _multiplicador_crecimiento(edad: int) -> float:
 ## joven — 1.0 si no aplica ninguna de las dos cosas. mult_entrenamiento
 ## (§9.5, Instalaciones.factor_entrenamiento): +1%/nivel de instalaciones
 ## de entrenamiento, sobre TODO el crecimiento. foco_atributo (§7.4 punto
-## 3, core/entrenamiento.gd): si no es "", ESE atributo puntual crece al
-## doble esta temporada — "" si el jugador no tiene foco individual.
+## 3, core/entrenamiento.gd): si no es "", ESE atributo puntual crece más
+## rápido esta temporada — "" si el jugador no tiene foco individual.
 const MULTIPLICADOR_FOCO := 2.0
+
+## Piso del multiplicador de foco. Entrenarle algo que no tiene nada que
+## ver con su puesto igual sirve un poco: es lo que permite RECONVERTIR a
+## un jugador de posición a lo largo de varias temporadas. Sin piso, un
+## defensa entrenando volea no crecía nada y la reconversión era
+## imposible.
+const MULTIPLICADOR_FOCO_MINIMO := 1.3
+
+
+## Cuánto rinde el foco individual según qué tan propio del puesto sea el
+## atributo. Un delantero entrenando `tiro` (su atributo de mayor peso)
+## saca el multiplicador completo; el mismo delantero entrenando `pases`
+## saca bastante menos, y un defensa entrenando `volea` —que ni figura en
+## los pesos de DFC— saca el piso.
+##
+## Se escala contra el peso MÁXIMO de su propia posición y no contra un
+## número fijo, porque los pesos no suman igual en todos los puestos: si
+## se comparara contra una constante, unas posiciones rendirían siempre
+## más que otras por cómo está armada la tabla, no por decisión de nadie.
+static func multiplicador_foco(posicion: String, atributo: String) -> float:
+	var tabla: Dictionary = PlayerGenerator.get_weights()
+	if not tabla.has(posicion):
+		return MULTIPLICADOR_FOCO
+	var pesos: Dictionary = tabla[posicion]
+	var maximo := 0.0
+	for p in pesos.values():
+		maximo = maxf(maximo, float(p))
+	if maximo <= 0.0:
+		return MULTIPLICADOR_FOCO
+	var relevancia: float = clampf(float(pesos.get(atributo, 0)) / maximo, 0.0, 1.0)
+	return lerpf(MULTIPLICADOR_FOCO_MINIMO, MULTIPLICADOR_FOCO, relevancia)
 
 
 static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator, mult_mentor: float = 1.0,
@@ -90,7 +121,7 @@ static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator, m
 			if not congelado_por_comodon:
 				var distancia: float = float(jugador["potencial"]) - valor_actual
 				if distancia > 0.0:
-					var mult_foco: float = MULTIPLICADOR_FOCO if attr == foco_atributo else 1.0
+					var mult_foco: float = multiplicador_foco(jugador["posicion"], attr) if attr == foco_atributo else 1.0
 					cambio = distancia * 0.12 * mult_edad * mult_tier * mult_personalidad * mult_mentor * mult_entrenamiento * mult_foco
 				cambio += rng.randfn(0.0, 0.6)
 		else:
