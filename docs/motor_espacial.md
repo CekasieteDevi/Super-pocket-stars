@@ -2301,3 +2301,63 @@ el dato viajaba pero la pantalla se había armado con el texto inicial y
 nadie la volvía a tocar.
 
 Balance final: goles 3,33 vs 3,26 del abstracto, amarillas 3,14 vs 3,17.
+
+## 41. Los pases eran demasiado largos
+
+El usuario dijo que veía a su equipo "hacer pases de un área a otra"
+sintiendo que tenían media baja. Tenía razón. Se agregó `dist_pases` a
+las stats (separado de `dist_pelotazos`, porque el pelotazo es largo a
+propósito y mezclarlos escondía el problema) y la medición fue:
+
+| Plantel | `pases` medio | Mediana | >30 m | Máx |
+|---|---|---|---|---|
+| media 23 | 23,4 | 20,6 m | 19% | 52 m |
+| media 62 | 62,3 | 23,5 m | 32% | 65 m |
+
+Mediana de 21 m contra los 15-18 reales, uno de cada cinco pases por
+encima de 30 m, y **un plantel de `pases` 23 pasando casi igual que uno
+de 62**. El atributo casi no se notaba.
+
+La causa no era el alcance máximo sino el peso: `pase.distancia` valía
+0,15, o sea que un pase de 26 m perdía apenas 0,15 de utilidad contra uno
+de 2 m. La distancia prácticamente no costaba. Subió a **0,55**, y de paso
+se ajustó el alcance (`max_dist_pase_malo` 26 → 22, `bueno` 46 → 42).
+
+| Plantel | Mediana | >30 m | Máx |
+|---|---|---|---|
+| media 23 | 16,0 m | 4% | 50 m |
+| media 62 | 18,4 m | 10% | 50 m |
+
+Primer intento fallido, que vale anotar: bajar el alcance a 17/38 dejó la
+mediana perfecta (12,7 m) pero **disparó los pelotazos a 15 por partido**,
+porque al achicar el rango del pase normal todo compañero un poco lejos
+caía en "solo llego con un pelotazo". El alcance no era la palanca; el
+peso sí.
+
+## 42. La pelota salía un tick tarde
+
+"Cuando hacen un pase la pelota queda en el lugar, el jugador se mueve un
+poco y luego la pelota se mueve."
+
+El orden del tick era: 1) si está en vuelo, avanzarla; 2) si hay
+poseedor, decidir. Un pase lanzado en el paso 2 **no se movía hasta el
+tick siguiente**, y mientras tanto el que la pateó sí se movía —al
+soltarla deja de ser el poseedor y el paso 3 ya no lo saltea—. Se veía
+como si la pelota saliera sola y tarde.
+
+Ahora, si la decisión la puso en movimiento, se la hace avanzar en el
+mismo tick. Lo mismo al reanudar un balón parado. Medido: la pelota se
+mueve 4 m en el fotograma en que se suelta, contra 0 antes.
+
+## 43. Los reinicios se juegan, no se corren
+
+El lateral y el tiro libre lejano dejaban la pelota en los pies del
+ejecutor y ahí entraba la lógica normal de decisión, donde "conducir"
+gana casi siempre: el que sacaba **arrancaba corriendo desde la línea de
+banda**. Ahora los tres reinicios cortos (saque del medio, lateral, falta
+lejana) fuerzan un pase al compañero más atrasado que esté a distancia,
+con la misma función `_tocar_corto`.
+
+Balance final: goles 3,37 vs 3,26 del abstracto, amarillas 3,22 vs 3,17,
+pases completados 37,3 (subieron desde 29 porque un pase corto se
+completa mucho más).

@@ -380,6 +380,8 @@ static func crear_estado(home: Team, away: Team, rng: RandomNumberGenerator) -> 
 		"pase_detalle": {"intentos": 0, "interceptado_vuelo": 0, "rival_llego_antes": 0, "fuera": 0},
 		"linea_offside": {"local": LIMITE_X, "away": -LIMITE_X},
 		"dist_tiros": [],
+		"dist_pases": [],
+		"dist_pelotazos": [],
 		"posesion_ticks": {"home": 0, "away": 0},
 		"tiros": {"home": 0, "away": 0},
 		"pases": {"home": 0, "away": 0},
@@ -1849,6 +1851,14 @@ static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: i
 	var dir: Vector2 = (objetivo - poseedor["pos"]).normalized()
 	var pelota: Dictionary = estado["pelota"]
 	estado["pase_detalle"]["intentos"] += 1
+	# Se separan porque son jugadas distintas: el pelotazo es a propósito
+	# largo (lo manda `fuerza`) y mezclarlo con el pase normal escondía
+	# cuánto se estaba pasando de largo en el juego asociado.
+	var _d: float = poseedor["pos"].distance_to(objetivo)
+	if es_pelotazo:
+		estado["dist_pelotazos"].append(_d)
+	else:
+		estado["dist_pases"].append(_d)
 	_accion(estado, int(poseedor["clave"]), ACCION_PATEA)
 	pelota["poseedor_id"] = -1
 	pelota["en_vuelo"] = true
@@ -1930,6 +1940,10 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 				_mover_hacia(e_p, e_p.get("marca", e_p["pos"]), FACTOR_TROTE_PARADO)
 		if int(estado["detenido"]) == 0:
 			_ejecutar_balon_parado(estado)
+			# Mismo motivo que en el paso 2: si el reinicio fue un pase,
+			# la pelota arranca en este fotograma y no en el siguiente.
+			if pelota["en_vuelo"]:
+				_avanzar_pelota(estado)
 		_cerrar_tick(estado, con_fotogramas, eventos_antes)
 		return
 
@@ -1939,6 +1953,14 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 	# 2. Con poseedor: decide y ejecuta.
 	elif pelota["poseedor_id"] != -1:
 		_decidir_y_ejecutar(estado)
+		# Si la decisión la puso en movimiento, la pelota arranca YA. Sin
+		# esto perdía un tick entero: el pase salía, la pelota se quedaba
+		# clavada donde estaba, el que la pateó se movía —porque al soltarla
+		# deja de ser el poseedor y el paso 3 ya no lo saltea— y recién al
+		# tick siguiente la pelota empezaba a viajar. Se veía como si la
+		# pelota saliera sola y tarde.
+		if pelota["en_vuelo"]:
+			_avanzar_pelota(estado)
 
 	# El tick que PARÓ el juego (gol, falta, córner) no mueve a nadie más:
 	# si no, el arquero que se acaba de tirar se levanta y trota a su
@@ -2712,10 +2734,11 @@ static func _marcar_posiciones(estado: Dictionary, pos: Vector2, ataca_local: bo
 		e["marca"] = e["base"]
 
 
-## El toque inicial: se la pasa al compañero MÁS ATRASADO que tenga cerca,
-## que es lo que se hace de verdad — la pelota va para atrás y el equipo
-## sale jugando desde ahí.
-static func _tocar_del_medio(estado: Dictionary, saca_local: bool) -> void:
+## Un reinicio se JUEGA, no se arranca corriendo: se la toca al compañero
+## más atrasado que esté a distancia de pase. Vale para el saque del
+## medio, el lateral y el tiro libre lejano — en los tres el que la pone
+## en juego no sale conduciendo.
+static func _tocar_corto(estado: Dictionary, saca_local: bool) -> void:
 	var poseedor_id: int = int(estado["pelota"]["poseedor_id"])
 	if poseedor_id == -1 or not estado["jugadores"].has(poseedor_id):
 		return
@@ -2758,7 +2781,7 @@ static func _ejecutar_balon_parado(estado: Dictionary) -> void:
 		# compañero y desde ahí empieza el partido. Sin esto el que la
 		# tenía salía corriendo solo desde el círculo central, que no es
 		# lo que pasa en ninguna cancha.
-		_tocar_del_medio(estado, bool(bp["saca_local"]))
+		_tocar_corto(estado, bool(bp["saca_local"]))
 		estado["eventos"].append({
 			"minuto": _minuto_int(estado), "tipo": "saque_inicial",
 			"equipo": _equipo_de(estado, bool(bp["saca_local"])).nombre,
@@ -2793,7 +2816,10 @@ static func _ejecutar_balon_parado(estado: Dictionary) -> void:
 			estado["pelota"]["centro_de"] = ataca_local
 			estado["centros"]["intentos"] = int(estado["centros"].get("intentos", 0)) + 1
 		_:
-			pass  # corto: la pone en juego y sigue el partido
+			# Corto (lateral, falta lejana): se la TOCA a un compañero. Si
+			# no, el ejecutor arrancaba corriendo con la pelota desde la
+			# línea de banda, que no es poner la pelota en juego.
+			_tocar_corto(estado, ataca_local)
 
 
 ## Reventarla arriba y lejos, sin destinatario: la agarra el que llegue.
@@ -3052,6 +3078,8 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 			"penales": estado.get("penales", 0),
 			"libres_directos": estado.get("libres_directos", 0),
 			"offsides": estado.get("offsides", 0),
+			"dist_pases": estado["dist_pases"],
+			"dist_pelotazos": estado["dist_pelotazos"],
 			"reinicios": estado["reinicios"],
 			"cooldown_activos": estado["cooldown"].size(),
 			"pase_detalle": estado["pase_detalle"],
