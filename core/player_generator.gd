@@ -9,6 +9,15 @@ const ATTR_GROUPS_PATH := "res://data/attribute_groups.json"
 
 static var _weights_cache = null
 static var _all_attributes_cache: Array = []
+static var _groups_cache = null
+
+
+## Los atributos agrupados como los define el GDD (§2). Lo usa la ficha
+## del jugador para mostrarlos por bloque en vez de como una lista de 25.
+static func get_attribute_groups() -> Dictionary:
+	if _groups_cache == null:
+		_groups_cache = DataLoader.load_json(ATTR_GROUPS_PATH)
+	return _groups_cache
 
 
 static func get_weights() -> Dictionary:

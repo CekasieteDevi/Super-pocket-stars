@@ -13,6 +13,8 @@ extends Control
 var paneles: Dictionary = {}  # nombre -> Control, para mostrar/ocultar en bloque
 
 var lista_plantel: RichTextLabel
+var lista_ficha: RichTextLabel
+var ficha_jugador_id := -1
 var contenedor_banco_botones: VBoxContainer
 var lista_tabla: RichTextLabel
 var label_resultado: Label
@@ -90,6 +92,7 @@ func _ready() -> void:
 	_construir_panel_cantera(contenedor)
 	_construir_panel_noticias(contenedor)
 	_construir_panel_partida_guardado(contenedor)
+	_construir_panel_ficha(contenedor)
 
 	_mostrar_plantel()
 
@@ -133,10 +136,14 @@ func _construir_panel_plantel(padre: Control) -> void:
 	panel.add_child(titulo)
 
 	var titulo_titulares := Label.new()
-	titulo_titulares.text = "Titulares (11)"
+	titulo_titulares.text = "Titulares (11) — toca el nombre para ver la ficha"
 	panel.add_child(titulo_titulares)
 
 	lista_plantel = RichTextLabel.new()
+	lista_plantel.bbcode_enabled = true
+	# Cada linea es un enlace al id del jugador: se toca el nombre y se
+	# abre su ficha. Es el unico lugar donde se pueden ver los atributos.
+	lista_plantel.meta_clicked.connect(func(meta): _mostrar_ficha(int(meta)))
 	lista_plantel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	lista_plantel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.add_child(lista_plantel)
@@ -162,9 +169,14 @@ func _refrescar_plantel() -> void:
 	var texto := ""
 	for j in equipo.jugadores:
 		var capitan := "  (C)" if j["id"] == equipo.capitan_id else ""
-		var canterano := "  [cantera]" if j.get("es_canterano", false) else ""
-		texto += "%-4s  %-22s  media %5.1f   potencial %3d   genetica %s%s%s%s\n" % [
-			j["posicion"], _nombre_jugador(j), j["media"], j["potencial"], j["genetica_tier"], capitan, canterano, _tag_habilidad(j)
+		# [lb] es el corchete escapado: la lista ahora es BBCode y un
+		# "[cantera]" suelto se comería como si fuera una etiqueta.
+		var canterano := "  [lb]cantera]" if j.get("es_canterano", false) else ""
+		# El nombre va como enlace y COLOREADO: un [url] sin estilo no se
+		# distingue del texto común y nadie descubre que se puede tocar.
+		texto += "%-4s  [url=%d][color=#8ecae6]%-22s[/color][/url]  media %5.1f   potencial %3d   genetica %s%s%s%s\n" % [
+			j["posicion"], j["id"], _nombre_jugador(j), j["media"], j["potencial"],
+			j["genetica_tier"], capitan, canterano, _tag_habilidad(j)
 		]
 	lista_plantel.text = texto
 
@@ -178,9 +190,14 @@ func _refrescar_plantel() -> void:
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		fila.add_child(label)
 
+		var jugador_id: int = j["id"]
+		var btn_ficha := Button.new()
+		btn_ficha.text = "Ficha"
+		btn_ficha.pressed.connect(func(): _mostrar_ficha(jugador_id))
+		fila.add_child(btn_ficha)
+
 		var btn := Button.new()
 		btn.text = "Subir a titular"
-		var jugador_id: int = j["id"]
 		btn.pressed.connect(func(): _on_promover_a_titular(jugador_id))
 		fila.add_child(btn)
 
@@ -190,6 +207,124 @@ func _refrescar_plantel() -> void:
 func _on_promover_a_titular(jugador_id: int) -> void:
 	GameState.equipo_jugador.promover_a_titular(jugador_id)
 	_refrescar_plantel()
+
+
+## Ficha del jugador: los atributos, que hasta ahora no se veian en
+## ningun lado. Sin esto el jugador no puede entender por que su equipo
+## juega como juega — que un plantel tire pases cortos o remate de lejos
+## sale de numeros que estaban ocultos.
+func _construir_panel_ficha(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	padre.add_child(panel)
+	paneles["ficha"] = panel
+
+	var btn_volver := Button.new()
+	btn_volver.text = "< Volver al plantel"
+	btn_volver.pressed.connect(_mostrar_plantel)
+	panel.add_child(btn_volver)
+
+	lista_ficha = RichTextLabel.new()
+	lista_ficha.bbcode_enabled = true
+	lista_ficha.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	lista_ficha.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(lista_ficha)
+
+
+func _mostrar_ficha(jugador_id: int) -> void:
+	ficha_jugador_id = jugador_id
+	_ocultar_todos()
+	paneles["ficha"].visible = true
+	_refrescar_ficha()
+
+
+## Barra de texto para un atributo. Se pinta con color segun el valor
+## porque una grilla de 25 numeros sueltos no se lee: lo que se quiere ver
+## de un vistazo es en que es bueno y en que no.
+func _barra_atributo(nombre: String, valor: int) -> String:
+	var llenos: int = int(round(valor / 10.0))
+	var color := "#c0392b"
+	if valor >= 75:
+		color = "#27ae60"
+	elif valor >= 55:
+		color = "#7fb069"
+	elif valor >= 40:
+		color = "#d4a017"
+	return "  %-14s [color=%s]%3d %s[/color]
+" % [
+		nombre.replace("_", " "), color, valor,
+		"█".repeat(llenos) + "░".repeat(10 - llenos)]
+
+
+func _refrescar_ficha() -> void:
+	var equipo := GameState.equipo_jugador
+	var j := _buscar_jugador_por_id(equipo, ficha_jugador_id)
+	if j.is_empty():
+		lista_ficha.text = "Ese jugador ya no esta en el plantel."
+		return
+
+	var t := "[b]%s[/b]   %s, %d anos
+" % [_nombre_jugador(j), j["posicion"], j["edad"]]
+	t += "media %.1f   potencial %d   genetica %s
+" % [j["media"], j["potencial"], j["genetica_tier"]]
+	if j.get("mejor_posicion", j["posicion"]) != j["posicion"]:
+		t += "[color=#d4a017]Rinde mejor de %s (media %.1f ahi)[/color]
+" % [
+			j["mejor_posicion"], j.get("media_mejor_posicion", j["media"])]
+	t += "pie %s
+" % ("izquierdo" if Personalidad.pie_preferido(j) < 0 else "derecho")
+
+	var p: Dictionary = j.get("personalidades", {})
+	if p.is_empty():
+		t += "sin rasgos de personalidad
+"
+	else:
+		t += "[color=#27ae60]%s[/color]  /  [color=#c0392b]%s[/color]
+" % [
+			p.get("positiva", "-"), p.get("negativa", "-")]
+	var tag := _tag_habilidad(j)
+	if tag != "":
+		t += "habilidad:%s
+" % tag
+
+	# Estado: lo que cambia partido a partido.
+	t += "
+[b]Estado[/b]
+"
+	t += "  energia      %3d%%
+" % int(round(equipo.resistencia_pct(j["id"]) * 100.0))
+	t += "  animo        %3d
+" % int(equipo.animo.get(j["id"], 50))
+	if equipo.esta_lesionado(j["id"]):
+		var les: Dictionary = equipo.lesiones[j["id"]]
+		t += "  [color=#c0392b]lesionado: %s, %d dias[/color]
+" % [les["tipo"], les["dias_restantes"]]
+	var susp: int = int(equipo.suspendidos.get(j["id"], 0))
+	if susp > 0:
+		t += "  [color=#c0392b]suspendido %d fecha(s)[/color]
+" % susp
+	t += "  contrato     %d ano(s),  sueldo %s
+" % [
+		int(equipo.contratos.get(j["id"], 0)), Economia.formato_dinero(equipo.sueldos.get(j["id"], 0))]
+	if equipo.clausulas.has(j["id"]):
+		t += "  clausula     %s
+" % Economia.formato_dinero(equipo.clausulas[j["id"]])
+
+	# Atributos por grupo. El de arquero solo si es arquero: a un delantero
+	# no le sirve saber su `estirada`.
+	var grupos: Dictionary = PlayerGenerator.get_attribute_groups()
+	var attrs: Dictionary = j["atributos"]
+	for grupo in grupos:
+		if grupo == "arquero" and j["posicion"] != "ARQ":
+			continue
+		t += "
+[b]%s[/b]
+" % grupo.capitalize()
+		for a in grupos[grupo]:
+			if attrs.has(a):
+				t += _barra_atributo(a, int(attrs[a]))
+	lista_ficha.text = t
 
 
 func _construir_panel_tabla(padre: Control) -> void:
