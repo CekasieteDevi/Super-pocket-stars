@@ -57,12 +57,17 @@ const SEG_FESTEJO := 2.2
 ## Cuánto flota una tarjeta sobre el infractor, en segundos reales.
 const SEG_TARJETA := 2.6
 
+## Cuánto dura el parpadeo negro del corte de juego. Corto a propósito:
+## es un golpe, no una transición.
+const SEG_PARPADEO := 0.35
+
 var _relato_restante := 0.0
 var _relato_total := 1.0
 var _festejo_restante := 0.0
 var _festejo_total := 1.0
 var _tarjetas: Array = []          # [{"clave": int, "restante": float}]
 var _idx_narrado := 0
+var _parpadeo_restante := 0.0
 ## Fotograma que se sostiene durante el festejo, o -1. Es EL del gol: el
 ## motor deja la pelota en la red y recién unos ticks después manda a
 ## todos al círculo central (ver MotorEspacial._festejar_gol), así que ese
@@ -120,6 +125,7 @@ func iniciar(lista: Array, c_local: Color, c_visitante: Color,
 	_terminado = false
 	_relato_restante = 0.0
 	_festejo_restante = 0.0
+	_parpadeo_restante = 0.0
 	_idx_congelado = -1
 	_tarjetas.clear()
 	_idx_narrado = 0
@@ -143,6 +149,7 @@ func saltar_al_final() -> void:
 	_idx_narrado = fotogramas.size() - 1
 	_relato_restante = 0.0
 	_festejo_restante = 0.0
+	_parpadeo_restante = 0.0
 	_idx_congelado = -1
 	_tarjetas.clear()
 	_mostrar(fotogramas.size() - 1, 0.0)
@@ -193,6 +200,9 @@ func _avanzar_efectos(delta: float) -> void:
 			_idx_congelado = -1
 	hud.festejo = _festejo_restante / _festejo_total if _festejo_restante > 0.0 else 0.0
 	vista.euforia = hud.festejo
+	if _parpadeo_restante > 0.0:
+		_parpadeo_restante = maxf(_parpadeo_restante - delta, 0.0)
+	hud.parpadeo = _parpadeo_restante / SEG_PARPADEO
 	var vivas: Array = []
 	for t in _tarjetas:
 		t["restante"] = float(t["restante"]) - delta
@@ -206,6 +216,11 @@ func _avanzar_efectos(delta: float) -> void:
 ## y falta), así que gana el más importante para el relato, pero la
 ## tarjeta se registra igual aunque no sea la que se narra.
 func _narrar(idx: int) -> void:
+	# El corte en seco lo marca el motor en el fotograma, no se deduce del
+	# evento: la falta y el saque del medio lo disparan por caminos
+	# distintos y el que manda es el mismo en los dos.
+	if bool(fotogramas[idx].get("corte", false)):
+		_parpadeo_restante = SEG_PARPADEO
 	var lista: Array = fotogramas[idx].get("eventos", [])
 	if lista.is_empty():
 		return

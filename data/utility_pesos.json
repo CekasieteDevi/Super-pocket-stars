@@ -52,13 +52,13 @@
   },
   "tiro": {
     "base": 0.0,
-    "geometria": 6.2
+    "geometria": 7.0
   },
   "_tiro_resolucion": "Calibrado contra un partido real: ~35% de los remates van al arco y de esos entra alrededor de 1 de cada 3. calidad = tiro*peso_atributo + geometria*peso_geometria.",
   "tiro_resolucion": {
     "peso_atributo": 0.6,
     "peso_geometria": 0.4,
-    "porteria_base": 0.425,
+    "porteria_base": 0.5,
     "porteria_calidad": 0.5,
     "palo": 0.05,
     "fuerza_base": 0.8

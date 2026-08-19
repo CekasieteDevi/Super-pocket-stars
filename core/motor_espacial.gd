@@ -143,7 +143,7 @@ const ALCANCE_ESTIRADA := 2.0
 ## son 0,25 s, así que 10 ticks son 2,5 segundos de reloj de partido: lo
 ## suficiente para que se vea que el juego paró y que la gente se acomoda,
 ## sin que aburra a x1.
-const TICKS_DETENIDO := {"falta": 12, "corner": 13, "gol": 10, "saque_inicial": 4, "lateral": 7, "saque_arco": 8}
+const TICKS_DETENIDO := {"falta": 12, "corner": 13, "gol": 10, "saque_inicial": 12, "lateral": 7, "saque_arco": 8}
 
 ## Cuánto le achica el margen de error de desmarque el rasgo Enfocado.
 ## No es cero: hasta el delantero más atento se va alguna vez, y ponerlo
@@ -460,18 +460,24 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 	var f: Dictionary = w["fisica"]
 	var sesgos: Dictionary = w["sesgos_personalidad"]
 	var es_local: bool = poseedor["equipo_local"]
+	# El arquero no encara, no juega paredes y no sale conduciendo: saca.
+	# Sin esto se lo vio salir de un saque de arco a jugar una pared con un
+	# defensor, perderla y comerse el gol — el motor lo trataba como a un
+	# jugador de campo más porque nada lo distinguía.
+	var es_arquero: bool = poseedor["rol"] == "ARQ"
 	var pos: Vector2 = poseedor["pos"]
 	var presion := presion_normalizada(estado, pos, es_local)
 	var mi_valor := valor_posicion(pos, es_local)
 	var opciones := []
 
 	# --- Conducir -----------------------------------------------------
-	var wc: Dictionary = w["conducir"]
-	var u_conducir: float = wc["base"] + wc["espacio"] * (1.0 - presion) + wc["progreso"] * (1.0 - mi_valor)
-	opciones.append({
-		"tipo": "conducir", "utilidad": u_conducir,
-		"detalle": {"presion": presion, "mi_valor": mi_valor},
-	})
+	if not es_arquero:
+		var wc: Dictionary = w["conducir"]
+		var u_conducir: float = wc["base"] + wc["espacio"] * (1.0 - presion) + wc["progreso"] * (1.0 - mi_valor)
+		opciones.append({
+			"tipo": "conducir", "utilidad": u_conducir,
+			"detalle": {"presion": presion, "mi_valor": mi_valor},
+		})
 
 	# --- Tirar --------------------------------------------------------
 	var geo := factor_geometria(pos, es_local, jugador)
@@ -511,7 +517,7 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 	# dejaba la pared exigiendo `control` 50 sin querer — justo al revés,
 	# porque la pared es el recurso del que NO puede pasarlo por sí solo.
 	var rival_delante := _rival_a_encarar(estado, pos, es_local)
-	var sabe_gambetear: bool = float(jugador["atributos"]["control"]) >= float(f["control_minimo_gambeta"])
+	var sabe_gambetear: bool = not es_arquero 		and float(jugador["atributos"]["control"]) >= float(f["control_minimo_gambeta"])
 	var rival_a_encarar := rival_delante if sabe_gambetear else -1
 	if rival_a_encarar != -1:
 		var wg: Dictionary = w["gambeta"]
@@ -626,7 +632,7 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 		# del que lo marca. Son DOS pases encadenados, así que hay dos
 		# chances de que se la corten: por eso es una jugada de los que
 		# saben pasar, no de cualquiera.
-		if sabe_pared and dist <= dist_max_muro and rival_delante != -1:
+		if sabe_pared and not es_arquero and dist <= dist_max_muro and rival_delante != -1:
 			var retorno := _punto_retorno_pared(pos, es_local, avance_pared)
 			var riesgo_muro := riesgo_linea(estado, pos, comp["pos"], es_local)
 			var u_pared: float = wpa["base"] \
@@ -2031,6 +2037,7 @@ static func _cerrar_tick(estado: Dictionary, con_fotogramas: bool, eventos_antes
 		# emite la tarjeta y después la falta, y quedarse con el último
 		# hacía desaparecer las tarjetas del relato.
 		_push_fotograma(estado, estado["eventos"].slice(eventos_antes))
+	estado["corte_este_tick"] = false
 
 
 static func _avanzar_pelota(estado: Dictionary) -> void:
@@ -2379,11 +2386,21 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 	ticks_control = maxi(ticks_control, 1)
 	var ticks: int = int(pelota.get("ticks_con_pelota", 0))
 	if ticks == 0 or ticks % ticks_control != 0:
-		_conducir(estado, poseedor)
+		# El arquero no sale conduciendo mientras piensa: se queda con la
+		# pelota. Quitarle "conducir" de las opciones no alcanzaba, porque
+		# este atajo lo hace avanzar igual en todos los ticks en que no
+		# decide — y así se lo veía salir caminando del área.
+		if poseedor["rol"] != "ARQ":
+			_conducir(estado, poseedor)
 		return
 
 	var opciones := evaluar_opciones(estado, poseedor, jugador)
 	if opciones.is_empty():
+		# Sin opciones y sin poder conducir, el arquero se quedaría con la
+		# pelota para siempre: la revienta, que es lo que hace cualquier
+		# arquero sin salida.
+		if poseedor["rol"] == "ARQ":
+			_despejar(estado, poseedor, jugador)
 		return
 	var presion := presion_normalizada(estado, poseedor["pos"], es_local)
 	var temp := temperatura(jugador, presion)
@@ -2583,7 +2600,7 @@ static func _tiro_libre(estado: Dictionary, punto: Vector2, ataca_local: bool, _
 	if ejecutor == -1:
 		_dar_pelota_al_arquero(estado, ataca_local, true)
 		return
-	_detener_juego(estado, pos, ataca_local, ejecutor, tipo, int(TICKS_DETENIDO["falta"]))
+	_detener_juego(estado, pos, ataca_local, ejecutor, tipo, int(TICKS_DETENIDO["falta"]), true)
 
 
 ## Quién la ejecuta. En el tiro libre directo manda `tiros_libres`; en el
@@ -2612,8 +2629,14 @@ static func _elegir_ejecutor(estado: Dictionary, pos: Vector2, ataca_local: bool
 ## Para el juego, deja la pelota en el punto y le da a cada uno su marca.
 ## Los jugadores NO se teletransportan: durante los ticks de pausa trotan
 ## hasta ahí (ver el paso 0 de _tick), así se ve cómo el área se llena.
+## `corte` = frenada en seco: en vez de que los jugadores caminen a sus
+## marcas, se los planta ahí y el juego queda TOTALMENTE congelado los
+## ticks que dure. Es lo que se usa en la falta y en el saque del medio,
+## donde el reinicio tiene que leerse como un corte y no como una
+## transición. El resto de los reinicios (lateral, córner, saque de arco)
+## siguen con la gente acomodándose, que ahí sí se ve bien.
 static func _detener_juego(estado: Dictionary, pos: Vector2, ataca_local: bool,
-		ejecutor: int, tipo: String, ticks: int) -> void:
+		ejecutor: int, tipo: String, ticks: int, corte: bool = false) -> void:
 	var pelota: Dictionary = estado["pelota"]
 	# La pelota NO se pone en el punto todavía: se queda DONDE QUEDÓ
 	# —afuera de la cancha, en las manos del arquero, donde fue la falta—
@@ -2631,7 +2654,17 @@ static func _detener_juego(estado: Dictionary, pos: Vector2, ataca_local: bool,
 	_marcar_posiciones(estado, pos, ataca_local, ejecutor, tipo)
 	estado["balon_parado"] = {"tipo": tipo, "pos": pos, "ataca_local": ataca_local, "ejecutor": ejecutor}
 	estado["detenido"] = ticks
-	estado["quietos"] = int(round(ticks * FRACCION_QUIETOS))
+	if corte:
+		for id in estado["jugadores"]:
+			var e_c: Dictionary = estado["jugadores"][id]
+			e_c["pos"] = e_c.get("marca", e_c["pos"])
+			e_c["vel"] = Vector2.ZERO
+			e_c["rapidez"] = 0.0
+		pelota["pos"] = pos
+		estado["quietos"] = ticks
+		estado["corte_este_tick"] = true
+	else:
+		estado["quietos"] = int(round(ticks * FRACCION_QUIETOS))
 
 
 ## Adónde va cada uno mientras el juego está parado. Es la parte que hace
@@ -2897,6 +2930,9 @@ static func _push_fotograma(estado: Dictionary, eventos_del_tick: Array = []) ->
 		# A diferencia de "evento", vienen con la clave del jugador, que es
 		# lo que la vista necesita para animar al que corresponde.
 		"acciones": estado["acciones_tick"],
+		# El juego se cortó en seco en este tick (falta, saque del medio):
+		# la vista lo usa para el parpadeo.
+		"corte": bool(estado.get("corte_este_tick", false)),
 		"goles": {"home": estado["home"].goles, "away": estado["away"].goles},
 	})
 
@@ -2944,6 +2980,7 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 		}
 		estado["detenido"] = int(TICKS_DETENIDO["saque_inicial"])
 		estado["quietos"] = int(TICKS_DETENIDO["saque_inicial"])
+		estado["corte_este_tick"] = true
 		for t in range(TICKS_POR_MITAD):
 			_tick(estado, con_fotogramas)
 			if not ventanas.is_empty() and estado["minuto"] >= ventanas[0]:

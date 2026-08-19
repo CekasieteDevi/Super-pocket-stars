@@ -46,6 +46,12 @@ var relato_alfa := 0.0
 ## sin que ninguno lleve su propio reloj.
 var festejo := 0.0
 
+## Parpadeo negro, 1 a 0. Marca el instante en que el juego se corta en
+## seco (falta, saque del medio). Es un recurso de presentación puro: la
+## frenada ya existe en el motor, pero sin un golpe visual el ojo no
+## registra el corte, solo ve que todo se quedó quieto.
+var parpadeo := 0.0
+
 var _columna: VBoxContainer
 var _boton_pausa: Button
 var _boton_menu: Button
@@ -115,6 +121,8 @@ func _draw() -> void:
 	_dibujar_poseedor(fuente)
 	_dibujar_relato(fuente)
 	_dibujar_festejo(fuente)
+	if parpadeo > 0.01:
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, clampf(parpadeo, 0.0, 1.0) * 0.85))
 
 
 ## Banner: camiseta, nombre, resultado, nombre, camiseta.

@@ -2197,3 +2197,60 @@ Balance tras todo esto: goles 3,23 vs 3,26 del abstracto, amarillas 3,29
 vs 3,17. **No hizo falta tocar nada**: las faltas bajaron de 6,7 a 6,3 y
 el presupuesto de tarjetas por tiempo (§36) absorbió el cambio solo, que
 era exactamente para lo que se hizo.
+
+## 39. El arquero no es un jugador de campo, y el corte en seco
+
+### El arquero salía a jugar
+
+Se lo vio salir de un saque de arco a **jugar una pared con un
+defensor**, perderla y comerse el gol. El motor lo trataba como a
+cualquier otro: nada lo distinguía en `evaluar_opciones`.
+
+Ahora el arquero no conduce, no encara y no juega paredes: saca. Y hubo
+que arreglarlo en DOS lugares, porque sacarle "conducir" de las opciones
+no alcanzaba — `_decidir_y_ejecutar` tiene un atajo por el que el
+poseedor conduce en todos los ticks en los que NO evalúa (evaluar 4 veces
+por segundo desbordaba las tiradas de remate), y ese atajo lo hacía
+avanzar igual. Con las dos mitades, el arquero se queda con la pelota
+hasta que decide qué hacer. Si se queda sin opciones, la revienta, que es
+lo que hace cualquier arquero sin salida — antes ese caso no existía
+porque conducir siempre estaba disponible.
+
+**Costó 0,46 goles por partido** (3,23 → 2,77): eran goles que salían de
+regalos del arquero y no deberían haber existido nunca.
+
+### El corte en seco
+
+La falta y el saque del medio ahora **frenan el partido de golpe**: los
+jugadores se plantan en su marca, la pantalla da un parpadeo negro y todo
+queda absolutamente inmóvil 12 ticks (3 segundos) antes de que se juegue
+la pelota. El parpadeo es presentación pura —la frenada ya existía en el
+motor— pero sin ese golpe visual el ojo no registra el corte: solo ve que
+todo se quedó quieto, que es lo que el usuario venía reportando tres
+veces seguidas.
+
+El corte además **tapa el reacomodo**: los jugadores se teletransportan a
+sus marcas durante el parpadeo en vez de caminar. El resto de los
+reinicios (lateral, córner, saque de arco) siguen con la gente
+acomodándose caminando, que ahí sí se ve bien y no necesita corte.
+
+`_detener_juego` toma un flag `corte`; el motor marca el fotograma con
+`"corte": true` y la vista dispara el parpadeo desde ahí. Se marca en el
+fotograma y no se deduce del evento porque la falta y el saque del medio
+lo disparan por caminos distintos.
+
+Verificado contando movimiento entre fotogramas: 22 jugadores se mueven
+en el fotograma del parpadeo (el salto a las marcas, que queda tapado) y
+**0 de 22 durante los 12 siguientes**.
+
+### Balance
+
+Al recuperar los goles que se llevó el arreglo del arquero, `tiro.geometria`
+dejó de servir: de 7,0 a 7,6 subió los tiros de 8,7 a 8,9 y los goles no
+se movieron (2,98 las dos veces). Estaba saturado. Se usó
+`tiro_resolucion.porteria_base` (0,425 → 0,50), que es el otro lado del
+mismo problema: no cuántas veces rematan sino cuántas van al arco.
+
+Paridad final: goles 3,27 vs 3,26, amarillas 3,19 vs 3,17. Y en la liga
+real (§37): división 10, 3,32 vs 3,39; división 5, 3,55 vs 3,04;
+división 1, 3,13 vs 3,09.
