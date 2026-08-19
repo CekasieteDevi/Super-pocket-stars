@@ -99,6 +99,13 @@ static func multiplicador_foco(posicion: String, atributo: String) -> float:
 	return lerpf(MULTIPLICADOR_FOCO_MINIMO, MULTIPLICADOR_FOCO, relevancia)
 
 
+## Techo de un atributo concreto. Cae al potencial global si el jugador
+## viene de un guardado anterior a §7.2 y Team no alcanzó a migrarlo.
+static func techo_de(jugador: Dictionary, atributo: String) -> int:
+	var techos: Dictionary = jugador.get("potenciales", {})
+	return int(techos.get(atributo, jugador["potencial"]))
+
+
 static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator, mult_mentor: float = 1.0,
 		mult_entrenamiento: float = 1.0, foco_atributo: String = "") -> void:
 	jugador["edad"] += 1
@@ -119,11 +126,22 @@ static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator, m
 
 		if mult_edad >= 0.0:
 			if not congelado_por_comodon:
-				var distancia: float = float(jugador["potencial"]) - valor_actual
+				# §7.2: el techo es el de ESTE atributo, no el global. Un
+				# jugador de potencial 80 puede tener tope 92 en tiro y 68
+				# en pases, y crece hacia cada uno por separado.
+				var distancia: float = float(techo_de(jugador, attr)) - valor_actual
 				if distancia > 0.0:
 					var mult_foco: float = multiplicador_foco(jugador["posicion"], attr) if attr == foco_atributo else 1.0
 					cambio = distancia * 0.12 * mult_edad * mult_tier * mult_personalidad * mult_mentor * mult_entrenamiento * mult_foco
 				cambio += rng.randfn(0.0, 0.6)
+				# El techo es techo: el ruido aleatorio no puede empujar
+				# por encima. Antes se sumaba igual estando ya en el tope,
+				# y como era un paseo al azar sin nada que lo trajera de
+				# vuelta, en doce temporadas un atributo se despegaba hasta
+				# 10 puntos de su propio techo.
+				var techo_attr: float = float(techo_de(jugador, attr))
+				if valor_actual + cambio > techo_attr:
+					cambio = maxf(techo_attr - valor_actual, 0.0)
 		else:
 			var grupo := _grupo_de_atributo(attr)
 			var factor_declive: float = DECLIVE_POR_GRUPO.get(grupo, 0.5)

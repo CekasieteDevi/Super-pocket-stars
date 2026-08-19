@@ -59,9 +59,10 @@ static func generate(id: int, rng: RandomNumberGenerator, forced_position: Strin
 		potencial = genetica["potencial"]
 		tier = genetica["tier"]
 
+	var potenciales := techos_por_atributo(potencial, rng)
 	var atributos := {}
 	for attr in get_all_attributes():
-		atributos[attr] = _roll_attribute(potencial, rng)
+		atributos[attr] = _roll_attribute(potenciales[attr], rng)
 
 	var media_natural := compute_media(atributos, position)
 	var mejor := best_position(atributos)
@@ -74,6 +75,10 @@ static func generate(id: int, rng: RandomNumberGenerator, forced_position: Strin
 		"posicion": position,
 		"genetica_tier": tier,
 		"potencial": potencial,
+		# §7.2: cada atributo con su propio techo. `potencial` sigue siendo
+		# el número de la genética (lo usan el scouting, el valor y la UI),
+		# pero lo que limita el crecimiento de CADA atributo es este dict.
+		"potenciales": potenciales,
 		"atributos": atributos,
 		"media": media_natural,
 		"mejor_posicion": mejor["posicion"],
@@ -90,13 +95,56 @@ static func generate(id: int, rng: RandomNumberGenerator, forced_position: Strin
 	}
 
 
-## Cada atributo se tira independiente, con techo blando en el potencial.
-## factor 0.55-1.0 + ruido gaussiano da variación individual (§7.2 lo profundiza
-## en fases posteriores con techo propio por atributo; acá alcanza para media general).
-static func _roll_attribute(potencial: int, rng: RandomNumberGenerator) -> int:
+## §7.2: el techo de CADA atributo, derivado del potencial global más una
+## variación propia. Es lo que hace que dos Prodigios no sean el mismo
+## jugador: uno tope de velocidad y otro tope de pases.
+##
+## La variación NO se sesga por puesto a propósito. Sesgarla haría a todos
+## más "correctos" para su posición, pero mataría dos cosas que ya
+## existen: que aparezca un lateral que en realidad remata mejor que el 9
+## (`mejor_posicion`), y que valga la pena mirar la ficha atributo por
+## atributo en vez de la media.
+const DESVIO_TECHO := 9.0
+const TECHO_MIN := 15
+const TECHO_MAX := 99
+
+
+static func techos_por_atributo(potencial: int, rng: RandomNumberGenerator) -> Dictionary:
+	var out := {}
+	for attr in get_all_attributes():
+		out[attr] = int(clamp(round(float(potencial) + rng.randfn(0.0, DESVIO_TECHO)),
+			TECHO_MIN, TECHO_MAX))
+	return out
+
+
+## Versión determinista para partidas guardadas ANTES de que existieran
+## los techos por atributo: no hay RNG disponible al cargar, así que la
+## desviación sale del id del jugador y del nombre del atributo. Es
+## estable (el mismo jugador siempre obtiene los mismos techos) y tiene la
+## misma forma que la versión aleatoria.
+static func techos_derivados(potencial: int, jugador_id: int) -> Dictionary:
+	var out := {}
+	for attr in get_all_attributes():
+		var h: int = absi(hash("%d/%s" % [jugador_id, attr]))
+		# Dos muestras uniformes promediadas se acercan a una normal, que
+		# es lo que produce techos_por_atributo con randfn.
+		var u1: float = float(h % 1000) / 1000.0
+		var u2: float = float((h / 1000) % 1000) / 1000.0
+		var desvio: float = (u1 + u2 - 1.0) * DESVIO_TECHO * 1.7
+		out[attr] = int(clamp(round(float(potencial) + desvio), TECHO_MIN, TECHO_MAX))
+	return out
+
+
+## Cada atributo se tira independiente, con techo blando en SU propio
+## techo (§7.2). factor 0.55-1.0 + ruido gaussiano da la variación de
+## cuánto de ese techo ya tiene alcanzado al generarse.
+static func _roll_attribute(techo: int, rng: RandomNumberGenerator) -> int:
 	var factor := rng.randf_range(0.55, 1.0)
-	var valor := float(potencial) * factor + rng.randfn(0.0, 4.0)
-	return int(clamp(round(valor), 0, 100))
+	var valor := float(techo) * factor + rng.randfn(0.0, 4.0)
+	# Se corta EN el techo: con factor cerca de 1 y ruido positivo, un
+	# atributo nacía hasta 10 puntos por encima de su propio tope y ya
+	# nunca volvía a bajar, con lo cual el techo no significaba nada.
+	return int(clamp(round(valor), 0, float(techo)))
 
 
 static func compute_media(atributos: Dictionary, position: String) -> float:

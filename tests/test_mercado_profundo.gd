@@ -26,7 +26,12 @@ func _test_clausula_se_fija_al_fichar(rng: RandomNumberGenerator) -> void:
 	var equipo := Team.generar("ClubClausulas", rng, 0)
 	var jugador: Dictionary = equipo.jugadores[0]
 	var id: int = jugador["id"]
-	var valor := ValorJugador.calcular(jugador, equipo.animo.get(id, 50.0), equipo.contratos.get(id, 1))
+	# Team.generar fija la clausula con valores de REFERENCIA (animo 50,
+	# contrato 3), no con el animo y el contrato que despues sortea. Hay
+	# que recomputar con los mismos o el test pasa solo cuando el RNG
+	# casualmente saca contrato 3 -- que es lo que venia haciendo, y se
+	# rompio en cuanto un cambio ajeno corrio el stream del RNG.
+	var valor := ValorJugador.calcular(jugador, 50.0, 3)
 
 	var ok: bool = equipo.clausulas.has(id)
 	ok = ok and is_equal_approx(equipo.clausulas[id], valor * Team.FACTOR_CLAUSULA)

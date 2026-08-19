@@ -250,7 +250,7 @@ func _mostrar_ficha(jugador_id: int) -> void:
 ## Barra de texto para un atributo. Se pinta con color segun el valor
 ## porque una grilla de 25 numeros sueltos no se lee: lo que se quiere ver
 ## de un vistazo es en que es bueno y en que no.
-func _barra_atributo(nombre: String, valor: int) -> String:
+func _barra_atributo(nombre: String, valor: int, techo: int) -> String:
 	var llenos: int = int(round(valor / 10.0))
 	var color := "#c0392b"
 	if valor >= 75:
@@ -259,10 +259,18 @@ func _barra_atributo(nombre: String, valor: int) -> String:
 		color = "#7fb069"
 	elif valor >= 40:
 		color = "#d4a017"
-	return "  %-14s [color=%s]%3d %s[/color]
+	# El techo de ESTE atributo (§7.2) es lo que dice si todavia le queda
+	# margen ahi o si ya llego: dos jugadores con el mismo potencial global
+	# pueden tener techos muy distintos atributo por atributo.
+	var margen := ""
+	if techo > valor + 1:
+		margen = "  [color=#7f8c8d]-> %d[/color]" % techo
+	else:
+		margen = "  [color=#7f8c8d](al tope)[/color]"
+	return "  %-14s [color=%s]%3d %s[/color]%s
 " % [
 		nombre.replace("_", " "), color, valor,
-		"█".repeat(llenos) + "░".repeat(10 - llenos)]
+		"█".repeat(llenos) + "░".repeat(10 - llenos), margen]
 
 
 func _refrescar_ficha() -> void:
@@ -331,7 +339,7 @@ func _refrescar_ficha() -> void:
 " % grupo.capitalize()
 		for a in grupos[grupo]:
 			if attrs.has(a):
-				t += _barra_atributo(a, int(attrs[a]))
+				t += _barra_atributo(a, int(attrs[a]), Progresion.techo_de(j, a))
 	lista_ficha.text = t
 
 

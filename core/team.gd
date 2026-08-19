@@ -344,6 +344,15 @@ static func _normalizar_jugadores(lista: Array) -> Array:
 			j["partidos_seguidos_banco"] = int(j["partidos_seguidos_banco"])
 		for attr in j["atributos"]:
 			j["atributos"][attr] = int(j["atributos"][attr])
+		# §7.2: los guardados anteriores a los techos por atributo no
+		# traen el campo. Se derivan del id, que es estable, en vez de
+		# dejar el potencial global plano: si no, un jugador viejo nunca
+		# tendría la individualidad que sí tienen los nuevos.
+		if not j.has("potenciales") or (j["potenciales"] as Dictionary).is_empty():
+			j["potenciales"] = PlayerGenerator.techos_derivados(int(j["potencial"]), int(j["id"]))
+		else:
+			for attr in j["potenciales"]:
+				j["potenciales"][attr] = int(j["potenciales"][attr])
 	return lista
 
 
