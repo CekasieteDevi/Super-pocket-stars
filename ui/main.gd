@@ -15,6 +15,12 @@ var paneles: Dictionary = {}  # nombre -> Control, para mostrar/ocultar en bloqu
 var lista_plantel: RichTextLabel
 var lista_ficha: RichTextLabel
 var ficha_jugador_id := -1
+var option_formacion: OptionButton
+var contenedor_formacion: VBoxContainer
+var label_formacion_estado: Label
+## Jugador tocado primero en la pantalla de formacion, a la espera del
+## segundo para intercambiarlos. -1 = nadie seleccionado.
+var formacion_seleccion := -1
 var contenedor_banco_botones: VBoxContainer
 var lista_tabla: RichTextLabel
 var label_resultado: Label
@@ -63,7 +69,8 @@ func _ready() -> void:
 	raiz.add_child(barra)
 
 	for entrada in [
-		["Plantel", "_mostrar_plantel"], ["Tabla", "_mostrar_tabla"], ["Partido", "_mostrar_partido"],
+		["Plantel", "_mostrar_plantel"], ["Formacion", "_mostrar_formacion"],
+		["Tabla", "_mostrar_tabla"], ["Partido", "_mostrar_partido"],
 		["Economia", "_mostrar_economia"], ["Mercado", "_mostrar_mercado"],
 		["Libres", "_mostrar_libres"], ["Prestamos", "_mostrar_prestamos"],
 		["Instalaciones", "_mostrar_instalaciones"], ["Seleccion", "_mostrar_seleccion"],
@@ -93,6 +100,7 @@ func _ready() -> void:
 	_construir_panel_noticias(contenedor)
 	_construir_panel_partida_guardado(contenedor)
 	_construir_panel_ficha(contenedor)
+	_construir_panel_formacion(contenedor)
 
 	_mostrar_plantel()
 
@@ -325,6 +333,130 @@ func _refrescar_ficha() -> void:
 			if attrs.has(a):
 				t += _barra_atributo(a, int(attrs[a]))
 	lista_ficha.text = t
+
+
+## §8.1: elegir formacion y mover jugadores. La formacion define los 11
+## SLOTS y el slot i lo ocupa jugadores[i] (ver core/formaciones.gd), asi
+## que mover a alguien de lugar es literalmente reordenar esa lista.
+##
+## El intercambio es en dos toques —uno elige, el otro confirma— en vez de
+## un desplegable por slot: con 18 jugadores un OptionButton por fila son
+## 18 listas de 18, y en un celular eso no se toca.
+func _construir_panel_formacion(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	padre.add_child(panel)
+	paneles["formacion"] = panel
+
+	var fila := HBoxContainer.new()
+	panel.add_child(fila)
+	var etiqueta := Label.new()
+	etiqueta.text = "Formacion:"
+	fila.add_child(etiqueta)
+
+	option_formacion = OptionButton.new()
+	for nombre in Formaciones.lista():
+		option_formacion.add_item(nombre)
+	option_formacion.item_selected.connect(_on_formacion_elegida)
+	fila.add_child(option_formacion)
+
+	label_formacion_estado = Label.new()
+	label_formacion_estado.text = "Toca un jugador y despues otro para cambiarlos de lugar."
+	panel.add_child(label_formacion_estado)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+
+	contenedor_formacion = VBoxContainer.new()
+	contenedor_formacion.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(contenedor_formacion)
+
+
+func _mostrar_formacion() -> void:
+	_ocultar_todos()
+	paneles["formacion"].visible = true
+	formacion_seleccion = -1
+	_refrescar_formacion()
+
+
+func _on_formacion_elegida(idx: int) -> void:
+	var nombre: String = option_formacion.get_item_text(idx)
+	GameState.equipo_jugador.formacion = nombre
+	formacion_seleccion = -1
+	_refrescar_formacion()
+
+
+## Un toque elige, el segundo intercambia. Si se vuelve a tocar al mismo,
+## se cancela.
+func _on_tocar_jugador_formacion(jugador_id: int) -> void:
+	if formacion_seleccion == -1:
+		formacion_seleccion = jugador_id
+	elif formacion_seleccion == jugador_id:
+		formacion_seleccion = -1
+	else:
+		GameState.equipo_jugador.intercambiar(formacion_seleccion, jugador_id)
+		formacion_seleccion = -1
+	_refrescar_formacion()
+	_refrescar_plantel()
+
+
+## Aviso cuando alguien esta fuera de su puesto. No lo impide —es una
+## decision del DT— pero el motor lo castiga solo: el jugador toma el ROL
+## del slot y juega con SUS atributos, asi que un defensor de 9 remata con
+## el `tiro` que tiene.
+func _texto_slot(rol: String, j: Dictionary) -> String:
+	var aviso := ""
+	if j["posicion"] != rol:
+		aviso = "   [%s de puesto natural]" % j["posicion"]
+	return "%-4s  %-22s  media %5.1f%s%s" % [
+		rol, _nombre_jugador(j), j["media"], aviso, _tag_habilidad(j)]
+
+
+func _refrescar_formacion() -> void:
+	var equipo := GameState.equipo_jugador
+	var idx := Formaciones.lista().find(equipo.formacion)
+	if idx >= 0:
+		option_formacion.selected = idx
+	label_formacion_estado.text = "Toca un jugador y despues otro para cambiarlos de lugar." 		if formacion_seleccion == -1 else "Elegido. Toca a otro para cambiarlos, o al mismo para cancelar."
+
+	for hijo in contenedor_formacion.get_children():
+		hijo.queue_free()
+
+	var roles := Formaciones.roles(equipo.formacion)
+	_agregar_titulo_formacion("Titulares")
+	for i in range(equipo.jugadores.size()):
+		var j: Dictionary = equipo.jugadores[i]
+		var rol: String = str(roles[i]) if i < roles.size() else str(j["posicion"])
+		_agregar_fila_formacion(_texto_slot(rol, j), j["id"])
+	_agregar_titulo_formacion("Banco")
+	for j in equipo.banco:
+		_agregar_fila_formacion("      %-22s  media %5.1f   (%s)%s" % [
+			_nombre_jugador(j), j["media"], j["posicion"], _tag_habilidad(j)], j["id"])
+
+
+func _agregar_titulo_formacion(texto: String) -> void:
+	var t := Label.new()
+	t.text = texto
+	contenedor_formacion.add_child(t)
+
+
+func _agregar_fila_formacion(texto: String, jugador_id: int) -> void:
+	var fila := HBoxContainer.new()
+	var btn := Button.new()
+	btn.text = ("> " if formacion_seleccion == jugador_id else "  ") + texto
+	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.pressed.connect(func(): _on_tocar_jugador_formacion(jugador_id))
+	fila.add_child(btn)
+
+	var btn_ficha := Button.new()
+	btn_ficha.text = "Ficha"
+	btn_ficha.pressed.connect(func(): _mostrar_ficha(jugador_id))
+	fila.add_child(btn_ficha)
+	contenedor_formacion.add_child(fila)
 
 
 func _construir_panel_tabla(padre: Control) -> void:

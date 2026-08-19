@@ -2408,3 +2408,39 @@ dar por arreglado un reinicio, buscar TODOS los que llegan al mismo lugar.
 Balance final: goles 3,16 vs 3,26 del abstracto, amarillas 3,16 vs 3,17.
 En la liga real: división 10, 3,28 vs 3,34; división 5, 3,51 vs 2,94;
 división 1, 2,90 vs 3,22.
+
+## 46. Formaciones
+
+Hasta acá la formación era implícita: el motor repartía a los 11 por su
+`posicion` sobre `BASE_FORMACION`, un 4-2-3-1 fijo. Si un equipo tenía
+tres jugadores del mismo puesto, los que sobraban caían al mismo
+casillero (`idx % slots.size()`) y quedaban **apilados**.
+
+Ahora las formaciones viven en `data/formaciones.json` (4-2-3-1, 4-4-2,
+4-3-3, 3-5-2, 5-3-2) y cada una define los 11 slots EN ORDEN con su rol y
+su casillero. La decisión importante es la correspondencia **por
+índice**: el slot `i` lo ocupa `Team.jugadores[i]`, o sea que el orden de
+esa lista ES la alineación.
+
+De ahí sale gratis lo mejor de la feature: **el rol en cancha lo da el
+SLOT, no el puesto natural del jugador**. Se puede poner a un volante de
+9 sin inventar ninguna mecánica de "fuera de posición" — el motor le da
+el rol del slot y sus atributos hacen el resto: rematará con el `tiro`
+que tiene, que es bajo. La UI avisa ("MC de puesto natural") pero no lo
+impide: es una decisión del DT, mala pero suya.
+
+Un cambio hereda el **slot del que sale** (rol y casillero), no el de su
+propio puesto: entrar a la cancha es ocupar el lugar que se libera, no
+inventar uno nuevo.
+
+Balance sin cambios para la IA, que sigue en 4-2-3-1 y cuyo orden de
+`jugadores` coincide con el de la formación: goles 3,09 vs 3,26 del
+abstracto, amarillas 3,13 vs 3,17.
+
+### La pantalla
+
+Pestaña **Formación**: un desplegable arriba y los 11 slots con su rol y
+quién lo ocupa, más el banco. El intercambio es **en dos toques** —uno
+elige, el otro confirma— y no un desplegable por fila: con 18 jugadores
+eso son 18 listas de 18, que en un celular no se toca. Cada fila lleva
+además su botón a la ficha (§ficha del jugador).

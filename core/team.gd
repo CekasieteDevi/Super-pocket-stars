@@ -29,6 +29,11 @@ var banco: Array = []  # 7 dicts, uno por puesto de BANCO_FORMACION (suplentes)
 var local: bool = false
 var estilo: String = ""  # Tiki taka/Contragolpe/Juego directo/Presión alta/Defensivo/Físico, ver core/estilos.gd
 var dt: Dictionary = {}  # {"nivel":1-10, "rasgo":Conservador/Loco/Cantera/Chequera}, ver core/dt.gd
+## Formación elegida (ver core/formaciones.gd). El slot `i` de la
+## formación lo ocupa jugadores[i], así que el ORDEN de esa lista es la
+## alineación y no un detalle interno.
+var formacion: String = Formaciones.POR_DEFECTO
+
 var calidad_cancha: float = 0.0  # -8..+3, ver core/estado_cancha.gd — rige cuando este club juega de local
 var clima_partido: String = ""  # transitorio, solo dentro de un partido — "" (normal) / Lluvia / Calor / Viento, ver core/clima.gd
 var arbitro_partido: String = ""  # transitorio, solo dentro de un partido — Estricto/Permisivo/Casero, ver core/arbitro.gd
@@ -200,6 +205,7 @@ func guardar() -> Dictionary:
 
 	return {
 		"nombre": nombre, "estilo": estilo, "dt": dt, "calidad_cancha": calidad_cancha,
+		"formacion": formacion,
 		"jugadores": jugadores, "banco": banco, "cantera": cantera,
 		"siguiente_id_cantera": siguiente_id_cantera, "capitan_id": capitan_id,
 		"fatiga_acumulada": _claves_a_texto(fatiga_acumulada),
@@ -239,6 +245,9 @@ static func cargar(datos: Dictionary) -> Team:
 		var rng_migracion_dt := RandomNumberGenerator.new()
 		rng_migracion_dt.seed = hash(datos["nombre"]) + 1  # +1 para no repetir la tirada de estilo
 		t.dt = DT.generar(rng_migracion_dt)
+	t.formacion = str(datos.get("formacion", Formaciones.POR_DEFECTO))
+	if not Formaciones.existe(t.formacion):
+		t.formacion = Formaciones.POR_DEFECTO
 	if datos.has("calidad_cancha"):
 		t.calidad_cancha = datos["calidad_cancha"]
 	else:
@@ -419,6 +428,40 @@ func mover_a_banco(jugador: Dictionary) -> Dictionary:
 ## El jugador (o la IA) decide subir a un suplente a titular — swap directo
 ## de posición, el titular más débil de esa posición pasa al banco. Sin
 ## costo, es reordenar tu propio plantel, no un fichaje.
+## Intercambia dos jugadores del plantel, estén donde estén (dos
+## titulares entre sí, o un titular con uno del banco). Es lo que necesita
+## la pantalla de formación: mover a alguien de slot no es "promoverlo",
+## es cambiarlo de lugar.
+##
+## Devuelve false si alguno no está o si son el mismo. NO valida puestos a
+## propósito: poner a un defensor de 9 es una decisión del DT, mala pero
+## suya, y el motor ya la castiga solo (juega con SUS atributos en el rol
+## del slot).
+func intercambiar(id_a: int, id_b: int) -> bool:
+	if id_a == id_b:
+		return false
+	var a := _ubicar(id_a)
+	var b := _ubicar(id_b)
+	if a.is_empty() or b.is_empty():
+		return false
+	var lista_a: Array = jugadores if a["titular"] else banco
+	var lista_b: Array = jugadores if b["titular"] else banco
+	var tmp: Dictionary = lista_a[a["idx"]]
+	lista_a[a["idx"]] = lista_b[b["idx"]]
+	lista_b[b["idx"]] = tmp
+	return true
+
+
+func _ubicar(jugador_id: int) -> Dictionary:
+	for i in range(jugadores.size()):
+		if jugadores[i]["id"] == jugador_id:
+			return {"titular": true, "idx": i}
+	for i in range(banco.size()):
+		if banco[i]["id"] == jugador_id:
+			return {"titular": false, "idx": i}
+	return {}
+
+
 func promover_a_titular(jugador_banco_id: int) -> Dictionary:
 	var idx_banco := -1
 	for i in range(banco.size()):

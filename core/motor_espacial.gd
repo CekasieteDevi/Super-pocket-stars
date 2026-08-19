@@ -52,6 +52,10 @@ const MEDIO_ANCHO := 34.0
 ## Posición base de cada rol para el equipo LOCAL (metros). El visitante
 ## usa las mismas espejadas en X. Sigue la formación real de
 ## Team.FORMACION: 1 ARQ, 2 DFC, 2 LAT, 2 MC, 1 MCO, 2 EXT, 1 DC.
+## Casilleros de respaldo por puesto. La formación real vive en
+## data/formaciones.json (ver core/formaciones.gd); esto solo se usa para
+## ubicar a un suplente que entra cuando, por lo que sea, no quedó ningún
+## slot libre que heredar.
 const BASE_FORMACION := {
 	"ARQ": [Vector2(-50.5, 0.0)],
 	"DFC": [Vector2(-35.0, -9.0), Vector2(-35.0, 9.0)],
@@ -313,18 +317,19 @@ static func _alcance_en(e: Dictionary, segundos: float) -> float:
 	return v0 * t_rampa + 0.5 * a * t_rampa * t_rampa + vmax * (segundos - t_rampa)
 
 
-## Reparte los 11 de un equipo en los slots de BASE_FORMACION. Si un
-## equipo viene con una composición rara (más de 2 DFC, por ejemplo,
-## porque hubo cambios o rojas), los que no entran en ningún slot caen al
-## slot 0 de su rol — nunca se pierde un jugador.
+## Reparte los 11 de un equipo en los slots de su formación.
 static func _armar_jugadores(equipo: Team, es_local: bool, estado: Dictionary) -> void:
-	var usados := {}
-	for j in equipo.jugadores_en_cancha():
-		var rol: String = j["posicion"]
-		var slots: Array = BASE_FORMACION.get(rol, BASE_FORMACION["MC"])
-		var idx: int = usados.get(rol, 0)
-		usados[rol] = idx + 1
-		var base: Vector2 = slots[idx % slots.size()]
+	# El reparto es por SLOT, no por puesto: el slot `i` de la formación lo
+	# ocupa jugadores[i]. Antes se repartía por `posicion` y, si un equipo
+	# tenía tres jugadores del mismo puesto, los que sobraban caían al
+	# mismo casillero y quedaban apilados. Además así el rol en cancha sale
+	# de la formación, que es lo que permite jugar a alguien fuera de su
+	# puesto sin ninguna mecánica nueva.
+	var slots := Formaciones.slots(equipo.formacion)
+	for i in range(mini(equipo.jugadores.size(), slots.size())):
+		var j: Dictionary = equipo.jugadores[i]
+		var rol: String = str(slots[i]["rol"])
+		var base: Vector2 = slots[i]["base"]
 		if not es_local:
 			base = Vector2(-base.x, base.y)
 		estado["jugadores"][clave_de(j["id"], es_local)] = {
@@ -2278,7 +2283,10 @@ static func _sincronizar_cambios(estado: Dictionary) -> void:
 			if e["equipo_local"] != es_local:
 				continue
 			if not deben_estar.has(clave):
-				libres.append(e["pos"])
+				# El que entra hereda el SLOT del que sale (rol y
+				# casillero), no el de su propio puesto: un cambio ocupa
+				# el lugar que se libera, no inventa uno nuevo.
+				libres.append({"pos": e["pos"], "rol": e["rol"], "base": e["base"]})
 				if estado["pelota"]["poseedor_id"] == clave:
 					_dar_pelota_al_arquero(estado, not es_local)
 				estado["jugadores"].erase(clave)
@@ -2287,12 +2295,15 @@ static func _sincronizar_cambios(estado: Dictionary) -> void:
 			if estado["jugadores"].has(clave):
 				continue
 			var j: Dictionary = deben_estar[clave]
-			var rol: String = j["posicion"]
-			var slots: Array = BASE_FORMACION.get(rol, BASE_FORMACION["MC"])
-			var base: Vector2 = slots[0]
-			if not es_local:
-				base = Vector2(-base.x, base.y)
-			var pos: Vector2 = libres.pop_back() if not libres.is_empty() else base
+			var hueco: Dictionary = libres.pop_back() if not libres.is_empty() else {}
+			var rol: String = str(hueco["rol"]) if hueco.has("rol") else str(j["posicion"])
+			var base: Vector2 = hueco["base"] if hueco.has("base") else Vector2.ZERO
+			if not hueco.has("base"):
+				var s_def: Array = BASE_FORMACION.get(rol, BASE_FORMACION["MC"])
+				base = s_def[0]
+				if not es_local:
+					base = Vector2(-base.x, base.y)
+			var pos: Vector2 = hueco["pos"] if hueco.has("pos") else base
 			estado["jugadores"][clave] = {
 				"clave": clave, "jugador_id": j["id"], "equipo_local": es_local,
 				"rol": rol, "base": base, "pos": pos, "vel": Vector2.ZERO,

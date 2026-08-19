@@ -1,0 +1,68 @@
+{
+  "_comentario": "Cada formacion define los 11 puestos EN ORDEN y donde se para cada uno, en metros con el origen en el centro de la cancha y el equipo atacando hacia +x. El slot i de la lista lo ocupa jugadores[i] del Team, asi que un jugador puede jugar fuera de su puesto natural: el motor le da el ROL del slot y sus atributos hacen el resto (un defensor de 9 remata con su `tiro`, que es bajo). Las X estan calibradas contra LIMITE_X=43.5 y el arquero contra ARQUERO_X_MIN.",
+  "4-2-3-1": [
+    ["ARQ", -50.5, 0.0],
+    ["DFC", -35.0, -9.0],
+    ["DFC", -35.0, 9.0],
+    ["LAT", -30.0, -24.0],
+    ["LAT", -30.0, 24.0],
+    ["MC", -14.0, -10.0],
+    ["MC", -14.0, 10.0],
+    ["MCO", -2.0, 0.0],
+    ["EXT", 8.0, -22.0],
+    ["EXT", 8.0, 22.0],
+    ["DC", 14.0, 0.0]
+  ],
+  "4-4-2": [
+    ["ARQ", -50.5, 0.0],
+    ["DFC", -35.0, -9.0],
+    ["DFC", -35.0, 9.0],
+    ["LAT", -30.0, -24.0],
+    ["LAT", -30.0, 24.0],
+    ["MC", -12.0, -8.0],
+    ["MC", -12.0, 8.0],
+    ["EXT", -4.0, -24.0],
+    ["EXT", -4.0, 24.0],
+    ["DC", 14.0, -7.0],
+    ["DC", 14.0, 7.0]
+  ],
+  "4-3-3": [
+    ["ARQ", -50.5, 0.0],
+    ["DFC", -35.0, -9.0],
+    ["DFC", -35.0, 9.0],
+    ["LAT", -28.0, -24.0],
+    ["LAT", -28.0, 24.0],
+    ["MC", -18.0, 0.0],
+    ["MC", -8.0, -12.0],
+    ["MC", -8.0, 12.0],
+    ["EXT", 12.0, -24.0],
+    ["EXT", 12.0, 24.0],
+    ["DC", 16.0, 0.0]
+  ],
+  "3-5-2": [
+    ["ARQ", -50.5, 0.0],
+    ["DFC", -36.0, -13.0],
+    ["DFC", -37.0, 0.0],
+    ["DFC", -36.0, 13.0],
+    ["LAT", -18.0, -26.0],
+    ["LAT", -18.0, 26.0],
+    ["MC", -16.0, -9.0],
+    ["MC", -18.0, 0.0],
+    ["MC", -16.0, 9.0],
+    ["DC", 14.0, -7.0],
+    ["DC", 14.0, 7.0]
+  ],
+  "5-3-2": [
+    ["ARQ", -50.5, 0.0],
+    ["DFC", -37.0, -14.0],
+    ["DFC", -38.0, 0.0],
+    ["DFC", -37.0, 14.0],
+    ["LAT", -30.0, -25.0],
+    ["LAT", -30.0, 25.0],
+    ["MC", -16.0, -11.0],
+    ["MC", -18.0, 0.0],
+    ["MC", -16.0, 11.0],
+    ["DC", 12.0, -7.0],
+    ["DC", 12.0, 7.0]
+  ]
+}
