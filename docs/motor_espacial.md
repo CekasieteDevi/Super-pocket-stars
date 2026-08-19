@@ -2361,3 +2361,50 @@ con la misma función `_tocar_corto`.
 Balance final: goles 3,37 vs 3,26 del abstracto, amarillas 3,22 vs 3,17,
 pases completados 37,3 (subieron desde 29 porque un pase corto se
 completa mucho más).
+
+## 44. La gambeta teletransportaba
+
+"Cada tanto, cuando hay un duelo, el que tiene la pelota se teletransporta
+cerca de otro rival."
+
+Al ganar una gambeta, el motor **movía al que gambeteaba a tres metros
+más allá del defensor**. Eran hasta cinco metros en un solo tick —el
+doble de lo que puede correr— y, como el punto de llegada se calculaba
+desde la posición del DEFENSOR, muchas veces lo dejaba pegado a otro
+rival: se veía al que llevaba la pelota aparecer de golpe encima de un
+marcador nuevo.
+
+Se eliminó el salto. La ventaja de pasar a alguien la da la
+**penalización** que ya existía (el defensor queda fuera de la jugada
+unos segundos, `ticks_penalizacion_duelo`), no un desplazamiento mágico.
+La gambeta se lee igual —el defensor se queda clavado— sin romper la
+física del resto del motor, que después de la aceleración (§34) es la
+única parte que se movía sin respetar velocidad ni rampa.
+
+Efecto colateral interesante: los goles SUBIERON al sacarlo (3,37 →
+3,45). El teletransporte estaba dejando al que gambeteaba encima de otro
+marcador, así que la jugada se perdía enseguida; sin él la posesión se
+retiene mejor (pases completados 37,3 → 39,3).
+
+## 45. El saque del medio tras un gol iba por otro camino
+
+El arranque de cada tiempo ya paraba el juego y se jugaba con un pase,
+pero el saque del medio **después de un gol** llamaba a
+`_reiniciar_desde_medio` y devolvía la pelota de una: el que la tenía
+salía corriendo desde el círculo. Era el mismo bug ya arreglado, pero por
+un camino distinto.
+
+Ahora `_reiniciar_desde_medio` **deja el saque armado, no ejecutado**: se
+para el juego, hay parpadeo y recién después se la tocan, valga para el
+arranque de un tiempo o para un gol. Los dos caminos comparten el código
+en vez de duplicarlo. El parámetro `mitad` distingue si además hay que
+anunciarlo por el relato (arranque de tiempo) o no (post-gol, que ya se
+contó como gol).
+
+Es la segunda vez que pasa lo mismo —un arreglo aplicado a un camino y no
+al otro— y en las dos el síntoma fue idéntico. Vale como regla: antes de
+dar por arreglado un reinicio, buscar TODOS los que llegan al mismo lugar.
+
+Balance final: goles 3,16 vs 3,26 del abstracto, amarillas 3,16 vs 3,17.
+En la liga real: división 10, 3,28 vs 3,34; división 5, 3,51 vs 2,94;
+división 1, 2,90 vs 3,22.

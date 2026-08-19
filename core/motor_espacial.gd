@@ -823,14 +823,17 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 
 	if pasa:
 		estado["gambetas"][lado_g]["ganadas"] += 1
-		# Se lo saca de encima: queda más allá del defensor, y el defensor
-		# pasado unos segundos.
-		var arco := arco_rival(es_local)
-		var dir: Vector2 = (arco - poseedor["pos"]).normalized()
-		var salida: Vector2 = e_rival["pos"] + dir * float(f["gambeta_avance"])
-		poseedor["pos"] = Vector2(
-			clampf(salida.x, -MEDIO_LARGO + 1.0, MEDIO_LARGO - 1.0),
-			clampf(salida.y, -MEDIO_ANCHO + 1.0, MEDIO_ANCHO - 1.0))
+		# Al que lo pasan queda fuera de la jugada unos segundos y el que
+		# gambeteó sigue con la pelota: la ventaja la da la penalización,
+		# no un salto de posición.
+		#
+		# Antes acá se lo TELETRANSPORTABA a tres metros más allá del
+		# defensor. Eran hasta cinco metros en un tick, o sea el doble de
+		# lo que puede correr, y como el punto de llegada se calculaba
+		# desde el defensor, muchas veces lo dejaba pegado a OTRO rival:
+		# se veía al que llevaba la pelota aparecer de golpe encima de un
+		# marcador nuevo. La gambeta se lee igual —el defensor se queda
+		# clavado— sin romper la física del resto del motor.
 		_penalizar(estado, clave_rival, defensor)
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "gambeta", "equipo": eq_a.nombre, "rival": eq_d.nombre,
@@ -1198,7 +1201,14 @@ static func _duelo_simple(atacante: Dictionary, attr_a: String, eq_a: Team,
 
 
 ## Saque del medio después de un gol (o al empezar cada tiempo).
-static func _reiniciar_desde_medio(estado: Dictionary, saca_local: bool) -> void:
+## `mitad` 1 o 2 = arranque de un tiempo (lo anuncia el relato); 0 = saque
+## del medio después de un gol. En los dos casos el saque queda ARMADO,
+## no ejecutado: se para el juego unos segundos y recién entonces se la
+## tocan. Antes el post-gol reiniciaba y devolvía la pelota de una, así
+## que el que la tenía salía corriendo desde el círculo — el mismo bug
+## que ya se había arreglado para el arranque de cada tiempo, pero por
+## este otro camino.
+static func _reiniciar_desde_medio(estado: Dictionary, saca_local: bool, mitad: int = 0) -> void:
 	# Quién la saca: el MCO del equipo que corresponde.
 	var sacador := -1
 	for id in estado["jugadores"]:
@@ -1256,12 +1266,18 @@ static func _reiniciar_desde_medio(estado: Dictionary, saca_local: bool) -> void
 	estado["quietos"] = 0
 	estado.erase("balon_parado")
 
-	if sacador != -1:
-		estado["jugadores"][sacador]["pos"] = Vector2.ZERO
-		estado["jugadores"][sacador]["marca"] = Vector2.ZERO
-		estado["pelota"]["poseedor_id"] = sacador
+	if sacador == -1:
+		estado["pelota"]["poseedor_id"] = -1
 		return
-	estado["pelota"]["poseedor_id"] = -1
+	estado["jugadores"][sacador]["pos"] = Vector2.ZERO
+	estado["jugadores"][sacador]["marca"] = Vector2.ZERO
+	estado["pelota"]["poseedor_id"] = sacador
+	estado["balon_parado"] = {
+		"tipo": "saque_inicial", "saca_local": saca_local, "mitad": mitad,
+	}
+	estado["detenido"] = int(TICKS_DETENIDO["saque_inicial"])
+	estado["quietos"] = int(TICKS_DETENIDO["saque_inicial"])
+	estado["corte_este_tick"] = true
 
 
 ## `attr_remate` permite rematar con otro atributo que no sea `tiro`: un
@@ -2782,12 +2798,15 @@ static func _ejecutar_balon_parado(estado: Dictionary) -> void:
 		# tenía salía corriendo solo desde el círculo central, que no es
 		# lo que pasa en ninguna cancha.
 		_tocar_corto(estado, bool(bp["saca_local"]))
-		estado["eventos"].append({
-			"minuto": _minuto_int(estado), "tipo": "saque_inicial",
-			"equipo": _equipo_de(estado, bool(bp["saca_local"])).nombre,
-			"rival": _equipo_de(estado, not bool(bp["saca_local"])).nombre,
-			"jugador_posicion": "", "resultado": str(bp["mitad"]),
-		})
+		# Solo se anuncia el arranque de un tiempo; el saque del medio tras
+		# un gol ya se contó como gol.
+		if int(bp["mitad"]) > 0:
+			estado["eventos"].append({
+				"minuto": _minuto_int(estado), "tipo": "saque_inicial",
+				"equipo": _equipo_de(estado, bool(bp["saca_local"])).nombre,
+				"rival": _equipo_de(estado, not bool(bp["saca_local"])).nombre,
+				"jugador_posicion": "", "resultado": str(bp["mitad"]),
+			})
 		return
 	var ejecutor := int(bp["ejecutor"])
 	if not estado["jugadores"].has(ejecutor):
@@ -3038,18 +3057,8 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 	# 75'. Se reusa _procesar_cambios sin tocarlo.
 	var ventanas := [45, 60, 75]
 	for mitad in range(2):
-		_reiniciar_desde_medio(estado, mitad == 0)
+		_reiniciar_desde_medio(estado, mitad == 0, mitad + 1)
 		estado["minuto"] = MINUTOS_MOSTRADOS_POR_MITAD * mitad
-		# Un segundo quieto antes de poner la pelota en juego. La cámara
-		# viene de otra parte de la cancha y salta al círculo central: sin
-		# esta pausa el arranque de cada tiempo se ve como un tirón de
-		# cámara y no se entiende qué pasó.
-		estado["balon_parado"] = {
-			"tipo": "saque_inicial", "saca_local": mitad == 0, "mitad": mitad + 1,
-		}
-		estado["detenido"] = int(TICKS_DETENIDO["saque_inicial"])
-		estado["quietos"] = int(TICKS_DETENIDO["saque_inicial"])
-		estado["corte_este_tick"] = true
 		for t in range(TICKS_POR_MITAD):
 			_tick(estado, con_fotogramas)
 			if not ventanas.is_empty() and estado["minuto"] >= ventanas[0]:
