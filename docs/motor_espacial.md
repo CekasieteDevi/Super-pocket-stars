@@ -2254,3 +2254,50 @@ mismo problema: no cuántas veces rematan sino cuántas van al arco.
 Paridad final: goles 3,27 vs 3,26, amarillas 3,19 vs 3,17. Y en la liga
 real (§37): división 10, 3,32 vs 3,39; división 5, 3,55 vs 3,04;
 división 1, 3,13 vs 3,09.
+
+## 40. Amarillas sin falta, y el saque del medio como pase
+
+### La amarilla que salía sin que se cortara el juego
+
+`_resolver_gambeta` llamaba **directo** a `_chequear_tarjeta_repetido`,
+sin pasar por `_cobrar_falta`. O sea: se veía la barrida, salía la
+tarjeta y el juego seguía como si nada, porque no había infracción — solo
+una amonestación suelta.
+
+Ahora el defensor pasado puede **hacer falta** (22% de las veces que lo
+pasan), y eso va por `_cobrar_falta`, que trae su tarjeta, su parada de
+juego y su tiro libre. Si no hace falta, no hay tarjeta. Es la tercera
+vez en este motor que el síntoma "esto no se detiene" resulta ser un
+camino que se saltea la maquinaria de interrupción, no la maquinaria
+fallando.
+
+Costó tarjetas: se perdieron ~1,8 ocasiones de amonestar por partido (las
+gambetas) y bajaron de 3,19 a 2,83. El presupuesto por tiempo amortiguó
+parte, pero como una falta no puede dar más de una tarjeta (§36) hubo que
+subir `tiradas_tarjeta_por_partido` de 450 a 600.
+
+### El saque del medio es un pase
+
+El que la tenía en el círculo salía **corriendo solo** hacia el arco
+rival, porque después de la pausa entraba en la lógica normal de decisión
+y "conducir" ganaba. Ahora el toque inicial es un pase forzado al
+compañero **más atrasado** que tenga a distancia, que es lo que se hace de
+verdad: la pelota va para atrás y el equipo sale jugando desde ahí.
+
+### El guardado se olvidaba del último partido
+
+`cargar_partida` limpiaba `ultimo_resultado`, `ultimo_log` y
+`ultimos_eventos` a propósito, con el argumento de que eran de otra
+sesión. El efecto era que la pantalla de Partido decía **"todavía no
+jugaste ninguna fecha"** con una temporada entera encima, que es
+directamente falso.
+
+Ahora los tres se guardan y se restauran. Los FOTOGRAMAS no: son 960
+cuadros de 22 jugadores y harían pesar el archivo megabytes. Así que al
+cargar hay resultado, log y estadísticas pero no repetición, y el botón
+lo dice — "Ver partido animado (la repetición no se guarda)" — en vez de
+quedar gris y mudo. Y hacía falta además repintar la pantalla al cargar:
+el dato viajaba pero la pantalla se había armado con el texto inicial y
+nadie la volvía a tocar.
+
+Balance final: goles 3,33 vs 3,26 del abstracto, amarillas 3,14 vs 3,17.

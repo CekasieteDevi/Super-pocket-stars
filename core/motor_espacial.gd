@@ -808,10 +808,18 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 	var res := Duel.resolver(ata, def,
 		MatchEngine._bloques_equipo(eq_a, eq_d, jugador, "control", minuto, estado["rng"]),
 		MatchEngine._bloques_equipo(eq_d, eq_a, defensor, "quite", minuto, estado["rng"]))
-	# Encarar es exponerse: la falta se chequea igual que en un quite.
-	_chequear_tarjeta_repetido(estado, defensor, eq_d, eq_a, minuto)
+	var pasa := Duel.gana_atacante(res, estado["rng"])
 
-	if Duel.gana_atacante(res, estado["rng"]):
+	# Lo pasó: el que quedó mal parado puede haberlo bajado. La falta se
+	# COBRA —con su tarjeta, su parada de juego y su tiro libre— en vez de
+	# amonestar suelto. Antes acá se llamaba directo a
+	# _chequear_tarjeta_repetido, así que salía una amarilla sin falta: se
+	# veía la barrida, aparecía la tarjeta y el juego seguía como si nada.
+	if pasa and estado["rng"].randf() < float(f["prob_falta_en_gambeta"]):
+		_cobrar_falta(estado, poseedor["pos"], es_local, defensor, eq_d, eq_a, minuto)
+		return
+
+	if pasa:
 		estado["gambetas"][lado_g]["ganadas"] += 1
 		# Se lo saca de encima: queda más allá del defensor, y el defensor
 		# pasado unos segundos.
@@ -2704,6 +2712,38 @@ static func _marcar_posiciones(estado: Dictionary, pos: Vector2, ataca_local: bo
 		e["marca"] = e["base"]
 
 
+## El toque inicial: se la pasa al compañero MÁS ATRASADO que tenga cerca,
+## que es lo que se hace de verdad — la pelota va para atrás y el equipo
+## sale jugando desde ahí.
+static func _tocar_del_medio(estado: Dictionary, saca_local: bool) -> void:
+	var poseedor_id: int = int(estado["pelota"]["poseedor_id"])
+	if poseedor_id == -1 or not estado["jugadores"].has(poseedor_id):
+		return
+	var poseedor: Dictionary = estado["jugadores"][poseedor_id]
+	var equipo := _equipo_de(estado, saca_local)
+	var jugador := _dict_jugador(estado, equipo, poseedor["jugador_id"])
+	if jugador.is_empty():
+		return
+
+	var mejor := -1
+	var mejor_valor: float = INF
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		if e["equipo_local"] != saca_local or id == poseedor_id or e["rol"] == "ARQ":
+			continue
+		var dist: float = poseedor["pos"].distance_to(e["pos"])
+		if dist > float(pesos()["fisica"]["max_dist_pase_malo"]):
+			continue
+		# Más atrás = mejor. valor_posicion es 1 pegado al arco rival.
+		var valor := valor_posicion(e["pos"], saca_local)
+		if valor < mejor_valor:
+			mejor_valor = valor
+			mejor = id
+	if mejor == -1:
+		return
+	_lanzar_pase(estado, poseedor, mejor, jugador)
+
+
 ## Se reanuda: el ejecutor toca la pelota y la jugada arranca.
 static func _ejecutar_balon_parado(estado: Dictionary) -> void:
 	var bp: Dictionary = estado.get("balon_parado", {})
@@ -2714,8 +2754,11 @@ static func _ejecutar_balon_parado(estado: Dictionary) -> void:
 		_reiniciar_desde_medio(estado, bool(bp["saca_local"]))
 		return
 	if str(bp["tipo"]) == "saque_inicial":
-		# La pelota ya está en el círculo con su ejecutor desde que se
-		# armó la mitad: acá solo se anuncia que arrancó.
+		# El saque del medio es un PASE, no un arranque: se la toca a un
+		# compañero y desde ahí empieza el partido. Sin esto el que la
+		# tenía salía corriendo solo desde el círculo central, que no es
+		# lo que pasa en ninguna cancha.
+		_tocar_del_medio(estado, bool(bp["saca_local"]))
 		estado["eventos"].append({
 			"minuto": _minuto_int(estado), "tipo": "saque_inicial",
 			"equipo": _equipo_de(estado, bool(bp["saca_local"])).nombre,

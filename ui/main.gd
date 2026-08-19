@@ -270,6 +270,7 @@ func _construir_panel_partido(padre: Control) -> void:
 
 	label_resultado = Label.new()
 	label_resultado.text = "Todavia no jugaste ninguna fecha."
+	label_resultado.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	panel.add_child(label_resultado)
 
 	lista_estadisticas = RichTextLabel.new()
@@ -1139,10 +1140,45 @@ func _on_cargar_partida() -> void:
 		label_partida_estado.text = "Partida cargada: temporada %d, division %d, %s." % [
 			GameState.temporada_actual, GameState.division_jugador + 1, GameState.equipo_jugador.nombre
 		]
+		_refrescar_ultimo_partido()
 		_mostrar_plantel()
 	else:
 		label_partida_estado.text = "No se pudo cargar la partida (archivo corrupto o inexistente)."
 	_refrescar_partida_guardado()
+
+
+## Repinta la pantalla de Partido con el último partido jugado. Hace
+## falta al CARGAR: el resultado viaja en el guardado, pero la pantalla se
+## había armado con el texto inicial y se quedaba diciendo "todavía no
+## jugaste ninguna fecha" con una temporada entera encima.
+func _refrescar_ultimo_partido() -> void:
+	var r: Dictionary = GameState.ultimo_resultado
+	if r.is_empty():
+		label_resultado.text = "Todavia no jugaste ninguna fecha."
+		lista_log.text = ""
+		lista_estadisticas.text = ""
+		_refrescar_boton_animado()
+		return
+	label_resultado.text = "Ultimo partido:  %s  %d - %d  %s" % [
+		r["local"], r["gl"], r["gv"], r["visitante"]
+	]
+	var texto_log := ""
+	for entry in GameState.ultimo_log:
+		if entry.find("GOL") != -1 or entry.find("TARJETA") != -1 or entry.find("CAMBIO") != -1:
+			texto_log += entry + "
+"
+	lista_log.text = texto_log
+	lista_estadisticas.text = _texto_estadisticas(r)
+	_refrescar_boton_animado()
+
+
+## La repeticion necesita los FOTOGRAMAS, que no se guardan por tamano, no
+## los eventos. Al cargar una partida hay resultado pero no repeticion, y
+## el boton tiene que decir por que en vez de quedar gris y mudo.
+func _refrescar_boton_animado() -> void:
+	var hay: bool = not GameState.ultimos_fotogramas.is_empty()
+	boton_ver_animado.disabled = not hay
+	boton_ver_animado.text = "Ver partido animado" if hay 		else "Ver partido animado (la repeticion no se guarda)"
 
 
 func _on_borrar_partida() -> void:
@@ -1195,7 +1231,7 @@ func _on_jugar_fecha() -> void:
 		if entry.find("GOL") != -1 or entry.find("TARJETA") != -1 or entry.find("CAMBIO") != -1:
 			texto_log += entry + "\n"
 	lista_log.text = texto_log
-	boton_ver_animado.disabled = GameState.ultimos_eventos.is_empty()
+	_refrescar_boton_animado()
 	lista_estadisticas.text = _texto_estadisticas(r) if r.size() > 0 else ""
 
 	_refrescar_tabla()
@@ -1250,7 +1286,7 @@ func _on_simular_temporada() -> void:
 	GameState.ultimos_eventos = []
 	lista_log.text = ""
 	lista_estadisticas.text = ""
-	boton_ver_animado.disabled = true
+	_refrescar_boton_animado()
 
 	_refrescar_tabla()
 	_refrescar_plantel()

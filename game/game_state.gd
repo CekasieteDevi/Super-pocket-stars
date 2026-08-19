@@ -380,6 +380,13 @@ func guardar_partida() -> void:
 		"ultima_posicion_final": ultima_posicion_final,
 		"juego_terminado": juego_terminado,
 		"motivo_fin_partida": motivo_fin_partida,
+		# El último partido jugado se guarda (resultado, log y eventos, no
+		# los fotogramas: son 960 cuadros de 22 jugadores y harían pesar el
+		# archivo megabytes). Sin esto, al cargar la pantalla de Partido
+		# decía "todavía no jugaste ninguna fecha", que era mentira.
+		"ultimo_resultado": ultimo_resultado,
+		"ultimo_log": ultimo_log,
+		"ultimos_eventos": ultimos_eventos,
 	}
 	var file := FileAccess.open(RUTA_PARTIDA, FileAccess.WRITE)
 	file.store_string(JSON.stringify(datos))
@@ -430,12 +437,13 @@ func cargar_partida() -> bool:
 	juego_terminado = datos.get("juego_terminado", false)
 	motivo_fin_partida = datos.get("motivo_fin_partida", "")
 
-	# Resultado/log/eventos del último partido son de la sesión anterior y
-	# ya no tienen mucho sentido mostrados sueltos (el jugador ni se
-	# acuerda de qué partido era) — se limpian, la próxima fecha los llena de nuevo.
-	ultimo_resultado = {}
-	ultimo_log = []
-	ultimos_eventos = []
+	# Resultado, log y eventos del último partido vuelven tal cual estaban.
+	# Los FOTOGRAMAS no: no se guardan por tamaño, así que la repetición
+	# animada no está disponible hasta jugar la próxima fecha. Es lo único
+	# que se pierde al cargar.
+	ultimo_resultado = datos.get("ultimo_resultado", {})
+	ultimo_log = datos.get("ultimo_log", [])
+	ultimos_eventos = datos.get("ultimos_eventos", [])
 	ultimos_fotogramas = []
 
 	return true

@@ -181,9 +181,11 @@
     "acel_max": 5.2,
     "freno_giro": 0.35,
     "vel_salida_min": 11.0,
-    "tiradas_tarjeta_por_partido": 450,
+    "tiradas_tarjeta_por_partido": 600,
     "_tiradas_tarjeta_por_partido": "Presupuesto de tiradas de tarjeta por partido. Se acumula con el TIEMPO y cada infraccion se lleva lo acumulado desde la anterior (ver MotorEspacial._chequeos_tarjeta), asi el total esperado no depende de cuantas infracciones haya. CHANCE_AMARILLA=0.02 esta calibrada sobre los ~180 duelos del motor abstracto y este resuelve muchos menos, de ahi que haga falta tirar varias veces por infraccion.",
     "tiradas_tarjeta_tope": 90,
-    "_tiradas_tarjeta_tope": "Tope por infraccion. Subirlo casi no cambia nada: con ~90 tiradas la chance de amonestar ya es del 85% y el limite real es que una falta no puede dar mas de una tarjeta. Existe para que una sequia larga no vuelva automatica a la siguiente."
+    "_tiradas_tarjeta_tope": "Tope por infraccion. Subirlo casi no cambia nada: con ~90 tiradas la chance de amonestar ya es del 85% y el limite real es que una falta no puede dar mas de una tarjeta. Existe para que una sequia larga no vuelva automatica a la siguiente.",
+    "prob_falta_en_gambeta": 0.22,
+    "_prob_falta_en_gambeta": "Chance de que el defensor pasado haga falta en vez de dejarlo pasar limpio. Va aparte de prob_falta porque encarar y quitar no son la misma situacion."
   }
 }
