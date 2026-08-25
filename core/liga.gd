@@ -160,6 +160,13 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 		var away: Team = equipos[partido[1]]
 		var con_log: bool = equipo_seguido != null and (home == equipo_seguido or away == equipo_seguido)
 
+		# §14 + §17: antes de dar por perdido el partido, el club echa mano
+		# de la cantera. Recién si ni con los juveniles llega al mínimo
+		# pierde 0-3. Los convocados vuelven solos a la reserva cuando el
+		# plantel se recupera, así que esto corre todas las fechas.
+		_convocar_emergencia(home)
+		_convocar_emergencia(away)
+
 		var home_corto: bool = home.jugadores_sanos_count() < MINIMO_DISPONIBLES
 		var away_corto: bool = away.jugadores_sanos_count() < MINIMO_DISPONIBLES
 		# Snapshot ANTES del partido: las suspensiones que ya tenía cada
@@ -203,6 +210,17 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 	}
 
 
+func _convocar_emergencia(equipo: Team) -> void:
+	var r := equipo.ajustar_convocatorias_de_emergencia(MINIMO_DISPONIBLES)
+	if r["subidos"].is_empty():
+		return
+	var nombres := []
+	for j in r["subidos"]:
+		nombres.append("%s (%s, %d años)" % [j["nombre"], j["posicion"], int(j["edad"])])
+	noticias.append("%s no llega a %d disponibles y sube de la cantera a %s." % [
+		equipo.nombre, MINIMO_DISPONIBLES, ", ".join(nombres)])
+
+
 ## §14: "si no llegás a MINIMO_DISPONIBLES, perdés el partido por no
 ## presentarte" — 0-3 en contra + multa. Devuelve el mismo formato que
 ## MatchEngine.simular() para que el resto de jugar_fecha() no note la
@@ -210,6 +228,15 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 ## se resuelve como empate administrativo 0-0 con multa para ambos, para
 ## no romper la simetría de goles a favor/en contra de la tabla.
 func _resolver_forfeit(home: Team, away: Team, home_corto: bool, away_corto: bool) -> Dictionary:
+	# expulsados_partido dura SOLO el partido en curso y lo limpia
+	# reset_partido(), que corre dentro de simular(). Un forfeit no simula
+	# nada, asi que sin esto los expulsados del ultimo partido jugado
+	# quedaban marcados para siempre: la suspension se servia igual (ver
+	# _servir_suspensiones mas abajo) pero puede_jugar() los seguia
+	# contando como no disponibles, y el equipo arrastraba un jugador
+	# menos en el conteo por el resto de la partida.
+	home.expulsados_partido.clear()
+	away.expulsados_partido.clear()
 	var gl := 0
 	var gv := 0
 	if home_corto and not away_corto:

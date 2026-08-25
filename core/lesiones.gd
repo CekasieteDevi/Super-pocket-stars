@@ -4,8 +4,8 @@ extends RefCounted
 ## Motor de lesiones — Fase 5 (GDD §2.3).
 ##
 ## instalaciones_medicas ya es un sistema real (§9.5, Instalaciones.factor_riesgo_lesion)
-## y se pasa desde MatchEngine._chequear_lesion. carga_entrenamiento todavía
-## no existe como sistema — queda en 1.0 hasta que haya algo real que lo mueva.
+## y carga_entrenamiento también (§7.4.1, CargaEntrenamiento.factor_lesion);
+## los dos se pasan desde MatchEngine._chequear_lesion.
 ##
 ## Nota sobre la fórmula del GDD: "riesgo = base × (1 − energía/100) × ...",
 ## tomada literal, da riesgo CERO con el jugador 100% descansado — ningún
@@ -15,14 +15,25 @@ extends RefCounted
 ## intención (cansado se lesiona más) sin el efecto absurdo.
 
 const TABLA_PATH := "res://data/lesiones.json"
-## Bajado de 0.0018 a 0.0010 en el balance de la fase 10: sin plantel de 25
-## todavía (§14), una lesión no se cubre con un suplente — le pega directo
-## a la posición por el resto de la temporada. A la tasa vieja (~0,75
-## lesiones nuevas por jugador y temporada) eso inflaba los goles de una
-## temporada completa a ~5,5 por partido con las defensas degradadas. No
-## es la solución real (esa es tener banco), pero mientras tanto conviene
-## que ocurran con menos frecuencia.
-const RIESGO_BASE := 0.0010
+## Subido de 0.0010 a 0.0050. La tasa vieja se habia bajado porque no
+## habia banco: una lesion no se cubria con nadie y le pegaba a la
+## posicion por el resto de la temporada. Eso ya no aplica —el banco de 7
+## existe (§14) y la cantera cubre las emergencias (ver
+## Team.ajustar_convocatorias_de_emergencia)—, y a 0.0010 el sistema no
+## se sentia: ~3 lesiones por plantel y temporada, 1,5% del plantel
+## afuera. Con eso, entrenar Brutal era gratis y ademas daba puntos, o
+## sea que elegir la carga (§7.4.1) no era una decision.
+##
+## A 0.0050 con carga Normal: ~16 lesiones por plantel y temporada, 7%
+## del plantel afuera en cualquier momento, ~2,7 graves. Brutal cuesta
+## 2,6 puntos por temporada y paga con +1,1 de media a las 4 — que es la
+## forma que tenia que tener el intercambio. Los goles no se movieron
+## (2,8-3,0 por partido, igual que antes).
+##
+## OJO: subir esto no alcanzaba por si solo. El motivo real de que las
+## lesiones no dolieran era que el banco salia tan bueno como el once
+## (+0,2 de media) — ver Team._acomodar_por_calidad.
+const RIESGO_BASE := 0.0050
 
 static var _tabla_cache: Array = []
 

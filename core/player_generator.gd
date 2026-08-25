@@ -45,7 +45,17 @@ static func get_all_attributes() -> Array:
 ## pais (§10.1): pool de nombre/apellido — "Uruguay" (default) usa
 ## GeneradorNombres, cualquier otro país reconocido usa su propio pool
 ## (GeneradorNombresInternacional), y un país sin pool cae al de Uruguay.
-static func generate(id: int, rng: RandomNumberGenerator, forced_position: String = "", potencial_forzado: int = -1, pais: String = "Uruguay") -> Dictionary:
+## Cuanto de su techo tiene YA realizado un jugador al nacer. §7.2 dio a
+## cada atributo su propio techo; esto es cuanto de ese techo trae puesto.
+## Un titular arranca entre el 55% y el 100%; un suplente bastante mas
+## abajo, que es lo que lo hace suplente. Los techos NO cambian: el
+## suplente puede crecer y quedarse con el puesto (§7.3), que es como
+## deberia funcionar un banco.
+const REALIZACION_TITULAR := Vector2(0.55, 1.0)
+const REALIZACION_SUPLENTE := Vector2(0.45, 0.78)
+
+
+static func generate(id: int, rng: RandomNumberGenerator, forced_position: String = "", potencial_forzado: int = -1, pais: String = "Uruguay", realizacion: Vector2 = REALIZACION_TITULAR) -> Dictionary:
 	var positions := get_weights().keys()
 	var position: String = forced_position if forced_position != "" else positions[rng.randi() % positions.size()]
 
@@ -62,7 +72,7 @@ static func generate(id: int, rng: RandomNumberGenerator, forced_position: Strin
 	var potenciales := techos_por_atributo(potencial, rng)
 	var atributos := {}
 	for attr in get_all_attributes():
-		atributos[attr] = _roll_attribute(potenciales[attr], rng)
+		atributos[attr] = _roll_attribute(potenciales[attr], rng, realizacion)
 
 	var media_natural := compute_media(atributos, position)
 	var mejor := best_position(atributos)
@@ -138,8 +148,9 @@ static func techos_derivados(potencial: int, jugador_id: int) -> Dictionary:
 ## Cada atributo se tira independiente, con techo blando en SU propio
 ## techo (§7.2). factor 0.55-1.0 + ruido gaussiano da la variación de
 ## cuánto de ese techo ya tiene alcanzado al generarse.
-static func _roll_attribute(techo: int, rng: RandomNumberGenerator) -> int:
-	var factor := rng.randf_range(0.55, 1.0)
+static func _roll_attribute(techo: int, rng: RandomNumberGenerator,
+		realizacion: Vector2 = REALIZACION_TITULAR) -> int:
+	var factor := rng.randf_range(realizacion.x, realizacion.y)
 	var valor := float(techo) * factor + rng.randfn(0.0, 4.0)
 	# Se corta EN el techo: con factor cerca de 1 y ruido positivo, un
 	# atributo nacía hasta 10 puntos por encima de su propio tope y ya

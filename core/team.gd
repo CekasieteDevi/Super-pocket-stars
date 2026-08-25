@@ -165,8 +165,16 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 		t.jugadores.append(jugador)
 		t._registrar_fichaje(jugador, ValorJugador.calcular(jugador, 50.0, 3), rng.randi_range(1, 5))
 		t.armonia += Personalidad.bonus_armonia(jugador)
+	# El banco nace con menos techo realizado que el once (ver
+	# PlayerGenerator.REALIZACION_SUPLENTE). Antes salia del mismo molde y
+	# quedaba tan bueno como el titular (+0,2 de media), asi que perder a
+	# un titular no costaba nada: entraba alguien identico. Se baja el
+	# banco en vez de subir el once a proposito — media_equipo() mira solo
+	# a los titulares y es el numero contra el que estan calibrados la
+	# economia, los objetivos y la paridad entre los dos motores.
 	for pos in BANCO_FORMACION:
-		var jugador := PlayerGenerator.generate(next_id, rng, pos, potencial_objetivo, pais)
+		var jugador := PlayerGenerator.generate(next_id, rng, pos, potencial_objetivo, pais,
+			PlayerGenerator.REALIZACION_SUPLENTE)
 		next_id += 1
 		t.banco.append(jugador)
 		t._registrar_fichaje(jugador, ValorJugador.calcular(jugador, 50.0, 3), rng.randi_range(1, 5))
@@ -765,6 +773,77 @@ func liberar_veteranos_de_cantera() -> Array:
 			conservados.append(j)
 	cantera = conservados
 	return liberados
+
+
+## §14 + §17: convocatoria de emergencia. Si las bajas (lesiones, rojas,
+## suspensiones) dejan al plantel por debajo del mínimo para presentarse,
+## suben juveniles de la cantera como refuerzo — que es lo que hace un
+## club de verdad, no perder 0-3 por no presentarse teniendo siete pibes
+## en reserva. Vuelven solos a la cantera cuando el plantel se recupera.
+##
+## No es una promoción: el juvenil NO firma contrato ni cobra sueldo
+## mientras está convocado (por eso no pasa por _registrar_fichaje) y no
+## cuenta para el objetivo de cantera — promoverlo de verdad sigue siendo
+## una decisión aparte, ver promover_juvenil. Tampoco desplaza a nadie:
+## el banco crece mientras dura la emergencia, porque el punto es sumar
+## gente disponible y un swap dejaría el conteo igual que antes.
+##
+## Devuelve {"subidos":Array, "bajados":Array} para que quien llame pueda
+## contarlo como noticia.
+func ajustar_convocatorias_de_emergencia(minimo: int) -> Dictionary:
+	var subidos := []
+	var bajados := []
+
+	# Primero devolver a los que ya no hacen falta. Un convocado lesionado
+	# se va igual (no aporta), y uno sano solo si el plantel sigue
+	# llegando al mínimo sin él.
+	var i := banco.size() - 1
+	while i >= 0:
+		var j: Dictionary = banco[i]
+		if bool(j.get("convocado_emergencia", false)):
+			var aporta: int = 1 if puede_jugar(j["id"]) else 0
+			if jugadores_sanos_count() - aporta >= minimo:
+				j.erase("convocado_emergencia")
+				# Baja del contrato temporal, pero NO de animo/fatiga/lesiones:
+				# _limpiar_registro borraria tambien la lesion y el pibe
+				# volveria a la cantera curado de arriba.
+				sueldos.erase(j["id"])
+				contratos.erase(j["id"])
+				clausulas.erase(j["id"])
+				banco.remove_at(i)
+				cantera.append(j)
+				bajados.append(j)
+		i -= 1
+
+	# Después llamar a los que hagan falta, del mejor para abajo.
+	while jugadores_sanos_count() < minimo:
+		var idx := _mejor_juvenil_disponible()
+		if idx < 0:
+			break
+		var juvenil: Dictionary = cantera[idx]
+		cantera.remove_at(idx)
+		juvenil["convocado_emergencia"] = true
+		# Contrato corto de debutante. Se da de alta igual que un fichaje
+		# porque el resto del juego da por hecho que todo el que está en
+		# el plantel tiene sueldo, contrato y ánimo (lo verifica
+		# test_phase6): un jugador sin alta rompe economía y mercado. Se
+		# le da de baja al devolverlo a la cantera, más arriba.
+		_registrar_fichaje(juvenil, ValorJugador.calcular(juvenil, 50.0, 1), 1)
+		banco.append(juvenil)
+		subidos.append(juvenil)
+
+	return {"subidos": subidos, "bajados": bajados}
+
+
+## El juvenil sano de mayor media. -1 si no queda ninguno disponible.
+func _mejor_juvenil_disponible() -> int:
+	var mejor := -1
+	for i in range(cantera.size()):
+		if not puede_jugar(cantera[i]["id"]):
+			continue
+		if mejor == -1 or cantera[i]["media"] > cantera[mejor]["media"]:
+			mejor = i
+	return mejor
 
 
 ## Saca al juvenil de la cantera y lo pone en el banco (§14 — un debutante
