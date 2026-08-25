@@ -471,10 +471,24 @@ func guardar_partida() -> void:
 		"ultimo_resultado": ultimo_resultado,
 		"ultimo_log": ultimo_log,
 		"ultimos_eventos": ultimos_eventos,
+		# Las copas en curso también: perder el cuadro a mitad de
+		# temporada al cargar sería inaceptable. Solo guardan nombres, así
+		# que pesan nada (ver Copa.guardar).
+		"copa_nacional": copa_nacional.guardar() if copa_nacional != null else {},
+		"copas_division": _guardar_copas_division(),
 	}
+
+
 	var file := FileAccess.open(RUTA_PARTIDA, FileAccess.WRITE)
 	file.store_string(JSON.stringify(datos))
 	file.close()
+
+
+func _guardar_copas_division() -> Array:
+	var out := []
+	for c in copas_division:
+		out.append(c.guardar())
+	return out
 
 
 ## Devuelve true si pudo cargar. No toca nada del estado actual si falla
@@ -525,11 +539,17 @@ func cargar_partida() -> bool:
 	# Los FOTOGRAMAS no: no se guardan por tamaño, así que la repetición
 	# animada no está disponible hasta jugar la próxima fecha. Es lo único
 	# que se pierde al cargar.
-	# Las copas en curso NO se guardan: Copa tiene referencias a Team y
-	# serializarlas sería duplicar media pirámide. Se rearman con los
-	# equipos actuales, o sea que cargar una partida vuelve a sortear los
-	# cuadros. Es la única cosa que se pierde además de la repetición.
-	_armar_copas()
+	# Las copas vuelven con su cuadro y su historial. Solo se rearman si el
+	# guardado es anterior a que existieran las copas intercaladas.
+	var datos_nacional: Dictionary = datos.get("copa_nacional", {})
+	var datos_division: Array = datos.get("copas_division", [])
+	if datos_nacional.is_empty() or datos_division.size() != piramide.divisiones.size():
+		_armar_copas()
+	else:
+		copa_nacional = Copa.cargar(datos_nacional, piramide)
+		copas_division = []
+		for d in datos_division:
+			copas_division.append(Copa.cargar(d, piramide))
 	ultimo_resultado = datos.get("ultimo_resultado", {})
 	ultimo_log = datos.get("ultimo_log", [])
 	ultimos_eventos = datos.get("ultimos_eventos", [])

@@ -124,3 +124,48 @@ static func _mezclar(equipos: Array, rng: RandomNumberGenerator) -> Array:
 		copia[i] = copia[j]
 		copia[j] = tmp
 	return copia
+
+
+## Guardado. `historial` ya usa NOMBRES (se arma así en
+## jugar_siguiente_ronda), así que lo único que hay que traducir son las
+## tres cosas que sí guardan referencias a Team: el bye, los partidos
+## pendientes y el campeón. Los equipos se relocalizan al cargar buscando
+## por nombre en la pirámide, igual que hace Confederacion.
+func guardar() -> Dictionary:
+	var pares := []
+	for p in partidos_pendientes:
+		pares.append([p[0].nombre, p[1].nombre])
+	var bye := []
+	for e in equipos_con_bye:
+		bye.append(e.nombre)
+	return {
+		"nombre": nombre,
+		"equipos_con_bye": bye,
+		"partidos_pendientes": pares,
+		"historial": historial,
+		"campeon": campeon.nombre if campeon != null else "",
+	}
+
+
+static func cargar(datos: Dictionary, piramide) -> Copa:
+	var indice := {}
+	for liga in piramide.divisiones:
+		for e in liga.equipos:
+			indice[e.nombre] = e
+
+	var c := Copa.new()
+	c.nombre = str(datos.get("nombre", "Copa"))
+	c.historial = datos.get("historial", [])
+	for n in datos.get("equipos_con_bye", []):
+		if indice.has(str(n)):
+			c.equipos_con_bye.append(indice[str(n)])
+	for p in datos.get("partidos_pendientes", []):
+		# Si un equipo del cuadro ya no existe (no debería pasar dentro de
+		# una temporada), se descarta el cruce entero en vez de dejar un
+		# partido a medias que reventaría al jugarlo.
+		if indice.has(str(p[0])) and indice.has(str(p[1])):
+			c.partidos_pendientes.append([indice[str(p[0])], indice[str(p[1])]])
+	var campeon_nombre := str(datos.get("campeon", ""))
+	if campeon_nombre != "" and indice.has(campeon_nombre):
+		c.campeon = indice[campeon_nombre]
+	return c

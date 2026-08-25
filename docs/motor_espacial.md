@@ -2518,10 +2518,16 @@ semana además de la liga sería un calendario que no existe. La semana con
 copa se reparte 3 + 4 días en vez de 7, y como los días son lo que
 recupera fatiga, el plantel llega al domingo a media máquina.
 
-Las copas **no se guardan**: `Copa` tiene referencias a `Team` y
-serializarlas sería duplicar media pirámide. Al cargar se rearman, o sea
-que se vuelven a sortear los cuadros. Es lo segundo que se pierde al
-cargar, después de la repetición del partido.
+Las copas **sí se guardan**. La primera versión no lo hacía, con el
+argumento de que `Copa` referencia `Team` y serializarlo duplicaría media
+pirámide — pero perder el cuadro a mitad de temporada al cargar la
+partida es inaceptable, así que no era una simplificación válida.
+
+El truco ya estaba resuelto en `Confederacion`: se guardan NOMBRES y al
+cargar se relocalizan los equipos buscando en la pirámide. Y `historial`
+ya usaba nombres desde siempre, así que lo único a traducir eran tres
+cosas: el bye, los cruces pendientes y el campeón. Costo real: 28 KB
+sobre un guardado de 10,4 MB, o sea 0,3%.
 
 ### La recuperación era demasiado rápida
 
