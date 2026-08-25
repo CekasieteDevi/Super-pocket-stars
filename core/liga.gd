@@ -349,7 +349,9 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 		# individual lo elige él desde la UI.
 		if equipo != equipo_protegido:
 			Entrenamiento.asignar_foco_automatico_ia(equipo, rng)
-		var mult_entrenamiento := Instalaciones.factor_entrenamiento(equipo)
+		# §7.4.1: la carga de entrenamiento de la temporada, promediada
+		# semana a semana, entra acá junto con las instalaciones.
+		var mult_entrenamiento: float = Instalaciones.factor_entrenamiento(equipo) * equipo.factor_carga_temporada()
 
 		for jugador in equipo.todos_los_jugadores():
 			var foco: String = equipo.foco_individual.get(jugador["id"], "")
@@ -363,6 +365,8 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 				noticias.append("%s: multan a un %s por llegar tarde a los entrenamientos (%s)." % [
 					equipo.nombre, jugador["posicion"], Economia.formato_dinero(Personalidad.MULTA_IMPUNTUAL)
 				])
+		# §7.4.1: la carga acumulada ya se consumió en mult_entrenamiento.
+		equipo.reiniciar_carga()
 
 		var reporte := _procesar_cantera(equipo, rng, equipo == equipo_protegido, bonus_mentor, temporada_actual)
 		reporte_cantera.append(reporte)

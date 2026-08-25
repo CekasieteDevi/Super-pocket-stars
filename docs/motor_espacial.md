@@ -2501,3 +2501,59 @@ La comparación válida es **la misma liga corrida dos veces con la misma
 semilla**, una siguiendo al equipo y otra sin seguir a nadie, para que lo
 único que cambie sea el motor que resolvió sus partidos. Está en
 `tests/_diag_desarrollo.gd`.
+
+## 48. GDD 7.4.1 + 7.4.7 — Carga de entrenamiento y calendario real
+
+El GDD pide cinco escalones de carga semanal y dice para qué sirven: *"si
+hay partidos cada 3 días, la carga tiene que bajar o llegás fundido. Ese
+es el juego"*. La carga sola no alcanzaba, porque **no había calendario**:
+todas las fechas estaban a 7 días una de otra y las copas se resolvían de
+una sola vez al cerrar la temporada.
+
+### Las copas ahora se juegan entre semana
+
+Se arman al empezar la temporada y se juega **una ronda cada 4 fechas de
+liga**, alternando copa nacional y copas de división — dos partidos entre
+semana además de la liga sería un calendario que no existe. La semana con
+copa se reparte 3 + 4 días en vez de 7, y como los días son lo que
+recupera fatiga, el plantel llega al domingo a media máquina.
+
+Las copas **no se guardan**: `Copa` tiene referencias a `Team` y
+serializarlas sería duplicar media pirámide. Al cargar se rearman, o sea
+que se vuelven a sortear los cuadros. Es lo segundo que se pierde al
+cargar, después de la repetición del partido.
+
+### La recuperación era demasiado rápida
+
+Con `RECUPERACION_FATIGA_POR_DIA` en 0,1, **tres días alcanzaban para
+recuperar todo lo que cuesta un partido**. O sea que jugar entre semana
+no tenía ninguna consecuencia y el calendario apretado habría sido
+decoración pura. El test lo destapó antes de que el bug llegara a
+jugarse: los dos equipos, el que descansó una semana y el que jugó el
+miércoles, llegaban al domingo con 1,00 de energía.
+
+Con 0,055 una semana completa recupera casi todo y media semana deja al
+plantel a ~91%. Ahí la carga pasa a ser una decisión.
+
+### ¿Es una decisión de verdad?
+
+Tres temporadas con el mismo equipo, mismo seed, una corrida por escalón:
+
+| Carga | Puntos/temp | Crecimiento de media |
+|---|---|---|
+| Recuperación | 70,3 | +3,71 |
+| Ligero | 75,0 | +3,93 |
+| Normal | 70,3 | +3,82 |
+| Intenso | 74,3 | +4,15 |
+| **Brutal** | **67,0** | **+4,43** |
+
+El crecimiento es monótono y claro: de +3,71 a +4,43. Los puntos son
+ruidosos en el medio (una sola semilla), pero Brutal es el peor de los
+cinco con el mejor crecimiento, que es exactamente la forma que se
+buscaba: apretar te hace mejores jugadores y te cuesta la temporada.
+
+**Lo que NO funciona todavía**: las lesiones. Los multiplicadores están
+(0,65 a 1,90) y ahora sí se aplican —`Lesiones.evaluar_riesgo` recibía el
+parámetro desde siempre pero nadie se lo pasaba— pero la tasa base es tan
+baja que en tres temporadas Brutal produjo UNA. El contrapeso real hoy es
+la fatiga, no la enfermería.

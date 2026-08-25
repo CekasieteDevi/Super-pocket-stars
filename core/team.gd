@@ -19,7 +19,12 @@ const BANCO_FORMACION := ["ARQ", "DFC", "LAT", "MC", "MCO", "EXT", "DC"]
 const RANGO_IDS_RESERVADO := 300
 
 ## §3: cuánto recupera la fatiga acumulada por día de descanso entre fechas.
-const RECUPERACION_FATIGA_POR_DIA := 0.1
+## §3/§7.4.7. Estaba en 0,1: con eso, TRES días alcanzaban para recuperar
+## todo lo que cuesta un partido, así que jugar entre semana no tenía
+## consecuencia y el calendario apretado era decorativo. Con 0,055, una
+## semana completa recupera casi todo y media semana deja al plantel a
+## ~80%, que es donde la carga de entrenamiento pasa a ser una decisión.
+const RECUPERACION_FATIGA_POR_DIA := 0.055
 ## §3: velocidad de la deriva natural del ánimo hacia 50 (por semana).
 const DERIVA_ANIMO_POR_SEMANA := 1.0
 
@@ -33,6 +38,13 @@ var dt: Dictionary = {}  # {"nivel":1-10, "rasgo":Conservador/Loco/Cantera/Chequ
 ## formación lo ocupa jugadores[i], así que el ORDEN de esa lista es la
 ## alineación y no un detalle interno.
 var formacion: String = Formaciones.POR_DEFECTO
+
+## §7.4.1: carga de entrenamiento de la semana en curso. Se elige entre
+## fecha y fecha; lo que importa para la progresión es el PROMEDIO de la
+## temporada, que se acumula en carga_suma/carga_semanas.
+var carga_entrenamiento: String = CargaEntrenamiento.POR_DEFECTO
+var carga_suma: float = 0.0
+var carga_semanas: float = 0.0
 
 var calidad_cancha: float = 0.0  # -8..+3, ver core/estado_cancha.gd — rige cuando este club juega de local
 var clima_partido: String = ""  # transitorio, solo dentro de un partido — "" (normal) / Lluvia / Calor / Viento, ver core/clima.gd
@@ -206,6 +218,8 @@ func guardar() -> Dictionary:
 	return {
 		"nombre": nombre, "estilo": estilo, "dt": dt, "calidad_cancha": calidad_cancha,
 		"formacion": formacion,
+		"carga_entrenamiento": carga_entrenamiento,
+		"carga_suma": carga_suma, "carga_semanas": carga_semanas,
 		"jugadores": jugadores, "banco": banco, "cantera": cantera,
 		"siguiente_id_cantera": siguiente_id_cantera, "capitan_id": capitan_id,
 		"fatiga_acumulada": _claves_a_texto(fatiga_acumulada),
@@ -245,6 +259,11 @@ static func cargar(datos: Dictionary) -> Team:
 		var rng_migracion_dt := RandomNumberGenerator.new()
 		rng_migracion_dt.seed = hash(datos["nombre"]) + 1  # +1 para no repetir la tirada de estilo
 		t.dt = DT.generar(rng_migracion_dt)
+	t.carga_entrenamiento = str(datos.get("carga_entrenamiento", CargaEntrenamiento.POR_DEFECTO))
+	if not CargaEntrenamiento.existe(t.carga_entrenamiento):
+		t.carga_entrenamiento = CargaEntrenamiento.POR_DEFECTO
+	t.carga_suma = float(datos.get("carga_suma", 0.0))
+	t.carga_semanas = float(datos.get("carga_semanas", 0.0))
 	t.formacion = str(datos.get("formacion", Formaciones.POR_DEFECTO))
 	if not Formaciones.existe(t.formacion):
 		t.formacion = Formaciones.POR_DEFECTO
@@ -358,6 +377,19 @@ static func _normalizar_jugadores(lista: Array) -> Array:
 			for attr in j["potenciales"]:
 				j["potenciales"][attr] = int(j["potenciales"][attr])
 	return lista
+
+
+## Promedio de carga de la temporada, para la progresión. Se resetea al
+## cerrar la temporada (ver Liga.fin_de_temporada).
+func factor_carga_temporada() -> float:
+	if carga_semanas <= 0.0:
+		return 1.0
+	return carga_suma / carga_semanas
+
+
+func reiniciar_carga() -> void:
+	carga_suma = 0.0
+	carga_semanas = 0.0
 
 
 func recalcular_capitan() -> void:
@@ -673,11 +705,17 @@ func actualizar_post_partido(goles_propios: int, goles_rival: int, goleadores_id
 func avanzar_dias(dias: int) -> Array:
 	for j in todos_los_jugadores():
 		var id: int = j["id"]
-		var recuperacion: float = RECUPERACION_FATIGA_POR_DIA * Personalidad.factor_recuperacion_fatiga(j) * Instalaciones.factor_recuperacion_fatiga(self)
+		var recuperacion: float = RECUPERACION_FATIGA_POR_DIA 			* Personalidad.factor_recuperacion_fatiga(j) 			* Instalaciones.factor_recuperacion_fatiga(self) 			* CargaEntrenamiento.factor_recuperacion(carga_entrenamiento)
 		fatiga_acumulada[id] = min(1.0, fatiga_acumulada.get(id, 1.0) + recuperacion * dias)
 		var actual: float = animo.get(id, 50.0)
 		var deriva: float = clamp(50.0 - actual, -DERIVA_ANIMO_POR_SEMANA, DERIVA_ANIMO_POR_SEMANA) * (dias / 7.0)
 		animo[id] = clamp(actual + deriva, 0.0, 100.0)
+
+	# La carga de ESTA semana cuenta para el promedio de la temporada,
+	# ponderada por los días: una semana de dos partidos con carga baja
+	# pesa lo mismo que cualquier otra semana de la misma duración.
+	carga_suma += CargaEntrenamiento.factor_crecimiento(carga_entrenamiento) * (float(dias) / 7.0)
+	carga_semanas += float(dias) / 7.0
 
 	var recuperados := []
 	for id in lesiones.keys():

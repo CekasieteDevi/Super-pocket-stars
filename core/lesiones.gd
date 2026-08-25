@@ -43,8 +43,9 @@ static func evaluar_riesgo(jugador: Dictionary, resistencia_pct: float,
 
 
 ## Devuelve {} si no hay lesión, o {"tipo":String, "dias":int} si hubo.
-static func intentar_lesion(jugador: Dictionary, resistencia_pct: float, rng: RandomNumberGenerator, instalaciones_medicas: float = 1.0) -> Dictionary:
-	var riesgo := evaluar_riesgo(jugador, resistencia_pct, instalaciones_medicas)
+static func intentar_lesion(jugador: Dictionary, resistencia_pct: float, rng: RandomNumberGenerator,
+		instalaciones_medicas: float = 1.0, carga_entrenamiento: float = 1.0) -> Dictionary:
+	var riesgo := evaluar_riesgo(jugador, resistencia_pct, instalaciones_medicas, carga_entrenamiento)
 	if rng.randf() >= riesgo:
 		return {}
 

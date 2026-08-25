@@ -13,6 +13,17 @@ extends Node
 ## reales) y el plantel de 25 con banco todavía no existen.
 
 const DIAS_ENTRE_FECHAS := 7
+
+## §7.4.1/§7.4.7: cada cuántas fechas de liga cae una ronda de copa ENTRE
+## SEMANA. Antes las copas se resolvían de una sola vez al cerrar la
+## temporada, así que todas las fechas estaban a 7 días una de otra y
+## elegir la carga de entrenamiento no tenía consecuencia: sin semanas
+## apretadas, "Intenso" gana siempre.
+const FECHAS_ENTRE_RONDAS_COPA := 4
+## Reparto de la semana con partido entre semana: domingo, miércoles, y el
+## domingo siguiente.
+const DIAS_HASTA_COPA := 3
+const DIAS_DESPUES_DE_COPA := 4
 const DIVISION_INICIAL := 9  # 0-indexado: división 10, la última (GDD original)
 const MAX_NOTICIAS_GUARDADAS := 200
 
@@ -38,6 +49,12 @@ var ultimos_eventos: Array = []
 ## (MotorEspacial). Solo lo consume la animación — no se guarda en el save
 ## (son ~21.600 fotogramas) y se pierde al cerrar el juego, igual que el log.
 var ultimos_fotogramas: Array = []
+
+## Copas en curso. Ya no se resuelven de una sola vez al cerrar la
+## temporada: se arman al empezarla y se juegan una ronda por semana
+## entre fechas de liga (ver _jugar_ronda_de_copas).
+var copa_nacional: Copa = null
+var copas_division: Array = []
 var noticias: Array = []
 var ultimo_informe_economico: Dictionary = {}  # ingresos/egresos/neto del ultimo cierre de temporada
 var ultima_posicion_final: Dictionary = {}  # {"posicion","total","division"} del cierre de temporada mas reciente
@@ -66,6 +83,21 @@ func _ready() -> void:
 	equipo_jugador = piramide.divisiones[DIVISION_INICIAL].equipos[0]
 	equipo_jugador.objetivo_temporada = Objetivos.generar(
 		equipo_jugador, _es_ultima_division(DIVISION_INICIAL), liga_jugador().equipos.size(), rng)
+	_armar_copas()
+
+
+## Arma las copas de la temporada. Se llama al empezar cada una: los
+## cuadros se sortean UNA vez y después se juegan ronda a ronda.
+func _armar_copas() -> void:
+	var todos := []
+	for liga in piramide.divisiones:
+		for equipo in liga.equipos:
+			todos.append(equipo)
+	copa_nacional = Copa.iniciar("Copa Nacional", todos, rng)
+	copas_division = []
+	for d in range(piramide.divisiones.size()):
+		copas_division.append(Copa.iniciar(
+			"Copa Division %d" % (d + 1), piramide.divisiones[d].equipos.duplicate(), rng))
 
 
 func liga_jugador() -> Liga:
@@ -108,12 +140,62 @@ func jugar_siguiente_fecha() -> void:
 				ultimos_fotogramas = r.get("fotogramas_seguido", [])
 		else:
 			liga.jugar_fecha(fecha_actual, rng)
-		liga.avanzar_dias(DIAS_ENTRE_FECHAS)
 
 	fecha_actual += 1
 
+	# La semana se reparte según si hay o no partido entre semana. Los
+	# días son los que recuperan fatiga (Team.avanzar_dias), así que una
+	# semana de dos partidos deja al plantel a media máquina — que es
+	# justamente el punto de la carga de entrenamiento.
+	if _toca_ronda_de_copa():
+		_avanzar_dias_todos(DIAS_HASTA_COPA)
+		_jugar_ronda_de_copas()
+		_avanzar_dias_todos(DIAS_DESPUES_DE_COPA)
+	else:
+		_avanzar_dias_todos(DIAS_ENTRE_FECHAS)
+
 	if not hay_fecha_pendiente():
 		_cerrar_temporada()
+
+
+func _avanzar_dias_todos(dias: int) -> void:
+	for liga in piramide.divisiones:
+		liga.avanzar_dias(dias)
+
+
+func _toca_ronda_de_copa() -> bool:
+	if copa_nacional == null:
+		return false
+	if fecha_actual % FECHAS_ENTRE_RONDAS_COPA != 0:
+		return false
+	return _hay_copa_pendiente()
+
+
+func _hay_copa_pendiente() -> bool:
+	if copa_nacional != null and copa_nacional.campeon == null:
+		return true
+	for c in copas_division:
+		if c.campeon == null:
+			return true
+	return false
+
+
+## Una ronda por slot, alternando qué copa se juega: dos partidos entre
+## semana además de la liga sería un calendario que no existe.
+func _jugar_ronda_de_copas() -> void:
+	var slot: int = int(fecha_actual / FECHAS_ENTRE_RONDAS_COPA)
+	var toca_nacional: bool = slot % 2 == 1
+	if toca_nacional and copa_nacional != null and copa_nacional.campeon == null:
+		copa_nacional.jugar_siguiente_ronda(rng)
+		if copa_nacional.campeon != null:
+			_agregar_noticia("COPA NACIONAL: campeón %s" % copa_nacional.campeon.nombre)
+		return
+	for i in range(copas_division.size()):
+		var c: Copa = copas_division[i]
+		if c.campeon == null:
+			c.jugar_siguiente_ronda(rng)
+			if c.campeon != null:
+				_agregar_noticia("COPA DIVISIÓN %d: campeón %s" % [i + 1, c.campeon.nombre])
 
 
 ## Copas + internacional con la temporada recién jugada, después ascensos/
@@ -130,13 +212,13 @@ func _cerrar_temporada() -> void:
 		equipo_jugador.nombre, posicion_final, tabla_final.size(), division_jugador + 1
 	])
 
-	var copa_nacional := Copas.jugar_copa_nacional(piramide, rng)
-	var copas_division := Copas.jugar_copas_de_division(piramide, rng)
+	# Las copas vienen jugándose entre semana desde la primera fecha; si
+	# quedó alguna ronda sin jugar (temporada corta, pocas fechas), se
+	# termina acá para que siempre haya campeón.
+	while _hay_copa_pendiente():
+		_jugar_ronda_de_copas()
 	var resultado_internacional := confederacion.jugar_temporada_internacional(rng)
 
-	_agregar_noticia("COPA NACIONAL: campeón %s" % copa_nacional.campeon.nombre)
-	for i in range(copas_division.size()):
-		_agregar_noticia("COPA DIVISIÓN %d: campeón %s" % [i + 1, copas_division[i].campeon.nombre])
 	for copa_nombre in ["campeones", "guerreros", "emergentes"]:
 		var campeon: Team = resultado_internacional[copa_nombre]["campeon"]
 		if campeon != null:
@@ -213,6 +295,8 @@ func _cerrar_temporada() -> void:
 
 	temporada_actual += 1
 	fecha_actual = 0
+	# Cuadros nuevos con los equipos YA movidos de división.
+	_armar_copas()
 
 	if not juego_terminado:
 		equipo_jugador.objetivo_temporada = Objetivos.generar(
@@ -441,6 +525,11 @@ func cargar_partida() -> bool:
 	# Los FOTOGRAMAS no: no se guardan por tamaño, así que la repetición
 	# animada no está disponible hasta jugar la próxima fecha. Es lo único
 	# que se pierde al cargar.
+	# Las copas en curso NO se guardan: Copa tiene referencias a Team y
+	# serializarlas sería duplicar media pirámide. Se rearman con los
+	# equipos actuales, o sea que cargar una partida vuelve a sortear los
+	# cuadros. Es la única cosa que se pierde además de la repetición.
+	_armar_copas()
 	ultimo_resultado = datos.get("ultimo_resultado", {})
 	ultimo_log = datos.get("ultimo_log", [])
 	ultimos_eventos = datos.get("ultimos_eventos", [])

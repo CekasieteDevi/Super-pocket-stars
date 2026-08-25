@@ -89,7 +89,12 @@ static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atri
 static func _chequear_lesion(jugador: Dictionary, equipo: Team, rng: RandomNumberGenerator) -> void:
 	if equipo.esta_lesionado(jugador["id"]):
 		return
-	var resultado := Lesiones.intentar_lesion(jugador, equipo.resistencia_pct(jugador["id"]), rng, Instalaciones.factor_riesgo_lesion(equipo))
+	# §7.4.1: entrenar duro rompe jugadores. El parámetro ya existía en
+	# evaluar_riesgo pero nadie lo pasaba.
+	var resultado := Lesiones.intentar_lesion(
+		jugador, equipo.resistencia_pct(jugador["id"]), rng,
+		Instalaciones.factor_riesgo_lesion(equipo),
+		CargaEntrenamiento.factor_lesion(equipo.carga_entrenamiento))
 	if not resultado.is_empty():
 		equipo.lesionar(jugador["id"], resultado["tipo"], resultado["dias"])
 

@@ -16,6 +16,8 @@ var lista_plantel: RichTextLabel
 var lista_ficha: RichTextLabel
 var ficha_jugador_id := -1
 var option_formacion: OptionButton
+var option_carga: OptionButton
+var label_carga_efecto: Label
 var contenedor_formacion: VBoxContainer
 var label_formacion_estado: Label
 ## Jugador tocado primero en la pantalla de formacion, a la espera del
@@ -369,6 +371,22 @@ func _construir_panel_formacion(padre: Control) -> void:
 	option_formacion.item_selected.connect(_on_formacion_elegida)
 	fila.add_child(option_formacion)
 
+	var fila_carga := HBoxContainer.new()
+	panel.add_child(fila_carga)
+	var et_carga := Label.new()
+	et_carga.text = "Carga de entrenamiento:"
+	fila_carga.add_child(et_carga)
+
+	option_carga = OptionButton.new()
+	for nivel in CargaEntrenamiento.NIVELES:
+		option_carga.add_item(CargaEntrenamiento.ETIQUETAS[nivel])
+	option_carga.item_selected.connect(_on_carga_elegida)
+	fila_carga.add_child(option_carga)
+
+	label_carga_efecto = Label.new()
+	label_carga_efecto.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	panel.add_child(label_carga_efecto)
+
 	label_formacion_estado = Label.new()
 	label_formacion_estado.text = "Toca un jugador y despues otro para cambiarlos de lugar."
 	panel.add_child(label_formacion_estado)
@@ -387,6 +405,14 @@ func _mostrar_formacion() -> void:
 	_ocultar_todos()
 	paneles["formacion"].visible = true
 	formacion_seleccion = -1
+	_refrescar_formacion()
+
+
+## §7.4.1: la carga se elige entre fecha y fecha. Lo que decide la
+## progresión es el PROMEDIO de la temporada, así que bajarla una semana
+## apretada no arruina el año.
+func _on_carga_elegida(idx: int) -> void:
+	GameState.equipo_jugador.carga_entrenamiento = CargaEntrenamiento.NIVELES[idx]
 	_refrescar_formacion()
 
 
@@ -428,6 +454,11 @@ func _refrescar_formacion() -> void:
 	var idx := Formaciones.lista().find(equipo.formacion)
 	if idx >= 0:
 		option_formacion.selected = idx
+	var idx_carga := CargaEntrenamiento.NIVELES.find(equipo.carga_entrenamiento)
+	if idx_carga >= 0:
+		option_carga.selected = idx_carga
+	label_carga_efecto.text = "%s   —   promedio de la temporada hasta ahora: x%.2f de crecimiento" % [
+		CargaEntrenamiento.resumen(equipo.carga_entrenamiento), equipo.factor_carga_temporada()]
 	label_formacion_estado.text = "Toca un jugador y despues otro para cambiarlos de lugar." 		if formacion_seleccion == -1 else "Elegido. Toca a otro para cambiarlos, o al mismo para cancelar."
 
 	for hijo in contenedor_formacion.get_children():
