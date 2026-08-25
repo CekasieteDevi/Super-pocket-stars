@@ -365,7 +365,71 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_log:
 		"log": log,
 		"goles_log": goles_log,
 		"eventos": eventos,
+		# §7.3: este motor no sabe quién hizo qué, así que estima el
+		# reparto por puesto. Ver xp_estimada.
+		"xp": {"home": xp_estimada(home), "away": xp_estimada(away)},
 	}
+
+
+## §7.3 aprendizaje por uso, lado abstracto. Este motor resuelve el
+## partido como una cadena de duelos por zona: no tiene idea de cuántos
+## pases dio cada jugador. Entonces estima el reparto con los PESOS DE
+## POSICIÓN (data/position_weights.json), que son literalmente "qué hace
+## un jugador de este puesto".
+##
+## Es una aproximación, y a propósito: lo que NO puede ser aproximado es
+## el TOTAL. MotorEspacial normaliza a `minutos/90` por jugador y esto
+## entrega lo mismo, así que un titular crece igual de rápido juegue el
+## usuario o la IA. Si los totales no coincidieran, el desbalance se
+## acumularía temporada a temporada en vez de promediarse como los goles.
+##
+## Lo que sí cambia entre motores es la FORMA: acá un 9 siempre entrena
+## como un 9 promedio; en el partido del usuario, un 9 que remató ocho
+## veces entrena tiro de verdad. Esa es justamente la ventaja de jugarlo.
+const FRACCION_SUPLENTE := 0.35
+## Un titular al que cambian jugó la mayor parte (las ventanas son 45',
+## 60' y 75'), no el partido entero.
+const FRACCION_REEMPLAZADO := 0.7
+
+
+static func xp_estimada(equipo: Team) -> Dictionary:
+	var pesos: Dictionary = PlayerGenerator.get_weights()
+	var out := {}
+	for j in equipo.todos_los_jugadores():
+		var titular: bool = _es_titular(equipo, j["id"])
+		var esta: bool = equipo.en_cancha.has(j["id"])
+		# Tres casos: jugó todo, salió, o entró. El que no pisó la cancha
+		# no aprende nada, que es justamente lo que hace que los minutos
+		# importen (§7.3).
+		var fraccion := 0.0
+		if titular and esta:
+			fraccion = 1.0
+		elif titular:
+			fraccion = FRACCION_REEMPLAZADO
+		elif esta:
+			fraccion = FRACCION_SUPLENTE
+		if fraccion <= 0.0:
+			continue
+		var perfil: Dictionary = pesos.get(j["posicion"], {})
+		if perfil.is_empty():
+			continue
+		var suma := 0.0
+		for a in perfil:
+			suma += float(perfil[a])
+		if suma <= 0.0:
+			continue
+		var d := {}
+		for a in perfil:
+			d[a] = float(perfil[a]) / suma * fraccion
+		out[int(j["id"])] = d
+	return out
+
+
+static func _es_titular(equipo: Team, jugador_id: int) -> bool:
+	for j in equipo.jugadores:
+		if j["id"] == jugador_id:
+			return true
+	return false
 
 
 ## §8.7: tiempo suplementario — 2 tiempos de 15' cada uno, mismo motor que

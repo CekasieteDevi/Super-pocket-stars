@@ -342,6 +342,10 @@ static func _normalizar_jugadores(lista: Array) -> Array:
 			j["partidos_seguidos_titular"] = int(j["partidos_seguidos_titular"])
 		if j.has("partidos_seguidos_banco"):
 			j["partidos_seguidos_banco"] = int(j["partidos_seguidos_banco"])
+		# §7.3: el uso acumulado va en float y JSON lo devuelve como float,
+		# asi que no hay que normalizarlo; solo garantizar que exista.
+		if not j.has("xp_uso"):
+			j["xp_uso"] = {}
 		for attr in j["atributos"]:
 			j["atributos"][attr] = int(j["atributos"][attr])
 		# §7.2: los guardados anteriores a los techos por atributo no

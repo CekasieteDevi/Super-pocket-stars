@@ -2444,3 +2444,60 @@ quién lo ocupa, más el banco. El intercambio es **en dos toques** —uno
 elige, el otro confirma— y no un desplegable por fila: con 18 jugadores
 eso son 18 listas de 18, que en un celular no se toca. Cada fila lleva
 además su botón a la ficha (§ficha del jugador).
+
+## 47. GDD 7.3 — Aprendizaje por uso
+
+"El jugador gana XP en el atributo que usa en el partido." El motor
+espacial ya sabía quién remató, quién pasó y a quién le gambetearon, así
+que la parte de recolectar fue barata: un `_xp()` en los sitios que ya
+existían.
+
+**Lo caro era la paridad, y es la mitad del trabajo.** Solo los partidos
+del usuario usan este motor; los otros 19 clubes usan el abstracto, que
+no tiene idea de quién hizo qué. Y a diferencia de los goles, un
+desbalance acá **no se promedia: se acumula temporada a temporada**.
+
+La solución es que el TOTAL sea idéntico por construcción y solo varíe la
+FORMA. Cada jugador reparte `minutos/90` puntos de XP por partido:
+
+- **Espacial**: reparte según lo que hizo de verdad.
+- **Abstracto**: reparte según los pesos de su posición
+  (`position_weights.json`), que son literalmente "qué hace un jugador de
+  este puesto".
+
+Un titular suma 1,00 por partido en los dos motores. Lo que se gana
+jugándolo es la forma: un 9 que remató ocho veces entrena `tiro` de
+verdad, contra el 9 promedio del motor abstracto.
+
+### Tres cosas que la medición encontró
+
+**Un central que juega 90 minutos sin tocar la pelota también entrena.**
+La primera versión recorría las acciones, así que ese jugador se quedaba
+en cero mientras su equivalente en la IA cobraba completo. Ahora se
+recorre por MINUTOS y el que no tuvo acciones cobra por su puesto.
+
+**El juego detenido también es tiempo jugado.** Los minutos se contaban
+en el cuerpo del tick, que hace `return` temprano durante las
+interrupciones (§38): un titular sumaba 0,80 de partido contra el 1,00
+del abstracto, o sea que el equipo del usuario crecía **20% más lento**
+que el resto de la liga. Se cuentan en `_cerrar_tick`, que corre siempre.
+
+**El reparto se MEZCLA con el perfil del puesto** (45%). Las acciones de
+un partido tocan cuatro o cinco atributos y el perfil reparte entre
+nueve, así que con solo acciones el equipo del usuario crecía 6% más
+lento. Medido en 5 temporadas, la misma liga corrida dos veces con la
+misma semilla: −0,34 de media de plantel sin la mezcla, **−0,13 con
+ella**, y con el signo ya cambiando entre semillas.
+
+### Cómo medirlo bien
+
+El primer diagnóstico comparaba al equipo seguido contra el PROMEDIO de
+la liga y daba +5,71 contra +4,39 — un desbalance enorme. Era falso: ese
+plantel simplemente tenía mejor perfil de edades. Apagando el efecto por
+completo la brecha era todavía MAYOR (+5,28 vs +3,67), que es lo que
+delató el error.
+
+La comparación válida es **la misma liga corrida dos veces con la misma
+semilla**, una siguiendo al equipo y otra sin seguir a nadie, para que lo
+único que cambie sea el motor que resolvió sus partidos. Está en
+`tests/_diag_desarrollo.gd`.

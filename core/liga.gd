@@ -243,6 +243,25 @@ func _actualizar_estado_jugadores(home: Team, away: Team, r: Dictionary) -> void
 	Fans.actualizar_por_resultado(away, r["goles_visitante"], r["goles_local"])
 	_actualizar_rachas_titular_banco(home)
 	_actualizar_rachas_titular_banco(away)
+	# §7.3: el uso del partido se acumula en el jugador y lo consume
+	# Progresion al cerrar la temporada. Los dos motores entregan el mismo
+	# shape, así que esto no sabe cuál se usó — y no tiene por qué.
+	var xp: Dictionary = r.get("xp", {})
+	_acumular_xp(home, xp.get("home", {}))
+	_acumular_xp(away, xp.get("away", {}))
+
+
+static func _acumular_xp(equipo: Team, por_jugador: Dictionary) -> void:
+	if por_jugador.is_empty():
+		return
+	for j in equipo.todos_los_jugadores():
+		var d = por_jugador.get(j["id"], null)
+		if d == null:
+			continue
+		var acum: Dictionary = j.get("xp_uso", {})
+		for a in d:
+			acum[a] = float(acum.get(a, 0.0)) + float(d[a])
+		j["xp_uso"] = acum
 
 
 ## §6: racha de partidos SEGUIDOS de titular (Comodón, ver Progresion.

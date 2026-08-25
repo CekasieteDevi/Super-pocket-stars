@@ -74,6 +74,22 @@ const MULTIPLICADOR_FOCO := 2.0
 ## imposible.
 const MULTIPLICADOR_FOCO_MINIMO := 1.3
 
+## §7.3 aprendizaje por uso. El atributo que MÁS usó en la temporada
+## crece hasta un `MULTIPLICADOR_USO` más rápido; el resto, en proporción
+## a cuánto lo usó. Todo escalado por cuánto jugó: un suplente que sumó
+## cuatro partidos no aprende como un titular.
+##
+## Se normaliza contra el uso MÁXIMO del propio jugador y no contra una
+## tabla por atributo, porque las escalas no son comparables: un volante
+## da 40 pases por partido y remata una vez, y con una referencia común
+## el `tiro` nunca sumaría nada para nadie. Lo que interesa es en qué
+## gasta SUS acciones.
+const MULTIPLICADOR_USO := 0.40
+## Partidos-equivalentes de titular para llegar al efecto pleno. Una
+## temporada son ~38 fechas, así que con media temporada de titular ya se
+## nota.
+const USO_TEMPORADA_PLENA := 19.0
+
 
 ## Cuánto rinde el foco individual según qué tan propio del puesto sea el
 ## atributo. Un delantero entrenando `tiro` (su atributo de mayor peso)
@@ -106,6 +122,25 @@ static func techo_de(jugador: Dictionary, atributo: String) -> int:
 	return int(techos.get(atributo, jugador["potencial"]))
 
 
+## Cuánto acelera este atributo por haberlo usado en la cancha.
+static func multiplicador_uso(jugador: Dictionary, atributo: String) -> float:
+	var uso: Dictionary = jugador.get("xp_uso", {})
+	if uso.is_empty():
+		return 1.0
+	var maximo := 0.0
+	var total := 0.0
+	for a in uso:
+		maximo = maxf(maximo, float(uso[a]))
+		total += float(uso[a])
+	if maximo <= 0.0:
+		return 1.0
+	# `total` viene en partidos-equivalentes (cada partido reparte
+	# minutos/90 entre los atributos), así que mide cuánto jugó.
+	var carga: float = clampf(total / USO_TEMPORADA_PLENA, 0.0, 1.0)
+	var relativo: float = clampf(float(uso.get(atributo, 0.0)) / maximo, 0.0, 1.0)
+	return 1.0 + MULTIPLICADOR_USO * relativo * carga
+
+
 static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator, mult_mentor: float = 1.0,
 		mult_entrenamiento: float = 1.0, foco_atributo: String = "") -> void:
 	jugador["edad"] += 1
@@ -132,7 +167,8 @@ static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator, m
 				var distancia: float = float(techo_de(jugador, attr)) - valor_actual
 				if distancia > 0.0:
 					var mult_foco: float = multiplicador_foco(jugador["posicion"], attr) if attr == foco_atributo else 1.0
-					cambio = distancia * 0.12 * mult_edad * mult_tier * mult_personalidad * mult_mentor * mult_entrenamiento * mult_foco
+					var mult_uso: float = multiplicador_uso(jugador, attr)
+					cambio = distancia * 0.12 * mult_edad * mult_tier * mult_personalidad * mult_mentor * mult_entrenamiento * mult_foco * mult_uso
 				cambio += rng.randfn(0.0, 0.6)
 				# El techo es techo: el ruido aleatorio no puede empujar
 				# por encima. Antes se sumaba igual estando ya en el tope,
@@ -150,6 +186,9 @@ static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator, m
 
 		jugador["atributos"][attr] = clamp(round(valor_actual + cambio), 0, 100)
 
+	# El uso se consume al cerrar la temporada: lo que jugó este año no
+	# puede seguir acelerándolo el año que viene.
+	jugador["xp_uso"] = {}
 	jugador["media"] = PlayerGenerator.compute_media(jugador["atributos"], jugador["posicion"])
 	var mejor := PlayerGenerator.best_position(jugador["atributos"])
 	jugador["mejor_posicion"] = mejor["posicion"]

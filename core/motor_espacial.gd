@@ -190,6 +190,26 @@ const ACCION_BARRIDA := "barrida"
 const ACCION_VUELA := "vuela"
 
 
+## §7.3: suma uso de un atributo. Se guarda por jugador_id porque es lo
+## que persiste entre partidos; la clave espacial no le sirve a nadie
+## fuera del partido.
+static func _xp(estado: Dictionary, jugador_id: int, es_local: bool, atributo: String, cantidad: float = 1.0) -> void:
+	var lado: String = "home" if es_local else "away"
+	if not estado["xp"].has(lado):
+		estado["xp"][lado] = {}
+	var por_jugador: Dictionary = estado["xp"][lado]
+	if not por_jugador.has(jugador_id):
+		por_jugador[jugador_id] = {}
+	var d: Dictionary = por_jugador[jugador_id]
+	d[atributo] = float(d.get(atributo, 0.0)) + cantidad
+
+
+## Lo mismo tomando la entidad del motor, que es lo que hay a mano en la
+## mayoría de los sitios.
+static func _xp_e(estado: Dictionary, e: Dictionary, atributo: String, cantidad: float = 1.0) -> void:
+	_xp(estado, int(e["jugador_id"]), bool(e["equipo_local"]), atributo, cantidad)
+
+
 ## Registra que `clave` hizo `accion` en el tick actual. Solo cuesta algo
 ## cuando se están generando fotogramas: en el resto de la liga, que
 ## simula sin animación, es un `return` inmediato.
@@ -387,6 +407,12 @@ static func crear_estado(home: Team, away: Team, rng: RandomNumberGenerator) -> 
 		"dist_tiros": [],
 		"dist_pases": [],
 		"dist_pelotazos": [],
+		# §7.3 aprendizaje por uso: cuántas veces cada jugador usó cada
+		# atributo, y cuántos ticks estuvo en cancha. Se normaliza al
+		# terminar (ver xp_normalizada) para que el TOTAL no dependa del
+		# motor, solo el reparto.
+		"xp": {},
+		"ticks_en_cancha": {},
 		"posesion_ticks": {"home": 0, "away": 0},
 		"tiros": {"home": 0, "away": 0},
 		"pases": {"home": 0, "away": 0},
@@ -804,6 +830,8 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 	estado["gambetas"][lado_g]["intentos"] += 1
 	# El que va a ser encarado se tira a cortarla.
 	_accion(estado, clave_rival, ACCION_BARRIDA)
+	_xp_e(estado, poseedor, "control")
+	_xp_e(estado, e_rival, "quite")
 
 	var att_a: Dictionary = jugador["atributos"]
 	var att_d: Dictionary = defensor["atributos"]
@@ -915,6 +943,8 @@ static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bo
 		MatchEngine._bloques_equipo(eq_a, eq_d, j_a, "cabezazo", minuto, rng),
 		MatchEngine._bloques_equipo(eq_d, eq_a, j_d, "salto", minuto, rng))
 
+	_xp_e(estado, estado["jugadores"][atacante], "cabezazo")
+	_xp_e(estado, estado["jugadores"][defensor], "salto")
 	if Duel.gana_atacante(res, rng):
 		estado["centros"]["ganados"] = int(estado["centros"].get("ganados", 0)) + 1
 		_entregar_pelota(estado, atacante)
@@ -1298,6 +1328,7 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	# Un cabezazo no es una patada; por ahora no hay sprite propio, así que
 	# se anima igual que un remate de pie.
 	_accion(estado, int(poseedor["clave"]), ACCION_PATEA)
+	_xp_e(estado, poseedor, attr_remate)
 	estado["tiros"][clave] += 1
 	estado["dist_tiros"].append(poseedor["pos"].distance_to(arco_rival(es_local)))
 
@@ -1312,6 +1343,7 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	var bloqueador := -1 if attr_remate == "cabezazo" else _bloqueador_de_tiro(estado, poseedor["pos"], es_local)
 	if bloqueador != -1 and _gana_bloqueo(estado, bloqueador, jugador, eq_a, eq_d, poseedor["pos"], es_local, minuto):
 		_accion(estado, bloqueador, ACCION_BARRIDA)
+		_xp_e(estado, estado["jugadores"][bloqueador], "barrida")
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "tiro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 			"jugador_posicion": poseedor["rol"], "clave": poseedor["clave"], "resultado": "bloqueado",
@@ -1360,6 +1392,7 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	eq_a.desgastar(jugador["id"], jugador["atributos"]["energia"], mult_tiro)
 	eq_d.desgastar(arquero["id"], arq_attrs["energia"], mult_tiro)
 	var gol := Duel.gana_atacante(res, rng)
+	_xp(estado, int(arquero["id"]), not es_local, "reflejos")
 	_lanzar_remate(estado, poseedor, {
 		"tipo": "gol" if gol else "atajada",
 		"es_local": es_local, "clave": poseedor["clave"], "rol": poseedor["rol"],
@@ -1881,6 +1914,9 @@ static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: i
 	else:
 		estado["dist_pases"].append(_d)
 	_accion(estado, int(poseedor["clave"]), ACCION_PATEA)
+	# §7.3: pasar entrena `pases`; reventarla, `fuerza`. El centro suma
+	# `centros` cuando se marca como tal, un tick después de esto.
+	_xp_e(estado, poseedor, "fuerza" if es_pelotazo else "pases")
 	pelota["poseedor_id"] = -1
 	pelota["en_vuelo"] = true
 	# La pelota sale más fuerte cuanto mejor pega el que la toca: un pase
@@ -2072,6 +2108,19 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 ## porque el juego detenido hace un tick reducido pero tiene que avanzar
 ## el reloj y emitir su fotograma igual que cualquier otro.
 static func _cerrar_tick(estado: Dictionary, con_fotogramas: bool, eventos_antes: int) -> void:
+	# Minutos en cancha (§7.3). Va acá y no en el cuerpo del tick porque
+	# el juego detenido también es tiempo jugado: contando solo los ticks
+	# "vivos", un titular sumaba 0,80 de partido contra el 1,00 que da el
+	# motor abstracto, o sea que el equipo del usuario crecía 20% más
+	# lento que el resto de la liga.
+	for id_m in estado["jugadores"]:
+		var e_m: Dictionary = estado["jugadores"][id_m]
+		var k_m: String = "%s_%d" % ["h" if e_m["equipo_local"] else "a", int(e_m["jugador_id"])]
+		var reg: Dictionary = estado["ticks_en_cancha"].get(k_m,
+			{"t": 0, "rol": e_m["rol"], "id": int(e_m["jugador_id"]), "local": bool(e_m["equipo_local"])})
+		reg["t"] = int(reg["t"]) + 1
+		estado["ticks_en_cancha"][k_m] = reg
+
 	estado["tick"] += 1
 	# El reloj MOSTRADO avanza 90 minutos a lo largo de los 960 ticks del
 	# partido: es la ficción de "esto son 90 minutos". Todo lo que depende
@@ -2323,6 +2372,7 @@ static func _gana_intercepcion(estado: Dictionary, clave_def: int, dist: float, 
 	var eq_def := _equipo_de(estado, not pasador_local)
 	var pasador := _dict_jugador(estado, eq_pas, int(estado["pelota"].get("pasador_id", -1)))
 	var defensor := _dict_jugador(estado, eq_def, estado["jugadores"][clave_def]["jugador_id"])
+	_xp_e(estado, estado["jugadores"][clave_def], "inteligencia")
 	if pasador.is_empty() or defensor.is_empty():
 		return true
 
@@ -2480,6 +2530,10 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador, null, true)
 		"centro":
 			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador)
+			# El centro se lanza como pase, así que el XP de `pases` ya se
+			# sumó; se corrige acá, que es donde se sabe que era centro.
+			_xp_e(estado, poseedor, "pases", -1.0)
+			_xp_e(estado, poseedor, "centros")
 			# Va por arriba: no se corta en el camino, se define al caer.
 			estado["pelota"]["altura_max"] = float(f["altura_centro"])
 			estado["pelota"]["es_centro"] = true
@@ -2941,6 +2995,11 @@ static func _intentar_robo(estado: Dictionary) -> void:
 	var minuto := _minuto_int(estado)
 	# Se tira al piso a quitarla, le salga o no.
 	_accion(estado, mejor_id, ACCION_BARRIDA)
+	# §7.3: el que va al quite entrena `quite`; al que se la disputan,
+	# `control`. Es literalmente el ejemplo del GDD ("un lateral al que le
+	# hacen 20 gambetas gana XP de quite").
+	_xp_e(estado, estado["jugadores"][mejor_id], "quite")
+	_xp_e(estado, poseedor, "control")
 	# El poseedor defiende su pelota con `control` contra el `quite` del rival.
 	var aguanta := _duelo_simple(jug_a, "control", eq_a, jug_d, "quite", eq_d, minuto, estado["rng"])
 
@@ -3040,6 +3099,66 @@ static func _push_fotograma(estado: Dictionary, eventos_del_tick: Array = []) ->
 # API pública
 # ---------------------------------------------------------------------------
 
+## Cuánto del reparto de XP sale del PUESTO en vez de las acciones
+## concretas del partido. Ver el comentario adentro de xp_normalizada.
+const MEZCLA_PERFIL := 0.45
+
+
+## §7.3: convierte los conteos crudos de acciones en una distribución
+## comparable entre motores. Cada jugador reparte `minutos/90` puntos de
+## XP entre los atributos que usó, en proporción a cuánto usó cada uno.
+##
+## Normalizar así es lo que permite que el motor abstracto —que no sabe
+## quién hizo qué— entregue lo MISMO en total con una estimación por
+## puesto: si los totales no coincidieran, los jugadores del usuario
+## crecerían a otro ritmo que los de la IA, y a diferencia de los goles
+## ese desbalance se acumula temporada a temporada en vez de promediarse.
+static func xp_normalizada(estado: Dictionary) -> Dictionary:
+	var total_ticks := float(TICKS_POR_MITAD * 2)
+	var pesos: Dictionary = PlayerGenerator.get_weights()
+	var out := {"home": {}, "away": {}}
+	# Se recorre por MINUTOS, no por acciones: un central que jugó los 90
+	# sin tocar la pelota igual entrenó, y si se lo saltea acá su equipo
+	# crece más lento que el de la IA —donde el motor abstracto sí le da
+	# su parte— y el desbalance se acumula por temporada.
+	for clave_t in estado["ticks_en_cancha"]:
+		var reg: Dictionary = estado["ticks_en_cancha"][clave_t]
+		var fraccion: float = clampf(float(reg["t"]) / total_ticks, 0.0, 1.0)
+		if fraccion <= 0.0:
+			continue
+		var lado: String = "home" if bool(reg["local"]) else "away"
+		var jugador_id: int = int(reg["id"])
+		var d: Dictionary = estado["xp"].get(lado, {}).get(jugador_id, {})
+		var suma := 0.0
+		for a in d:
+			suma += maxf(float(d[a]), 0.0)
+		# El reparto MEZCLA lo que hizo con lo que su puesto exige. Las
+		# acciones de un partido tocan cuatro o cinco atributos, mientras
+		# que el perfil del puesto (el que usa el motor abstracto) reparte
+		# entre nueve: con solo las acciones, el equipo del usuario crecía
+		# un 6% más lento que el resto de la liga, medido en 5 temporadas.
+		# Y tiene sentido más allá del número: un jugador entrena lo que su
+		# puesto le exige, no solo lo que le tocó hacer ese domingo.
+		var perfil: Dictionary = pesos.get(str(reg["rol"]), {})
+		var suma_p := 0.0
+		for a in perfil:
+			suma_p += float(perfil[a])
+		var norm := {}
+		if suma > 0.0:
+			for a in d:
+				var v: float = maxf(float(d[a]), 0.0)
+				if v > 0.0:
+					norm[a] = v / suma * (1.0 - MEZCLA_PERFIL) * fraccion
+		var peso_perfil: float = MEZCLA_PERFIL if suma > 0.0 else 1.0
+		if suma_p > 0.0:
+			for a in perfil:
+				norm[a] = float(norm.get(a, 0.0)) 					+ float(perfil[a]) / suma_p * peso_perfil * fraccion
+		if norm.is_empty():
+			continue
+		out[lado][jugador_id] = norm
+	return out
+
+
 ## Mismo shape de salida que MatchEngine.simular (goles_local,
 ## goles_visitante, log, goles_log, eventos) para que Liga/GameState/
 ## EstadisticasPartido/Objetivos/Fans no se enteren de que ahora hay
@@ -3084,6 +3203,8 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 		"goles_log": estado["goles_log"],
 		"eventos": estado["eventos"],
 		"fotogramas": estado["fotogramas"],
+		# §7.3: cuánto entrenó cada jugador cada atributo, normalizado.
+		"xp": xp_normalizada(estado),
 		"stats": {
 			"ticks": estado["tick"],
 			"posesion": estado["posesion_ticks"],
