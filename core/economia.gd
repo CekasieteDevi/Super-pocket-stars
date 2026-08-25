@@ -44,6 +44,27 @@ const MANTENIMIENTO_FIJO := 25000.0
 const RESERVA_MANTENIMIENTO := 12500.0
 const PREMIO_POR_POSICION := {1: 50000.0, 2: 30000.0, 3: 15000.0}
 
+## Cuanto multiplica los ingresos la CATEGORIA del club (indice 0 =
+## primera). Aforo, sponsors y derechos de TV no son iguales en primera
+## que en decima, pero AFORO_BASE, SPONSOR_BASE y PRECIO_ENTRADA son
+## constantes fijas: sin esto, los ingresos iban de 127k en decima a 182k
+## en primera (+43%) mientras los sueldos —que siguen al valor del
+## jugador— iban de 43k a 535k (x12,5). Resultado: con el gradiente de
+## NivelDivision, las divisiones 1 a 4 nacian en rojo profundo (-353k en
+## primera) y quebraban de entrada, mientras decima nadaba en plata.
+##
+## La curva es geometrica, ~1,27 por escalon, y decima queda en 1.0 a
+## proposito: ahi es donde arranca el jugador y donde esta calibrado el
+## balance (ver PRECIO_ENTRADA), asi que ese escalon no se toca.
+const MULTIPLICADOR_DIVISION := [8.70, 6.85, 5.40, 4.25, 3.35, 2.64, 2.08, 1.64, 1.29, 1.00]
+
+
+## -1 (liga suelta, sin escalon en la piramide) = sin multiplicador.
+static func factor_division(division: int) -> float:
+	if division < 0:
+		return 1.0
+	return MULTIPLICADOR_DIVISION[clamp(division, 0, MULTIPLICADOR_DIVISION.size() - 1)]
+
 ## Si la caja total queda por debajo de -20% del valor del plantel, quiebra.
 const UMBRAL_QUIEBRA := -0.2
 
@@ -69,14 +90,14 @@ const BONUS_OCUPACION_FANS := 0.3
 
 
 ## Procesa una temporada terminada para un club. posicion_tabla es 1-indexado.
-static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos: int) -> Dictionary:
+static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos: int, division: int = -1) -> Dictionary:
 	var ocupacion_base: float = 0.3 + clamp(equipo.reputacion, 0.0, 100.0) / 100.0 * 0.7
 	var ocupacion: float = clamp(ocupacion_base + equipo.fans / 100.0 * BONUS_OCUPACION_FANS, 0.0, 1.0)
 	var asistencia: float = AFORO_BASE * Instalaciones.factor_aforo(equipo) * ocupacion
 	var ingreso_entradas: float = PARTIDOS_DE_LOCAL * asistencia * PRECIO_ENTRADA
 	var ingreso_sponsor: float = SPONSOR_BASE + (total_equipos - posicion_tabla) * 1000.0
 	var premio: float = PREMIO_POR_POSICION.get(posicion_tabla, 0.0)
-	var ingresos: float = ingreso_entradas + ingreso_sponsor + premio
+	var ingresos: float = (ingreso_entradas + ingreso_sponsor + premio) * factor_division(division)
 
 	var total_sueldos := 0.0
 	for id in equipo.sueldos:

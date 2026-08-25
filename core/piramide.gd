@@ -40,6 +40,9 @@ static func cargar(datos: Dictionary) -> Piramide:
 	var p := Piramide.new()
 	for ld in datos["divisiones"]:
 		p.divisiones.append(Liga.cargar(ld))
+	# El escalon no se guarda: es la posicion en el array (ver Liga.division).
+	for d in range(p.divisiones.size()):
+		p.divisiones[d].division = d
 	p.resolver_prestamos()
 
 	# Migración de guardados de antes de §8.4 #14 (clásicos): si nadie de
@@ -91,7 +94,7 @@ static func generar(rng: RandomNumberGenerator) -> Piramide:
 		for i in range(EQUIPOS_POR_DIVISION):
 			nombres.append(GeneradorNombres.nombre_club(rng, nombres_usados))
 		var liga := Liga.new()
-		liga.inicializar(nombres, rng, siguiente_id)
+		liga.inicializar(nombres, rng, siguiente_id, d)
 		Rivalidad.hornear_clasicos(liga.equipos)
 		siguiente_id += EQUIPOS_POR_DIVISION * Team.RANGO_IDS_RESERVADO
 		p.divisiones.append(liga)

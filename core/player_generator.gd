@@ -63,7 +63,7 @@ static func generate(id: int, rng: RandomNumberGenerator, forced_position: Strin
 	var tier: String
 	if potencial_forzado >= 0:
 		potencial = clamp(potencial_forzado + rng.randi_range(-8, 8), 15, 99)
-		tier = "Extranjero"
+		tier = Genetics.tier_de(potencial)
 	else:
 		var genetica := Genetics.roll(rng)
 		potencial = genetica["potencial"]

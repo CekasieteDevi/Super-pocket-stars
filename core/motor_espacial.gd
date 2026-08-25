@@ -285,12 +285,34 @@ static func factor_geometria(pos: Vector2, equipo_local: bool, jugador: Dictiona
 # Armado del estado inicial
 # ---------------------------------------------------------------------------
 
-## Interpola entre dos valores segun un atributo 0-100. Es la base de que
-## el partido CAMBIE de aspecto con el nivel del plantel: en división 10 se
-## ve lento y trabado, y con jugadores de élite se ve rápido y asociado.
-static func _por_atributo(jugador: Dictionary, atributo: String, en_0: float, en_100: float) -> float:
-	var v: float = clampf(float(jugador["atributos"][atributo]) / 100.0, 0.0, 1.0)
-	return en_0 + v * (en_100 - en_0)
+## Nivel al que se juega el partido en curso (media de los dos planteles).
+## Es estado estático a propósito y no un parámetro: lo consumen una
+## docena de curvas repartidas por todo el motor, la mitad de ellas sin
+## `estado` a mano, y los partidos se simulan de a uno. Lo fija
+## crear_estado() al armar el partido.
+static var _nivel_partido: float = MatchEngine.NIVEL_REFERENCIA
+
+
+## Interpola entre dos valores segun un atributo 0-100, medido contra el
+## NIVEL del partido (ver MatchEngine.relativo_al_nivel).
+##
+## Va normalizado por defecto porque la cancha no cambia de tamaño con la
+## división. Con el gradiente de NivelDivision, un delantero de primera
+## con tiro ~87 remataba desde mucho más lejos (rango_tiro) que uno de
+## décima con tiro ~37, y así primera terminaba con 18,8 remates y 4,10
+## goles por partido contra 6,4 y 2,20 en décima — mientras el motor
+## abstracto, que resuelve el resto de la liga y contra el que están
+## calibrados economía, objetivos y fans, daba ~3,3 en todas.
+##
+## `absoluto` es para lo que SÍ tiene que escalar con la división: la
+## velocidad y la aceleración. Son las que hacen que primera se vea rápida
+## y asociada y décima lenta y trabada, que es lo que hace que ascender se
+## note. Lo que no puede escalar es cuántos goles termina habiendo.
+static func _por_atributo(jugador: Dictionary, atributo: String, en_0: float, en_100: float,
+		absoluto: bool = false) -> float:
+	var bruto: float = float(jugador["atributos"][atributo])
+	var valor: float = bruto if absoluto else MatchEngine.relativo_al_nivel(bruto, _nivel_partido)
+	return en_0 + clampf(valor / 100.0, 0.0, 1.0) * (en_100 - en_0)
 
 
 ## Con qué atributo ejecuta un pase este jugador. Un jugador de campo usa
@@ -307,7 +329,7 @@ static func atributo_pase(jugador: Dictionary, distancia: float) -> String:
 
 static func _vel_max(jugador: Dictionary) -> float:
 	var f: Dictionary = pesos()["fisica"]
-	return _por_atributo(jugador, "velocidad", f["vel_min"], f["vel_max"])
+	return _por_atributo(jugador, "velocidad", f["vel_min"], f["vel_max"], true)
 
 
 ## Cuántos m/s² gana por segundo. Nadie pasa de parado a su velocidad
@@ -320,7 +342,7 @@ static func _vel_max(jugador: Dictionary) -> float:
 ## jugador vía position_weights.json.
 static func _aceleracion(jugador: Dictionary) -> float:
 	var f: Dictionary = pesos()["fisica"]
-	return _por_atributo(jugador, "aceleracion", f["acel_min"], f["acel_max"])
+	return _por_atributo(jugador, "aceleracion", f["acel_min"], f["acel_max"], true)
 
 
 ## Cuánto terreno cubre desde su velocidad ACTUAL en `segundos`, con la
@@ -381,8 +403,10 @@ static func _armar_jugadores(equipo: Team, es_local: bool, estado: Dictionary) -
 
 
 static func crear_estado(home: Team, away: Team, rng: RandomNumberGenerator) -> Dictionary:
+	_nivel_partido = MatchEngine.nivel_partido(home, away)
 	var estado := {
 		"home": home, "away": away,
+		"nivel": _nivel_partido,
 		"jugadores": {},
 		"pelota": {"pos": Vector2.ZERO, "vel": Vector2.ZERO, "poseedor_id": -1, "en_vuelo": false},
 		"minuto": 0.0,
@@ -1361,7 +1385,13 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	# banda, que es como funciona de verdad.
 	var f_pie := factor_pie(jugador, poseedor["pos"], arco_rival(es_local), es_local)
 	var remate_efectivo: float = float(jugador["atributos"][attr_remate]) * f_pie
-	var calidad: float = remate_efectivo / 100.0 * float(r["peso_atributo"]) + geo * float(r["peso_geometria"])
+	# La punteria (chance_porteria) mira el valor ABSOLUTO del atributo, asi
+	# que con el gradiente por division (NivelDivision) un delantero de
+	# primera no erraba nunca. Se normaliza al nivel del partido — solo
+	# para esto: el duelo contra el arquero, mas abajo, ya es relativo por
+	# construccion y usa remate_efectivo sin tocar.
+	var remate_normalizado: float = MatchEngine.relativo_al_nivel(remate_efectivo, _nivel_partido)
+	var calidad: float = remate_normalizado / 100.0 * float(r["peso_atributo"]) + geo * float(r["peso_geometria"])
 	var chance_porteria: float = clampf(float(r["porteria_base"]) + calidad * float(r["porteria_calidad"]), 0.05, 0.85)
 	var chance_palo: float = float(r["palo"]) * calidad
 	var roll := rng.randf()

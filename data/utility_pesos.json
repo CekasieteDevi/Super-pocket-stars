@@ -58,7 +58,7 @@
   "tiro_resolucion": {
     "peso_atributo": 0.6,
     "peso_geometria": 0.4,
-    "porteria_base": 0.435,
+    "porteria_base": 0.49,
     "porteria_calidad": 0.5,
     "palo": 0.05,
     "fuerza_base": 0.8
@@ -163,8 +163,8 @@
     "ticks_control_bueno": 2,
     "geometria_minima_tiro": 0.03,
     "_rango_tiro": "Hasta donde le da para patear segun el atributo tiro. Define el ALCANCE: un jugador flojo solo ve chance cerca del area y prefiere seguir metiendose; uno bueno valora el remate de media distancia.",
-    "rango_tiro_malo": 16.5,
-    "rango_tiro_bueno": 34.0,
+    "rango_tiro_malo": 22.0,
+    "rango_tiro_bueno": 44.0,
     "rango_tiro_medio": 24.0,
     "_ticks_penalizacion_duelo": "Ticks que un jugador queda fuera de la disputa despues de perder la pelota o de ir al quite y fallar. Es LA penalizacion que evita el loop de duelos entre los mismos dos. La habilidad Recuperacion la acorta.",
     "ticks_penalizacion_duelo": 26,

@@ -14,6 +14,10 @@ var fixture: Array = []  # fechas -> [[idx_local, idx_visitante], ...]
 ## por posición e id. Lesiones/resultados destacados quedan pendientes de
 ## conectar acá.
 var noticias: Array = []
+## En que escalon de la piramide esta esta liga (0 = primera). Lo necesita
+## la economia: los ingresos escalan con la categoria (ver
+## Economia.factor_division). -1 = liga suelta, sin escalon (tests).
+var division: int = -1
 
 ## Agentes libres (§9.3 extendido): jugadores sin club, fichables sin fee de
 ## transferencia. Ver core/agentes_libres.gd. Pool por división, igual que
@@ -96,12 +100,18 @@ static func generar_fixture_ida_vuelta(n: int) -> Array:
 ## id_inicial: mismo motivo que Team.generar — si esta Liga es una división
 ## de una Piramide (Fase 7), cada división necesita su propio rango de ids
 ## para que un ascenso/descenso no pise jugadores de otra división.
-func inicializar(nombres_equipos: Array, rng: RandomNumberGenerator, id_inicial: int = 0) -> void:
+## division: 0 = primera. Decide con qué nivel nacen los planteles (ver
+## NivelDivision). -1 = sin gradiente, planteles al azar como antes —
+## lo usan los tests que arman una liga suelta y no les importa el nivel.
+func inicializar(nombres_equipos: Array, rng: RandomNumberGenerator, id_inicial: int = 0, division: int = -1) -> void:
 	equipos.clear()
 	tabla.clear()
+	self.division = division
+	var potencial := NivelDivision.potencial(division) if division >= 0 else -1
+	var realizacion := NivelDivision.realizacion(division) if division >= 0 else PlayerGenerator.REALIZACION_TITULAR
 	var siguiente_id := id_inicial
 	for nombre in nombres_equipos:
-		var equipo := Team.generar(nombre, rng, siguiente_id)
+		var equipo := Team.generar(nombre, rng, siguiente_id, potencial, "Uruguay", realizacion)
 		siguiente_id += Team.RANGO_IDS_RESERVADO
 		equipos.append(equipo)
 		tabla[nombre] = _fila_vacia()
@@ -331,7 +341,7 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 		var nombre: String = orden_final[i]
 		for equipo in equipos:
 			if equipo.nombre == nombre:
-				var informe := Economia.procesar_temporada(equipo, i + 1, orden_final.size())
+				var informe := Economia.procesar_temporada(equipo, i + 1, orden_final.size(), division)
 				informe["equipo"] = nombre
 				informes_economia.append(informe)
 

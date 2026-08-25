@@ -470,7 +470,10 @@ static func _resolver_tiro(equipo_atacante: Team, equipo_defensor: Team, atacant
 		rng: RandomNumberGenerator, con_log: bool, log: Array, eventos: Array, minuto: int) -> Dictionary:
 	var arquero := equipo_defensor.arquero()
 	var tiro: int = atacante["atributos"]["tiro"]
-	var destino := _resolver_destino(tiro, rng)
+	# La punteria se juzga contra el nivel del partido, no en absoluto:
+	# ver relativo_al_nivel.
+	var destino := _resolver_destino(
+		int(round(relativo_al_nivel(float(tiro), nivel_partido(equipo_atacante, equipo_defensor)))), rng)
 
 	if destino != "porteria":
 		if con_log:
@@ -535,8 +538,35 @@ static func _duelo_tiro(atacante: Dictionary, tiro_valor: float, equipo_atacante
 	return resultado
 
 
+## Media de plantel contra la que están calibradas las curvas que miran el
+## valor ABSOLUTO de un atributo. Es la media que daban todos los clubes
+## cuando la pirámide no tenía gradiente por división.
+const NIVEL_REFERENCIA := 46.0
+
+
+## El nivel al que se juega este partido.
+static func nivel_partido(a: Team, b: Team) -> float:
+	return (a.media_equipo() + b.media_equipo()) * 0.5
+
+
+## Lleva un atributo al nivel de referencia, conservando cuánto se despega
+## el jugador del nivel al que juega.
+##
+## Hace falta porque algunas curvas (puntería, ver _resolver_destino) miran
+## el valor absoluto: con el gradiente por división (NivelDivision) un
+## delantero de primera tiene tiro ~87 y erraba casi nunca, así que la
+## primera terminaba con 5,45 goles por partido y la décima con 2,24 —
+## justo al revés de lo que pasa en el fútbol de verdad, y con la economía
+## y los objetivos calibrados sobre ~3,4. Normalizando, un delantero
+## promedio de su liga apunta igual de bien juegue donde juegue, y el que
+## se despega de su liga sigue teniendo su ventaja.
+static func relativo_al_nivel(valor: float, nivel: float) -> float:
+	return clampf(valor - nivel + NIVEL_REFERENCIA, 0.0, 100.0)
+
+
 ## §8.2 punto 1: a mayor tiro, más chance de ir a puerta; el palo escala con
-## la precisión, "afuera" baja cuanto mejor es el rematador.
+## la precisión, "afuera" baja cuanto mejor es el rematador. `tiro` viene
+## ya normalizado al nivel del partido (ver relativo_al_nivel).
 static func _resolver_destino(tiro: int, rng: RandomNumberGenerator) -> String:
 	var t: float = clamp(tiro, 0, 100) / 100.0
 	var chance_palo: float = 0.05 * t

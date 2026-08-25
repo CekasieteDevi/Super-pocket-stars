@@ -155,18 +155,22 @@ var prestados_propios: Dictionary = {}  # jugador_id -> {"club_dueno":Team, "tem
 ## pais (§10.1): pool de nombre/apellido de los jugadores generados — ver
 ## PlayerGenerator.generate. "Uruguay" (default) para los 200 clubes de la
 ## pirámide, el país real para los clubes del exterior.
-static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int = 0, potencial_objetivo: int = -1, pais: String = "Uruguay") -> Team:
+## realizacion: cuánto del techo trae puesto un titular (ver
+## PlayerGenerator._roll_attribute). Por división lo decide NivelDivision;
+## los clubes que se generan sueltos (tests, exterior, selecciones) se
+## quedan con la banda por defecto.
+static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int = 0, potencial_objetivo: int = -1, pais: String = "Uruguay", realizacion: Vector2 = PlayerGenerator.REALIZACION_TITULAR) -> Team:
 	var t := Team.new()
 	t.nombre = nombre
 	var next_id := id_inicial
 	for pos in FORMACION:
-		var jugador := PlayerGenerator.generate(next_id, rng, pos, potencial_objetivo, pais)
+		var jugador := PlayerGenerator.generate(next_id, rng, pos, potencial_objetivo, pais, realizacion)
 		next_id += 1
 		t.jugadores.append(jugador)
 		t._registrar_fichaje(jugador, ValorJugador.calcular(jugador, 50.0, 3), rng.randi_range(1, 5))
 		t.armonia += Personalidad.bonus_armonia(jugador)
 	# El banco nace con menos techo realizado que el once (ver
-	# PlayerGenerator.REALIZACION_SUPLENTE). Antes salia del mismo molde y
+	# NivelDivision.FACTOR_SUPLENTE). Antes salia del mismo molde y
 	# quedaba tan bueno como el titular (+0,2 de media), asi que perder a
 	# un titular no costaba nada: entraba alguien identico. Se baja el
 	# banco en vez de subir el once a proposito — media_equipo() mira solo
@@ -174,7 +178,7 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 	# economia, los objetivos y la paridad entre los dos motores.
 	for pos in BANCO_FORMACION:
 		var jugador := PlayerGenerator.generate(next_id, rng, pos, potencial_objetivo, pais,
-			PlayerGenerator.REALIZACION_SUPLENTE)
+			realizacion * NivelDivision.FACTOR_SUPLENTE)
 		next_id += 1
 		t.banco.append(jugador)
 		t._registrar_fichaje(jugador, ValorJugador.calcular(jugador, 50.0, 3), rng.randi_range(1, 5))

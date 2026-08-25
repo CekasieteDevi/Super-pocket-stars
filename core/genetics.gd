@@ -38,3 +38,20 @@ static func roll(rng: RandomNumberGenerator) -> Dictionary:
 		"tier": last["tier"],
 		"potencial": rng.randi_range(int(last["min"]), int(last["max"])),
 	}
+
+
+## El tier que le corresponde a un potencial ya decidido. Se usa cuando el
+## potencial viene impuesto de afuera (nivel de la división, fuerza de un
+## club del exterior, de una selección) en vez de salir de roll(): antes
+## esos jugadores se marcaban todos como "Extranjero", que no está en la
+## tabla, y entonces Progresion.VELOCIDAD_POR_TIER caía al 1.0 por defecto
+## y Aprendizaje no les daba nunca el bonus de genética. O sea que el tier
+## dejaba de significar algo justo para los planteles generados por nivel.
+static func tier_de(potencial: int) -> String:
+	var tiers := get_tiers()
+	var mejor: String = str(tiers[tiers.size() - 1]["tier"])
+	for t in tiers:
+		if potencial >= int(t["min"]):
+			return str(t["tier"])
+		mejor = str(t["tier"])
+	return mejor
