@@ -141,8 +141,10 @@ static func multiplicador_uso(jugador: Dictionary, atributo: String) -> float:
 	return 1.0 + MULTIPLICADOR_USO * relativo * carga
 
 
+## `mult_area` es el multiplicador por atributo que deja el foco de equipo
+## (§7.4.2, ver FocoEquipo.multiplicadores). Vacio = sin enfasis.
 static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator, mult_mentor: float = 1.0,
-		mult_entrenamiento: float = 1.0, foco_atributo: String = "") -> void:
+		mult_entrenamiento: float = 1.0, foco_atributo: String = "", mult_area: Dictionary = {}) -> void:
 	jugador["edad"] += 1
 	var mult_edad := _multiplicador_crecimiento(jugador["edad"])
 	var mult_tier: float = VELOCIDAD_POR_TIER.get(jugador["genetica_tier"], 1.0)
@@ -168,7 +170,8 @@ static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator, m
 				if distancia > 0.0:
 					var mult_foco: float = multiplicador_foco(jugador["posicion"], attr) if attr == foco_atributo else 1.0
 					var mult_uso: float = multiplicador_uso(jugador, attr)
-					cambio = distancia * 0.12 * mult_edad * mult_tier * mult_personalidad * mult_mentor * mult_entrenamiento * mult_foco * mult_uso
+					var mult_equipo: float = float(mult_area.get(attr, 1.0))
+					cambio = distancia * 0.12 * mult_edad * mult_tier * mult_personalidad * mult_mentor * mult_entrenamiento * mult_foco * mult_uso * mult_equipo
 				cambio += rng.randfn(0.0, 0.6)
 				# El techo es techo: el ruido aleatorio no puede empujar
 				# por encima. Antes se sumaba igual estando ya en el tope,

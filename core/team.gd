@@ -45,6 +45,12 @@ var formacion: String = Formaciones.POR_DEFECTO
 var carga_entrenamiento: String = CargaEntrenamiento.POR_DEFECTO
 var carga_suma: float = 0.0
 var carga_semanas: float = 0.0
+## §7.4.2: que practica el plantel entero. A diferencia de la carga, no se
+## promedia a un numero: se acumula CUANTAS SEMANAS estuvo puesta cada
+## area, porque cambiar de area a mitad de temporada tiene que repartir y
+## no reiniciar. Ver FocoEquipo.
+var foco_equipo: String = FocoEquipo.POR_DEFECTO
+var foco_semanas: Dictionary = {}  # area -> semanas acumuladas esta temporada
 
 var calidad_cancha: float = 0.0  # -8..+3, ver core/estado_cancha.gd — rige cuando este club juega de local
 var clima_partido: String = ""  # transitorio, solo dentro de un partido — "" (normal) / Lluvia / Calor / Viento, ver core/clima.gd
@@ -185,6 +191,9 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 		t.armonia += Personalidad.bonus_armonia(jugador)
 	t.armonia += rng.randf_range(-3.0, 5.0)
 	t.estilo = Estilos.generar(rng)
+	# §7.4.2: se entrena lo que se juega. Es el valor inicial y se puede
+	# cambiar; para los clubes de la IA queda asi toda la partida.
+	t.foco_equipo = FocoEquipo.para_estilo(t.estilo)
 	t.dt = DT.generar(rng)
 	t.config_cambios = DT.config_cambios_de(t.dt["nivel"])
 	t.reputacion = clamp(t.media_equipo(), 20.0, 80.0)
@@ -232,6 +241,7 @@ func guardar() -> Dictionary:
 		"formacion": formacion,
 		"carga_entrenamiento": carga_entrenamiento,
 		"carga_suma": carga_suma, "carga_semanas": carga_semanas,
+		"foco_equipo": foco_equipo, "foco_semanas": foco_semanas,
 		"jugadores": jugadores, "banco": banco, "cantera": cantera,
 		"siguiente_id_cantera": siguiente_id_cantera, "capitan_id": capitan_id,
 		"fatiga_acumulada": _claves_a_texto(fatiga_acumulada),
@@ -276,6 +286,10 @@ static func cargar(datos: Dictionary) -> Team:
 		t.carga_entrenamiento = CargaEntrenamiento.POR_DEFECTO
 	t.carga_suma = float(datos.get("carga_suma", 0.0))
 	t.carga_semanas = float(datos.get("carga_semanas", 0.0))
+	t.foco_equipo = str(datos.get("foco_equipo", FocoEquipo.POR_DEFECTO))
+	if not FocoEquipo.existe(t.foco_equipo):
+		t.foco_equipo = FocoEquipo.POR_DEFECTO
+	t.foco_semanas = datos.get("foco_semanas", {})
 	t.formacion = str(datos.get("formacion", Formaciones.POR_DEFECTO))
 	if not Formaciones.existe(t.formacion):
 		t.formacion = Formaciones.POR_DEFECTO
@@ -402,6 +416,22 @@ func factor_carga_temporada() -> float:
 func reiniciar_carga() -> void:
 	carga_suma = 0.0
 	carga_semanas = 0.0
+	foco_semanas = {}
+
+
+## §7.4.2: como se reparte la temporada entre areas, normalizado a 1. Si
+## no paso ninguna semana (temporada recien empezada) devuelve {}, y
+## FocoEquipo lo trata como "general".
+func reparto_foco() -> Dictionary:
+	var total := 0.0
+	for area in foco_semanas:
+		total += float(foco_semanas[area])
+	if total <= 0.0:
+		return {}
+	var salida := {}
+	for area in foco_semanas:
+		salida[area] = float(foco_semanas[area]) / total
+	return salida
 
 
 func recalcular_capitan() -> void:
@@ -728,6 +758,8 @@ func avanzar_dias(dias: int) -> Array:
 	# pesa lo mismo que cualquier otra semana de la misma duración.
 	carga_suma += CargaEntrenamiento.factor_crecimiento(carga_entrenamiento) * (float(dias) / 7.0)
 	carga_semanas += float(dias) / 7.0
+	# §7.4.2: lo mismo para el area que se esta practicando.
+	foco_semanas[foco_equipo] = float(foco_semanas.get(foco_equipo, 0.0)) + float(dias) / 7.0
 
 	var recuperados := []
 	for id in lesiones.keys():

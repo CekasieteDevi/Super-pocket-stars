@@ -389,10 +389,13 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 		# §7.4.1: la carga de entrenamiento de la temporada, promediada
 		# semana a semana, entra acá junto con las instalaciones.
 		var mult_entrenamiento: float = Instalaciones.factor_entrenamiento(equipo) * equipo.factor_carga_temporada()
+		# §7.4.2: que practico el plantel entero esta temporada.
+		var mult_area := FocoEquipo.multiplicadores(
+			equipo.reparto_foco(), PlayerGenerator.get_all_attributes())
 
 		for jugador in equipo.todos_los_jugadores():
 			var foco: String = equipo.foco_individual.get(jugador["id"], "")
-			Progresion.aplicar_temporada(jugador, rng, Mentores.multiplicador_para(jugador, bonus_mentor), mult_entrenamiento, foco)
+			Progresion.aplicar_temporada(jugador, rng, Mentores.multiplicador_para(jugador, bonus_mentor), mult_entrenamiento, foco, mult_area)
 			Entrenamiento.actualizar_racha(jugador, foco)
 			var aprendida := Aprendizaje.procesar_jugador(jugador, equipo, temporada_actual, rng)
 			if not aprendida.is_empty():
@@ -432,7 +435,8 @@ func _procesar_cantera(equipo: Team, rng: RandomNumberGenerator, es_protegido: b
 	var aprendizajes := []
 	for juvenil in equipo.cantera:
 		var foco: String = equipo.foco_individual.get(juvenil["id"], "")
-		Progresion.aplicar_temporada(juvenil, rng, Mentores.multiplicador_para(juvenil, bonus_mentor), mult_entrenamiento, foco)
+		Progresion.aplicar_temporada(juvenil, rng, Mentores.multiplicador_para(juvenil, bonus_mentor), mult_entrenamiento, foco,
+			FocoEquipo.multiplicadores(equipo.reparto_foco(), PlayerGenerator.get_all_attributes()))
 		Entrenamiento.actualizar_racha(juvenil, foco)
 		var aprendida := Aprendizaje.procesar_jugador(juvenil, equipo, temporada_actual, rng)
 		if not aprendida.is_empty():

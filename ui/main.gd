@@ -17,6 +17,8 @@ var lista_ficha: RichTextLabel
 var ficha_jugador_id := -1
 var option_formacion: OptionButton
 var option_carga: OptionButton
+var option_foco: OptionButton
+var label_foco_efecto: Label
 var label_carga_efecto: Label
 var contenedor_formacion: VBoxContainer
 var label_formacion_estado: Label
@@ -387,6 +389,23 @@ func _construir_panel_formacion(padre: Control) -> void:
 	label_carga_efecto.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	panel.add_child(label_carga_efecto)
 
+	# §7.4.2: la carga dice CUANTO se entrena, el foco dice QUE.
+	var fila_foco := HBoxContainer.new()
+	panel.add_child(fila_foco)
+	var et_foco := Label.new()
+	et_foco.text = "Foco del equipo:"
+	fila_foco.add_child(et_foco)
+
+	option_foco = OptionButton.new()
+	for area in FocoEquipo.AREAS:
+		option_foco.add_item(FocoEquipo.ETIQUETAS[area])
+	option_foco.item_selected.connect(_on_foco_equipo_elegido)
+	fila_foco.add_child(option_foco)
+
+	label_foco_efecto = Label.new()
+	label_foco_efecto.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	panel.add_child(label_foco_efecto)
+
 	label_formacion_estado = Label.new()
 	label_formacion_estado.text = "Toca un jugador y despues otro para cambiarlos de lugar."
 	panel.add_child(label_formacion_estado)
@@ -413,6 +432,14 @@ func _mostrar_formacion() -> void:
 ## apretada no arruina el año.
 func _on_carga_elegida(idx: int) -> void:
 	GameState.equipo_jugador.carga_entrenamiento = CargaEntrenamiento.NIVELES[idx]
+	_refrescar_formacion()
+
+
+## §7.4.2: se puede cambiar cuando quieras. Lo que pesa al cierre de
+## temporada es cuantas SEMANAS estuvo puesta cada area, asi que cambiar a
+## mitad de año reparte en vez de reiniciar.
+func _on_foco_equipo_elegido(idx: int) -> void:
+	GameState.equipo_jugador.foco_equipo = FocoEquipo.AREAS[idx]
 	_refrescar_formacion()
 
 
@@ -449,6 +476,19 @@ func _texto_slot(rol: String, j: Dictionary) -> String:
 		rol, _nombre_jugador(j), j["media"], aviso, _tag_habilidad(j)]
 
 
+## Cuanto pesa cada area en lo que va de la temporada. Sin esto, cambiar
+## de foco a mitad de año no se ve por ningun lado.
+func _reparto_foco_texto(equipo: Team) -> String:
+	var reparto := equipo.reparto_foco()
+	if reparto.size() <= 1:
+		return ""
+	var partes := []
+	for area in reparto:
+		partes.append("%s %d%%" % [FocoEquipo.ETIQUETAS.get(area, area), int(round(float(reparto[area]) * 100.0))])
+	return "
+   Temporada hasta ahora: %s" % ", ".join(partes)
+
+
 func _refrescar_formacion() -> void:
 	var equipo := GameState.equipo_jugador
 	var idx := Formaciones.lista().find(equipo.formacion)
@@ -459,6 +499,10 @@ func _refrescar_formacion() -> void:
 		option_carga.selected = idx_carga
 	label_carga_efecto.text = "%s   —   promedio de la temporada hasta ahora: x%.2f de crecimiento" % [
 		CargaEntrenamiento.resumen(equipo.carga_entrenamiento), equipo.factor_carga_temporada()]
+	var idx_foco := FocoEquipo.AREAS.find(equipo.foco_equipo)
+	if idx_foco >= 0:
+		option_foco.selected = idx_foco
+	label_foco_efecto.text = "%s%s" % [FocoEquipo.resumen(equipo.foco_equipo), _reparto_foco_texto(equipo)]
 	label_formacion_estado.text = "Toca un jugador y despues otro para cambiarlos de lugar." 		if formacion_seleccion == -1 else "Elegido. Toca a otro para cambiarlos, o al mismo para cancelar."
 
 	for hijo in contenedor_formacion.get_children():
