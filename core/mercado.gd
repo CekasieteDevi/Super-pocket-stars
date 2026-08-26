@@ -32,7 +32,10 @@ const MEJORA_MINIMA_ENTRE_DIVISIONES := 4.0
 ## Que fraccion del presupuesto de fichajes se anima a gastar un club en
 ## UNA sola compra. Sin esto, el primer club en tocarle el turno se
 ## fundia el presupuesto entero en un jugador y no fichaba nunca mas.
-const FRACCION_MAXIMA_POR_FICHAJE := 0.55
+## Subido de 0.55 con el escalon de elite (ValorJugador.MEDIA_ELITE): un
+## crack de media 99 cuesta diez veces lo que un titular bueno, asi que
+## comprarlo ES fundirse el presupuesto. Ese es el trato.
+const FRACCION_MAXIMA_POR_FICHAJE := 0.85
 
 ## Cuantas compras intenta cada club por temporada.
 const INTENTOS_POR_CLUB := 4

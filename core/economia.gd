@@ -56,7 +56,13 @@ const PREMIO_POR_POSICION := {1: 50000.0, 2: 30000.0, 3: 15000.0}
 ## La curva es geometrica, ~1,27 por escalon, y decima queda en 1.0 a
 ## proposito: ahi es donde arranca el jugador y donde esta calibrado el
 ## balance (ver PRECIO_ENTRADA), asi que ese escalon no se toca.
-const MULTIPLICADOR_DIVISION := [8.70, 6.85, 5.40, 4.25, 3.35, 2.64, 2.08, 1.64, 1.29, 1.00]
+## Las tres de arriba estan MUY por encima de la curva geometrica del
+## resto. No es arbitrario: es el escalon de elite de ValorJugador
+## (MEDIA_ELITE). Arriba de media 70 los jugadores valen —y por lo tanto
+## cobran, el sueldo es el 10% del valor— ordenes de magnitud mas, asi que
+## los ingresos tienen que acompañar o primera nace quebrada. De division
+## 4 para abajo no cambia nada, igual que los precios.
+const MULTIPLICADOR_DIVISION := [228.0, 42.0, 8.00, 4.25, 3.35, 2.64, 2.08, 1.64, 1.29, 1.00]
 
 
 ## -1 (liga suelta, sin escalon en la piramide) = sin multiplicador.

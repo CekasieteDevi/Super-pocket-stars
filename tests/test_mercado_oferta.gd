@@ -47,7 +47,12 @@ func _test_oferta_exitosa(rng: RandomNumberGenerator) -> void:
 			idx_saliente = i
 			break
 	comprador.jugadores[idx_saliente]["media"] = 40.0
-	comprador.caja["fichajes"] = 10000000.0  # de sobra, para aislar el caso de "alcanza"
+	# De sobra, para aislar el caso de "alcanza". Subido de 10M con el
+	# escalon de elite de ValorJugador (MEDIA_ELITE): un jugador de media
+	# alta pasa a costar decenas de millones y 10M dejaron de ser "de
+	# sobra" — el test fallaba por presupuesto, que es justo lo que este
+	# caso NO quiere estar probando.
+	comprador.caja["fichajes"] = 500000000.0
 
 	var caja_vendedor_antes: float = vendedor.caja["fichajes"]
 	var jugador_objetivo_id: int = vendedor.jugadores[idx_objetivo]["id"]

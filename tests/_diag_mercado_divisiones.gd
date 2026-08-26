@@ -32,6 +32,18 @@ func _init() -> void:
 				joyas += 1
 		if (t + 1) % 4 == 0:
 			_fila(p, t + 1)
+	print("")
+	print("=== Quiebras y caja al cierre ===")
+	for d in range(p.divisiones.size()):
+		var quebrados := 0
+		var caja := 0.0
+		for e in p.divisiones[d].equipos:
+			if e.quebrado:
+				quebrados += 1
+			for c in e.caja:
+				caja += float(e.caja[c])
+		print("  division %2d | %d quebrados | caja media %s" % [
+			d + 1, quebrados, Economia.formato_dinero(caja / float(p.divisiones[d].equipos.size()))])
 	print("\n=== Compras entre divisiones en %d temporadas ===" % TEMPORADAS)
 	var total := 0
 	for d in range(p.divisiones.size()):

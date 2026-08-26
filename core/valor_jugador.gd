@@ -11,6 +11,21 @@ extends RefCounted
 
 const VALOR_BASE := 50000.0
 
+## §9.2: el escalon de elite. Hasta acá el valor sube con (media/50)^4, que
+## es empinado pero manejable; de acá para arriba sube muchisimo mas.
+##
+## Sin esto un jugador de media 99 —el techo absoluto del juego— valia
+## $768.477, cuando un club de primera netea mas de un millon por
+## temporada: cualquiera ahorraba dos años y se compraba al mejor jugador
+## del mundo. Con el escalon vale ~$98M y es el fichaje de una era.
+##
+## El umbral es 70 a proposito: es la media de un titular de division 3,
+## asi que de division 4 para abajo NADA cambia de precio y la calibracion
+## economica de las divisiones bajas —que es donde arranca el jugador—
+## queda intacta.
+const MEDIA_ELITE := 70.0
+const EXPONENTE_ELITE := 14.0
+
 const FACTOR_EDAD := [
 	{"max": 20, "factor": 0.7},
 	{"max": 23, "factor": 0.9},
@@ -36,7 +51,10 @@ static func _factor_edad(edad: int) -> float:
 ## corto resta valor de negociación (eso es real), pero con un rango más
 ## angosto (0.7-1.0) el efecto está presente sin dominar la valuación.
 static func calcular(jugador: Dictionary, animo: float, contrato_restante: int) -> float:
-	var factor_media: float = pow(max(jugador["media"], 1.0) / 50.0, 4.0)
+	var media: float = max(jugador["media"], 1.0)
+	var factor_media: float = pow(media / 50.0, 4.0)
+	if media > MEDIA_ELITE:
+		factor_media *= pow(media / MEDIA_ELITE, EXPONENTE_ELITE)
 	var factor_edad: float = _factor_edad(jugador["edad"])
 	var factor_animo: float = 0.85 + (clamp(animo, 0.0, 100.0) / 100.0) * 0.3
 	var factor_contrato: float = clamp(0.7 + 0.075 * contrato_restante, 0.7, 1.0)
