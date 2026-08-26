@@ -522,8 +522,10 @@ func _renovar_contrato(equipo: Team, id: int, jugador: Dictionary, rng: RandomNu
 	equipo.contratos[id] = anios
 	if jugador.is_empty():
 		return
-	var valor := ValorJugador.calcular(jugador, equipo.animo.get(id, 50.0), anios)
-	equipo.sueldos[id] = Economia.sueldo_sugerido(valor) * Personalidad.factor_sueldo(jugador)
+	# base_salarial, no calcular: el sueldo no lleva el escalon de elite
+	# (ver ValorJugador.base_salarial).
+	var base := ValorJugador.base_salarial(jugador, equipo.animo.get(id, 50.0), anios)
+	equipo.sueldos[id] = Economia.sueldo_sugerido(base) * Personalidad.factor_sueldo(jugador)
 
 
 ## Descuenta 1 partido de suspensión a los ids que YA estaban suspendidos

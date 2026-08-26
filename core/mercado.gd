@@ -286,8 +286,8 @@ static func _indice_en_posicion(equipo: Team, posicion: String, rng: RandomNumbe
 	return candidatos[rng.randi() % candidatos.size()]
 
 
-## §9.3 extendido: mercado ENTRE divisiones. El de arriba compra, el de
-## abajo cobra.
+## §9.3 extendido: mercado entre clubes de TODA la piramide. Cualquiera
+## puede comprarle a cualquiera, de la division que sea.
 ##
 ## ejecutar_ventana() opera dentro de una sola division y es un TRUEQUE en
 ## el que el club con el peor jugador de un puesto recibe al mejor: sirve
@@ -296,10 +296,10 @@ static func _indice_en_posicion(equipo: Team, posicion: String, rng: RandomNumbe
 ## Esto es lo contrario y es lo que hace que la piramide se sienta una
 ## piramide: plata contra talento, de arriba hacia abajo.
 ##
-## Un club solo mira DIVISIONES MAS BAJAS que la suya. Lo que lo limita no
-## es una regla sino la caja, y la caja ahora escala con la categoria (ver
-## Economia.MULTIPLICADOR_DIVISION), asi que los de arriba compran mas y
-## mejor sin que haya que decirselo.
+## En la practica termina comprando el de arriba y cobrando el de abajo,
+## pero eso sale solo de la caja, que escala con la categoria (ver
+## Economia.MULTIPLICADOR_DIVISION): un club de decima PUEDE ofertar por un
+## crack de primera, lo que no puede es pagarlo.
 ##
 ## Se compra por dos motivos distintos:
 ##   REFUERZO: alguien que mejora un puesto flojo, hoy.
@@ -309,7 +309,7 @@ static func _indice_en_posicion(equipo: Team, posicion: String, rng: RandomNumbe
 ##   resistencia_venta.
 static func ventana_entre_divisiones(piramide, rng: RandomNumberGenerator, equipo_protegido: Team = null) -> Array:
 	var transferencias := []
-	for d in range(piramide.divisiones.size() - 1):
+	for d in range(piramide.divisiones.size()):
 		var compradores: Array = piramide.divisiones[d].equipos.duplicate()
 		compradores.shuffle()
 		for comprador in compradores:
@@ -319,13 +319,13 @@ static func ventana_entre_divisiones(piramide, rng: RandomNumberGenerator, equip
 			# otra division): que una falle no cierra el mercado del club.
 			# Con break, un club tenia UN intento real y no tres.
 			for _i in range(INTENTOS_POR_CLUB):
-				var t := _intentar_compra_abajo(piramide, d, comprador, rng, equipo_protegido)
+				var t := _intentar_compra(piramide, d, comprador, rng, equipo_protegido)
 				if not t.is_empty():
 					transferencias.append(t)
 	return transferencias
 
 
-static func _intentar_compra_abajo(piramide, division_compradora: int, comprador: Team,
+static func _intentar_compra(piramide, division_compradora: int, comprador: Team,
 		rng: RandomNumberGenerator, equipo_protegido: Team) -> Dictionary:
 	var tope: float = comprador.caja["fichajes"] * FRACCION_MAXIMA_POR_FICHAJE
 	if tope <= 0.0:
@@ -341,21 +341,25 @@ static func _intentar_compra_abajo(piramide, division_compradora: int, comprador
 	var a_mejorar: Dictionary = comprador.jugadores[idx_flojo]
 	var nivel_comprador := comprador.nivel_potencial()
 
-	# A que division se mira. Casi siempre a la de justo abajo y cada tanto
-	# mucho mas hondo: elevar al cuadrado un numero entre 0 y 1 lo empuja
-	# hacia el 0, asi que los pasos chicos son los comunes.
+	# A que division se mira: CUALQUIERA, mas abajo, mas arriba o la propia.
+	# Lo unico que decide si el negocio se puede hacer es la plata y las
+	# ganas de vender del otro, no una regla sobre a donde mirar.
 	#
-	# Uniforme entre todas las de abajo no sirve: un club de primera
+	# Casi siempre a una division cercana y cada tanto muy lejos: elevar al
+	# cuadrado un numero entre 0 y 1 lo empuja hacia el 0, asi que los
+	# pasos chicos son los comunes. Uniforme no sirve —un club de primera
 	# gastaba casi todos sus intentos mirando decima, donde no hay nadie
-	# que lo mejore, y terminaba fichando menos que un club de novena.
-	# Pero tampoco puede ser siempre la de al lado, o la joya del fondo no
-	# sube nunca.
-	var saltos: int = piramide.divisiones.size() - division_compradora - 1
-	var paso: int = 1 + int(rng.randf() * rng.randf() * float(saltos))
-	var abajo: int = division_compradora + mini(paso, saltos)
-	var vendedores: Array = piramide.divisiones[abajo].equipos
+	# que lo mejore— pero tampoco puede mirar siempre al lado, o la joya
+	# del fondo no sube nunca y un club chico no le compra jamas un
+	# descarte a uno grande.
+	var total_div: int = piramide.divisiones.size()
+	var paso: int = int(rng.randf() * rng.randf() * float(total_div))
+	if rng.randf() < 0.5:
+		paso = -paso
+	var objetivo_div: int = clampi(division_compradora + paso, 0, total_div - 1)
+	var vendedores: Array = piramide.divisiones[objetivo_div].equipos
 	var vendedor: Team = vendedores[rng.randi() % vendedores.size()]
-	if vendedor == equipo_protegido:
+	if vendedor == equipo_protegido or vendedor == comprador:
 		return {}
 
 	var mejor_id := -1
@@ -411,7 +415,7 @@ static func _intentar_compra_abajo(piramide, division_compradora: int, comprador
 
 	return {
 		"jugador_id": mejor_id, "posicion": posicion, "joya": es_joya,
-		"de": vendedor.nombre, "de_division": abajo + 1,
+		"de": vendedor.nombre, "de_division": objetivo_div + 1,
 		"a": comprador.nombre, "a_division": division_compradora + 1,
 		"valor": valor, "media": float(objetivo["media"]), "potencial": int(objetivo["potencial"]),
 	}

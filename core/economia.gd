@@ -111,14 +111,25 @@ static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos:
 	var egresos: float = total_sueldos + MANTENIMIENTO_FIJO
 
 	var neto: float = ingresos - egresos
+	# El presupuesto se REINICIA cada temporada, como en un modo carrera:
+	# lo que no gastaste se pierde. Antes se acumulaba (+=) y despues de
+	# ocho temporadas un club de primera tenia $157M dormidos en la caja y
+	# uno de decima mas de ocho temporadas de ingresos sin gastar — con
+	# suficientes años, cualquier club terminaba pudiendo comprar
+	# cualquier cosa, que es justo lo que el escalon de elite de
+	# ValorJugador esta para evitar.
+	#
+	# La DEUDA si se arrastra: si cerraste en rojo, arrancas el año
+	# debiendo. Si no, la quiebra desapareceria sola cada temporada y
+	# _recalcular_quiebra no volveria a dispararse nunca.
 	for categoria in PRESUPUESTO_PORCENTAJES:
 		var asignado: float = neto * PRESUPUESTO_PORCENTAJES[categoria]
-		equipo.caja[categoria] += asignado
+		equipo.caja[categoria] = asignado + minf(0.0, equipo.caja[categoria])
 		equipo.presupuesto_temporada[categoria] = asignado
 	# Mantenimiento no sale del neto (que ya lo restó una vez como costo fijo
 	# más arriba, en egresos) — se repone con una reserva fija, siempre
 	# igual, para que gastar de más en sueldos no lo mande a números rojos.
-	equipo.caja["mantenimiento"] += RESERVA_MANTENIMIENTO
+	equipo.caja["mantenimiento"] = RESERVA_MANTENIMIENTO + minf(0.0, equipo.caja["mantenimiento"])
 	equipo.presupuesto_temporada["mantenimiento"] = RESERVA_MANTENIMIENTO
 	# Foto de la caja justo despues de repartir el ingreso y antes de que el
 	# mercado (que corre a continuacion en el mismo cierre) gaste nada —

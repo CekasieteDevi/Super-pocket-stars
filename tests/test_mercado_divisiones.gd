@@ -101,9 +101,13 @@ func _test_los_de_arriba_compran_mejor(rng: RandomNumberGenerator) -> void:
 	var suma := {}
 	var cuenta := {}
 	for _t in range(4):
+		# Presupuestos REALES, no una cifra plana para todos: con el escalon
+		# de elite (ValorJugador.MEDIA_ELITE) un titular de primera cuesta
+		# millones, asi que darle a todo el mundo la misma caja obliga a los
+		# de arriba a fichar barato y borra justo lo que este test mide.
 		for liga in p.divisiones:
-			for e in liga.equipos:
-				e.caja["fichajes"] = 400000.0
+			for i in range(liga.equipos.size()):
+				Economia.procesar_temporada(liga.equipos[i], i + 1, liga.equipos.size(), liga.division)
 		for t in Mercado.ventana_entre_divisiones(p, rng, null):
 			var d: int = int(t["a_division"])
 			suma[d] = float(suma.get(d, 0.0)) + float(t["media"])

@@ -51,9 +51,30 @@ static func _factor_edad(edad: int) -> float:
 ## corto resta valor de negociación (eso es real), pero con un rango más
 ## angosto (0.7-1.0) el efecto está presente sin dominar la valuación.
 static func calcular(jugador: Dictionary, animo: float, contrato_restante: int) -> float:
+	return _valor(jugador, animo, contrato_restante, true)
+
+
+## Lo que se usa para calcular el SUELDO — el mismo valor pero SIN el
+## escalon de elite.
+##
+## El pase y el sueldo no escalan igual. El pase de un crack es una subasta
+## por algo que no se puede conseguir de otra manera; el sueldo es lo que
+## el club paga todos los años, y no puede seguir la misma curva.
+##
+## Sin separarlos, el sueldo era el 10% de un valor que crece como
+## media^18 arriba del umbral: un plantel que mejoraba dos o tres puntos de
+## media multiplicaba su masa salarial varias veces, mientras el ingreso
+## sigue atado a una constante por division (Economia.MULTIPLICADOR_DIVISION).
+## Medido a 6 temporadas: division 3 pagaba $3,81M de sueldos contra
+## $1,50M de ingresos, y 15 de sus 20 clubes cerraban en rojo.
+static func base_salarial(jugador: Dictionary, animo: float, contrato_restante: int) -> float:
+	return _valor(jugador, animo, contrato_restante, false)
+
+
+static func _valor(jugador: Dictionary, animo: float, contrato_restante: int, con_elite: bool) -> float:
 	var media: float = max(jugador["media"], 1.0)
 	var factor_media: float = pow(media / 50.0, 4.0)
-	if media > MEDIA_ELITE:
+	if con_elite and media > MEDIA_ELITE:
 		factor_media *= pow(media / MEDIA_ELITE, EXPONENTE_ELITE)
 	var factor_edad: float = _factor_edad(jugador["edad"])
 	var factor_animo: float = 0.85 + (clamp(animo, 0.0, 100.0) / 100.0) * 0.3

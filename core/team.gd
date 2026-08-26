@@ -470,9 +470,12 @@ const FACTOR_CLAUSULA := 1.8
 ## Da de alta a un jugador que se suma al plantel (fichaje, ascenso desde
 ## cantera): sueldo, contrato, ánimo neutro, totalmente descansado,
 ## cláusula de rescisión nueva.
+## `valor` es el valor de PASE (fija la clausula). El sueldo sale aparte de
+## base_salarial, que no lleva el escalon de elite: ver ValorJugador.
 func _registrar_fichaje(jugador: Dictionary, valor: float, contrato_anios: int = 3) -> void:
 	var id: int = jugador["id"]
-	sueldos[id] = Economia.sueldo_sugerido(valor) * Personalidad.factor_sueldo(jugador)
+	var base := ValorJugador.base_salarial(jugador, 50.0, contrato_anios)
+	sueldos[id] = Economia.sueldo_sugerido(base) * Personalidad.factor_sueldo(jugador)
 	contratos[id] = contrato_anios
 	animo[id] = 50.0
 	fatiga_acumulada[id] = 1.0
