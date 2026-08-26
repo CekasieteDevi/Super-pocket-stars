@@ -601,6 +601,102 @@ func vender_titular(indice_titular: int, jugador_entrante: Dictionary) -> void:
 	recalcular_capitan()
 
 
+## §9.3: el club PIERDE a un jugador (lo compró otro club) y tapa el
+## hueco solo. A diferencia de vender_titular, acá no llega nadie a
+## cambio: es una venta por plata.
+##
+## El relleno va en orden de lo que haría un club de verdad: si era
+## titular, sube el suplente de su puesto; el lugar que queda en el banco
+## lo toma el mejor juvenil de la cantera y, si no hay ninguno, un
+## jugador nuevo del NIVEL DEL CLUB (ver nivel_potencial — nunca de la
+## tabla global, o los clubes de abajo se rellenarían con gente mejor de
+## la que les corresponde).
+##
+## Devuelve false si el jugador no está en el plantel.
+func perder_jugador(jugador_id: int, rng: RandomNumberGenerator) -> bool:
+	var idx_titular := -1
+	for i in range(jugadores.size()):
+		if jugadores[i]["id"] == jugador_id:
+			idx_titular = i
+			break
+	var idx_banco := -1
+	if idx_titular == -1:
+		for i in range(banco.size()):
+			if banco[i]["id"] == jugador_id:
+				idx_banco = i
+				break
+	if idx_titular == -1 and idx_banco == -1:
+		return false
+
+	var posicion: String = jugadores[idx_titular]["posicion"] if idx_titular != -1 else banco[idx_banco]["posicion"]
+
+	if idx_titular != -1:
+		# Sube el mejor suplente de ese puesto y el hueco pasa al banco.
+		var mejor := -1
+		for i in range(banco.size()):
+			if banco[i]["posicion"] == posicion and (mejor == -1 or banco[i]["media"] > banco[mejor]["media"]):
+				mejor = i
+		if mejor == -1:
+			for i in range(banco.size()):
+				if mejor == -1 or banco[i]["media"] > banco[mejor]["media"]:
+					mejor = i
+		if mejor == -1:
+			jugadores.remove_at(idx_titular)
+			_limpiar_registro(jugador_id)
+			recalcular_capitan()
+			return true
+		jugadores[idx_titular] = banco[mejor]
+		idx_banco = mejor
+
+	banco[idx_banco] = _relevo_para(posicion, rng)
+	_limpiar_registro(jugador_id)
+	recalcular_capitan()
+	return true
+
+
+## Con quién se tapa un hueco en el banco: primero la cantera, después
+## alguien nuevo del nivel del club.
+func _relevo_para(posicion: String, rng: RandomNumberGenerator) -> Dictionary:
+	var mejor := -1
+	for i in range(cantera.size()):
+		if cantera[i]["posicion"] == posicion and (mejor == -1 or cantera[i]["media"] > cantera[mejor]["media"]):
+			mejor = i
+	if mejor != -1:
+		var juvenil: Dictionary = cantera[mejor]
+		juvenil["es_canterano"] = true
+		cantera.remove_at(mejor)
+		_registrar_fichaje(juvenil, ValorJugador.calcular(juvenil, 50.0, 3))
+		promociones_temporada += 1
+		return juvenil
+	var nuevo := PlayerGenerator.generate(siguiente_id_cantera, rng, posicion, nivel_potencial())
+	siguiente_id_cantera += 1
+	_registrar_fichaje(nuevo, ValorJugador.calcular(nuevo, 50.0, 3))
+	return nuevo
+
+
+## §9.3: el club INCORPORA a un jugador comprado. Entra de titular si
+## mejora al que está en su puesto y si no al banco; el plantel se
+## mantiene en 18 soltando al más flojo de ese puesto.
+func incorporar(jugador: Dictionary, valor: float, contrato_anios: int = 3) -> Dictionary:
+	var posicion: String = jugador["posicion"]
+	var idx_titular := -1
+	for i in range(jugadores.size()):
+		if jugadores[i]["posicion"] == posicion and (idx_titular == -1 or jugadores[i]["media"] < jugadores[idx_titular]["media"]):
+			idx_titular = i
+
+	_registrar_fichaje(jugador, valor, contrato_anios)
+	var saliente := {}
+	if idx_titular != -1 and jugador["media"] > jugadores[idx_titular]["media"]:
+		saliente = mover_a_banco(jugadores[idx_titular])
+		jugadores[idx_titular] = jugador
+	else:
+		saliente = mover_a_banco(jugador)
+	if not saliente.is_empty():
+		_limpiar_registro(saliente["id"])
+	recalcular_capitan()
+	return saliente
+
+
 func reset_partido() -> void:
 	racha = 0
 	avance = 0

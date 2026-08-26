@@ -19,6 +19,23 @@ extends RefCounted
 ## fichar a cada jugador (Team.FACTOR_CLAUSULA).
 
 const UMBRAL_DIFERENCIA_MEDIA := 8.0
+
+## Hasta que edad un jugador cuenta como "joya" y su club se lo pelea por
+## el techo y no por lo que rinde hoy (ver resistencia_venta).
+const EDAD_JOYA := 23
+
+## Cuanto tiene que mejorar el puesto un fichaje de otra division para que
+## valga la pena. Mas bajo que UMBRAL_DIFERENCIA_MEDIA porque acá no hay
+## trueque: el que compra pone plata y no resigna a nadie de arriba.
+const MEJORA_MINIMA_ENTRE_DIVISIONES := 4.0
+
+## Que fraccion del presupuesto de fichajes se anima a gastar un club en
+## UNA sola compra. Sin esto, el primer club en tocarle el turno se
+## fundia el presupuesto entero en un jugador y no fichaba nunca mas.
+const FRACCION_MAXIMA_POR_FICHAJE := 0.55
+
+## Cuantas compras intenta cada club por temporada.
+const INTENTOS_POR_CLUB := 4
 const POSICIONES := ["ARQ", "DFC", "LAT", "MC", "MCO", "EXT", "DC"]
 
 
@@ -128,6 +145,15 @@ static func resistencia_venta(vendedor: Team, jugador: Dictionary) -> float:
 			cuenta += 1
 	if cuenta > 0 and jugador["media"] - (media_resto / cuenta) >= 8.0:
 		resistencia += 0.3
+
+	# La joya de la cantera. Un club chico que saca un fenomeno puede
+	# preferir quedarselo y jugarse el ascenso con el, en vez de cobrar:
+	# cuanto mas techo tiene el pibe respecto del nivel del club, mas se
+	# lo pelea. Sin esto, cada crack que aparecia abajo subia de division
+	# la misma temporada, siempre.
+	var sobra_techo: float = float(jugador["potencial"]) - float(vendedor.nivel_potencial())
+	if sobra_techo > 0.0 and int(jugador["edad"]) <= EDAD_JOYA:
+		resistencia += clamp(sobra_techo / 40.0, 0.0, 1.0) * 0.35
 
 	resistencia += clamp(vendedor.reputacion / 100.0, 0.0, 1.0) * 0.3
 	resistencia += DT.ajuste_resistencia_venta(vendedor)  # §8.6.4: Chequera vende mas facil, Cantera protege mas
@@ -255,3 +281,134 @@ static func _indice_en_posicion(equipo: Team, posicion: String, rng: RandomNumbe
 	if candidatos.is_empty():
 		return -1
 	return candidatos[rng.randi() % candidatos.size()]
+
+
+## §9.3 extendido: mercado ENTRE divisiones. El de arriba compra, el de
+## abajo cobra.
+##
+## ejecutar_ventana() opera dentro de una sola division y es un TRUEQUE en
+## el que el club con el peor jugador de un puesto recibe al mejor: sirve
+## para que los planteles se muevan, pero nivela la liga en vez de
+## estratificarla, y deja a los clubes grandes tapando bajas con juveniles.
+## Esto es lo contrario y es lo que hace que la piramide se sienta una
+## piramide: plata contra talento, de arriba hacia abajo.
+##
+## Un club solo mira DIVISIONES MAS BAJAS que la suya. Lo que lo limita no
+## es una regla sino la caja, y la caja ahora escala con la categoria (ver
+## Economia.MULTIPLICADOR_DIVISION), asi que los de arriba compran mas y
+## mejor sin que haya que decirselo.
+##
+## Se compra por dos motivos distintos:
+##   REFUERZO: alguien que mejora un puesto flojo, hoy.
+##   JOYA: un pibe con techo muy por encima de lo que da el club, aunque
+##   todavia no rinda. Es el caso del crack que aparece en la cantera de
+##   un club de decima — que puede negarse a venderlo, ver
+##   resistencia_venta.
+static func ventana_entre_divisiones(piramide, rng: RandomNumberGenerator, equipo_protegido: Team = null) -> Array:
+	var transferencias := []
+	for d in range(piramide.divisiones.size() - 1):
+		var compradores: Array = piramide.divisiones[d].equipos.duplicate()
+		compradores.shuffle()
+		for comprador in compradores:
+			if comprador == equipo_protegido or comprador.quebrado:
+				continue
+			# Cada intento es una gestion distinta (otro puesto, otro club,
+			# otra division): que una falle no cierra el mercado del club.
+			# Con break, un club tenia UN intento real y no tres.
+			for _i in range(INTENTOS_POR_CLUB):
+				var t := _intentar_compra_abajo(piramide, d, comprador, rng, equipo_protegido)
+				if not t.is_empty():
+					transferencias.append(t)
+	return transferencias
+
+
+static func _intentar_compra_abajo(piramide, division_compradora: int, comprador: Team,
+		rng: RandomNumberGenerator, equipo_protegido: Team) -> Dictionary:
+	var tope: float = comprador.caja["fichajes"] * FRACCION_MAXIMA_POR_FICHAJE
+	if tope <= 0.0:
+		return {}
+
+	var posicion: String = POSICIONES[rng.randi() % POSICIONES.size()]
+	var idx_flojo := -1
+	for i in range(comprador.jugadores.size()):
+		if comprador.jugadores[i]["posicion"] == posicion and (idx_flojo == -1 or comprador.jugadores[i]["media"] < comprador.jugadores[idx_flojo]["media"]):
+			idx_flojo = i
+	if idx_flojo == -1:
+		return {}
+	var a_mejorar: Dictionary = comprador.jugadores[idx_flojo]
+	var nivel_comprador := comprador.nivel_potencial()
+
+	# A que division se mira. Casi siempre a la de justo abajo y cada tanto
+	# mucho mas hondo: elevar al cuadrado un numero entre 0 y 1 lo empuja
+	# hacia el 0, asi que los pasos chicos son los comunes.
+	#
+	# Uniforme entre todas las de abajo no sirve: un club de primera
+	# gastaba casi todos sus intentos mirando decima, donde no hay nadie
+	# que lo mejore, y terminaba fichando menos que un club de novena.
+	# Pero tampoco puede ser siempre la de al lado, o la joya del fondo no
+	# sube nunca.
+	var saltos: int = piramide.divisiones.size() - division_compradora - 1
+	var paso: int = 1 + int(rng.randf() * rng.randf() * float(saltos))
+	var abajo: int = division_compradora + mini(paso, saltos)
+	var vendedores: Array = piramide.divisiones[abajo].equipos
+	var vendedor: Team = vendedores[rng.randi() % vendedores.size()]
+	if vendedor == equipo_protegido:
+		return {}
+
+	var mejor_id := -1
+	var mejor_puntaje := 0.0
+	var es_joya := false
+	for j in vendedor.todos_los_jugadores() + vendedor.cantera:
+		if j["posicion"] != posicion:
+			continue
+		var refuerzo: float = float(j["media"]) - float(a_mejorar["media"])
+		var techo: float = float(j["potencial"]) - float(nivel_comprador)
+		var joya: bool = int(j["edad"]) <= EDAD_JOYA and techo > 0.0
+		var puntaje: float = refuerzo if refuerzo >= MEJORA_MINIMA_ENTRE_DIVISIONES else 0.0
+		if joya:
+			puntaje = maxf(puntaje, techo)
+		if puntaje > mejor_puntaje:
+			mejor_puntaje = puntaje
+			mejor_id = int(j["id"])
+			es_joya = joya and refuerzo < MEJORA_MINIMA_ENTRE_DIVISIONES
+	if mejor_id == -1:
+		return {}
+
+	var objetivo := {}
+	for j in vendedor.todos_los_jugadores() + vendedor.cantera:
+		if int(j["id"]) == mejor_id:
+			objetivo = j
+			break
+
+	var valor := ValorJugador.calcular(objetivo, vendedor.animo.get(mejor_id, 50.0), vendedor.contratos.get(mejor_id, 3))
+	if valor > tope:
+		return {}
+	if rng.randf() < resistencia_venta(vendedor, objetivo):
+		return {}
+
+	var en_cantera := false
+	for j in vendedor.cantera:
+		if int(j["id"]) == mejor_id:
+			en_cantera = true
+			break
+	if en_cantera:
+		var idx := -1
+		for i in range(vendedor.cantera.size()):
+			if int(vendedor.cantera[i]["id"]) == mejor_id:
+				idx = i
+				break
+		vendedor.cantera.remove_at(idx)
+		vendedor._limpiar_registro(mejor_id)
+	elif not vendedor.perder_jugador(mejor_id, rng):
+		return {}
+
+	comprador.caja["fichajes"] -= valor
+	vendedor.caja["fichajes"] += valor
+	comprador.incorporar(objetivo, valor)
+
+	return {
+		"jugador_id": mejor_id, "posicion": posicion, "joya": es_joya,
+		"de": vendedor.nombre, "de_division": abajo + 1,
+		"a": comprador.nombre, "a_division": division_compradora + 1,
+		"valor": valor, "media": float(objetivo["media"]), "potencial": int(objetivo["potencial"]),
+	}

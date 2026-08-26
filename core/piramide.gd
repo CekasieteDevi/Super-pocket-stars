@@ -128,12 +128,31 @@ func fin_de_temporada(rng: RandomNumberGenerator, equipo_protegido: Team = null,
 	for liga in divisiones:
 		informes.append(liga.procesar_economia_y_mercado_y_progresion(rng, equipo_protegido, temporada_actual))
 
+	# §9.3: recien ahora, con la economia de TODAS las divisiones ya
+	# procesada, los clubes de arriba salen a comprar abajo. Va antes de
+	# ascensos y descensos a proposito: se ficha con la categoria de la
+	# temporada que termino, que es la plata que se cobro.
+	var transferencias := Mercado.ventana_entre_divisiones(self, rng, equipo_protegido)
+	for t in transferencias:
+		var liga_destino: Liga = divisiones[t["a_division"] - 1]
+		if t["joya"]:
+			liga_destino.noticias.append(
+				"FICHAJES: %s (division %d) se lleva a una joven promesa de %s (division %d) por %s — media %d, techo %d." % [
+					t["a"], t["a_division"], t["de"], t["de_division"],
+					Economia.formato_dinero(t["valor"]), int(t["media"]), t["potencial"]])
+		else:
+			liga_destino.noticias.append(
+				"FICHAJES: %s (division %d) refuerza el puesto de %s con un jugador de %s (division %d) por %s." % [
+					t["a"], t["a_division"], t["posicion"], t["de"], t["de_division"],
+					Economia.formato_dinero(t["valor"])])
+
 	var movimientos := _ejecutar_ascensos_y_descensos(ordenes, rng)
 
 	for liga in divisiones:
 		liga.iniciar_temporada()
 
-	return {"informes_por_division": informes, "movimientos": movimientos}
+	return {"informes_por_division": informes, "movimientos": movimientos,
+		"transferencias_entre_divisiones": transferencias}
 
 
 func _ejecutar_ascensos_y_descensos(ordenes: Array, rng: RandomNumberGenerator) -> Array:
