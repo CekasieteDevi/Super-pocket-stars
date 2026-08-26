@@ -202,7 +202,9 @@ static func procesar_quiebra(equipo: Team, rng: RandomNumberGenerator) -> Array:
 		var valor := ValorJugador.calcular(saliente, equipo.animo.get(saliente["id"], 50.0), equipo.contratos.get(saliente["id"], 1))
 		var ingreso: float = valor * FRACCION_VENTA_DE_URGENCIA
 
-		var reemplazo := PlayerGenerator.generate(equipo.siguiente_id_cantera, rng, saliente["posicion"])
+		# Del nivel del club, no de la tabla global (ver Team.nivel_potencial).
+		var reemplazo := PlayerGenerator.generate(
+			equipo.siguiente_id_cantera, rng, saliente["posicion"], equipo.nivel_potencial())
 		equipo.siguiente_id_cantera += 1
 		lista[mejor_idx] = reemplazo
 		equipo.recalcular_capitan()

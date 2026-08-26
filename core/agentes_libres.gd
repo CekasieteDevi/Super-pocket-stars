@@ -36,7 +36,10 @@ static func liberar(equipo: Team, jugador: Dictionary, pool: Array, rng: RandomN
 	if idx == -1:
 		return
 
-	var reemplazo := PlayerGenerator.generate(equipo.siguiente_id_cantera, rng, jugador["posicion"])
+	# Del nivel del club: un club de decima no ficha un agente libre de
+	# primera (ver Team.nivel_potencial).
+	var reemplazo := PlayerGenerator.generate(
+		equipo.siguiente_id_cantera, rng, jugador["posicion"], equipo.nivel_potencial())
 	equipo.siguiente_id_cantera += 1
 	if en_banco:
 		equipo.banco[idx] = reemplazo

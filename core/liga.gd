@@ -442,7 +442,10 @@ func _procesar_cantera(equipo: Team, rng: RandomNumberGenerator, es_protegido: b
 		if not aprendida.is_empty():
 			aprendizajes.append({"jugador": juvenil, "habilidad": aprendida})
 	var liberados := equipo.liberar_veteranos_de_cantera()
-	var nuevos := equipo.generar_camada(rng, Instalaciones.cantidad_camada(equipo))
+	# La cantera de un club de decima no produce los mismos juveniles que
+	# la de uno de primera (ver Team.nivel_potencial).
+	var nuevos := equipo.generar_camada(rng, Instalaciones.cantidad_camada(equipo),
+		equipo.nivel_potencial() + Instalaciones.bonus_potencial_juveniles(equipo))
 	var promovidos := []
 	var promovidos_a_titular := []
 	if not es_protegido:

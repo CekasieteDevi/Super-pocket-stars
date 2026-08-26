@@ -777,10 +777,39 @@ func avanzar_dias(dias: int) -> Array:
 ## que cualquier jugador). "cantidad" la decide el nivel de la mejora de
 ## Juveniles (§9.5, Instalaciones.cantidad_camada) — el default de 3 acá es
 ## solo para llamadas sueltas (tests) que no pasan por ese cálculo.
-func generar_camada(rng: RandomNumberGenerator, cantidad: int = 3) -> Array:
+## El nivel del club, medido en TECHO y no en media: es lo que decide de
+## que calidad son los jugadores que entran al club (cantera, agentes
+## libres, reemplazos por quiebra).
+##
+## Sin esto los tres puntos de entrada tiraban de la tabla global de
+## genetica, con media ~60, sin importar el club: la cantera de un club de
+## decima producia los mismos juveniles que la de uno de primera. En 12
+## temporadas eso aplanaba la piramide entera — el techo promedio de
+## decima subia de 55 a 71 y el de primera bajaba de 96 a 86, y la brecha
+## entre la mejor y la peor division pasaba de 41 a 15.
+##
+## Se mide sobre el plantel ENTERO y no sobre los titulares: un juvenil
+## entra al plantel, no al once. Midiendolo sobre los once —que son los
+## mejores— cada camada nacia por encima del nivel real del club y, como
+## despues solo se promueve a los mejores de cada camada, eso hacia
+## trinquete: la piramide entera derivaba hacia arriba temporada tras
+## temporada en vez de quedarse quieta.
+func nivel_potencial() -> int:
+	var plantel := todos_los_jugadores()
+	if plantel.is_empty():
+		return -1
+	var total := 0.0
+	for j in plantel:
+		total += float(j["potencial"])
+	return int(round(total / float(plantel.size())))
+
+
+## potencial_objetivo -1 = tabla global de genetica (lo que usan los tests
+## que generan una camada suelta). Liga pasa el nivel del club.
+func generar_camada(rng: RandomNumberGenerator, cantidad: int = 3, potencial_objetivo: int = -1) -> Array:
 	var nuevos := []
 	for i in range(cantidad):
-		var jugador := PlayerGenerator.generate(siguiente_id_cantera, rng)
+		var jugador := PlayerGenerator.generate(siguiente_id_cantera, rng, "", potencial_objetivo)
 		siguiente_id_cantera += 1
 		jugador["edad"] = 15
 

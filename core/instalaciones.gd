@@ -86,6 +86,17 @@ static func cantidad_camada(equipo: Team) -> int:
 	return 2 + nivel
 
 
+## §9.5 juveniles, la otra mitad: además de cuántos, de qué calidad. Se
+## suma al nivel del club (Team.nivel_potencial) para decidir el techo de
+## la camada. Nivel 3 (el del medio) es neutro: una academia buena saca
+## chicos por encima de lo que da el club y una abandonada por debajo.
+## Sin esto, invertir en juveniles solo daba cantidad y la decisión era
+## floja.
+static func bonus_potencial_juveniles(equipo: Team) -> int:
+	var nivel: int = equipo.instalaciones.get("juveniles", 1)
+	return (nivel - 3) * 3
+
+
 ## §9.5/§7.4 entrenamiento: cuántos jugadores pueden estar en foco
 ## individual a la vez (ver core/entrenamiento.gd).
 ## Tope duro de jugadores en foco individual a la vez. Las instalaciones
