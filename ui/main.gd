@@ -45,9 +45,7 @@ var lista_economia: RichTextLabel
 var lista_cantera: RichTextLabel
 var contenedor_cantera_botones: VBoxContainer
 var lista_noticias: RichTextLabel
-var contenedor_mercado_botones: VBoxContainer
 var label_mercado_estado: Label
-var posicion_mercado_actual: String = "DC"
 var contenedor_libres_botones: VBoxContainer
 var label_libres_estado: Label
 var contenedor_prestamos_ceder_botones: VBoxContainer
@@ -730,37 +728,22 @@ func _refrescar_economia() -> void:
 
 
 ## Fase 9, extendido con mercado más profundo: mercado iniciado por el
-## jugador (Mercado.comprar_al_contado). Busca en TODA la pirámide y en el
-## plantel entero del rival —titulares, banco y cantera—, que es lo mismo
-## que puede hacer la IA (Mercado.ventana_entre_divisiones). Antes miraba
-## solo tu división y las dos vecinas, y solo los titulares: la joya que
-## la IA pesca de la academia de un club de décima el jugador ni la veía.
-## Lo que acota la lista es el filtro de división y el de puesto, no una
-## regla del juego.
-const POSICIONES_MERCADO := ["ARQ", "DFC", "LAT", "MC", "MCO", "EXT", "DC"]
-
-## -1 = todas las divisiones; 0..9 = una en particular. Arranca en -2
-## ("todavía no se eligió") porque el default es TU división, y cuál es eso
-## no se sabe hasta que hay partida cargada: con "Todas" por defecto la
-## lista ordenada por media mostraba quince cracks de primera impagables y
-## nada útil.
-var division_mercado_actual: int = -2
-var option_division_mercado: OptionButton
-
-
-## [{"equipo":Team, "division":int}, ...] — division es 1-indexada para
-## mostrarla en la UI.
-func _candidatos_mercado_por_division() -> Array:
-	var equipo := GameState.equipo_jugador
-	var candidatos := []
-	for d in range(GameState.piramide.divisiones.size()):
-		if division_mercado_actual != -1 and d != division_mercado_actual:
-			continue
-		for rival in GameState.piramide.divisiones[d].equipos:
-			if rival == equipo:
-				continue
-			candidatos.append({"equipo": rival, "division": d + 1})
-	return candidatos
+## §9.3 rework: el buscador del mercado. La logica de filtrar, tapar y
+## ordenar vive en core/busqueda_mercado.gd; aca solo se dibuja.
+##
+## De un jugador ajeno se ve el nombre y el puesto. Lo demas sale "?"
+## hasta que un investigador termine su informe (core/investigadores.gd).
+var filtros_mercado: Dictionary = BusquedaMercado.filtros_vacios()
+var resultados_mercado: Array = []
+var orden_mercado: String = "nombre"
+var orden_mercado_asc: bool = true
+var contenedor_mercado_tabla: GridContainer
+var label_mercado_resumen: Label
+var option_pos_mercado: OptionButton
+var option_div_mercado: OptionButton
+var spin_edad_min: SpinBox
+var spin_edad_max: SpinBox
+var spin_contrato: SpinBox
 
 
 func _construir_panel_mercado(padre: Control) -> void:
@@ -771,123 +754,191 @@ func _construir_panel_mercado(padre: Control) -> void:
 	paneles["mercado"] = panel
 
 	var titulo := Label.new()
-	titulo.text = "Mercado — cualquier jugador de cualquier club de la piramide"
+	titulo.text = "Mercado — de un jugador ajeno solo sabes el nombre y el puesto hasta investigarlo"
 	panel.add_child(titulo)
 
-	var fila_division := HBoxContainer.new()
-	panel.add_child(fila_division)
-	var et_division := Label.new()
-	et_division.text = "Division:"
-	fila_division.add_child(et_division)
-	option_division_mercado = OptionButton.new()
-	option_division_mercado.add_item("Todas")
-	for d in range(10):
-		option_division_mercado.add_item("Division %d" % (d + 1))
-	option_division_mercado.item_selected.connect(func(idx: int):
-		division_mercado_actual = idx - 1
-		_refrescar_mercado()
-	)
-	fila_division.add_child(option_division_mercado)
+	var filtros := HBoxContainer.new()
+	panel.add_child(filtros)
 
-	var barra_posiciones := HBoxContainer.new()
-	panel.add_child(barra_posiciones)
-	for pos in POSICIONES_MERCADO:
-		var btn := Button.new()
-		btn.text = pos
-		btn.pressed.connect(func():
-			posicion_mercado_actual = pos
-			_refrescar_mercado()
-		)
-		barra_posiciones.add_child(btn)
+	filtros.add_child(_etiqueta("Puesto:"))
+	option_pos_mercado = OptionButton.new()
+	option_pos_mercado.add_item("Cualquiera")
+	for pos in BusquedaMercado.POSICIONES:
+		option_pos_mercado.add_item(pos)
+	filtros.add_child(option_pos_mercado)
+
+	filtros.add_child(_etiqueta("Division:"))
+	option_div_mercado = OptionButton.new()
+	option_div_mercado.add_item("Cualquiera")
+	for d in range(10):
+		option_div_mercado.add_item("D%d" % (d + 1))
+	filtros.add_child(option_div_mercado)
+
+	filtros.add_child(_etiqueta("Edad:"))
+	spin_edad_min = _spin(0, 45, 0)
+	filtros.add_child(spin_edad_min)
+	filtros.add_child(_etiqueta("a"))
+	spin_edad_max = _spin(0, 45, 0)
+	filtros.add_child(spin_edad_max)
+
+	filtros.add_child(_etiqueta("Contrato hasta:"))
+	spin_contrato = _spin(0, 6, 0)
+	filtros.add_child(spin_contrato)
+
+	var btn_buscar := Button.new()
+	btn_buscar.text = "Buscar"
+	btn_buscar.custom_minimum_size = Vector2(110, 44)
+	btn_buscar.pressed.connect(_on_buscar_mercado)
+	filtros.add_child(btn_buscar)
 
 	label_mercado_estado = Label.new()
+	label_mercado_estado.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label_mercado_estado.text = ""
 	panel.add_child(label_mercado_estado)
+
+	label_mercado_resumen = Label.new()
+	label_mercado_resumen.text = "Ponele los filtros que quieras (todos opcionales) y toca Buscar."
+	panel.add_child(label_mercado_resumen)
 
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.add_child(scroll)
 
-	contenedor_mercado_botones = VBoxContainer.new()
-	contenedor_mercado_botones.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(contenedor_mercado_botones)
+	contenedor_mercado_tabla = GridContainer.new()
+	contenedor_mercado_tabla.columns = BusquedaMercado.COLUMNAS.size() + 3
+	contenedor_mercado_tabla.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(contenedor_mercado_tabla)
+
+
+func _etiqueta(texto: String) -> Label:
+	var l := Label.new()
+	l.text = texto
+	return l
+
+
+func _spin(minimo: int, maximo: int, valor: int) -> SpinBox:
+	var sb := SpinBox.new()
+	sb.min_value = minimo
+	sb.max_value = maximo
+	sb.value = valor
+	sb.custom_minimum_size = Vector2(70, 44)
+	return sb
+
+
+## 0 en un spin = "sin filtro", por eso se traduce a -1.
+func _on_buscar_mercado() -> void:
+	filtros_mercado = {
+		"posicion": "" if option_pos_mercado.selected <= 0 else option_pos_mercado.get_item_text(option_pos_mercado.selected),
+		"division": option_div_mercado.selected - 1,
+		"edad_min": -1 if int(spin_edad_min.value) == 0 else int(spin_edad_min.value),
+		"edad_max": -1 if int(spin_edad_max.value) == 0 else int(spin_edad_max.value),
+		"contrato_max": -1 if int(spin_contrato.value) == 0 else int(spin_contrato.value),
+	}
+	orden_mercado = "nombre"
+	orden_mercado_asc = true
+	var crudos := BusquedaMercado.buscar(GameState.piramide, GameState.equipo_jugador, filtros_mercado)
+	resultados_mercado = []
+	for entrada in crudos:
+		var f := BusquedaMercado.ficha(GameState.equipo_jugador, entrada)
+		f["equipo"] = entrada["equipo"]
+		resultados_mercado.append(f)
+	_refrescar_mercado()
+
+
+func _on_ordenar_mercado(clave: String) -> void:
+	if orden_mercado == clave:
+		orden_mercado_asc = not orden_mercado_asc
+	else:
+		orden_mercado = clave
+		orden_mercado_asc = true
+	_refrescar_mercado()
 
 
 func _refrescar_mercado() -> void:
-	for hijo in contenedor_mercado_botones.get_children():
+	if contenedor_mercado_tabla == null:
+		return
+	for hijo in contenedor_mercado_tabla.get_children():
 		hijo.queue_free()
 
 	var equipo := GameState.equipo_jugador
-	if division_mercado_actual == -2:
-		division_mercado_actual = GameState.division_jugador
-		if option_division_mercado != null:
-			option_division_mercado.selected = division_mercado_actual + 1
-	var mi_media_en_posicion := -1.0
-	for j in equipo.jugadores:
-		if j["posicion"] == posicion_mercado_actual and (mi_media_en_posicion < 0.0 or j["media"] < mi_media_en_posicion):
-			mi_media_en_posicion = j["media"]
-
-	var candidatos := []  # [{equipo, jugador, division, origen}]
-	for entrada in _candidatos_mercado_por_division():
-		var rival: Team = entrada["equipo"]
-		for j in rival.jugadores:
-			if j["posicion"] == posicion_mercado_actual:
-				candidatos.append({"equipo": rival, "jugador": j, "division": entrada["division"], "origen": "titular"})
-		for j in rival.banco:
-			if j["posicion"] == posicion_mercado_actual:
-				candidatos.append({"equipo": rival, "jugador": j, "division": entrada["division"], "origen": "banco"})
-		for j in rival.cantera:
-			if j["posicion"] == posicion_mercado_actual:
-				candidatos.append({"equipo": rival, "jugador": j, "division": entrada["division"], "origen": "cantera"})
-	candidatos.sort_custom(func(a, b): return a["jugador"]["media"] > b["jugador"]["media"])
-
-	var titulo_lista := Label.new()
-	var donde := "toda la piramide" if division_mercado_actual == -1 else "la division %d" % (division_mercado_actual + 1)
-	titulo_lista.text = "Tu titular mas debil en %s tiene media %.1f. %d candidatos en %s (presupuesto de fichajes: %s):" % [
-		posicion_mercado_actual, mi_media_en_posicion, candidatos.size(), donde,
+	var libres: int = Investigadores.libres(equipo).size()
+	label_mercado_resumen.text = "%d jugadores. Investigadores: %d de %d libres. Presupuesto de fichajes: %s." % [
+		resultados_mercado.size(), libres, equipo.investigadores.size(),
 		Economia.formato_dinero(equipo.caja["fichajes"])]
-	contenedor_mercado_botones.add_child(titulo_lista)
 
-	# 40 y no 15: la lista ahora sale de toda la piramide y de los tres
-	# origenes (titulares, banco y cantera), asi que quince filas se comian
-	# todo lo interesante que no fuera un titular de primera.
-	for i in range(min(40, candidatos.size())):
-		var candidato: Dictionary = candidatos[i]
-		var rival: Team = candidato["equipo"]
-		var jugador: Dictionary = candidato["jugador"]
+	if resultados_mercado.is_empty():
+		return
 
-		var fila := HBoxContainer.new()
-		var valor := ValorJugador.calcular(jugador, rival.animo.get(jugador["id"], 50.0), rival.contratos.get(jugador["id"], 1))
-		var clausula: float = rival.clausulas.get(jugador["id"], valor * Team.FACTOR_CLAUSULA)
-		var label := Label.new()
-		label.text = "%-22s  %-14s D%d  %-8s media %5.1f  pot %3d  ~%s  (clausula %s)" % [
-			_nombre_jugador(jugador), rival.nombre, candidato["division"], candidato["origen"],
-			jugador["media"], jugador["potencial"],
-			Economia.formato_dinero(valor), Economia.formato_dinero(clausula)
-		]
-		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		fila.add_child(label)
+	var fichas := BusquedaMercado.ordenar(resultados_mercado, orden_mercado, orden_mercado_asc)
 
-		var jugador_id: int = jugador["id"]
-
+	for col in BusquedaMercado.COLUMNAS:
 		var btn := Button.new()
-		btn.text = "Ofertar"
-		# La compra es al contado: no se resigna a nadie, asi que ya no
-		# tiene sentido exigir que el objetivo te mejore. Comprar un
-		# juvenil con proyeccion que hoy rinde menos que tu titular es una
-		# decision valida — es justo lo que hace la IA con las joyas.
-		btn.disabled = equipo.caja["fichajes"] < valor
-		btn.pressed.connect(func(): _on_ofertar(rival, jugador_id))
-		fila.add_child(btn)
+		var flecha := ""
+		if orden_mercado == col["clave"]:
+			flecha = " (asc)" if orden_mercado_asc else " (desc)"
+		btn.text = str(col["titulo"]) + flecha
+		var clave := str(col["clave"])
+		btn.pressed.connect(func(): _on_ordenar_mercado(clave))
+		contenedor_mercado_tabla.add_child(btn)
+	contenedor_mercado_tabla.add_child(_etiqueta("Club"))
+	contenedor_mercado_tabla.add_child(_etiqueta(""))
+	contenedor_mercado_tabla.add_child(_etiqueta(""))
 
-		var btn_clausula := Button.new()
-		btn_clausula.text = "Pagar clausula"
-		btn_clausula.disabled = equipo.caja["fichajes"] < clausula
-		btn_clausula.pressed.connect(func(): _on_pagar_clausula(rival, jugador_id))
-		fila.add_child(btn_clausula)
+	# Un tope: la piramide tiene ~3.600 jugadores y dibujarlos a todos
+	# cuelga la pantalla. Con los filtros y el orden, 60 alcanzan.
+	for i in range(min(60, fichas.size())):
+		_fila_mercado(fichas[i])
 
-		contenedor_mercado_botones.add_child(fila)
+
+func _fila_mercado(f: Dictionary) -> void:
+	var equipo := GameState.equipo_jugador
+
+	var btn_nombre := Button.new()
+	btn_nombre.text = str(f["nombre"])
+	btn_nombre.flat = true
+	btn_nombre.disabled = not bool(f["conocido"])
+	btn_nombre.tooltip_text = "Investigalo para ver su ficha." if not f["conocido"] else "Ver ficha"
+	contenedor_mercado_tabla.add_child(btn_nombre)
+
+	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["edad"] == null else str(f["edad"])))
+	contenedor_mercado_tabla.add_child(_etiqueta(str(f["posicion"])))
+	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["valor"] == null else Economia.formato_dinero(f["valor"])))
+	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["salario"] == null else Economia.formato_dinero(f["salario"])))
+	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["contrato"] == null else "%d anios" % int(f["contrato"])))
+	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["animo"] == null else "%d" % int(f["animo"])))
+	contenedor_mercado_tabla.add_child(_etiqueta("%s D%d" % [str(f["club"]), int(f["division"])]))
+
+	var vendedor: Team = f["equipo"]
+	var jugador_id := int(f["id"])
+
+	var btn_inv := Button.new()
+	if bool(f["conocido"]):
+		btn_inv.text = "Conocido"
+		btn_inv.disabled = true
+	elif float(f["progreso"]) >= 0.0:
+		btn_inv.text = "%d%%" % int(round(float(f["progreso"]) * 100.0))
+		btn_inv.disabled = true
+	else:
+		btn_inv.text = "Investigar"
+		btn_inv.disabled = Investigadores.libres(equipo).is_empty()
+		btn_inv.pressed.connect(func(): _on_investigar(vendedor, jugador_id))
+	contenedor_mercado_tabla.add_child(btn_inv)
+
+	var btn_comprar := Button.new()
+	btn_comprar.text = "Comprar"
+	btn_comprar.pressed.connect(func(): _on_ofertar(vendedor, jugador_id))
+	contenedor_mercado_tabla.add_child(btn_comprar)
+
+
+func _on_investigar(vendedor: Team, jugador_id: int) -> void:
+	var r := Investigadores.investigar(GameState.equipo_jugador, jugador_id, vendedor.nombre)
+	if r["exito"]:
+		label_mercado_estado.text = "Investigador de %d estrellas asignado: el informe tarda %d dias." % [
+			int(r["investigador"]["estrellas"]), int(round(float(r["dias_totales"])))]
+	else:
+		label_mercado_estado.text = "No se pudo: %s" % r["motivo"]
+	_on_buscar_mercado()
 
 
 func _on_pagar_clausula(vendedor: Team, jugador_id: int) -> void:
