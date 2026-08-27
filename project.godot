@@ -21,8 +21,16 @@ GameState="*res://game/game_state.gd"
 
 [display]
 
+; Resolucion de referencia: es la que se uso para disenar y capturar toda
+; la UI. Con stretch canvas_items + expand, en un celular la pantalla se
+; escala a esto y se gana o pierde a los costados segun la relacion de
+; aspecto real del telefono.
+window/size/viewport_width=1152
+window/size/viewport_height=648
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+; El juego es horizontal (GDD): en el celular se fuerza apaisado.
+window/handheld/orientation=1
 
 [physics]
 
@@ -30,6 +38,8 @@ window/stretch/aspect="expand"
 
 [rendering]
 
+; Requerido para exportar a Android: sin esto Godot rechaza el export.
+textures/vram_compression/import_etc2_astc=true
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
