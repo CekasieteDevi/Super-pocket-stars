@@ -510,7 +510,7 @@ func cerrar_fichaje(oferta_id: int, sueldo: float, anios: int, clausula: float) 
 	if not r["exito"]:
 		return r
 	equipo_jugador.clausulas[jugador_id] = clausula
-	equipo_jugador.conocimiento[jugador_id] = float(Investigadores.DIAS_VIGENCIA)
+	Investigadores.marcar_conocido(equipo_jugador, jugador_id)
 	oferta["estado"] = Ofertas.CERRADA
 	oferta["log"].append("Firmado: %d año(s) a %s, cláusula %s." % [
 		anios, Economia.formato_dinero(sueldo), Economia.formato_dinero(clausula)])
@@ -555,7 +555,7 @@ func pedir_prestamo(dueno: Team, jugador_id: int, duracion: String,
 		temporadas, porcentaje_sueldo, opcion_compra)
 	if not cierre["exito"]:
 		return cierre
-	equipo_jugador.conocimiento[jugador_id] = float(Investigadores.DIAS_VIGENCIA)
+	Investigadores.marcar_conocido(equipo_jugador, jugador_id)
 	_agregar_noticia("PRÉSTAMO: %s se lleva a un %s de %s por %s (fee %s)." % [
 		equipo_jugador.nombre, jugador["posicion"], dueno.nombre,
 		Prestamos.ETIQUETAS_DURACION.get(duracion, duracion),

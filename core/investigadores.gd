@@ -160,7 +160,7 @@ static func avanzar(equipo: Team, dias: int) -> Array:
 			continue
 		inv["dias"] = float(inv["dias"]) + float(dias)
 		if float(inv["dias"]) >= dias_de_informe(int(inv["estrellas"])):
-			equipo.conocimiento[objetivo] = float(DIAS_VIGENCIA)
+			marcar_conocido(equipo, objetivo)
 			terminados.append(objetivo)
 			inv["objetivo"] = -1
 			inv["club_objetivo"] = ""
@@ -184,6 +184,15 @@ static func progreso(equipo: Team, jugador_id: int) -> float:
 ## en avanzar(), asi que si esta en el diccionario, esta vigente.
 static func conoce(equipo: Team, jugador_id: int) -> bool:
 	return equipo.conocimiento.has(jugador_id)
+
+
+## Da por conocido a un jugador, con el plazo entero por delante. Existe
+## para que el formato de `conocimiento` (dias restantes, no un booleano)
+## viva en UN solo lugar: escribirlo a mano desde afuera es como se colo
+## el bug de `= true`, que con el descuento de avanzar() dejaba el
+## conocimiento en un dia y lo evaporaba en la primera semana.
+static func marcar_conocido(equipo: Team, jugador_id: int) -> void:
+	equipo.conocimiento[jugador_id] = float(DIAS_VIGENCIA)
 
 
 ## Cuantos dias le quedan de vigencia a un informe. -1 si no lo conoces.

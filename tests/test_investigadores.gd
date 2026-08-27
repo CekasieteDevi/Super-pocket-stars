@@ -98,7 +98,7 @@ func _test_guardado(rng: RandomNumberGenerator) -> void:
 	print("\n=== Investigadores y conocimiento sobreviven al guardado ===")
 	var e := Team.generar("Espia5", rng, 0)
 	var ajeno := Team.generar("Rival5", rng, 3000)
-	e.conocimiento[ajeno.jugadores[0]["id"]] = true
+	Investigadores.marcar_conocido(e, int(ajeno.jugadores[0]["id"]))
 	Investigadores.investigar(e, ajeno.jugadores[1]["id"], ajeno.nombre)
 	e.avanzar_dias(40)
 
