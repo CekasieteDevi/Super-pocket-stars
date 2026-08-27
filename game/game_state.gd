@@ -78,12 +78,30 @@ func _ready() -> void:
 	rng.seed = 99
 
 	piramide = Piramide.generar(rng)
+	_sembrar_presupuestos()
 	confederacion = Confederacion.generar(piramide, rng)
 	seleccion = Seleccion.new()
 	equipo_jugador = piramide.divisiones[DIVISION_INICIAL].equipos[0]
 	equipo_jugador.objetivo_temporada = Objetivos.generar(
 		equipo_jugador, _es_ultima_division(DIVISION_INICIAL), liga_jugador().equipos.size(), rng)
 	_armar_copas()
+
+
+## El presupuesto de la PRIMERA temporada. Sin esto todos los clubes
+## —incluido el tuyo— arrancan la partida con la caja en cero, porque los
+## presupuestos se reparten al CERRAR una temporada (Economia): en la
+## temporada 1 no habia con que fichar ni con que ofertar, y el mercado
+## entero estaba muerto hasta el segundo año.
+##
+## Se corre como si cada club hubiera terminado a mitad de tabla, que es
+## lo neutro: en esa posicion el ajuste de reputacion es cero, asi que
+## sembrar la caja no le mueve la reputacion a nadie.
+func _sembrar_presupuestos() -> void:
+	for d in range(piramide.divisiones.size()):
+		var liga: Liga = piramide.divisiones[d]
+		var medio: int = int(liga.equipos.size() / 2.0)
+		for equipo in liga.equipos:
+			Economia.procesar_temporada(equipo, medio, liga.equipos.size(), liga.division)
 
 
 ## Arma las copas de la temporada. Se llama al empezar cada una: los
@@ -161,6 +179,15 @@ func jugar_siguiente_fecha() -> void:
 func _avanzar_dias_todos(dias: int) -> void:
 	for liga in piramide.divisiones:
 		liga.avanzar_dias(dias)
+	# §9.3: las negociaciones corren con el calendario. Acá se resuelven
+	# las que esperaban respuesta del otro club y aparecen las ofertas
+	# nuevas por jugadores nuestros.
+	for oferta in Ofertas.avanzar(equipo_jugador, dias, piramide, rng, temporada_actual, division_jugador):
+		if not oferta["log"].is_empty():
+			_agregar_noticia("MERCADO: %s" % oferta["log"][-1])
+	for nueva in Ofertas.generar_entrantes(equipo_jugador, piramide, rng, dias, division_jugador):
+		_agregar_noticia("MERCADO: %s" % nueva["log"][-1])
+	Ofertas.archivar(equipo_jugador)
 
 
 func _toca_ronda_de_copa() -> bool:
@@ -361,53 +388,129 @@ func ofertar_por_jugador(vendedor: Team, jugador_objetivo_id: int) -> Dictionary
 	return resultado
 
 
-## §9.3 rework, tramo 1: le ofertas al CLUB. Si le ofreces una miseria te
-## veta por una temporada — ese es el castigo por no haber investigado.
-func ofertar_compra(vendedor: Team, jugador_id: int, monto: float) -> Dictionary:
+## §9.3 rework: mandar una oferta ya no se resuelve en el acto. Queda
+## abierta y el club se toma unos dias (ver core/ofertas.gd), asi que el
+## mercado pasa a ser algo que hay que administrar: mandas tres y esperas.
+func enviar_oferta(vendedor: Team, jugador_id: int, monto: float) -> Dictionary:
 	if Negociacion.bloqueado(vendedor, jugador_id, temporada_actual):
 		return {"exito": false, "motivo": "%s no te quiere escuchar por este jugador hasta la temporada que viene." % vendedor.nombre}
 	var donde := Mercado.ubicar(vendedor, jugador_id)
 	if donde.is_empty():
 		return {"exito": false, "motivo": "Ese jugador ya no está en ese club."}
+	for o in equipo_jugador.ofertas:
+		if int(o["jugador_id"]) == jugador_id and Ofertas.abierta(o):
+			return {"exito": false, "motivo": "Ya tenés una negociación abierta por él."}
 	if equipo_jugador.caja["fichajes"] < monto:
 		return {"exito": false, "motivo": "No te alcanza el presupuesto de Fichajes."}
 
-	var r := Negociacion.evaluar_oferta(vendedor, donde["jugador"], monto)
-	if r["insulto"]:
-		Negociacion.bloquear(vendedor, jugador_id, temporada_actual)
-		_agregar_noticia("MERCADO: %s se ofendió con la oferta de %s y cortó la negociación." % [
-			vendedor.nombre, equipo_jugador.nombre])
-		return {"exito": false, "insulto": true,
-			"motivo": "Se ofendieron. No te van a escuchar por este jugador hasta la temporada que viene."}
-	if not r["acepta"]:
-		return {"exito": false, "motivo": "Rechazaron la oferta. Piden más."}
-	return {"exito": true, "monto": monto}
+	var oferta := Ofertas.nueva(
+		equipo_jugador.siguiente_id_oferta, vendedor.nombre, donde["jugador"], monto, false, rng)
+	equipo_jugador.siguiente_id_oferta += 1
+	oferta["log"].append("Ofertaste %s a %s." % [Economia.formato_dinero(monto), vendedor.nombre])
+	equipo_jugador.ofertas.append(oferta)
+	return {"exito": true, "oferta": oferta}
 
 
-## §9.3 rework, tramo 2: el CLUB ya dijo que si, ahora falta el JUGADOR.
-## El sueldo que pide depende de cuanto baja de categoria (ver
-## Negociacion.sueldo_pretendido); si no lo investigaste, no sabes cuanto
-## cobra hoy y estas tirando al aire.
-func ofrecer_contrato(vendedor: Team, jugador_id: int, monto: float,
-		sueldo: float, anios: int) -> Dictionary:
+func _oferta_por_id(oferta_id: int) -> Dictionary:
+	for o in equipo_jugador.ofertas:
+		if int(o["id"]) == oferta_id:
+			return o
+	return {}
+
+
+## Responder a una negociacion que quedo de nuestro lado. `accion` es
+## "aceptar", "rechazar" o "contraofertar".
+##
+## Aceptar una oferta ENTRANTE no cierra nada: manda al comprador a hablar
+## de contrato con tu jugador, y eso puede salir mal. Aceptar una SALIENTE
+## (o sea, pagar lo que te contraofertaron) te deja en acuerdo de clubes y
+## el contrato lo arreglas vos.
+func responder_oferta(oferta_id: int, accion: String, monto: float = 0.0) -> Dictionary:
+	var oferta := _oferta_por_id(oferta_id)
+	if oferta.is_empty():
+		return {"exito": false, "motivo": "Esa negociación ya no existe."}
+	if str(oferta["estado"]) != Ofertas.PENDIENTE_NOSOTROS:
+		return {"exito": false, "motivo": "No es tu turno en esa negociación."}
+
+	match accion:
+		"rechazar":
+			Ofertas.rechazar(oferta)
+			return {"exito": true, "oferta": oferta}
+		"contraofertar":
+			if not bool(oferta["entrante"]) and equipo_jugador.caja["fichajes"] < monto:
+				return {"exito": false, "motivo": "No te alcanza el presupuesto de Fichajes."}
+			Ofertas.contraofertar(oferta, monto, rng)
+			return {"exito": true, "oferta": oferta}
+		"aceptar":
+			if bool(oferta["entrante"]):
+				Ofertas.aceptar_entrante(oferta, rng)
+				return {"exito": true, "oferta": oferta}
+			if equipo_jugador.caja["fichajes"] < float(oferta["monto"]):
+				return {"exito": false, "motivo": "No te alcanza el presupuesto de Fichajes."}
+			oferta["estado"] = Ofertas.ACUERDO_CLUB
+			oferta["log"].append("Aceptaste pagar %s." % Economia.formato_dinero(oferta["monto"]))
+			return {"exito": true, "oferta": oferta}
+	return {"exito": false, "motivo": "Acción desconocida."}
+
+
+## Ultimo tramo de una oferta NUESTRA ya acordada con el club: el contrato
+## con el jugador. La clausula es tuya: ponersela alta lo blinda contra
+## que te lo saquen, pero a el lo encierra y lo cobra (ver
+## Negociacion.PESO_CLAUSULA).
+func cerrar_fichaje(oferta_id: int, sueldo: float, anios: int, clausula: float) -> Dictionary:
+	var oferta := _oferta_por_id(oferta_id)
+	if oferta.is_empty() or str(oferta["estado"]) != Ofertas.ACUERDO_CLUB or bool(oferta["entrante"]):
+		return {"exito": false, "motivo": "Esa negociación no está para firmar."}
+	var vendedor := _club_por_nombre(str(oferta["club"]))
+	if vendedor == null:
+		return {"exito": false, "motivo": "Ese club ya no existe."}
+	var jugador_id := int(oferta["jugador_id"])
 	var donde := Mercado.ubicar(vendedor, jugador_id)
 	if donde.is_empty():
+		oferta["estado"] = Ofertas.RETIRADA
 		return {"exito": false, "motivo": "Ese jugador ya no está en ese club."}
 	var jugador: Dictionary = donde["jugador"]
-	var div_origen := _division_de(vendedor)
+
+	var normal: float = maxf(1.0, ValorJugador.calcular(
+		jugador, vendedor.animo.get(jugador_id, 50.0), 3) * Team.FACTOR_CLAUSULA)
 	var detalle := Negociacion.interes_jugador(
 		jugador, vendedor.animo.get(jugador_id, 50.0),
-		float(vendedor.sueldos.get(jugador_id, 0.0)), sueldo, div_origen, division_jugador)
+		float(vendedor.sueldos.get(jugador_id, 0.0)), sueldo,
+		_division_de(vendedor), division_jugador, clausula / normal)
 	if not detalle["acepta"]:
 		return {"exito": false, "motivo": Negociacion.motivo_rechazo(detalle), "detalle": detalle}
 
-	var r := Mercado.ejecutar_pase(equipo_jugador, vendedor, jugador_id, monto, sueldo, anios, rng)
-	if r["exito"]:
-		equipo_jugador.conocimiento[jugador_id] = true
-		_agregar_noticia("FICHAJE: %s se lleva a un %s de %s por %s (%d años, %s por temporada)." % [
-			equipo_jugador.nombre, r["posicion"], vendedor.nombre,
-			Economia.formato_dinero(monto), anios, Economia.formato_dinero(sueldo)])
+	var r := Mercado.ejecutar_pase(
+		equipo_jugador, vendedor, jugador_id, float(oferta["monto"]), sueldo, anios, rng)
+	if not r["exito"]:
+		return r
+	equipo_jugador.clausulas[jugador_id] = clausula
+	equipo_jugador.conocimiento[jugador_id] = true
+	oferta["estado"] = Ofertas.CERRADA
+	oferta["log"].append("Firmado: %d año(s) a %s, cláusula %s." % [
+		anios, Economia.formato_dinero(sueldo), Economia.formato_dinero(clausula)])
+	_agregar_noticia("FICHAJE: %s se lleva a un %s de %s por %s." % [
+		equipo_jugador.nombre, r["posicion"], vendedor.nombre,
+		Economia.formato_dinero(oferta["monto"])])
 	return r
+
+
+func _club_por_nombre(nombre: String) -> Team:
+	for liga in piramide.divisiones:
+		for e in liga.equipos:
+			if e.nombre == nombre:
+				return e
+	return null
+
+
+## Las negociaciones que estan de tu lado esperando respuesta, para que la
+## UI pueda avisar sin recorrer todo.
+func ofertas_para_responder() -> int:
+	var n := 0
+	for o in equipo_jugador.ofertas:
+		if str(o["estado"]) == Ofertas.PENDIENTE_NOSOTROS:
+			n += 1
+	return n
 
 
 ## En que division esta un club. -1 si no aparece (no deberia pasar).

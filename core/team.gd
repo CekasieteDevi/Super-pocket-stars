@@ -155,6 +155,13 @@ var conocimiento: Dictionary = {}
 ## ultima temporada del veto. Vive en el club VENDEDOR: es el que se
 ## ofendio con la oferta miserable (ver Negociacion.bloquear).
 var bloqueos_mercado: Dictionary = {}
+## §9.3: negociaciones abiertas, en las dos direcciones (ver
+## core/ofertas.gd). Solo las lleva el club del jugador humano — los de la
+## IA arreglan entre ellos de una.
+var ofertas: Array = []
+var siguiente_id_oferta: int = 0
+## Las que terminaron, para la pestaña Historial.
+var historial_mercado: Array = []
 
 var cantera: Array = []  # dicts de PlayerGenerator.generate, juveniles sin promover
 var siguiente_id_cantera: int = 0
@@ -265,6 +272,8 @@ func guardar() -> Dictionary:
 		"investigadores": investigadores, "siguiente_id_investigador": siguiente_id_investigador,
 		"conocimiento": _claves_a_texto(conocimiento),
 		"bloqueos_mercado": _claves_a_texto(bloqueos_mercado),
+		"ofertas": ofertas, "siguiente_id_oferta": siguiente_id_oferta,
+		"historial_mercado": historial_mercado,
 		"fatiga_acumulada": _claves_a_texto(fatiga_acumulada),
 		"animo": _claves_a_texto(animo),
 		"lesiones": _claves_a_texto(lesiones),
@@ -340,6 +349,15 @@ static func cargar(datos: Dictionary) -> Team:
 	t.siguiente_id_investigador = maxi(1, int(datos.get("siguiente_id_investigador", 0)))
 	t.conocimiento = _claves_a_entero(datos.get("conocimiento", {}))
 	t.bloqueos_mercado = _claves_a_entero(datos.get("bloqueos_mercado", {}))
+	t.ofertas = datos.get("ofertas", [])
+	for o in t.ofertas:
+		o["id"] = int(o["id"])
+		o["jugador_id"] = int(o["jugador_id"])
+		o["ronda"] = int(o["ronda"])
+		o["monto"] = float(o["monto"])
+		o["dias"] = float(o["dias"])
+	t.siguiente_id_oferta = int(datos.get("siguiente_id_oferta", 0))
+	t.historial_mercado = datos.get("historial_mercado", [])
 	t.capitan_id = datos["capitan_id"]
 	t.fatiga_acumulada = _claves_a_entero(datos["fatiga_acumulada"])
 	t.animo = _claves_a_entero(datos["animo"])

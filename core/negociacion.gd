@@ -16,6 +16,13 @@ extends RefCounted
 ## pedirá y cuánto cobra hoy. Si vas a ciegas, estás adivinando, y
 ## adivinar barato sale caro.
 
+## Cuánto se le perdona a una oferta que casi llega. Hace falta porque el
+## precio pedido NO es fijo: se recalcula al contestar, y en los días que
+## el club se toma para responder el ánimo del jugador derivó y la
+## tasación se movió. Sin esta tolerancia, ofertar exactamente la cifra
+## que te mostraron y que te la rechacen por unos pesos se siente roto.
+const TOLERANCIA_ACEPTACION := 0.98
+
 ## Debajo de esta fracción del precio pedido, la oferta ofende y el club
 ## te bloquea. Es el riesgo real de ofertar sin haber investigado.
 const FRACCION_INSULTO := 0.55
@@ -43,6 +50,13 @@ const TOPE_SUELDO_ABAJO := -0.5
 ## A partir de acá el jugador acepta.
 const UMBRAL_ACEPTA := 0.5
 
+## Cuanto le molesta al jugador una clausula alta. Ponersela por las
+## nubes lo blinda contra que te lo saquen, pero a el lo encierra, y lo
+## cobra: por cada vez que la clausula supera a la normal (valor x
+## Team.FACTOR_CLAUSULA), pierde estas ganas de firmar.
+const PESO_CLAUSULA := 0.12
+
+
 ## Un hincha del club no se quiere ir ni loco. Un mercenario va donde
 ## pagan: la plata le pesa el doble y la categoría casi nada.
 const PENALIZACION_HINCHA := 0.35
@@ -69,7 +83,7 @@ static func evaluar_oferta(vendedor: Team, jugador: Dictionary, monto: float) ->
 	var pedido := precio_pedido(vendedor, jugador)
 	if monto < pedido * FRACCION_INSULTO:
 		return {"acepta": false, "insulto": true, "pedido": pedido}
-	return {"acepta": monto >= pedido, "insulto": false, "pedido": pedido}
+	return {"acepta": monto >= pedido * TOLERANCIA_ACEPTACION, "insulto": false, "pedido": pedido}
 
 
 ## Lo que el jugador quiere cobrar en el club nuevo. Parte de lo que cobra
@@ -92,8 +106,11 @@ static func sueldo_pretendido(jugador: Dictionary, sueldo_actual: float,
 ## El ánimo hace de rendimiento: en este motor se mueve con los
 ## resultados y los goles (Team.actualizar_post_partido), así que un
 ## jugador que la está pasando mal es justamente el que se quiere ir.
+## `exceso_clausula` = cuantas veces la clausula ofrecida supera a la
+## normal. 1.0 = la de siempre, 3.0 = el triple.
 static func interes_jugador(jugador: Dictionary, animo: float, sueldo_actual: float,
-		sueldo_ofrecido: float, division_origen: int, division_destino: int) -> Dictionary:
+		sueldo_ofrecido: float, division_origen: int, division_destino: int,
+		exceso_clausula: float = 1.0) -> Dictionary:
 	var peso_division := PESO_DIVISION
 	var peso_sueldo := PESO_SUELDO
 	if Personalidad.tiene(jugador, "Mercenario"):
@@ -105,8 +122,10 @@ static func interes_jugador(jugador: Dictionary, animo: float, sueldo_actual: fl
 	var mejora: float = sueldo_ofrecido / maxf(1.0, sueldo_actual)
 	var por_sueldo: float = clampf((mejora - 1.0) * peso_sueldo, TOPE_SUELDO_ABAJO, TOPE_SUELDO_ARRIBA)
 	var por_rasgo: float = -PENALIZACION_HINCHA if Personalidad.tiene(jugador, "Hincha del club") else 0.0
+	var por_clausula: float = -maxf(0.0, exceso_clausula - 1.0) * PESO_CLAUSULA
 
-	var total: float = clampf(0.5 + por_division + por_animo + por_sueldo + por_rasgo, 0.0, 1.0)
+	var total: float = clampf(
+		0.5 + por_division + por_animo + por_sueldo + por_rasgo + por_clausula, 0.0, 1.0)
 	return {
 		"interes": total,
 		"acepta": total >= UMBRAL_ACEPTA,
@@ -114,6 +133,7 @@ static func interes_jugador(jugador: Dictionary, animo: float, sueldo_actual: fl
 		"por_animo": por_animo,
 		"por_sueldo": por_sueldo,
 		"por_rasgo": por_rasgo,
+		"por_clausula": por_clausula,
 	}
 
 
@@ -123,7 +143,7 @@ static func interes_jugador(jugador: Dictionary, animo: float, sueldo_actual: fl
 static func motivo_rechazo(detalle: Dictionary) -> String:
 	var peor := ""
 	var valor := 0.0
-	for clave in ["por_division", "por_animo", "por_sueldo", "por_rasgo"]:
+	for clave in ["por_division", "por_animo", "por_sueldo", "por_rasgo", "por_clausula"]:
 		var v: float = float(detalle[clave])
 		if v < valor:
 			valor = v
@@ -135,6 +155,8 @@ static func motivo_rechazo(detalle: Dictionary) -> String:
 			return "El sueldo que le ofrecés es peor que el que tiene."
 		"por_rasgo":
 			return "Es hincha del club y no se quiere ir."
+		"por_clausula":
+			return "La cláusula que le querés poner lo encierra. Bajala o pagale más."
 		_:
 			return "Está cómodo donde está: no le movés el amperímetro."
 
