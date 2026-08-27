@@ -62,8 +62,9 @@ static func contratar(equipo: Team, estrellas: int) -> Dictionary:
 	var inv := {
 		"id": equipo.siguiente_id_investigador,
 		"estrellas": clamp(estrellas, ESTRELLAS_MIN, ESTRELLAS_MAX),
-		"objetivo": -1,      # jugador_id que está investigando, -1 = libre
-		"club_objetivo": "", # de qué club es, para poder mostrarlo
+		"objetivo": -1,       # jugador_id que está investigando, -1 = libre
+		"club_objetivo": "",  # de qué club es, para poder mostrarlo
+		"nombre_objetivo": "",
 		"dias": 0.0,         # cuánto lleva investigando a este objetivo
 	}
 	equipo.siguiente_id_investigador += 1
@@ -92,7 +93,8 @@ static func libres(equipo: Team) -> Array:
 
 ## Le pone un objetivo al MEJOR investigador libre — al jugador no le
 ## interesa elegir cuál, le interesa cuánto tarda.
-static func investigar(equipo: Team, jugador_id: int, club_nombre: String) -> Dictionary:
+static func investigar(equipo: Team, jugador_id: int, club_nombre: String,
+		nombre_jugador: String = "") -> Dictionary:
 	if equipo.conocimiento.has(jugador_id):
 		return {"exito": false, "motivo": "Ya lo conocés."}
 	for inv in equipo.investigadores:
@@ -106,6 +108,7 @@ static func investigar(equipo: Team, jugador_id: int, club_nombre: String) -> Di
 		return {"exito": false, "motivo": "No tenés investigadores libres."}
 	mejor["objetivo"] = jugador_id
 	mejor["club_objetivo"] = club_nombre
+	mejor["nombre_objetivo"] = nombre_jugador
 	mejor["dias"] = 0.0
 	return {"exito": true, "investigador": mejor, "dias_totales": dias_de_informe(int(mejor["estrellas"]))}
 
@@ -116,6 +119,7 @@ static func cancelar(equipo: Team, investigador_id: int) -> bool:
 		if int(inv["id"]) == investigador_id:
 			inv["objetivo"] = -1
 			inv["club_objetivo"] = ""
+			inv["nombre_objetivo"] = ""
 			inv["dias"] = 0.0
 			return true
 	return false
@@ -137,6 +141,7 @@ static func avanzar(equipo: Team, dias: int) -> Array:
 			terminados.append(objetivo)
 			inv["objetivo"] = -1
 			inv["club_objetivo"] = ""
+			inv["nombre_objetivo"] = ""
 			inv["dias"] = 0.0
 	return terminados
 
