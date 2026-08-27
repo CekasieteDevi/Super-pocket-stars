@@ -321,12 +321,18 @@ static func cargar(datos: Dictionary) -> Team:
 	t.cantera = _normalizar_jugadores(datos["cantera"])
 	t.siguiente_id_cantera = datos["siguiente_id_cantera"]
 	t.investigadores = datos.get("investigadores", [])
+	# Migracion de partidas anteriores a §9.4: sin esto, un guardado viejo
+	# se quedaba con CERO investigadores y no podia investigar a nadie
+	# nunca mas — el boton quedaba gris para siempre. Se les da el mismo
+	# de 1 estrella con el que arranca un club nuevo.
+	if t.investigadores.is_empty():
+		t.investigadores = [{"id": 0, "estrellas": 1, "objetivo": -1, "club_objetivo": "", "dias": 0.0}]
 	for inv in t.investigadores:
 		inv["id"] = int(inv["id"])
 		inv["estrellas"] = int(inv["estrellas"])
 		inv["objetivo"] = int(inv["objetivo"])
 		inv["dias"] = float(inv["dias"])
-	t.siguiente_id_investigador = int(datos.get("siguiente_id_investigador", 0))
+	t.siguiente_id_investigador = maxi(1, int(datos.get("siguiente_id_investigador", 0)))
 	t.conocimiento = _claves_a_entero(datos.get("conocimiento", {}))
 	t.capitan_id = datos["capitan_id"]
 	t.fatiga_acumulada = _claves_a_entero(datos["fatiga_acumulada"])

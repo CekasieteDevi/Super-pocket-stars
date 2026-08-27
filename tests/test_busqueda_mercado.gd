@@ -18,6 +18,7 @@ func _init() -> void:
 	_test_la_niebla_tapa_todo_menos_nombre_y_puesto(piramide, mio)
 	_test_investigar_destapa(piramide, mio, rng)
 	_test_lo_desconocido_ordena_al_final(piramide, mio)
+	_test_las_habilidades_dormidas_no_se_ven()
 	quit()
 
 
@@ -154,3 +155,24 @@ func _test_lo_desconocido_ordena_al_final(piramide: Piramide, mio: Team) -> void
 		print("OK: los conocidos van primero y los tapados al final, ordene como ordene.")
 	else:
 		print("FALLA: primero=%s ultimo=%s" % [fichas[0]["valor"], fichas[-1]["valor"]])
+
+
+func _test_las_habilidades_dormidas_no_se_ven() -> void:
+	print("\n=== Una habilidad dormida no se le ve a un jugador ajeno ===")
+	# Encontrartela despues de comprarlo es la sorpresa que hace que valga
+	# la pena arriesgarse con un juvenil; verla de antemano la mataria.
+	var nivel := 2
+	var dormido := {"media": Habilidades.MEDIA_MINIMA[nivel] - 10.0,
+		"habilidad": {"nombre": "Cabeceador", "nivel": nivel}}
+	var despierto := {"media": Habilidades.MEDIA_MINIMA[nivel] + 10.0,
+		"habilidad": {"nombre": "Cabeceador", "nivel": nivel}}
+
+	var ajeno_dormido := BusquedaMercado.habilidad_visible(dormido, true)
+	var ajeno_despierto := BusquedaMercado.habilidad_visible(despierto, true)
+	var propio_dormido := BusquedaMercado.habilidad_visible(dormido, false)
+
+	if ajeno_dormido.is_empty() and not ajeno_despierto.is_empty() and not propio_dormido.is_empty():
+		print("OK: dormida invisible en un ajeno, visible en el propio, y la manifestada se ve siempre.")
+	else:
+		print("FALLA: ajeno dormido=%s, ajeno despierto=%s, propio dormido=%s" % [
+			ajeno_dormido, ajeno_despierto, propio_dormido])

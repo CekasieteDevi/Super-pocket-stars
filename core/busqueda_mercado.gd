@@ -124,3 +124,21 @@ static func ordenar(fichas: Array, clave: String, ascendente: bool) -> Array:
 		return va < vb if ascendente else va > vb
 	)
 	return conocidas + tapadas
+
+
+## Que habilidad se le VE a un jugador. `ajeno` = es de otro club.
+##
+## Una habilidad DORMIDA —la tiene, pero todavia no llego a la media que
+## la manifiesta (Habilidades.MEDIA_MINIMA)— no se muestra de un ajeno:
+## por fuera del club no hay forma de saber que esta ahi. Encontrartela
+## despues de comprarlo es la sorpresa que hace que valga la pena
+## arriesgarse con un juvenil, y verla de antemano la mataria.
+##
+## En tu propio plantel si se ve, dormida y todo: para eso lo tenes.
+static func habilidad_visible(jugador: Dictionary, ajeno: bool) -> Dictionary:
+	var h: Dictionary = jugador.get("habilidad", {})
+	if h.is_empty():
+		return {}
+	if not ajeno:
+		return h
+	return h if Habilidades.tiene_manifestada(jugador, str(h["nombre"])) else {}

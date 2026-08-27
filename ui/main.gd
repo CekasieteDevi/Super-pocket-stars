@@ -15,6 +15,11 @@ var paneles: Dictionary = {}  # nombre -> Control, para mostrar/ocultar en bloqu
 var lista_plantel: RichTextLabel
 var lista_ficha: RichTextLabel
 var ficha_jugador_id := -1
+## De que club es el jugador de la ficha. null = uno propio. Si es ajeno,
+## la ficha se dibuja en modo AJENO: sin lo que solo sabe un club de su
+## propia gente y sin las habilidades dormidas (ver _refrescar_ficha).
+var ficha_club: Team = null
+var boton_volver_ficha: Button
 var option_formacion: OptionButton
 var option_carga: OptionButton
 var option_foco: OptionButton
@@ -116,8 +121,10 @@ func _nombre_jugador(j: Dictionary) -> String:
 ## (bronce=★, plata=★★, oro=★★★) — atenuada entre parentesis si todavia
 ## no se manifesto (no llego a la media minima) para que se note que esta
 ## "dormida", no activa.
-func _tag_habilidad(j: Dictionary) -> String:
-	var h: Dictionary = j.get("habilidad", {})
+## `ajeno` = es un jugador de otro club, y ahi una habilidad DORMIDA no se
+## muestra — ver BusquedaMercado.habilidad_visible.
+func _tag_habilidad(j: Dictionary, ajeno: bool = false) -> String:
+	var h: Dictionary = BusquedaMercado.habilidad_visible(j, ajeno)
 	if h.is_empty():
 		return ""
 	var estrellas := "★".repeat(h.get("nivel", 1))
@@ -230,10 +237,15 @@ func _construir_panel_ficha(padre: Control) -> void:
 	padre.add_child(panel)
 	paneles["ficha"] = panel
 
-	var btn_volver := Button.new()
-	btn_volver.text = "< Volver al plantel"
-	btn_volver.pressed.connect(_mostrar_plantel)
-	panel.add_child(btn_volver)
+	boton_volver_ficha = Button.new()
+	boton_volver_ficha.text = "< Volver al plantel"
+	boton_volver_ficha.pressed.connect(func():
+		if ficha_club != null:
+			_mostrar_mercado()
+		else:
+			_mostrar_plantel()
+	)
+	panel.add_child(boton_volver_ficha)
 
 	lista_ficha = RichTextLabel.new()
 	lista_ficha.bbcode_enabled = true
@@ -242,8 +254,11 @@ func _construir_panel_ficha(padre: Control) -> void:
 	panel.add_child(lista_ficha)
 
 
-func _mostrar_ficha(jugador_id: int) -> void:
+## club = null para uno propio; el Team dueño si es ajeno (viene del
+## mercado, y solo se llega hasta aca con el informe terminado).
+func _mostrar_ficha(jugador_id: int, club: Team = null) -> void:
 	ficha_jugador_id = jugador_id
+	ficha_club = club
 	_ocultar_todos()
 	paneles["ficha"].visible = true
 	_refrescar_ficha()
@@ -276,14 +291,28 @@ func _barra_atributo(nombre: String, valor: int, techo: int) -> String:
 
 
 func _refrescar_ficha() -> void:
-	var equipo := GameState.equipo_jugador
+	var ajeno: bool = ficha_club != null
+	var equipo: Team = ficha_club if ajeno else GameState.equipo_jugador
+	boton_volver_ficha.text = "< Volver al mercado" if ajeno else "< Volver al plantel"
+
+	# De un ajeno solo se llega hasta aca con el informe terminado, pero se
+	# vuelve a chequear igual: la ficha se puede quedar abierta mientras
+	# pasa el tiempo y el jugador puede haber cambiado de club.
+	if ajeno and not Investigadores.conoce(GameState.equipo_jugador, ficha_jugador_id):
+		lista_ficha.text = "Todavia no lo investigaste."
+		return
+
+	# _buscar_jugador_por_id ya mira titulares, banco y cantera.
 	var j := _buscar_jugador_por_id(equipo, ficha_jugador_id)
 	if j.is_empty():
-		lista_ficha.text = "Ese jugador ya no esta en el plantel."
+		lista_ficha.text = "Ese jugador ya no esta en %s." % (equipo.nombre if ajeno else "el plantel")
 		return
 
 	var t := "[b]%s[/b]   %s, %d anos
 " % [_nombre_jugador(j), j["posicion"], j["edad"]]
+	if ajeno:
+		t += "[color=#8ecae6]%s[/color]
+" % equipo.nombre
 	t += "media %.1f   potencial %d   genetica %s
 " % [j["media"], j["potencial"], j["genetica_tier"]]
 	if j.get("mejor_posicion", j["posicion"]) != j["posicion"]:
@@ -301,16 +330,18 @@ func _refrescar_ficha() -> void:
 		t += "[color=#27ae60]%s[/color]  /  [color=#c0392b]%s[/color]
 " % [
 			p.get("positiva", "-"), p.get("negativa", "-")]
-	var tag := _tag_habilidad(j)
+	var tag := _tag_habilidad(j, ajeno)
 	if tag != "":
 		t += "habilidad:%s
 " % tag
 
-	# Estado: lo que cambia partido a partido.
 	t += "
 [b]Estado[/b]
 "
-	t += "  energia      %3d%%
+	if not ajeno:
+		# La energia es del partido en curso: de un jugador ajeno no se
+		# sabe, y ademas no significa nada fuera de su propio calendario.
+		t += "  energia      %3d%%
 " % int(round(equipo.resistencia_pct(j["id"]) * 100.0))
 	t += "  animo        %3d
 " % int(equipo.animo.get(j["id"], 50))
@@ -318,16 +349,21 @@ func _refrescar_ficha() -> void:
 		var les: Dictionary = equipo.lesiones[j["id"]]
 		t += "  [color=#c0392b]lesionado: %s, %d dias[/color]
 " % [les["tipo"], les["dias_restantes"]]
-	var susp: int = int(equipo.suspendidos.get(j["id"], 0))
-	if susp > 0:
-		t += "  [color=#c0392b]suspendido %d fecha(s)[/color]
+	if not ajeno:
+		var susp: int = int(equipo.suspendidos.get(j["id"], 0))
+		if susp > 0:
+			t += "  [color=#c0392b]suspendido %d fecha(s)[/color]
 " % susp
-	t += "  contrato     %d ano(s),  sueldo %s
+	t += "  contrato     %d año(s),  sueldo %s
 " % [
 		int(equipo.contratos.get(j["id"], 0)), Economia.formato_dinero(equipo.sueldos.get(j["id"], 0))]
 	if equipo.clausulas.has(j["id"]):
 		t += "  clausula     %s
 " % Economia.formato_dinero(equipo.clausulas[j["id"]])
+	if ajeno:
+		t += "  valor        %s
+" % Economia.formato_dinero(
+			ValorJugador.calcular(j, equipo.animo.get(j["id"], 50.0), equipo.contratos.get(j["id"], 3)))
 
 	# Atributos por grupo. El de arquero solo si es arquero: a un delantero
 	# no le sirve saber su `estirada`.
@@ -899,13 +935,17 @@ func _fila_mercado(f: Dictionary) -> void:
 	btn_nombre.flat = true
 	btn_nombre.disabled = not bool(f["conocido"])
 	btn_nombre.tooltip_text = "Investigalo para ver su ficha." if not f["conocido"] else "Ver ficha"
+	var club_de: Team = f["equipo"]
+	var id_de := int(f["id"])
+	if bool(f["conocido"]):
+		btn_nombre.pressed.connect(func(): _mostrar_ficha(id_de, club_de))
 	contenedor_mercado_tabla.add_child(btn_nombre)
 
 	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["edad"] == null else str(f["edad"])))
 	contenedor_mercado_tabla.add_child(_etiqueta(str(f["posicion"])))
 	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["valor"] == null else Economia.formato_dinero(f["valor"])))
 	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["salario"] == null else Economia.formato_dinero(f["salario"])))
-	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["contrato"] == null else "%d anios" % int(f["contrato"])))
+	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["contrato"] == null else "%d años" % int(f["contrato"])))
 	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["animo"] == null else "%d" % int(f["animo"])))
 	contenedor_mercado_tabla.add_child(_etiqueta("%s D%d" % [str(f["club"]), int(f["division"])]))
 
