@@ -906,6 +906,7 @@ func _mostrar_solapa_mercado(clave: String) -> void:
 	for k in solapas_mercado:
 		solapas_mercado[k].visible = (k == clave)
 	match clave:
+		"jugadores": _refrescar_mercado()
 		"enviadas": _refrescar_ofertas(contenedor_enviadas, false)
 		"recibidas": _refrescar_ofertas(contenedor_recibidas, true)
 		"historial": _refrescar_historial()
@@ -954,12 +955,13 @@ func _on_buscar_mercado() -> void:
 	}
 	orden_mercado = "nombre"
 	orden_mercado_asc = true
-	var crudos := BusquedaMercado.buscar(GameState.piramide, GameState.equipo_jugador, filtros_mercado)
-	resultados_mercado = []
-	for entrada in crudos:
-		var f := BusquedaMercado.ficha(GameState.equipo_jugador, entrada)
-		f["equipo"] = entrada["equipo"]
-		resultados_mercado.append(f)
+	# Se guardan las ENTRADAS, no las fichas: la ficha (y con ella el
+	# avance del informe, el valor y el animo) se recalcula en cada
+	# refresco. Cacheandola, el boton Investigar quedaba clavado en el
+	# porcentaje del momento en que apretaste Buscar y no se movia nunca
+	# aunque pasaran temporadas.
+	resultados_mercado = BusquedaMercado.buscar(
+		GameState.piramide, GameState.equipo_jugador, filtros_mercado)
 	_refrescar_mercado()
 
 
@@ -988,7 +990,12 @@ func _refrescar_mercado() -> void:
 	if resultados_mercado.is_empty():
 		return
 
-	var fichas := BusquedaMercado.ordenar(resultados_mercado, orden_mercado, orden_mercado_asc)
+	var fichas := []
+	for entrada in resultados_mercado:
+		var f := BusquedaMercado.ficha(GameState.equipo_jugador, entrada)
+		f["equipo"] = entrada["equipo"]
+		fichas.append(f)
+	fichas = BusquedaMercado.ordenar(fichas, orden_mercado, orden_mercado_asc)
 
 	for col in BusquedaMercado.COLUMNAS:
 		var btn := Button.new()
