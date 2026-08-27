@@ -372,3 +372,41 @@ static func _intentar_compra(piramide, division_compradora: int, comprador: Team
 		"a": comprador.nombre, "a_division": division_compradora + 1,
 		"valor": valor, "media": float(objetivo["media"]), "potencial": int(objetivo["potencial"]),
 	}
+
+
+## §9.3 rework: cierra un pase con los terminos que se PACTARON en la
+## negociacion (ver core/negociacion.gd), en vez de al valor de tabla.
+##
+## comprar_al_contado() sigue siendo la via de la IA y de la clausula, que
+## no negocian: pagan lo que dice la calculadora. Esta es la del jugador
+## humano, donde el precio lo pusiste vos y el sueldo lo acordaste con el
+## jugador.
+static func ejecutar_pase(comprador: Team, vendedor: Team, jugador_id: int, precio: float,
+		sueldo: float, anios: int, rng: RandomNumberGenerator) -> Dictionary:
+	var donde := ubicar(vendedor, jugador_id)
+	if donde.is_empty():
+		return {"exito": false, "motivo": "Ese jugador ya no está en ese club."}
+	if comprador.caja["fichajes"] < precio:
+		return {"exito": false, "motivo": "No te alcanza el presupuesto de Fichajes."}
+	var jugador: Dictionary = donde["jugador"]
+
+	if donde["origen"] == "cantera":
+		for i in range(vendedor.cantera.size()):
+			if int(vendedor.cantera[i]["id"]) == jugador_id:
+				vendedor.cantera.remove_at(i)
+				break
+		vendedor._limpiar_registro(jugador_id)
+	elif not vendedor.perder_jugador(jugador_id, rng):
+		return {"exito": false, "motivo": "Ese jugador ya no está en ese club."}
+
+	comprador.caja["fichajes"] -= precio
+	vendedor.caja["fichajes"] += precio
+	var saliente := comprador.incorporar(jugador, precio, anios)
+	# incorporar() registra el fichaje con el sueldo de tabla; acá se pisa
+	# con el que se acordó, que es el que el jugador acepto.
+	comprador.sueldos[jugador_id] = sueldo
+	comprador.contratos[jugador_id] = anios
+
+	return {"exito": true, "jugador": jugador, "posicion": jugador["posicion"],
+		"precio": precio, "sueldo": sueldo, "anios": anios,
+		"origen": donde["origen"], "jugador_sale": saliente}

@@ -108,6 +108,7 @@ func _ready() -> void:
 	_construir_panel_partida_guardado(contenedor)
 	_construir_panel_ficha(contenedor)
 	_construir_panel_formacion(contenedor)
+	_construir_dialogo_negociacion()
 
 	_mostrar_plantel()
 
@@ -966,9 +967,237 @@ func _fila_mercado(f: Dictionary) -> void:
 	contenedor_mercado_tabla.add_child(btn_inv)
 
 	var btn_comprar := Button.new()
-	btn_comprar.text = "Comprar"
-	btn_comprar.pressed.connect(func(): _on_ofertar(vendedor, jugador_id))
+	# §9.3: ahora se NEGOCIA. El veto por una oferta miserable se ve aca:
+	# el boton queda gris hasta la temporada que viene.
+	if Negociacion.bloqueado(vendedor, jugador_id, GameState.temporada_actual):
+		btn_comprar.text = "Vetado"
+		btn_comprar.disabled = true
+		btn_comprar.tooltip_text = "Te ofendieron con la ultima oferta. Vuelven a escucharte la temporada que viene."
+	else:
+		btn_comprar.text = "Comprar"
+		btn_comprar.pressed.connect(func(): _abrir_negociacion(vendedor, jugador_id))
 	contenedor_mercado_tabla.add_child(btn_comprar)
+
+
+## §9.3 rework: el modal de negociacion. Dos tramos, uno atras del otro:
+## primero el CLUB acepta la plata, despues el JUGADOR acepta el contrato.
+##
+## Toda la asimetria de informacion se ve aca: si lo investigaste, arriba
+## dice cuanto vale y cuanto cobra, y ofertas sabiendo. Si no, esos
+## renglones dicen "?" y el numero lo estas inventando — y ofertar muy
+## abajo no te deja negociar de nuevo, te veta la temporada.
+var dialogo_negociacion: AcceptDialog
+var negociacion_vendedor: Team = null
+var negociacion_jugador_id: int = -1
+var negociacion_monto: float = 0.0
+var negociacion_paso: String = "oferta"  # "oferta" o "contrato"
+var label_negociacion_datos: Label
+var label_negociacion_estado: RichTextLabel
+var caja_negociacion_oferta: VBoxContainer
+var caja_negociacion_contrato: VBoxContainer
+var spin_negociacion_monto: SpinBox
+var spin_negociacion_sueldo: SpinBox
+var spin_negociacion_anios: SpinBox
+var boton_negociacion_accion: Button
+var boton_negociacion_clausula: Button
+
+
+func _construir_dialogo_negociacion() -> void:
+	dialogo_negociacion = AcceptDialog.new()
+	dialogo_negociacion.title = "Negociacion"
+	dialogo_negociacion.ok_button_text = "Cerrar"
+	dialogo_negociacion.min_size = Vector2(620, 420)
+	add_child(dialogo_negociacion)
+
+	var caja := VBoxContainer.new()
+	caja.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dialogo_negociacion.add_child(caja)
+
+	label_negociacion_datos = Label.new()
+	label_negociacion_datos.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	caja.add_child(label_negociacion_datos)
+
+	caja_negociacion_oferta = VBoxContainer.new()
+	caja.add_child(caja_negociacion_oferta)
+	var fila_monto := HBoxContainer.new()
+	caja_negociacion_oferta.add_child(fila_monto)
+	fila_monto.add_child(_etiqueta("Oferta al club:"))
+	spin_negociacion_monto = SpinBox.new()
+	spin_negociacion_monto.min_value = 0
+	spin_negociacion_monto.max_value = 1000000000
+	spin_negociacion_monto.step = 1000
+	spin_negociacion_monto.custom_minimum_size = Vector2(200, 44)
+	fila_monto.add_child(spin_negociacion_monto)
+
+	caja_negociacion_contrato = VBoxContainer.new()
+	caja_negociacion_contrato.visible = false
+	caja.add_child(caja_negociacion_contrato)
+	var fila_sueldo := HBoxContainer.new()
+	caja_negociacion_contrato.add_child(fila_sueldo)
+	fila_sueldo.add_child(_etiqueta("Sueldo por temporada:"))
+	spin_negociacion_sueldo = SpinBox.new()
+	spin_negociacion_sueldo.min_value = 0
+	spin_negociacion_sueldo.max_value = 500000000
+	spin_negociacion_sueldo.step = 500
+	spin_negociacion_sueldo.custom_minimum_size = Vector2(200, 44)
+	fila_sueldo.add_child(spin_negociacion_sueldo)
+	var fila_anios := HBoxContainer.new()
+	caja_negociacion_contrato.add_child(fila_anios)
+	fila_anios.add_child(_etiqueta("Años de contrato:"))
+	spin_negociacion_anios = SpinBox.new()
+	spin_negociacion_anios.min_value = 1
+	spin_negociacion_anios.max_value = 5
+	spin_negociacion_anios.value = 3
+	spin_negociacion_anios.custom_minimum_size = Vector2(90, 44)
+	fila_anios.add_child(spin_negociacion_anios)
+
+	var fila_botones := HBoxContainer.new()
+	caja.add_child(fila_botones)
+
+	boton_negociacion_accion = Button.new()
+	boton_negociacion_accion.custom_minimum_size = Vector2(200, 48)
+	boton_negociacion_accion.pressed.connect(_on_negociacion_accion)
+	fila_botones.add_child(boton_negociacion_accion)
+
+	# La clausula es el atajo para el que no quiere negociar: se paga de
+	# mas pero la venta es obligatoria, sin resistencia y sin que el club
+	# pueda ofenderse. Solo aparece si lo investigaste — si no, no sabes
+	# cuanto es.
+	boton_negociacion_clausula = Button.new()
+	boton_negociacion_clausula.custom_minimum_size = Vector2(240, 48)
+	boton_negociacion_clausula.pressed.connect(_on_negociacion_clausula)
+	fila_botones.add_child(boton_negociacion_clausula)
+
+	label_negociacion_estado = RichTextLabel.new()
+	label_negociacion_estado.bbcode_enabled = true
+	label_negociacion_estado.fit_content = true
+	label_negociacion_estado.custom_minimum_size = Vector2(0, 120)
+	caja.add_child(label_negociacion_estado)
+
+
+func _abrir_negociacion(vendedor: Team, jugador_id: int) -> void:
+	negociacion_vendedor = vendedor
+	negociacion_jugador_id = jugador_id
+	negociacion_paso = "oferta"
+	negociacion_monto = 0.0
+
+	var donde := Mercado.ubicar(vendedor, jugador_id)
+	if donde.is_empty():
+		label_mercado_estado.text = "Ese jugador ya no esta en ese club."
+		return
+	var jugador: Dictionary = donde["jugador"]
+	var conocido := Investigadores.conoce(GameState.equipo_jugador, jugador_id)
+
+	var t := "%s (%s) — %s\n" % [_nombre_jugador(jugador), jugador["posicion"], vendedor.nombre]
+	if conocido:
+		var valor := ValorJugador.calcular(
+			jugador, vendedor.animo.get(jugador_id, 50.0), vendedor.contratos.get(jugador_id, 3))
+		# Lo que PIDEN, no solo lo que vale: el club suma lo que le duele
+		# soltarlo. Precargar el valor a secas hacia que la oferta por
+		# defecto se rechazara SIEMPRE, que es una trampa y no un desafio
+		# — y saber cuanto piden es justamente para lo que investigaste.
+		var pedido := Negociacion.precio_pedido(vendedor, jugador)
+		t += "Vale %s y piden alrededor de %s.\n" % [
+			Economia.formato_dinero(valor), Economia.formato_dinero(pedido)]
+		t += "Hoy cobra %s y le quedan %d año(s).\n" % [
+			Economia.formato_dinero(vendedor.sueldos.get(jugador_id, 0.0)),
+			int(vendedor.contratos.get(jugador_id, 0))]
+		# Redondeo hacia ARRIBA: el paso del control es de 1.000 y hacia
+		# abajo dejaba la oferta un peso corta del pedido.
+		spin_negociacion_monto.value = ceil(pedido / spin_negociacion_monto.step) * spin_negociacion_monto.step
+	else:
+		t += "NO lo investigaste: no sabes lo que vale ni lo que cobra.\n"
+		t += "Ofertar muy por debajo te deja sin negociacion por una temporada.\n"
+		spin_negociacion_monto.value = 0
+	t += "Tu presupuesto de fichajes: %s." % Economia.formato_dinero(GameState.equipo_jugador.caja["fichajes"])
+	label_negociacion_datos.text = t
+
+	caja_negociacion_oferta.visible = true
+	caja_negociacion_contrato.visible = false
+	boton_negociacion_accion.text = "Ofertar"
+	boton_negociacion_accion.disabled = false
+	if conocido:
+		var clausula: float = vendedor.clausulas.get(jugador_id, 0.0)
+		boton_negociacion_clausula.visible = clausula > 0.0
+		boton_negociacion_clausula.text = "Pagar clausula (%s)" % Economia.formato_dinero(clausula)
+		boton_negociacion_clausula.disabled = GameState.equipo_jugador.caja["fichajes"] < clausula
+	else:
+		boton_negociacion_clausula.visible = false
+	label_negociacion_estado.text = ""
+	dialogo_negociacion.popup_centered()
+
+
+func _on_negociacion_accion() -> void:
+	if negociacion_vendedor == null:
+		return
+	if negociacion_paso == "oferta":
+		_paso_oferta()
+	else:
+		_paso_contrato()
+
+
+func _paso_oferta() -> void:
+	var monto := float(spin_negociacion_monto.value)
+	var r := GameState.ofertar_compra(negociacion_vendedor, negociacion_jugador_id, monto)
+	if not r["exito"]:
+		var color := "#c0392b" if r.get("insulto", false) else "#d4a017"
+		label_negociacion_estado.text = "[color=%s]%s[/color]" % [color, r["motivo"]]
+		if r.get("insulto", false):
+			boton_negociacion_accion.disabled = true
+			_on_buscar_mercado()
+		return
+
+	negociacion_monto = monto
+	negociacion_paso = "contrato"
+	caja_negociacion_oferta.visible = false
+	caja_negociacion_contrato.visible = true
+	boton_negociacion_accion.text = "Ofrecer contrato"
+
+	# Lo que pretende cobrar solo se sabe si lo investigaste; si no, el
+	# numero de arranque es el sueldo que pagarias por uno de tu propio
+	# nivel, que es una referencia mala a proposito.
+	var donde := Mercado.ubicar(negociacion_vendedor, negociacion_jugador_id)
+	var jugador: Dictionary = donde["jugador"]
+	var conocido := Investigadores.conoce(GameState.equipo_jugador, negociacion_jugador_id)
+	if conocido:
+		var pretende := Negociacion.sueldo_pretendido(
+			jugador, float(negociacion_vendedor.sueldos.get(negociacion_jugador_id, 0.0)),
+			GameState._division_de(negociacion_vendedor), GameState.division_jugador)
+		spin_negociacion_sueldo.value = pretende
+		label_negociacion_estado.text = "[color=#27ae60]Aceptaron los %s.[/color] Ahora hay que convencerlo a el: pretende alrededor de %s." % [
+			Economia.formato_dinero(negociacion_monto), Economia.formato_dinero(pretende)]
+	else:
+		spin_negociacion_sueldo.value = Economia.sueldo_sugerido(
+			ValorJugador.base_salarial(jugador, 50.0, 3))
+		label_negociacion_estado.text = "[color=#27ae60]Aceptaron los %s.[/color] Ahora hay que convencerlo a el, y no sabes cuanto pretende." % Economia.formato_dinero(negociacion_monto)
+
+
+## La clausula salta los DOS tramos: no hay que convencer al club (es
+## obligatoria) ni al jugador (la clausula es suya, si la pagan se va).
+func _on_negociacion_clausula() -> void:
+	var r := GameState.pagar_clausula(negociacion_vendedor, negociacion_jugador_id)
+	if not r["exito"]:
+		label_negociacion_estado.text = "[color=#d4a017]%s[/color]" % r["motivo"]
+		return
+	label_negociacion_estado.text = "[color=#27ae60]Clausula pagada: %s es tuyo por %s.[/color]" % [
+		_nombre_jugador(r["jugador"]), Economia.formato_dinero(r["precio"])]
+	boton_negociacion_accion.disabled = true
+	boton_negociacion_clausula.disabled = true
+	_on_buscar_mercado()
+
+
+func _paso_contrato() -> void:
+	var r := GameState.ofrecer_contrato(
+		negociacion_vendedor, negociacion_jugador_id, negociacion_monto,
+		float(spin_negociacion_sueldo.value), int(spin_negociacion_anios.value))
+	if not r["exito"]:
+		label_negociacion_estado.text = "[color=#d4a017]%s[/color]" % r["motivo"]
+		return
+	label_negociacion_estado.text = "[color=#27ae60]Cerrado. %s es tuyo por %s, %d año(s) a %s por temporada.[/color]" % [
+		_nombre_jugador(r["jugador"]), Economia.formato_dinero(r["precio"]),
+		int(r["anios"]), Economia.formato_dinero(r["sueldo"])]
+	boton_negociacion_accion.disabled = true
+	_on_buscar_mercado()
 
 
 func _on_investigar(vendedor: Team, jugador_id: int) -> void:
@@ -995,22 +1224,6 @@ func _on_pagar_clausula(vendedor: Team, jugador_id: int) -> void:
 	_refrescar_economia()
 
 
-func _on_ofertar(vendedor: Team, jugador_id: int) -> void:
-	var resultado := GameState.ofertar_por_jugador(vendedor, jugador_id)
-	if resultado["exito"]:
-		label_mercado_estado.text = "Fichaje concretado: entra un %s, sale un %s, diferencia pagada %s." % [
-			resultado["jugador_entra"]["posicion"], resultado["jugador_sale"]["posicion"], Economia.formato_dinero(resultado["diferencia"])
-		]
-	else:
-		label_mercado_estado.text = "No se pudo: %s" % resultado["motivo"]
-
-	_refrescar_mercado()
-	_refrescar_plantel()
-	_refrescar_economia()
-
-
-## Agentes libres (§9.3 extendido): pool de tu división, sin fee de
-## transferencia, ver core/agentes_libres.gd.
 func _construir_panel_libres(padre: Control) -> void:
 	var panel := VBoxContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

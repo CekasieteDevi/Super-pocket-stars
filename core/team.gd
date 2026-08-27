@@ -151,6 +151,10 @@ var siguiente_id_investigador: int = 0
 ## jugador_id -> true de los jugadores AJENOS que ya investigamos. Los
 ## propios se conocen siempre, no hace falta anotarlos.
 var conocimiento: Dictionary = {}
+## §9.3: a quien le cerre la puerta y hasta cuando. jugador_id ->
+## ultima temporada del veto. Vive en el club VENDEDOR: es el que se
+## ofendio con la oferta miserable (ver Negociacion.bloquear).
+var bloqueos_mercado: Dictionary = {}
 
 var cantera: Array = []  # dicts de PlayerGenerator.generate, juveniles sin promover
 var siguiente_id_cantera: int = 0
@@ -260,6 +264,7 @@ func guardar() -> Dictionary:
 		"siguiente_id_cantera": siguiente_id_cantera, "capitan_id": capitan_id,
 		"investigadores": investigadores, "siguiente_id_investigador": siguiente_id_investigador,
 		"conocimiento": _claves_a_texto(conocimiento),
+		"bloqueos_mercado": _claves_a_texto(bloqueos_mercado),
 		"fatiga_acumulada": _claves_a_texto(fatiga_acumulada),
 		"animo": _claves_a_texto(animo),
 		"lesiones": _claves_a_texto(lesiones),
@@ -334,6 +339,7 @@ static func cargar(datos: Dictionary) -> Team:
 		inv["dias"] = float(inv["dias"])
 	t.siguiente_id_investigador = maxi(1, int(datos.get("siguiente_id_investigador", 0)))
 	t.conocimiento = _claves_a_entero(datos.get("conocimiento", {}))
+	t.bloqueos_mercado = _claves_a_entero(datos.get("bloqueos_mercado", {}))
 	t.capitan_id = datos["capitan_id"]
 	t.fatiga_acumulada = _claves_a_entero(datos["fatiga_acumulada"])
 	t.animo = _claves_a_entero(datos["animo"])

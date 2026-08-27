@@ -361,6 +361,63 @@ func ofertar_por_jugador(vendedor: Team, jugador_objetivo_id: int) -> Dictionary
 	return resultado
 
 
+## §9.3 rework, tramo 1: le ofertas al CLUB. Si le ofreces una miseria te
+## veta por una temporada — ese es el castigo por no haber investigado.
+func ofertar_compra(vendedor: Team, jugador_id: int, monto: float) -> Dictionary:
+	if Negociacion.bloqueado(vendedor, jugador_id, temporada_actual):
+		return {"exito": false, "motivo": "%s no te quiere escuchar por este jugador hasta la temporada que viene." % vendedor.nombre}
+	var donde := Mercado.ubicar(vendedor, jugador_id)
+	if donde.is_empty():
+		return {"exito": false, "motivo": "Ese jugador ya no está en ese club."}
+	if equipo_jugador.caja["fichajes"] < monto:
+		return {"exito": false, "motivo": "No te alcanza el presupuesto de Fichajes."}
+
+	var r := Negociacion.evaluar_oferta(vendedor, donde["jugador"], monto)
+	if r["insulto"]:
+		Negociacion.bloquear(vendedor, jugador_id, temporada_actual)
+		_agregar_noticia("MERCADO: %s se ofendió con la oferta de %s y cortó la negociación." % [
+			vendedor.nombre, equipo_jugador.nombre])
+		return {"exito": false, "insulto": true,
+			"motivo": "Se ofendieron. No te van a escuchar por este jugador hasta la temporada que viene."}
+	if not r["acepta"]:
+		return {"exito": false, "motivo": "Rechazaron la oferta. Piden más."}
+	return {"exito": true, "monto": monto}
+
+
+## §9.3 rework, tramo 2: el CLUB ya dijo que si, ahora falta el JUGADOR.
+## El sueldo que pide depende de cuanto baja de categoria (ver
+## Negociacion.sueldo_pretendido); si no lo investigaste, no sabes cuanto
+## cobra hoy y estas tirando al aire.
+func ofrecer_contrato(vendedor: Team, jugador_id: int, monto: float,
+		sueldo: float, anios: int) -> Dictionary:
+	var donde := Mercado.ubicar(vendedor, jugador_id)
+	if donde.is_empty():
+		return {"exito": false, "motivo": "Ese jugador ya no está en ese club."}
+	var jugador: Dictionary = donde["jugador"]
+	var div_origen := _division_de(vendedor)
+	var detalle := Negociacion.interes_jugador(
+		jugador, vendedor.animo.get(jugador_id, 50.0),
+		float(vendedor.sueldos.get(jugador_id, 0.0)), sueldo, div_origen, division_jugador)
+	if not detalle["acepta"]:
+		return {"exito": false, "motivo": Negociacion.motivo_rechazo(detalle), "detalle": detalle}
+
+	var r := Mercado.ejecutar_pase(equipo_jugador, vendedor, jugador_id, monto, sueldo, anios, rng)
+	if r["exito"]:
+		equipo_jugador.conocimiento[jugador_id] = true
+		_agregar_noticia("FICHAJE: %s se lleva a un %s de %s por %s (%d años, %s por temporada)." % [
+			equipo_jugador.nombre, r["posicion"], vendedor.nombre,
+			Economia.formato_dinero(monto), anios, Economia.formato_dinero(sueldo)])
+	return r
+
+
+## En que division esta un club. -1 si no aparece (no deberia pasar).
+func _division_de(club: Team) -> int:
+	for d in range(piramide.divisiones.size()):
+		if piramide.divisiones[d].equipos.has(club):
+			return d
+	return division_jugador
+
+
 ## Fuerza la venta pagando la cláusula de rescisión completa — sin la
 ## resistencia que puede rechazar una oferta común (Mercado.pagar_clausula).
 func pagar_clausula(vendedor: Team, jugador_objetivo_id: int) -> Dictionary:
