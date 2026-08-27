@@ -143,6 +143,15 @@ var scouts: Array = []  # [{"nivel":int}], §9.4 — empieza con 1 al mínimo (�
 var instalaciones: Dictionary = {}  # categoria -> nivel 1-5 (§9.5), ver core/instalaciones.gd
 
 ## Fase 9: cantera (§17).
+## §9.4 rework: la red de espionaje. Ver core/investigadores.gd — de un
+## jugador ajeno solo se sabe el nombre y el puesto hasta que uno de estos
+## termina su informe.
+var investigadores: Array = []  # dicts {id, estrellas, objetivo, club_objetivo, dias}
+var siguiente_id_investigador: int = 0
+## jugador_id -> true de los jugadores AJENOS que ya investigamos. Los
+## propios se conocen siempre, no hace falta anotarlos.
+var conocimiento: Dictionary = {}
+
 var cantera: Array = []  # dicts de PlayerGenerator.generate, juveniles sin promover
 var siguiente_id_cantera: int = 0
 
@@ -199,6 +208,11 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 	t.reputacion = clamp(t.media_equipo(), 20.0, 80.0)
 	t.calidad_cancha = EstadoCancha.generar(t.reputacion, rng)
 	t.scouts = [{"nivel": 1}]
+	# §9.4: todo club arranca con un investigador de 1 estrella. Tarda
+	# media temporada por informe, que es justo lo bastante lento como para
+	# que quieras otro mejor.
+	t.investigadores = [{"id": 0, "estrellas": 1, "objetivo": -1, "club_objetivo": "", "dias": 0.0}]
+	t.siguiente_id_investigador = 1
 	t.instalaciones = Instalaciones.nivel_inicial()
 	for categoria in Economia.CATEGORIAS_CAJA:
 		t.caja[categoria] = 0.0
@@ -244,6 +258,8 @@ func guardar() -> Dictionary:
 		"foco_equipo": foco_equipo, "foco_semanas": foco_semanas,
 		"jugadores": jugadores, "banco": banco, "cantera": cantera,
 		"siguiente_id_cantera": siguiente_id_cantera, "capitan_id": capitan_id,
+		"investigadores": investigadores, "siguiente_id_investigador": siguiente_id_investigador,
+		"conocimiento": _claves_a_texto(conocimiento),
 		"fatiga_acumulada": _claves_a_texto(fatiga_acumulada),
 		"animo": _claves_a_texto(animo),
 		"lesiones": _claves_a_texto(lesiones),
@@ -304,6 +320,14 @@ static func cargar(datos: Dictionary) -> Team:
 	t.banco = _normalizar_jugadores(datos["banco"])
 	t.cantera = _normalizar_jugadores(datos["cantera"])
 	t.siguiente_id_cantera = datos["siguiente_id_cantera"]
+	t.investigadores = datos.get("investigadores", [])
+	for inv in t.investigadores:
+		inv["id"] = int(inv["id"])
+		inv["estrellas"] = int(inv["estrellas"])
+		inv["objetivo"] = int(inv["objetivo"])
+		inv["dias"] = float(inv["dias"])
+	t.siguiente_id_investigador = int(datos.get("siguiente_id_investigador", 0))
+	t.conocimiento = _claves_a_entero(datos.get("conocimiento", {}))
 	t.capitan_id = datos["capitan_id"]
 	t.fatiga_acumulada = _claves_a_entero(datos["fatiga_acumulada"])
 	t.animo = _claves_a_entero(datos["animo"])
@@ -843,6 +867,12 @@ func actualizar_post_partido(goles_propios: int, goles_rival: int, goleadores_id
 
 ## Avanza el calendario entre fechas: recupera fatiga, hace derivar el ánimo
 ## hacia 50 y cuenta los días de lesión. Devuelve los ids que se recuperaron.
+## Se llena en cada avanzar_dias() con los informes de scouting que se
+## completaron ese tramo, para que la UI pueda avisar sin tener que
+## comparar diccionarios ella misma.
+var informes_terminados: Array = []
+
+
 func avanzar_dias(dias: int) -> Array:
 	for j in todos_los_jugadores():
 		var id: int = j["id"]
@@ -859,6 +889,9 @@ func avanzar_dias(dias: int) -> Array:
 	carga_semanas += float(dias) / 7.0
 	# §7.4.2: lo mismo para el area que se esta practicando.
 	foco_semanas[foco_equipo] = float(foco_semanas.get(foco_equipo, 0.0)) + float(dias) / 7.0
+	# §9.4: los informes corren con el calendario, no con las fechas
+	# jugadas — una semana de dos partidos no acelera un scouteo.
+	informes_terminados = Investigadores.avanzar(self, dias)
 
 	var recuperados := []
 	for id in lesiones.keys():
