@@ -27,6 +27,7 @@ const COLUMNAS := [
 	{"clave": "nombre", "titulo": "Nombre", "oculta": false},
 	{"clave": "edad", "titulo": "Edad", "oculta": false},
 	{"clave": "posicion", "titulo": "Pos", "oculta": false},
+	{"clave": "media", "titulo": "Media", "oculta": true},
 	{"clave": "valor", "titulo": "Valor", "oculta": true},
 	{"clave": "salario", "titulo": "Salario", "oculta": true},
 	{"clave": "contrato", "titulo": "Contrato", "oculta": true},
@@ -95,6 +96,7 @@ static func ficha(equipo_propio: Team, entrada: Dictionary) -> Dictionary:
 		"progreso": Investigadores.progreso(equipo_propio, id),
 	}
 	if not f["conocido"]:
+		f["media"] = null
 		f["valor"] = null
 		f["salario"] = null
 		f["contrato"] = null
@@ -102,6 +104,7 @@ static func ficha(equipo_propio: Team, entrada: Dictionary) -> Dictionary:
 		return f
 	var animo: float = float(club.animo.get(id, 50.0))
 	var contrato := int(club.contratos.get(id, 3))
+	f["media"] = float(j["media"])
 	f["valor"] = ValorJugador.calcular(j, animo, contrato)
 	f["salario"] = float(club.sueldos.get(id, 0.0))
 	f["contrato"] = contrato

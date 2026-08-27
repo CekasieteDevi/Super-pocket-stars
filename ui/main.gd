@@ -1034,6 +1034,7 @@ func _fila_mercado(f: Dictionary) -> void:
 	# La edad se sabe siempre: en el futbol es publica.
 	contenedor_mercado_tabla.add_child(_etiqueta(str(f["edad"])))
 	contenedor_mercado_tabla.add_child(_etiqueta(str(f["posicion"])))
+	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["media"] == null else "%.1f" % float(f["media"])))
 	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["valor"] == null else Economia.formato_dinero(f["valor"])))
 	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["salario"] == null else Economia.formato_dinero(f["salario"])))
 	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["contrato"] == null else "%d años" % int(f["contrato"])))
@@ -2417,8 +2418,21 @@ func _on_simular_temporada() -> void:
 		label_resultado.text = "Temporada terminada."
 		return
 
+	# Simular una temporada entera bloquea el hilo unos segundos. Sin
+	# esto el boton se quedaba igual y parecia que el toque no habia
+	# entrado. Los dos await dejan que Godot dibuje el cambio ANTES de
+	# empezar a laburar: sin ellos el texto nuevo no llega a pintarse.
+	boton_simular_temporada.text = "Simulando..."
+	boton_simular_temporada.disabled = true
+	label_resultado.text = "Simulando la temporada, esto tarda unos segundos..."
+	await get_tree().process_frame
+	await get_tree().process_frame
+
 	var temporada_antes := GameState.temporada_actual
 	GameState.simular_temporada_completa()
+
+	boton_simular_temporada.text = "[debug] Simular resto de la temporada"
+	boton_simular_temporada.disabled = false
 
 	if GameState.temporada_actual != temporada_antes:
 		label_resultado.text = "[debug] Temporada simulada entera." + _texto_cierre_temporada()
