@@ -96,6 +96,15 @@ func _ready() -> void:
 ## Se corre como si cada club hubiera terminado a mitad de tabla, que es
 ## lo neutro: en esa posicion el ajuste de reputacion es cero, asi que
 ## sembrar la caja no le mueve la reputacion a nadie.
+func _todas_las_cajas_vacias() -> bool:
+	for liga in piramide.divisiones:
+		for equipo in liga.equipos:
+			for categoria in equipo.caja:
+				if not is_zero_approx(float(equipo.caja[categoria])):
+					return false
+	return true
+
+
 func _sembrar_presupuestos() -> void:
 	for d in range(piramide.divisiones.size()):
 		var liga: Liga = piramide.divisiones[d]
@@ -696,6 +705,14 @@ func cargar_partida() -> bool:
 	ultima_posicion_final = datos["ultima_posicion_final"]
 	juego_terminado = datos.get("juego_terminado", false)
 	motivo_fin_partida = datos.get("motivo_fin_partida", "")
+
+	# Migración: un guardado hecho en la temporada 1 ANTES de que
+	# existiera la siembra tiene la caja de TODOS en cero y se quedaría
+	# así hasta el cierre de temporada, con el mercado muerto. Se detecta
+	# porque ningún club de ninguna división tiene un peso en ninguna
+	# categoría, que en una partida en curso no pasa nunca.
+	if _todas_las_cajas_vacias():
+		_sembrar_presupuestos()
 
 	# Resultado, log y eventos del último partido vuelven tal cual estaban.
 	# Los FOTOGRAMAS no: no se guardan por tamaño, así que la repetición
