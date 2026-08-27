@@ -4,15 +4,20 @@ extends RefCounted
 ## §9.3 rework: el buscador del mercado. Filtros opcionales, resultado
 ## alfabético, columnas ordenables — y la NIEBLA.
 ##
-## De un jugador ajeno solo se ve el nombre y el puesto hasta que un
-## investigador termine su informe (ver core/investigadores.gd). Todo lo
-## demás sale como desconocido, y de eso se encarga `ficha`: la UI nunca
-## lee el jugador directo, para no filtrar un dato sin querer.
+## De un jugador ajeno se ve el nombre, el puesto y la EDAD; lo demás
+## queda tapado hasta que un investigador termine su informe (ver
+## core/investigadores.gd). De eso se encarga `ficha`: la UI nunca lee el
+## jugador directo, para no filtrar un dato sin querer.
 ##
-## Los filtros de edad y contrato SI trabajan sobre datos ocultos, y es a
-## propósito: filtrar es pedirle a tu gente "traeme volantes de menos de
-## 23", no enterarte de la edad exacta de nadie. La lista se achica, la
-## ficha sigue tapada.
+## La edad es pública porque en el fútbol lo es: sale en cualquier lado y
+## no hace falta mandar a nadie a verlo jugar para saber que tiene 33.
+## Lo que se paga por averiguar es lo que rinde, lo que cobra y lo que le
+## queda de contrato.
+##
+## El filtro de contrato SI trabaja sobre un dato oculto, y es a
+## propósito: filtrar es pedirle a tu gente "traeme volantes con contrato
+## corto", no enterarte de cuánto le queda a cada uno. La lista se achica,
+## la ficha sigue tapada.
 
 const POSICIONES := ["ARQ", "DFC", "LAT", "MC", "MCO", "EXT", "DC"]
 
@@ -20,7 +25,7 @@ const POSICIONES := ["ARQ", "DFC", "LAT", "MC", "MCO", "EXT", "DC"]
 ## solo se ven con informe terminado.
 const COLUMNAS := [
 	{"clave": "nombre", "titulo": "Nombre", "oculta": false},
-	{"clave": "edad", "titulo": "Edad", "oculta": true},
+	{"clave": "edad", "titulo": "Edad", "oculta": false},
 	{"clave": "posicion", "titulo": "Pos", "oculta": false},
 	{"clave": "valor", "titulo": "Valor", "oculta": true},
 	{"clave": "salario", "titulo": "Salario", "oculta": true},
@@ -82,6 +87,7 @@ static func ficha(equipo_propio: Team, entrada: Dictionary) -> Dictionary:
 		"id": id,
 		"nombre": _alfabetico(entrada).strip_edges(),
 		"posicion": str(j["posicion"]),
+		"edad": int(j["edad"]),
 		"club": club.nombre,
 		"division": int(entrada["division"]),
 		"origen": str(entrada["origen"]),
@@ -89,7 +95,6 @@ static func ficha(equipo_propio: Team, entrada: Dictionary) -> Dictionary:
 		"progreso": Investigadores.progreso(equipo_propio, id),
 	}
 	if not f["conocido"]:
-		f["edad"] = null
 		f["valor"] = null
 		f["salario"] = null
 		f["contrato"] = null
@@ -97,7 +102,6 @@ static func ficha(equipo_propio: Team, entrada: Dictionary) -> Dictionary:
 		return f
 	var animo: float = float(club.animo.get(id, 50.0))
 	var contrato := int(club.contratos.get(id, 3))
-	f["edad"] = int(j["edad"])
 	f["valor"] = ValorJugador.calcular(j, animo, contrato)
 	f["salario"] = float(club.sueldos.get(id, 0.0))
 	f["contrato"] = contrato

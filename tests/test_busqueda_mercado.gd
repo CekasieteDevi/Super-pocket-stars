@@ -107,11 +107,14 @@ func _test_la_niebla_tapa_todo_menos_nombre_y_puesto(piramide: Piramide, mio: Te
 	f["division"] = 0
 	var fichas := _fichas(piramide, mio, f)
 	var ficha: Dictionary = fichas[0]
-	var tapado: bool = ficha["edad"] == null and ficha["valor"] == null \
+	var tapado: bool = ficha["valor"] == null \
 		and ficha["salario"] == null and ficha["contrato"] == null and ficha["animo"] == null
-	var visible: bool = str(ficha["nombre"]) != "" and str(ficha["posicion"]) != ""
+	# La edad es publica: se sabe siempre, sin informe.
+	var visible: bool = str(ficha["nombre"]) != "" and str(ficha["posicion"]) != "" \
+		and ficha["edad"] != null and int(ficha["edad"]) > 0
 	if tapado and visible and not bool(ficha["conocido"]):
-		print("OK: se ve '%s' (%s) y nada mas." % [ficha["nombre"], ficha["posicion"]])
+		print("OK: se ve '%s' (%s, %d anios) y nada mas." % [
+			ficha["nombre"], ficha["posicion"], int(ficha["edad"])])
 	else:
 		print("FALLA: %s" % ficha)
 

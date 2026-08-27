@@ -1031,7 +1031,8 @@ func _fila_mercado(f: Dictionary) -> void:
 		btn_nombre.pressed.connect(func(): _mostrar_ficha(id_de, club_de))
 	contenedor_mercado_tabla.add_child(btn_nombre)
 
-	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["edad"] == null else str(f["edad"])))
+	# La edad se sabe siempre: en el futbol es publica.
+	contenedor_mercado_tabla.add_child(_etiqueta(str(f["edad"])))
 	contenedor_mercado_tabla.add_child(_etiqueta(str(f["posicion"])))
 	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["valor"] == null else Economia.formato_dinero(f["valor"])))
 	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["salario"] == null else Economia.formato_dinero(f["salario"])))
