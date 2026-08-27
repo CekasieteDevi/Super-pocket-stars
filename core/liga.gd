@@ -373,7 +373,10 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 
 	var reporte_cantera := []
 	for equipo in equipos:
-		var vueltos := Prestamos.procesar_retornos(equipo, temporada_actual)
+		# float: los prestamos de medio año vencen a mitad de temporada
+		# (ver Prestamos.procesar_retornos). Al cierre ya vencio todo lo
+		# que tenia que vencer este año.
+		var vueltos := Prestamos.procesar_retornos(equipo, float(temporada_actual))
 		for j in vueltos:
 			noticias.append("PRÉSTAMOS: %s vuelve a %s tras el préstamo." % [j["posicion"], equipo.nombre])
 

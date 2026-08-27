@@ -96,6 +96,21 @@ func _ready() -> void:
 ## Se corre como si cada club hubiera terminado a mitad de tabla, que es
 ## lo neutro: en esa posicion el ajuste de reputacion es cero, asi que
 ## sembrar la caja no le mueve la reputacion a nadie.
+## Los prestamos de MEDIO año vencen a mitad de temporada, no al cierre,
+## asi que hay que mirarlos mientras la temporada corre. El momento es la
+## temporada como decimal: 3.5 es la mitad de la 3.
+func _procesar_retornos_de_medio_ano() -> void:
+	var fechas: int = liga_jugador().fixture.size()
+	if fechas <= 0:
+		return
+	var momento: float = float(temporada_actual) + float(fecha_actual) / float(fechas)
+	for liga in piramide.divisiones:
+		for equipo in liga.equipos:
+			for j in Prestamos.procesar_retornos(equipo, momento):
+				if equipo == equipo_jugador:
+					_agregar_noticia("PRÉSTAMOS: vuelve %s del préstamo." % j["posicion"])
+
+
 func _todas_las_cajas_vacias() -> bool:
 	for liga in piramide.divisiones:
 		for equipo in liga.equipos:
@@ -197,6 +212,7 @@ func _avanzar_dias_todos(dias: int) -> void:
 	for nueva in Ofertas.generar_entrantes(equipo_jugador, piramide, rng, dias, division_jugador):
 		_agregar_noticia("MERCADO: %s" % nueva["log"][-1])
 	Ofertas.archivar(equipo_jugador)
+	_procesar_retornos_de_medio_ano()
 
 
 func _toca_ronda_de_copa() -> bool:
@@ -504,6 +520,58 @@ func cerrar_fichaje(oferta_id: int, sueldo: float, anios: int, clausula: float) 
 	return r
 
 
+## §9.3 rework: pedir un jugador a PRESTAMO. A diferencia de una compra,
+## no hay regateo por rondas: el dueño mira las condiciones (cuanto del
+## sueldo le sacas de encima y, si hay opcion de compra, si el numero le
+## cierra contra lo que CREE que va a valer) y contesta si o no. Despues
+## falta que el jugador quiera venir.
+##
+## `duracion` es una clave de Prestamos.DURACIONES.
+func pedir_prestamo(dueno: Team, jugador_id: int, duracion: String,
+		porcentaje_sueldo: float, opcion_compra: float) -> Dictionary:
+	var donde := Mercado.ubicar(dueno, jugador_id)
+	if donde.is_empty():
+		return {"exito": false, "motivo": "Ese jugador ya no está en ese club."}
+	var jugador: Dictionary = donde["jugador"]
+	var temporadas: float = float(Prestamos.DURACIONES.get(duracion, 1.0))
+
+	var r := Prestamos.evaluar_pedido(dueno, jugador, porcentaje_sueldo, opcion_compra, temporadas)
+	if not r["acepta"]:
+		return {"exito": false, "motivo": r["motivo"], "minimo": r.get("minimo", 0.0)}
+
+	# El jugador tambien decide. En un prestamo el salto de categoria pesa
+	# la MITAD: es temporal y lo que busca es jugar, no mudarse.
+	var sueldo_actual: float = float(dueno.sueldos.get(jugador_id, 0.0))
+	var div_origen := _division_de(dueno)
+	var salto: int = division_jugador - div_origen
+	var detalle := Negociacion.interes_jugador(
+		jugador, dueno.animo.get(jugador_id, 50.0), sueldo_actual, sueldo_actual,
+		div_origen, div_origen + int(round(salto / 2.0)))
+	if not detalle["acepta"]:
+		return {"exito": false, "motivo": Negociacion.motivo_rechazo(detalle), "detalle": detalle}
+
+	var cierre := Prestamos.ceder(dueno, equipo_jugador, jugador_id,
+		float(temporada_actual) + _fraccion_de_temporada(),
+		temporadas, porcentaje_sueldo, opcion_compra)
+	if not cierre["exito"]:
+		return cierre
+	equipo_jugador.conocimiento[jugador_id] = true
+	_agregar_noticia("PRÉSTAMO: %s se lleva a un %s de %s por %s (fee %s)." % [
+		equipo_jugador.nombre, jugador["posicion"], dueno.nombre,
+		Prestamos.ETIQUETAS_DURACION.get(duracion, duracion),
+		Economia.formato_dinero(cierre["fee"])])
+	return cierre
+
+
+## Cuanto de la temporada va corrido, de 0 a 1. Lo usa el prestamo para
+## saber cuando vence.
+func _fraccion_de_temporada() -> float:
+	var fechas: int = liga_jugador().fixture.size()
+	if fechas <= 0:
+		return 0.0
+	return float(fecha_actual) / float(fechas)
+
+
 func _club_por_nombre(nombre: String) -> Team:
 	for liga in piramide.divisiones:
 		for e in liga.equipos:
@@ -557,7 +625,7 @@ func fichar_agente_libre(jugador_id: int, indice_saliente: int, es_banco: bool) 
 ## Cedés a un jugador de TU banco o cantera a préstamo por una temporada
 ## (Prestamos.ceder). Vuelve solo al cierre de la temporada de retorno.
 func ceder_a_prestamo(jugador_id: int, club_destino: Team) -> Dictionary:
-	var resultado := Prestamos.ceder(equipo_jugador, club_destino, jugador_id, temporada_actual)
+	var resultado := Prestamos.ceder(equipo_jugador, club_destino, jugador_id, float(temporada_actual))
 	if resultado["exito"]:
 		_agregar_noticia("PRÉSTAMO: %s cede un %s a %s por esta temporada." % [
 			equipo_jugador.nombre, resultado["jugador"]["posicion"], club_destino.nombre
@@ -565,19 +633,6 @@ func ceder_a_prestamo(jugador_id: int, club_destino: Team) -> Dictionary:
 	return resultado
 
 
-## Pedís prestado a un jugador del banco/cantera de otro club de tu
-## división. Vuelve solo a su club al cierre de la temporada de retorno.
-func pedir_prestamo(club_origen: Team, jugador_id: int) -> Dictionary:
-	var resultado := Prestamos.ceder(club_origen, equipo_jugador, jugador_id, temporada_actual)
-	if resultado["exito"]:
-		_agregar_noticia("PRÉSTAMO: %s recibe a préstamo un %s de %s." % [
-			equipo_jugador.nombre, resultado["jugador"]["posicion"], club_origen.nombre
-		])
-	return resultado
-
-
-## Sube un nivel de instalación del club (Instalaciones.mejorar), pagado con
-## el presupuesto de Mejoras.
 func mejorar_instalacion(categoria: String) -> Dictionary:
 	var resultado := Instalaciones.mejorar(equipo_jugador, categoria)
 	if resultado["exito"]:

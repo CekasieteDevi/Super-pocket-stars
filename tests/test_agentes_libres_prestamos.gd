@@ -100,7 +100,11 @@ func _test_prestamo_desde_banco_y_retorno(rng: RandomNumberGenerator) -> void:
 
 	var ok: bool = resultado["exito"]
 	ok = ok and origen.banco.size() == banco_origen_antes - 1  # hueco real, no se repone
-	ok = ok and not origen.sueldos.has(jugador_id)
+	# El dueño CONSERVA el registro: desde el reparto de sueldo (§9.3
+	# rework) sigue pagando su parte mientras dura el prestamo. Con el
+	# reparto por defecto —el que recibe paga todo— esa parte es cero,
+	# que es distinto de no estar.
+	ok = ok and origen.sueldos.has(jugador_id) and is_zero_approx(float(origen.sueldos[jugador_id]))
 	ok = ok and destino.banco.size() == 8  # se agrega de mas, no pisa a nadie
 	ok = ok and destino.sueldos.has(jugador_id)
 	ok = ok and origen.prestados_afuera.has(jugador_id)

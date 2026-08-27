@@ -54,7 +54,6 @@ var label_mercado_estado: Label
 var contenedor_libres_botones: VBoxContainer
 var label_libres_estado: Label
 var contenedor_prestamos_ceder_botones: VBoxContainer
-var contenedor_prestamos_pedir_botones: VBoxContainer
 var label_prestamos_estado: Label
 var contenedor_instalaciones_botones: VBoxContainer
 var label_instalaciones_estado: Label
@@ -109,6 +108,7 @@ func _ready() -> void:
 	_construir_panel_ficha(contenedor)
 	_construir_panel_formacion(contenedor)
 	_construir_dialogo_negociacion()
+	_construir_dialogo_prestamo()
 
 	_mostrar_plantel()
 
@@ -889,7 +889,7 @@ func _construir_solapa_jugadores(padre: Control) -> Control:
 	caja.add_child(scroll)
 
 	contenedor_mercado_tabla = GridContainer.new()
-	contenedor_mercado_tabla.columns = BusquedaMercado.COLUMNAS.size() + 3
+	contenedor_mercado_tabla.columns = BusquedaMercado.COLUMNAS.size() + 4
 	contenedor_mercado_tabla.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(contenedor_mercado_tabla)
 	return caja
@@ -995,6 +995,7 @@ func _refrescar_mercado() -> void:
 	contenedor_mercado_tabla.add_child(_etiqueta("Club"))
 	contenedor_mercado_tabla.add_child(_etiqueta(""))
 	contenedor_mercado_tabla.add_child(_etiqueta(""))
+	contenedor_mercado_tabla.add_child(_etiqueta(""))
 
 	# Un tope: la piramide tiene ~3.600 jugadores y dibujarlos a todos
 	# cuelga la pantalla. Con los filtros y el orden, 60 alcanzan.
@@ -1057,6 +1058,11 @@ func _fila_mercado(f: Dictionary) -> void:
 		btn_comprar.text = "Comprar"
 		btn_comprar.pressed.connect(func(): _abrir_negociacion(vendedor, jugador_id))
 	contenedor_mercado_tabla.add_child(btn_comprar)
+
+	var btn_prestamo := Button.new()
+	btn_prestamo.text = "Prestamo"
+	btn_prestamo.pressed.connect(func(): _abrir_prestamo(vendedor, jugador_id))
+	contenedor_mercado_tabla.add_child(btn_prestamo)
 
 
 func _on_investigar(vendedor: Team, jugador_id: int) -> void:
@@ -1147,6 +1153,144 @@ func _refrescar_historial() -> void:
 			t += "    [color=#7f8c8d]%s[/color]\n" % str(linea)
 		rc.text = t
 		contenedor_historial.add_child(rc)
+
+
+## §9.3 rework: el modal de PRESTAMO. A diferencia de una compra no hay
+## regateo por rondas: el dueño mira las condiciones y contesta si o no en
+## el momento. Lo que se negocia no es el precio sino los terminos —
+## cuanto dura, cuanto del sueldo le sacas de encima, y si te lo atas con
+## una opcion de compra.
+var dialogo_prestamo: AcceptDialog
+var prestamo_dueno: Team = null
+var prestamo_jugador_id: int = -1
+var option_prestamo_duracion: OptionButton
+var slider_prestamo_sueldo: HSlider
+var label_prestamo_sueldo: Label
+var check_prestamo_opcion: CheckBox
+var spin_prestamo_opcion: SpinBox
+var label_prestamo_datos: Label
+var label_prestamo_estado: RichTextLabel
+
+
+func _construir_dialogo_prestamo() -> void:
+	dialogo_prestamo = AcceptDialog.new()
+	dialogo_prestamo.title = "Prestamo"
+	dialogo_prestamo.ok_button_text = "Cerrar"
+	dialogo_prestamo.min_size = Vector2(640, 440)
+	add_child(dialogo_prestamo)
+
+	var caja := VBoxContainer.new()
+	caja.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dialogo_prestamo.add_child(caja)
+
+	label_prestamo_datos = Label.new()
+	label_prestamo_datos.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	caja.add_child(label_prestamo_datos)
+
+	var fila_dur := HBoxContainer.new()
+	caja.add_child(fila_dur)
+	fila_dur.add_child(_etiqueta("Duración:"))
+	option_prestamo_duracion = OptionButton.new()
+	for clave in Prestamos.DURACIONES:
+		option_prestamo_duracion.add_item(Prestamos.ETIQUETAS_DURACION[clave])
+		option_prestamo_duracion.set_item_metadata(option_prestamo_duracion.item_count - 1, clave)
+	option_prestamo_duracion.selected = 1
+	fila_dur.add_child(option_prestamo_duracion)
+
+	var fila_sueldo := HBoxContainer.new()
+	caja.add_child(fila_sueldo)
+	fila_sueldo.add_child(_etiqueta("Del sueldo pagás:"))
+	slider_prestamo_sueldo = HSlider.new()
+	slider_prestamo_sueldo.min_value = 0
+	slider_prestamo_sueldo.max_value = 100
+	slider_prestamo_sueldo.step = 5
+	slider_prestamo_sueldo.value = 100
+	slider_prestamo_sueldo.custom_minimum_size = Vector2(260, 44)
+	fila_sueldo.add_child(slider_prestamo_sueldo)
+	label_prestamo_sueldo = Label.new()
+	fila_sueldo.add_child(label_prestamo_sueldo)
+	slider_prestamo_sueldo.value_changed.connect(func(_v): _refrescar_prestamo_sueldo())
+
+	var fila_opcion := HBoxContainer.new()
+	caja.add_child(fila_opcion)
+	check_prestamo_opcion = CheckBox.new()
+	check_prestamo_opcion.text = "Con opción de compra"
+	fila_opcion.add_child(check_prestamo_opcion)
+	spin_prestamo_opcion = SpinBox.new()
+	spin_prestamo_opcion.min_value = 0
+	spin_prestamo_opcion.max_value = 1000000000
+	spin_prestamo_opcion.step = 5000
+	spin_prestamo_opcion.custom_minimum_size = Vector2(200, 44)
+	fila_opcion.add_child(spin_prestamo_opcion)
+
+	var btn := Button.new()
+	btn.text = "Pedir préstamo"
+	btn.custom_minimum_size = Vector2(220, 48)
+	btn.pressed.connect(_on_pedir_prestamo)
+	caja.add_child(btn)
+
+	label_prestamo_estado = RichTextLabel.new()
+	label_prestamo_estado.bbcode_enabled = true
+	label_prestamo_estado.fit_content = true
+	label_prestamo_estado.custom_minimum_size = Vector2(0, 120)
+	caja.add_child(label_prestamo_estado)
+
+
+func _refrescar_prestamo_sueldo() -> void:
+	var pct := int(slider_prestamo_sueldo.value)
+	var texto := "%d%%" % pct
+	if prestamo_dueno != null and Investigadores.conoce(GameState.equipo_jugador, prestamo_jugador_id):
+		var sueldo: float = float(prestamo_dueno.sueldos.get(prestamo_jugador_id, 0.0))
+		texto += "  (%s por temporada)" % Economia.formato_dinero(sueldo * pct / 100.0)
+	label_prestamo_sueldo.text = texto
+
+
+func _abrir_prestamo(dueno: Team, jugador_id: int) -> void:
+	prestamo_dueno = dueno
+	prestamo_jugador_id = jugador_id
+	var donde := Mercado.ubicar(dueno, jugador_id)
+	if donde.is_empty():
+		label_mercado_estado.text = "Ese jugador ya no esta en ese club."
+		return
+	var jugador: Dictionary = donde["jugador"]
+	var conocido := Investigadores.conoce(GameState.equipo_jugador, jugador_id)
+
+	var t := "%s (%s) — %s\n" % [_nombre_jugador(jugador), jugador["posicion"], dueno.nombre]
+	t += "Un club no presta a un titular suyo, y quiere que le saques de encima al menos el %d%% del sueldo.\n" % [
+		int(Prestamos.PORCENTAJE_SUELDO_MINIMO * 100.0)]
+	if conocido:
+		t += "Hoy cobra %s.\n" % Economia.formato_dinero(dueno.sueldos.get(jugador_id, 0.0))
+		spin_prestamo_opcion.value = ceil(
+			Prestamos.valor_futuro_estimado(jugador, 1.0) * Prestamos.MARGEN_OPCION
+			/ spin_prestamo_opcion.step) * spin_prestamo_opcion.step
+	else:
+		t += "NO lo investigaste: no sabes lo que cobra ni lo que puede llegar a valer.\n"
+		spin_prestamo_opcion.value = 0
+	label_prestamo_datos.text = t
+	_refrescar_prestamo_sueldo()
+	label_prestamo_estado.text = ""
+	dialogo_prestamo.popup_centered()
+
+
+func _on_pedir_prestamo() -> void:
+	var idx := option_prestamo_duracion.selected
+	var duracion := str(option_prestamo_duracion.get_item_metadata(idx))
+	var opcion: float = float(spin_prestamo_opcion.value) if check_prestamo_opcion.button_pressed else 0.0
+	var r := GameState.pedir_prestamo(
+		prestamo_dueno, prestamo_jugador_id, duracion,
+		float(slider_prestamo_sueldo.value) / 100.0, opcion)
+	if not r["exito"]:
+		var extra := ""
+		if float(r.get("minimo", 0.0)) > 0.0:
+			extra = " Pedirían al menos %s." % Economia.formato_dinero(r["minimo"])
+		label_prestamo_estado.text = "[color=#d4a017]%s%s[/color]" % [r["motivo"], extra]
+		return
+	var cola := ""
+	if float(r.get("opcion_compra", 0.0)) > 0.0:
+		cola = " Con opción de compra a %s." % Economia.formato_dinero(r["opcion_compra"])
+	label_prestamo_estado.text = "[color=#27ae60]Cerrado. Llega a préstamo (fee %s, pagás %s de sueldo).%s[/color]" % [
+		Economia.formato_dinero(r["fee"]), Economia.formato_dinero(r["sueldo_propio"]), cola]
+	_on_buscar_mercado()
 
 
 ## §9.3 rework: el modal hace dos trabajos.
@@ -1597,24 +1741,14 @@ func _construir_panel_prestamos(padre: Control) -> void:
 	contenedor_prestamos_ceder_botones.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll_ceder.add_child(contenedor_prestamos_ceder_botones)
 
-	var titulo_pedir := Label.new()
-	titulo_pedir.text = "Pedir prestado (banco y cantera de tu division)"
-	panel.add_child(titulo_pedir)
-
-	var scroll_pedir := ScrollContainer.new()
-	scroll_pedir.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll_pedir.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.add_child(scroll_pedir)
-
-	contenedor_prestamos_pedir_botones = VBoxContainer.new()
-	contenedor_prestamos_pedir_botones.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll_pedir.add_child(contenedor_prestamos_pedir_botones)
+	# Pedir prestado ya no vive aca: se hace desde Mercado, con el mismo
+	# buscador y las mismas condiciones que una compra (duracion, reparto
+	# del sueldo y opcion de compra). Esta pestaña quedo solo para CEDER,
+	# que es la operacion inversa.
 
 
 func _refrescar_prestamos() -> void:
 	for hijo in contenedor_prestamos_ceder_botones.get_children():
-		hijo.queue_free()
-	for hijo in contenedor_prestamos_pedir_botones.get_children():
 		hijo.queue_free()
 
 	var equipo := GameState.equipo_jugador
@@ -1646,38 +1780,6 @@ func _refrescar_prestamos() -> void:
 
 		contenedor_prestamos_ceder_botones.add_child(fila)
 
-	var candidatos := []  # [{equipo, jugador, desde_cantera}]
-	for rival in GameState.liga_jugador().equipos:
-		if rival == equipo:
-			continue
-		for j in rival.banco:
-			candidatos.append({"equipo": rival, "jugador": j, "desde_cantera": false})
-		for j in rival.cantera:
-			candidatos.append({"equipo": rival, "jugador": j, "desde_cantera": true})
-
-	if candidatos.is_empty():
-		var label2 := Label.new()
-		label2.text = "No hay candidatos para pedir prestado en tu division."
-		contenedor_prestamos_pedir_botones.add_child(label2)
-	for candidato in candidatos:
-		var rival: Team = candidato["equipo"]
-		var j: Dictionary = candidato["jugador"]
-		var fila := HBoxContainer.new()
-		var origen_txt := "cantera" if candidato["desde_cantera"] else "banco"
-		var label := Label.new()
-		label.text = "%-14s  %-4s  %-22s  media %5.1f  potencial %3d  (%s)" % [rival.nombre, j["posicion"], _nombre_jugador(j), j["media"], j["potencial"], origen_txt]
-		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		fila.add_child(label)
-
-		var btn := Button.new()
-		btn.text = "Pedir prestado"
-		var jugador_id: int = j["id"]
-		btn.pressed.connect(func(): _on_pedir_prestamo(rival, jugador_id))
-		fila.add_child(btn)
-
-		contenedor_prestamos_pedir_botones.add_child(fila)
-
-
 ## Elige un rival al azar de tu division como destino del prestamo — no
 ## hay negociacion todavia (eso es contenido pendiente), cualquier club de
 ## tu misma division puede recibirlo.
@@ -1694,20 +1796,6 @@ func _on_ceder_prestamo(jugador_id: int) -> void:
 	if resultado["exito"]:
 		label_prestamos_estado.text = "Prestamo concretado: %s se va a %s por esta temporada (fee cobrado %s)." % [
 			resultado["jugador"]["posicion"], destino.nombre, Economia.formato_dinero(resultado["fee"])
-		]
-	else:
-		label_prestamos_estado.text = "No se pudo: %s" % resultado["motivo"]
-
-	_refrescar_prestamos()
-	_refrescar_plantel()
-	_refrescar_economia()
-
-
-func _on_pedir_prestamo(club_origen: Team, jugador_id: int) -> void:
-	var resultado := GameState.pedir_prestamo(club_origen, jugador_id)
-	if resultado["exito"]:
-		label_prestamos_estado.text = "Prestamo recibido: llega un %s de %s (fee pagado %s)." % [
-			resultado["jugador"]["posicion"], club_origen.nombre, Economia.formato_dinero(resultado["fee"])
 		]
 	else:
 		label_prestamos_estado.text = "No se pudo: %s" % resultado["motivo"]
