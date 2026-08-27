@@ -789,8 +789,7 @@ var botones_solapa_mercado: Dictionary = {}
 var contenedor_enviadas: VBoxContainer
 var contenedor_recibidas: VBoxContainer
 var contenedor_historial: VBoxContainer
-var contenedor_investigadores: VBoxContainer
-var label_investigadores_estado: Label
+var contenedor_investigaciones: VBoxContainer
 
 
 func _construir_panel_mercado(padre: Control) -> void:
@@ -804,7 +803,7 @@ func _construir_panel_mercado(padre: Control) -> void:
 	panel.add_child(barra)
 	for entrada in [["jugadores", "Jugadores"], ["enviadas", "Ofertas enviadas"],
 			["recibidas", "Ofertas recibidas"], ["historial", "Historial"],
-			["investigadores", "Investigadores"]]:
+			["investigaciones", "Investigaciones"]]:
 		var btn := Button.new()
 		btn.text = entrada[1]
 		btn.custom_minimum_size = Vector2(0, 44)
@@ -817,7 +816,6 @@ func _construir_panel_mercado(padre: Control) -> void:
 	label_mercado_estado.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label_mercado_estado.text = ""
 	panel.add_child(label_mercado_estado)
-	label_investigadores_estado = label_mercado_estado
 
 	var cuerpo := Control.new()
 	cuerpo.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -831,8 +829,8 @@ func _construir_panel_mercado(padre: Control) -> void:
 	solapas_mercado["recibidas"] = _solapa_con_scroll(cuerpo, contenedor_recibidas)
 	contenedor_historial = VBoxContainer.new()
 	solapas_mercado["historial"] = _solapa_con_scroll(cuerpo, contenedor_historial)
-	contenedor_investigadores = VBoxContainer.new()
-	solapas_mercado["investigadores"] = _solapa_con_scroll(cuerpo, contenedor_investigadores)
+	contenedor_investigaciones = VBoxContainer.new()
+	solapas_mercado["investigaciones"] = _solapa_con_scroll(cuerpo, contenedor_investigaciones)
 	_mostrar_solapa_mercado("jugadores")
 
 
@@ -910,7 +908,7 @@ func _mostrar_solapa_mercado(clave: String) -> void:
 		"enviadas": _refrescar_ofertas(contenedor_enviadas, false)
 		"recibidas": _refrescar_ofertas(contenedor_recibidas, true)
 		"historial": _refrescar_historial()
-		"investigadores": _refrescar_investigadores()
+		"investigaciones": _refrescar_investigaciones()
 	_actualizar_titulos_solapas()
 
 
@@ -1088,100 +1086,95 @@ func _fila_mercado(f: Dictionary) -> void:
 	contenedor_mercado_tabla.add_child(btn_prestamo)
 
 
-## §9.4: la solapa de INVESTIGADORES. Estaba el sistema entero y no tenia
-## pantalla: se podia usar el que venia de fabrica y nada mas, asi que el
-## jugador quedaba clavado en informes de media temporada para siempre.
+## §9.4: la solapa de INVESTIGACIONES — a quien estas mirando y a quien
+## ya conoces. Contratar y despedir investigadores no vive aca sino en
+## Instalaciones, que es donde se decide en que gasta el club.
 ##
-## Arriba los que tenes, con en que anda cada uno y cuanto le falta.
-## Abajo el mercado de contrataciones: diez niveles, el precio crece con
-## el cuadrado de las estrellas y sale de Mejoras, o sea que compite
-## directo con las instalaciones.
-func _refrescar_investigadores() -> void:
-	for hijo in contenedor_investigadores.get_children():
+## Los conocidos van ordenados por lo que les queda de vigencia, del que
+## esta por vencer al que recien empieza: lo accionable primero.
+func _refrescar_investigaciones() -> void:
+	for hijo in contenedor_investigaciones.get_children():
 		hijo.queue_free()
 	var equipo := GameState.equipo_jugador
+	var indice := _indice_de_jugadores()
 
 	var titulo := Label.new()
-	titulo.text = "Tus investigadores (%d de %d slots) — presupuesto de Mejoras: %s" % [
-		equipo.investigadores.size(), Investigadores.SLOTS,
-		Economia.formato_dinero(equipo.caja["mejoras"])]
-	contenedor_investigadores.add_child(titulo)
+	titulo.text = "En curso"
+	contenedor_investigaciones.add_child(titulo)
 
-	var explicacion := Label.new()
-	explicacion.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	explicacion.text = "Las estrellas son VELOCIDAD, no calidad: el informe siempre termina " \
-		+ "completo. Uno de 1 estrella tarda %d dias y uno de 10, %d. Cada uno investiga a un " \
-		+ "jugador por vez. Despedir libera el slot pero pierde el informe a medio hacer y no " \
-		+ "devuelve la plata."
-	explicacion.text = explicacion.text % [
-		int(Investigadores.dias_de_informe(1)), int(Investigadores.dias_de_informe(10))]
-	contenedor_investigadores.add_child(explicacion)
-
+	var en_curso := 0
 	for inv in equipo.investigadores:
+		if int(inv["objetivo"]) == -1:
+			continue
+		en_curso += 1
+		var pct: float = float(inv["dias"]) / Investigadores.dias_de_informe(int(inv["estrellas"]))
+		var faltan: int = int(ceil(
+			Investigadores.dias_de_informe(int(inv["estrellas"])) - float(inv["dias"])))
+		var quien := str(inv["nombre_objetivo"])
+		if quien == "":
+			quien = "un jugador"
 		var fila := HBoxContainer.new()
-		var estrellas := "★".repeat(int(inv["estrellas"]))
-		var estado := "libre"
-		if int(inv["objetivo"]) != -1:
-			var pct: float = float(inv["dias"]) / Investigadores.dias_de_informe(int(inv["estrellas"]))
-			var quien := str(inv["nombre_objetivo"])
-			if quien == "":
-				quien = "un jugador de %s" % str(inv["club_objetivo"])
-			estado = "investigando a %s — %d%%" % [quien, int(round(pct * 100.0))]
-		var l := _etiqueta("%-12s  %s" % [estrellas, estado])
+		var l := _etiqueta("%-26s %-24s  %3d%%  (faltan %d dias, investigador de %d★)" % [
+			quien, str(inv["club_objetivo"]), int(round(pct * 100.0)), faltan, int(inv["estrellas"])])
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		fila.add_child(l)
-
 		var id_inv := int(inv["id"])
-		if int(inv["objetivo"]) != -1:
-			var btn_cancelar := Button.new()
-			btn_cancelar.text = "Cancelar informe"
-			btn_cancelar.pressed.connect(func():
-				Investigadores.cancelar(equipo, id_inv)
-				_refrescar_investigadores()
-			)
-			fila.add_child(btn_cancelar)
-
-		var btn_despedir := Button.new()
-		btn_despedir.text = "Despedir"
-		btn_despedir.pressed.connect(func():
-			Investigadores.despedir(equipo, id_inv)
-			label_investigadores_estado.text = "Investigador despedido: se libero un slot."
-			_refrescar_investigadores()
-		)
-		fila.add_child(btn_despedir)
-		contenedor_investigadores.add_child(fila)
-
-	var separador := Label.new()
-	separador.text = "\nContratar"
-	contenedor_investigadores.add_child(separador)
-
-	var hay_slot: bool = equipo.investigadores.size() < Investigadores.SLOTS
-	for estrellas in range(Investigadores.ESTRELLAS_MIN, Investigadores.ESTRELLAS_MAX + 1):
-		var costo := Investigadores.costo(estrellas)
-		var fila := HBoxContainer.new()
-		var l := _etiqueta("%-12s  informe en %3d dias  —  %s" % [
-			"★".repeat(estrellas), int(Investigadores.dias_de_informe(estrellas)),
-			Economia.formato_dinero(costo)])
-		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		fila.add_child(l)
 		var btn := Button.new()
-		btn.text = "Contratar"
-		btn.disabled = not hay_slot or equipo.caja["mejoras"] < costo
-		var e := estrellas
-		btn.pressed.connect(func(): _on_contratar_investigador(e))
+		btn.text = "Cancelar"
+		btn.pressed.connect(func():
+			Investigadores.cancelar(equipo, id_inv)
+			_refrescar_investigaciones()
+		)
 		fila.add_child(btn)
-		contenedor_investigadores.add_child(fila)
+		contenedor_investigaciones.add_child(fila)
+	if en_curso == 0:
+		contenedor_investigaciones.add_child(_etiqueta(
+			"Nadie. Los investigadores libres estan esperando: mandalos desde la solapa Jugadores."))
+
+	var titulo2 := Label.new()
+	titulo2.text = "
+Conocidos (%d) — un informe dura %d dias y despues el jugador vuelve a quedar tapado" % [
+		equipo.conocimiento.size(), Investigadores.DIAS_VIGENCIA]
+	contenedor_investigaciones.add_child(titulo2)
+
+	if equipo.conocimiento.is_empty():
+		contenedor_investigaciones.add_child(_etiqueta("Todavia no terminaste ningun informe."))
+		return
+
+	var conocidos := []
+	for id in equipo.conocimiento:
+		conocidos.append({"id": int(id), "dias": float(equipo.conocimiento[id])})
+	conocidos.sort_custom(func(a, b): return float(a["dias"]) < float(b["dias"]))
+
+	for c in conocidos:
+		var id: int = int(c["id"])
+		var dato: Dictionary = indice.get(id, {})
+		var nombre := "(ya no esta en la piramide)"
+		var club := ""
+		var extra := ""
+		if not dato.is_empty():
+			var j: Dictionary = dato["jugador"]
+			nombre = _nombre_jugador(j)
+			club = "%s D%d" % [dato["club"].nombre, int(dato["division"])]
+			extra = "%-4s  media %5.1f  %2d años" % [j["posicion"], j["media"], int(j["edad"])]
+		var dias: int = int(ceil(float(c["dias"])))
+		var aviso := "vence en %d dias" % dias
+		if dias < 120:
+			aviso = "VENCE PRONTO (%d dias)" % dias
+		contenedor_investigaciones.add_child(_etiqueta(
+			"%-26s %-24s %-28s  %s" % [nombre, club, extra, aviso]))
 
 
-func _on_contratar_investigador(estrellas: int) -> void:
-	var r := Investigadores.contratar(GameState.equipo_jugador, estrellas)
-	if r["exito"]:
-		label_investigadores_estado.text = "Contratado un investigador de %d estrella(s) por %s." % [
-			estrellas, Economia.formato_dinero(r["costo"])]
-	else:
-		label_investigadores_estado.text = "No se pudo: %s" % r["motivo"]
-	_refrescar_investigadores()
-	_refrescar_economia()
+## id -> {jugador, club, division} de toda la piramide. Se arma una vez
+## por refresco: el conocimiento guarda solo el id, y buscar cada uno por
+## separado seria recorrer 3.600 jugadores por fila.
+func _indice_de_jugadores() -> Dictionary:
+	var indice := {}
+	for d in range(GameState.piramide.divisiones.size()):
+		for club in GameState.piramide.divisiones[d].equipos:
+			for j in club.jugadores + club.banco + club.cantera:
+				indice[int(j["id"])] = {"jugador": j, "club": club, "division": d + 1}
+	return indice
 
 
 func _on_investigar(vendedor: Team, jugador_id: int) -> void:
@@ -1993,7 +1986,73 @@ func _refrescar_instalaciones() -> void:
 
 		contenedor_instalaciones_botones.add_child(fila)
 
+	_refrescar_investigadores_instalaciones(equipo)
 	_refrescar_foco_individual(equipo)
+
+
+## §9.4: la red de investigadores vive en Instalaciones porque es lo que
+## es — una inversion permanente del club, pagada con Mejoras, que compite
+## con el estadio y la cantera por la misma plata. A quien estas mirando
+## con ella se ve en Mercado > Investigaciones.
+##
+## No se MEJORAN como el resto de las instalaciones: se contratan y se
+## despiden. Despedir sirve para liberar un slot y poner a uno mejor.
+func _refrescar_investigadores_instalaciones(equipo: Team) -> void:
+	var titulo := Label.new()
+	titulo.text = "\nInvestigadores (%d de %d slots) — las estrellas son VELOCIDAD, no calidad: el informe siempre termina completo" % [
+		equipo.investigadores.size(), Investigadores.SLOTS]
+	titulo.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	contenedor_instalaciones_botones.add_child(titulo)
+
+	for inv in equipo.investigadores:
+		var fila := HBoxContainer.new()
+		var estado := "libre"
+		if int(inv["objetivo"]) != -1:
+			var quien := str(inv["nombre_objetivo"])
+			estado = "ocupado con %s" % (quien if quien != "" else str(inv["club_objetivo"]))
+		var l := _etiqueta("%-14s  informe en %3d dias  —  %s" % [
+			"★".repeat(int(inv["estrellas"])),
+			int(Investigadores.dias_de_informe(int(inv["estrellas"]))), estado])
+		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		fila.add_child(l)
+		var id_inv := int(inv["id"])
+		var btn := Button.new()
+		btn.text = "Despedir"
+		btn.pressed.connect(func():
+			Investigadores.despedir(equipo, id_inv)
+			label_instalaciones_estado.text = "Investigador despedido: se libero un slot."
+			_refrescar_instalaciones()
+		)
+		fila.add_child(btn)
+		contenedor_instalaciones_botones.add_child(fila)
+
+	var hay_slot: bool = equipo.investigadores.size() < Investigadores.SLOTS
+	for estrellas in range(Investigadores.ESTRELLAS_MIN, Investigadores.ESTRELLAS_MAX + 1):
+		var costo := Investigadores.costo(estrellas)
+		var fila := HBoxContainer.new()
+		var l := _etiqueta("%-14s  informe en %3d dias  —  contratar por %s" % [
+			"★".repeat(estrellas), int(Investigadores.dias_de_informe(estrellas)),
+			Economia.formato_dinero(costo)])
+		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		fila.add_child(l)
+		var btn := Button.new()
+		btn.text = "Contratar"
+		btn.disabled = not hay_slot or equipo.caja["mejoras"] < costo
+		var e := estrellas
+		btn.pressed.connect(func(): _on_contratar_investigador(e))
+		fila.add_child(btn)
+		contenedor_instalaciones_botones.add_child(fila)
+
+
+func _on_contratar_investigador(estrellas: int) -> void:
+	var r := Investigadores.contratar(GameState.equipo_jugador, estrellas)
+	if r["exito"]:
+		label_instalaciones_estado.text = "Contratado un investigador de %d estrella(s) por %s." % [
+			estrellas, Economia.formato_dinero(r["costo"])]
+	else:
+		label_instalaciones_estado.text = "No se pudo: %s" % r["motivo"]
+	_refrescar_instalaciones()
+	_refrescar_economia()
 
 
 ## §7.4 punto 3 / §5: hasta N jugadores (N = nivel de Entrenamiento con
