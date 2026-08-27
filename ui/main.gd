@@ -1046,7 +1046,14 @@ func _fila_mercado(f: Dictionary) -> void:
 
 	var btn_inv := Button.new()
 	if bool(f["conocido"]):
+		# Cuanto le queda al informe antes de quedar viejo: es lo que te
+		# avisa que vas a tener que volver a mandar a alguien.
+		var quedan := Investigadores.vigencia(equipo, jugador_id)
 		btn_inv.text = "Conocido"
+		btn_inv.tooltip_text = "El informe vence en %d dias." % quedan
+		if quedan < 120:
+			btn_inv.text = "Vence pronto"
+			btn_inv.tooltip_text = "El informe vence en %d dias. Volve a investigarlo para no perderlo." % quedan
 		btn_inv.disabled = true
 	elif float(f["progreso"]) >= 0.0:
 		btn_inv.text = "%d%%" % int(round(float(f["progreso"]) * 100.0))

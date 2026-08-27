@@ -32,6 +32,19 @@ const ESTRELLAS_MAX := 10
 const DIAS_UNA_ESTRELLA := 133.0
 const DIAS_DIEZ_ESTRELLAS := 21.0
 
+## Cuánto dura un informe antes de quedar viejo, en días de calendario.
+## Tres temporadas (~266 días cada una).
+##
+## Que CADUQUE es lo que le da trabajo permanente a la red: sin esto,
+## investigabas una vez en la temporada 1 y en la 10 seguías viendo el
+## rendimiento de ese jugador al día, gratis y para siempre, y después
+## del primer año los investigadores no tenían nada que hacer.
+##
+## Se lleva en días y no en temporadas para no tener que arrastrar el
+## número de temporada por medio motor: se descuenta en el mismo lugar
+## que la fatiga y los días de lesión (Team.avanzar_dias).
+const DIAS_VIGENCIA := 798
+
 ## Cuánto sale contratar a uno, de una vez y para siempre (sale de
 ## Mejoras). Crece con el cuadrado de las estrellas: un investigador de 10
 ## es una inversión de club grande, no algo que compres en división 10 con
@@ -129,7 +142,17 @@ static func cancelar(equipo: Team, investigador_id: int) -> bool:
 ## fatiga y las lesiones: los informes corren con el calendario, no con
 ## las fechas jugadas, así que una semana de dos partidos no acelera nada.
 ## Devuelve los jugador_id de los informes que se completaron.
+## Devuelve los jugador_id de los informes que se COMPLETARON en este
+## tramo. De paso vence los que ya quedaron viejos (DIAS_VIGENCIA).
 static func avanzar(equipo: Team, dias: int) -> Array:
+	# Los informes viejos se van venciendo con el calendario.
+	for id in equipo.conocimiento.keys():
+		var resta: float = float(equipo.conocimiento[id]) - float(dias)
+		if resta <= 0.0:
+			equipo.conocimiento.erase(id)
+		else:
+			equipo.conocimiento[id] = resta
+
 	var terminados := []
 	for inv in equipo.investigadores:
 		var objetivo: int = int(inv["objetivo"])
@@ -137,7 +160,7 @@ static func avanzar(equipo: Team, dias: int) -> Array:
 			continue
 		inv["dias"] = float(inv["dias"]) + float(dias)
 		if float(inv["dias"]) >= dias_de_informe(int(inv["estrellas"])):
-			equipo.conocimiento[objetivo] = true
+			equipo.conocimiento[objetivo] = float(DIAS_VIGENCIA)
 			terminados.append(objetivo)
 			inv["objetivo"] = -1
 			inv["club_objetivo"] = ""
@@ -156,5 +179,15 @@ static func progreso(equipo: Team, jugador_id: int) -> float:
 
 ## Lo unico que se sabe de un jugador sin informe. El resto de la UI se
 ## apoya en esto para no filtrar datos sin querer.
+##
+## No hace falta mirar la fecha: el informe se vence solo descontando dias
+## en avanzar(), asi que si esta en el diccionario, esta vigente.
 static func conoce(equipo: Team, jugador_id: int) -> bool:
 	return equipo.conocimiento.has(jugador_id)
+
+
+## Cuantos dias le quedan de vigencia a un informe. -1 si no lo conoces.
+static func vigencia(equipo: Team, jugador_id: int) -> int:
+	if not equipo.conocimiento.has(jugador_id):
+		return -1
+	return int(ceil(float(equipo.conocimiento[jugador_id])))

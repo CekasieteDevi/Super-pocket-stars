@@ -348,6 +348,12 @@ static func cargar(datos: Dictionary) -> Team:
 		inv["dias"] = float(inv["dias"])
 	t.siguiente_id_investigador = maxi(1, int(datos.get("siguiente_id_investigador", 0)))
 	t.conocimiento = _claves_a_entero(datos.get("conocimiento", {}))
+	# Migracion: antes el valor era `true` (el informe no caducaba). Ahora
+	# es cuantos dias le quedan de vigencia; a los viejos se les da el
+	# plazo entero.
+	for id_c in t.conocimiento:
+		if typeof(t.conocimiento[id_c]) != TYPE_FLOAT and typeof(t.conocimiento[id_c]) != TYPE_INT:
+			t.conocimiento[id_c] = float(Investigadores.DIAS_VIGENCIA)
 	t.bloqueos_mercado = _claves_a_entero(datos.get("bloqueos_mercado", {}))
 	t.ofertas = datos.get("ofertas", [])
 	for o in t.ofertas:
