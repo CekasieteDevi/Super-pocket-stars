@@ -350,11 +350,13 @@ func _jugar_amistoso_seleccion() -> void:
 ## Mercado). Wrapper sobre Mercado.ofertar_por_jugador() que además deja
 ## una noticia si la oferta se concreta.
 func ofertar_por_jugador(vendedor: Team, jugador_objetivo_id: int) -> Dictionary:
-	var resultado := Mercado.ofertar_por_jugador(equipo_jugador, vendedor, jugador_objetivo_id, rng)
+	# Compra al contado, la misma operacion que hace la IA: cualquiera del
+	# plantel o de la cantera del vendedor, de la division que sea.
+	var resultado := Mercado.comprar_al_contado(equipo_jugador, vendedor, jugador_objetivo_id, rng)
 	if resultado["exito"]:
-		_agregar_noticia("FICHAJE: %s ficha a un %s de %s por $%.0f (sale un %s)" % [
+		_agregar_noticia("FICHAJE: %s ficha a un %s de %s por %s" % [
 			equipo_jugador.nombre, resultado["posicion"], vendedor.nombre,
-			resultado["diferencia"], resultado["jugador_sale"]["posicion"]
+			Economia.formato_dinero(resultado["precio"])
 		])
 	return resultado
 
@@ -362,11 +364,11 @@ func ofertar_por_jugador(vendedor: Team, jugador_objetivo_id: int) -> Dictionary
 ## Fuerza la venta pagando la cláusula de rescisión completa — sin la
 ## resistencia que puede rechazar una oferta común (Mercado.pagar_clausula).
 func pagar_clausula(vendedor: Team, jugador_objetivo_id: int) -> Dictionary:
-	var resultado := Mercado.pagar_clausula(equipo_jugador, vendedor, jugador_objetivo_id)
+	var resultado := Mercado.comprar_al_contado(equipo_jugador, vendedor, jugador_objetivo_id, rng, true)
 	if resultado["exito"]:
-		_agregar_noticia("CLÁUSULA: %s paga la cláusula de un %s de %s por $%.0f (sale un %s)" % [
+		_agregar_noticia("CLÁUSULA: %s paga la cláusula de un %s de %s por %s" % [
 			equipo_jugador.nombre, resultado["posicion"], vendedor.nombre,
-			resultado["clausula"], resultado["jugador_sale"]["posicion"]
+			Economia.formato_dinero(resultado["precio"])
 		])
 	return resultado
 

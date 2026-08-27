@@ -730,22 +730,31 @@ func _refrescar_economia() -> void:
 
 
 ## Fase 9, extendido con mercado más profundo: mercado iniciado por el
-## jugador (Mercado.ofertar_por_jugador / Mercado.pagar_clausula). Busca
-## en tu división y las dos vecinas (una arriba, una abajo) — mostrar toda
-## la pirámide sería demasiado ruido, pero limitarse a exactamente tu
-## división también se sentía corto.
+## jugador (Mercado.comprar_al_contado). Busca en TODA la pirámide y en el
+## plantel entero del rival —titulares, banco y cantera—, que es lo mismo
+## que puede hacer la IA (Mercado.ventana_entre_divisiones). Antes miraba
+## solo tu división y las dos vecinas, y solo los titulares: la joya que
+## la IA pesca de la academia de un club de décima el jugador ni la veía.
+## Lo que acota la lista es el filtro de división y el de puesto, no una
+## regla del juego.
 const POSICIONES_MERCADO := ["ARQ", "DFC", "LAT", "MC", "MCO", "EXT", "DC"]
 
+## -1 = todas las divisiones; 0..9 = una en particular. Arranca en -2
+## ("todavía no se eligió") porque el default es TU división, y cuál es eso
+## no se sabe hasta que hay partida cargada: con "Todas" por defecto la
+## lista ordenada por media mostraba quince cracks de primera impagables y
+## nada útil.
+var division_mercado_actual: int = -2
+var option_division_mercado: OptionButton
 
-## Divisiones vecinas + la propia (acotado a 0..9), como equipos de esa
-## división: [{"equipo":Team, "division":int}, ...] — division es
-## 1-indexada para mostrar en la UI.
+
+## [{"equipo":Team, "division":int}, ...] — division es 1-indexada para
+## mostrarla en la UI.
 func _candidatos_mercado_por_division() -> Array:
 	var equipo := GameState.equipo_jugador
 	var candidatos := []
-	for offset in [-1, 0, 1]:
-		var d: int = GameState.division_jugador + offset
-		if d < 0 or d >= GameState.piramide.divisiones.size():
+	for d in range(GameState.piramide.divisiones.size()):
+		if division_mercado_actual != -1 and d != division_mercado_actual:
 			continue
 		for rival in GameState.piramide.divisiones[d].equipos:
 			if rival == equipo:
@@ -762,8 +771,23 @@ func _construir_panel_mercado(padre: Control) -> void:
 	paneles["mercado"] = panel
 
 	var titulo := Label.new()
-	titulo.text = "Mercado — ofertar por un jugador de tu division y las vecinas"
+	titulo.text = "Mercado — cualquier jugador de cualquier club de la piramide"
 	panel.add_child(titulo)
+
+	var fila_division := HBoxContainer.new()
+	panel.add_child(fila_division)
+	var et_division := Label.new()
+	et_division.text = "Division:"
+	fila_division.add_child(et_division)
+	option_division_mercado = OptionButton.new()
+	option_division_mercado.add_item("Todas")
+	for d in range(10):
+		option_division_mercado.add_item("Division %d" % (d + 1))
+	option_division_mercado.item_selected.connect(func(idx: int):
+		division_mercado_actual = idx - 1
+		_refrescar_mercado()
+	)
+	fila_division.add_child(option_division_mercado)
 
 	var barra_posiciones := HBoxContainer.new()
 	panel.add_child(barra_posiciones)
@@ -795,24 +819,40 @@ func _refrescar_mercado() -> void:
 		hijo.queue_free()
 
 	var equipo := GameState.equipo_jugador
+	if division_mercado_actual == -2:
+		division_mercado_actual = GameState.division_jugador
+		if option_division_mercado != null:
+			option_division_mercado.selected = division_mercado_actual + 1
 	var mi_media_en_posicion := -1.0
 	for j in equipo.jugadores:
 		if j["posicion"] == posicion_mercado_actual and (mi_media_en_posicion < 0.0 or j["media"] < mi_media_en_posicion):
 			mi_media_en_posicion = j["media"]
 
-	var candidatos := []  # [{equipo, jugador, division}]
+	var candidatos := []  # [{equipo, jugador, division, origen}]
 	for entrada in _candidatos_mercado_por_division():
 		var rival: Team = entrada["equipo"]
 		for j in rival.jugadores:
 			if j["posicion"] == posicion_mercado_actual:
-				candidatos.append({"equipo": rival, "jugador": j, "division": entrada["division"]})
+				candidatos.append({"equipo": rival, "jugador": j, "division": entrada["division"], "origen": "titular"})
+		for j in rival.banco:
+			if j["posicion"] == posicion_mercado_actual:
+				candidatos.append({"equipo": rival, "jugador": j, "division": entrada["division"], "origen": "banco"})
+		for j in rival.cantera:
+			if j["posicion"] == posicion_mercado_actual:
+				candidatos.append({"equipo": rival, "jugador": j, "division": entrada["division"], "origen": "cantera"})
 	candidatos.sort_custom(func(a, b): return a["jugador"]["media"] > b["jugador"]["media"])
 
 	var titulo_lista := Label.new()
-	titulo_lista.text = "Tu titular mas debil en %s tiene media %.1f — mostrando los mejores de tu division y las vecinas:" % [posicion_mercado_actual, mi_media_en_posicion]
+	var donde := "toda la piramide" if division_mercado_actual == -1 else "la division %d" % (division_mercado_actual + 1)
+	titulo_lista.text = "Tu titular mas debil en %s tiene media %.1f. %d candidatos en %s (presupuesto de fichajes: %s):" % [
+		posicion_mercado_actual, mi_media_en_posicion, candidatos.size(), donde,
+		Economia.formato_dinero(equipo.caja["fichajes"])]
 	contenedor_mercado_botones.add_child(titulo_lista)
 
-	for i in range(min(15, candidatos.size())):
+	# 40 y no 15: la lista ahora sale de toda la piramide y de los tres
+	# origenes (titulares, banco y cantera), asi que quince filas se comian
+	# todo lo interesante que no fuera un titular de primera.
+	for i in range(min(40, candidatos.size())):
 		var candidato: Dictionary = candidatos[i]
 		var rival: Team = candidato["equipo"]
 		var jugador: Dictionary = candidato["jugador"]
@@ -821,8 +861,9 @@ func _refrescar_mercado() -> void:
 		var valor := ValorJugador.calcular(jugador, rival.animo.get(jugador["id"], 50.0), rival.contratos.get(jugador["id"], 1))
 		var clausula: float = rival.clausulas.get(jugador["id"], valor * Team.FACTOR_CLAUSULA)
 		var label := Label.new()
-		label.text = "%-22s  %-14s D%d  media %5.1f  pot %3d  ~%s  (clausula %s)" % [
-			_nombre_jugador(jugador), rival.nombre, candidato["division"], jugador["media"], jugador["potencial"],
+		label.text = "%-22s  %-14s D%d  %-8s media %5.1f  pot %3d  ~%s  (clausula %s)" % [
+			_nombre_jugador(jugador), rival.nombre, candidato["division"], candidato["origen"],
+			jugador["media"], jugador["potencial"],
 			Economia.formato_dinero(valor), Economia.formato_dinero(clausula)
 		]
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -832,7 +873,11 @@ func _refrescar_mercado() -> void:
 
 		var btn := Button.new()
 		btn.text = "Ofertar"
-		btn.disabled = jugador["media"] <= mi_media_en_posicion
+		# La compra es al contado: no se resigna a nadie, asi que ya no
+		# tiene sentido exigir que el objetivo te mejore. Comprar un
+		# juvenil con proyeccion que hoy rinde menos que tu titular es una
+		# decision valida — es justo lo que hace la IA con las joyas.
+		btn.disabled = equipo.caja["fichajes"] < valor
 		btn.pressed.connect(func(): _on_ofertar(rival, jugador_id))
 		fila.add_child(btn)
 

@@ -1,7 +1,7 @@
 extends SceneTree
 
 ## Mercado más profundo: resistencia de venta y cláusula de rescisión
-## (Mercado.resistencia_venta, Mercado.pagar_clausula). Correr con:
+## (Mercado.resistencia_venta, Mercado.comprar_al_contado). Correr con:
 ## godot --headless --script tests/test_mercado_profundo.gd
 
 const SEED := 3131
@@ -127,7 +127,7 @@ func _test_oferta_comun_puede_ser_rechazada_por_resistencia(rng: RandomNumberGen
 	rng_oferta.seed = 555
 	var rechazado_por_resistencia := false
 	for intento in range(50):
-		var resultado := Mercado.ofertar_por_jugador(comprador, vendedor, jugador_objetivo_id, rng_oferta)
+		var resultado := Mercado.comprar_al_contado(comprador, vendedor, jugador_objetivo_id, rng_oferta)
 		if not resultado["exito"] and resultado.get("resistencia", false):
 			rechazado_por_resistencia = true
 			break
@@ -141,7 +141,7 @@ func _test_oferta_comun_puede_ser_rechazada_por_resistencia(rng: RandomNumberGen
 
 
 func _test_clausula_fuerza_la_venta_pase_lo_que_pase(rng: RandomNumberGenerator) -> void:
-	print("\n=== pagar_clausula(): venta obligatoria, ignora resistencia y si el objetivo 'es mejor' ===")
+	print("\n=== La clausula fuerza la venta, ignorando la resistencia ===")
 	var comprador := Team.generar("CompradorClausula", rng, 5000)
 	var vendedor := Team.generar("VendedorClausula", rng, 6000)
 	vendedor.reputacion = 100.0
@@ -163,15 +163,20 @@ func _test_clausula_fuerza_la_venta_pase_lo_que_pase(rng: RandomNumberGenerator)
 			j["media"] = 99.0
 	comprador.caja["fichajes"] = clausula + 1000.0
 
-	var resultado := Mercado.pagar_clausula(comprador, vendedor, jugador_objetivo_id)
+	var resultado := Mercado.comprar_al_contado(comprador, vendedor, jugador_objetivo_id, rng, true)
 
+	# El plantel entero, no solo los once: la compra al contado mete al que
+	# llega de titular si mejora el puesto y al banco si no, y aca el
+	# comprador ya tiene un MC mejor a proposito. Donde caiga es decision
+	# de Team.incorporar; lo que este test prueba es que la venta se
+	# concreta igual.
 	var comprador_ids := []
-	for j in comprador.jugadores:
+	for j in comprador.todos_los_jugadores():
 		comprador_ids.append(j["id"])
 
 	var ok: bool = resultado["exito"]
 	ok = ok and comprador_ids.has(jugador_objetivo_id)
-	ok = ok and is_equal_approx(resultado["clausula"], clausula)
+	ok = ok and is_equal_approx(resultado["precio"], clausula)
 
 	if ok:
 		print("OK: la clausula fuerza la venta del capitan/figura sin importar resistencia ni si convenia (%s)." % Economia.formato_dinero(clausula))
@@ -180,15 +185,15 @@ func _test_clausula_fuerza_la_venta_pase_lo_que_pase(rng: RandomNumberGenerator)
 
 
 func _test_clausula_rechazo_sin_fondos(rng: RandomNumberGenerator) -> void:
-	print("\n=== pagar_clausula(): rechazo si no alcanza el presupuesto ===")
+	print("\n=== La clausula se rechaza si no alcanza el presupuesto ===")
 	var comprador := Team.generar("CompradorPobre", rng, 7000)
 	var vendedor := Team.generar("VendedorClausula2", rng, 8000)
 	comprador.caja["fichajes"] = 0.0
 
 	var jugador_objetivo_id: int = vendedor.jugadores[0]["id"]
-	var resultado := Mercado.pagar_clausula(comprador, vendedor, jugador_objetivo_id)
+	var resultado := Mercado.comprar_al_contado(comprador, vendedor, jugador_objetivo_id, rng, true)
 
-	if not resultado["exito"] and resultado.has("clausula"):
-		print("OK: se rechazo por falta de fondos para la clausula (%s)." % Economia.formato_dinero(resultado["clausula"]))
+	if not resultado["exito"] and resultado.has("precio"):
+		print("OK: se rechazo por falta de fondos para la clausula (%s)." % Economia.formato_dinero(resultado["precio"]))
 	else:
 		print("FALLA: %s" % [resultado])

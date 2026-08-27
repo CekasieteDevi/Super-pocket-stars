@@ -119,12 +119,6 @@ static func ejecutar_ventana(liga: Liga, rng: RandomNumberGenerator, equipo_prot
 	return transferencias
 
 
-## Oferta del jugador humano por un jugador puntual de otro club — a
-## diferencia de ejecutar_ventana() (automático, entre clubes de la IA),
-## esto lo dispara la UI cuando el usuario elige a alguien. El que sale a
-## cambio es siempre tu titular más débil en esa misma posición (pasa a tu
-## banco, no se libera), y solo se permite si el objetivo es realmente
-## mejor — si no, no tiene sentido la oferta.
 ## §9.3 extendido: cuánto le cuesta a un club de la IA desprenderse de un
 ## jugador con una oferta común (no una cláusula) — 0.0 lo vende sin
 ## problema, cerca de 1.0 casi nunca acepta. Más resistencia si es el
@@ -163,117 +157,76 @@ static func resistencia_venta(vendedor: Team, jugador: Dictionary) -> float:
 	return clamp(resistencia, 0.0, 0.85)
 
 
-static func ofertar_por_jugador(comprador: Team, vendedor: Team, jugador_objetivo_id: int, rng: RandomNumberGenerator) -> Dictionary:
-	var indice_objetivo := -1
-	for i in range(vendedor.jugadores.size()):
-		if vendedor.jugadores[i]["id"] == jugador_objetivo_id:
-			indice_objetivo = i
-			break
-	if indice_objetivo < 0:
-		return {"exito": false, "motivo": "Ese jugador ya no juega en ese club."}
-
-	var jugador_objetivo: Dictionary = vendedor.jugadores[indice_objetivo]
-	var posicion: String = jugador_objetivo["posicion"]
-
-	var indice_saliente := -1
-	for i in range(comprador.jugadores.size()):
-		if comprador.jugadores[i]["posicion"] == posicion:
-			if indice_saliente == -1 or comprador.jugadores[i]["media"] < comprador.jugadores[indice_saliente]["media"]:
-				indice_saliente = i
-	if indice_saliente < 0:
-		return {"exito": false, "motivo": "No tenés ningún jugador en esa posición para dar de cambio."}
-
-	var jugador_saliente: Dictionary = comprador.jugadores[indice_saliente]
-	if jugador_objetivo["media"] <= jugador_saliente["media"]:
-		return {"exito": false, "motivo": "Tu jugador actual en esa posición ya es igual o mejor."}
-
-	var valor_objetivo := ValorJugador.calcular(jugador_objetivo, vendedor.animo.get(jugador_objetivo["id"], 50.0), vendedor.contratos.get(jugador_objetivo["id"], 1))
-	var valor_saliente := ValorJugador.calcular(jugador_saliente, comprador.animo.get(jugador_saliente["id"], 50.0), comprador.contratos.get(jugador_saliente["id"], 1))
-	var diferencia: float = max(0.0, valor_objetivo - valor_saliente)
-
-	if comprador.caja["fichajes"] < diferencia:
-		return {"exito": false, "motivo": "No te alcanza el presupuesto de Fichajes.", "diferencia": diferencia, "disponible": comprador.caja["fichajes"]}
-
-	var resistencia := resistencia_venta(vendedor, jugador_objetivo)
-	if rng.randf() < resistencia:
-		return {
-			"exito": false, "motivo": "El club no quiere desprenderse de esa pieza con una oferta común.",
-			"resistencia": true, "clausula": vendedor.clausulas.get(jugador_objetivo_id, 0.0),
-		}
-
-	comprador.caja["fichajes"] -= diferencia
-	vendedor.caja["fichajes"] += diferencia
-
-	# El comprador pisa el puesto titular directo — jugador_saliente se va
-	# entero al club vendedor (ver vender_titular), no se banquea en el
-	# suyo propio.
-	comprador.jugadores[indice_saliente] = jugador_objetivo
-	comprador.recalcular_capitan()
-	vendedor.vender_titular(indice_objetivo, jugador_saliente)
-
-	comprador._registrar_fichaje(jugador_objetivo, valor_objetivo)
-	vendedor._registrar_fichaje(jugador_saliente, valor_saliente)
-	comprador._limpiar_registro(jugador_saliente["id"])  # jugador_saliente ya no es de este club
-	vendedor._limpiar_registro(jugador_objetivo["id"])  # jugador_objetivo ya no es de este club
-
-	return {
-		"exito": true, "jugador_entra": jugador_objetivo, "jugador_sale": jugador_saliente,
-		"diferencia": diferencia, "posicion": posicion,
-	}
+## Dónde está un jugador dentro de un club: {"jugador":Dictionary,
+## "origen":"titular"/"banco"/"cantera"} o {} si no está.
+##
+## Hace falta porque las dos vias de compra del jugador humano miraban
+## SOLO vendedor.jugadores, asi que el banco y —lo que mas importa— la
+## cantera ajena eran invisibles: la joya que la IA pesca de la academia
+## de un club de decima el jugador no la podia ni ver.
+static func ubicar(vendedor: Team, jugador_id: int) -> Dictionary:
+	for j in vendedor.jugadores:
+		if int(j["id"]) == jugador_id:
+			return {"jugador": j, "origen": "titular"}
+	for j in vendedor.banco:
+		if int(j["id"]) == jugador_id:
+			return {"jugador": j, "origen": "banco"}
+	for j in vendedor.cantera:
+		if int(j["id"]) == jugador_id:
+			return {"jugador": j, "origen": "cantera"}
+	return {}
 
 
-## Paga la cláusula de rescisión completa: venta OBLIGATORIA, sin
-## resistencia_venta y sin comparar si el objetivo es "mejor" que tu
-## titular actual (pagar de más por alguien que no te mejora es una
-## decisión tuya, no algo que el sistema tenga que impedir). Todo el
-## monto sale de Fichajes — no hay "diferencia" con nadie porque no hay
-## intercambio de jugadores de por medio, solo la cláusula en efectivo.
-static func pagar_clausula(comprador: Team, vendedor: Team, jugador_objetivo_id: int) -> Dictionary:
-	var indice_objetivo := -1
-	for i in range(vendedor.jugadores.size()):
-		if vendedor.jugadores[i]["id"] == jugador_objetivo_id:
-			indice_objetivo = i
-			break
-	if indice_objetivo < 0:
-		return {"exito": false, "motivo": "Ese jugador ya no juega en ese club."}
+## §9.3: compra al contado. Es la misma operacion que hace la IA en
+## ventana_entre_divisiones —plata contra jugador, sin nadie a cambio— y
+## sirve para cualquiera del plantel o de la cantera del vendedor, de la
+## division que sea.
+##
+## `forzar` = pagar la clausula de rescision: precio mas alto pero venta
+## obligatoria, sin resistencia.
+##
+## Reemplaza a las dos vias que tenia el jugador humano hasta el mercado
+## abierto: ofertar_por_jugador() (un TRUEQUE, te llevabas al objetivo y
+## dabas tu titular mas flojo de ese puesto) y pagar_clausula(). Las dos
+## miraban solo vendedor.jugadores y las dos quedaron borradas.
+static func comprar_al_contado(comprador: Team, vendedor: Team, jugador_id: int,
+		rng: RandomNumberGenerator, forzar: bool = false) -> Dictionary:
+	if comprador == vendedor:
+		return {"exito": false, "motivo": "Ese jugador ya es tuyo."}
+	var donde := ubicar(vendedor, jugador_id)
+	if donde.is_empty():
+		return {"exito": false, "motivo": "Ese jugador ya no está en ese club."}
+	var jugador: Dictionary = donde["jugador"]
 
-	var jugador_objetivo: Dictionary = vendedor.jugadores[indice_objetivo]
-	var posicion: String = jugador_objetivo["posicion"]
-	var clausula: float = vendedor.clausulas.get(
-		jugador_objetivo_id,
-		ValorJugador.calcular(jugador_objetivo, vendedor.animo.get(jugador_objetivo_id, 50.0), vendedor.contratos.get(jugador_objetivo_id, 1)) * Team.FACTOR_CLAUSULA
-	)
+	var valor := ValorJugador.calcular(
+		jugador, vendedor.animo.get(jugador_id, 50.0), vendedor.contratos.get(jugador_id, 3))
+	var precio: float = vendedor.clausulas.get(jugador_id, valor * Team.FACTOR_CLAUSULA) if forzar else valor
 
-	if comprador.caja["fichajes"] < clausula:
-		return {"exito": false, "motivo": "No te alcanza el presupuesto de Fichajes para pagar la cláusula.", "clausula": clausula, "disponible": comprador.caja["fichajes"]}
+	if comprador.caja["fichajes"] < precio:
+		return {"exito": false, "motivo": "No te alcanza el presupuesto de Fichajes.",
+			"precio": precio, "disponible": comprador.caja["fichajes"]}
 
-	var indice_saliente := -1
-	for i in range(comprador.jugadores.size()):
-		if comprador.jugadores[i]["posicion"] == posicion:
-			if indice_saliente == -1 or comprador.jugadores[i]["media"] < comprador.jugadores[indice_saliente]["media"]:
-				indice_saliente = i
-	if indice_saliente < 0:
-		return {"exito": false, "motivo": "No tenés ningún jugador en esa posición para reemplazar."}
+	if not forzar and rng.randf() < resistencia_venta(vendedor, jugador):
+		return {"exito": false, "motivo": "El club no quiere desprenderse de esa pieza con una oferta común.",
+			"resistencia": true, "clausula": vendedor.clausulas.get(jugador_id, valor * Team.FACTOR_CLAUSULA)}
 
-	var jugador_saliente: Dictionary = comprador.jugadores[indice_saliente]
-	var valor_saliente := ValorJugador.calcular(jugador_saliente, comprador.animo.get(jugador_saliente["id"], 50.0), comprador.contratos.get(jugador_saliente["id"], 1))
+	# La cantera no es plantel: sale de la lista y listo, no hay hueco que
+	# tapar. Del plantel si, y de eso se encarga Team.perder_jugador.
+	if donde["origen"] == "cantera":
+		for i in range(vendedor.cantera.size()):
+			if int(vendedor.cantera[i]["id"]) == jugador_id:
+				vendedor.cantera.remove_at(i)
+				break
+		vendedor._limpiar_registro(jugador_id)
+	elif not vendedor.perder_jugador(jugador_id, rng):
+		return {"exito": false, "motivo": "Ese jugador ya no está en ese club."}
 
-	comprador.caja["fichajes"] -= clausula
-	vendedor.caja["fichajes"] += clausula
+	comprador.caja["fichajes"] -= precio
+	vendedor.caja["fichajes"] += precio
+	var saliente := comprador.incorporar(jugador, valor)
 
-	comprador.jugadores[indice_saliente] = jugador_objetivo
-	comprador.recalcular_capitan()
-	vendedor.vender_titular(indice_objetivo, jugador_saliente)
-
-	comprador._registrar_fichaje(jugador_objetivo, clausula / Team.FACTOR_CLAUSULA)
-	vendedor._registrar_fichaje(jugador_saliente, valor_saliente)
-	comprador._limpiar_registro(jugador_saliente["id"])
-	vendedor._limpiar_registro(jugador_objetivo_id)
-
-	return {
-		"exito": true, "jugador_entra": jugador_objetivo, "jugador_sale": jugador_saliente,
-		"clausula": clausula, "posicion": posicion,
-	}
+	return {"exito": true, "jugador": jugador, "posicion": jugador["posicion"],
+		"precio": precio, "origen": donde["origen"], "jugador_sale": saliente}
 
 
 static func _indice_en_posicion(equipo: Team, posicion: String, rng: RandomNumberGenerator) -> int:
