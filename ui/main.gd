@@ -57,7 +57,7 @@ var contenedor_prestamos_ceder_botones: VBoxContainer
 var label_prestamos_estado: Label
 var contenedor_instalaciones_botones: VBoxContainer
 var label_instalaciones_estado: Label
-var lista_seleccion: RichTextLabel
+var contenedor_seleccion: VBoxContainer
 var label_cantera_mentor: Label
 var label_partida_estado: Label
 var boton_cargar_partida: Button
@@ -2406,6 +2406,9 @@ func _on_pagar_clausula(vendedor: Team, jugador_id: int) -> void:
 	_refrescar_economia()
 
 
+## Agentes libres: no se paga fee de transferencia, solo el sueldo. Es la
+## unica forma de reforzarse sin plata en la caja de fichajes, asi que la
+## pantalla lo dice arriba de todo.
 func _construir_panel_libres(padre: Control) -> void:
 	var panel := VBoxContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -2413,15 +2416,21 @@ func _construir_panel_libres(padre: Control) -> void:
 	padre.add_child(panel)
 	paneles["libres"] = panel
 
-	var titulo := Label.new()
-	titulo.text = "Agentes libres — sin fee de transferencia, solo pagas el sueldo"
-	panel.add_child(titulo)
+	var aviso := Label.new()
+	aviso.text = "Sin fee de transferencia: solo pagas el sueldo. Fichar reemplaza a tu jugador MAS FLOJO de ese puesto, asi que nunca empeora el plantel."
+	aviso.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	aviso.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	aviso.add_theme_color_override("font_color", Tema.SUAVE)
+	panel.add_child(aviso)
 
 	label_libres_estado = Label.new()
 	label_libres_estado.text = ""
+	label_libres_estado.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label_libres_estado.add_theme_color_override("font_color", Tema.AMBAR)
 	panel.add_child(label_libres_estado)
 
 	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.add_child(scroll)
@@ -2431,31 +2440,83 @@ func _construir_panel_libres(padre: Control) -> void:
 	scroll.add_child(contenedor_libres_botones)
 
 
+## Una tarjeta vacia con un texto explicativo. Se repite en cuatro
+## pantallas (libres, prestamos, cantera, noticias) y siempre por el mismo
+## motivo: una lista vacia sin explicacion se lee como algo roto.
+func _tarjeta_vacia(texto: String) -> Control:
+	var caja := Componentes.tarjeta()
+	var l := Label.new()
+	l.text = texto
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.add_theme_color_override("font_color", Tema.SUAVE)
+	caja.add_child(l)
+	return caja
+
+
+## Una fila "jugador + un boton": la comparten libres y prestamos.
+func _fila_jugador_accion(j: Dictionary, detalle: String, texto_boton: String,
+		ayuda_boton: String, al_apretar: Callable) -> Control:
+	var fila := Componentes.tarjeta()
+	var dentro := HBoxContainer.new()
+	fila.add_child(dentro)
+
+	var caja_pos := CenterContainer.new()
+	caja_pos.custom_minimum_size = Vector2(56, 0)
+	caja_pos.add_child(Componentes.chip(str(j["posicion"]), Color("#2f4a3c")))
+	dentro.add_child(caja_pos)
+
+	var izq := VBoxContainer.new()
+	izq.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	izq.add_theme_constant_override("separation", 2)
+	dentro.add_child(izq)
+	var nombre := Label.new()
+	nombre.text = _nombre_jugador(j)
+	nombre.clip_text = true
+	nombre.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	izq.add_child(nombre)
+	var sub := Label.new()
+	sub.text = detalle
+	sub.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	sub.add_theme_color_override("font_color", Tema.SUAVE)
+	izq.add_child(sub)
+
+	var caja_media := VBoxContainer.new()
+	caja_media.custom_minimum_size = Vector2(90, 0)
+	caja_media.add_theme_constant_override("separation", 0)
+	dentro.add_child(caja_media)
+	caja_media.add_child(Tema.etiqueta_seccion("Media"))
+	var l_media := Label.new()
+	l_media.text = "%.1f" % float(j["media"])
+	Tema.numero(l_media, 22, Componentes.color_de_valor(int(j["media"])))
+	caja_media.add_child(l_media)
+
+	var btn := Button.new()
+	btn.text = texto_boton
+	btn.tooltip_text = ayuda_boton
+	btn.custom_minimum_size = Vector2(130, Tema.ALTO_TACTIL)
+	btn.pressed.connect(al_apretar)
+	dentro.add_child(btn)
+	return fila
+
+
 func _refrescar_libres() -> void:
 	for hijo in contenedor_libres_botones.get_children():
 		hijo.queue_free()
 
 	var pool: Array = GameState.liga_jugador().agentes_libres
 	if pool.is_empty():
-		var label := Label.new()
-		label.text = "No hay agentes libres en tu division por ahora — aparecen cuando a un club de la IA se le vence el contrato de alguien."
-		contenedor_libres_botones.add_child(label)
+		contenedor_libres_botones.add_child(_tarjeta_vacia(
+			"No hay agentes libres en tu division por ahora. Aparecen cuando a un club de la IA se le vence el contrato de alguien y no se lo renueva."))
 		return
 
 	for agente in pool:
-		var fila := HBoxContainer.new()
-		var label := Label.new()
-		label.text = "%-4s  %-22s  media %5.1f  potencial %3d  edad %d" % [agente["posicion"], _nombre_jugador(agente), agente["media"], agente["potencial"], agente["edad"]]
-		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		fila.add_child(label)
-
-		var btn := Button.new()
-		btn.text = "Fichar"
-		var agente_id: int = agente["id"]
-		btn.pressed.connect(func(): _on_fichar_libre(agente_id))
-		fila.add_child(btn)
-
-		contenedor_libres_botones.add_child(fila)
+		var id: int = int(agente["id"])
+		contenedor_libres_botones.add_child(_fila_jugador_accion(
+			agente,
+			"%d años   ·   potencial %d" % [int(agente["edad"]), int(agente["potencial"])],
+			"Fichar",
+			"Reemplaza a tu jugador mas flojo de ese puesto, titular o suplente.",
+			func(): _on_fichar_libre(id)))
 
 
 ## Reemplaza siempre a tu jugador mas debil en esa posicion (titular o
@@ -2504,6 +2565,8 @@ func _on_fichar_libre(agente_id: int) -> void:
 ## Prestamos (§9.3 extendido): cedes banco/cantera propios por una
 ## temporada, o pedis prestado a otro club de tu division — ver
 ## core/prestamos.gd.
+## Ceder a prestamo. Pedir prestado NO vive aca: se hace desde Mercado,
+## con la misma negociacion que una compra.
 func _construir_panel_prestamos(padre: Control) -> void:
 	var panel := VBoxContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -2511,20 +2574,22 @@ func _construir_panel_prestamos(padre: Control) -> void:
 	padre.add_child(panel)
 	paneles["prestamos"] = panel
 
-	var titulo := Label.new()
-	titulo.text = "Prestamos — 1 temporada, fee unico del 10%% del valor + sueldo mientras dure"
-	panel.add_child(titulo)
+	var aviso := Label.new()
+	aviso.text = "Ceder a prestamo: una temporada, cobras un fee del 10% del valor y el club que lo recibe le paga el sueldo. Solo banco y cantera — a un titular no se lo puede ceder. Para PEDIR prestado, anda a Mercado."
+	aviso.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	aviso.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	aviso.add_theme_color_override("font_color", Tema.SUAVE)
+	panel.add_child(aviso)
 
 	label_prestamos_estado = Label.new()
 	label_prestamos_estado.text = ""
+	label_prestamos_estado.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label_prestamos_estado.add_theme_color_override("font_color", Tema.AMBAR)
 	panel.add_child(label_prestamos_estado)
 
-	var titulo_ceder := Label.new()
-	titulo_ceder.text = "Ceder a prestamo (tu banco y cantera)"
-	panel.add_child(titulo_ceder)
-
 	var scroll_ceder := ScrollContainer.new()
-	scroll_ceder.custom_minimum_size = Vector2(0, 160)
+	scroll_ceder.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll_ceder.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll_ceder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.add_child(scroll_ceder)
 
@@ -2532,18 +2597,12 @@ func _construir_panel_prestamos(padre: Control) -> void:
 	contenedor_prestamos_ceder_botones.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll_ceder.add_child(contenedor_prestamos_ceder_botones)
 
-	# Pedir prestado ya no vive aca: se hace desde Mercado, con el mismo
-	# buscador y las mismas condiciones que una compra (duracion, reparto
-	# del sueldo y opcion de compra). Esta pestaña quedo solo para CEDER,
-	# que es la operacion inversa.
-
 
 func _refrescar_prestamos() -> void:
 	for hijo in contenedor_prestamos_ceder_botones.get_children():
 		hijo.queue_free()
 
 	var equipo := GameState.equipo_jugador
-
 	var cedibles := []
 	for j in equipo.banco:
 		cedibles.append({"jugador": j, "desde_cantera": false})
@@ -2551,25 +2610,22 @@ func _refrescar_prestamos() -> void:
 		cedibles.append({"jugador": j, "desde_cantera": true})
 
 	if cedibles.is_empty():
-		var label := Label.new()
-		label.text = "No tenes banco ni cantera disponible para ceder."
-		contenedor_prestamos_ceder_botones.add_child(label)
+		contenedor_prestamos_ceder_botones.add_child(_tarjeta_vacia(
+			"No tenes a nadie para ceder: solo se puede prestar gente del banco o de la cantera."))
+		return
+
 	for entrada in cedibles:
 		var j: Dictionary = entrada["jugador"]
-		var fila := HBoxContainer.new()
-		var origen_txt := "cantera" if entrada["desde_cantera"] else "banco"
-		var label := Label.new()
-		label.text = "%-4s  %-22s  media %5.1f  potencial %3d  (%s)" % [j["posicion"], _nombre_jugador(j), j["media"], j["potencial"], origen_txt]
-		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		fila.add_child(label)
+		var id: int = int(j["id"])
+		var origen := "cantera" if entrada["desde_cantera"] else "banco"
+		contenedor_prestamos_ceder_botones.add_child(_fila_jugador_accion(
+			j,
+			"%s   ·   %d años   ·   potencial %d" % [
+				origen, int(j["edad"]), int(j["potencial"])],
+			"Ceder",
+			"Se va una temporada a un club de tu division. Cobras el fee ahora.",
+			func(): _on_ceder_prestamo(id)))
 
-		var btn := Button.new()
-		btn.text = "Ceder"
-		var jugador_id: int = j["id"]
-		btn.pressed.connect(func(): _on_ceder_prestamo(jugador_id))
-		fila.add_child(btn)
-
-		contenedor_prestamos_ceder_botones.add_child(fila)
 
 ## Elige un rival al azar de tu division como destino del prestamo — no
 ## hay negociacion todavia (eso es contenido pendiente), cualquier club de
@@ -2824,6 +2880,9 @@ func _on_mejorar_instalacion(categoria: String) -> void:
 ## toque, en vivo: no hace falta esperar al amistoso de fin de temporada
 ## para ver quién entraría hoy) con el club de origen de cada uno, y
 ## resalta a los que son de tu propio equipo.
+## La seleccion: los mejores de TODA la piramide, no de tu division. Que
+## te convoquen a alguien es la senal mas clara de que un jugador tuyo
+## esta entre los mejores del pais, asi que los tuyos van resaltados.
 func _construir_panel_seleccion(padre: Control) -> void:
 	var panel := VBoxContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -2831,42 +2890,86 @@ func _construir_panel_seleccion(padre: Control) -> void:
 	padre.add_child(panel)
 	paneles["seleccion"] = panel
 
-	var titulo := Label.new()
-	titulo.text = "Selección Uruguay — convocatoria actual (los mejores de TODA la piramide). Juega un amistoso al cerrar cada temporada."
-	panel.add_child(titulo)
+	var aviso := Label.new()
+	aviso.text = "Convocatoria actual de Uruguay: los mejores de toda la piramide. Juega un amistoso al cerrar cada temporada."
+	aviso.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	aviso.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	aviso.add_theme_color_override("font_color", Tema.SUAVE)
+	panel.add_child(aviso)
 
-	lista_seleccion = RichTextLabel.new()
-	lista_seleccion.bbcode_enabled = true
-	lista_seleccion.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	lista_seleccion.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.add_child(lista_seleccion)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+
+	contenedor_seleccion = VBoxContainer.new()
+	contenedor_seleccion.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	contenedor_seleccion.add_theme_constant_override("separation", 0)
+	scroll.add_child(contenedor_seleccion)
+
+
+func _fila_convocado(j: Dictionary, clubes_por_jugador: Dictionary, par: bool) -> Control:
+	var club: Team = clubes_por_jugador.get(j["id"])
+	var mio: bool = club == GameState.equipo_jugador
+	var fila := Componentes.fila(par)
+	if mio:
+		var e: StyleBoxFlat = fila.get_theme_stylebox("panel").duplicate()
+		e.bg_color = Tema.PANEL_ALTO
+		e.border_width_left = 4
+		e.border_color = Tema.AMBAR
+		fila.add_theme_stylebox_override("panel", e)
+	var dentro := Componentes.contenido(fila)
+
+	var caja_pos := CenterContainer.new()
+	caja_pos.custom_minimum_size = Vector2(56, 0)
+	caja_pos.add_child(Componentes.chip(str(j["posicion"]), Color("#2f4a3c")))
+	dentro.add_child(caja_pos)
+
+	var color: Color = Tema.AMBAR if mio else Tema.TEXTO
+	dentro.add_child(Componentes.celda(_nombre_jugador(j), 230, color))
+	dentro.add_child(Componentes.celda(
+		club.nombre if club != null else "?", 230,
+		Tema.AMBAR if mio else Tema.SUAVE))
+	dentro.add_child(Componentes.celda_numero("%.1f" % float(j["media"]), 80, color,
+		HORIZONTAL_ALIGNMENT_RIGHT))
+	# La media va alineada a la derecha, asi que sin este hueco su ultimo
+	# digito queda pegado a la columna siguiente y se leen como un numero.
+	var hueco := Control.new()
+	hueco.custom_minimum_size = Vector2(24, 0)
+	dentro.add_child(hueco)
+	var veces: int = GameState.seleccion.convocatorias.get(j["id"], 0)
+	dentro.add_child(Componentes.celda(
+		"%d convocatoria%s" % [veces, "s" if veces != 1 else ""], 190, Tema.SUAVE))
+	return fila
 
 
 func _refrescar_seleccion() -> void:
+	if contenedor_seleccion == null:
+		return
+	for hijo in contenedor_seleccion.get_children():
+		hijo.queue_free()
+
 	var convocatoria := GameState.seleccion.previsualizar(GameState.piramide)
 	var uruguay: Team = convocatoria["equipo"]
-	var clubes_por_jugador: Dictionary = convocatoria["clubes_por_jugador"]
+	var clubes: Dictionary = convocatoria["clubes_por_jugador"]
 
-	var texto := "[b]Titulares (11)[/b]\n"
-	for j in uruguay.jugadores:
-		texto += _linea_convocado(j, clubes_por_jugador)
-	texto += "\n[b]Banco (7)[/b]\n"
-	for j in uruguay.banco:
-		texto += _linea_convocado(j, clubes_por_jugador)
+	var propios := 0
+	for j in uruguay.jugadores + uruguay.banco:
+		if clubes.get(j["id"]) == GameState.equipo_jugador:
+			propios += 1
+	var resumen := Tema.etiqueta_seccion(
+		"Titulares (%d)  ·  tuyos convocados: %d" % [uruguay.jugadores.size(), propios])
+	contenedor_seleccion.add_child(resumen)
+	for i in range(uruguay.jugadores.size()):
+		contenedor_seleccion.add_child(
+			_fila_convocado(uruguay.jugadores[i], clubes, i % 2 == 0))
 
-	lista_seleccion.text = texto
-
-
-func _linea_convocado(j: Dictionary, clubes_por_jugador: Dictionary) -> String:
-	var club: Team = clubes_por_jugador.get(j["id"])
-	var club_nombre: String = club.nombre if club != null else "?"
-	var veces: int = GameState.seleccion.convocatorias.get(j["id"], 0)
-	var linea := "%-4s  %-22s  %-20s  media %5.1f  (%d convocatoria%s)" % [
-		j["posicion"], _nombre_jugador(j), club_nombre, j["media"], veces, "s" if veces != 1 else ""
-	]
-	if club == GameState.equipo_jugador:
-		return "[color=yellow]%s  <- tu equipo[/color]\n" % linea
-	return linea + "\n"
+	contenedor_seleccion.add_child(Tema.etiqueta_seccion(
+		"Banco (%d)" % uruguay.banco.size()))
+	for i in range(uruguay.banco.size()):
+		contenedor_seleccion.add_child(
+			_fila_convocado(uruguay.banco[i], clubes, i % 2 == 0))
 
 
 ## §17: los juveniles sin debutar. Lo que se decide aca es a quien
@@ -3075,29 +3178,52 @@ func _construir_panel_partida_guardado(padre: Control) -> void:
 	padre.add_child(panel)
 	paneles["partida_guardado"] = panel
 
-	var titulo := Label.new()
-	titulo.text = "Partida — guardado local (1 solo espacio)"
-	panel.add_child(titulo)
+	var tarjeta := Componentes.tarjeta()
+	panel.add_child(tarjeta)
+	var dentro := VBoxContainer.new()
+	tarjeta.add_child(dentro)
+
+	dentro.add_child(Tema.etiqueta_seccion("Guardado local · un solo espacio"))
 
 	label_partida_estado = Label.new()
 	label_partida_estado.text = ""
-	panel.add_child(label_partida_estado)
+	label_partida_estado.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	dentro.add_child(label_partida_estado)
+
+	var advertencia := Label.new()
+	advertencia.text = "Guardar pisa lo que hubiera. Cargar reemplaza TODO lo que este pasando ahora por lo del archivo. Borrar elimina el archivo y no toca la partida en curso."
+	advertencia.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	advertencia.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	advertencia.add_theme_color_override("font_color", Tema.SUAVE)
+	dentro.add_child(advertencia)
 
 	var barra := HBoxContainer.new()
-	panel.add_child(barra)
+	dentro.add_child(barra)
 
+	# Guardar es la accion principal de la pantalla: la unica ambar.
 	var boton_guardar := Button.new()
 	boton_guardar.text = "Guardar partida"
+	boton_guardar.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
+	Tema.primario(boton_guardar)
 	boton_guardar.pressed.connect(_on_guardar_partida)
 	barra.add_child(boton_guardar)
 
 	boton_cargar_partida = Button.new()
 	boton_cargar_partida.text = "Cargar partida"
+	boton_cargar_partida.custom_minimum_size = Vector2(180, Tema.ALTO_TACTIL)
 	boton_cargar_partida.pressed.connect(_on_cargar_partida)
 	barra.add_child(boton_cargar_partida)
 
+	var hueco := Control.new()
+	hueco.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	barra.add_child(hueco)
+
+	# Borrar lejos de las otras dos y en rojo: es la unica que no se puede
+	# deshacer.
 	boton_borrar_partida = Button.new()
-	boton_borrar_partida.text = "Borrar partida guardada"
+	boton_borrar_partida.text = "Borrar guardado"
+	boton_borrar_partida.custom_minimum_size = Vector2(180, Tema.ALTO_TACTIL)
+	boton_borrar_partida.add_theme_color_override("font_color", Tema.ROJO)
 	boton_borrar_partida.pressed.connect(_on_borrar_partida)
 	barra.add_child(boton_borrar_partida)
 
@@ -3107,7 +3233,8 @@ func _refrescar_partida_guardado() -> void:
 	boton_cargar_partida.disabled = not hay_guardado
 	boton_borrar_partida.disabled = not hay_guardado
 	if label_partida_estado.text == "":
-		label_partida_estado.text = "Hay una partida guardada." if hay_guardado else "No hay ninguna partida guardada todavia."
+		label_partida_estado.text = "Hay una partida guardada." if hay_guardado \
+			else "No hay ninguna partida guardada todavia."
 
 
 func _on_guardar_partida() -> void:
