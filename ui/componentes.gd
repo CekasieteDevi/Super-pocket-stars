@@ -27,6 +27,15 @@ const COL_ANIMO := 76
 const COL_CLUB := 136
 const COL_ACCION := 100
 
+## Anchos de la tabla de posiciones. Mismo criterio que el mercado: el
+## encabezado y las filas los comparten para que no se desalineen.
+const COL_POSICION := 46
+const COL_EQUIPO := 236
+const COL_JUGADOS := 50
+const COL_GOLES := 56
+const COL_DIFERENCIA := 62
+const COL_PUNTOS := 64
+
 ## Lo que ocupan juntas las columnas que tapa la niebla. Es el ancho del
 ## bloque "sin investigar" que las reemplaza — ver `bloque_tapado`.
 const COL_TAPADAS := COL_MEDIA + COL_VALOR + COL_SALARIO + COL_CONTRATO + COL_ANIMO
@@ -48,8 +57,14 @@ static func celda(texto: String, ancho: int, color: Color = Tema.TEXTO,
 
 ## Una celda con un número: Archivo y cifras tabulares, para que las
 ## columnas no bailen al cambiar de fila.
-static func celda_numero(texto: String, ancho: int, color: Color = Tema.TEXTO) -> Label:
-	var l := celda(texto, ancho, color)
+## `alineacion` queda a la IZQUIERDA por defecto porque asi la usa el
+## mercado, donde el encabezado son botones de ordenar alineados a la
+## izquierda. La tabla de posiciones pide DERECHA a mano: en una columna
+## de cifras de ancho distinto (9 y 32 puntos) alineadas a la izquierda
+## las unidades no coinciden y hay que comparar digito por digito.
+static func celda_numero(texto: String, ancho: int, color: Color = Tema.TEXTO,
+		alineacion: int = HORIZONTAL_ALIGNMENT_LEFT) -> Label:
+	var l := celda(texto, ancho, color, alineacion)
 	var f := Tema.archivo(700)
 	if f != null:
 		l.add_theme_font_override("font", f)
@@ -248,6 +263,23 @@ static func fila(par: bool) -> PanelContainer:
 	dentro.add_theme_constant_override("separation", 4)
 	caja.add_child(dentro)
 	return caja
+
+
+## Una barra de color fina al costado de una fila: la usa la tabla para
+## marcar las zonas de ascenso y descenso. Va como columna propia y no
+## como borde del panel porque el fondo alterno de la fila ya usa el
+## StyleBox y dos bordes distintos se pisan.
+static func acento_lateral(color: Color) -> Panel:
+	var p := Panel.new()
+	p.custom_minimum_size = Vector2(4, 0)
+	var e := StyleBoxFlat.new()
+	e.bg_color = color
+	e.corner_radius_top_left = 2
+	e.corner_radius_top_right = 2
+	e.corner_radius_bottom_left = 2
+	e.corner_radius_bottom_right = 2
+	p.add_theme_stylebox_override("panel", e)
+	return p
 
 
 ## El HBox de adentro de una fila, para meterle las celdas.

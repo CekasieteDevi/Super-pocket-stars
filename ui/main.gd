@@ -29,7 +29,9 @@ var cancha_formacion: CanchaFormacion
 var label_formacion_estado: Label
 ## Jugador tocado primero en la pantalla de formacion, a la espera del
 ## segundo para intercambiarlos. -1 = nadie seleccionado.
-var lista_tabla: RichTextLabel
+var contenedor_tabla: VBoxContainer
+var _fila_propia_tabla: Control = null
+var label_tabla_leyenda: Label
 var label_resultado: Label
 var lista_log: RichTextLabel
 var lista_estadisticas: RichTextLabel
@@ -793,31 +795,147 @@ func _construir_panel_tabla(padre: Control) -> void:
 
 	var titulo := Label.new()
 	titulo.name = "titulo"
+	Tema.numero(titulo, Tema.TAM_BASE)
 	panel.add_child(titulo)
 
-	lista_tabla = RichTextLabel.new()
-	lista_tabla.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	lista_tabla.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.add_child(lista_tabla)
+	# La leyenda de zonas: sin esto las barras de color son decoracion.
+	label_tabla_leyenda = Label.new()
+	label_tabla_leyenda.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	label_tabla_leyenda.add_theme_color_override("font_color", Tema.SUAVE)
+	panel.add_child(label_tabla_leyenda)
+
+	panel.add_child(_encabezado_tabla())
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+	contenedor_tabla = VBoxContainer.new()
+	contenedor_tabla.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	contenedor_tabla.add_theme_constant_override("separation", 0)
+	scroll.add_child(contenedor_tabla)
 	_refrescar_tabla()
+
+
+func _encabezado_tabla() -> PanelContainer:
+	var fila := Componentes.fila(false)
+	var dentro := Componentes.contenido(fila)
+	dentro.add_child(Componentes.acento_lateral(Color.TRANSPARENT))
+	var cols := [
+		["#", Componentes.COL_POSICION, HORIZONTAL_ALIGNMENT_RIGHT],
+		["Equipo", Componentes.COL_EQUIPO, HORIZONTAL_ALIGNMENT_LEFT],
+		["PJ", Componentes.COL_JUGADOS, HORIZONTAL_ALIGNMENT_RIGHT],
+		["PG", Componentes.COL_JUGADOS, HORIZONTAL_ALIGNMENT_RIGHT],
+		["PE", Componentes.COL_JUGADOS, HORIZONTAL_ALIGNMENT_RIGHT],
+		["PP", Componentes.COL_JUGADOS, HORIZONTAL_ALIGNMENT_RIGHT],
+		["GF", Componentes.COL_GOLES, HORIZONTAL_ALIGNMENT_RIGHT],
+		["GC", Componentes.COL_GOLES, HORIZONTAL_ALIGNMENT_RIGHT],
+		["DG", Componentes.COL_DIFERENCIA, HORIZONTAL_ALIGNMENT_RIGHT],
+		["Pts", Componentes.COL_PUNTOS, HORIZONTAL_ALIGNMENT_RIGHT],
+	]
+	for c in cols:
+		var l := Componentes.celda(str(c[0]), int(c[1]), Tema.SUAVE, int(c[2]))
+		l.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+		dentro.add_child(l)
+	return fila
+
+
+## Que le pasa al que termina en esta posicion. Las reglas viven en
+## Piramide (1° y 2° suben, 3° juega el playoff contra el 18°, 19° y 20°
+## bajan); aca solo se traducen a color. Division 1 no asciende y division
+## 10 no desciende, y por eso la zona depende de en cual estas.
+func _zona_de_posicion(pos: int, division: int) -> Dictionary:
+	if division > 1:
+		if pos <= 2:
+			return {"color": Tema.VERDE, "que": "asciende"}
+		if pos == 3:
+			return {"color": Tema.VERDE_TIBIO, "que": "playoff de ascenso"}
+	if division < Piramide.N_DIVISIONES:
+		if pos >= 19:
+			return {"color": Tema.ROJO, "que": "desciende"}
+		if pos == 18:
+			return {"color": Color("#a2622f"), "que": "playoff de descenso"}
+	return {"color": Color.TRANSPARENT, "que": ""}
 
 
 func _refrescar_tabla() -> void:
 	var panel: VBoxContainer = paneles["tabla"]
+	var division := GameState.division_jugador + 1
 	var titulo: Label = panel.get_node("titulo")
-	titulo.text = "Tabla de posiciones — Division %d" % (GameState.division_jugador + 1)
+	titulo.text = "Tabla de posiciones — División %d" % division
+
+	# La leyenda dice solo lo que aplica: division 1 no asciende y
+	# division 10 no desciende, y anunciar una zona que no existe es peor
+	# que no decir nada.
+	var partes := []
+	if division > 1:
+		partes.append("verde: ascienden · verde claro: playoff de ascenso")
+	if division < Piramide.N_DIVISIONES:
+		partes.append("naranja: playoff de descenso · rojo: descienden")
+	label_tabla_leyenda.text = "      ".join(partes)
+
+	for hijo in contenedor_tabla.get_children():
+		hijo.queue_free()
 
 	var liga := GameState.liga_jugador()
-	var texto := "%-14s %3s %3s %3s %3s %4s %4s %4s %4s\n" % ["Equipo", "PJ", "PG", "PE", "PP", "GF", "GC", "DG", "Pts"]
+	var mio: String = GameState.equipo_jugador.nombre
 	var pos := 1
 	for nombre in liga.tabla_ordenada():
 		var f: Dictionary = liga.tabla[nombre]
-		var marca := " <- vos" if nombre == GameState.equipo_jugador.nombre else ""
-		texto += "%2d. %-14s %3d %3d %3d %3d %4d %4d %4d %4d%s\n" % [
-			pos, nombre, f["pj"], f["pg"], f["pe"], f["pp"], f["gf"], f["gc"], f["dg"], f["pts"], marca
-		]
+		var zona := _zona_de_posicion(pos, division)
+		var soy_yo: bool = nombre == mio
+		var fila := Componentes.fila(pos % 2 == 0)
+		if soy_yo:
+			# Tu club tiene que saltar a la vista al abrir la pantalla: es
+			# lo unico que se busca en una tabla de 20.
+			var e: StyleBoxFlat = fila.get_theme_stylebox("panel").duplicate()
+			e.bg_color = Tema.PANEL_ALTO
+			e.border_width_top = 1
+			e.border_width_bottom = 1
+			e.border_color = Tema.AMBAR
+			fila.add_theme_stylebox_override("panel", e)
+		var dentro := Componentes.contenido(fila)
+		dentro.add_child(Componentes.acento_lateral(zona["color"]))
+		if zona["que"] != "":
+			fila.tooltip_text = str(zona["que"]).capitalize()
+
+		var color_texto: Color = Tema.AMBAR if soy_yo else Tema.TEXTO
+		dentro.add_child(Componentes.celda_numero(
+			str(pos), Componentes.COL_POSICION, color_texto, HORIZONTAL_ALIGNMENT_RIGHT))
+		dentro.add_child(Componentes.celda(
+			nombre, Componentes.COL_EQUIPO, color_texto))
+		for clave in ["pj", "pg", "pe", "pp"]:
+			dentro.add_child(Componentes.celda_numero(str(f[clave]),
+				Componentes.COL_JUGADOS, Tema.SUAVE, HORIZONTAL_ALIGNMENT_RIGHT))
+		for clave in ["gf", "gc"]:
+			dentro.add_child(Componentes.celda_numero(str(f[clave]),
+				Componentes.COL_GOLES, Tema.SUAVE, HORIZONTAL_ALIGNMENT_RIGHT))
+		var dg := int(f["dg"])
+		dentro.add_child(Componentes.celda_numero(
+			("+%d" % dg) if dg > 0 else str(dg), Componentes.COL_DIFERENCIA,
+			Tema.VERDE if dg > 0 else (Tema.ROJO if dg < 0 else Tema.SUAVE),
+			HORIZONTAL_ALIGNMENT_RIGHT))
+		dentro.add_child(Componentes.celda_numero(
+			str(f["pts"]), Componentes.COL_PUNTOS, color_texto, HORIZONTAL_ALIGNMENT_RIGHT))
+		contenedor_tabla.add_child(fila)
+		if soy_yo:
+			_fila_propia_tabla = fila
 		pos += 1
-	lista_tabla.text = texto
+
+	_centrar_tabla_en_mi_club.call_deferred()
+
+
+## Deja tu fila a la vista al abrir. Va diferido porque recien despues de
+## que el contenedor se acomoda las filas tienen posicion: pedido en el
+## mismo cuadro, todas estan en y=0 y el scroll no se mueve.
+func _centrar_tabla_en_mi_club() -> void:
+	if _fila_propia_tabla == null or not is_instance_valid(_fila_propia_tabla):
+		return
+	var scroll := _fila_propia_tabla.get_parent().get_parent() as ScrollContainer
+	if scroll == null:
+		return
+	scroll.scroll_vertical = int(maxf(0.0,
+		_fila_propia_tabla.position.y - scroll.size.y * 0.5))
 
 
 func _construir_panel_partido(padre: Control) -> void:
