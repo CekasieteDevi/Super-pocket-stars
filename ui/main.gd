@@ -1626,77 +1626,164 @@ func _dias_que_faltan(equipo: Team, jugador_id: int) -> int:
 ##
 ## Los conocidos van ordenados por lo que les queda de vigencia, del que
 ## esta por vencer al que recien empieza: lo accionable primero.
+## Mercado › Investigaciones: a quien estas mirando y a quien ya conoces.
+##
+## Arriba de todo va cuantos investigadores tenes y un boton que lleva
+## derecho a contratarlos. Es la pregunta que aparece sola al entrar acá
+## —"¿y dónde compro investigadores?"— y la respuesta estaba a tres
+## clicks, en otra seccion.
 func _refrescar_investigaciones() -> void:
 	for hijo in contenedor_investigaciones.get_children():
 		hijo.queue_free()
 	var equipo := GameState.equipo_jugador
 	var indice := _indice_de_jugadores()
 
-	var titulo := Label.new()
-	titulo.text = "En curso"
-	contenedor_investigaciones.add_child(titulo)
+	var libres := 0
+	for inv in equipo.investigadores:
+		if int(inv["objetivo"]) == -1:
+			libres += 1
 
+	var cabecera := Componentes.tarjeta(
+		Tema.ROJO if equipo.investigadores.is_empty() else Color.TRANSPARENT)
+	contenedor_investigaciones.add_child(cabecera)
+	var fila_cab := HBoxContainer.new()
+	cabecera.add_child(fila_cab)
+	var izq := VBoxContainer.new()
+	izq.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	izq.add_theme_constant_override("separation", 2)
+	fila_cab.add_child(izq)
+	izq.add_child(Tema.etiqueta_seccion("Tu red de investigadores"))
+	var resumen := Label.new()
+	if equipo.investigadores.is_empty():
+		resumen.text = "No tenes ninguno. Sin investigadores no podes averiguar nada de los jugadores de otros clubes: los ves tapados."
+		resumen.add_theme_color_override("font_color", Tema.ROJO)
+	else:
+		resumen.text = "%d contratado%s, %d libre%s esperando orden." % [
+			equipo.investigadores.size(), "" if equipo.investigadores.size() == 1 else "s",
+			libres, "" if libres == 1 else "s"]
+	resumen.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	izq.add_child(resumen)
+
+	var btn_contratar := Button.new()
+	btn_contratar.text = "Contratar investigadores"
+	btn_contratar.custom_minimum_size = Vector2(280, Tema.ALTO_TACTIL)
+	btn_contratar.tooltip_text = "Se contratan en Equipo › Instalaciones, con el presupuesto de Mejoras."
+	if equipo.investigadores.is_empty():
+		Tema.primario(btn_contratar)
+	btn_contratar.pressed.connect(func():
+		solapa_instalaciones = "investigadores"
+		_mostrar_seccion("equipo")
+		_mostrar_panel_de_seccion("instalaciones")
+	)
+	fila_cab.add_child(btn_contratar)
+
+	# --- En curso ----------------------------------------------------------
+	contenedor_investigaciones.add_child(Tema.etiqueta_seccion("Informes en curso"))
 	var en_curso := 0
 	for inv in equipo.investigadores:
 		if int(inv["objetivo"]) == -1:
 			continue
 		en_curso += 1
-		var pct: float = float(inv["dias"]) / Investigadores.dias_de_informe(int(inv["estrellas"]))
-		var faltan: int = int(ceil(
-			Investigadores.dias_de_informe(int(inv["estrellas"])) - float(inv["dias"])))
-		var quien := str(inv["nombre_objetivo"])
+		var total := Investigadores.dias_de_informe(int(inv["estrellas"]))
+		var pct: float = float(inv["dias"]) / total if total > 0.0 else 0.0
+		var faltan: int = int(ceil(total - float(inv["dias"])))
+		var quien := str(inv.get("nombre_objetivo", ""))
 		if quien == "":
 			quien = "un jugador"
+
+		var tarjeta := Componentes.tarjeta(Tema.AMBAR)
+		contenedor_investigaciones.add_child(tarjeta)
 		var fila := HBoxContainer.new()
-		var l := _etiqueta("%-26s %-24s  %3d%%  (faltan %d dias, investigador de %d★)" % [
-			quien, str(inv["club_objetivo"]), int(round(pct * 100.0)), faltan, int(inv["estrellas"])])
-		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		fila.add_child(l)
+		tarjeta.add_child(fila)
+
+		var datos := VBoxContainer.new()
+		datos.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		datos.add_theme_constant_override("separation", 3)
+		fila.add_child(datos)
+		var l_nombre := Label.new()
+		l_nombre.text = quien
+		l_nombre.clip_text = true
+		l_nombre.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		datos.add_child(l_nombre)
+		var l_club := Label.new()
+		l_club.text = "%s   ·   investigador de %d★" % [
+			str(inv.get("club_objetivo", "")), int(inv["estrellas"])]
+		l_club.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		l_club.add_theme_color_override("font_color", Tema.SUAVE)
+		datos.add_child(l_club)
+		datos.add_child(Componentes.bloque_investigando(0, pct, faltan))
+
 		var id_inv := int(inv["id"])
 		var btn := Button.new()
 		btn.text = "Cancelar"
+		btn.custom_minimum_size = Vector2(150, Tema.ALTO_TACTIL)
+		btn.tooltip_text = "Se pierde lo avanzado: el investigador vuelve a quedar libre."
 		btn.pressed.connect(func():
 			Investigadores.cancelar(equipo, id_inv)
 			_refrescar_investigaciones()
 		)
 		fila.add_child(btn)
-		contenedor_investigaciones.add_child(fila)
-	if en_curso == 0:
-		contenedor_investigaciones.add_child(_etiqueta(
-			"Nadie. Los investigadores libres estan esperando: mandalos desde la solapa Jugadores."))
 
-	var titulo2 := Label.new()
-	titulo2.text = "
-Conocidos (%d) — un informe dura %d dias y despues el jugador vuelve a quedar tapado" % [
-		equipo.conocimiento.size(), Investigadores.DIAS_VIGENCIA]
-	contenedor_investigaciones.add_child(titulo2)
+	if en_curso == 0:
+		contenedor_investigaciones.add_child(_tarjeta_vacia(
+			"Nadie bajo la lupa. Los investigadores libres estan esperando orden: elegi a quien mirar desde la solapa Jugadores."))
+
+	# --- Conocidos ---------------------------------------------------------
+	contenedor_investigaciones.add_child(Tema.etiqueta_seccion(
+		"Conocidos (%d)  ·  un informe dura %d dias y despues el jugador vuelve a quedar tapado" % [
+			equipo.conocimiento.size(), Investigadores.DIAS_VIGENCIA]))
 
 	if equipo.conocimiento.is_empty():
-		contenedor_investigaciones.add_child(_etiqueta("Todavia no terminaste ningun informe."))
+		contenedor_investigaciones.add_child(_tarjeta_vacia(
+			"Todavia no terminaste ningun informe."))
 		return
 
+	# Ordenados por lo que les queda: el que esta por vencer primero, que es
+	# el unico que pide una decision.
 	var conocidos := []
 	for id in equipo.conocimiento:
 		conocidos.append({"id": int(id), "dias": float(equipo.conocimiento[id])})
 	conocidos.sort_custom(func(a, b): return float(a["dias"]) < float(b["dias"]))
 
-	for c in conocidos:
+	contenedor_investigaciones.add_child(_encabezado_conocidos())
+	for i in range(conocidos.size()):
+		var c: Dictionary = conocidos[i]
 		var id: int = int(c["id"])
 		var dato: Dictionary = indice.get(id, {})
-		var nombre := "(ya no esta en la piramide)"
-		var club := ""
-		var extra := ""
-		if not dato.is_empty():
-			var j: Dictionary = dato["jugador"]
-			nombre = _nombre_jugador(j)
-			club = "%s D%d" % [dato["club"].nombre, int(dato["division"])]
-			extra = "%-4s  media %5.1f  %2d años" % [j["posicion"], j["media"], int(j["edad"])]
 		var dias: int = int(ceil(float(c["dias"])))
-		var aviso := "vence en %d dias" % dias
-		if dias < 120:
-			aviso = "VENCE PRONTO (%d dias)" % dias
-		contenedor_investigaciones.add_child(_etiqueta(
-			"%-26s %-24s %-28s  %s" % [nombre, club, extra, aviso]))
+		var fila := Componentes.fila(i % 2 == 0)
+		var dentro := Componentes.contenido(fila)
+
+		if dato.is_empty():
+			dentro.add_child(Componentes.celda(
+				"(ya no esta en la piramide)", 260, Tema.SUAVE))
+			dentro.add_child(Componentes.celda("", 210))
+			dentro.add_child(Componentes.celda("", 250))
+		else:
+			var j: Dictionary = dato["jugador"]
+			dentro.add_child(Componentes.celda(_nombre_jugador(j), 260))
+			dentro.add_child(Componentes.celda("%s  ·  D%d" % [
+				dato["club"].nombre, int(dato["division"])], 210, Tema.SUAVE))
+			dentro.add_child(Componentes.celda("%s  ·  media %.1f  ·  %d años" % [
+				j["posicion"], float(j["media"]), int(j["edad"])], 250, Tema.SUAVE))
+
+		# Menos de 120 dias es menos de media temporada: alcanza para
+		# decidir si conviene volver a mirarlo antes de que se tape.
+		var pronto: bool = dias < 120
+		dentro.add_child(Componentes.celda(
+			("VENCE PRONTO · %d dias" % dias) if pronto else ("vence en %d dias" % dias),
+			220, Tema.ROJO if pronto else Tema.SUAVE))
+		contenedor_investigaciones.add_child(fila)
+
+
+func _encabezado_conocidos() -> Control:
+	var fila := Componentes.fila(false)
+	var dentro := Componentes.contenido(fila)
+	for par in [["Jugador", 260], ["Club", 210], ["Datos", 250], ["Informe", 220]]:
+		var l := Componentes.celda(str(par[0]), int(par[1]), Tema.SUAVE)
+		l.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+		dentro.add_child(l)
+	return fila
 
 
 ## id -> {jugador, club, division} de toda la piramide. Se arma una vez
