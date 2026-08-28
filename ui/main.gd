@@ -120,6 +120,10 @@ func _ready() -> void:
 	_construir_dialogo_negociacion()
 	_construir_dialogo_prestamo()
 
+	# Al final, cuando ya esta todo construido: deja las listas
+	# deslizables con el dedo (ver _ajustar_para_tactil).
+	_ajustar_para_tactil(self)
+
 	_mostrar_plantel()
 
 
@@ -1393,6 +1397,12 @@ func _construir_dialogo_prestamo() -> void:
 	btn.pressed.connect(_on_pedir_prestamo)
 	caja.add_child(btn)
 
+	var cerrar_prestamo := Button.new()
+	cerrar_prestamo.text = "Cerrar"
+	cerrar_prestamo.custom_minimum_size = Vector2(200, 48)
+	cerrar_prestamo.pressed.connect(func(): dialogo_prestamo.hide())
+	caja.add_child(cerrar_prestamo)
+
 	label_prestamo_estado = RichTextLabel.new()
 	label_prestamo_estado.bbcode_enabled = true
 	label_prestamo_estado.fit_content = true
@@ -1576,6 +1586,15 @@ func _construir_dialogo_negociacion() -> void:
 	boton_negociacion_clausula.custom_minimum_size = Vector2(240, 48)
 	boton_negociacion_clausula.pressed.connect(_on_negociacion_clausula)
 	fila_botones.add_child(boton_negociacion_clausula)
+
+	# Cerrar propio: el boton que trae AcceptDialog queda abajo de todo y
+	# en un telefono no se ve, y la X del titulo es imposible de acertar
+	# con el dedo. Sin esto el modal no se podia cerrar.
+	var cerrar_negociacion := Button.new()
+	cerrar_negociacion.text = "Cerrar"
+	cerrar_negociacion.custom_minimum_size = Vector2(200, 48)
+	cerrar_negociacion.pressed.connect(func(): dialogo_negociacion.hide())
+	fila_botones.add_child(cerrar_negociacion)
 
 	label_negociacion_estado = RichTextLabel.new()
 	label_negociacion_estado.bbcode_enabled = true
@@ -2796,3 +2815,26 @@ func _aplicar_tema_tactil() -> void:
 	tema.set_constant("line_spacing", "Label", 6)
 
 	theme = tema
+
+
+## Cuanto hay que arrastrar antes de que un gesto cuente como scroll. Sin
+## esto (el valor por defecto es 0) un arrastre que EMPIEZA sobre una
+## etiqueta, un boton o un texto se lo come ese control y nunca llega al
+## ScrollContainer: en el telefono las listas simplemente no se deslizan.
+const ZONA_MUERTA_SCROLL := 30
+
+
+## Recorre todo lo construido y lo deja usable con el dedo. Se hace de una
+## pasada al final de _ready() en vez de recordar cada propiedad en cada
+## panel: hay diez ScrollContainer repartidos por la UI y olvidarse de uno
+## deja esa pantalla sin scroll, que es un bug silencioso y molesto.
+func _ajustar_para_tactil(nodo: Node) -> void:
+	if nodo is ScrollContainer:
+		nodo.scroll_deadzone = ZONA_MUERTA_SCROLL
+	elif nodo is RichTextLabel:
+		# PASS y no STOP: el texto sigue recibiendo el toque (los nombres
+		# del plantel son enlaces) pero ademas lo deja pasar al scroll de
+		# arriba, asi se puede deslizar arrastrando sobre la lista.
+		nodo.mouse_filter = Control.MOUSE_FILTER_PASS
+	for hijo in nodo.get_children():
+		_ajustar_para_tactil(hijo)
