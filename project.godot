@@ -29,8 +29,11 @@ window/size/viewport_width=1152
 window/size/viewport_height=648
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
-; El juego es horizontal (GDD): en el celular se fuerza apaisado.
-window/handheld/orientation=1
+; El juego es horizontal (GDD). 4 = SENSOR_LANDSCAPE: queda apaisado
+; siempre pero se puede girar entre las dos orientaciones horizontales.
+; OJO con el numero: en el enum de Godot 0 es landscape y 1 es PORTRAIT,
+; asi que un 1 aca deja el juego de costado en el telefono.
+window/handheld/orientation=4
 
 [physics]
 

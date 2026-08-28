@@ -67,6 +67,8 @@ var boton_borrar_partida: Button
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
+	_aplicar_tema_tactil()
+
 	var raiz := VBoxContainer.new()
 	raiz.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(raiz)
@@ -153,31 +155,43 @@ func _construir_panel_plantel(padre: Control) -> void:
 	titulo.text = "Plantel / formacion — %s" % GameState.equipo_jugador.nombre
 	panel.add_child(titulo)
 
-	var titulo_titulares := Label.new()
-	titulo_titulares.text = "Titulares (11) — toca el nombre para ver la ficha"
-	panel.add_child(titulo_titulares)
-
-	lista_plantel = RichTextLabel.new()
-	lista_plantel.bbcode_enabled = true
-	# Cada linea es un enlace al id del jugador: se toca el nombre y se
-	# abre su ficha. Es el unico lugar donde se pueden ver los atributos.
-	lista_plantel.meta_clicked.connect(func(meta): _mostrar_ficha(int(meta)))
-	lista_plantel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	lista_plantel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.add_child(lista_plantel)
-
-	var titulo_banco := Label.new()
-	titulo_banco.text = "Banco (7)"
-	panel.add_child(titulo_banco)
-
+	# UN solo scroll para toda la pantalla, no uno por seccion. Antes los
+	# titulares vivian en un RichTextLabel que se estiraba y el banco en su
+	# propio scroll de alto fijo: con la fuente tactil los 11 titulares ya
+	# no entraban y el ultimo quedaba cortado. Ademas dos scrolls anidados
+	# en un telefono son una pelea con el dedo.
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 180)
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.add_child(scroll)
 
+	var cuerpo := VBoxContainer.new()
+	cuerpo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(cuerpo)
+
+	var titulo_titulares := Label.new()
+	titulo_titulares.text = "Titulares (11) — toca el nombre para ver la ficha"
+	cuerpo.add_child(titulo_titulares)
+
+	lista_plantel = RichTextLabel.new()
+	lista_plantel.bbcode_enabled = true
+	# fit_content: crece hasta mostrarse entera y la deja scrollear al
+	# contenedor de afuera, en vez de recortarse por dentro.
+	lista_plantel.fit_content = true
+	lista_plantel.scroll_active = false
+	# Cada linea es un enlace al id del jugador: se toca el nombre y se
+	# abre su ficha. Es el unico lugar donde se pueden ver los atributos.
+	lista_plantel.meta_clicked.connect(func(meta): _mostrar_ficha(int(meta)))
+	lista_plantel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cuerpo.add_child(lista_plantel)
+
+	var titulo_banco := Label.new()
+	titulo_banco.text = "Banco (7)"
+	cuerpo.add_child(titulo_banco)
+
 	contenedor_banco_botones = VBoxContainer.new()
 	contenedor_banco_botones.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(contenedor_banco_botones)
+	cuerpo.add_child(contenedor_banco_botones)
 
 	_refrescar_plantel()
 
@@ -2706,3 +2720,43 @@ func _mostrar_partida_panel() -> void:
 	paneles["partida_guardado"].visible = true
 	label_partida_estado.text = ""
 	_refrescar_partida_guardado()
+
+
+## Tema para que esto se pueda tocar con un dedo.
+##
+## La UI se armo mirandola en un monitor, con la fuente por defecto de
+## Godot (16) y botones del alto del texto: en un Pixel 6 eso da filas de
+## ~3,6 mm reales, contra los 9 mm que recomienda Android. No entraba
+## nada.
+##
+## Se aplica en la RAIZ y no botón por botón porque los paneles se
+## reconstruyen solos todo el tiempo (la tabla del mercado, el plantel, la
+## formacion): un tema en la raiz lo hereda tambien lo que se crea
+## despues, y no hay forma de olvidarse de aplicarlo en una pantalla nueva.
+##
+## Se duplican los StyleBox del tema por defecto en vez de armar unos
+## nuevos: asi cambia el ALTO y no el aspecto.
+const FUENTE_TACTIL := 20
+const PADDING_BOTON := 11
+
+
+func _aplicar_tema_tactil() -> void:
+	var tema := Theme.new()
+	tema.default_font_size = FUENTE_TACTIL
+
+	var por_defecto := ThemeDB.get_default_theme()
+	for tipo in ["Button", "OptionButton", "CheckBox", "LineEdit"]:
+		for estado in ["normal", "hover", "pressed", "disabled", "focus"]:
+			if not por_defecto.has_stylebox(estado, tipo):
+				continue
+			var caja: StyleBox = por_defecto.get_stylebox(estado, tipo).duplicate()
+			caja.content_margin_top = PADDING_BOTON
+			caja.content_margin_bottom = PADDING_BOTON
+			tema.set_stylebox(estado, tipo, caja)
+
+	# Las listas de texto (plantel, ficha, historial) se leen mejor con
+	# algo de aire entre renglones: ahi tocas nombres, no solo lees.
+	tema.set_constant("line_separation", "RichTextLabel", 8)
+	tema.set_constant("line_spacing", "Label", 6)
+
+	theme = tema
