@@ -46,10 +46,10 @@ var label_informe_rival: Label
 const OPCIONES_CAMBIOS := ["equilibrado", "descanso", "rendimiento"]
 const ETIQUETAS_CAMBIOS := {"equilibrado": "Equilibrado", "descanso": "Priorizar descanso", "rendimiento": "Priorizar rendimiento"}
 var vista_partido: VistaPartido
-var lista_economia: RichTextLabel
+var contenedor_economia: VBoxContainer
 var lista_cantera: RichTextLabel
 var contenedor_cantera_botones: VBoxContainer
-var lista_noticias: RichTextLabel
+var contenedor_noticias: VBoxContainer
 var label_mercado_estado: Label
 var contenedor_libres_botones: VBoxContainer
 var label_libres_estado: Label
@@ -608,25 +608,26 @@ func _construir_panel_formacion(padre: Control) -> void:
 	option_foco.item_selected.connect(_on_foco_equipo_elegido)
 	fila.add_child(option_foco)
 
-	label_carga_efecto = Label.new()
-	label_carga_efecto.add_theme_color_override("font_color", Tema.SUAVE)
-	label_carga_efecto.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
-	label_carga_efecto.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	# Sin recorte, su texto fija el ancho minimo de la fila y ese minimo
-	# empuja el de la pantalla entera: el banco de la derecha se iba fuera
-	# del viewport. Que se corte el texto, no la UI.
-	label_carga_efecto.clip_text = true
-	label_carga_efecto.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	fila.add_child(label_carga_efecto)
-
 	label_foco_efecto = Label.new()
 	label_foco_efecto.visible = false
 	panel.add_child(label_foco_efecto)
 
+	var pie := HBoxContainer.new()
+	panel.add_child(pie)
+
 	label_formacion_estado = Label.new()
 	label_formacion_estado.text = "Arrastrá un jugador sobre otro para cambiarlos de lugar."
 	label_formacion_estado.add_theme_color_override("font_color", Tema.SUAVE)
-	panel.add_child(label_formacion_estado)
+	label_formacion_estado.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pie.add_child(label_formacion_estado)
+
+	# El efecto de la carga no entra en la fila de los tres desplegables
+	# —ahi quedaba cortado a la mitad— y aca sobra ancho.
+	label_carga_efecto = Label.new()
+	label_carga_efecto.add_theme_color_override("font_color", Tema.SUAVE)
+	label_carga_efecto.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	label_carga_efecto.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	pie.add_child(label_carga_efecto)
 
 	var cuerpo := HBoxContainer.new()
 	cuerpo.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -732,7 +733,6 @@ func _refrescar_formacion() -> void:
 	if idx_carga >= 0:
 		option_carga.selected = idx_carga
 	label_carga_efecto.text = _texto_carga(equipo)
-	label_carga_efecto.tooltip_text = label_carga_efecto.text
 	option_carga.tooltip_text = CargaEntrenamiento.resumen(equipo.carga_entrenamiento)
 	var idx_foco := FocoEquipo.AREAS.find(equipo.foco_equipo)
 	if idx_foco >= 0:
@@ -1036,6 +1036,10 @@ func _construir_panel_partido_animado(padre: Control) -> void:
 	vista_partido.hud.menu_pedido.connect(_mostrar_partido)
 
 
+## §11: la economia del club. Cuatro cajas separadas —fichajes,
+## contratos, mejoras y mantenimiento— y no se puede pasar plata de una a
+## otra, por eso no hay un "total": sumarlas no te dice cuanto podes
+## gastar en nada concreto.
 func _construir_panel_economia(padre: Control) -> void:
 	var panel := VBoxContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1043,62 +1047,171 @@ func _construir_panel_economia(padre: Control) -> void:
 	padre.add_child(panel)
 	paneles["economia"] = panel
 
-	var titulo := Label.new()
-	titulo.text = "Economia del club"
-	panel.add_child(titulo)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
 
-	lista_economia = RichTextLabel.new()
-	lista_economia.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	lista_economia.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.add_child(lista_economia)
+	contenedor_economia = VBoxContainer.new()
+	contenedor_economia.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(contenedor_economia)
+
+
+## Una caja de presupuesto. El numero grande es el RESTANTE porque es lo
+## unico que se puede gastar hoy; lo asignado y lo gastado van abajo,
+## chicos, y la barra los muestra de un vistazo.
+func _caja_presupuesto(categoria: String, asignado: float, usado: float,
+		restante: float) -> Control:
+	var caja := Componentes.tarjeta(Tema.ROJO if restante < 0.0 else Color.TRANSPARENT)
+	caja.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	caja.tooltip_text = "El presupuesto se REINICIA cada temporada: lo que no gastaste no se acumula, la deuda si se arrastra."
+	var dentro := VBoxContainer.new()
+	dentro.add_theme_constant_override("separation", 4)
+	caja.add_child(dentro)
+	dentro.add_child(Tema.etiqueta_seccion(categoria))
+
+	var l := Label.new()
+	l.text = Economia.formato_dinero(restante)
+	Tema.numero(l, 24, Tema.ROJO if restante < 0.0 else Tema.TEXTO)
+	dentro.add_child(l)
+
+	var barra := ProgressBar.new()
+	barra.min_value = 0.0
+	barra.max_value = 1.0
+	barra.value = clampf(usado / asignado, 0.0, 1.0) if asignado > 0.0 else 0.0
+	barra.show_percentage = false
+	barra.custom_minimum_size = Vector2(0, 6)
+	var fondo := StyleBoxFlat.new()
+	fondo.bg_color = Color("#2a3a33")
+	barra.add_theme_stylebox_override("background", fondo)
+	var relleno := StyleBoxFlat.new()
+	relleno.bg_color = Tema.ROJO if restante < 0.0 else Tema.AMBAR
+	barra.add_theme_stylebox_override("fill", relleno)
+	dentro.add_child(barra)
+
+	var pie := Label.new()
+	pie.text = "gastaste %s de %s" % [
+		Economia.formato_dinero(usado), Economia.formato_dinero(asignado)]
+	pie.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+	pie.add_theme_color_override("font_color", Tema.SUAVE)
+	pie.clip_text = true
+	dentro.add_child(pie)
+	return caja
+
+
+## Una linea del balance: concepto a la izquierda, plata a la derecha.
+## `fuerte` es para los totales; `sangria` para el desglose de egresos.
+func _linea_balance(concepto: String, monto: float, color: Color,
+		sangria: int = 0, fuerte: bool = false) -> Control:
+	var fila := HBoxContainer.new()
+	if sangria > 0:
+		var hueco := Control.new()
+		hueco.custom_minimum_size = Vector2(sangria, 0)
+		fila.add_child(hueco)
+	var izq := Label.new()
+	izq.text = concepto
+	izq.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	izq.add_theme_color_override("font_color", Tema.TEXTO if fuerte else Tema.SUAVE)
+	fila.add_child(izq)
+	var der := Label.new()
+	der.text = Economia.formato_dinero(monto)
+	der.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	der.custom_minimum_size = Vector2(200, 0)
+	Tema.numero(der, Tema.TAM_BASE if fuerte else Tema.TAM_CHICO, color)
+	fila.add_child(der)
+	return fila
 
 
 func _refrescar_economia() -> void:
+	if contenedor_economia == null:
+		return
+	for hijo in contenedor_economia.get_children():
+		hijo.queue_free()
 	var equipo := GameState.equipo_jugador
-	var texto := "Reputacion: %.1f / 100%s\n" % [equipo.reputacion, "  (EN QUIEBRA)" if equipo.quebrado else ""]
-	texto += "Hinchas: %.1f / 100 (racha sin ganar: %d)  — suman ganando, se pierden con una racha larga sin ganar, y ascender/descender pesa fuerte.\n\n" % [equipo.fans, equipo.racha_sin_ganar]
 
-	var sueldos_totales := 0.0
-	for id in equipo.sueldos:
-		sueldos_totales += equipo.sueldos[id]
+	if equipo.quebrado:
+		var aviso := Componentes.tarjeta(Tema.ROJO)
+		var l := Label.new()
+		l.text = "EN QUIEBRA — el club se esta liquidando: se venden jugadores hasta salir del rojo."
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.add_theme_color_override("font_color", Tema.ROJO)
+		aviso.add_child(l)
+		contenedor_economia.add_child(aviso)
+
+	# Primero los presupuestos: es lo unico que podes gastar hoy.
+	contenedor_economia.add_child(Tema.etiqueta_seccion(
+		"Presupuestos · lo que te queda por categoria"))
+	var grilla := HBoxContainer.new()
+	grilla.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	contenedor_economia.add_child(grilla)
+	for categoria in Economia.CATEGORIAS_CAJA:
+		var asignado: float = equipo.presupuesto_temporada.get(categoria, 0.0)
+		var restante: float = equipo.caja.get(categoria, 0.0)
+		var usado: float = equipo.caja_al_cierre.get(categoria, 0.0) - restante
+		grilla.add_child(_caja_presupuesto(
+			str(categoria).capitalize(), asignado, usado, restante))
+
+	var nota := Label.new()
+	nota.text = "No se puede pasar plata de una caja a otra: por eso no hay un total. El presupuesto se reinicia cada temporada — lo que no gastaste no se acumula, la deuda si se arrastra."
+	nota.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	nota.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	nota.add_theme_color_override("font_color", Tema.SUAVE)
+	contenedor_economia.add_child(nota)
+
+	contenedor_economia.add_child(Tema.etiqueta_seccion("Ultimo balance de temporada"))
+	var tarjeta := Componentes.tarjeta()
+	contenedor_economia.add_child(tarjeta)
+	var caja_balance := VBoxContainer.new()
+	tarjeta.add_child(caja_balance)
 
 	var informe: Dictionary = GameState.ultimo_informe_economico
 	if informe.is_empty():
-		texto += "Ultimo balance: todavia no cerraste una temporada.\n"
-		texto += "La plata entra recien cuando termina la fecha 38 (entradas + sponsor + premio segun tabla).\n\n"
+		var vacio := Label.new()
+		vacio.text = "Todavia no cerraste una temporada. La plata entra al terminar la fecha 38: entradas, sponsor y premio segun donde termines en la tabla."
+		vacio.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		vacio.add_theme_color_override("font_color", Tema.SUAVE)
+		caja_balance.add_child(vacio)
 	else:
-		texto += "Ultimo balance de temporada:\n"
-		texto += "  Ingresos            %s\n" % Economia.formato_dinero(informe["ingresos"])
-		texto += "  Egresos             %s\n" % Economia.formato_dinero(informe["egresos"])
-		texto += "    de los cuales sueldos:      %s\n" % Economia.formato_dinero(informe["sueldos"])
-		texto += "    de los cuales mantenimiento: %s\n" % Economia.formato_dinero(informe["mantenimiento"])
-		texto += "  Neto                %s%s\n\n" % [Economia.formato_dinero(informe["neto"]), "  (en rojo)" if informe["neto"] < 0 else ""]
+		caja_balance.add_child(_linea_balance(
+			"Ingresos", informe["ingresos"], Tema.VERDE, 0, true))
+		caja_balance.add_child(_linea_balance(
+			"Egresos", -absf(informe["egresos"]), Tema.ROJO, 0, true))
+		caja_balance.add_child(_linea_balance(
+			"de los cuales, sueldos", informe["sueldos"], Tema.SUAVE, 24))
+		caja_balance.add_child(_linea_balance(
+			"de los cuales, mantenimiento", informe["mantenimiento"], Tema.SUAVE, 24))
+		var neto: float = informe["neto"]
+		caja_balance.add_child(_linea_balance(
+			"Neto", neto, Tema.VERDE if neto >= 0.0 else Tema.ROJO, 0, true))
 
-	# "Restante" es lo que tenes disponible AHORA para gastar de cada
-	# categoria — la plata que no gastaste una temporada se ACUMULA para la
-	# siguiente en vez de perderse, asi que puede ser mayor que lo que se
-	# asigno esta temporada si venis ahorrando. No se puede gastar plata de
-	# Fichajes en Contratos ni viceversa, por eso no hay un "Total" (sumarlos
-	# no te dice cuanto podes gastar en nada concreto). "Usado" sale de
-	# comparar contra la foto de la caja justo despues del ultimo reparto,
-	# antes de que el mercado gastara nada.
-	texto += "Presupuestos (Restante = lo que podes gastar AHORA; puede ser mayor a lo Asignado esta temporada si venis ahorrando de antes):\n"
-	texto += "  %-14s %14s %14s %14s\n" % ["Categoria", "Asignado", "Usado", "Restante"]
-	for categoria in equipo.caja:
-		var presupuesto: float = equipo.presupuesto_temporada.get(categoria, 0.0)
-		var restante: float = equipo.caja[categoria]
-		var usado: float = equipo.caja_al_cierre.get(categoria, 0.0) - restante
-		texto += "  %-14s %14s %14s %14s\n" % [categoria.capitalize(), Economia.formato_dinero(presupuesto), Economia.formato_dinero(usado), Economia.formato_dinero(restante)]
-	texto += "\n"
+	contenedor_economia.add_child(Tema.etiqueta_seccion("El club"))
+	var fila_club := HBoxContainer.new()
+	fila_club.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	contenedor_economia.add_child(fila_club)
 
-	texto += "Masa salarial actual del plantel: %s (puede diferir del ultimo balance si hubo fichajes despues)\n" % Economia.formato_dinero(sueldos_totales)
-
+	var sueldos := 0.0
+	for id in equipo.sueldos:
+		sueldos += equipo.sueldos[id]
 	var valor_plantel := 0.0
 	for j in equipo.jugadores:
-		valor_plantel += ValorJugador.calcular(j, equipo.animo.get(j["id"], 50.0), equipo.contratos.get(j["id"], 1))
-	texto += "Valor de mercado del plantel: %s\n" % Economia.formato_dinero(valor_plantel)
+		valor_plantel += ValorJugador.calcular(
+			j, equipo.animo.get(j["id"], 50.0), equipo.contratos.get(j["id"], 1))
 
-	lista_economia.text = texto
+	fila_club.add_child(_caja_numero("Reputación", "%.1f" % equipo.reputacion, Tema.TEXTO))
+	fila_club.add_child(_caja_numero("Hinchas", "%.1f" % equipo.fans,
+		Componentes.color_de_valor(int(equipo.fans))))
+	fila_club.add_child(_caja_numero("Masa salarial",
+		Economia.formato_dinero(sueldos), Tema.TEXTO))
+	fila_club.add_child(_caja_numero("Valor del plantel",
+		Economia.formato_dinero(valor_plantel), Tema.TEXTO))
+
+	var explica := Label.new()
+	explica.text = "Todos los clubes arrancan con 0 hinchas: se ganan ganando, se pierden con una racha larga sin ganar, y ascender o descender pesa fuerte. Mas hinchas = mas gente en el estadio y mas ingreso por entradas. Racha sin ganar: %d. La masa salarial es la de HOY: puede diferir del balance si fichaste despues." % equipo.racha_sin_ganar
+	explica.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	explica.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	explica.add_theme_color_override("font_color", Tema.SUAVE)
+	contenedor_economia.add_child(explica)
 
 
 ## Fase 9, extendido con mercado más profundo: mercado iniciado por el
@@ -2756,6 +2869,11 @@ func _linea_convocado(j: Dictionary, clubes_por_jugador: Dictionary) -> String:
 	return linea + "\n"
 
 
+## §17: los juveniles sin debutar. Lo que se decide aca es a quien
+## PROMOVER, y eso cuesta: el promovido entra al banco y el peor suplente
+## queda libre. Por eso la pantalla muestra el potencial —lo unico que
+## importa de un pibe— y lo muestra como un RANGO: el scout no sabe el
+## numero exacto, y cuanto mejor el scout, mas angosto el rango.
 func _construir_panel_cantera(padre: Control) -> void:
 	var panel := VBoxContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -2763,14 +2881,14 @@ func _construir_panel_cantera(padre: Control) -> void:
 	padre.add_child(panel)
 	paneles["cantera"] = panel
 
-	var titulo := Label.new()
-	titulo.text = "Cantera (§17) — juveniles sin debutar. Promover los manda al banco (para subirlos a titular, ver Plantel)."
-	panel.add_child(titulo)
-
 	label_cantera_mentor = Label.new()
+	label_cantera_mentor.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label_cantera_mentor.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	label_cantera_mentor.add_theme_color_override("font_color", Tema.SUAVE)
 	panel.add_child(label_cantera_mentor)
 
 	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.add_child(scroll)
@@ -2778,6 +2896,65 @@ func _construir_panel_cantera(padre: Control) -> void:
 	contenedor_cantera_botones = VBoxContainer.new()
 	contenedor_cantera_botones.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(contenedor_cantera_botones)
+
+
+## La ficha de un juvenil. El potencial va como barra con el rango que da
+## el scout, y no como numero: un "potencial 74" que en realidad es
+## 66-82 miente, y el margen es justamente lo que se compra mejorando el
+## scouting.
+func _tarjeta_juvenil(equipo: Team, juvenil: Dictionary, nivel_scout: int) -> Control:
+	var margen := Scout.margen(nivel_scout)
+	var pot_min: int = clamp(int(juvenil["potencial"]) - margen, 0, 99)
+	var pot_max: int = clamp(int(juvenil["potencial"]) + margen, 0, 99)
+
+	var tarjeta := Componentes.tarjeta(Componentes.color_de_valor(pot_max))
+	var fila := HBoxContainer.new()
+	tarjeta.add_child(fila)
+
+	var caja_pos := CenterContainer.new()
+	caja_pos.custom_minimum_size = Vector2(56, 0)
+	caja_pos.add_child(Componentes.chip(str(juvenil["posicion"]), Color("#2f4a3c")))
+	fila.add_child(caja_pos)
+
+	var izq := VBoxContainer.new()
+	izq.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	izq.add_theme_constant_override("separation", 2)
+	fila.add_child(izq)
+	var nombre := Label.new()
+	nombre.text = _nombre_jugador(juvenil)
+	nombre.clip_text = true
+	nombre.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	izq.add_child(nombre)
+	var sub := Label.new()
+	sub.text = "%d años   ·   media %.1f%s" % [
+		int(juvenil["edad"]), float(juvenil["media"]), _tag_habilidad(juvenil)]
+	sub.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	sub.add_theme_color_override("font_color", Tema.SUAVE)
+	izq.add_child(sub)
+
+	var caja_pot := VBoxContainer.new()
+	caja_pot.custom_minimum_size = Vector2(240, 0)
+	caja_pot.add_theme_constant_override("separation", 2)
+	fila.add_child(caja_pot)
+	caja_pot.add_child(Tema.etiqueta_seccion("Potencial (scout nivel %d)" % nivel_scout))
+	var l_pot := Label.new()
+	l_pot.text = "%d – %d" % [pot_min, pot_max]
+	Tema.numero(l_pot, 22, Componentes.color_de_valor(pot_max))
+	caja_pot.add_child(l_pot)
+	var rango := Label.new()
+	rango.text = "margen ±%d — un scout mejor lo achica" % margen
+	rango.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+	rango.add_theme_color_override("font_color", Tema.SUAVE)
+	caja_pot.add_child(rango)
+
+	var btn := Button.new()
+	btn.text = "Promover"
+	btn.custom_minimum_size = Vector2(140, Tema.ALTO_TACTIL)
+	btn.tooltip_text = "Entra al banco y el peor suplente queda libre."
+	var id: int = int(juvenil["id"])
+	btn.pressed.connect(func(): _on_promover_juvenil(id))
+	fila.add_child(btn)
+	return tarjeta
 
 
 func _refrescar_cantera() -> void:
@@ -2792,41 +2969,30 @@ func _refrescar_cantera() -> void:
 			mentor = j
 			break
 	if mentor.is_empty():
-		label_cantera_mentor.text = "Sin mentor en el plantel: nadie de 28+ con Lider nato / Profesional / Metodico."
+		label_cantera_mentor.text = "Sin mentor: nadie de 28 o mas con Lider nato, Profesional o Metodico. Con uno, los de 21 o menos crecen mas rapido."
 	else:
 		var rasgo := "?"
 		for candidato in Mentores.BONUS_POR_RASGO:
 			if Personalidad.tiene(mentor, candidato):
 				rasgo = candidato
 				break
-		label_cantera_mentor.text = "Mentor: %s (%s, %d años) — los jugadores de 21 o menos crecen mas rapido." % [_nombre_jugador(mentor), rasgo, mentor["edad"]]
+		label_cantera_mentor.text = "Mentor: %s (%s, %d años) — los de 21 o menos crecen mas rapido. Promover manda al banco: el peor suplente queda libre." % [
+			_nombre_jugador(mentor), rasgo, int(mentor["edad"])]
 
 	if equipo.cantera.is_empty():
-		var label := Label.new()
-		label.text = "No hay juveniles en la cantera esta temporada."
-		contenedor_cantera_botones.add_child(label)
+		var vacio := Componentes.tarjeta()
+		var l := Label.new()
+		l.text = "No hay juveniles esta temporada. La camada nueva llega al cerrar la temporada; las Instalaciones deciden cuantos y de que nivel."
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.add_theme_color_override("font_color", Tema.SUAVE)
+		vacio.add_child(l)
+		contenedor_cantera_botones.add_child(vacio)
 		return
 
 	var nivel_scout: int = equipo.scouts[0]["nivel"] if not equipo.scouts.is_empty() else 1
 	for juvenil in equipo.cantera:
-		var fila := HBoxContainer.new()
-		var margen := Scout.margen(nivel_scout)
-		var potencial_min: int = clamp(juvenil["potencial"] - margen, 0, 99)
-		var potencial_max: int = clamp(juvenil["potencial"] + margen, 0, 99)
-		var label := Label.new()
-		label.text = "%-4s  %-22s  edad %d  media %.1f  potencial %d-%d (scout nivel %d)%s" % [
-			juvenil["posicion"], _nombre_jugador(juvenil), juvenil["edad"], juvenil["media"], potencial_min, potencial_max, nivel_scout, _tag_habilidad(juvenil)
-		]
-		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		fila.add_child(label)
-
-		var btn := Button.new()
-		btn.text = "Promover al banco"
-		var id: int = juvenil["id"]
-		btn.pressed.connect(func(): _on_promover_juvenil(id))
-		fila.add_child(btn)
-
-		contenedor_cantera_botones.add_child(fila)
+		contenedor_cantera_botones.add_child(
+			_tarjeta_juvenil(equipo, juvenil, nivel_scout))
 
 
 func _on_promover_juvenil(id: int) -> void:
@@ -2835,6 +3001,9 @@ func _on_promover_juvenil(id: int) -> void:
 	_refrescar_plantel()
 
 
+## Las noticias de la temporada. Van en tarjetas y de la mas NUEVA a la
+## mas vieja: en un parrafo corrido de treinta lineas lo ultimo que paso
+## quedaba al fondo, que es justo lo que se viene a leer.
 func _construir_panel_noticias(padre: Control) -> void:
 	var panel := VBoxContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -2842,21 +3011,57 @@ func _construir_panel_noticias(padre: Control) -> void:
 	padre.add_child(panel)
 	paneles["noticias"] = panel
 
-	var titulo := Label.new()
-	titulo.text = "Noticias"
-	panel.add_child(titulo)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
 
-	lista_noticias = RichTextLabel.new()
-	lista_noticias.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	lista_noticias.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.add_child(lista_noticias)
+	contenedor_noticias = VBoxContainer.new()
+	contenedor_noticias.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(contenedor_noticias)
+
+
+## Le pone color a la noticia segun de que hable. Es lo unico que
+## distingue un ascenso de un descenso cuando hay treinta seguidas.
+func _acento_de_noticia(texto: String) -> Color:
+	var t := texto.to_lower()
+	# El descenso primero: "desciende" no contiene "ascien" (lleva una "e"
+	# delante), pero conviene no depender de eso.
+	if t.contains("descen") or t.contains("descien") or t.contains("quiebra") 			or t.contains("lesion"):
+		return Tema.ROJO
+	if t.contains("ascen") or t.contains("ascien") or t.contains("campe") 			or t.contains("gana"):
+		return Tema.VERDE
+	if t.contains("fich") or t.contains("transfer") or t.contains("prestamo"):
+		return Tema.CELESTE
+	return Tema.BORDE
 
 
 func _refrescar_noticias() -> void:
-	if GameState.noticias.is_empty():
-		lista_noticias.text = "Todavia no hay noticias — se generan al cerrar cada temporada."
+	if contenedor_noticias == null:
 		return
-	lista_noticias.text = "\n".join(GameState.noticias)
+	for hijo in contenedor_noticias.get_children():
+		hijo.queue_free()
+
+	if GameState.noticias.is_empty():
+		var vacio := Componentes.tarjeta()
+		var l := Label.new()
+		l.text = "Todavia no hay noticias: se generan al cerrar cada temporada."
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.add_theme_color_override("font_color", Tema.SUAVE)
+		vacio.add_child(l)
+		contenedor_noticias.add_child(vacio)
+		return
+
+	var total := GameState.noticias.size()
+	for i in range(total - 1, -1, -1):
+		var texto := str(GameState.noticias[i])
+		var tarjeta := Componentes.tarjeta(_acento_de_noticia(texto))
+		var l := Label.new()
+		l.text = texto
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		tarjeta.add_child(l)
+		contenedor_noticias.add_child(tarjeta)
 
 
 ## Guardado de partida (§12) — un solo slot: Guardar pisa lo que hubiera,
