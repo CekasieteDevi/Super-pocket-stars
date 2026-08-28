@@ -26,9 +26,13 @@ var _energia: float = 1.0
 var _animo: float = 50.0
 var _lesionado: bool = false
 var _es_banco: bool = false
+## Cuanto se achica respecto del tamaño completo. La cancha la calcula
+## segun el alto que le toco (ver CanchaFormacion._escala_cubos).
+var escala: float = 1.0
 
 
-static func crear(jugador: Dictionary, rol: String, equipo: Team, es_banco: bool) -> CuboJugador:
+static func crear(jugador: Dictionary, rol: String, equipo: Team, es_banco: bool,
+		escala_inicial: float = 1.0) -> CuboJugador:
 	var c := CuboJugador.new()
 	c.jugador_id = int(jugador["id"])
 	c._rol = rol
@@ -38,13 +42,14 @@ static func crear(jugador: Dictionary, rol: String, equipo: Team, es_banco: bool
 	c._animo = float(equipo.animo.get(c.jugador_id, 50.0))
 	c._lesionado = equipo.esta_lesionado(c.jugador_id)
 	c._es_banco = es_banco
+	c.escala = escala_inicial
 	c._armar()
 	return c
 
 
 func _armar() -> void:
-	custom_minimum_size = Vector2(ANCHO, ALTO)
-	size = Vector2(ANCHO, ALTO)
+	custom_minimum_size = Vector2(ANCHO, ALTO) * escala
+	size = custom_minimum_size
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	add_theme_stylebox_override("panel", _estilo())
 
@@ -65,15 +70,16 @@ func _armar() -> void:
 	media.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	media.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	media.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	Tema.numero(media, Tema.TAM_CHICO)
+	Tema.numero(media, int(Tema.TAM_CHICO * escala))
 	arriba.add_child(media)
 
 	var nombre := Label.new()
+	nombre.name = "nombre"
 	nombre.text = _nombre
 	nombre.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	nombre.clip_text = true
 	nombre.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	nombre.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	nombre.add_theme_font_size_override("font_size", int(Tema.TAM_CHICO * escala))
 	caja.add_child(nombre)
 
 	# Energía y ánimo como dos barras finas: son los dos datos que hacen
@@ -147,3 +153,12 @@ func _notification(que: int) -> void:
 	# sin esto el cubo de origen se quedaba resaltado para siempre.
 	if que == NOTIFICATION_DRAG_END:
 		add_theme_stylebox_override("panel", _estilo())
+
+
+## Rearma el cubo a otra escala. La cancha lo llama cuando cambia de
+## tamaño; el texto se achica con el cubo, si no se sale por los costados.
+func aplicar_escala(nueva: float) -> void:
+	escala = nueva
+	for hijo in get_children():
+		hijo.queue_free()
+	_armar()

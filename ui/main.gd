@@ -715,6 +715,44 @@ func _refrescar_formacion() -> void:
 		cubo.intercambio_pedido.connect(_on_intercambio_arrastrado)
 		contenedor_formacion.add_child(cubo)
 
+	# La RESERVA no se arrastra a la cancha, y es a proposito: un canterano
+	# no es parte del plantel de 18. Para usarlo hay que promoverlo, y eso
+	# tiene un costo real —desplaza al peor del banco, que queda libre— asi
+	# que es una decision, no un arrastre.
+	if not equipo.cantera.is_empty():
+		contenedor_formacion.add_child(Tema.etiqueta_seccion("Reserva"))
+		var aclaracion := Label.new()
+		aclaracion.text = "No juegan hasta promoverlos: el promovido entra al banco y el peor suplente queda libre."
+		aclaracion.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		aclaracion.add_theme_color_override("font_color", Tema.SUAVE)
+		aclaracion.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		contenedor_formacion.add_child(aclaracion)
+		for j in equipo.cantera:
+			var caja := VBoxContainer.new()
+			caja.add_theme_constant_override("separation", 2)
+			contenedor_formacion.add_child(caja)
+			var cubo := CuboJugador.crear(j, str(j["posicion"]), equipo, true)
+			# Sin arrastre: no hay a donde soltarlo que signifique algo.
+			cubo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			cubo.modulate = Color(1, 1, 1, 0.72)
+			caja.add_child(cubo)
+			var id_j := int(j["id"])
+			var btn := Button.new()
+			btn.text = "Promover"
+			btn.pressed.connect(func(): _on_promover_desde_formacion(id_j))
+			caja.add_child(btn)
+
+
+func _on_promover_desde_formacion(jugador_id: int) -> void:
+	var r := GameState.equipo_jugador.promover_juvenil(jugador_id)
+	if r.is_empty():
+		label_formacion_estado.text = "No se pudo promover a ese juvenil."
+		return
+	label_formacion_estado.text = "%s sube al banco; queda libre %s." % [
+		_nombre_jugador(r["promovido"]), _nombre_jugador(r["saliente"])]
+	_refrescar_formacion()
+	_refrescar_plantel()
+
 
 ## Arrastraste uno sobre otro: se intercambian, esten en la cancha o en el
 ## banco. Team.intercambiar ya sabia hacer las dos cosas.

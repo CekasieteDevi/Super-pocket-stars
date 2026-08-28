@@ -22,8 +22,16 @@ var _equipo: Team = null
 var _cubos: Array = []
 
 
+## Alto de referencia con el que los cubos se ven a tamaño completo. Por
+## debajo se achican en proporcion en vez de pisarse unos a otros.
+const ALTO_REFERENCIA := 440.0
+
+
 func _init() -> void:
-	custom_minimum_size = Vector2(700, 440)
+	# Minimo CHICO a proposito: con un minimo grande, en una pantalla baja
+	# el contenedor se pasaba de largo y la cancha quedaba cortada abajo
+	# sin forma de llegar. Ahora se achica sola y siempre entra entera.
+	custom_minimum_size = Vector2(360, 240)
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 
@@ -35,9 +43,10 @@ func mostrar(equipo: Team) -> void:
 	_cubos.clear()
 
 	var slots: Array = Formaciones.slots(equipo.formacion)
+	var escala := _escala_cubos()
 	for i in range(min(slots.size(), equipo.jugadores.size())):
 		var cubo := CuboJugador.crear(
-			equipo.jugadores[i], str(slots[i]["rol"]), equipo, false)
+			equipo.jugadores[i], str(slots[i]["rol"]), equipo, false, escala)
 		cubo.intercambio_pedido.connect(func(a, b): intercambio_pedido.emit(a, b))
 		add_child(cubo)
 		_cubos.append(cubo)
@@ -72,17 +81,29 @@ func _a_pantalla(metros: Vector2) -> Vector2:
 		r.position.y + (metros.y + ANCHO_M * 0.5) / ANCHO_M * r.size.y)
 
 
+## Cuanto se achican los cubos cuando la cancha entra chica. Sin esto, en
+## una pantalla baja los once quedaban del mismo tamaño sobre una cancha
+## mas chica y se pisaban entre ellos.
+func _escala_cubos() -> float:
+	var r := _rect_cancha()
+	if r.size.y <= 0.0:
+		return 1.0
+	return clampf(r.size.y / ALTO_REFERENCIA, 0.62, 1.0)
+
+
 func _acomodar() -> void:
 	if _equipo == null:
 		return
 	var slots: Array = Formaciones.slots(_equipo.formacion)
+	var escala := _escala_cubos()
 	for i in range(_cubos.size()):
 		if i >= slots.size():
 			continue
-		var base: Vector2 = slots[i]["base"]
-		var centro := _a_pantalla(base)
 		var cubo: CuboJugador = _cubos[i]
-		cubo.position = centro - Vector2(CuboJugador.ANCHO, CuboJugador.ALTO) * 0.5
+		if not is_equal_approx(cubo.escala, escala):
+			cubo.aplicar_escala(escala)
+		var centro := _a_pantalla(slots[i]["base"])
+		cubo.position = centro - cubo.custom_minimum_size * 0.5
 
 
 func _draw() -> void:
