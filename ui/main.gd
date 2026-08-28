@@ -67,7 +67,8 @@ var boton_borrar_partida: Button
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
-	_aplicar_tema_tactil()
+	# El sistema visual entero vive en ui/tema.gd y se hereda desde la raiz.
+	theme = Tema.construir()
 
 	var raiz := VBoxContainer.new()
 	raiz.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -676,6 +677,8 @@ func _construir_panel_partido(padre: Control) -> void:
 
 	boton_jugar_fecha = Button.new()
 	boton_jugar_fecha.text = "Jugar siguiente fecha"
+	# La accion principal de la pantalla de partido: la unica ambar de aca.
+	Tema.primario(boton_jugar_fecha)
 	boton_jugar_fecha.pressed.connect(_on_jugar_fecha)
 	panel.add_child(boton_jugar_fecha)
 
@@ -909,7 +912,8 @@ func _construir_solapa_jugadores(padre: Control) -> Control:
 
 	var btn_buscar := Button.new()
 	btn_buscar.text = "Buscar"
-	btn_buscar.custom_minimum_size = Vector2(110, 44)
+	btn_buscar.custom_minimum_size = Vector2(130, Tema.ALTO_TACTIL)
+	Tema.primario(btn_buscar)
 	btn_buscar.pressed.connect(_on_buscar_mercado)
 	filtros.add_child(btn_buscar)
 
@@ -1070,7 +1074,7 @@ func _fila_mercado(f: Dictionary) -> void:
 	var btn_nombre := Button.new()
 	btn_nombre.text = str(f["nombre"])
 	btn_nombre.tooltip_text = str(f["nombre"])
-	btn_nombre.custom_minimum_size = Vector2(165, 0)
+	btn_nombre.custom_minimum_size = Vector2(210, 0)
 	btn_nombre.clip_text = true
 	btn_nombre.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	btn_nombre.flat = true
@@ -1091,7 +1095,7 @@ func _fila_mercado(f: Dictionary) -> void:
 	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["contrato"] == null else "%d años" % int(f["contrato"])))
 	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["animo"] == null else "%d" % int(f["animo"])))
 	contenedor_mercado_tabla.add_child(_etiqueta_corta(
-		"%s D%d" % [str(f["club"]), int(f["division"])], 140))
+		"%s D%d" % [str(f["club"]), int(f["division"])], 185))
 
 	var vendedor: Team = f["equipo"]
 	var jugador_id := int(f["id"])
@@ -1393,7 +1397,8 @@ func _construir_dialogo_prestamo() -> void:
 
 	var btn := Button.new()
 	btn.text = "Pedir préstamo"
-	btn.custom_minimum_size = Vector2(220, 48)
+	btn.custom_minimum_size = Vector2(220, Tema.ALTO_TACTIL)
+	Tema.primario(btn)
 	btn.pressed.connect(_on_pedir_prestamo)
 	caja.add_child(btn)
 
@@ -1562,7 +1567,8 @@ func _construir_dialogo_negociacion() -> void:
 	caja.add_child(fila_botones)
 
 	boton_negociacion_accion = Button.new()
-	boton_negociacion_accion.custom_minimum_size = Vector2(200, 48)
+	boton_negociacion_accion.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
+	Tema.primario(boton_negociacion_accion)
 	boton_negociacion_accion.pressed.connect(_on_negociacion_accion)
 	fila_botones.add_child(boton_negociacion_accion)
 
@@ -2775,46 +2781,6 @@ func _mostrar_partida_panel() -> void:
 	paneles["partida_guardado"].visible = true
 	label_partida_estado.text = ""
 	_refrescar_partida_guardado()
-
-
-## Tema para que esto se pueda tocar con un dedo.
-##
-## La UI se armo mirandola en un monitor, con la fuente por defecto de
-## Godot (16) y botones del alto del texto: en un Pixel 6 eso da filas de
-## ~3,6 mm reales, contra los 9 mm que recomienda Android. No entraba
-## nada.
-##
-## Se aplica en la RAIZ y no botón por botón porque los paneles se
-## reconstruyen solos todo el tiempo (la tabla del mercado, el plantel, la
-## formacion): un tema en la raiz lo hereda tambien lo que se crea
-## despues, y no hay forma de olvidarse de aplicarlo en una pantalla nueva.
-##
-## Se duplican los StyleBox del tema por defecto en vez de armar unos
-## nuevos: asi cambia el ALTO y no el aspecto.
-const FUENTE_TACTIL := 20
-const PADDING_BOTON := 11
-
-
-func _aplicar_tema_tactil() -> void:
-	var tema := Theme.new()
-	tema.default_font_size = FUENTE_TACTIL
-
-	var por_defecto := ThemeDB.get_default_theme()
-	for tipo in ["Button", "OptionButton", "CheckBox", "LineEdit"]:
-		for estado in ["normal", "hover", "pressed", "disabled", "focus"]:
-			if not por_defecto.has_stylebox(estado, tipo):
-				continue
-			var caja: StyleBox = por_defecto.get_stylebox(estado, tipo).duplicate()
-			caja.content_margin_top = PADDING_BOTON
-			caja.content_margin_bottom = PADDING_BOTON
-			tema.set_stylebox(estado, tipo, caja)
-
-	# Las listas de texto (plantel, ficha, historial) se leen mejor con
-	# algo de aire entre renglones: ahi tocas nombres, no solo lees.
-	tema.set_constant("line_separation", "RichTextLabel", 8)
-	tema.set_constant("line_spacing", "Label", 6)
-
-	theme = tema
 
 
 ## Cuanto hay que arrastrar antes de que un gesto cuente como scroll. Sin
