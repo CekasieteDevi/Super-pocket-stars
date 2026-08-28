@@ -1679,26 +1679,30 @@ func _on_pedir_prestamo() -> void:
 	_on_buscar_mercado()
 
 
-## §9.3 rework: el modal hace dos trabajos.
+## §9.3: el modal de negociación.
 ##
-## MANDAR una oferta nueva (desde la solapa Jugadores): ponés la cifra y
-## se va. No hay respuesta en el acto — el club se toma unos dias.
+## Dos cosas que el jugador no sabía hasta que le pasaban, y que ahora se
+## ven ANTES de apretar:
 ##
-## VER una negociacion abierta (desde Ofertas enviadas / recibidas): se
-## lee el ida y vuelta y se responde. Que podes hacer depende del estado:
-## aceptar, rechazar o contraofertar cuando te toca; firmar contrato
-## cuando los clubes ya arreglaron y el que compra sos vos.
+##   1. Que después de arreglar con el club todavía falta convencer al
+##      futbolista. Los dos tramos están dibujados arriba desde el
+##      principio.
+##   2. Que ofertar muy abajo no es "negociar duro": te vetan una
+##      temporada. La barra de riesgo muestra dónde empieza esa zona.
 ##
-## Toda la asimetria de informacion se ve aca: si lo investigaste, arriba
-## dice cuanto vale y cuanto piden. Si no, esos renglones dicen "?" y el
-## numero lo estas inventando — y ofertar muy abajo te veta la temporada.
+## El modal hace dos trabajos: MANDAR una oferta nueva (desde la solapa
+## Jugadores) y VER una ya abierta (desde Ofertas enviadas / recibidas).
 var dialogo_negociacion: AcceptDialog
 var negociacion_vendedor: Team = null
 var negociacion_jugador_id: int = -1
 var negociacion_oferta_id: int = -1
-var label_negociacion_datos: Label
+var label_negociacion_titulo: Label
+var label_negociacion_sub: Label
+var caja_negociacion_datos: HBoxContainer
+var caja_negociacion_pasos: HBoxContainer
 var label_negociacion_estado: RichTextLabel
 var caja_negociacion_monto: VBoxContainer
+var caja_negociacion_riesgo: VBoxContainer
 var caja_negociacion_contrato: VBoxContainer
 var spin_negociacion_monto: SpinBox
 var spin_negociacion_sueldo: SpinBox
@@ -1714,106 +1718,208 @@ func _construir_dialogo_negociacion() -> void:
 	dialogo_negociacion = AcceptDialog.new()
 	dialogo_negociacion.title = "Negociacion"
 	dialogo_negociacion.ok_button_text = "Cerrar"
-	dialogo_negociacion.min_size = Vector2(660, 460)
+	dialogo_negociacion.min_size = Vector2(820, 560)
 	add_child(dialogo_negociacion)
 
 	var caja := VBoxContainer.new()
 	caja.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	dialogo_negociacion.add_child(caja)
 
-	label_negociacion_datos = Label.new()
-	label_negociacion_datos.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	caja.add_child(label_negociacion_datos)
+	label_negociacion_titulo = Label.new()
+	Tema.numero(label_negociacion_titulo, 24)
+	caja.add_child(label_negociacion_titulo)
+
+	label_negociacion_sub = Label.new()
+	label_negociacion_sub.add_theme_color_override("font_color", Tema.SUAVE)
+	caja.add_child(label_negociacion_sub)
+
+	caja_negociacion_pasos = HBoxContainer.new()
+	caja.add_child(caja_negociacion_pasos)
+
+	caja_negociacion_datos = HBoxContainer.new()
+	caja.add_child(caja_negociacion_datos)
 
 	caja_negociacion_monto = VBoxContainer.new()
 	caja.add_child(caja_negociacion_monto)
 	var fila_monto := HBoxContainer.new()
 	caja_negociacion_monto.add_child(fila_monto)
-	fila_monto.add_child(_etiqueta("Monto:"))
+	fila_monto.add_child(Tema.etiqueta_seccion("Tu oferta"))
 	spin_negociacion_monto = SpinBox.new()
 	spin_negociacion_monto.min_value = 0
 	spin_negociacion_monto.max_value = 1000000000
 	spin_negociacion_monto.step = 1000
-	spin_negociacion_monto.custom_minimum_size = Vector2(200, 44)
+	spin_negociacion_monto.custom_minimum_size = Vector2(240, Tema.ALTO_TACTIL)
+	spin_negociacion_monto.value_changed.connect(func(_v): _refrescar_riesgo())
 	fila_monto.add_child(spin_negociacion_monto)
+
+	caja_negociacion_riesgo = VBoxContainer.new()
+	caja_negociacion_monto.add_child(caja_negociacion_riesgo)
 
 	caja_negociacion_contrato = VBoxContainer.new()
 	caja_negociacion_contrato.visible = false
 	caja.add_child(caja_negociacion_contrato)
-	var fila_sueldo := HBoxContainer.new()
-	caja_negociacion_contrato.add_child(fila_sueldo)
-	fila_sueldo.add_child(_etiqueta("Sueldo por temporada:"))
-	spin_negociacion_sueldo = SpinBox.new()
-	spin_negociacion_sueldo.min_value = 0
-	spin_negociacion_sueldo.max_value = 500000000
-	spin_negociacion_sueldo.step = 500
-	spin_negociacion_sueldo.custom_minimum_size = Vector2(200, 44)
-	fila_sueldo.add_child(spin_negociacion_sueldo)
-	var fila_anios := HBoxContainer.new()
-	caja_negociacion_contrato.add_child(fila_anios)
-	fila_anios.add_child(_etiqueta("Años de contrato:"))
-	spin_negociacion_anios = SpinBox.new()
-	spin_negociacion_anios.min_value = 1
-	spin_negociacion_anios.max_value = 5
+	spin_negociacion_sueldo = _fila_spin(caja_negociacion_contrato,
+		"Sueldo por temporada", 0, 500000000, 500)
+	spin_negociacion_anios = _fila_spin(caja_negociacion_contrato,
+		"Años de contrato", 1, 5, 1)
 	spin_negociacion_anios.value = 3
-	spin_negociacion_anios.custom_minimum_size = Vector2(90, 44)
-	fila_anios.add_child(spin_negociacion_anios)
 	# La clausula la ponés vos: alta lo blinda contra que te lo saquen,
 	# pero a él lo encierra y te lo cobra pidiendo más sueldo.
-	var fila_clausula := HBoxContainer.new()
-	caja_negociacion_contrato.add_child(fila_clausula)
-	fila_clausula.add_child(_etiqueta("Cláusula de rescisión:"))
-	spin_negociacion_clausula = SpinBox.new()
-	spin_negociacion_clausula.min_value = 0
-	spin_negociacion_clausula.max_value = 5000000000
-	spin_negociacion_clausula.step = 5000
-	spin_negociacion_clausula.custom_minimum_size = Vector2(220, 44)
-	fila_clausula.add_child(spin_negociacion_clausula)
+	spin_negociacion_clausula = _fila_spin(caja_negociacion_contrato,
+		"Cláusula de rescisión", 0, 5000000000, 5000)
 
 	var fila_botones := HBoxContainer.new()
 	caja.add_child(fila_botones)
 
 	boton_negociacion_accion = Button.new()
-	boton_negociacion_accion.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
+	boton_negociacion_accion.custom_minimum_size = Vector2(220, Tema.ALTO_TACTIL)
 	Tema.primario(boton_negociacion_accion)
 	boton_negociacion_accion.pressed.connect(_on_negociacion_accion)
 	fila_botones.add_child(boton_negociacion_accion)
 
 	boton_negociacion_contra = Button.new()
 	boton_negociacion_contra.text = "Contraofertar"
-	boton_negociacion_contra.custom_minimum_size = Vector2(180, 48)
+	boton_negociacion_contra.custom_minimum_size = Vector2(180, Tema.ALTO_TACTIL)
 	boton_negociacion_contra.visible = false
 	boton_negociacion_contra.pressed.connect(_on_negociacion_contraofertar)
 	fila_botones.add_child(boton_negociacion_contra)
 
 	boton_negociacion_rechazar = Button.new()
 	boton_negociacion_rechazar.text = "Rechazar"
-	boton_negociacion_rechazar.custom_minimum_size = Vector2(150, 48)
+	boton_negociacion_rechazar.custom_minimum_size = Vector2(150, Tema.ALTO_TACTIL)
 	boton_negociacion_rechazar.visible = false
 	boton_negociacion_rechazar.pressed.connect(_on_negociacion_rechazar)
 	fila_botones.add_child(boton_negociacion_rechazar)
 
-	# La clausula ajena es el atajo del que no quiere negociar: se paga de
+	# La clausula ajena: el atajo del que no quiere negociar. Se paga de
 	# mas pero la venta es obligatoria y nadie se puede ofender.
 	boton_negociacion_clausula = Button.new()
-	boton_negociacion_clausula.custom_minimum_size = Vector2(240, 48)
+	boton_negociacion_clausula.custom_minimum_size = Vector2(240, Tema.ALTO_TACTIL)
 	boton_negociacion_clausula.pressed.connect(_on_negociacion_clausula)
 	fila_botones.add_child(boton_negociacion_clausula)
 
-	# Cerrar propio: el boton que trae AcceptDialog queda abajo de todo y
-	# en un telefono no se ve, y la X del titulo es imposible de acertar
-	# con el dedo. Sin esto el modal no se podia cerrar.
-	var cerrar_negociacion := Button.new()
-	cerrar_negociacion.text = "Cerrar"
-	cerrar_negociacion.custom_minimum_size = Vector2(200, 48)
-	cerrar_negociacion.pressed.connect(func(): dialogo_negociacion.hide())
-	fila_botones.add_child(cerrar_negociacion)
+	var cerrar := Button.new()
+	cerrar.text = "Cerrar"
+	cerrar.custom_minimum_size = Vector2(140, Tema.ALTO_TACTIL)
+	cerrar.pressed.connect(func(): dialogo_negociacion.hide())
+	fila_botones.add_child(cerrar)
 
 	label_negociacion_estado = RichTextLabel.new()
 	label_negociacion_estado.bbcode_enabled = true
 	label_negociacion_estado.fit_content = true
-	label_negociacion_estado.custom_minimum_size = Vector2(0, 140)
+	label_negociacion_estado.custom_minimum_size = Vector2(0, 110)
 	caja.add_child(label_negociacion_estado)
+
+
+func _fila_spin(padre: Control, etiqueta: String, minimo: float, maximo: float, paso: float) -> SpinBox:
+	var fila := HBoxContainer.new()
+	padre.add_child(fila)
+	fila.add_child(Componentes.celda(etiqueta, 250, Tema.SUAVE))
+	var sb := SpinBox.new()
+	sb.min_value = minimo
+	sb.max_value = maximo
+	sb.step = paso
+	sb.custom_minimum_size = Vector2(240, Tema.ALTO_TACTIL)
+	fila.add_child(sb)
+	return sb
+
+
+## Los dos tramos, dibujados desde el principio. `paso` 1 o 2.
+func _dibujar_pasos(paso: int) -> void:
+	for hijo in caja_negociacion_pasos.get_children():
+		hijo.queue_free()
+	for i in [1, 2]:
+		var n: int = int(i)
+		var nombre := "Acuerdo con el club" if n == 1 else "Contrato con el jugador"
+		var hecho: bool = n < paso
+		var activo: bool = n == paso
+		var color := Tema.VERDE if hecho else (Tema.AMBAR if activo else Tema.SUAVE)
+		caja_negociacion_pasos.add_child(Componentes.chip(
+			"%d" % n, color, Tema.FONDO if (hecho or activo) else Tema.PANEL))
+		caja_negociacion_pasos.add_child(Componentes.celda(nombre, 260, color))
+
+
+func _caja_dato(etiqueta: String, valor: String, color: Color = Tema.TEXTO,
+		acento: bool = false) -> Control:
+	var caja := PanelContainer.new()
+	caja.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var estilo := StyleBoxFlat.new()
+	estilo.bg_color = Tema.PANEL_ALTO
+	estilo.corner_radius_top_left = Tema.RADIO
+	estilo.corner_radius_top_right = Tema.RADIO
+	estilo.corner_radius_bottom_left = Tema.RADIO
+	estilo.corner_radius_bottom_right = Tema.RADIO
+	estilo.content_margin_left = 14
+	estilo.content_margin_right = 14
+	estilo.content_margin_top = 10
+	estilo.content_margin_bottom = 10
+	if acento:
+		estilo.border_width_top = 1
+		estilo.border_width_bottom = 1
+		estilo.border_width_left = 1
+		estilo.border_width_right = 1
+		estilo.border_color = Tema.AMBAR
+	caja.add_theme_stylebox_override("panel", estilo)
+	var dentro := VBoxContainer.new()
+	caja.add_child(dentro)
+	dentro.add_child(Tema.etiqueta_seccion(etiqueta))
+	var l := Label.new()
+	l.text = valor
+	Tema.numero(l, 22, color)
+	dentro.add_child(l)
+	return caja
+
+
+## La barra de riesgo: dónde empieza la zona en la que se ofenden.
+##
+## Es lo que convierte "ofertar a ciegas" en una decisión informada. Solo
+## aparece si lo investigaste — si no, no sabés cuánto piden, y ese es
+## justamente el riesgo que corrés.
+func _refrescar_riesgo() -> void:
+	if caja_negociacion_riesgo == null:
+		return
+	for hijo in caja_negociacion_riesgo.get_children():
+		hijo.queue_free()
+	if negociacion_vendedor == null:
+		return
+	if not Investigadores.conoce(GameState.equipo_jugador, negociacion_jugador_id):
+		var aviso := Label.new()
+		aviso.text = "No lo investigaste: no sabés cuánto piden ni dónde está el límite."
+		aviso.add_theme_color_override("font_color", Tema.SUAVE)
+		caja_negociacion_riesgo.add_child(aviso)
+		return
+	var donde := Mercado.ubicar(negociacion_vendedor, negociacion_jugador_id)
+	if donde.is_empty():
+		return
+	var pedido := Negociacion.precio_pedido(negociacion_vendedor, donde["jugador"])
+	var insulto := pedido * Negociacion.FRACCION_INSULTO
+	var monto := float(spin_negociacion_monto.value)
+
+	var barra := HBoxContainer.new()
+	barra.add_theme_constant_override("separation", 0)
+	caja_negociacion_riesgo.add_child(barra)
+	for tramo in [[Tema.ROJO, 55], [Tema.AMBAR, 45], [Tema.VERDE, 60]]:
+		var p := Panel.new()
+		p.custom_minimum_size = Vector2(0, 8)
+		p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		p.size_flags_stretch_ratio = float(tramo[1])
+		var e := StyleBoxFlat.new()
+		e.bg_color = tramo[0]
+		p.add_theme_stylebox_override("panel", e)
+		barra.add_child(p)
+
+	var texto := Label.new()
+	texto.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	if monto < insulto:
+		texto.text = "Con menos de %s se ofenden y te vetan una temporada." % Economia.formato_dinero(insulto)
+		texto.add_theme_color_override("font_color", Tema.ROJO)
+	elif monto < pedido * Negociacion.TOLERANCIA_ACEPTACION:
+		texto.text = "Alcanza para que te escuchen, pero piden alrededor de %s." % Economia.formato_dinero(pedido)
+		texto.add_theme_color_override("font_color", Tema.AMBAR)
+	else:
+		texto.text = "Tu oferta llega a lo que piden."
+		texto.add_theme_color_override("font_color", Tema.VERDE)
+	caja_negociacion_riesgo.add_child(texto)
 
 
 ## Abrir para MANDAR una oferta nueva.
@@ -1829,28 +1935,42 @@ func _abrir_negociacion(vendedor: Team, jugador_id: int) -> void:
 	var jugador: Dictionary = donde["jugador"]
 	var conocido := Investigadores.conoce(GameState.equipo_jugador, jugador_id)
 
-	var t := "%s (%s) — %s\n" % [_nombre_jugador(jugador), jugador["posicion"], vendedor.nombre]
+	label_negociacion_titulo.text = _nombre_jugador(jugador)
+	label_negociacion_sub.text = "%s  ·  %d años  ·  %s" % [
+		jugador["posicion"], int(jugador["edad"]), vendedor.nombre]
+	_dibujar_pasos(1)
+
+	for hijo in caja_negociacion_datos.get_children():
+		hijo.queue_free()
 	if conocido:
 		var valor := ValorJugador.calcular(
 			jugador, vendedor.animo.get(jugador_id, 50.0), vendedor.contratos.get(jugador_id, 3))
+		# Lo que PIDEN, no solo lo que vale: el club suma lo que le duele
+		# soltarlo. Precargar el valor a secas hacia que la oferta por
+		# defecto se rechazara SIEMPRE.
 		var pedido := Negociacion.precio_pedido(vendedor, jugador)
-		t += "Vale %s y piden alrededor de %s.\n" % [
-			Economia.formato_dinero(valor), Economia.formato_dinero(pedido)]
-		t += "Hoy cobra %s y le quedan %d año(s).\n" % [
-			Economia.formato_dinero(vendedor.sueldos.get(jugador_id, 0.0)),
-			int(vendedor.contratos.get(jugador_id, 0))]
+		caja_negociacion_datos.add_child(_caja_dato(
+			"Vale", Economia.formato_dinero(valor)))
+		caja_negociacion_datos.add_child(_caja_dato(
+			"Piden alrededor de", Economia.formato_dinero(pedido), Tema.AMBAR, true))
+		caja_negociacion_datos.add_child(_caja_dato(
+			"Hoy cobra", Economia.formato_dinero(vendedor.sueldos.get(jugador_id, 0.0))))
+		caja_negociacion_datos.add_child(_caja_dato(
+			"Le quedan", "%d año(s)" % int(vendedor.contratos.get(jugador_id, 0))))
 		spin_negociacion_monto.value = ceil(pedido / spin_negociacion_monto.step) * spin_negociacion_monto.step
 		var clausula: float = vendedor.clausulas.get(jugador_id, 0.0)
 		boton_negociacion_clausula.visible = clausula > 0.0
-		boton_negociacion_clausula.text = "Pagar clausula (%s)" % Economia.formato_dinero(clausula)
+		boton_negociacion_clausula.text = "Pagar cláusula (%s)" % Economia.formato_dinero(clausula)
 		boton_negociacion_clausula.disabled = GameState.equipo_jugador.caja["fichajes"] < clausula
 	else:
-		t += "NO lo investigaste: no sabes lo que vale ni lo que piden.\n"
-		t += "Ofertar muy por debajo te deja sin negociacion por una temporada.\n"
+		caja_negociacion_datos.add_child(_caja_dato("Vale", "?", Tema.SUAVE))
+		caja_negociacion_datos.add_child(_caja_dato("Piden", "?", Tema.SUAVE))
+		caja_negociacion_datos.add_child(_caja_dato("Hoy cobra", "?", Tema.SUAVE))
+		caja_negociacion_datos.add_child(_caja_dato(
+			"Tu presupuesto",
+			Economia.formato_dinero(GameState.equipo_jugador.caja["fichajes"]), Tema.VERDE))
 		spin_negociacion_monto.value = 0
 		boton_negociacion_clausula.visible = false
-	t += "Tu presupuesto de fichajes: %s." % Economia.formato_dinero(GameState.equipo_jugador.caja["fichajes"])
-	label_negociacion_datos.text = t
 
 	caja_negociacion_monto.visible = true
 	caja_negociacion_contrato.visible = false
@@ -1858,7 +1978,9 @@ func _abrir_negociacion(vendedor: Team, jugador_id: int) -> void:
 	boton_negociacion_contra.visible = false
 	boton_negociacion_accion.text = "Enviar oferta"
 	boton_negociacion_accion.disabled = false
+	boton_negociacion_accion.visible = true
 	label_negociacion_estado.text = ""
+	_refrescar_riesgo()
 	dialogo_negociacion.popup_centered()
 
 
@@ -1871,21 +1993,24 @@ func _abrir_oferta(oferta_id: int) -> void:
 	negociacion_jugador_id = int(o["jugador_id"])
 	negociacion_vendedor = GameState._club_por_nombre(str(o["club"]))
 
-	var t := "%s (%s)\n" % [str(o["jugador"]), str(o["posicion"])]
-	t += "%s %s — sobre la mesa: %s — ronda %d\n" % [
+	label_negociacion_titulo.text = str(o["jugador"])
+	label_negociacion_sub.text = "%s %s  ·  sobre la mesa %s  ·  ronda %d  ·  %s" % [
 		"Oferta de" if bool(o["entrante"]) else "Tu oferta a", str(o["club"]),
-		Economia.formato_dinero(o["monto"]), int(o["ronda"])]
-	t += "Estado: %s" % _estado_legible(o)
-	label_negociacion_datos.text = t
+		Economia.formato_dinero(o["monto"]), int(o["ronda"]), _estado_legible(o)]
+
+	var a_firmar: bool = str(o["estado"]) == Ofertas.ACUERDO_CLUB and not bool(o["entrante"])
+	_dibujar_pasos(2 if a_firmar else 1)
+
+	for hijo in caja_negociacion_datos.get_children():
+		hijo.queue_free()
 
 	var historia := ""
 	for linea in o["log"]:
-		historia += "[color=#7f8c8d]%s[/color]\n" % str(linea)
+		historia += "[color=#93a79b]%s[/color]
+" % str(linea)
 	label_negociacion_estado.text = historia
 
 	var me_toca: bool = str(o["estado"]) == Ofertas.PENDIENTE_NOSOTROS
-	var a_firmar: bool = str(o["estado"]) == Ofertas.ACUERDO_CLUB and not bool(o["entrante"])
-
 	caja_negociacion_monto.visible = me_toca
 	caja_negociacion_contrato.visible = a_firmar
 	boton_negociacion_rechazar.visible = me_toca
@@ -1897,6 +2022,7 @@ func _abrir_oferta(oferta_id: int) -> void:
 	if me_toca:
 		spin_negociacion_monto.value = float(o["monto"])
 		boton_negociacion_accion.text = "Aceptar %s" % Economia.formato_dinero(o["monto"])
+		_refrescar_riesgo()
 	elif a_firmar:
 		_precargar_contrato(o)
 		boton_negociacion_accion.text = "Firmar contrato"
