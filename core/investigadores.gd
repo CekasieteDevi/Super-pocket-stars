@@ -22,7 +22,9 @@ extends RefCounted
 ## Los clubes de la IA no pasan por acá. Ellos ven todo, siempre. Simular
 ## su ignorancia sería trabajo invisible para el jugador.
 
-const SLOTS := 10
+## Seis slots, en una grilla de 3x2 en la UI. Diez era un numero sin
+## forma: nadie llegaba a llenarlos y la pantalla era una lista larga.
+const SLOTS := 6
 const ESTRELLAS_MIN := 1
 const ESTRELLAS_MAX := 10
 
@@ -64,7 +66,7 @@ static func costo(estrellas: int) -> float:
 
 
 ## Contrata a un investigador y lo mete en el primer slot libre.
-static func contratar(equipo: Team, estrellas: int) -> Dictionary:
+static func contratar(equipo: Team, estrellas: int, rng: RandomNumberGenerator = null) -> Dictionary:
 	if equipo.investigadores.size() >= SLOTS:
 		return {"exito": false, "motivo": "Ya tenés los %d investigadores." % SLOTS}
 	var precio := costo(estrellas)
@@ -72,7 +74,7 @@ static func contratar(equipo: Team, estrellas: int) -> Dictionary:
 		return {"exito": false, "motivo": "No alcanza el presupuesto de Mejoras.",
 			"costo": precio, "disponible": equipo.caja["mejoras"]}
 	equipo.caja["mejoras"] -= precio
-	var inv := nuevo(equipo.siguiente_id_investigador, estrellas)
+	var inv := nuevo(equipo.siguiente_id_investigador, estrellas, rng)
 	equipo.siguiente_id_investigador += 1
 	equipo.investigadores.append(inv)
 	return {"exito": true, "investigador": inv, "costo": precio}
@@ -85,9 +87,17 @@ static func contratar(equipo: Team, estrellas: int) -> Dictionary:
 ## tocaba esa clave cuando el tipo estaba ocupado, asi que el agujero
 ## nunca se noto. Mismo problema que tuvo `conocimiento` — si un formato
 ## se escribe a mano en dos lados, tarde o temprano difieren.
-static func nuevo(id: int, estrellas: int) -> Dictionary:
+## `rng` null = se arma uno sembrado con el id. Asi un investigador
+## siempre tiene el MISMO nombre aunque se lo reconstruya al cargar una
+## partida vieja, sin tener que pasar el rng del juego hasta aca.
+static func nuevo(id: int, estrellas: int, rng: RandomNumberGenerator = null) -> Dictionary:
+	if rng == null:
+		rng = RandomNumberGenerator.new()
+		rng.seed = hash("investigador:%d" % id)
+	var identidad := GeneradorNombres.nombre_jugador(rng)
 	return {
 		"id": id,
+		"nombre": "%s %s" % [identidad["nombre"], identidad["apellido"]],
 		"estrellas": clamp(estrellas, ESTRELLAS_MIN, ESTRELLAS_MAX),
 		"objetivo": -1,       # jugador_id que está investigando, -1 = libre
 		"club_objetivo": "",  # de qué club es, para poder mostrarlo

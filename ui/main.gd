@@ -122,6 +122,7 @@ func _ready() -> void:
 	_construir_panel_formacion(contenedor)
 	_construir_dialogo_negociacion()
 	_construir_dialogo_prestamo()
+	_construir_dialogo_investigador()
 
 	# Al final, cuando ya esta todo construido: deja las listas
 	# deslizables con el dedo (ver _ajustar_para_tactil).
@@ -2765,6 +2766,9 @@ const QUE_HACE_INSTALACION := {
 ## scroll no se entendia donde empezaba una y terminaba la otra.
 var solapa_instalaciones: String = "mejoras"
 var contenedor_instalaciones_solapas: HBoxContainer
+var dialogo_investigador: AcceptDialog
+var contenedor_investigador_dialogo: VBoxContainer
+var label_investigador_dialogo: Label
 
 
 ## Los efectos CONCRETOS de un nivel, para poder comparar el actual con el
@@ -2972,114 +2976,238 @@ func _refrescar_mejoras(equipo: Team) -> void:
 ## §9.4: la red de investigadores vive en Instalaciones porque es lo que
 ## es — una inversion permanente del club, pagada con Mejoras, que compite
 ## con el estadio y la cantera por la misma plata. A quien estas mirando
-## con ella se ve en Mercado > Investigaciones.
+## con ella se ve en Mercado › Investigaciones.
 ##
-## No se MEJORAN como el resto: se contratan y se despiden. Despedir sirve
-## para liberar un slot y poner a uno mejor.
+## Se muestran como SEIS slots en una grilla de 3x2, ocupados o vacios. Un
+## slot vacio es un boton de contratar: asi la pantalla dice de un vistazo
+## cuanto lugar te queda, en vez de una lista de contratados seguida de
+## otra lista de diez precios.
 func _refrescar_investigadores_instalaciones(equipo: Team) -> void:
-	var libres: int = Investigadores.SLOTS - equipo.investigadores.size()
 	var explica := Label.new()
-	explica.text = "Tenes %d de %d slots ocupados. Las estrellas son VELOCIDAD, no calidad: el informe siempre termina completo, uno de 10 estrellas solo tarda menos. A quien estan investigando se ve en Mercado › Investigaciones." % [
-		equipo.investigadores.size(), Investigadores.SLOTS]
+	explica.text = "Las estrellas son VELOCIDAD, no calidad: el informe siempre sale completo, uno de 10★ solo tarda menos."
 	explica.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	explica.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
 	explica.add_theme_color_override("font_color", Tema.SUAVE)
 	contenedor_instalaciones_botones.add_child(explica)
 
-	contenedor_instalaciones_botones.add_child(Tema.etiqueta_seccion("En plantilla"))
-	if equipo.investigadores.is_empty():
-		contenedor_instalaciones_botones.add_child(_tarjeta_vacia(
-			"No tenes ningun investigador. Sin al menos uno no podes averiguar nada de los jugadores de otros clubes."))
-	for inv in equipo.investigadores:
-		var ocupado: bool = int(inv["objetivo"]) != -1
-		var quien := str(inv["nombre_objetivo"])
-		var estado := "libre, esperando orden"
-		if ocupado:
-			estado = "investigando a %s" % (quien if quien != "" else str(inv["club_objetivo"]))
-		var id_inv := int(inv["id"])
-		contenedor_instalaciones_botones.add_child(_fila_investigador(
-			int(inv["estrellas"]), estado, ocupado, "Despedir",
-			Tema.VERDE if ocupado else Tema.SUAVE,
-			func():
-				Investigadores.despedir(equipo, id_inv)
-				label_instalaciones_estado.text = "Investigador despedido: se libero un slot."
-				_refrescar_instalaciones()
-		))
+	var grilla := GridContainer.new()
+	grilla.columns = 3
+	grilla.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grilla.add_theme_constant_override("h_separation", 10)
+	grilla.add_theme_constant_override("v_separation", 10)
+	contenedor_instalaciones_botones.add_child(grilla)
 
-	contenedor_instalaciones_botones.add_child(Tema.etiqueta_seccion(
-		"Contratar  ·  %d slot%s libre%s" % [libres, "" if libres == 1 else "s",
-		"" if libres == 1 else "s"]))
+	for i in range(Investigadores.SLOTS):
+		if i < equipo.investigadores.size():
+			grilla.add_child(_cubo_investigador(equipo, equipo.investigadores[i]))
+		else:
+			grilla.add_child(_cubo_slot_libre(equipo))
+
+
+## Alto de cada cubo. Calibrado para que las DOS filas de la grilla
+## entren juntas en una pantalla de 648: con 168 la de abajo quedaba
+## cortada y habia que scrollear para ver la mitad de tus slots.
+const ALTO_CUBO_INVESTIGADOR := 140
+
+
+func _cubo_investigador(equipo: Team, inv: Dictionary) -> Control:
+	var ocupado: bool = int(inv["objetivo"]) != -1
+	var tarjeta := Componentes.tarjeta(Tema.VERDE if ocupado else Tema.BORDE)
+	tarjeta.custom_minimum_size = Vector2(0, ALTO_CUBO_INVESTIGADOR)
+	tarjeta.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	var caja := VBoxContainer.new()
+	caja.add_theme_constant_override("separation", 4)
+	tarjeta.add_child(caja)
+
+	var nombre := Label.new()
+	nombre.text = str(inv.get("nombre", "Ojeador"))
+	nombre.clip_text = true
+	nombre.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	Tema.numero(nombre, Tema.TAM_BASE)
+	caja.add_child(nombre)
+
+	var estrellas := Label.new()
+	estrellas.text = "★".repeat(int(inv["estrellas"]))
+	estrellas.clip_text = true
+	estrellas.add_theme_color_override("font_color", Tema.AMBAR)
+	caja.add_child(estrellas)
+
+	var dias := Label.new()
+	dias.text = "informe en %d dias" % int(Investigadores.dias_de_informe(int(inv["estrellas"])))
+	dias.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	dias.add_theme_color_override("font_color", Tema.SUAVE)
+	caja.add_child(dias)
+
+	var estado := Label.new()
+	if ocupado:
+		var quien := str(inv.get("nombre_objetivo", ""))
+		estado.text = "investigando a %s" % (quien if quien != "" else str(inv.get("club_objetivo", "alguien")))
+		estado.add_theme_color_override("font_color", Tema.VERDE)
+	else:
+		estado.text = "libre, esperando orden"
+		estado.add_theme_color_override("font_color", Tema.SUAVE)
+	estado.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	estado.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	estado.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	caja.add_child(estado)
+
+	var id_inv := int(inv["id"])
+	var btn := Button.new()
+	btn.text = "Despedir"
+	btn.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	btn.tooltip_text = "No hay devolucion, y un informe a medio hacer se pierde."
+	btn.pressed.connect(func():
+		Investigadores.despedir(equipo, id_inv)
+		label_instalaciones_estado.text = "Se fue %s: quedo un slot libre." % str(
+			inv.get("nombre", "el investigador"))
+		_refrescar_instalaciones()
+	)
+	caja.add_child(btn)
+	return tarjeta
+
+
+func _cubo_slot_libre(equipo: Team) -> Control:
+	var tarjeta := Componentes.tarjeta()
+	tarjeta.custom_minimum_size = Vector2(0, ALTO_CUBO_INVESTIGADOR)
+	tarjeta.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var estilo: StyleBoxFlat = tarjeta.get_theme_stylebox("panel")
+	estilo.bg_color = Color("#1a231f")
+
+	var caja := VBoxContainer.new()
+	caja.add_theme_constant_override("separation", 4)
+	tarjeta.add_child(caja)
+
+	var vacio := Label.new()
+	vacio.text = "Slot libre"
+	vacio.add_theme_color_override("font_color", Tema.SUAVE)
+	caja.add_child(vacio)
+
+	var hueco := Control.new()
+	hueco.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	caja.add_child(hueco)
+
+	var btn := Button.new()
+	btn.text = "Contratar investigador"
+	btn.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	btn.clip_text = true
+	if equipo.investigadores.is_empty():
+		Tema.primario(btn)
+	btn.pressed.connect(_abrir_dialogo_investigador)
+	caja.add_child(btn)
+	return tarjeta
+
+
+## El menu de contratacion. Va en un modal y no en la pantalla porque son
+## diez opciones que solo se miran en el momento de contratar: abajo de la
+## grilla convertian la pantalla en la lista larga que se queria evitar.
+func _construir_dialogo_investigador() -> void:
+	dialogo_investigador = AcceptDialog.new()
+	dialogo_investigador.title = "Contratar un investigador"
+	dialogo_investigador.ok_button_text = "Cerrar"
+	dialogo_investigador.min_size = Vector2(720, 420)
+	# Un tope duro: sin esto el dialogo crece con su contenido —diez filas
+	# de opciones— y se pasa del alto de la pantalla, dejando el boton de
+	# cerrar afuera. Que scrollee la lista, no la ventana.
+	dialogo_investigador.max_size = Vector2(760, 560)
+	add_child(dialogo_investigador)
+
+	var caja := VBoxContainer.new()
+	caja.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dialogo_investigador.add_child(caja)
+
+	label_investigador_dialogo = Label.new()
+	label_investigador_dialogo.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label_investigador_dialogo.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	label_investigador_dialogo.add_theme_color_override("font_color", Tema.SUAVE)
+	caja.add_child(label_investigador_dialogo)
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# Con 380 el dialogo crecia mas alto que la pantalla y el boton de
+	# cerrar quedaba abajo del borde.
+	scroll.custom_minimum_size = Vector2(0, 260)
+	caja.add_child(scroll)
+	contenedor_investigador_dialogo = VBoxContainer.new()
+	contenedor_investigador_dialogo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(contenedor_investigador_dialogo)
+
+	# Sin boton de cerrar propio: con el tope de alto de arriba, el que trae
+	# AcceptDialog siempre queda dentro de la pantalla. Dos botones "Cerrar"
+	# uno arriba del otro se leian como que hacian cosas distintas.
+
+
+func _abrir_dialogo_investigador() -> void:
+	_refrescar_dialogo_investigador()
+	dialogo_investigador.popup_centered()
+
+
+func _refrescar_dialogo_investigador() -> void:
+	for hijo in contenedor_investigador_dialogo.get_children():
+		hijo.queue_free()
+	var equipo := GameState.equipo_jugador
 	var disponible: float = equipo.caja.get("mejoras", 0.0)
+	var libres: int = Investigadores.SLOTS - equipo.investigadores.size()
+
+	label_investigador_dialogo.text = "Te quedan %d slot%s de %d. Presupuesto de Mejoras: %s. Las estrellas son VELOCIDAD: el informe siempre sale completo." % [
+		libres, "" if libres == 1 else "s", Investigadores.SLOTS,
+		Economia.formato_dinero(disponible)]
+
 	for estrellas in range(Investigadores.ESTRELLAS_MIN, Investigadores.ESTRELLAS_MAX + 1):
 		var costo := Investigadores.costo(estrellas)
 		var motivo := ""
 		if libres <= 0:
-			motivo = "sin slots libres"
+			motivo = "sin slots"
 		elif disponible < costo:
-			motivo = "te faltan %s" % Economia.formato_dinero(costo - disponible)
+			motivo = "faltan %s" % Economia.formato_dinero(costo - disponible)
 		var e := estrellas
-		contenedor_instalaciones_botones.add_child(_fila_investigador(
-			estrellas, "cuesta %s" % Economia.formato_dinero(costo), false,
-			"Contratar", Tema.SUAVE, func(): _on_contratar_investigador(e), motivo))
+		var fila := Componentes.fila(estrellas % 2 == 0)
+		var dentro := Componentes.contenido(fila)
 
+		var l_estrellas := Label.new()
+		l_estrellas.text = "★".repeat(estrellas)
+		l_estrellas.custom_minimum_size = Vector2(190, 0)
+		l_estrellas.clip_text = true
+		l_estrellas.add_theme_color_override("font_color", Tema.AMBAR)
+		dentro.add_child(l_estrellas)
 
-## Una fila de investigador: estrellas, cuanto tarda el informe, en que
-## anda, y un boton. La comparten la plantilla y la lista de contratables.
-func _fila_investigador(estrellas: int, estado: String, activo: bool,
-		texto_boton: String, color_estado: Color, al_apretar: Callable,
-		motivo_apagado: String = "") -> Control:
-	var tarjeta := Componentes.tarjeta(Tema.VERDE if activo else Color.TRANSPARENT)
-	var fila := HBoxContainer.new()
-	tarjeta.add_child(fila)
+		dentro.add_child(Componentes.celda(
+			"informe en %d dias" % int(Investigadores.dias_de_informe(estrellas)),
+			190, Tema.TEXTO))
+		dentro.add_child(Componentes.celda_numero(
+			Economia.formato_dinero(costo), 130, Tema.TEXTO, HORIZONTAL_ALIGNMENT_RIGHT))
 
-	var l_estrellas := Label.new()
-	l_estrellas.text = "★".repeat(estrellas)
-	l_estrellas.custom_minimum_size = Vector2(190, 0)
-	l_estrellas.clip_text = true
-	l_estrellas.add_theme_color_override("font_color", Tema.AMBAR)
-	fila.add_child(l_estrellas)
+		var der := VBoxContainer.new()
+		der.custom_minimum_size = Vector2(170, 0)
+		der.add_theme_constant_override("separation", 2)
+		dentro.add_child(der)
+		var btn := Button.new()
+		btn.text = "Contratar"
+		btn.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+		btn.disabled = motivo != ""
+		btn.pressed.connect(func():
+			_on_contratar_investigador(e)
+			_refrescar_dialogo_investigador()
+		)
+		der.add_child(btn)
+		if motivo != "":
+			var l := Label.new()
+			l.text = motivo
+			l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			l.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+			l.add_theme_color_override("font_color", Tema.ROJO)
+			der.add_child(l)
 
-	var dias := Label.new()
-	dias.text = "informe en %d dias" % int(Investigadores.dias_de_informe(estrellas))
-	dias.custom_minimum_size = Vector2(200, 0)
-	dias.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
-	dias.add_theme_color_override("font_color", Tema.TEXTO)
-	fila.add_child(dias)
-
-	var l_estado := Label.new()
-	l_estado.text = estado
-	l_estado.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	l_estado.clip_text = true
-	l_estado.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	l_estado.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
-	l_estado.add_theme_color_override("font_color", color_estado)
-	fila.add_child(l_estado)
-
-	var der := VBoxContainer.new()
-	der.custom_minimum_size = Vector2(180, 0)
-	der.add_theme_constant_override("separation", 2)
-	fila.add_child(der)
-	var btn := Button.new()
-	btn.text = texto_boton
-	btn.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
-	btn.disabled = motivo_apagado != ""
-	btn.pressed.connect(al_apretar)
-	der.add_child(btn)
-	if motivo_apagado != "":
-		var l := Label.new()
-		l.text = motivo_apagado
-		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		l.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
-		l.add_theme_color_override("font_color", Tema.ROJO)
-		der.add_child(l)
-	return tarjeta
+		contenedor_investigador_dialogo.add_child(fila)
 
 
 func _on_contratar_investigador(estrellas: int) -> void:
-	var r := Investigadores.contratar(GameState.equipo_jugador, estrellas)
+	var r := Investigadores.contratar(GameState.equipo_jugador, estrellas, GameState.rng)
 	if r["exito"]:
-		label_instalaciones_estado.text = "Contratado un investigador de %d estrella(s) por %s." % [
-			estrellas, Economia.formato_dinero(r["costo"])]
+		label_instalaciones_estado.text = "%s se suma al club: %d estrella%s por %s." % [
+			str(r["investigador"]["nombre"]), estrellas,
+			"" if estrellas == 1 else "s", Economia.formato_dinero(r["costo"])]
 	else:
 		label_instalaciones_estado.text = "No se pudo: %s" % r["motivo"]
 	_refrescar_instalaciones()

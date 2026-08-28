@@ -222,7 +222,14 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 	# §9.4: todo club arranca con un investigador de 1 estrella. Tarda
 	# media temporada por informe, que es justo lo bastante lento como para
 	# que quieras otro mejor.
-	t.investigadores = [Investigadores.nuevo(0, 1)]
+	# El nombre NO sale del rng del juego: sacar dos numeros de ahi corre el
+	# stream compartido y cambia el plantel entero de todos los clubes (lo
+	# agarro test_personalidad_partido). Un rng propio sembrado con el
+	# nombre del club da nombres distintos por club y estables entre
+	# partidas, sin tocar la generacion.
+	var rng_investigador := RandomNumberGenerator.new()
+	rng_investigador.seed = hash("investigador:%s" % t.nombre)
+	t.investigadores = [Investigadores.nuevo(0, 1, rng_investigador)]
 	t.siguiente_id_investigador = 1
 	t.instalaciones = Instalaciones.nivel_inicial()
 	for categoria in Economia.CATEGORIAS_CAJA:
@@ -343,6 +350,12 @@ static func cargar(datos: Dictionary) -> Team:
 		t.investigadores = [Investigadores.nuevo(0, 1)]
 	for inv in t.investigadores:
 		inv["id"] = int(inv["id"])
+		# Partidas anteriores a que los investigadores tuvieran nombre: se
+		# lo deriva del id, que es estable, asi que no cambia entre cargas.
+		if not inv.has("nombre") or str(inv["nombre"]) == "":
+			inv["nombre"] = str(Investigadores.nuevo(int(inv["id"]), 1)["nombre"])
+		if not inv.has("nombre_objetivo"):
+			inv["nombre_objetivo"] = ""
 		inv["estrellas"] = int(inv["estrellas"])
 		inv["objetivo"] = int(inv["objetivo"])
 		inv["dias"] = float(inv["dias"])
