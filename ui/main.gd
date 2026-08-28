@@ -4499,9 +4499,23 @@ func _refrescar_portada() -> void:
 	fila_acciones.add_child(btn_jugar)
 	var btn_form := Button.new()
 	btn_form.text = "Ver formacion"
-	btn_form.custom_minimum_size = Vector2(220, Tema.ALTO_TACTIL)
+	btn_form.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
 	btn_form.pressed.connect(func(): _mostrar_seccion("equipo"))
 	fila_acciones.add_child(btn_form)
+
+	# Simular tambien vive aca y no solo en Partido: la portada es desde
+	# donde se juega, y mandar al jugador a otra seccion a buscar el boton
+	# que salta la temporada es pedirle que adivine donde esta.
+	var btn_simular := Button.new()
+	btn_simular.text = TEXTO_SIMULAR_TEMPORADA
+	btn_simular.custom_minimum_size = Vector2(280, Tema.ALTO_TACTIL)
+	btn_simular.tooltip_text = "Juega de una todas las fechas que quedan, las tuyas incluidas: no vas a poder tocar nada hasta el final."
+	btn_simular.disabled = rival == null or GameState.juego_terminado
+	btn_simular.pressed.connect(func():
+		_on_simular_temporada()
+		_refrescar_portada()
+	)
+	fila_acciones.add_child(btn_simular)
 
 	# --- Lo que esta esperando una decision --------------------------------
 	var pendientes := _pendientes_de_portada()
