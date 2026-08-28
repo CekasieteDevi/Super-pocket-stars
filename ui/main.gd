@@ -70,39 +70,35 @@ func _ready() -> void:
 	# El sistema visual entero vive en ui/tema.gd y se hereda desde la raiz.
 	theme = Tema.construir()
 
-	var raiz := VBoxContainer.new()
+	# Raiz apaisada: el riel de secciones al COSTADO y el contenido al lado.
+	# Al costado y no abajo porque el alto (648 px logicos) es lo escaso en
+	# apaisado, mientras que a lo ancho sobra.
+	var raiz := HBoxContainer.new()
 	raiz.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(raiz)
 
-	# La barra tiene 13 pestañas y en una pantalla angosta las ultimas
-	# quedaban FUERA de la ventana, sin forma de llegar a ellas. Va en un
-	# scroll horizontal: es lo que hace cualquier app con muchas solapas.
-	var barra_scroll := ScrollContainer.new()
-	barra_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	barra_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	raiz.add_child(barra_scroll)
+	_construir_riel(raiz)
 
-	var barra := HBoxContainer.new()
-	barra_scroll.add_child(barra)
+	var columna := VBoxContainer.new()
+	columna.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	columna.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	raiz.add_child(columna)
 
-	for entrada in [
-		["Plantel", "_mostrar_plantel"], ["Formacion", "_mostrar_formacion"],
-		["Tabla", "_mostrar_tabla"], ["Partido", "_mostrar_partido"],
-		["Economia", "_mostrar_economia"], ["Mercado", "_mostrar_mercado"],
-		["Libres", "_mostrar_libres"], ["Prestamos", "_mostrar_prestamos"],
-		["Instalaciones", "_mostrar_instalaciones"], ["Seleccion", "_mostrar_seleccion"],
-		["Cantera", "_mostrar_cantera"], ["Noticias", "_mostrar_noticias"], ["Partida", "_mostrar_partida_panel"],
-	]:
-		var btn := Button.new()
-		btn.text = entrada[0]
-		btn.pressed.connect(Callable(self, entrada[1]))
-		barra.add_child(btn)
+	_construir_barra_contexto(columna)
+
+	var sub_scroll := ScrollContainer.new()
+	sub_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sub_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	columna.add_child(sub_scroll)
+	barra_subsolapas = HBoxContainer.new()
+	sub_scroll.add_child(barra_subsolapas)
 
 	var contenedor := Control.new()
 	contenedor.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	contenedor.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	raiz.add_child(contenedor)
+	columna.add_child(contenedor)
 
+	_construir_panel_portada(contenedor)
 	_construir_panel_plantel(contenedor)
 	_construir_panel_tabla(contenedor)
 	_construir_panel_partido(contenedor)
@@ -125,7 +121,7 @@ func _ready() -> void:
 	# deslizables con el dedo (ver _ajustar_para_tactil).
 	_ajustar_para_tactil(self)
 
-	_mostrar_plantel()
+	_mostrar_seccion("club")
 
 
 ## Fix 10: nombre y apellido del jugador, para las listas de la UI.
@@ -819,6 +815,7 @@ var contenedor_enviadas: VBoxContainer
 var contenedor_recibidas: VBoxContainer
 var contenedor_historial: VBoxContainer
 var contenedor_investigaciones: VBoxContainer
+var contenedor_portada: VBoxContainer
 
 
 func _construir_panel_mercado(padre: Control) -> void:
@@ -2804,3 +2801,328 @@ func _ajustar_para_tactil(nodo: Node) -> void:
 		nodo.mouse_filter = Control.MOUSE_FILTER_PASS
 	for hijo in nodo.get_children():
 		_ajustar_para_tactil(hijo)
+
+
+## §UI: el armazón. Trece pestañas sueltas pasan a CINCO secciones con
+## subsolapas, y la navegación va al COSTADO.
+##
+## Al costado y no abajo porque el juego es apaisado: el alto son 648 px
+## lógicos y es lo escaso, mientras que a lo ancho sobra. Una barra abajo
+## se comería justo el espacio que necesitan las listas.
+##
+## Cada sección agrupa las pantallas que se usan juntas. Los paneles no se
+## tocan: siguen siendo los mismos nodos en `paneles`, solo cambia por
+## dónde se llega.
+const SECCIONES := [
+	{"clave": "club", "nombre": "Club", "paneles": []},
+	{"clave": "equipo", "nombre": "Equipo", "paneles": [
+		["plantel", "Plantel"], ["formacion", "Formacion"],
+		["cantera", "Cantera"], ["instalaciones", "Instalaciones"]]},
+	{"clave": "partido", "nombre": "Partido", "paneles": [
+		["partido", "Partido"], ["tabla", "Tabla"]]},
+	{"clave": "mercado", "nombre": "Mercado", "paneles": [
+		["mercado", "Mercado"], ["libres", "Libres"], ["prestamos", "Prestamos"]]},
+	{"clave": "mas", "nombre": "Mas", "paneles": [
+		["economia", "Economia"], ["noticias", "Noticias"],
+		["seleccion", "Seleccion"], ["partida", "Partida"]]},
+]
+
+var seccion_actual: String = "club"
+var panel_de_seccion_actual: String = ""
+var botones_seccion: Dictionary = {}
+var barra_subsolapas: HBoxContainer
+var label_barra_club: Label
+var label_barra_posicion: Label
+var label_barra_plata: Label
+var label_barra_fecha: Label
+
+
+func _construir_riel(padre: HBoxContainer) -> void:
+	var riel := VBoxContainer.new()
+	riel.custom_minimum_size = Vector2(132, 0)
+	padre.add_child(riel)
+
+	for seccion in SECCIONES:
+		var btn := Button.new()
+		btn.text = str(seccion["nombre"])
+		btn.custom_minimum_size = Vector2(0, 62)
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var clave := str(seccion["clave"])
+		btn.pressed.connect(func(): _mostrar_seccion(clave))
+		riel.add_child(btn)
+		botones_seccion[clave] = btn
+
+	riel.add_child(Control.new())
+	riel.get_child(riel.get_child_count() - 1).size_flags_vertical = Control.SIZE_EXPAND_FILL
+
+
+## La barra de contexto: quién sos, dónde estás y cuánta plata tenés. Antes
+## nada de esto se veía sin entrar a tres pantallas distintas.
+func _construir_barra_contexto(padre: VBoxContainer) -> void:
+	var barra := HBoxContainer.new()
+	padre.add_child(barra)
+
+	label_barra_club = Label.new()
+	Tema.numero(label_barra_club, Tema.TAM_BASE, Tema.TEXTO)
+	barra.add_child(label_barra_club)
+
+	label_barra_posicion = Label.new()
+	label_barra_posicion.add_theme_color_override("font_color", Tema.SUAVE)
+	barra.add_child(label_barra_posicion)
+
+	var espacio := Control.new()
+	espacio.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	barra.add_child(espacio)
+
+	barra.add_child(Tema.etiqueta_seccion("Fichajes"))
+	label_barra_plata = Label.new()
+	Tema.numero(label_barra_plata, Tema.TAM_BASE, Tema.VERDE)
+	barra.add_child(label_barra_plata)
+
+	barra.add_child(Tema.etiqueta_seccion("Fecha"))
+	label_barra_fecha = Label.new()
+	Tema.numero(label_barra_fecha, Tema.TAM_BASE, Tema.TEXTO)
+	barra.add_child(label_barra_fecha)
+
+
+func _refrescar_barra_contexto() -> void:
+	if label_barra_club == null:
+		return
+	var equipo := GameState.equipo_jugador
+	label_barra_club.text = equipo.nombre
+	var tabla := GameState.liga_jugador().tabla_ordenada()
+	var puesto: int = tabla.find(equipo.nombre) + 1
+	label_barra_posicion.text = "  Division %d  ·  %d° de %d" % [
+		GameState.division_jugador + 1, puesto, tabla.size()]
+	label_barra_plata.text = Economia.formato_dinero(equipo.caja["fichajes"])
+	label_barra_fecha.text = "%d / %d" % [
+		GameState.fecha_actual + 1, GameState.liga_jugador().fixture.size()]
+
+
+func _mostrar_seccion(clave: String) -> void:
+	seccion_actual = clave
+	for c in botones_seccion:
+		Tema.seleccionado(botones_seccion[c], c == clave)
+
+	for hijo in barra_subsolapas.get_children():
+		hijo.queue_free()
+
+	var seccion := {}
+	for s in SECCIONES:
+		if str(s["clave"]) == clave:
+			seccion = s
+	var subpaneles: Array = seccion.get("paneles", [])
+
+	if clave == "club":
+		_mostrar_portada()
+		return
+
+	for entrada in subpaneles:
+		var btn := Button.new()
+		btn.text = str(entrada[1])
+		var panel := str(entrada[0])
+		btn.set_meta("panel", panel)
+		btn.pressed.connect(func(): _mostrar_panel_de_seccion(panel))
+		barra_subsolapas.add_child(btn)
+	if not subpaneles.is_empty():
+		_mostrar_panel_de_seccion(str(subpaneles[0][0]))
+
+
+## Muestra un panel y marca su subsolapa. Reusa los `_mostrar_*` que ya
+## existian para que cada panel siga refrescandose como siempre.
+func _mostrar_panel_de_seccion(clave: String) -> void:
+	var metodos := {
+		"plantel": "_mostrar_plantel", "formacion": "_mostrar_formacion",
+		"cantera": "_mostrar_cantera", "instalaciones": "_mostrar_instalaciones",
+		"partido": "_mostrar_partido", "tabla": "_mostrar_tabla",
+		"mercado": "_mostrar_mercado", "libres": "_mostrar_libres",
+		"prestamos": "_mostrar_prestamos", "economia": "_mostrar_economia",
+		"noticias": "_mostrar_noticias", "seleccion": "_mostrar_seleccion",
+		"partida": "_mostrar_partida_panel",
+	}
+	if metodos.has(clave):
+		call(str(metodos[clave]))
+	panel_de_seccion_actual = clave
+	for hijo in barra_subsolapas.get_children():
+		if hijo is Button:
+			Tema.seleccionado(hijo, str(hijo.get_meta("panel", "")) == clave)
+	_refrescar_barra_contexto()
+
+
+## La PORTADA: la pantalla que contesta "que hago ahora".
+##
+## Antes el juego abria en Plantel, que no dice nada de lo que hay
+## pendiente: las ofertas por responder se perdian en el feed de noticias
+## y los informes terminados no avisaban en ningun lado.
+func _mostrar_portada() -> void:
+	_ocultar_todos()
+	paneles["portada"].visible = true
+	_refrescar_portada()
+	_refrescar_barra_contexto()
+
+
+func _construir_panel_portada(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	padre.add_child(panel)
+	paneles["portada"] = panel
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+
+	contenedor_portada = VBoxContainer.new()
+	contenedor_portada.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(contenedor_portada)
+
+
+func _tarjeta(padre: Control, acento: Color = Color.TRANSPARENT) -> VBoxContainer:
+	var caja := PanelContainer.new()
+	caja.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if acento != Color.TRANSPARENT:
+		var estilo := StyleBoxFlat.new()
+		estilo.bg_color = Tema.PANEL
+		estilo.corner_radius_top_left = Tema.RADIO
+		estilo.corner_radius_top_right = Tema.RADIO
+		estilo.corner_radius_bottom_left = Tema.RADIO
+		estilo.corner_radius_bottom_right = Tema.RADIO
+		estilo.border_width_left = 4
+		estilo.border_color = acento
+		estilo.content_margin_left = 16
+		estilo.content_margin_right = 16
+		estilo.content_margin_top = 12
+		estilo.content_margin_bottom = 12
+		caja.add_theme_stylebox_override("panel", estilo)
+	padre.add_child(caja)
+	var dentro := VBoxContainer.new()
+	caja.add_child(dentro)
+	return dentro
+
+
+func _refrescar_portada() -> void:
+	for hijo in contenedor_portada.get_children():
+		hijo.queue_free()
+	var equipo := GameState.equipo_jugador
+
+	# --- Proximo partido, con su boton -------------------------------------
+	var caja_partido := _tarjeta(contenedor_portada, Tema.AMBAR)
+	caja_partido.add_child(Tema.etiqueta_seccion(
+		"Proximo partido  ·  fecha %d" % (GameState.fecha_actual + 1)))
+	var rival := _proximo_rival()
+	var titulo := Label.new()
+	if rival == null:
+		titulo.text = "Temporada terminada."
+	else:
+		var de_local := false
+		var liga := GameState.liga_jugador()
+		for partido in liga.fixture[GameState.fecha_actual]:
+			if liga.equipos[partido[0]] == equipo:
+				de_local = true
+		titulo.text = "%s  vs  %s   (%s)" % [
+			equipo.nombre, rival.nombre, "de local" if de_local else "de visitante"]
+	Tema.numero(titulo, 24, Tema.TEXTO)
+	caja_partido.add_child(titulo)
+
+	var fila_acciones := HBoxContainer.new()
+	caja_partido.add_child(fila_acciones)
+	var btn_jugar := Button.new()
+	btn_jugar.text = "Jugar la fecha"
+	btn_jugar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	Tema.primario(btn_jugar)
+	btn_jugar.disabled = rival == null or GameState.juego_terminado
+	btn_jugar.pressed.connect(func():
+		_on_jugar_fecha()
+		_refrescar_portada()
+	)
+	fila_acciones.add_child(btn_jugar)
+	var btn_form := Button.new()
+	btn_form.text = "Ver formacion"
+	btn_form.custom_minimum_size = Vector2(220, Tema.ALTO_TACTIL)
+	btn_form.pressed.connect(func(): _mostrar_seccion("equipo"))
+	fila_acciones.add_child(btn_form)
+
+	# --- Lo que esta esperando una decision --------------------------------
+	var pendientes := _pendientes_de_portada()
+	contenedor_portada.add_child(Tema.etiqueta_seccion(
+		"Te toca decidir" if not pendientes.is_empty() else "Nada pendiente"))
+	if pendientes.is_empty():
+		var vacio := Label.new()
+		vacio.text = "No hay ofertas por responder ni informes nuevos."
+		vacio.add_theme_color_override("font_color", Tema.SUAVE)
+		contenedor_portada.add_child(vacio)
+	for p in pendientes:
+		var caja := _tarjeta(contenedor_portada, p["color"])
+		var fila := HBoxContainer.new()
+		caja.add_child(fila)
+		var texto := VBoxContainer.new()
+		texto.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		fila.add_child(texto)
+		var l1 := Label.new()
+		l1.text = str(p["titulo"])
+		texto.add_child(l1)
+		var l2 := Label.new()
+		l2.text = str(p["detalle"])
+		l2.add_theme_color_override("font_color", Tema.SUAVE)
+		l2.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		texto.add_child(l2)
+		var btn := Button.new()
+		btn.text = str(p["accion"])
+		btn.custom_minimum_size = Vector2(180, Tema.ALTO_TACTIL)
+		btn.pressed.connect(func(): _mostrar_seccion("mercado"))
+		fila.add_child(btn)
+
+	# --- Estado del club ---------------------------------------------------
+	contenedor_portada.add_child(Tema.etiqueta_seccion("El club"))
+	var estado := _tarjeta(contenedor_portada)
+	var objetivo: Dictionary = equipo.objetivo_temporada
+	if not objetivo.is_empty():
+		var l := Label.new()
+		l.text = "Objetivo: %s" % objetivo["descripcion"]
+		estado.add_child(l)
+	var linea := Label.new()
+	linea.text = "Media del once %.1f   ·   disponibles %d de %d   ·   carga %s   ·   foco %s" % [
+		equipo.media_equipo(), equipo.jugadores_sanos_count(),
+		equipo.todos_los_jugadores().size(),
+		CargaEntrenamiento.ETIQUETAS.get(equipo.carga_entrenamiento, "?"),
+		FocoEquipo.ETIQUETAS.get(equipo.foco_equipo, "?")]
+	linea.add_theme_color_override("font_color", Tema.SUAVE)
+	estado.add_child(linea)
+
+
+## Lo que esta esperando una decision tuya, ahora. Solo cosas accionables:
+## una lista de "novedades" que no se pueden tocar no sirve de nada.
+func _pendientes_de_portada() -> Array:
+	var equipo := GameState.equipo_jugador
+	var salida := []
+	for o in equipo.ofertas:
+		if str(o["estado"]) == Ofertas.PENDIENTE_NOSOTROS:
+			salida.append({
+				"color": Tema.ROJO,
+				"titulo": "%s ofrece %s por %s" % [
+					str(o["club"]), Economia.formato_dinero(o["monto"]), str(o["jugador"])]
+					if bool(o["entrante"]) else
+					"%s te contraoferta por %s" % [str(o["club"]), str(o["jugador"])],
+				"detalle": "%s  ·  ronda %d" % [str(o["posicion"]), int(o["ronda"])],
+				"accion": "Ver oferta",
+			})
+		elif str(o["estado"]) == Ofertas.ACUERDO_CLUB and not bool(o["entrante"]):
+			salida.append({
+				"color": Tema.AMBAR,
+				"titulo": "Acordaste %s por %s" % [
+					Economia.formato_dinero(o["monto"]), str(o["jugador"])],
+				"detalle": "Falta firmar el contrato con el jugador.",
+				"accion": "Firmar",
+			})
+	for id in equipo.conocimiento:
+		if int(equipo.conocimiento[id]) > Investigadores.DIAS_VIGENCIA - 30:
+			salida.append({
+				"color": Tema.CELESTE,
+				"titulo": "Informe nuevo listo",
+				"detalle": "Ya podes ver su ficha completa en el mercado.",
+				"accion": "Ver",
+			})
+			break
+	return salida
+

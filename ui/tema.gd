@@ -181,6 +181,24 @@ static func primario(boton: Button) -> Button:
 	return boton
 
 
+## Marca un botón como la sección/solapa ABIERTA. No se usa `disabled` para
+## eso: gris apagado se lee como "no se puede tocar", que es lo contrario de
+## "estás acá". Va fondo claro y una barra ámbar al costado.
+static func seleccionado(boton: Button, activo: bool) -> Button:
+	if not activo:
+		for estado in ["normal", "hover", "pressed"]:
+			boton.remove_theme_stylebox_override(estado)
+		boton.remove_theme_color_override("font_color")
+		return boton
+	var caja := _caja(PANEL_ALTO.lightened(0.05), BORDE, 1)
+	caja.border_width_left = 4
+	caja.border_color = AMBAR
+	for estado in ["normal", "hover", "pressed"]:
+		boton.add_theme_stylebox_override(estado, caja)
+	boton.add_theme_color_override("font_color", AMBAR)
+	return boton
+
+
 ## Un número que se lee de un vistazo: Archivo, con cifras tabulares para
 ## que las columnas de la tabla no bailen.
 static func numero(etiqueta: Label, tam: int = TAM_BASE, color: Color = TEXTO) -> Label:
