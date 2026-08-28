@@ -25,10 +25,10 @@ var option_foco: OptionButton
 var label_foco_efecto: Label
 var label_carga_efecto: Label
 var contenedor_formacion: VBoxContainer
+var cancha_formacion: CanchaFormacion
 var label_formacion_estado: Label
 ## Jugador tocado primero en la pantalla de formacion, a la espera del
 ## segundo para intercambiarlos. -1 = nadie seleccionado.
-var formacion_seleccion := -1
 var lista_tabla: RichTextLabel
 var label_resultado: Label
 var lista_log: RichTextLabel
@@ -268,16 +268,14 @@ func _fila_jugador(equipo: Team, j: Dictionary, par: bool, es_banco: bool) -> Co
 		color = Tema.ROJO
 	dentro.add_child(Componentes.celda(estado, 74, color))
 
-	if es_banco:
-		var btn_subir := Button.new()
-		btn_subir.text = "Subir"
-		btn_subir.custom_minimum_size = Vector2(96, 0)
-		btn_subir.pressed.connect(func(): _on_promover_a_titular(id))
-		dentro.add_child(btn_subir)
-	else:
-		var hueco := Control.new()
-		hueco.custom_minimum_size = Vector2(96, 0)
-		dentro.add_child(hueco)
+	# Ficha y no "Subir": cambiar jugadores de lugar se hace arrastrando en
+	# Formacion, que es donde se ve la cancha. Tener las dos formas en dos
+	# pantallas distintas confundia mas de lo que ayudaba.
+	var btn_ficha := Button.new()
+	btn_ficha.text = "Ficha"
+	btn_ficha.custom_minimum_size = Vector2(96, 0)
+	btn_ficha.pressed.connect(func(): _mostrar_ficha(id))
+	dentro.add_child(btn_ficha)
 	return fila
 
 
@@ -575,69 +573,73 @@ func _construir_panel_formacion(padre: Control) -> void:
 	padre.add_child(panel)
 	paneles["formacion"] = panel
 
+	# Los tres controles en UNA fila y sus explicaciones en el tooltip: en
+	# tres filas con su texto debajo se comian 200 px de alto y la cancha
+	# —que es el contenido de esta pantalla— quedaba cortada.
 	var fila := HBoxContainer.new()
 	panel.add_child(fila)
-	var etiqueta := Label.new()
-	etiqueta.text = "Formacion:"
-	fila.add_child(etiqueta)
 
+	fila.add_child(Tema.etiqueta_seccion("Formación"))
 	option_formacion = OptionButton.new()
 	for nombre in Formaciones.lista():
 		option_formacion.add_item(nombre)
 	option_formacion.item_selected.connect(_on_formacion_elegida)
 	fila.add_child(option_formacion)
 
-	var fila_carga := HBoxContainer.new()
-	panel.add_child(fila_carga)
-	var et_carga := Label.new()
-	et_carga.text = "Carga de entrenamiento:"
-	fila_carga.add_child(et_carga)
-
+	fila.add_child(Tema.etiqueta_seccion("Carga"))
 	option_carga = OptionButton.new()
 	for nivel in CargaEntrenamiento.NIVELES:
 		option_carga.add_item(CargaEntrenamiento.ETIQUETAS[nivel])
 	option_carga.item_selected.connect(_on_carga_elegida)
-	fila_carga.add_child(option_carga)
+	fila.add_child(option_carga)
 
-	label_carga_efecto = Label.new()
-	label_carga_efecto.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	panel.add_child(label_carga_efecto)
-
-	# §7.4.2: la carga dice CUANTO se entrena, el foco dice QUE.
-	var fila_foco := HBoxContainer.new()
-	panel.add_child(fila_foco)
-	var et_foco := Label.new()
-	et_foco.text = "Foco del equipo:"
-	fila_foco.add_child(et_foco)
-
+	fila.add_child(Tema.etiqueta_seccion("Foco"))
 	option_foco = OptionButton.new()
 	for area in FocoEquipo.AREAS:
 		option_foco.add_item(FocoEquipo.ETIQUETAS[area])
 	option_foco.item_selected.connect(_on_foco_equipo_elegido)
-	fila_foco.add_child(option_foco)
+	fila.add_child(option_foco)
+
+	label_carga_efecto = Label.new()
+	label_carga_efecto.add_theme_color_override("font_color", Tema.SUAVE)
+	label_carga_efecto.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	label_carga_efecto.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	fila.add_child(label_carga_efecto)
 
 	label_foco_efecto = Label.new()
-	label_foco_efecto.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label_foco_efecto.visible = false
 	panel.add_child(label_foco_efecto)
 
 	label_formacion_estado = Label.new()
-	label_formacion_estado.text = "Toca un jugador y despues otro para cambiarlos de lugar."
+	label_formacion_estado.text = "Arrastrá un jugador sobre otro para cambiarlos de lugar."
+	label_formacion_estado.add_theme_color_override("font_color", Tema.SUAVE)
 	panel.add_child(label_formacion_estado)
 
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.add_child(scroll)
+	var cuerpo := HBoxContainer.new()
+	cuerpo.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	cuerpo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(cuerpo)
 
+	cancha_formacion = CanchaFormacion.new()
+	cancha_formacion.intercambio_pedido.connect(_on_intercambio_arrastrado)
+	cuerpo.add_child(cancha_formacion)
+
+	# El banco al costado y no abajo: tiene que ser un destino de arrastre
+	# visible al mismo tiempo que la cancha, si no hay que soltar a ciegas.
+	var lado := VBoxContainer.new()
+	lado.custom_minimum_size = Vector2(CuboJugador.ANCHO + 34, 0)
+	cuerpo.add_child(lado)
+	lado.add_child(Tema.etiqueta_seccion("Banco"))
+	var scroll_banco := ScrollContainer.new()
+	scroll_banco.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	lado.add_child(scroll_banco)
 	contenedor_formacion = VBoxContainer.new()
-	contenedor_formacion.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(contenedor_formacion)
+	scroll_banco.add_child(contenedor_formacion)
 
 
 func _mostrar_formacion() -> void:
 	_ocultar_todos()
 	paneles["formacion"].visible = true
-	formacion_seleccion = -1
 	_refrescar_formacion()
 
 
@@ -660,22 +662,7 @@ func _on_foco_equipo_elegido(idx: int) -> void:
 func _on_formacion_elegida(idx: int) -> void:
 	var nombre: String = option_formacion.get_item_text(idx)
 	GameState.equipo_jugador.formacion = nombre
-	formacion_seleccion = -1
 	_refrescar_formacion()
-
-
-## Un toque elige, el segundo intercambia. Si se vuelve a tocar al mismo,
-## se cancela.
-func _on_tocar_jugador_formacion(jugador_id: int) -> void:
-	if formacion_seleccion == -1:
-		formacion_seleccion = jugador_id
-	elif formacion_seleccion == jugador_id:
-		formacion_seleccion = -1
-	else:
-		GameState.equipo_jugador.intercambiar(formacion_seleccion, jugador_id)
-		formacion_seleccion = -1
-	_refrescar_formacion()
-	_refrescar_plantel()
 
 
 ## Aviso cuando alguien esta fuera de su puesto. No lo impide —es una
@@ -711,49 +698,30 @@ func _refrescar_formacion() -> void:
 	var idx_carga := CargaEntrenamiento.NIVELES.find(equipo.carga_entrenamiento)
 	if idx_carga >= 0:
 		option_carga.selected = idx_carga
-	label_carga_efecto.text = "%s   —   promedio de la temporada hasta ahora: x%.2f de crecimiento" % [
-		CargaEntrenamiento.resumen(equipo.carga_entrenamiento), equipo.factor_carga_temporada()]
+	label_carga_efecto.text = "carga x%.2f de crecimiento en la temporada" % equipo.factor_carga_temporada()
+	option_carga.tooltip_text = CargaEntrenamiento.resumen(equipo.carga_entrenamiento)
 	var idx_foco := FocoEquipo.AREAS.find(equipo.foco_equipo)
 	if idx_foco >= 0:
 		option_foco.selected = idx_foco
-	label_foco_efecto.text = "%s%s" % [FocoEquipo.resumen(equipo.foco_equipo), _reparto_foco_texto(equipo)]
-	label_formacion_estado.text = "Toca un jugador y despues otro para cambiarlos de lugar." 		if formacion_seleccion == -1 else "Elegido. Toca a otro para cambiarlos, o al mismo para cancelar."
+	option_foco.tooltip_text = "%s%s" % [
+		FocoEquipo.resumen(equipo.foco_equipo), _reparto_foco_texto(equipo)]
+
+	cancha_formacion.mostrar(equipo)
 
 	for hijo in contenedor_formacion.get_children():
 		hijo.queue_free()
-
-	var roles := Formaciones.roles(equipo.formacion)
-	_agregar_titulo_formacion("Titulares")
-	for i in range(equipo.jugadores.size()):
-		var j: Dictionary = equipo.jugadores[i]
-		var rol: String = str(roles[i]) if i < roles.size() else str(j["posicion"])
-		_agregar_fila_formacion(_texto_slot(rol, j), j["id"])
-	_agregar_titulo_formacion("Banco")
 	for j in equipo.banco:
-		_agregar_fila_formacion("      %-22s  media %5.1f   (%s)%s" % [
-			_nombre_jugador(j), j["media"], j["posicion"], _tag_habilidad(j)], j["id"])
+		var cubo := CuboJugador.crear(j, str(j["posicion"]), equipo, true)
+		cubo.intercambio_pedido.connect(_on_intercambio_arrastrado)
+		contenedor_formacion.add_child(cubo)
 
 
-func _agregar_titulo_formacion(texto: String) -> void:
-	var t := Label.new()
-	t.text = texto
-	contenedor_formacion.add_child(t)
-
-
-func _agregar_fila_formacion(texto: String, jugador_id: int) -> void:
-	var fila := HBoxContainer.new()
-	var btn := Button.new()
-	btn.text = ("> " if formacion_seleccion == jugador_id else "  ") + texto
-	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn.pressed.connect(func(): _on_tocar_jugador_formacion(jugador_id))
-	fila.add_child(btn)
-
-	var btn_ficha := Button.new()
-	btn_ficha.text = "Ficha"
-	btn_ficha.pressed.connect(func(): _mostrar_ficha(jugador_id))
-	fila.add_child(btn_ficha)
-	contenedor_formacion.add_child(fila)
+## Arrastraste uno sobre otro: se intercambian, esten en la cancha o en el
+## banco. Team.intercambiar ya sabia hacer las dos cosas.
+func _on_intercambio_arrastrado(id_origen: int, id_destino: int) -> void:
+	if GameState.equipo_jugador.intercambiar(id_origen, id_destino):
+		_refrescar_formacion()
+		_refrescar_plantel()
 
 
 func _construir_panel_tabla(padre: Control) -> void:
