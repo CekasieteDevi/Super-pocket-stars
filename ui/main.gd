@@ -38,6 +38,9 @@ var lista_estadisticas: RichTextLabel
 var boton_jugar_fecha: Button
 var boton_ver_animado: Button
 var boton_simular_temporada: Button
+## En un solo lugar: estaba escrito a mano al construirlo y al terminar de
+## simular, y bastaba tocar uno para que el boton cambiara de nombre solo.
+const TEXTO_SIMULAR_TEMPORADA := "Simular resto de la temporada"
 var label_objetivo: Label
 var option_estilo: OptionButton
 var option_cambios: OptionButton
@@ -956,68 +959,95 @@ func _construir_panel_partido(padre: Control) -> void:
 	padre.add_child(panel)
 	paneles["partido"] = panel
 
-	var fila_tactica := HBoxContainer.new()
-	panel.add_child(fila_tactica)
-	var label_tactica := Label.new()
-	label_tactica.text = "Tu estilo de juego: "
-	fila_tactica.add_child(label_tactica)
+	# Los controles y los tres botones ARRIBA, y todo lo que cambia de alto
+	# —resultado, estadisticas, relato— abajo y adentro de un scroll.
+	#
+	# Antes iba todo en un VBox suelto y el panel no scrollea: con el
+	# relato de un partido largo el contenido pasaba el alto de la pantalla
+	# y los botones del final —"Ver partido animado" y "Simular resto de la
+	# temporada"— quedaban abajo del borde, sin forma de llegar. Parecian
+	# borrados.
+	var barra := HFlowContainer.new()
+	barra.add_theme_constant_override("h_separation", 12)
+	barra.add_theme_constant_override("v_separation", 8)
+	panel.add_child(barra)
+
 	option_estilo = OptionButton.new()
 	for estilo in Estilos.LISTA:
 		option_estilo.add_item(estilo)
+	option_estilo.custom_minimum_size = Vector2(190, Tema.ALTO_TACTIL)
 	option_estilo.item_selected.connect(_on_estilo_seleccionado)
-	fila_tactica.add_child(option_estilo)
+	barra.add_child(_grupo_filtro("Estilo de juego", option_estilo))
 
-	var fila_cambios := HBoxContainer.new()
-	panel.add_child(fila_cambios)
-	var label_cambios := Label.new()
-	label_cambios.text = "Cambios automaticos: "
-	fila_cambios.add_child(label_cambios)
 	option_cambios = OptionButton.new()
 	for opcion in OPCIONES_CAMBIOS:
 		option_cambios.add_item(ETIQUETAS_CAMBIOS[opcion])
+	option_cambios.custom_minimum_size = Vector2(230, Tema.ALTO_TACTIL)
 	option_cambios.item_selected.connect(_on_config_cambios_seleccionado)
-	fila_cambios.add_child(option_cambios)
+	barra.add_child(_grupo_filtro("Cambios automaticos", option_cambios))
 
-	label_objetivo = Label.new()
-	panel.add_child(label_objetivo)
-
-	label_informe_rival = Label.new()
-	panel.add_child(label_informe_rival)
+	var acciones := HBoxContainer.new()
+	acciones.add_theme_constant_override("separation", 8)
+	barra.add_child(_grupo_filtro(" ", acciones))
 
 	boton_jugar_fecha = Button.new()
 	boton_jugar_fecha.text = "Jugar siguiente fecha"
+	boton_jugar_fecha.custom_minimum_size = Vector2(230, Tema.ALTO_TACTIL)
 	# La accion principal de la pantalla de partido: la unica ambar de aca.
 	Tema.primario(boton_jugar_fecha)
 	boton_jugar_fecha.pressed.connect(_on_jugar_fecha)
-	panel.add_child(boton_jugar_fecha)
+	acciones.add_child(boton_jugar_fecha)
+
+	boton_ver_animado = Button.new()
+	# Mismo texto que le pone _on_jugar_fecha al habilitarlo: con dos
+	# distintos el boton se renombraba solo al terminar un partido.
+	boton_ver_animado.text = "Ver partido animado"
+	boton_ver_animado.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
+	boton_ver_animado.tooltip_text = "Reproduce tu ultimo partido con la vista de cancha."
+	boton_ver_animado.disabled = true
+	boton_ver_animado.pressed.connect(_mostrar_partido_animado)
+	acciones.add_child(boton_ver_animado)
+
+	boton_simular_temporada = Button.new()
+	boton_simular_temporada.text = TEXTO_SIMULAR_TEMPORADA
+	boton_simular_temporada.custom_minimum_size = Vector2(280, Tema.ALTO_TACTIL)
+	boton_simular_temporada.tooltip_text = "Juega de una todas las fechas que quedan, las tuyas incluidas: no vas a poder tocar nada hasta el final."
+	boton_simular_temporada.pressed.connect(_on_simular_temporada)
+	acciones.add_child(boton_simular_temporada)
+
+	label_objetivo = Label.new()
+	label_objetivo.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label_objetivo.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	label_objetivo.add_theme_color_override("font_color", Tema.SUAVE)
+	panel.add_child(label_objetivo)
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+	var dentro := VBoxContainer.new()
+	dentro.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(dentro)
+
+	label_informe_rival = Label.new()
+	label_informe_rival.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	dentro.add_child(label_informe_rival)
 
 	label_resultado = Label.new()
 	label_resultado.text = "Todavia no jugaste ninguna fecha."
 	label_resultado.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	panel.add_child(label_resultado)
+	dentro.add_child(label_resultado)
 
 	lista_estadisticas = RichTextLabel.new()
-	lista_estadisticas.custom_minimum_size = Vector2(0, 130)
-	panel.add_child(lista_estadisticas)
+	lista_estadisticas.fit_content = true
+	lista_estadisticas.custom_minimum_size = Vector2(0, 120)
+	dentro.add_child(lista_estadisticas)
 
 	lista_log = RichTextLabel.new()
-	lista_log.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	lista_log.fit_content = true
 	lista_log.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.add_child(lista_log)
-
-	boton_ver_animado = Button.new()
-	boton_ver_animado.text = "Ver partido animado"
-	boton_ver_animado.disabled = true
-	boton_ver_animado.pressed.connect(_mostrar_partido_animado)
-	panel.add_child(boton_ver_animado)
-
-	var separador := HSeparator.new()
-	panel.add_child(separador)
-
-	boton_simular_temporada = Button.new()
-	boton_simular_temporada.text = "[debug] Simular resto de la temporada"
-	boton_simular_temporada.pressed.connect(_on_simular_temporada)
-	panel.add_child(boton_simular_temporada)
+	dentro.add_child(lista_log)
 
 
 ## Reproduce el último partido propio con la vista de /match: proyección
@@ -3999,7 +4029,7 @@ func _on_simular_temporada() -> void:
 	var temporada_antes := GameState.temporada_actual
 	GameState.simular_temporada_completa()
 
-	boton_simular_temporada.text = "[debug] Simular resto de la temporada"
+	boton_simular_temporada.text = TEXTO_SIMULAR_TEMPORADA
 	boton_simular_temporada.disabled = false
 
 	if GameState.temporada_actual != temporada_antes:
