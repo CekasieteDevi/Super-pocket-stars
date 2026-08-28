@@ -93,10 +93,16 @@ func _ready() -> void:
 	barra_subsolapas = HBoxContainer.new()
 	sub_scroll.add_child(barra_subsolapas)
 
+	var margen := MarginContainer.new()
+	margen.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margen.add_theme_constant_override("margin_bottom", 10)
+	margen.add_theme_constant_override("margin_right", 10)
+	columna.add_child(margen)
+
 	var contenedor := Control.new()
 	contenedor.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	contenedor.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	columna.add_child(contenedor)
+	margen.add_child(contenedor)
 
 	_construir_panel_portada(contenedor)
 	_construir_panel_plantel(contenedor)
@@ -176,6 +182,7 @@ func _construir_panel_plantel(padre: Control) -> void:
 	paneles["plantel"] = panel
 
 	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.add_child(scroll)
@@ -185,7 +192,7 @@ func _construir_panel_plantel(padre: Control) -> void:
 	scroll.add_child(contenedor_lista_plantel)
 
 	var lateral := ScrollContainer.new()
-	lateral.custom_minimum_size = Vector2(430, 0)
+	lateral.custom_minimum_size = Vector2(388, 0)
 	lateral.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.add_child(lateral)
 
@@ -233,7 +240,7 @@ func _fila_jugador(equipo: Team, j: Dictionary, par: bool, es_banco: bool) -> Co
 	var dentro := Componentes.contenido(fila)
 
 	var caja_pos := CenterContainer.new()
-	caja_pos.custom_minimum_size = Vector2(64, 0)
+	caja_pos.custom_minimum_size = Vector2(56, 0)
 	var color_pos := Color("#4a2a28") if equipo.esta_lesionado(id) else Color("#2f4a3c")
 	caja_pos.add_child(Componentes.chip(str(j["posicion"]), color_pos))
 	dentro.add_child(caja_pos)
@@ -243,6 +250,9 @@ func _fila_jugador(equipo: Team, j: Dictionary, par: bool, es_banco: bool) -> Co
 	btn.flat = true
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.clip_text = true
+	btn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	btn.tooltip_text = btn.text
 	btn.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
 	btn.pressed.connect(func():
 		plantel_elegido = id
@@ -255,8 +265,8 @@ func _fila_jugador(equipo: Team, j: Dictionary, par: bool, es_banco: bool) -> Co
 	if bool(j.get("es_canterano", false)):
 		dentro.add_child(Componentes.chip("cantera", Color("#2a3a4a"), Tema.CELESTE))
 
-	dentro.add_child(Componentes.celda_numero("%.1f" % float(j["media"]), 70))
-	dentro.add_child(Componentes.celda("→%d" % int(j["potencial"]), 60, Tema.SUAVE))
+	dentro.add_child(Componentes.celda_numero("%.1f" % float(j["media"]), 62))
+	dentro.add_child(Componentes.celda("→%d" % int(j["potencial"]), 52, Tema.SUAVE))
 
 	# Estado: lo unico que hace falta saber de un vistazo al armar el equipo.
 	var estado := "Listo"
@@ -268,14 +278,14 @@ func _fila_jugador(equipo: Team, j: Dictionary, par: bool, es_banco: bool) -> Co
 	elif int(equipo.suspendidos.get(id, 0)) > 0:
 		estado = "Susp."
 		color = Tema.ROJO
-	dentro.add_child(Componentes.celda(estado, 74, color))
+	dentro.add_child(Componentes.celda(estado, 66, color))
 
 	# Ficha y no "Subir": cambiar jugadores de lugar se hace arrastrando en
 	# Formacion, que es donde se ve la cancha. Tener las dos formas en dos
 	# pantallas distintas confundia mas de lo que ayudaba.
 	var btn_ficha := Button.new()
 	btn_ficha.text = "Ficha"
-	btn_ficha.custom_minimum_size = Vector2(96, 0)
+	btn_ficha.custom_minimum_size = Vector2(84, 0)
 	btn_ficha.pressed.connect(func(): _mostrar_ficha(id))
 	dentro.add_child(btn_ficha)
 	return fila

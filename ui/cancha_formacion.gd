@@ -26,6 +26,9 @@ var _cubos: Array = []
 ## debajo se achican en proporcion en vez de pisarse unos a otros.
 const ALTO_REFERENCIA := 440.0
 
+## Aire entre el borde de la cancha y el del control.
+const MARGEN := 8.0
+
 
 func _init() -> void:
 	# Minimo CHICO a proposito: con un minimo grande, en una pantalla baja
@@ -67,9 +70,10 @@ func _rect_cancha() -> Rect2:
 	var disponible := size
 	if disponible.x <= 0.0 or disponible.y <= 0.0:
 		return Rect2()
-	# Un pixel de aire a cada lado: la linea de borde se dibuja CENTRADA
-	# sobre el rectangulo, asi que pegada al limite se corta a la mitad.
-	disponible -= Vector2(2, 2)
+	# Aire a cada lado. La linea de borde se dibuja CENTRADA sobre el
+	# rectangulo, asi que pegada al limite del control se corta a la
+	# mitad y la cancha se lee como cortada aunque este entera.
+	disponible -= Vector2(MARGEN, MARGEN) * 2.0
 	var escala: float = minf(disponible.x / LARGO_M, disponible.y / ANCHO_M)
 	var w := LARGO_M * escala
 	var h := ANCHO_M * escala
