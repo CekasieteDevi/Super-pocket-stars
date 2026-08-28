@@ -800,7 +800,7 @@ var filtros_mercado: Dictionary = BusquedaMercado.filtros_vacios()
 var resultados_mercado: Array = []
 var orden_mercado: String = "nombre"
 var orden_mercado_asc: bool = true
-var contenedor_mercado_tabla: GridContainer
+var contenedor_mercado_tabla: VBoxContainer
 var label_mercado_resumen: Label
 var option_pos_mercado: OptionButton
 var option_div_mercado: OptionButton
@@ -923,12 +923,11 @@ func _construir_solapa_jugadores(padre: Control) -> Control:
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	caja.add_child(scroll)
 
-	contenedor_mercado_tabla = GridContainer.new()
-	contenedor_mercado_tabla.columns = BusquedaMercado.COLUMNAS.size() + 4
-	# SIN expandir a lo ancho: con EXPAND_FILL la grilla se achicaba al
-	# ancho del scroll y las ultimas columnas —Comprar y Prestamo— quedaban
-	# recortadas y fuera de alcance. Dejandole su ancho natural, el
-	# ScrollContainer la puede correr en horizontal.
+	# Filas y no una grilla: la grilla no puede fusionar celdas, y el bloque
+	# "sin investigar" tiene que ocupar el lugar de las cinco columnas
+	# tapadas de una (ver Componentes.bloque_tapado). Cada fila es un HBox
+	# de celdas de ancho fijo, los mismos anchos que usa el encabezado.
+	contenedor_mercado_tabla = VBoxContainer.new()
 	scroll.add_child(contenedor_mercado_tabla)
 	return caja
 
@@ -1030,14 +1029,16 @@ func _refrescar_mercado() -> void:
 
 	var equipo := GameState.equipo_jugador
 	var libres: int = Investigadores.libres(equipo).size()
-	label_mercado_resumen.text = "%d jugadores. Investigadores: %d de %d libres. Presupuesto de fichajes: %s." % [
-		resultados_mercado.size(), libres, equipo.investigadores.size(),
-		Economia.formato_dinero(equipo.caja["fichajes"])]
+	label_mercado_resumen.text = "%d jugadores  ·  investigadores %d de %d libres" % [
+		resultados_mercado.size(), libres, equipo.investigadores.size()]
 	_actualizar_titulos_solapas()
 
 	if resultados_mercado.is_empty():
 		return
 
+	# La ficha se recalcula en cada refresco y no se cachea: el avance del
+	# informe, el valor y el animo viven ahi, y guardarlos dejaba la tabla
+	# mostrando una foto vieja.
 	var fichas := []
 	for entrada in resultados_mercado:
 		var f := BusquedaMercado.ficha(GameState.equipo_jugador, entrada)
@@ -1045,79 +1046,121 @@ func _refrescar_mercado() -> void:
 		fichas.append(f)
 	fichas = BusquedaMercado.ordenar(fichas, orden_mercado, orden_mercado_asc)
 
-	for col in BusquedaMercado.COLUMNAS:
-		var btn := Button.new()
-		var flecha := ""
-		if orden_mercado == col["clave"]:
-			flecha = " (asc)" if orden_mercado_asc else " (desc)"
-		btn.text = str(col["titulo"]) + flecha
-		var clave := str(col["clave"])
-		btn.pressed.connect(func(): _on_ordenar_mercado(clave))
-		contenedor_mercado_tabla.add_child(btn)
-	contenedor_mercado_tabla.add_child(_etiqueta("Club"))
-	contenedor_mercado_tabla.add_child(_etiqueta(""))
-	contenedor_mercado_tabla.add_child(_etiqueta(""))
-	contenedor_mercado_tabla.add_child(_etiqueta(""))
-
-	# Un tope: la piramide tiene ~3.600 jugadores y dibujarlos a todos
-	# cuelga la pantalla. Con los filtros y el orden, 60 alcanzan.
+	contenedor_mercado_tabla.add_child(_encabezado_mercado())
+	# Un tope: la piramide tiene ~3.600 jugadores y dibujarlos a todos cuelga
+	# la pantalla. Con los filtros y el orden, 60 alcanzan.
 	for i in range(min(60, fichas.size())):
-		_fila_mercado(fichas[i])
+		contenedor_mercado_tabla.add_child(_fila_mercado(fichas[i], i % 2 == 0))
 
 
-func _fila_mercado(f: Dictionary) -> void:
+## El encabezado. Cada columna visible es un boton que ordena; las tapadas
+## no, porque ordenar por algo que no conoces no significa nada.
+func _encabezado_mercado() -> Control:
+	var fila := Componentes.fila(false)
+	var dentro := Componentes.contenido(fila)
+	for col in BusquedaMercado.COLUMNAS:
+		var clave := str(col["clave"])
+		var ancho: int = _ancho_de_columna(clave)
+		var btn := Button.new()
+		btn.text = str(col["titulo"])
+		if orden_mercado == clave:
+			btn.text += "  ↑" if orden_mercado_asc else "  ↓"
+		btn.custom_minimum_size = Vector2(ancho, 0)
+		btn.flat = true
+		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		btn.add_theme_color_override("font_color",
+			Tema.AMBAR if orden_mercado == clave else Tema.SUAVE)
+		btn.pressed.connect(func(): _on_ordenar_mercado(clave))
+		dentro.add_child(btn)
+	dentro.add_child(Componentes.celda("Club", Componentes.COL_CLUB, Tema.SUAVE))
+	return fila
+
+
+func _ancho_de_columna(clave: String) -> int:
+	match clave:
+		"nombre": return Componentes.COL_NOMBRE
+		"edad": return Componentes.COL_EDAD
+		"posicion": return Componentes.COL_POS
+		"media": return Componentes.COL_MEDIA
+		"valor": return Componentes.COL_VALOR
+		"salario": return Componentes.COL_SALARIO
+		"contrato": return Componentes.COL_CONTRATO
+		"animo": return Componentes.COL_ANIMO
+	return 90
+
+
+func _fila_mercado(f: Dictionary, par: bool) -> Control:
 	var equipo := GameState.equipo_jugador
+	var fila := Componentes.fila(par)
+	var dentro := Componentes.contenido(fila)
+	var vendedor: Team = f["equipo"]
+	var jugador_id := int(f["id"])
+	var conocido: bool = bool(f["conocido"])
 
+	# Nombre: entra a la ficha, pero solo si lo investigaste.
 	var btn_nombre := Button.new()
 	btn_nombre.text = str(f["nombre"])
 	btn_nombre.tooltip_text = str(f["nombre"])
-	btn_nombre.custom_minimum_size = Vector2(210, 0)
+	btn_nombre.custom_minimum_size = Vector2(Componentes.COL_NOMBRE, 0)
+	btn_nombre.flat = true
+	btn_nombre.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	btn_nombre.clip_text = true
 	btn_nombre.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	btn_nombre.flat = true
-	btn_nombre.disabled = not bool(f["conocido"])
-	btn_nombre.tooltip_text = "Investigalo para ver su ficha." if not f["conocido"] else "Ver ficha"
-	var club_de: Team = f["equipo"]
-	var id_de := int(f["id"])
-	if bool(f["conocido"]):
-		btn_nombre.pressed.connect(func(): _mostrar_ficha(id_de, club_de))
-	contenedor_mercado_tabla.add_child(btn_nombre)
+	btn_nombre.disabled = not conocido
+	if conocido:
+		btn_nombre.add_theme_color_override("font_color", Tema.CELESTE)
+		btn_nombre.pressed.connect(func(): _mostrar_ficha(jugador_id, vendedor))
+	dentro.add_child(btn_nombre)
 
-	# La edad se sabe siempre: en el futbol es publica.
-	contenedor_mercado_tabla.add_child(_etiqueta(str(f["edad"])))
-	contenedor_mercado_tabla.add_child(_etiqueta(str(f["posicion"])))
-	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["media"] == null else "%.1f" % float(f["media"])))
-	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["valor"] == null else Economia.formato_dinero(f["valor"])))
-	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["salario"] == null else Economia.formato_dinero(f["salario"])))
-	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["contrato"] == null else "%d años" % int(f["contrato"])))
-	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["animo"] == null else "%d" % int(f["animo"])))
-	contenedor_mercado_tabla.add_child(_etiqueta_corta(
-		"%s D%d" % [str(f["club"]), int(f["division"])], 185))
+	# La edad se sabe SIEMPRE: en el futbol es publica.
+	dentro.add_child(Componentes.celda_numero(str(f["edad"]), Componentes.COL_EDAD))
 
-	var vendedor: Team = f["equipo"]
-	var jugador_id := int(f["id"])
+	var caja_pos := CenterContainer.new()
+	caja_pos.custom_minimum_size = Vector2(Componentes.COL_POS, 0)
+	caja_pos.add_child(Componentes.chip(str(f["posicion"]), Color("#2f4a3c")))
+	dentro.add_child(caja_pos)
 
+	if conocido:
+		dentro.add_child(Componentes.celda_numero("%.1f" % float(f["media"]), Componentes.COL_MEDIA))
+		dentro.add_child(Componentes.celda_numero(
+			Economia.formato_dinero(f["valor"]), Componentes.COL_VALOR))
+		dentro.add_child(Componentes.celda_numero(
+			Economia.formato_dinero(f["salario"]), Componentes.COL_SALARIO))
+		dentro.add_child(Componentes.celda_numero(
+			"%d años" % int(f["contrato"]), Componentes.COL_CONTRATO))
+		dentro.add_child(Componentes.celda_numero(str(int(f["animo"])), Componentes.COL_ANIMO,
+			Componentes.color_de_valor(int(f["animo"]))))
+	elif float(f["progreso"]) >= 0.0:
+		var inv := Investigadores.progreso(equipo, jugador_id)
+		var faltan := _dias_que_faltan(equipo, jugador_id)
+		dentro.add_child(Componentes.bloque_investigando(
+			Componentes.COL_TAPADAS, inv, faltan))
+	else:
+		dentro.add_child(Componentes.bloque_tapado(Componentes.COL_TAPADAS))
+
+	dentro.add_child(Componentes.celda(
+		"%s D%d" % [str(f["club"]), int(f["division"])], Componentes.COL_CLUB, Tema.SUAVE))
+
+	# --- Acciones ----------------------------------------------------------
 	var btn_inv := Button.new()
-	if bool(f["conocido"]):
-		# Cuanto le queda al informe antes de quedar viejo: es lo que te
-		# avisa que vas a tener que volver a mandar a alguien.
+	btn_inv.custom_minimum_size = Vector2(Componentes.COL_ACCION, 0)
+	if conocido:
 		var quedan := Investigadores.vigencia(equipo, jugador_id)
-		btn_inv.text = "Conocido"
-		btn_inv.tooltip_text = "El informe vence en %d dias." % quedan
-		if quedan < 120:
-			btn_inv.text = "Vence pronto"
-			btn_inv.tooltip_text = "El informe vence en %d dias. Volve a investigarlo para no perderlo." % quedan
+		btn_inv.text = "Vence pronto" if quedan < 120 else "Conocido"
+		btn_inv.tooltip_text = "El informe vence en %d días." % quedan
 		btn_inv.disabled = true
 	elif float(f["progreso"]) >= 0.0:
-		btn_inv.text = "%d%%" % int(round(float(f["progreso"]) * 100.0))
+		btn_inv.text = "En curso"
 		btn_inv.disabled = true
 	else:
 		btn_inv.text = "Investigar"
 		btn_inv.disabled = Investigadores.libres(equipo).is_empty()
+		btn_inv.add_theme_color_override("font_color", Tema.AMBAR)
 		btn_inv.pressed.connect(func(): _on_investigar(vendedor, jugador_id))
-	contenedor_mercado_tabla.add_child(btn_inv)
+	dentro.add_child(btn_inv)
 
 	var btn_comprar := Button.new()
+	btn_comprar.custom_minimum_size = Vector2(Componentes.COL_ACCION, 0)
 	var negociando := false
 	for o in equipo.ofertas:
 		if int(o["jugador_id"]) == jugador_id and Ofertas.abierta(o):
@@ -1133,12 +1176,23 @@ func _fila_mercado(f: Dictionary) -> void:
 	else:
 		btn_comprar.text = "Comprar"
 		btn_comprar.pressed.connect(func(): _abrir_negociacion(vendedor, jugador_id))
-	contenedor_mercado_tabla.add_child(btn_comprar)
+	dentro.add_child(btn_comprar)
 
 	var btn_prestamo := Button.new()
-	btn_prestamo.text = "Prestamo"
+	btn_prestamo.text = "Préstamo"
+	btn_prestamo.custom_minimum_size = Vector2(Componentes.COL_ACCION, 0)
 	btn_prestamo.pressed.connect(func(): _abrir_prestamo(vendedor, jugador_id))
-	contenedor_mercado_tabla.add_child(btn_prestamo)
+	dentro.add_child(btn_prestamo)
+	return fila
+
+
+## Cuantos dias le faltan al informe de este jugador. -1 si no hay ninguno.
+func _dias_que_faltan(equipo: Team, jugador_id: int) -> int:
+	for inv in equipo.investigadores:
+		if int(inv["objetivo"]) == jugador_id:
+			return int(ceil(
+				Investigadores.dias_de_informe(int(inv["estrellas"])) - float(inv["dias"])))
+	return -1
 
 
 ## §9.4: la solapa de INVESTIGACIONES — a quien estas mirando y a quien
