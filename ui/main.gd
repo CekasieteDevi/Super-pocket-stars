@@ -12,7 +12,6 @@ extends Control
 
 var paneles: Dictionary = {}  # nombre -> Control, para mostrar/ocultar en bloque
 
-var lista_plantel: RichTextLabel
 var lista_ficha: RichTextLabel
 var ficha_jugador_id := -1
 ## De que club es el jugador de la ficha. null = uno propio. Si es ajeno,
@@ -30,7 +29,6 @@ var label_formacion_estado: Label
 ## Jugador tocado primero en la pantalla de formacion, a la espera del
 ## segundo para intercambiarlos. -1 = nadie seleccionado.
 var formacion_seleccion := -1
-var contenedor_banco_botones: VBoxContainer
 var lista_tabla: RichTextLabel
 var label_resultado: Label
 var lista_log: RichTextLabel
@@ -154,100 +152,258 @@ func _ocultar_todos() -> void:
 ## (pestaña aparte). "Subir a titular" es la contraparte manual de
 ## Team.promover_a_titular(): la IA lo hace sola (Liga._procesar_cantera),
 ## el jugador humano lo decide desde acá.
+## §UI: el plantel en dos columnas — la lista a la izquierda y la ficha del
+## elegido a la derecha.
+##
+## Antes la ficha era una PANTALLA aparte: para comparar dos jugadores
+## había que entrar, volver, entrar de nuevo, y al volver se perdía dónde
+## estabas en la lista. En apaisado hay ancho de sobra para tenerla al lado.
+##
+## Y la lista deja de ser un RichTextLabel con enlaces BBCode: eran líneas
+## de 23 px imposibles de acertar con el dedo, y el nombre era lo único
+## tocable de toda la fila.
+var plantel_elegido: int = -1
+var contenedor_lista_plantel: VBoxContainer
+var contenedor_ficha_lateral: VBoxContainer
+
+
 func _construir_panel_plantel(padre: Control) -> void:
-	var panel := VBoxContainer.new()
+	var panel := HBoxContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	padre.add_child(panel)
 	paneles["plantel"] = panel
 
-	var titulo := Label.new()
-	titulo.text = "Plantel / formacion — %s" % GameState.equipo_jugador.nombre
-	panel.add_child(titulo)
-
-	# UN solo scroll para toda la pantalla, no uno por seccion. Antes los
-	# titulares vivian en un RichTextLabel que se estiraba y el banco en su
-	# propio scroll de alto fijo: con la fuente tactil los 11 titulares ya
-	# no entraban y el ultimo quedaba cortado. Ademas dos scrolls anidados
-	# en un telefono son una pelea con el dedo.
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.add_child(scroll)
 
-	var cuerpo := VBoxContainer.new()
-	cuerpo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(cuerpo)
+	contenedor_lista_plantel = VBoxContainer.new()
+	contenedor_lista_plantel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(contenedor_lista_plantel)
 
-	var titulo_titulares := Label.new()
-	titulo_titulares.text = "Titulares (11) — toca el nombre para ver la ficha"
-	cuerpo.add_child(titulo_titulares)
+	var lateral := ScrollContainer.new()
+	lateral.custom_minimum_size = Vector2(430, 0)
+	lateral.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	panel.add_child(lateral)
 
-	lista_plantel = RichTextLabel.new()
-	lista_plantel.bbcode_enabled = true
-	# fit_content: crece hasta mostrarse entera y la deja scrollear al
-	# contenedor de afuera, en vez de recortarse por dentro.
-	lista_plantel.fit_content = true
-	lista_plantel.scroll_active = false
-	# Cada linea es un enlace al id del jugador: se toca el nombre y se
-	# abre su ficha. Es el unico lugar donde se pueden ver los atributos.
-	lista_plantel.meta_clicked.connect(func(meta): _mostrar_ficha(int(meta)))
-	lista_plantel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	cuerpo.add_child(lista_plantel)
-
-	var titulo_banco := Label.new()
-	titulo_banco.text = "Banco (7)"
-	cuerpo.add_child(titulo_banco)
-
-	contenedor_banco_botones = VBoxContainer.new()
-	contenedor_banco_botones.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	cuerpo.add_child(contenedor_banco_botones)
+	contenedor_ficha_lateral = VBoxContainer.new()
+	contenedor_ficha_lateral.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lateral.add_child(contenedor_ficha_lateral)
 
 	_refrescar_plantel()
 
 
 func _refrescar_plantel() -> void:
-	var equipo := GameState.equipo_jugador
-	var texto := ""
-	for j in equipo.jugadores:
-		var capitan := "  (C)" if j["id"] == equipo.capitan_id else ""
-		# [lb] es el corchete escapado: la lista ahora es BBCode y un
-		# "[cantera]" suelto se comería como si fuera una etiqueta.
-		var canterano := "  [lb]cantera]" if j.get("es_canterano", false) else ""
-		# El nombre va como enlace y COLOREADO: un [url] sin estilo no se
-		# distingue del texto común y nadie descubre que se puede tocar.
-		texto += "%-4s  [url=%d][color=#8ecae6]%-22s[/color][/url]  media %5.1f   potencial %3d   genetica %s%s%s%s\n" % [
-			j["posicion"], j["id"], _nombre_jugador(j), j["media"], j["potencial"],
-			j["genetica_tier"], capitan, canterano, _tag_habilidad(j)
-		]
-	lista_plantel.text = texto
-
-	for hijo in contenedor_banco_botones.get_children():
+	if contenedor_lista_plantel == null:
+		return
+	for hijo in contenedor_lista_plantel.get_children():
 		hijo.queue_free()
-	for j in equipo.banco:
-		var fila := HBoxContainer.new()
-		var canterano := "  [cantera]" if j.get("es_canterano", false) else ""
-		var label := Label.new()
-		label.text = "%-4s  %-22s  media %5.1f   potencial %3d%s%s" % [j["posicion"], _nombre_jugador(j), j["media"], j["potencial"], canterano, _tag_habilidad(j)]
-		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		fila.add_child(label)
+	var equipo := GameState.equipo_jugador
 
-		var jugador_id: int = j["id"]
-		var btn_ficha := Button.new()
-		btn_ficha.text = "Ficha"
-		btn_ficha.pressed.connect(func(): _mostrar_ficha(jugador_id))
-		fila.add_child(btn_ficha)
+	# Si no elegiste a nadie todavia, se muestra el capitan: abrir en vacio
+	# desperdicia media pantalla.
+	if plantel_elegido == -1 or _buscar_jugador_por_id(equipo, plantel_elegido).is_empty():
+		plantel_elegido = equipo.capitan_id if equipo.capitan_id != -1 else int(equipo.jugadores[0]["id"])
 
-		var btn := Button.new()
-		btn.text = "Subir a titular"
-		btn.pressed.connect(func(): _on_promover_a_titular(jugador_id))
-		fila.add_child(btn)
+	contenedor_lista_plantel.add_child(Tema.etiqueta_seccion(
+		"Titulares (%d)  ·  %s" % [equipo.jugadores.size(), equipo.formacion]))
+	for i in range(equipo.jugadores.size()):
+		contenedor_lista_plantel.add_child(_fila_jugador(equipo, equipo.jugadores[i], i % 2 == 0, false))
 
-		contenedor_banco_botones.add_child(fila)
+	contenedor_lista_plantel.add_child(Tema.etiqueta_seccion("Banco (%d)" % equipo.banco.size()))
+	for i in range(equipo.banco.size()):
+		contenedor_lista_plantel.add_child(_fila_jugador(equipo, equipo.banco[i], i % 2 == 0, true))
+
+	_refrescar_ficha_lateral()
+
+
+## Una fila del plantel. TODA la fila es tocable, no solo el nombre.
+func _fila_jugador(equipo: Team, j: Dictionary, par: bool, es_banco: bool) -> Control:
+	var id := int(j["id"])
+	var elegido := id == plantel_elegido
+	var fila := Componentes.fila(par or elegido)
+	if elegido:
+		var estilo: StyleBoxFlat = fila.get_theme_stylebox("panel")
+		estilo.bg_color = Tema.PANEL_ALTO
+		estilo.border_width_left = 4
+		estilo.border_color = Tema.AMBAR
+	var dentro := Componentes.contenido(fila)
+
+	var caja_pos := CenterContainer.new()
+	caja_pos.custom_minimum_size = Vector2(64, 0)
+	var color_pos := Color("#4a2a28") if equipo.esta_lesionado(id) else Color("#2f4a3c")
+	caja_pos.add_child(Componentes.chip(str(j["posicion"]), color_pos))
+	dentro.add_child(caja_pos)
+
+	var btn := Button.new()
+	btn.text = _nombre_jugador(j)
+	btn.flat = true
+	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	btn.pressed.connect(func():
+		plantel_elegido = id
+		_refrescar_plantel()
+	)
+	dentro.add_child(btn)
+
+	if id == equipo.capitan_id:
+		dentro.add_child(Componentes.chip("C", Tema.AMBAR, Tema.FONDO))
+	if bool(j.get("es_canterano", false)):
+		dentro.add_child(Componentes.chip("cantera", Color("#2a3a4a"), Tema.CELESTE))
+
+	dentro.add_child(Componentes.celda_numero("%.1f" % float(j["media"]), 70))
+	dentro.add_child(Componentes.celda("→%d" % int(j["potencial"]), 60, Tema.SUAVE))
+
+	# Estado: lo unico que hace falta saber de un vistazo al armar el equipo.
+	var estado := "Listo"
+	var color := Tema.VERDE
+	if equipo.esta_lesionado(id):
+		var les: Dictionary = equipo.lesiones[id]
+		estado = "%d d" % int(les["dias_restantes"])
+		color = Tema.ROJO
+	elif int(equipo.suspendidos.get(id, 0)) > 0:
+		estado = "Susp."
+		color = Tema.ROJO
+	dentro.add_child(Componentes.celda(estado, 74, color))
+
+	if es_banco:
+		var btn_subir := Button.new()
+		btn_subir.text = "Subir"
+		btn_subir.custom_minimum_size = Vector2(96, 0)
+		btn_subir.pressed.connect(func(): _on_promover_a_titular(id))
+		dentro.add_child(btn_subir)
+	else:
+		var hueco := Control.new()
+		hueco.custom_minimum_size = Vector2(96, 0)
+		dentro.add_child(hueco)
+	return fila
 
 
 func _on_promover_a_titular(jugador_id: int) -> void:
 	GameState.equipo_jugador.promover_a_titular(jugador_id)
 	_refrescar_plantel()
+
+
+## La ficha del elegido, al costado. Muestra lo que hace falta para
+## DECIDIR: en qué es fuerte, cuánto le queda por crecer y cómo está.
+## Los 25 atributos completos siguen estando en la ficha entera.
+func _refrescar_ficha_lateral() -> void:
+	for hijo in contenedor_ficha_lateral.get_children():
+		hijo.queue_free()
+	var equipo := GameState.equipo_jugador
+	var j := _buscar_jugador_por_id(equipo, plantel_elegido)
+	if j.is_empty():
+		return
+
+	var tarjeta := Componentes.tarjeta()
+	contenedor_ficha_lateral.add_child(tarjeta)
+	var caja := VBoxContainer.new()
+	tarjeta.add_child(caja)
+
+	var titulo := Label.new()
+	titulo.text = _nombre_jugador(j)
+	Tema.numero(titulo, 24)
+	caja.add_child(titulo)
+
+	var sub := Label.new()
+	sub.text = "%s  ·  %d años  ·  %s" % [j["posicion"], int(j["edad"]), j["genetica_tier"]]
+	sub.add_theme_color_override("font_color", Tema.SUAVE)
+	caja.add_child(sub)
+
+	var rasgos: Dictionary = j.get("personalidades", {})
+	if not rasgos.is_empty():
+		var fila_rasgos := HBoxContainer.new()
+		caja.add_child(fila_rasgos)
+		if str(rasgos.get("positiva", "")) != "":
+			fila_rasgos.add_child(Componentes.chip(
+				str(rasgos["positiva"]), Color("#23402f"), Color("#7fd6a0")))
+		if str(rasgos.get("negativa", "")) != "":
+			fila_rasgos.add_child(Componentes.chip(
+				str(rasgos["negativa"]), Color("#3f2523"), Color("#e29d95")))
+	var tag := _tag_habilidad(j)
+	if tag != "":
+		var l := Label.new()
+		l.text = "Habilidad:%s" % tag
+		l.add_theme_color_override("font_color", Tema.AMBAR)
+		l.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		caja.add_child(l)
+
+	# Los tres numeros que se miran primero.
+	var fila_nums := HBoxContainer.new()
+	caja.add_child(fila_nums)
+	fila_nums.add_child(_caja_numero("Media", "%.1f" % float(j["media"]), Tema.TEXTO))
+	fila_nums.add_child(_caja_numero("Techo", str(int(j["potencial"])), Tema.AMBAR))
+	var animo := int(equipo.animo.get(plantel_elegido, 50))
+	fila_nums.add_child(_caja_numero("Ánimo", str(animo), Componentes.color_de_valor(animo)))
+
+	if equipo.esta_lesionado(plantel_elegido):
+		var les: Dictionary = equipo.lesiones[plantel_elegido]
+		var l := Label.new()
+		l.text = "Lesionado: %s, %d días" % [les["tipo"], int(les["dias_restantes"])]
+		l.add_theme_color_override("font_color", Tema.ROJO)
+		caja.add_child(l)
+
+	caja.add_child(Tema.etiqueta_seccion("En qué es fuerte"))
+	for attr in _mejores_atributos(j, 5):
+		caja.add_child(Componentes.barra_atributo(
+			attr, int(j["atributos"][attr]), int(Progresion.techo_de(j, attr))))
+
+	var contrato := Label.new()
+	contrato.text = "Contrato %d año(s)  ·  sueldo %s" % [
+		int(equipo.contratos.get(plantel_elegido, 0)),
+		Economia.formato_dinero(equipo.sueldos.get(plantel_elegido, 0))]
+	contrato.add_theme_color_override("font_color", Tema.SUAVE)
+	caja.add_child(contrato)
+
+	var btn := Button.new()
+	btn.text = "Ficha completa"
+	btn.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	var id := plantel_elegido
+	btn.pressed.connect(func(): _mostrar_ficha(id))
+	caja.add_child(btn)
+
+
+func _caja_numero(etiqueta: String, valor: String, color: Color) -> Control:
+	var caja := PanelContainer.new()
+	caja.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var estilo := StyleBoxFlat.new()
+	estilo.bg_color = Tema.PANEL_ALTO
+	estilo.corner_radius_top_left = Tema.RADIO
+	estilo.corner_radius_top_right = Tema.RADIO
+	estilo.corner_radius_bottom_left = Tema.RADIO
+	estilo.corner_radius_bottom_right = Tema.RADIO
+	estilo.content_margin_left = 12
+	estilo.content_margin_right = 12
+	estilo.content_margin_top = 8
+	estilo.content_margin_bottom = 8
+	caja.add_theme_stylebox_override("panel", estilo)
+	var dentro := VBoxContainer.new()
+	caja.add_child(dentro)
+	dentro.add_child(Tema.etiqueta_seccion(etiqueta))
+	var l := Label.new()
+	l.text = valor
+	Tema.numero(l, 26, color)
+	dentro.add_child(l)
+	return caja
+
+
+## Los atributos donde este jugador es mejor, para no mostrar los 25.
+## Solo los que le sirven a su puesto: la `estirada` de un delantero no
+## dice nada.
+func _mejores_atributos(j: Dictionary, cuantos: int) -> Array:
+	var grupos: Dictionary = PlayerGenerator.get_attribute_groups()
+	var candidatos := []
+	for grupo in grupos:
+		if grupo == "arquero" and str(j["posicion"]) != "ARQ":
+			continue
+		for a in grupos[grupo]:
+			if j["atributos"].has(a):
+				candidatos.append(a)
+	candidatos.sort_custom(func(a, b):
+		return int(j["atributos"][a]) > int(j["atributos"][b]))
+	return candidatos.slice(0, cuantos)
 
 
 ## Ficha del jugador: los atributos, que hasta ahora no se veian en
