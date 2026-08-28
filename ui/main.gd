@@ -4503,6 +4503,18 @@ func _refrescar_portada() -> void:
 	btn_form.pressed.connect(func(): _mostrar_seccion("equipo"))
 	fila_acciones.add_child(btn_form)
 
+	# La repeticion aparece SOLO cuando hay: necesita los fotogramas, que
+	# no se guardan por tamano, asi que existe unicamente entre que jugas
+	# la fecha y que cargas otra partida. Un boton gris permanente en la
+	# portada seria ruido; aca es una oferta que aparece cuando sirve.
+	if not GameState.ultimos_fotogramas.is_empty():
+		var btn_animado := Button.new()
+		btn_animado.text = "Ver partido animado"
+		btn_animado.custom_minimum_size = Vector2(240, Tema.ALTO_TACTIL)
+		btn_animado.tooltip_text = "Reproduce tu ultimo partido con la vista de cancha. Se pierde al cerrar el juego."
+		btn_animado.pressed.connect(_mostrar_partido_animado)
+		fila_acciones.add_child(btn_animado)
+
 	# Simular tambien vive aca y no solo en Partido: la portada es desde
 	# donde se juega, y mandar al jugador a otra seccion a buscar el boton
 	# que salta la temporada es pedirle que adivine donde esta.
