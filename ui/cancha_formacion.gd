@@ -67,10 +67,13 @@ func _rect_cancha() -> Rect2:
 	var disponible := size
 	if disponible.x <= 0.0 or disponible.y <= 0.0:
 		return Rect2()
+	# Un pixel de aire a cada lado: la linea de borde se dibuja CENTRADA
+	# sobre el rectangulo, asi que pegada al limite se corta a la mitad.
+	disponible -= Vector2(2, 2)
 	var escala: float = minf(disponible.x / LARGO_M, disponible.y / ANCHO_M)
 	var w := LARGO_M * escala
 	var h := ANCHO_M * escala
-	return Rect2((disponible.x - w) * 0.5, (disponible.y - h) * 0.5, w, h)
+	return Rect2((size.x - w) * 0.5, (size.y - h) * 0.5, w, h)
 
 
 ## De metros del motor a píxeles de la pantalla.
@@ -103,7 +106,17 @@ func _acomodar() -> void:
 		if not is_equal_approx(cubo.escala, escala):
 			cubo.aplicar_escala(escala)
 		var centro := _a_pantalla(slots[i]["base"])
-		cubo.position = centro - cubo.custom_minimum_size * 0.5
+		# El cubo va CENTRADO en su posicion, asi que los slots pegados a
+		# la linea de fondo quedaban con media ficha afuera del control —
+		# y el de mas abajo se cortaba contra el borde de la pantalla, se
+		# agrandara la ventana o no, porque la cancha crecia con ella y el
+		# sobrante tambien. Se empuja adentro el que se pasa, en vez de
+		# reencuadrar a los once: apretarlos a todos media ficha por lado
+		# los hacia pisarse en el medio, que es donde mas hay.
+		var sitio := centro - cubo.custom_minimum_size * 0.5
+		cubo.position = Vector2(
+			clampf(sitio.x, 0.0, maxf(0.0, size.x - cubo.custom_minimum_size.x)),
+			clampf(sitio.y, 0.0, maxf(0.0, size.y - cubo.custom_minimum_size.y)))
 
 
 func _draw() -> void:

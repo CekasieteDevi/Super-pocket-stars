@@ -493,10 +493,6 @@ func _refrescar_ficha() -> void:
 " % equipo.nombre
 	t += "media %.1f   potencial %d   genetica %s
 " % [j["media"], j["potencial"], j["genetica_tier"]]
-	if j.get("mejor_posicion", j["posicion"]) != j["posicion"]:
-		t += "[color=#d4a017]Rinde mejor de %s (media %.1f ahi)[/color]
-" % [
-			j["mejor_posicion"], j.get("media_mejor_posicion", j["media"])]
 	t += "pie %s
 " % ("izquierdo" if Personalidad.pie_preferido(j) < 0 else "derecho")
 
@@ -604,6 +600,11 @@ func _construir_panel_formacion(padre: Control) -> void:
 	label_carga_efecto.add_theme_color_override("font_color", Tema.SUAVE)
 	label_carga_efecto.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
 	label_carga_efecto.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Sin recorte, su texto fija el ancho minimo de la fila y ese minimo
+	# empuja el de la pantalla entera: el banco de la derecha se iba fuera
+	# del viewport. Que se corte el texto, no la UI.
+	label_carga_efecto.clip_text = true
+	label_carga_efecto.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	fila.add_child(label_carga_efecto)
 
 	label_foco_efecto = Label.new()
@@ -690,6 +691,26 @@ func _reparto_foco_texto(equipo: Team) -> String:
    Temporada hasta ahora: %s" % ", ".join(partes)
 
 
+## Lo que hace la carga elegida, en la fila misma.
+##
+## Antes aca iba el promedio de la temporada, que es correcto pero arranca
+## en x1.00 y solo se mueve semana a semana: mover el desplegable no
+## cambiaba el numero y se leia como un control roto. El promedio sigue
+## estando, atras, y solo cuando ya significa algo.
+func _texto_carga(equipo: Team) -> String:
+	var nivel: String = equipo.carga_entrenamiento
+	var t := "crecimiento x%.2f · recuperación x%.2f · lesiones x%.2f" % [
+		CargaEntrenamiento.factor_crecimiento(nivel),
+		CargaEntrenamiento.factor_recuperacion(nivel),
+		CargaEntrenamiento.factor_lesion(nivel)]
+	# Lo que decide la progresion es el promedio de la temporada, no el
+	# nivel de hoy: sin esto, bajar la carga la ultima semana pareceria
+	# arruinar el año entero.
+	if equipo.carga_semanas > 0.0:
+		t += "   —   temporada x%.2f" % equipo.factor_carga_temporada()
+	return t
+
+
 func _refrescar_formacion() -> void:
 	var equipo := GameState.equipo_jugador
 	var idx := Formaciones.lista().find(equipo.formacion)
@@ -698,7 +719,8 @@ func _refrescar_formacion() -> void:
 	var idx_carga := CargaEntrenamiento.NIVELES.find(equipo.carga_entrenamiento)
 	if idx_carga >= 0:
 		option_carga.selected = idx_carga
-	label_carga_efecto.text = "carga x%.2f de crecimiento en la temporada" % equipo.factor_carga_temporada()
+	label_carga_efecto.text = _texto_carga(equipo)
+	label_carga_efecto.tooltip_text = label_carga_efecto.text
 	option_carga.tooltip_text = CargaEntrenamiento.resumen(equipo.carga_entrenamiento)
 	var idx_foco := FocoEquipo.AREAS.find(equipo.foco_equipo)
 	if idx_foco >= 0:
