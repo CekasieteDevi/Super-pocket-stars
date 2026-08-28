@@ -13,19 +13,26 @@ extends RefCounted
 ## Anchos de las columnas del mercado. Viven acá y no en el panel porque el
 ## encabezado y las filas TIENEN que usar los mismos: cuando estaban
 ## duplicados, tocar uno y olvidarse del otro desalineaba la tabla entera.
-## Calibrados para que la fila ENTERA entre en el ancho util de una
-## pantalla de 1440 logicos menos el riel: 190+58+68+446+136+3x100, mas
-## separaciones, da ~1.280. Si se agranda una columna hay que achicar otra.
-const COL_NOMBRE := 190
-const COL_EDAD := 58
-const COL_POS := 68
-const COL_MEDIA := 78
-const COL_VALOR := 100
-const COL_SALARIO := 96
-const COL_CONTRATO := 96
-const COL_ANIMO := 76
-const COL_CLUB := 136
-const COL_ACCION := 100
+## Calibrados contra el ancho REAL disponible, medido: en 1152 logicos,
+## despues del riel y del margen quedan 1.010 px. La suma de columnas
+## (958) mas separaciones (28) y margenes (20) da 1.006 y entra justo.
+## Si se agranda una columna hay que achicar otra, o el ultimo boton se
+## sale de la pantalla — que es lo que pasaba con tres botones de accion
+## de 130 en la misma fila: median 1.270.
+const COL_NOMBRE := 160
+const COL_EDAD := 46
+const COL_POS := 56
+const COL_MEDIA := 56
+const COL_VALOR := 92
+const COL_SALARIO := 84
+const COL_CONTRATO := 58
+const COL_ANIMO := 46
+const COL_CLUB := 114
+const COL_ACCION := 122
+const COL_FICHAR := 110
+
+## La tabla del mercado va en cuerpo chico: ver `celda`.
+const TAM_TABLA := Tema.TAM_CHICO
 
 ## Anchos de la tabla de posiciones. Mismo criterio que el mercado: el
 ## encabezado y las filas los comparten para que no se desalineen.
@@ -38,13 +45,22 @@ const COL_PUNTOS := 64
 
 ## Lo que ocupan juntas las columnas que tapa la niebla. Es el ancho del
 ## bloque "sin investigar" que las reemplaza — ver `bloque_tapado`.
-const COL_TAPADAS := COL_MEDIA + COL_VALOR + COL_SALARIO + COL_CONTRATO + COL_ANIMO
+##
+## Suma tambien las CUATRO separaciones que hay entre esas cinco celdas:
+## el bloque es un solo hijo y no las lleva, asi que sin esto una fila
+## destapada mide 16 px mas que una tapada y las dos no alinean.
+const COL_TAPADAS := COL_MEDIA + COL_VALOR + COL_SALARIO + COL_CONTRATO + COL_ANIMO + 16
 
 
 ## Una celda de ancho fijo. `alineacion` de HORIZONTAL_ALIGNMENT_*.
+## `tam` 0 = el del tema. La tabla del mercado pide TAM_CHICO: con once
+## columnas, el cuerpo a 20 px obliga a anchos donde no entra ni un
+## nombre ni un club, y un nombre recortado no sirve para nada.
 static func celda(texto: String, ancho: int, color: Color = Tema.TEXTO,
-		alineacion: int = HORIZONTAL_ALIGNMENT_LEFT) -> Label:
+		alineacion: int = HORIZONTAL_ALIGNMENT_LEFT, tam: int = 0) -> Label:
 	var l := Label.new()
+	if tam > 0:
+		l.add_theme_font_size_override("font_size", tam)
 	l.text = texto
 	l.custom_minimum_size = Vector2(ancho, 0)
 	l.horizontal_alignment = alineacion
@@ -63,8 +79,8 @@ static func celda(texto: String, ancho: int, color: Color = Tema.TEXTO,
 ## de cifras de ancho distinto (9 y 32 puntos) alineadas a la izquierda
 ## las unidades no coinciden y hay que comparar digito por digito.
 static func celda_numero(texto: String, ancho: int, color: Color = Tema.TEXTO,
-		alineacion: int = HORIZONTAL_ALIGNMENT_LEFT) -> Label:
-	var l := celda(texto, ancho, color, alineacion)
+		alineacion: int = HORIZONTAL_ALIGNMENT_LEFT, tam: int = 0) -> Label:
+	var l := celda(texto, ancho, color, alineacion, tam)
 	var f := Tema.archivo(700)
 	if f != null:
 		l.add_theme_font_override("font", f)

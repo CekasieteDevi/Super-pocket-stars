@@ -1300,45 +1300,87 @@ func _solapa_con_scroll(padre: Control, contenido: VBoxContainer) -> Control:
 	return scroll
 
 
+## Un filtro con su titulo ARRIBA. Al lado, el par titulo+control mide
+## casi el doble de ancho, y con cuatro filtros eso no entra en una
+## pantalla de telefono.
+func _grupo_filtro(titulo: String, control: Control) -> Control:
+	var caja := VBoxContainer.new()
+	caja.add_theme_constant_override("separation", 2)
+	caja.add_child(Tema.etiqueta_seccion(titulo))
+	caja.add_child(control)
+	return caja
+
+
 func _construir_solapa_jugadores(padre: Control) -> Control:
 	var caja := VBoxContainer.new()
 	caja.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	padre.add_child(caja)
 
-	var filtros := HBoxContainer.new()
+	# Los filtros en un contenedor que ENVUELVE, y cada uno con su titulo
+	# ARRIBA en vez de al lado. En una sola fila con "Puesto:" al costado la
+	# barra medía mas que la pantalla y el boton Buscar quedaba fuera del
+	# viewport: sin el boton, la pantalla entera no servia para nada.
+	var filtros := HFlowContainer.new()
+	filtros.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	filtros.add_theme_constant_override("h_separation", 12)
+	filtros.add_theme_constant_override("v_separation", 8)
 	caja.add_child(filtros)
 
-	filtros.add_child(_etiqueta("Puesto:"))
 	option_pos_mercado = OptionButton.new()
 	option_pos_mercado.add_item("Cualquiera")
 	for pos in BusquedaMercado.POSICIONES:
 		option_pos_mercado.add_item(pos)
-	filtros.add_child(option_pos_mercado)
+	option_pos_mercado.custom_minimum_size = Vector2(150, Tema.ALTO_TACTIL)
+	filtros.add_child(_grupo_filtro("Puesto", option_pos_mercado))
 
-	filtros.add_child(_etiqueta("Division:"))
 	option_div_mercado = OptionButton.new()
 	option_div_mercado.add_item("Cualquiera")
 	for d in range(10):
 		option_div_mercado.add_item("D%d" % (d + 1))
-	filtros.add_child(option_div_mercado)
+	option_div_mercado.custom_minimum_size = Vector2(150, Tema.ALTO_TACTIL)
+	filtros.add_child(_grupo_filtro("Division", option_div_mercado))
 
-	filtros.add_child(_etiqueta("Edad:"))
+	var caja_edad := HBoxContainer.new()
+	caja_edad.add_theme_constant_override("separation", 6)
 	spin_edad_min = _spin(0, 45, 0)
-	filtros.add_child(spin_edad_min)
-	filtros.add_child(_etiqueta("a"))
+	spin_edad_min.custom_minimum_size = Vector2(96, Tema.ALTO_TACTIL)
+	caja_edad.add_child(spin_edad_min)
+	var a := Label.new()
+	a.text = "a"
+	a.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	a.add_theme_color_override("font_color", Tema.SUAVE)
+	caja_edad.add_child(a)
 	spin_edad_max = _spin(0, 45, 0)
-	filtros.add_child(spin_edad_max)
+	spin_edad_max.custom_minimum_size = Vector2(96, Tema.ALTO_TACTIL)
+	caja_edad.add_child(spin_edad_max)
+	filtros.add_child(_grupo_filtro("Edad  (0 = sin limite)", caja_edad))
 
-	filtros.add_child(_etiqueta("Contrato hasta:"))
 	spin_contrato = _spin(0, 6, 0)
-	filtros.add_child(spin_contrato)
+	spin_contrato.custom_minimum_size = Vector2(110, Tema.ALTO_TACTIL)
+	filtros.add_child(_grupo_filtro("Contrato hasta  (0 = cualquiera)", spin_contrato))
 
+	var acciones := HBoxContainer.new()
+	acciones.add_theme_constant_override("separation", 8)
 	var btn_buscar := Button.new()
 	btn_buscar.text = "Buscar"
-	btn_buscar.custom_minimum_size = Vector2(130, Tema.ALTO_TACTIL)
+	btn_buscar.custom_minimum_size = Vector2(140, Tema.ALTO_TACTIL)
 	Tema.primario(btn_buscar)
 	btn_buscar.pressed.connect(_on_buscar_mercado)
-	filtros.add_child(btn_buscar)
+	acciones.add_child(btn_buscar)
+	var btn_limpiar := Button.new()
+	btn_limpiar.text = "Limpiar"
+	btn_limpiar.custom_minimum_size = Vector2(120, Tema.ALTO_TACTIL)
+	btn_limpiar.tooltip_text = "Deja todos los filtros en cualquiera."
+	btn_limpiar.pressed.connect(func():
+		option_pos_mercado.selected = 0
+		option_div_mercado.selected = 0
+		spin_edad_min.value = 0
+		spin_edad_max.value = 0
+		spin_contrato.value = 0
+		_on_buscar_mercado()
+	)
+	acciones.add_child(btn_limpiar)
+	filtros.add_child(_grupo_filtro(" ", acciones))
 
 	label_mercado_resumen = Label.new()
 	label_mercado_resumen.text = "Ponele los filtros que quieras (todos opcionales) y toca Buscar."
@@ -1494,11 +1536,13 @@ func _encabezado_mercado() -> Control:
 		btn.custom_minimum_size = Vector2(ancho, 0)
 		btn.flat = true
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		btn.add_theme_font_size_override("font_size", Componentes.TAM_TABLA)
 		btn.add_theme_color_override("font_color",
 			Tema.AMBAR if orden_mercado == clave else Tema.SUAVE)
 		btn.pressed.connect(func(): _on_ordenar_mercado(clave))
 		dentro.add_child(btn)
-	dentro.add_child(Componentes.celda("Club", Componentes.COL_CLUB, Tema.SUAVE))
+	dentro.add_child(Componentes.celda("Club", Componentes.COL_CLUB, Tema.SUAVE,
+		HORIZONTAL_ALIGNMENT_LEFT, Componentes.TAM_TABLA))
 	return fila
 
 
@@ -1528,6 +1572,7 @@ func _fila_mercado(f: Dictionary, par: bool) -> Control:
 	btn_nombre.text = str(f["nombre"])
 	btn_nombre.tooltip_text = str(f["nombre"])
 	btn_nombre.custom_minimum_size = Vector2(Componentes.COL_NOMBRE, 0)
+	btn_nombre.add_theme_font_size_override("font_size", Componentes.TAM_TABLA)
 	btn_nombre.flat = true
 	btn_nombre.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	btn_nombre.clip_text = true
@@ -1539,7 +1584,8 @@ func _fila_mercado(f: Dictionary, par: bool) -> Control:
 	dentro.add_child(btn_nombre)
 
 	# La edad se sabe SIEMPRE: en el futbol es publica.
-	dentro.add_child(Componentes.celda_numero(str(f["edad"]), Componentes.COL_EDAD))
+	dentro.add_child(Componentes.celda_numero(str(f["edad"]), Componentes.COL_EDAD,
+		Tema.TEXTO, HORIZONTAL_ALIGNMENT_RIGHT, Componentes.TAM_TABLA))
 
 	var caja_pos := CenterContainer.new()
 	caja_pos.custom_minimum_size = Vector2(Componentes.COL_POS, 0)
@@ -1547,15 +1593,20 @@ func _fila_mercado(f: Dictionary, par: bool) -> Control:
 	dentro.add_child(caja_pos)
 
 	if conocido:
-		dentro.add_child(Componentes.celda_numero("%.1f" % float(f["media"]), Componentes.COL_MEDIA))
+		dentro.add_child(Componentes.celda_numero("%.1f" % float(f["media"]), Componentes.COL_MEDIA,
+			Tema.TEXTO, HORIZONTAL_ALIGNMENT_RIGHT, Componentes.TAM_TABLA))
 		dentro.add_child(Componentes.celda_numero(
-			Economia.formato_dinero(f["valor"]), Componentes.COL_VALOR))
+			Economia.formato_dinero(f["valor"]), Componentes.COL_VALOR,
+			Tema.TEXTO, HORIZONTAL_ALIGNMENT_RIGHT, Componentes.TAM_TABLA))
 		dentro.add_child(Componentes.celda_numero(
-			Economia.formato_dinero(f["salario"]), Componentes.COL_SALARIO))
+			Economia.formato_dinero(f["salario"]), Componentes.COL_SALARIO,
+			Tema.TEXTO, HORIZONTAL_ALIGNMENT_RIGHT, Componentes.TAM_TABLA))
 		dentro.add_child(Componentes.celda_numero(
-			"%d años" % int(f["contrato"]), Componentes.COL_CONTRATO))
+			"%d años" % int(f["contrato"]), Componentes.COL_CONTRATO,
+			Tema.TEXTO, HORIZONTAL_ALIGNMENT_RIGHT, Componentes.TAM_TABLA))
 		dentro.add_child(Componentes.celda_numero(str(int(f["animo"])), Componentes.COL_ANIMO,
-			Componentes.color_de_valor(int(f["animo"]))))
+			Componentes.color_de_valor(int(f["animo"])),
+			HORIZONTAL_ALIGNMENT_RIGHT, Componentes.TAM_TABLA))
 	elif float(f["progreso"]) >= 0.0:
 		var inv := Investigadores.progreso(equipo, jugador_id)
 		var faltan := _dias_que_faltan(equipo, jugador_id)
@@ -1565,11 +1616,18 @@ func _fila_mercado(f: Dictionary, par: bool) -> Control:
 		dentro.add_child(Componentes.bloque_tapado(Componentes.COL_TAPADAS))
 
 	dentro.add_child(Componentes.celda(
-		"%s D%d" % [str(f["club"]), int(f["division"])], Componentes.COL_CLUB, Tema.SUAVE))
+		"%s D%d" % [str(f["club"]), int(f["division"])], Componentes.COL_CLUB, Tema.SUAVE,
+		HORIZONTAL_ALIGNMENT_LEFT, Componentes.TAM_TABLA))
 
 	# --- Acciones ----------------------------------------------------------
+	# Dos botones y no tres. Comprar y Prestamo eran dos columnas separadas
+	# y entre las tres acciones la fila medía 1.270 px contra 1.010 de
+	# pantalla: el ultimo boton quedaba fuera del viewport. Son las dos
+	# formas de quedarse con el MISMO jugador, asi que van juntas bajo
+	# "Fichar" y se elige adentro.
 	var btn_inv := Button.new()
 	btn_inv.custom_minimum_size = Vector2(Componentes.COL_ACCION, 0)
+	btn_inv.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
 	if conocido:
 		var quedan := Investigadores.vigencia(equipo, jugador_id)
 		btn_inv.text = "Vence pronto" if quedan < 120 else "Conocido"
@@ -1581,35 +1639,53 @@ func _fila_mercado(f: Dictionary, par: bool) -> Control:
 	else:
 		btn_inv.text = "Investigar"
 		btn_inv.disabled = Investigadores.libres(equipo).is_empty()
+		if btn_inv.disabled:
+			btn_inv.tooltip_text = "No tenes investigadores libres. Se contratan en Equipo › Instalaciones."
 		btn_inv.add_theme_color_override("font_color", Tema.AMBAR)
 		btn_inv.pressed.connect(func(): _on_investigar(vendedor, jugador_id))
 	dentro.add_child(btn_inv)
 
-	var btn_comprar := Button.new()
-	btn_comprar.custom_minimum_size = Vector2(Componentes.COL_ACCION, 0)
 	var negociando := false
 	for o in equipo.ofertas:
 		if int(o["jugador_id"]) == jugador_id and Ofertas.abierta(o):
 			negociando = true
-	if Negociacion.bloqueado(vendedor, jugador_id, GameState.temporada_actual):
-		btn_comprar.text = "Vetado"
-		btn_comprar.disabled = true
-		btn_comprar.tooltip_text = "Te ofendieron con la ultima oferta. Vuelven a escucharte la temporada que viene."
-	elif negociando:
-		btn_comprar.text = "En curso"
-		btn_comprar.disabled = true
-		btn_comprar.tooltip_text = "Ya tenes una negociacion abierta por el. Miralo en Ofertas enviadas."
-	else:
-		btn_comprar.text = "Comprar"
-		btn_comprar.pressed.connect(func(): _abrir_negociacion(vendedor, jugador_id))
-	dentro.add_child(btn_comprar)
 
-	var btn_prestamo := Button.new()
-	btn_prestamo.text = "Préstamo"
-	btn_prestamo.custom_minimum_size = Vector2(Componentes.COL_ACCION, 0)
-	btn_prestamo.pressed.connect(func(): _abrir_prestamo(vendedor, jugador_id))
-	dentro.add_child(btn_prestamo)
+	if Negociacion.bloqueado(vendedor, jugador_id, GameState.temporada_actual):
+		dentro.add_child(_boton_fichar_apagado("Vetado",
+			"Te ofendieron con la ultima oferta. Vuelven a escucharte la temporada que viene."))
+	elif negociando:
+		dentro.add_child(_boton_fichar_apagado("En curso",
+			"Ya tenes una negociacion abierta por el. Miralo en Ofertas enviadas."))
+	else:
+		var menu := MenuButton.new()
+		menu.text = "Fichar"
+		menu.custom_minimum_size = Vector2(Componentes.COL_FICHAR, 0)
+		menu.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		menu.flat = false
+		var pop := menu.get_popup()
+		pop.add_item("Comprar", 0)
+		pop.add_item("Pedir a préstamo", 1)
+		pop.id_pressed.connect(func(id: int):
+			if id == 0:
+				_abrir_negociacion(vendedor, jugador_id)
+			else:
+				_abrir_prestamo(vendedor, jugador_id)
+		)
+		dentro.add_child(menu)
 	return fila
+
+
+## El lugar del boton Fichar cuando no se puede fichar. Ocupa el MISMO
+## ancho: si desapareciera, la fila se desalinearia con las de al lado.
+func _boton_fichar_apagado(texto: String, ayuda: String) -> Button:
+	var b := Button.new()
+	b.text = texto
+	b.tooltip_text = ayuda
+	b.disabled = true
+	b.custom_minimum_size = Vector2(Componentes.COL_FICHAR, 0)
+	b.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	return b
+
 
 
 ## Cuantos dias le faltan al informe de este jugador. -1 si no hay ninguno.
