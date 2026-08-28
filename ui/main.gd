@@ -73,8 +73,16 @@ func _ready() -> void:
 	raiz.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(raiz)
 
+	# La barra tiene 13 pestañas y en una pantalla angosta las ultimas
+	# quedaban FUERA de la ventana, sin forma de llegar a ellas. Va en un
+	# scroll horizontal: es lo que hace cualquier app con muchas solapas.
+	var barra_scroll := ScrollContainer.new()
+	barra_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	barra_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	raiz.add_child(barra_scroll)
+
 	var barra := HBoxContainer.new()
-	raiz.add_child(barra)
+	barra_scroll.add_child(barra)
 
 	for entrada in [
 		["Plantel", "_mostrar_plantel"], ["Formacion", "_mostrar_formacion"],
@@ -813,8 +821,12 @@ func _construir_panel_mercado(padre: Control) -> void:
 	padre.add_child(panel)
 	paneles["mercado"] = panel
 
+	var barra_scroll := ScrollContainer.new()
+	barra_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	barra_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(barra_scroll)
 	var barra := HBoxContainer.new()
-	panel.add_child(barra)
+	barra_scroll.add_child(barra)
 	for entrada in [["jugadores", "Jugadores"], ["enviadas", "Ofertas enviadas"],
 			["recibidas", "Ofertas recibidas"], ["historial", "Historial"],
 			["investigaciones", "Investigaciones"]]:
@@ -908,7 +920,10 @@ func _construir_solapa_jugadores(padre: Control) -> Control:
 
 	contenedor_mercado_tabla = GridContainer.new()
 	contenedor_mercado_tabla.columns = BusquedaMercado.COLUMNAS.size() + 4
-	contenedor_mercado_tabla.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# SIN expandir a lo ancho: con EXPAND_FILL la grilla se achicaba al
+	# ancho del scroll y las ultimas columnas —Comprar y Prestamo— quedaban
+	# recortadas y fuera de alcance. Dejandole su ancho natural, el
+	# ScrollContainer la puede correr en horizontal.
 	scroll.add_child(contenedor_mercado_tabla)
 	return caja
 
@@ -944,6 +959,22 @@ func _actualizar_titulos_solapas() -> void:
 func _etiqueta(texto: String) -> Label:
 	var l := Label.new()
 	l.text = texto
+	return l
+
+
+## Etiqueta con ancho TOPE y puntos suspensivos. La usan las columnas de
+## texto largo de la tabla del mercado: un nombre de club como
+## "Estudiantes Sol Naciente" ensanchaba la grilla lo suficiente como para
+## que los botones de accion arrancaran fuera de pantalla en un telefono
+## angosto. El texto completo queda en el tooltip, asi que no se pierde.
+func _etiqueta_corta(texto: String, ancho: int) -> Label:
+	var l := Label.new()
+	l.text = texto
+	l.tooltip_text = texto
+	l.custom_minimum_size = Vector2(ancho, 0)
+	l.size_flags_horizontal = Control.SIZE_FILL
+	l.clip_text = true
+	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	return l
 
 
@@ -1034,6 +1065,10 @@ func _fila_mercado(f: Dictionary) -> void:
 
 	var btn_nombre := Button.new()
 	btn_nombre.text = str(f["nombre"])
+	btn_nombre.tooltip_text = str(f["nombre"])
+	btn_nombre.custom_minimum_size = Vector2(165, 0)
+	btn_nombre.clip_text = true
+	btn_nombre.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	btn_nombre.flat = true
 	btn_nombre.disabled = not bool(f["conocido"])
 	btn_nombre.tooltip_text = "Investigalo para ver su ficha." if not f["conocido"] else "Ver ficha"
@@ -1051,7 +1086,8 @@ func _fila_mercado(f: Dictionary) -> void:
 	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["salario"] == null else Economia.formato_dinero(f["salario"])))
 	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["contrato"] == null else "%d años" % int(f["contrato"])))
 	contenedor_mercado_tabla.add_child(_etiqueta("?" if f["animo"] == null else "%d" % int(f["animo"])))
-	contenedor_mercado_tabla.add_child(_etiqueta("%s D%d" % [str(f["club"]), int(f["division"])]))
+	contenedor_mercado_tabla.add_child(_etiqueta_corta(
+		"%s D%d" % [str(f["club"]), int(f["division"])], 140))
 
 	var vendedor: Team = f["equipo"]
 	var jugador_id := int(f["id"])
