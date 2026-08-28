@@ -26,7 +26,11 @@ static func limite(equipo: Team) -> int:
 ## límite de cupos Y el jugador no tenía uno asignado antes (reasignar un
 ## cupo ya ocupado, o cambiarle el atributo a alguien que ya lo tenía, no
 ## cuenta como un cupo nuevo).
+## Un atributo que no existe se guardaba igual y quemaba el cupo sin
+## hacer nada: la progresion despues no encontraba que multiplicar.
 static func asignar(equipo: Team, jugador_id: int, atributo: String) -> bool:
+	if not PlayerGenerator.get_all_attributes().has(atributo):
+		return false
 	if not equipo.foco_individual.has(jugador_id) and equipo.foco_individual.size() >= limite(equipo):
 		return false
 	equipo.foco_individual[jugador_id] = atributo

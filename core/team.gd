@@ -222,7 +222,7 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 	# §9.4: todo club arranca con un investigador de 1 estrella. Tarda
 	# media temporada por informe, que es justo lo bastante lento como para
 	# que quieras otro mejor.
-	t.investigadores = [{"id": 0, "estrellas": 1, "objetivo": -1, "club_objetivo": "", "dias": 0.0}]
+	t.investigadores = [Investigadores.nuevo(0, 1)]
 	t.siguiente_id_investigador = 1
 	t.instalaciones = Instalaciones.nivel_inicial()
 	for categoria in Economia.CATEGORIAS_CAJA:
@@ -340,7 +340,7 @@ static func cargar(datos: Dictionary) -> Team:
 	# nunca mas — el boton quedaba gris para siempre. Se les da el mismo
 	# de 1 estrella con el que arranca un club nuevo.
 	if t.investigadores.is_empty():
-		t.investigadores = [{"id": 0, "estrellas": 1, "objetivo": -1, "club_objetivo": "", "dias": 0.0}]
+		t.investigadores = [Investigadores.nuevo(0, 1)]
 	for inv in t.investigadores:
 		inv["id"] = int(inv["id"])
 		inv["estrellas"] = int(inv["estrellas"])

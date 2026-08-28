@@ -72,17 +72,28 @@ static func contratar(equipo: Team, estrellas: int) -> Dictionary:
 		return {"exito": false, "motivo": "No alcanza el presupuesto de Mejoras.",
 			"costo": precio, "disponible": equipo.caja["mejoras"]}
 	equipo.caja["mejoras"] -= precio
-	var inv := {
-		"id": equipo.siguiente_id_investigador,
+	var inv := nuevo(equipo.siguiente_id_investigador, estrellas)
+	equipo.siguiente_id_investigador += 1
+	equipo.investigadores.append(inv)
+	return {"exito": true, "investigador": inv, "costo": precio}
+
+
+## La forma de un investigador, en un solo lugar.
+##
+## Team armaba el investigador inicial a mano, con las mismas claves menos
+## `nombre_objetivo`, y la UI se rompia al leerlo: el codigo viejo solo
+## tocaba esa clave cuando el tipo estaba ocupado, asi que el agujero
+## nunca se noto. Mismo problema que tuvo `conocimiento` — si un formato
+## se escribe a mano en dos lados, tarde o temprano difieren.
+static func nuevo(id: int, estrellas: int) -> Dictionary:
+	return {
+		"id": id,
 		"estrellas": clamp(estrellas, ESTRELLAS_MIN, ESTRELLAS_MAX),
 		"objetivo": -1,       # jugador_id que está investigando, -1 = libre
 		"club_objetivo": "",  # de qué club es, para poder mostrarlo
 		"nombre_objetivo": "",
-		"dias": 0.0,         # cuánto lleva investigando a este objetivo
+		"dias": 0.0,          # cuánto lleva investigando a este objetivo
 	}
-	equipo.siguiente_id_investigador += 1
-	equipo.investigadores.append(inv)
-	return {"exito": true, "investigador": inv, "costo": precio}
 
 
 ## Lo despide. No hay devolución: lo que pagaste, pagado. Sirve para

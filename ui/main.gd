@@ -2655,12 +2655,65 @@ func _on_ceder_prestamo(jugador_id: int) -> void:
 ## Instalaciones del club (§9.5): mejoras permanentes pagadas con el
 ## presupuesto de Mejoras, ver core/instalaciones.gd.
 const NOMBRES_INSTALACIONES := {
-	"estadio": "Estadio (mas aforo, mas entradas)",
-	"medica": "Medica (menos lesiones, recupera mas rapido)",
-	"juveniles": "Juveniles (camada de cantera mas grande)",
-	"scouting": "Scouting (reportes de potencial mas precisos)",
-	"entrenamiento": "Entrenamiento (mas cupos de foco individual hasta 3, crecimiento mas rapido)",
+	"estadio": "Estadio",
+	"medica": "Médica",
+	"juveniles": "Juveniles",
+	"scouting": "Scouting",
+	"entrenamiento": "Entrenamiento",
 }
+
+## Que hace cada area, en una linea. Va aparte del nombre porque el nombre
+## se lee de un vistazo y esto se lee cuando dudas.
+const QUE_HACE_INSTALACION := {
+	"estadio": "Mas aforo: entra mas gente y suben los ingresos por entradas.",
+	"medica": "Menos lesiones y recuperacion de fatiga mas rapida entre fechas.",
+	"juveniles": "Camada de cantera mas grande y con mejor techo.",
+	"scouting": "Reportes de potencial mas precisos: el rango de los juveniles se achica.",
+	"entrenamiento": "Mas cupos de foco individual (hasta 3) y todo el plantel crece un poco mas rapido.",
+}
+
+## Que pestaña de Instalaciones esta abierta. Las tres cosas que vivian
+## aca —mejoras, investigadores y foco individual— no tienen nada que ver
+## entre si salvo que se pagan con la misma caja, y apiladas en un solo
+## scroll no se entendia donde empezaba una y terminaba la otra.
+var solapa_instalaciones: String = "mejoras"
+var contenedor_instalaciones_solapas: HBoxContainer
+
+
+## Los efectos CONCRETOS de un nivel, para poder comparar el actual con el
+## siguiente. Sin esto "subir a nivel 3 cuesta $72.000" no dice nada:
+## no se sabe que se compra.
+func _efecto_instalacion(categoria: String, nivel: int) -> String:
+	match categoria:
+		"estadio":
+			if nivel <= 1:
+				return "aforo base"
+			return "aforo +%d%%" % ((nivel - 1) * 20)
+		"medica":
+			return "lesiones −%d%%, recuperacion +%d%%" % [
+				(nivel - 1) * 10, (nivel - 1) * 15]
+		"juveniles":
+			# La calidad se SUMA al nivel del club: por debajo del 3 la
+			# academia saca chicos peores de lo que da el club.
+			return "camada de %d, calidad %+d" % [2 + nivel, (nivel - 3) * 3]
+		"scouting":
+			return "potencial de juveniles ±%d" % Scout.margen(
+				mini(Scout.NIVEL_MAXIMO, nivel * 2 - 1))
+		"entrenamiento":
+			return "%d cupo%s de foco, crecimiento +%d%%" % [
+				mini(nivel, Instalaciones.MAXIMO_FOCO_INDIVIDUAL),
+				"" if mini(nivel, Instalaciones.MAXIMO_FOCO_INDIVIDUAL) == 1 else "s",
+				nivel - 1]
+	return ""
+
+
+## Los niveles como puntos llenos y vacios: cuanto te queda por mejorar se
+## ve sin leer "3/5".
+func _puntos_de_nivel(nivel: int, maximo: int) -> Label:
+	var l := Label.new()
+	l.text = "●".repeat(nivel) + "○".repeat(maximo - nivel)
+	l.add_theme_color_override("font_color", Tema.AMBAR)
+	return l
 
 
 func _construir_panel_instalaciones(padre: Control) -> void:
@@ -2670,15 +2723,28 @@ func _construir_panel_instalaciones(padre: Control) -> void:
 	padre.add_child(panel)
 	paneles["instalaciones"] = panel
 
-	var titulo := Label.new()
-	titulo.text = "Instalaciones — mejoras permanentes, se pagan con el presupuesto de Mejoras"
-	panel.add_child(titulo)
+	contenedor_instalaciones_solapas = HBoxContainer.new()
+	panel.add_child(contenedor_instalaciones_solapas)
+	for par in [["mejoras", "Mejoras"], ["investigadores", "Investigadores"],
+			["foco", "Foco individual"]]:
+		var clave: String = par[0]
+		var btn := Button.new()
+		btn.text = str(par[1])
+		btn.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+		btn.pressed.connect(func():
+			solapa_instalaciones = clave
+			_refrescar_instalaciones()
+		)
+		contenedor_instalaciones_solapas.add_child(btn)
 
 	label_instalaciones_estado = Label.new()
 	label_instalaciones_estado.text = ""
+	label_instalaciones_estado.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label_instalaciones_estado.add_theme_color_override("font_color", Tema.AMBAR)
 	panel.add_child(label_instalaciones_estado)
 
 	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.add_child(scroll)
@@ -2691,36 +2757,129 @@ func _construir_panel_instalaciones(padre: Control) -> void:
 func _refrescar_instalaciones() -> void:
 	for hijo in contenedor_instalaciones_botones.get_children():
 		hijo.queue_free()
-
 	var equipo := GameState.equipo_jugador
-	var label_presupuesto := Label.new()
-	label_presupuesto.text = "Presupuesto de Mejoras disponible: %s" % Economia.formato_dinero(equipo.caja["mejoras"])
-	contenedor_instalaciones_botones.add_child(label_presupuesto)
 
+	for btn in contenedor_instalaciones_solapas.get_children():
+		var clave := "mejoras"
+		if str((btn as Button).text) == "Investigadores":
+			clave = "investigadores"
+		elif str((btn as Button).text) == "Foco individual":
+			clave = "foco"
+		Tema.seleccionado(btn, clave == solapa_instalaciones)
+
+	# La caja de Mejoras es la restriccion de las dos primeras solapas, asi
+	# que va siempre a la vista: sin esto "Mejorar" aparece apagado y no se
+	# entiende por que.
+	if solapa_instalaciones != "foco":
+		var caja := Componentes.tarjeta()
+		var dentro := HBoxContainer.new()
+		caja.add_child(dentro)
+		var izq := VBoxContainer.new()
+		izq.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		izq.add_theme_constant_override("separation", 0)
+		dentro.add_child(izq)
+		izq.add_child(Tema.etiqueta_seccion("Presupuesto de Mejoras disponible"))
+		var l := Label.new()
+		l.text = Economia.formato_dinero(equipo.caja.get("mejoras", 0.0))
+		Tema.numero(l, 26, Tema.VERDE if equipo.caja.get("mejoras", 0.0) > 0.0 else Tema.ROJO)
+		izq.add_child(l)
+		var nota := Label.new()
+		nota.text = "Las mejoras y los investigadores salen de esta misma caja: compiten entre si."
+		nota.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		nota.custom_minimum_size = Vector2(420, 0)
+		nota.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		nota.add_theme_color_override("font_color", Tema.SUAVE)
+		dentro.add_child(nota)
+		contenedor_instalaciones_botones.add_child(caja)
+
+	match solapa_instalaciones:
+		"investigadores":
+			_refrescar_investigadores_instalaciones(equipo)
+		"foco":
+			_refrescar_foco_individual(equipo)
+		_:
+			_refrescar_mejoras(equipo)
+
+
+## Las cinco areas. Cada una dice lo que da AHORA y lo que daria con el
+## nivel siguiente: sin eso, "subir a nivel 3 cuesta $72.000" no informa
+## nada, porque no se sabe que se compra.
+func _refrescar_mejoras(equipo: Team) -> void:
+	var disponible: float = equipo.caja.get("mejoras", 0.0)
 	for categoria in Instalaciones.CATEGORIAS:
 		var nivel: int = equipo.instalaciones.get(categoria, 1)
+		var al_maximo: bool = nivel >= Instalaciones.NIVEL_MAXIMO
+		var costo: float = 0.0 if al_maximo else Instalaciones.costo_siguiente_nivel(nivel)
+
+		var tarjeta := Componentes.tarjeta(Tema.VERDE if al_maximo else Color.TRANSPARENT)
+		contenedor_instalaciones_botones.add_child(tarjeta)
 		var fila := HBoxContainer.new()
-		var label := Label.new()
-		if nivel >= Instalaciones.NIVEL_MAXIMO:
-			label.text = "%-45s  nivel %d/%d (maximo)" % [NOMBRES_INSTALACIONES[categoria], nivel, Instalaciones.NIVEL_MAXIMO]
+		tarjeta.add_child(fila)
+
+		var izq := VBoxContainer.new()
+		izq.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		izq.add_theme_constant_override("separation", 3)
+		fila.add_child(izq)
+
+		var cabecera := HBoxContainer.new()
+		izq.add_child(cabecera)
+		var nombre := Label.new()
+		nombre.text = str(NOMBRES_INSTALACIONES[categoria])
+		Tema.numero(nombre, Tema.TAM_BASE)
+		cabecera.add_child(nombre)
+		cabecera.add_child(_puntos_de_nivel(nivel, Instalaciones.NIVEL_MAXIMO))
+		var n := Label.new()
+		n.text = "nivel %d de %d" % [nivel, Instalaciones.NIVEL_MAXIMO]
+		n.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		n.add_theme_color_override("font_color", Tema.SUAVE)
+		cabecera.add_child(n)
+
+		var que := Label.new()
+		que.text = str(QUE_HACE_INSTALACION[categoria])
+		que.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		que.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		que.add_theme_color_override("font_color", Tema.SUAVE)
+		izq.add_child(que)
+
+		var salto := Label.new()
+		if al_maximo:
+			salto.text = "Ahora: %s   ·   ya esta al maximo" % _efecto_instalacion(categoria, nivel)
+			salto.add_theme_color_override("font_color", Tema.VERDE)
 		else:
-			var costo := Instalaciones.costo_siguiente_nivel(nivel)
-			label.text = "%-45s  nivel %d/%d — subir a %d cuesta %s" % [
-				NOMBRES_INSTALACIONES[categoria], nivel, Instalaciones.NIVEL_MAXIMO, nivel + 1, Economia.formato_dinero(costo)
-			]
-		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		fila.add_child(label)
+			salto.text = "Ahora %s   →   con nivel %d %s" % [
+				_efecto_instalacion(categoria, nivel), nivel + 1,
+				_efecto_instalacion(categoria, nivel + 1)]
+			salto.add_theme_color_override("font_color", Tema.CELESTE)
+		salto.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		salto.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		izq.add_child(salto)
+
+		var der := VBoxContainer.new()
+		der.custom_minimum_size = Vector2(230, 0)
+		der.add_theme_constant_override("separation", 3)
+		fila.add_child(der)
 
 		var btn := Button.new()
-		btn.text = "Mejorar"
-		btn.disabled = nivel >= Instalaciones.NIVEL_MAXIMO
-		btn.pressed.connect(func(): _on_mejorar_instalacion(categoria))
-		fila.add_child(btn)
+		btn.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+		var cat: String = categoria
+		btn.pressed.connect(func(): _on_mejorar_instalacion(cat))
+		if al_maximo:
+			btn.text = "Al maximo"
+			btn.disabled = true
+		else:
+			btn.text = "Mejorar por %s" % Economia.formato_dinero(costo)
+			btn.disabled = disponible < costo
+		der.add_child(btn)
 
-		contenedor_instalaciones_botones.add_child(fila)
-
-	_refrescar_investigadores_instalaciones(equipo)
-	_refrescar_foco_individual(equipo)
+		# Un boton apagado sin motivo es lo que hacia que no se entendiera
+		# como mejorar: ahora dice cuanto falta.
+		if not al_maximo and disponible < costo:
+			var falta := Label.new()
+			falta.text = "te faltan %s" % Economia.formato_dinero(costo - disponible)
+			falta.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			falta.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+			falta.add_theme_color_override("font_color", Tema.ROJO)
+			der.add_child(falta)
 
 
 ## §9.4: la red de investigadores vive en Instalaciones porque es lo que
@@ -2728,53 +2887,105 @@ func _refrescar_instalaciones() -> void:
 ## con el estadio y la cantera por la misma plata. A quien estas mirando
 ## con ella se ve en Mercado > Investigaciones.
 ##
-## No se MEJORAN como el resto de las instalaciones: se contratan y se
-## despiden. Despedir sirve para liberar un slot y poner a uno mejor.
+## No se MEJORAN como el resto: se contratan y se despiden. Despedir sirve
+## para liberar un slot y poner a uno mejor.
 func _refrescar_investigadores_instalaciones(equipo: Team) -> void:
-	var titulo := Label.new()
-	titulo.text = "\nInvestigadores (%d de %d slots) — las estrellas son VELOCIDAD, no calidad: el informe siempre termina completo" % [
+	var libres: int = Investigadores.SLOTS - equipo.investigadores.size()
+	var explica := Label.new()
+	explica.text = "Tenes %d de %d slots ocupados. Las estrellas son VELOCIDAD, no calidad: el informe siempre termina completo, uno de 10 estrellas solo tarda menos. A quien estan investigando se ve en Mercado › Investigaciones." % [
 		equipo.investigadores.size(), Investigadores.SLOTS]
-	titulo.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	contenedor_instalaciones_botones.add_child(titulo)
+	explica.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	explica.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	explica.add_theme_color_override("font_color", Tema.SUAVE)
+	contenedor_instalaciones_botones.add_child(explica)
 
+	contenedor_instalaciones_botones.add_child(Tema.etiqueta_seccion("En plantilla"))
+	if equipo.investigadores.is_empty():
+		contenedor_instalaciones_botones.add_child(_tarjeta_vacia(
+			"No tenes ningun investigador. Sin al menos uno no podes averiguar nada de los jugadores de otros clubes."))
 	for inv in equipo.investigadores:
-		var fila := HBoxContainer.new()
-		var estado := "libre"
-		if int(inv["objetivo"]) != -1:
-			var quien := str(inv["nombre_objetivo"])
-			estado = "ocupado con %s" % (quien if quien != "" else str(inv["club_objetivo"]))
-		var l := _etiqueta("%-14s  informe en %3d dias  —  %s" % [
-			"★".repeat(int(inv["estrellas"])),
-			int(Investigadores.dias_de_informe(int(inv["estrellas"]))), estado])
-		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		fila.add_child(l)
+		var ocupado: bool = int(inv["objetivo"]) != -1
+		var quien := str(inv["nombre_objetivo"])
+		var estado := "libre, esperando orden"
+		if ocupado:
+			estado = "investigando a %s" % (quien if quien != "" else str(inv["club_objetivo"]))
 		var id_inv := int(inv["id"])
-		var btn := Button.new()
-		btn.text = "Despedir"
-		btn.pressed.connect(func():
-			Investigadores.despedir(equipo, id_inv)
-			label_instalaciones_estado.text = "Investigador despedido: se libero un slot."
-			_refrescar_instalaciones()
-		)
-		fila.add_child(btn)
-		contenedor_instalaciones_botones.add_child(fila)
+		contenedor_instalaciones_botones.add_child(_fila_investigador(
+			int(inv["estrellas"]), estado, ocupado, "Despedir",
+			Tema.VERDE if ocupado else Tema.SUAVE,
+			func():
+				Investigadores.despedir(equipo, id_inv)
+				label_instalaciones_estado.text = "Investigador despedido: se libero un slot."
+				_refrescar_instalaciones()
+		))
 
-	var hay_slot: bool = equipo.investigadores.size() < Investigadores.SLOTS
+	contenedor_instalaciones_botones.add_child(Tema.etiqueta_seccion(
+		"Contratar  ·  %d slot%s libre%s" % [libres, "" if libres == 1 else "s",
+		"" if libres == 1 else "s"]))
+	var disponible: float = equipo.caja.get("mejoras", 0.0)
 	for estrellas in range(Investigadores.ESTRELLAS_MIN, Investigadores.ESTRELLAS_MAX + 1):
 		var costo := Investigadores.costo(estrellas)
-		var fila := HBoxContainer.new()
-		var l := _etiqueta("%-14s  informe en %3d dias  —  contratar por %s" % [
-			"★".repeat(estrellas), int(Investigadores.dias_de_informe(estrellas)),
-			Economia.formato_dinero(costo)])
-		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		fila.add_child(l)
-		var btn := Button.new()
-		btn.text = "Contratar"
-		btn.disabled = not hay_slot or equipo.caja["mejoras"] < costo
+		var motivo := ""
+		if libres <= 0:
+			motivo = "sin slots libres"
+		elif disponible < costo:
+			motivo = "te faltan %s" % Economia.formato_dinero(costo - disponible)
 		var e := estrellas
-		btn.pressed.connect(func(): _on_contratar_investigador(e))
-		fila.add_child(btn)
-		contenedor_instalaciones_botones.add_child(fila)
+		contenedor_instalaciones_botones.add_child(_fila_investigador(
+			estrellas, "cuesta %s" % Economia.formato_dinero(costo), false,
+			"Contratar", Tema.SUAVE, func(): _on_contratar_investigador(e), motivo))
+
+
+## Una fila de investigador: estrellas, cuanto tarda el informe, en que
+## anda, y un boton. La comparten la plantilla y la lista de contratables.
+func _fila_investigador(estrellas: int, estado: String, activo: bool,
+		texto_boton: String, color_estado: Color, al_apretar: Callable,
+		motivo_apagado: String = "") -> Control:
+	var tarjeta := Componentes.tarjeta(Tema.VERDE if activo else Color.TRANSPARENT)
+	var fila := HBoxContainer.new()
+	tarjeta.add_child(fila)
+
+	var l_estrellas := Label.new()
+	l_estrellas.text = "★".repeat(estrellas)
+	l_estrellas.custom_minimum_size = Vector2(190, 0)
+	l_estrellas.clip_text = true
+	l_estrellas.add_theme_color_override("font_color", Tema.AMBAR)
+	fila.add_child(l_estrellas)
+
+	var dias := Label.new()
+	dias.text = "informe en %d dias" % int(Investigadores.dias_de_informe(estrellas))
+	dias.custom_minimum_size = Vector2(200, 0)
+	dias.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	dias.add_theme_color_override("font_color", Tema.TEXTO)
+	fila.add_child(dias)
+
+	var l_estado := Label.new()
+	l_estado.text = estado
+	l_estado.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l_estado.clip_text = true
+	l_estado.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	l_estado.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	l_estado.add_theme_color_override("font_color", color_estado)
+	fila.add_child(l_estado)
+
+	var der := VBoxContainer.new()
+	der.custom_minimum_size = Vector2(180, 0)
+	der.add_theme_constant_override("separation", 2)
+	fila.add_child(der)
+	var btn := Button.new()
+	btn.text = texto_boton
+	btn.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	btn.disabled = motivo_apagado != ""
+	btn.pressed.connect(al_apretar)
+	der.add_child(btn)
+	if motivo_apagado != "":
+		var l := Label.new()
+		l.text = motivo_apagado
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+		l.add_theme_color_override("font_color", Tema.ROJO)
+		der.add_child(l)
+	return tarjeta
 
 
 func _on_contratar_investigador(estrellas: int) -> void:
@@ -2795,13 +3006,24 @@ func _on_contratar_investigador(estrellas: int) -> void:
 ##
 ## Cuánto más rápido depende de si el atributo es propio del puesto (ver
 ## Progresion.multiplicador_foco), así que el multiplicador se muestra
-## por jugador: es la información con la que se decide a quién enfocar.
+## ANTES de asignar y no después: es la información con la que se decide.
 func _refrescar_foco_individual(equipo: Team) -> void:
-	var titulo_foco := Label.new()
-	titulo_foco.text = "\nFoco individual (%d/%d cupos usados) — el atributo elegido crece x2 esta temporada. 2 temporadas seguidas en el mismo atributo (con ese atributo en 65+) puede hacerle aprender una habilidad de bronce." % [
-		equipo.foco_individual.size(), Entrenamiento.limite(equipo)
-	]
-	contenedor_instalaciones_botones.add_child(titulo_foco)
+	var limite := Entrenamiento.limite(equipo)
+	var usados := equipo.foco_individual.size()
+
+	var explica := Label.new()
+	explica.text = "El atributo elegido crece mucho mas rapido esta temporada. Cuanto mas depende del PUESTO: enfocar el remate de un 9 rinde mas que el mismo remate en un central. Dos temporadas seguidas en el mismo atributo, con ese atributo en 65 o mas, puede hacerle aprender una habilidad de bronce. Los cupos los da la instalacion de Entrenamiento, con tope de %d." % Instalaciones.MAXIMO_FOCO_INDIVIDUAL
+	explica.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	explica.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	explica.add_theme_color_override("font_color", Tema.SUAVE)
+	contenedor_instalaciones_botones.add_child(explica)
+
+	contenedor_instalaciones_botones.add_child(Tema.etiqueta_seccion(
+		"Cupos usados: %d de %d" % [usados, limite]))
+
+	if equipo.foco_individual.is_empty():
+		contenedor_instalaciones_botones.add_child(_tarjeta_vacia(
+			"No tenes a nadie en foco. Es plata gratis que estas dejando pasar: los cupos no se acumulan de una temporada a la otra."))
 
 	for jugador_id in equipo.foco_individual.keys():
 		var jugador := _buscar_jugador_por_id(equipo, jugador_id)
@@ -2809,25 +3031,71 @@ func _refrescar_foco_individual(equipo: Team) -> void:
 			continue
 		var atributo: String = equipo.foco_individual[jugador_id]
 		var racha: int = jugador.get("foco_temporadas_consecutivas", 0)
+		var mult := Progresion.multiplicador_foco(str(jugador["posicion"]), atributo)
+		var valor: int = int(jugador["atributos"].get(atributo, 0))
+
+		var tarjeta := Componentes.tarjeta(Tema.AMBAR)
+		contenedor_instalaciones_botones.add_child(tarjeta)
 		var fila := HBoxContainer.new()
-		var label := Label.new()
-		label.text = "%-22s %-5s foco: %-10s x%.2f (racha: %d temporada%s)" % [
-			_nombre_jugador(jugador), jugador["posicion"], atributo,
-			Progresion.multiplicador_foco(jugador["posicion"], atributo),
-			racha, "" if racha == 1 else "s"
-		]
-		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		fila.add_child(label)
-		var btn_quitar := Button.new()
-		btn_quitar.text = "Quitar"
-		btn_quitar.pressed.connect(func():
-			Entrenamiento.quitar(equipo, jugador_id)
+		tarjeta.add_child(fila)
+
+		var caja_pos := CenterContainer.new()
+		caja_pos.custom_minimum_size = Vector2(56, 0)
+		caja_pos.add_child(Componentes.chip(str(jugador["posicion"]), Color("#2f4a3c")))
+		fila.add_child(caja_pos)
+
+		var izq := VBoxContainer.new()
+		izq.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		izq.add_theme_constant_override("separation", 2)
+		fila.add_child(izq)
+		var nombre := Label.new()
+		nombre.text = _nombre_jugador(jugador)
+		nombre.clip_text = true
+		nombre.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		izq.add_child(nombre)
+		var sub := Label.new()
+		# La racha y el valor del atributo juntos: son las dos condiciones
+		# de la habilidad de bronce y por separado no dicen nada.
+		var falta := ""
+		if valor < 65:
+			falta = "   ·   le faltan %d puntos para poder aprender la habilidad" % (65 - valor)
+		elif racha >= 1:
+			falta = "   ·   otra temporada mas y puede aprender la habilidad"
+		sub.text = "%s %d   ·   racha de %d temporada%s%s" % [
+			atributo.replace("_", " "), valor, racha, "" if racha == 1 else "s", falta]
+		sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		sub.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		sub.add_theme_color_override("font_color", Tema.SUAVE)
+		izq.add_child(sub)
+
+		var caja_mult := VBoxContainer.new()
+		caja_mult.custom_minimum_size = Vector2(120, 0)
+		caja_mult.add_theme_constant_override("separation", 0)
+		fila.add_child(caja_mult)
+		caja_mult.add_child(Tema.etiqueta_seccion("Crece"))
+		var l_mult := Label.new()
+		l_mult.text = "x%.2f" % mult
+		Tema.numero(l_mult, 22, _color_de_multiplicador(mult))
+		caja_mult.add_child(l_mult)
+
+		var id_j := int(jugador_id)
+		var btn := Button.new()
+		btn.text = "Quitar"
+		btn.custom_minimum_size = Vector2(130, Tema.ALTO_TACTIL)
+		btn.pressed.connect(func():
+			Entrenamiento.quitar(equipo, id_j)
+			label_instalaciones_estado.text = "Foco liberado: quedo un cupo."
 			_refrescar_instalaciones()
 		)
-		fila.add_child(btn_quitar)
-		contenedor_instalaciones_botones.add_child(fila)
+		fila.add_child(btn)
 
-	if equipo.foco_individual.size() >= Entrenamiento.limite(equipo):
+	if usados >= limite:
+		var tope := Label.new()
+		tope.text = "No te quedan cupos. Quitale el foco a alguien, o subi la instalacion de Entrenamiento (hasta %d cupos)." % Instalaciones.MAXIMO_FOCO_INDIVIDUAL
+		tope.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		tope.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		tope.add_theme_color_override("font_color", Tema.SUAVE)
+		contenedor_instalaciones_botones.add_child(tope)
 		return
 
 	var elegibles: Array = equipo.jugadores + equipo.banco + equipo.cantera
@@ -2835,27 +3103,74 @@ func _refrescar_foco_individual(equipo: Team) -> void:
 	if elegibles.is_empty():
 		return
 
+	contenedor_instalaciones_botones.add_child(Tema.etiqueta_seccion("Asignar un foco nuevo"))
+	var tarjeta_nueva := Componentes.tarjeta()
+	contenedor_instalaciones_botones.add_child(tarjeta_nueva)
+	var caja := VBoxContainer.new()
+	tarjeta_nueva.add_child(caja)
 	var fila_nueva := HBoxContainer.new()
+	caja.add_child(fila_nueva)
+
 	var option_jugador := OptionButton.new()
+	option_jugador.custom_minimum_size = Vector2(340, Tema.ALTO_TACTIL)
 	for j in elegibles:
-		option_jugador.add_item("%s (%s, %d años)" % [_nombre_jugador(j), j["posicion"], j["edad"]])
+		option_jugador.add_item("%s  (%s, %d años)" % [
+			_nombre_jugador(j), j["posicion"], int(j["edad"])])
 	fila_nueva.add_child(option_jugador)
 
 	var option_atributo := OptionButton.new()
+	option_atributo.custom_minimum_size = Vector2(240, Tema.ALTO_TACTIL)
 	for attr in PlayerGenerator.get_all_attributes():
-		option_atributo.add_item(attr)
+		option_atributo.add_item(str(attr).replace("_", " "))
 	fila_nueva.add_child(option_atributo)
+
+	# La vista previa es el punto de la pantalla: el multiplicador depende
+	# del puesto, asi que hay que poder verlo ANTES de gastar el cupo.
+	var previa := Label.new()
+	previa.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	previa.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	previa.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	caja.add_child(previa)
+
+	var actualizar_previa := func():
+		var j: Dictionary = elegibles[option_jugador.selected]
+		var attr: String = str(PlayerGenerator.get_all_attributes()[option_atributo.selected])
+		var m := Progresion.multiplicador_foco(str(j["posicion"]), attr)
+		var v: int = int(j["atributos"].get(attr, 0))
+		previa.text = "%s tiene %s en %d y de %s crece x%.2f con el foco puesto ahi." % [
+			_nombre_jugador(j), attr.replace("_", " "), v, j["posicion"], m]
+		previa.add_theme_color_override("font_color", _color_de_multiplicador(m))
+	option_jugador.item_selected.connect(func(_i): actualizar_previa.call())
+	option_atributo.item_selected.connect(func(_i): actualizar_previa.call())
+	actualizar_previa.call()
 
 	var btn_asignar := Button.new()
 	btn_asignar.text = "Asignar foco"
+	btn_asignar.custom_minimum_size = Vector2(180, Tema.ALTO_TACTIL)
+	Tema.primario(btn_asignar)
 	btn_asignar.pressed.connect(func():
 		var jugador_elegido: Dictionary = elegibles[option_jugador.selected]
-		var atributo_elegido := option_atributo.get_item_text(option_atributo.selected)
+		var atributo_elegido: String = str(
+			PlayerGenerator.get_all_attributes()[option_atributo.selected])
 		Entrenamiento.asignar(equipo, jugador_elegido["id"], atributo_elegido)
+		label_instalaciones_estado.text = "%s entrena %s esta temporada." % [
+			_nombre_jugador(jugador_elegido), atributo_elegido.replace("_", " ")]
 		_refrescar_instalaciones()
 	)
 	fila_nueva.add_child(btn_asignar)
-	contenedor_instalaciones_botones.add_child(fila_nueva)
+
+
+## Verde si el atributo es de los que rinden en ese puesto, rojo si el
+## foco casi no sirve ahi. Es el unico dato que separa una buena decision
+## de una mala en esta pantalla.
+func _color_de_multiplicador(mult: float) -> Color:
+	if mult >= 2.4:
+		return Tema.VERDE
+	if mult >= 1.8:
+		return Tema.VERDE_TIBIO
+	if mult >= 1.4:
+		return Tema.AMBAR
+	return Tema.ROJO
 
 
 func _buscar_jugador_por_id(equipo: Team, jugador_id: int) -> Dictionary:
