@@ -35,8 +35,7 @@ var contenedor_tabla: VBoxContainer
 var _fila_propia_tabla: Control = null
 var label_tabla_leyenda: Label
 var label_resultado: Label
-var lista_log: RichTextLabel
-var lista_estadisticas: RichTextLabel
+var contenedor_ultimo_partido: VBoxContainer
 var boton_jugar_fecha: Button
 var boton_ver_animado: Button
 var boton_simular_temporada: Button
@@ -1399,17 +1398,17 @@ func _construir_panel_partido(padre: Control) -> void:
 	label_resultado = Label.new()
 	label_resultado.text = "Todavia no jugaste ninguna fecha."
 	label_resultado.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label_resultado.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	label_resultado.add_theme_color_override("font_color", Tema.SUAVE)
 	dentro.add_child(label_resultado)
 
-	lista_estadisticas = RichTextLabel.new()
-	lista_estadisticas.fit_content = true
-	lista_estadisticas.custom_minimum_size = Vector2(0, 120)
-	dentro.add_child(lista_estadisticas)
-
-	lista_log = RichTextLabel.new()
-	lista_log.fit_content = true
-	lista_log.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	dentro.add_child(lista_log)
+	# El resumen del ultimo partido: marcador, comparacion y linea de
+	# tiempo. Era lo ultimo que quedaba en texto monoespaciado, con las
+	# columnas alineadas a fuerza de espacios y el relato como un parrafo.
+	contenedor_ultimo_partido = VBoxContainer.new()
+	contenedor_ultimo_partido.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	contenedor_ultimo_partido.add_theme_constant_override("separation", 10)
+	dentro.add_child(contenedor_ultimo_partido)
 
 
 ## Reproduce el último partido propio con la vista de /match: proyección
@@ -4493,24 +4492,212 @@ func _on_cargar_partida() -> void:
 ## había armado con el texto inicial y se quedaba diciendo "todavía no
 ## jugaste ninguna fecha" con una temporada entera encima.
 func _refrescar_ultimo_partido() -> void:
+	if contenedor_ultimo_partido == null:
+		return
+	for hijo in contenedor_ultimo_partido.get_children():
+		hijo.queue_free()
+
 	var r: Dictionary = GameState.ultimo_resultado
 	if r.is_empty():
 		label_resultado.text = "Todavia no jugaste ninguna fecha."
-		lista_log.text = ""
-		lista_estadisticas.text = ""
 		_refrescar_boton_animado()
 		return
-	label_resultado.text = "Ultimo partido:  %s  %d - %d  %s" % [
-		r["local"], r["gl"], r["gv"], r["visitante"]
-	]
-	var texto_log := ""
-	for entry in GameState.ultimo_log:
-		if entry.find("GOL") != -1 or entry.find("TARJETA") != -1 or entry.find("CAMBIO") != -1:
-			texto_log += entry + "
-"
-	lista_log.text = texto_log
-	lista_estadisticas.text = _texto_estadisticas(r)
+
+	# El contexto del partido va como subtitulo y no mezclado con el
+	# marcador: clima y arbitro se leen una vez, el resultado se mira.
+	var contexto := ""
+	if not GameState.ultimo_log.is_empty():
+		var clima: String = GameState.equipo_jugador.clima_partido
+		contexto = "Clima %s  ·  árbitro %s" % [
+			clima, GameState.equipo_jugador.arbitro_partido] if clima != "" \
+			else "Árbitro %s" % GameState.equipo_jugador.arbitro_partido
+	label_resultado.text = contexto
+
+	contenedor_ultimo_partido.add_child(_tarjeta_marcador(r))
+	contenedor_ultimo_partido.add_child(Tema.etiqueta_seccion("Cómo se jugó"))
+	for fila in _filas_de_estadisticas(r):
+		contenedor_ultimo_partido.add_child(fila)
+
+	var hitos := _hitos_del_partido(r)
+	contenedor_ultimo_partido.add_child(Tema.etiqueta_seccion(
+		"Lo que paso" if not hitos.is_empty() else "No paso nada para contar"))
+	for h in hitos:
+		contenedor_ultimo_partido.add_child(h)
 	_refrescar_boton_animado()
+
+
+## El marcador, grande, con tu equipo marcado en ambar.
+func _tarjeta_marcador(r: Dictionary) -> Control:
+	var tarjeta := Componentes.tarjeta(_color_del_resultado(r))
+	var caja := VBoxContainer.new()
+	caja.add_theme_constant_override("separation", 2)
+	tarjeta.add_child(caja)
+
+	var fecha := Label.new()
+	fecha.text = "Fecha %d de %d" % [
+		GameState.fecha_actual, GameState.liga_jugador().fixture.size()]
+	fecha.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+	fecha.add_theme_color_override("font_color", Tema.SUAVE)
+	caja.add_child(fecha)
+
+	var fila := HBoxContainer.new()
+	caja.add_child(fila)
+	var mio: String = GameState.equipo_jugador.nombre
+	var l_local := Label.new()
+	l_local.text = str(r["local"])
+	l_local.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l_local.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	l_local.clip_text = true
+	Tema.numero(l_local, 22, Tema.AMBAR if str(r["local"]) == mio else Tema.TEXTO)
+	fila.add_child(l_local)
+
+	var marcador := Label.new()
+	marcador.text = "  %d - %d  " % [int(r["gl"]), int(r["gv"])]
+	Tema.numero(marcador, 30)
+	fila.add_child(marcador)
+
+	var l_visita := Label.new()
+	l_visita.text = str(r["visitante"])
+	l_visita.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l_visita.clip_text = true
+	Tema.numero(l_visita, 22, Tema.AMBAR if str(r["visitante"]) == mio else Tema.TEXTO)
+	fila.add_child(l_visita)
+	return tarjeta
+
+
+## Verde si ganaste, rojo si perdiste. El borde de la tarjeta dice el
+## resultado antes de que leas los numeros.
+func _color_del_resultado(r: Dictionary) -> Color:
+	var mio: String = GameState.equipo_jugador.nombre
+	var propios: int = int(r["gl"]) if str(r["local"]) == mio else int(r["gv"])
+	var ajenos: int = int(r["gv"]) if str(r["local"]) == mio else int(r["gl"])
+	if propios > ajenos:
+		return Tema.VERDE
+	if propios < ajenos:
+		return Tema.ROJO
+	return Tema.BORDE
+
+
+## Las cuatro comparaciones con barra. Las comparten esta pantalla y el
+## cuadro de fin de partido: son la misma informacion y no tenian por que
+## verse distintas.
+func _filas_de_estadisticas(r: Dictionary) -> Array:
+	var stats := EstadisticasPartido.calcular(
+		GameState.ultimos_eventos, str(r["local"]), str(r["visitante"]))
+	var loc: Dictionary = stats[str(r["local"])]
+	var vis: Dictionary = stats[str(r["visitante"])]
+	return [
+		_fila_estadistica("Posesión", "%.0f%%" % loc["posesion_pct"],
+			"%.0f%%" % vis["posesion_pct"],
+			float(loc["posesion_pct"]), float(vis["posesion_pct"])),
+		_fila_estadistica("Tiros", str(loc["tiros"]), str(vis["tiros"]),
+			float(loc["tiros"]), float(vis["tiros"])),
+		_fila_estadistica("Tiros al arco", str(loc["tiros_al_arco"]),
+			str(vis["tiros_al_arco"]),
+			float(loc["tiros_al_arco"]), float(vis["tiros_al_arco"])),
+		_fila_estadistica("Pases completados",
+			"%d/%d" % [loc["pases_completados"], loc["pases_intentados"]],
+			"%d/%d" % [vis["pases_completados"], vis["pases_intentados"]],
+			float(loc["pases_completados"]), float(vis["pases_completados"])),
+	]
+
+
+## La linea de tiempo: goles, tarjetas y cambios, en orden de minuto.
+##
+## Se arma con los eventos ESTRUCTURADOS y con goles_log, no filtrando el
+## relato por texto. Antes se buscaba "GOL" o "TARJETA" adentro de la
+## linea de log, que funciona hasta que alguien cambia una palabra.
+func _hitos_del_partido(r: Dictionary) -> Array:
+	var hitos := []
+	for gol in r.get("goles_log", []):
+		hitos.append({
+			"minuto": int(gol.get("minuto", 0)), "tipo": "gol",
+			"equipo": str(gol.get("equipo", "")),
+			"quien": _nombre_de_id(r, int(gol.get("jugador_id", -1))),
+			"detalle": "",
+		})
+	for ev in GameState.ultimos_eventos:
+		var tipo := str(ev.get("tipo", ""))
+		if tipo != "tarjeta" and tipo != "cambio":
+			continue
+		hitos.append({
+			"minuto": int(ev.get("minuto", 0)), "tipo": tipo,
+			"equipo": str(ev.get("equipo", "")),
+			"quien": str(ev.get("jugador_posicion", "")),
+			"detalle": str(ev.get("resultado", "")),
+		})
+	hitos.sort_custom(func(a, b): return int(a["minuto"]) < int(b["minuto"]))
+
+	var filas := []
+	for i in range(hitos.size()):
+		filas.append(_fila_hito(hitos[i], i % 2 == 0))
+	return filas
+
+
+func _fila_hito(h: Dictionary, par: bool) -> Control:
+	var fila := Componentes.fila(par)
+	var dentro := Componentes.contenido(fila)
+
+	var minuto := Componentes.celda_numero(
+		"%d'" % int(h["minuto"]), 54, Tema.SUAVE, HORIZONTAL_ALIGNMENT_RIGHT)
+	dentro.add_child(minuto)
+
+	var texto := ""
+	var color := Tema.TEXTO
+	match str(h["tipo"]):
+		"gol":
+			texto = "GOL de %s" % str(h["quien"])
+			color = Tema.VERDE
+		"tarjeta":
+			var d := str(h["detalle"])
+			texto = "Amarilla a %s" % str(h["quien"])
+			color = Tema.AMBAR
+			if d.begins_with("roja"):
+				texto = "ROJA a %s" % str(h["quien"])
+				if d == "roja_doble_amarilla":
+					texto += " (doble amarilla)"
+				color = Tema.ROJO
+		"cambio":
+			texto = "Cambio: sale %s (%s)" % [str(h["quien"]), str(h["detalle"])]
+			color = Tema.SUAVE
+
+	var caja_pos := CenterContainer.new()
+	caja_pos.custom_minimum_size = Vector2(16, 0)
+	var punto := Panel.new()
+	punto.custom_minimum_size = Vector2(8, 8)
+	var e := StyleBoxFlat.new()
+	e.bg_color = color
+	e.corner_radius_top_left = 4
+	e.corner_radius_top_right = 4
+	e.corner_radius_bottom_left = 4
+	e.corner_radius_bottom_right = 4
+	punto.add_theme_stylebox_override("panel", e)
+	caja_pos.add_child(punto)
+	dentro.add_child(caja_pos)
+
+	var l := Label.new()
+	l.text = texto
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l.clip_text = true
+	l.add_theme_color_override("font_color", color)
+	dentro.add_child(l)
+
+	var club := Componentes.celda(str(h["equipo"]), 180, Tema.SUAVE)
+	club.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	dentro.add_child(club)
+	return fila
+
+
+## De id de jugador a nombre, buscando en los dos planteles del partido.
+func _nombre_de_id(r: Dictionary, id: int) -> String:
+	for nombre in [str(r.get("local", "")), str(r.get("visitante", ""))]:
+		var equipo := _equipo_de_la_liga(nombre)
+		if equipo == null:
+			continue
+		var j := _buscar_jugador_por_id(equipo, id)
+		if not j.is_empty():
+			return _nombre_jugador(j)
+	return "?"
 
 
 ## La repeticion necesita los FOTOGRAMAS, que no se guardan por tamano, no
@@ -4577,31 +4764,9 @@ func _on_jugar_fecha() -> void:
 	var temporada_antes := GameState.temporada_actual
 	GameState.jugar_siguiente_fecha()
 
-	var r: Dictionary = GameState.ultimo_resultado
-	if r.size() > 0:
-		label_resultado.text = "Fecha %d/%d:  %s  %d - %d  %s" % [
-			GameState.fecha_actual, GameState.liga_jugador().fixture.size(),
-			r["local"], r["gl"], r["gv"], r["visitante"]
-		]
-		# GameState.ultimo_log vacio = fue un forfeit (Liga._resolver_forfeit
-		# no llama a MatchEngine.simular()), asi que equipo_jugador.clima_
-		# partido/arbitro_partido quedarian con lo que haya seteado el
-		# ULTIMO partido real jugado — mostrarlo seria mostrar informacion
-		# vieja de otra fecha.
-		if not GameState.ultimo_log.is_empty():
-			var clima: String = GameState.equipo_jugador.clima_partido
-			var clima_texto := "  (Clima: %s, árbitro %s)" % [clima, GameState.equipo_jugador.arbitro_partido] if clima != "" else "  (árbitro %s)" % GameState.equipo_jugador.arbitro_partido
-			label_resultado.text += clima_texto
+	_refrescar_ultimo_partido()
 	if GameState.temporada_actual != temporada_antes:
 		label_resultado.text += _texto_cierre_temporada()
-
-	var texto_log := ""
-	for entry in GameState.ultimo_log:
-		if entry.find("GOL") != -1 or entry.find("TARJETA") != -1 or entry.find("CAMBIO") != -1:
-			texto_log += entry + "\n"
-	lista_log.text = texto_log
-	_refrescar_boton_animado()
-	lista_estadisticas.text = _texto_estadisticas(r) if r.size() > 0 else ""
 
 	_refrescar_tabla()
 	_refrescar_plantel()
@@ -4617,28 +4782,6 @@ func _on_jugar_fecha() -> void:
 		_mostrar_partido_animado()
 
 
-## Resumen de estadisticas post-partido (posesion/tiros/pases) — pensado
-## para que efectos como el choque de estilos (§8.6.3) o el rasgo del DT
-## (§8.6.4) se puedan VER, ya que hoy solo cambian el % de exito de cada
-## duelo y eso queda invisible si lo unico que se muestra es el marcador.
-func _texto_estadisticas(r: Dictionary) -> String:
-	var stats := EstadisticasPartido.calcular(GameState.ultimos_eventos, r["local"], r["visitante"])
-	var loc: Dictionary = stats[r["local"]]
-	var vis: Dictionary = stats[r["visitante"]]
-	var texto := "%-24s %10s %10s\n" % ["", r["local"], r["visitante"]]
-	texto += "%-24s %9.0f%% %9.0f%%\n" % ["Posesion", loc["posesion_pct"], vis["posesion_pct"]]
-	texto += "%-24s %10d %10d\n" % ["Tiros", loc["tiros"], vis["tiros"]]
-	texto += "%-24s %10d %10d\n" % ["Tiros al arco", loc["tiros_al_arco"], vis["tiros_al_arco"]]
-	texto += "%-24s %10s %10s\n" % [
-		"Pases (completados)",
-		"%d/%d" % [loc["pases_completados"], loc["pases_intentados"]],
-		"%d/%d" % [vis["pases_completados"], vis["pases_intentados"]],
-	]
-	return texto
-
-
-## [debug] Simula todas las fechas que queden de la temporada de una,
-## para no tener que clickear "jugar fecha" muchas veces al probar.
 func _on_simular_temporada() -> void:
 	if GameState.juego_terminado:
 		_refrescar_objetivo()
@@ -4674,9 +4817,7 @@ func _on_simular_temporada() -> void:
 	GameState.ultimo_resultado = {}
 	GameState.ultimo_log = []
 	GameState.ultimos_eventos = []
-	lista_log.text = ""
-	lista_estadisticas.text = ""
-	_refrescar_boton_animado()
+	_refrescar_ultimo_partido()
 
 	_refrescar_tabla()
 	_refrescar_plantel()
