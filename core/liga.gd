@@ -280,6 +280,11 @@ func _actualizar_estado_jugadores(home: Team, away: Team, r: Dictionary) -> void
 	Fans.actualizar_por_resultado(away, r["goles_visitante"], r["goles_local"])
 	_actualizar_rachas_titular_banco(home)
 	_actualizar_rachas_titular_banco(away)
+	# §7.4.5: la tactica se asimila JUGANDOLA. Va aca y no en el motor
+	# porque tiene que correr una sola vez por partido, y el motor
+	# espacial y el abstracto entran los dos por este mismo camino.
+	Familiaridad.despues_de_partido(home)
+	Familiaridad.despues_de_partido(away)
 	# §7.3: el uso del partido se acumula en el jugador y lo consume
 	# Progresion al cerrar la temporada. Los dos motores entregan el mismo
 	# shape, así que esto no sabe cuál se usó — y no tiene por qué.

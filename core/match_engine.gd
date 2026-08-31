@@ -52,7 +52,7 @@ static func _elegir(jugadores: Array, rng: RandomNumberGenerator) -> Dictionary:
 
 
 ## §8.5: bloque A (forma del día, ver Team.forma_partido), bloque B
-## (equipo/racha/armonía/capitán), bloque C (local + choque de estilos
+## (equipo/racha/armonía/capitán/familiaridad táctica §7.4.5), bloque C (local + choque de estilos
 ## §8.6.3 + rasgo del DT según el marcador §8.6.4 + clima §8.4#18/20 +
 ## estado de la cancha §8.4#21 + árbitro casero §8.4#23 + público §8.4#22
 ## + varianza de clásico §8.4#14 + objetivo de directiva en riesgo
@@ -65,6 +65,10 @@ static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atri
 	var bloque_b: float = equipo.armonia + clamp(float(equipo.racha), 0.0, 10.0)
 	if jugador_id == equipo.capitan_id:
 		bloque_b += 2.0
+	# §8.4#11 / §7.4.5: la tactica que estas usando, de -8 recien
+	# estrenada a +5 dominada. Va en bloque B porque es del EQUIPO, no de
+	# este jugador ni del entorno.
+	bloque_b += Familiaridad.modificador(equipo)
 	var bloque_c := 5.0 if equipo.local else 0.0
 	bloque_c += Estilos.modificador(equipo.estilo, rival.estilo)
 	bloque_c += DT.modificador_partido(equipo, rival, atributo, minuto)

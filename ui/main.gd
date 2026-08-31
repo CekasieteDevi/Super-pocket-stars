@@ -23,6 +23,8 @@ var option_formacion: OptionButton
 var option_carga: OptionButton
 var option_foco: OptionButton
 var label_foco_efecto: Label
+var barra_familiaridad: ProgressBar
+var label_familiaridad: Label
 var label_carga_efecto: Label
 var contenedor_formacion: VBoxContainer
 var cancha_formacion: CanchaFormacion
@@ -616,6 +618,31 @@ func _construir_panel_formacion(padre: Control) -> void:
 	label_foco_efecto.visible = false
 	panel.add_child(label_foco_efecto)
 
+	# §7.4.5: cuanto conoce el equipo la tactica puesta. Va PEGADO a los
+	# desplegables que la cambian: es el dato con el que se decide si el
+	# cambio conviene, y verlo despues de cambiar llega tarde.
+	var caja_fam := HBoxContainer.new()
+	caja_fam.add_theme_constant_override("separation", 10)
+	panel.add_child(caja_fam)
+	var titulo_fam := Tema.etiqueta_seccion("Familiaridad tactica")
+	titulo_fam.custom_minimum_size = Vector2(200, 0)
+	caja_fam.add_child(titulo_fam)
+	barra_familiaridad = ProgressBar.new()
+	barra_familiaridad.min_value = 0.0
+	barra_familiaridad.max_value = 100.0
+	barra_familiaridad.show_percentage = false
+	barra_familiaridad.custom_minimum_size = Vector2(240, 8)
+	barra_familiaridad.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var fondo_fam := StyleBoxFlat.new()
+	fondo_fam.bg_color = Color("#2a3a33")
+	barra_familiaridad.add_theme_stylebox_override("background", fondo_fam)
+	caja_fam.add_child(barra_familiaridad)
+	label_familiaridad = Label.new()
+	label_familiaridad.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label_familiaridad.clip_text = true
+	label_familiaridad.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	caja_fam.add_child(label_familiaridad)
+
 	var pie := HBoxContainer.new()
 	panel.add_child(pie)
 
@@ -714,6 +741,33 @@ func _reparto_foco_texto(equipo: Team) -> String:
 ## en x1.00 y solo se mueve semana a semana: mover el desplegable no
 ## cambiaba el numero y se leia como un control roto. El promedio sigue
 ## estando, atras, y solo cuando ya significa algo.
+## §7.4.5: en que anda la tactica puesta y que le hace al equipo.
+##
+## Dice los PUNTOS del modificador y no solo el nivel, porque "72/100" no
+## significa nada solo: lo que se compara al decidir un cambio es cuanto
+## suma o resta en los duelos.
+func _refrescar_familiaridad(equipo: Team) -> void:
+	var nivel := Familiaridad.nivel(equipo)
+	var mod := Familiaridad.modificador(equipo)
+	barra_familiaridad.value = nivel
+
+	var color := Tema.VERDE if mod > 0.0 else (Tema.SUAVE if mod == 0.0 else (
+		Tema.ROJO if mod <= -4.0 else Tema.AMBAR))
+	var relleno := StyleBoxFlat.new()
+	relleno.bg_color = color
+	barra_familiaridad.add_theme_stylebox_override("fill", relleno)
+
+	var texto := "%d/100  ·  %+.1f en los duelos" % [int(round(nivel)), mod]
+	if mod < 0.0:
+		texto += "  ·  le faltan %d fechas para dejar de restar" % \
+			Familiaridad.fechas_para_neutro(equipo)
+	elif nivel < Familiaridad.MAXIMO:
+		texto += "  ·  sigue subiendo si no cambias de plan"
+	label_familiaridad.text = texto
+	label_familiaridad.add_theme_color_override("font_color", color)
+	label_familiaridad.tooltip_text = "Cada formacion + estilo se entrena por separado. Un plan nuevo arranca en frio y resta hasta que el equipo lo asimila; el foco de equipo tactico lo acelera. Cambiar solo una de las dos mitades arrastra parte de lo que ya sabias."
+
+
 func _texto_carga(equipo: Team) -> String:
 	var nivel: String = equipo.carga_entrenamiento
 	var t := "crecimiento x%.2f · recuperación x%.2f · lesiones x%.2f" % [
@@ -743,6 +797,8 @@ func _refrescar_formacion() -> void:
 		option_foco.selected = idx_foco
 	option_foco.tooltip_text = "%s%s" % [
 		FocoEquipo.resumen(equipo.foco_equipo), _reparto_foco_texto(equipo)]
+
+	_refrescar_familiaridad(equipo)
 
 	cancha_formacion.mostrar(equipo)
 

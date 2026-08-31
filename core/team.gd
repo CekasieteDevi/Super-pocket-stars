@@ -117,6 +117,10 @@ var expulsados_partido: Dictionary = {}  # jugador_id -> true, no disponible por
 var suspendidos: Dictionary = {}  # jugador_id -> partidos que todavia tiene que cumplir
 
 ## Fase 6: economía del club (§9.1).
+## §7.4.5: cuanto conoce el equipo cada tactica (formacion|estilo) -> 0-100.
+## Ver core/familiaridad.gd.
+var familiaridad: Dictionary = {}
+
 var caja: Dictionary = {}  # "fichajes"/"contratos"/"mejoras"/"mantenimiento" -> moneda
 ## Lo que se sumo a cada categoria en el ultimo cierre de temporada, y como
 ## quedo la caja justo despues de esa inyeccion (antes de que el mercado
@@ -231,6 +235,7 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 	rng_investigador.seed = hash("investigador:%s" % t.nombre)
 	t.investigadores = [Investigadores.nuevo(0, 1, rng_investigador)]
 	t.siguiente_id_investigador = 1
+	t.familiaridad = Familiaridad.inicial(t.formacion, t.estilo)
 	t.instalaciones = Instalaciones.nivel_inicial()
 	for categoria in Economia.CATEGORIAS_CAJA:
 		t.caja[categoria] = 0.0
@@ -289,6 +294,7 @@ func guardar() -> Dictionary:
 		"sueldos": _claves_a_texto(sueldos), "contratos": _claves_a_texto(contratos),
 		"clausulas": _claves_a_texto(clausulas),
 		"reputacion": reputacion, "quebrado": quebrado, "scouts": scouts, "instalaciones": instalaciones,
+		"familiaridad": familiaridad,
 		"config_cambios": config_cambios,
 		"objetivo_temporada": objetivo_temporada, "objetivos_incumplidos_seguidos": objetivos_incumplidos_seguidos,
 		"foco_individual": _claves_a_texto(foco_individual),
@@ -392,6 +398,14 @@ static func cargar(datos: Dictionary) -> Team:
 	t.quebrado = datos["quebrado"]
 	t.scouts = datos["scouts"]
 	t.instalaciones = datos["instalaciones"]
+	# Migracion: una partida anterior a §7.4.5 no trae el campo. Se le da
+	# la tactica que tenga puesta como ya asimilada — arrancarla en 0
+	# castigaria al jugador por algo que nunca eligio.
+	t.familiaridad = datos.get("familiaridad", {})
+	if t.familiaridad.is_empty():
+		t.familiaridad = Familiaridad.inicial(t.formacion, t.estilo)
+	for k in t.familiaridad:
+		t.familiaridad[k] = float(t.familiaridad[k])
 	t.config_cambios = datos.get("config_cambios", "equilibrado")
 	# JSON.parse() vuelve todos los numeros como float -- "posicion_maxima"
 	# despues se compara con un int (posicion_final) via <=, que en GDScript
