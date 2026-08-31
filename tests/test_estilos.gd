@@ -100,10 +100,17 @@ func _test_bloque_c_del_motor_incluye_el_choque(rng: RandomNumberGenerator) -> v
 	var home := Team.generar("Home", rng, 0)
 	var away := Team.generar("Away", rng, 100)
 	home.estilo = "Tiki taka"
+	# §7.4.5: cambiar el estilo a mano estrena una tactica, y eso resta
+	# hasta -8 en TODOS los duelos. Sin volver a sembrar la familiaridad,
+	# este test medía el matchup de estilos mas una penalizacion distinta
+	# en cada tanda, y la penalizacion es mas grande que el efecto que se
+	# quiere medir.
+	_reasentar_tactica(home)
 
 	var muestras := 500
 	var goles_con_ventaja := 0
 	away.estilo = "Presión alta"  # Tiki taka le gana a Presion alta -> +3 para home
+	_reasentar_tactica(away)
 	for i in range(muestras):
 		var rng_partido := RandomNumberGenerator.new()
 		rng_partido.seed = 1000 + i
@@ -111,6 +118,7 @@ func _test_bloque_c_del_motor_incluye_el_choque(rng: RandomNumberGenerator) -> v
 
 	var goles_neutro := 0
 	away.estilo = "Tiki taka"  # mismo estilo, matchup neutro (0 modificador)
+	_reasentar_tactica(away)
 	for i in range(muestras):
 		var rng_partido := RandomNumberGenerator.new()
 		rng_partido.seed = 1000 + i
@@ -120,3 +128,11 @@ func _test_bloque_c_del_motor_incluye_el_choque(rng: RandomNumberGenerator) -> v
 		print("OK: con matchup favorable, home hizo %d goles en %d partidos vs %d neutro." % [goles_con_ventaja, muestras, goles_neutro])
 	else:
 		print("FALLA: con matchup=%d neutro=%d (deberia ser mayor)." % [goles_con_ventaja, goles_neutro])
+
+
+## Deja al equipo con su tactica actual ya asimilada. Lo necesita
+## cualquier test que cambie `estilo` o `formacion` a mano: en el juego
+## eso se paga con familiaridad (§7.4.5), pero aca lo unico que se quiere
+## medir es otra cosa.
+func _reasentar_tactica(equipo: Team) -> void:
+	equipo.familiaridad = Familiaridad.inicial(equipo.formacion, equipo.estilo)

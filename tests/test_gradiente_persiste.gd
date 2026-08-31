@@ -19,21 +19,37 @@ func _init() -> void:
 	quit()
 
 
+## El punto es ESTRUCTURAL, no estadistico: si `nivel_potencial` midiera
+## solo a los once —que son a quienes se promueve— cada camada nacería
+## por encima del club real y la piramide derivaria hacia arriba sola.
+##
+## Antes esto se probaba generando UN club y comparando promedios, y eso
+## era una moneda al aire: el banco nace con menos MEDIA realizada (ver
+## NivelDivision.FACTOR_SUPLENTE) pero con el mismo POTENCIAL objetivo,
+## asi que los dos promedios son iguales en esperanza. Pasaba de suerte.
+## Ahora se separan los dos grupos a mano y se comprueba que el numero
+## mira a los dos.
 func _test_nivel_mide_el_plantel_entero(rng: RandomNumberGenerator) -> void:
 	print("=== nivel_potencial mide el plantel entero, no los once ===")
-	# Sobre los once —que son los mejores— cada camada nace por encima del
-	# club real y, como solo se promueve a los mejores, eso hace trinquete
-	# y la piramide deriva hacia arriba sola.
 	var e := Team.generar("Nivel", rng, 0)
-	var solo_once := 0.0
 	for j in e.jugadores:
-		solo_once += float(j["potencial"])
-	solo_once /= float(e.jugadores.size())
+		j["potencial"] = 90
+	for j in e.banco:
+		j["potencial"] = 50
+	for j in e.cantera:
+		j["potencial"] = 50
+
 	var nivel := e.nivel_potencial()
-	if float(nivel) < solo_once:
-		print("OK: nivel %d por debajo del promedio de los once (%.1f)." % [nivel, solo_once])
-	else:
-		print("FALLA: nivel %d no baja del promedio de los once (%.1f)." % [nivel, solo_once])
+	var esperado := int(round(
+		(90.0 * e.jugadores.size() + 50.0 * (e.banco.size() + e.cantera.size()))
+		/ float(e.todos_los_jugadores().size())))
+	if nivel != esperado:
+		print("FALLA: nivel %d, esperado %d (promedio del plantel entero)." % [nivel, esperado])
+		return
+	if nivel >= 90:
+		print("FALLA: nivel %d, esta midiendo solo a los once." % nivel)
+		return
+	print("OK: once en 90 y banco en 50 dan nivel %d, no 90." % nivel)
 
 
 func _test_la_camada_sale_del_nivel_del_club(rng: RandomNumberGenerator) -> void:

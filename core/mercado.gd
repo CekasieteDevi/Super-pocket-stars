@@ -125,6 +125,11 @@ static func ejecutar_ventana(liga: Liga, rng: RandomNumberGenerator, equipo_prot
 ## capitán, si es claramente su mejor jugador en esa posición (nadie
 ## vende a su figura sin pelear), o si el club tiene buena reputación
 ## (no necesita la plata tanto como uno de reputación baja).
+## Lo minimo que cualquier club le suma al valor de mercado — ver el
+## final de `resistencia_venta`.
+const RESISTENCIA_MINIMA := 0.05
+
+
 static func resistencia_venta(vendedor: Team, jugador: Dictionary) -> float:
 	var resistencia := 0.0
 	if jugador["id"] == vendedor.capitan_id:
@@ -154,7 +159,11 @@ static func resistencia_venta(vendedor: Team, jugador: Dictionary) -> float:
 
 	resistencia += clamp(vendedor.reputacion / 100.0, 0.0, 1.0) * 0.3
 	resistencia += DT.ajuste_resistencia_venta(vendedor)  # §8.6.4: Chequera vende mas facil, Cantera protege mas
-	return clamp(resistencia, 0.0, 0.85)
+	# Piso: ningun club suelta a un jugador por exactamente lo que vale.
+	# Con un DT Chequera (que descuenta) y reputacion baja, la suma daba 0
+	# y `precio_pedido` devolvia el valor de mercado clavado: ahi comprar
+	# deja de ser una negociacion y pasa a ser una calculadora.
+	return clamp(resistencia, RESISTENCIA_MINIMA, 0.85)
 
 
 ## Dónde está un jugador dentro de un club: {"jugador":Dictionary,

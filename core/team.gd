@@ -8,6 +8,11 @@ extends RefCounted
 ## disponibles (titulares+banco sanos, de 18 posibles) para jugar — si no
 ## se llega, ver Liga._resolver_forfeit().
 
+## La forma del 4-2-3-1, que es la formacion por defecto. Ya NO es lo que
+## se genera siempre: cada club nace con la formacion de su estilo (ver
+## Formaciones.POR_ESTILO) y su plantel sale de ahi. Se conservan porque
+## las usa el resto del codigo para saber cuantos titulares y cuantos
+## suplentes tiene un plantel, que eso si es fijo: 11 y 7.
 const FORMACION := ["ARQ", "DFC", "DFC", "LAT", "LAT", "MC", "MC", "MCO", "EXT", "EXT", "DC"]
 ## Un suplente por puesto — banco de 7, como pide §14.
 const BANCO_FORMACION := ["ARQ", "DFC", "LAT", "MC", "MCO", "EXT", "DC"]
@@ -196,8 +201,14 @@ var prestados_propios: Dictionary = {}  # jugador_id -> {"club_dueno":Team, "tem
 static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int = 0, potencial_objetivo: int = -1, pais: String = "Uruguay", realizacion: Vector2 = PlayerGenerator.REALIZACION_TITULAR) -> Team:
 	var t := Team.new()
 	t.nombre = nombre
+	# El estilo se elige ANTES que el plantel: de el sale la formacion, y
+	# de la formacion que puestos hay que generar. Al reves, el club
+	# terminaba con un plantel de 4-2-3-1 parado en 3-5-2, con gente fuera
+	# de posicion de arranque (§8.4#4, de -4 a -12).
+	t.estilo = Estilos.generar(rng)
+	t.formacion = Formaciones.para_estilo(t.estilo)
 	var next_id := id_inicial
-	for pos in FORMACION:
+	for pos in Formaciones.roles(t.formacion):
 		var jugador := PlayerGenerator.generate(next_id, rng, pos, potencial_objetivo, pais, realizacion)
 		next_id += 1
 		t.jugadores.append(jugador)
@@ -210,7 +221,7 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 	# banco en vez de subir el once a proposito — media_equipo() mira solo
 	# a los titulares y es el numero contra el que estan calibrados la
 	# economia, los objetivos y la paridad entre los dos motores.
-	for pos in BANCO_FORMACION:
+	for pos in Formaciones.banco_para(t.formacion):
 		var jugador := PlayerGenerator.generate(next_id, rng, pos, potencial_objetivo, pais,
 			realizacion * NivelDivision.FACTOR_SUPLENTE)
 		next_id += 1
@@ -218,7 +229,6 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 		t._registrar_fichaje(jugador, ValorJugador.calcular(jugador, 50.0, 3), rng.randi_range(1, 5))
 		t.armonia += Personalidad.bonus_armonia(jugador)
 	t.armonia += rng.randf_range(-3.0, 5.0)
-	t.estilo = Estilos.generar(rng)
 	# §7.4.2: se entrena lo que se juega. Es el valor inicial y se puede
 	# cambiar; para los clubes de la IA queda asi toda la partida.
 	t.foco_equipo = FocoEquipo.para_estilo(t.estilo)

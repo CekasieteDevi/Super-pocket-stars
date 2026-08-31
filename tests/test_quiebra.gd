@@ -62,6 +62,11 @@ func _test_reemplazo_es_mas_barato_y_reduce_el_sueldo(rng: RandomNumberGenerator
 	var equipo := Team.generar("ClubQuebrado2", rng, 1000)
 	for j in equipo.jugadores:
 		j["media"] = 90.0  # todos carisimos, para que la venta forzada duela de verdad
+		# Y con el sueldo que corresponde a esa media. Sin esto el estado
+		# quedaba incoherente —media de crack, sueldo de suplente— y que
+		# el reemplazo saliera mas barato pasaba a ser cuestion de suerte.
+		equipo._registrar_fichaje(
+			j, ValorJugador.calcular(j, 50.0, 3), equipo.contratos.get(j["id"], 3))
 	equipo.recalcular_capitan()
 
 	var sueldos_antes := 0.0
