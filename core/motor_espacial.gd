@@ -273,7 +273,22 @@ static func valor_posicion(pos: Vector2, equipo_local: bool) -> float:
 ## valora el remate de media distancia. Sin esto, un media 20 evaluaba
 ## pegarle desde 25 metros exactamente igual que un crack (medido: 23% de
 ## sus remates salían desde más de 20m).
-static func factor_geometria(pos: Vector2, equipo_local: bool, jugador: Dictionary = {}) -> float:
+## `absoluto` separa DOS preguntas que antes eran la misma:
+##
+##   desde donde SE ANIMA a patear -> absoluto. Que tan lejos del arco
+##   ves chance es tu pierna, no contra quien jugas. Normalizado, decima
+##   y quinta remataban desde exactamente la misma distancia.
+##
+##   que tan BUENO sale el remate -> normalizado. Aca si tiene que ser
+##   relativo: absoluto, un delantero de primera no erraba nunca y la
+##   liga terminaba con 4,10 goles por partido contra 2,20 en decima,
+##   mientras el motor abstracto daba lo mismo en todas.
+##
+## Se midio que son palancas independientes: el rango mueve la distancia
+## de los remates y no los goles; los pesos de tiro_resolucion mueven los
+## goles y no la distancia (tests/_diag_remates.gd).
+static func factor_geometria(pos: Vector2, equipo_local: bool, jugador: Dictionary = {},
+		es_decision: bool = false) -> float:
 	var f: Dictionary = pesos()["fisica"]
 	var arco := arco_rival(equipo_local)
 	var dist := pos.distance_to(arco)
@@ -281,7 +296,8 @@ static func factor_geometria(pos: Vector2, equipo_local: bool, jugador: Dictiona
 	var dy: float = absf(pos.y)
 	var rango: float = float(f["rango_tiro_medio"])
 	if not jugador.is_empty():
-		rango = _por_atributo(jugador, "tiro", f["rango_tiro_malo"], f["rango_tiro_bueno"])
+		rango = _por_atributo(jugador, "tiro", f["rango_tiro_malo"],
+			f["rango_tiro_bueno"], float(f["mezcla_fisica_rango_tiro"]) if es_decision else 0.0)
 	var f_dist: float = clampf(1.0 - (dist - 5.0) / rango, 0.0, 1.0)
 	var f_angulo: float = clampf(1.0 - (dy / dx) / 1.5, 0.0, 1.0)
 	return f_dist * f_angulo
@@ -310,14 +326,23 @@ static var _nivel_partido: float = MatchEngine.NIVEL_REFERENCIA
 ## abstracto, que resuelve el resto de la liga y contra el que están
 ## calibrados economía, objetivos y fans, daba ~3,3 en todas.
 ##
-## `absoluto` es para lo que SÍ tiene que escalar con la división: la
-## velocidad y la aceleración. Son las que hacen que primera se vea rápida
-## y asociada y décima lenta y trabada, que es lo que hace que ascender se
-## note. Lo que no puede escalar es cuántos goles termina habiendo.
+## `mezcla_absoluta` es para lo que SÍ tiene que escalar con la división:
+## la velocidad y la aceleración. Son las que hacen que primera se vea
+## rápida y asociada y décima lenta y trabada, que es lo que hace que
+## ascender se note. Lo que no puede escalar es cuántos goles termina
+## habiendo.
+##
+## Va de 0 (todo relativo al nivel del partido) a 1 (fisico puro). Es un
+## MEZCLADOR y no un booleano porque el rango de tiro necesita quedarse en
+## el medio: en absoluto puro un plantel de primera remata desde tan lejos
+## que suma tres remates por partido y se va a 3,25 goles contra 2,50 del
+## motor abstracto; en relativo puro decima y quinta rematan exactamente
+## desde la misma distancia, que es lo que no queremos.
 static func _por_atributo(jugador: Dictionary, atributo: String, en_0: float, en_100: float,
-		absoluto: bool = false) -> float:
+		mezcla_absoluta: float = 0.0) -> float:
 	var bruto: float = float(jugador["atributos"][atributo])
-	var valor: float = bruto if absoluto else MatchEngine.relativo_al_nivel(bruto, _nivel_partido)
+	var relativo: float = MatchEngine.relativo_al_nivel(bruto, _nivel_partido)
+	var valor: float = lerpf(relativo, bruto, clampf(mezcla_absoluta, 0.0, 1.0))
 	return en_0 + clampf(valor / 100.0, 0.0, 1.0) * (en_100 - en_0)
 
 
@@ -335,7 +360,7 @@ static func atributo_pase(jugador: Dictionary, distancia: float) -> String:
 
 static func _vel_max(jugador: Dictionary) -> float:
 	var f: Dictionary = pesos()["fisica"]
-	return _por_atributo(jugador, "velocidad", f["vel_min"], f["vel_max"], true)
+	return _por_atributo(jugador, "velocidad", f["vel_min"], f["vel_max"], 1.0)
 
 
 ## Cuántos m/s² gana por segundo. Nadie pasa de parado a su velocidad
@@ -348,7 +373,7 @@ static func _vel_max(jugador: Dictionary) -> float:
 ## jugador vía position_weights.json.
 static func _aceleracion(jugador: Dictionary) -> float:
 	var f: Dictionary = pesos()["fisica"]
-	return _por_atributo(jugador, "aceleracion", f["acel_min"], f["acel_max"], true)
+	return _por_atributo(jugador, "aceleracion", f["acel_min"], f["acel_max"], 1.0)
 
 
 ## Cuánto terreno cubre desde su velocidad ACTUAL en `segundos`, con la
@@ -569,7 +594,9 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 		})
 
 	# --- Tirar --------------------------------------------------------
-	var geo := factor_geometria(pos, es_local, jugador)
+	# ABSOLUTO: la DECISION de patear de lejos es fisica. La resolucion
+	# del remate, mas abajo en _resolver_tiro, sigue normalizada.
+	var geo := factor_geometria(pos, es_local, jugador, true)
 	if geo > float(f["geometria_minima_tiro"]):
 		var wt: Dictionary = w["tiro"]
 		var u_tiro: float = wt["base"] + wt["geometria"] * geo
@@ -636,7 +663,13 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 	# frente de juego de 45 metros. El arquero se mide por `golpe`, que es
 	# lo que define hasta dónde le llega el saque.
 	var attr_alcance := "golpe" if jugador.get("posicion", "") == "ARQ" else "pases"
-	var max_dist: float = _por_atributo(jugador, attr_alcance, f["max_dist_pase_malo"], f["max_dist_pase_bueno"])
+	# ABSOLUTO: hasta donde llega una patada es fisico, no relativo a la
+	# division. Normalizado al nivel del partido, un plantel con fuerza
+	# media 37 ponia exactamente la misma pelota de 60 m que uno de 86 —
+	# medido, las tres divisiones daban la misma distribucion. En una liga
+	# de burros todos eran "promedio" y por lo tanto todos llegaban lejos.
+	var max_dist: float = _por_atributo(jugador, attr_alcance,
+		f["max_dist_pase_malo"], f["max_dist_pase_bueno"], 1.0)
 	var sesgo_pase: float = float(sesgos["creador_pase"]) if Personalidad.tiene(jugador, "Creador") else 1.0
 	# El pase al hueco hay que VERLO: si el jugador no tiene la visión, la
 	# opción ni le aparece. Es lo que separa a un armador de un jugador que
@@ -645,7 +678,8 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 	# El pelotazo llega tan lejos como la pierna del que la pega, no como
 	# su técnica: por eso un equipo malo igual lo tiene disponible.
 	var wl: Dictionary = w["pase_largo"]
-	var max_largo: float = _por_atributo(jugador, "fuerza", f["max_pelotazo_debil"], f["max_pelotazo_fuerte"])
+	var max_largo: float = _por_atributo(jugador, "fuerza",
+		f["max_pelotazo_debil"], f["max_pelotazo_fuerte"], 1.0)
 	# La pared la habilita `pases`, y ese mismo atributo define su tamaño:
 	# el que la toca mejor puede jugarla con un compañero más lejos y salir
 	# a recibirla más adelante.
@@ -1418,7 +1452,9 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	# defensor flojo no le tapa el remate a un delantero de élite.
 	# Un cabezazo no se bloquea con el cuerpo: viene por arriba y ya se
 	# disputo en el duelo aereo.
-	var bloqueador := -1 if attr_remate == "cabezazo" else _bloqueador_de_tiro(estado, poseedor["pos"], es_local)
+	var bloqueador := -1 if attr_remate == "cabezazo" else _bloqueador_de_tiro(
+		estado, poseedor["pos"], es_local,
+		float(pesos()["fisica"]["dist_max_bloqueo_libre"]) if attr_remate == "tiros_libres" else -1.0)
 	if bloqueador != -1 and _gana_bloqueo(estado, bloqueador, jugador, eq_a, eq_d, poseedor["pos"], es_local, minuto):
 		_accion(estado, bloqueador, ACCION_BARRIDA)
 		_xp_e(estado, estado["jugadores"][bloqueador], "barrida")
@@ -1870,10 +1906,16 @@ static func _resolver_rebote(estado: Dictionary, desde: Vector2, toco_local: boo
 ## ¿Hay un defensor metido en la línea del remate? Devuelve su clave, o -1.
 ## Es la misma idea que la intercepción de un pase, pero contra el camino
 ## al arco.
-static func _bloqueador_de_tiro(estado: Dictionary, desde: Vector2, es_local: bool) -> int:
+## `dist_max` se pasa aparte para el tiro libre: la barrera esta a los
+## 9,15 reglamentarios, o sea mas lejos del tope de bloqueo del juego
+## abierto (6 m). Sin esto la barrera era decorado — se paraba en la
+## linea del remate y la pelota le pasaba por el medio siempre.
+static func _bloqueador_de_tiro(estado: Dictionary, desde: Vector2, es_local: bool,
+		dist_max: float = -1.0) -> int:
 	var f: Dictionary = pesos()["fisica"]
 	var arco := arco_rival(es_local)
 	var radio: float = f["radio_bloqueo_tiro"]
+	var tope: float = dist_max if dist_max > 0.0 else float(f["dist_max_bloqueo"])
 	var mejor := -1
 	var mejor_d: float = radio
 	for id in estado["jugadores"]:
@@ -1885,7 +1927,7 @@ static func _bloqueador_de_tiro(estado: Dictionary, desde: Vector2, es_local: bo
 		# cualquiera parado en la línea al arco bloqueaba y los goles se
 		# caían a 0.9 por partido.
 		var dist_al_rematador: float = desde.distance_to(e["pos"])
-		if dist_al_rematador > float(f["dist_max_bloqueo"]) or dist_al_rematador > desde.distance_to(arco):
+		if dist_al_rematador > tope or dist_al_rematador > desde.distance_to(arco):
 			continue
 		var d := _dist_a_segmento(e["pos"], desde, arco)
 		if d < mejor_d:
@@ -2975,6 +3017,22 @@ static func _marcar_posiciones(estado: Dictionary, pos: Vector2, ataca_local: bo
 	var rng: RandomNumberGenerator = estado["rng"]
 	var arco := arco_rival(ataca_local)
 	var dentro_x: float = arco.x - (11.0 if arco.x > 0.0 else -11.0)
+	# Quién arma la barrera se decide ANTES de acomodar a nadie: son los
+	# defensores más cercanos a la pelota, y el puesto que ocupa cada uno
+	# en la fila es lo que después los pone hombro con hombro.
+	for id in estado["jugadores"]:
+		estado["jugadores"][id]["puesto_barrera"] = -1
+	if tipo == "directo":
+		var candidatos := []
+		for id in estado["jugadores"]:
+			var e_b: Dictionary = estado["jugadores"][id]
+			if e_b["equipo_local"] == ataca_local or e_b["rol"] == "ARQ" or id == ejecutor:
+				continue
+			candidatos.append({"id": id, "d": pos.distance_to(e_b["pos"])})
+		candidatos.sort_custom(func(a, b): return float(a["d"]) < float(b["d"]))
+		var cuantos := mini(_tamano_barrera(pos, ataca_local), candidatos.size())
+		for i in range(cuantos):
+			estado["jugadores"][candidatos[i]["id"]]["puesto_barrera"] = i
 	for id in estado["jugadores"]:
 		var e: Dictionary = estado["jugadores"][id]
 		if id == ejecutor:
@@ -2994,13 +3052,57 @@ static func _marcar_posiciones(estado: Dictionary, pos: Vector2, ataca_local: bo
 			e["marca"] = e["base"]
 			continue
 
-		if tipo == "directo" and e["equipo_local"] != ataca_local:
-			# Barrera: los rivales que están encima se corren a la
-			# distancia reglamentaria en vez de aparecer ya corridos.
-			var d: float = pos.distance_to(e["pos"])
-			e["marca"] = pos + (e["pos"] - pos).normalized() * 9.15 if d < 9.15 else e["pos"]
+		if tipo == "directo":
+			e["marca"] = _marca_en_tiro_libre(e, pos, ataca_local)
 			continue
 		e["marca"] = e["base"]
+
+
+## Cuántos se paran en la barrera. Cuanto más de frente y más cerca del
+## arco es la falta, más gente se pone: una falta al borde del área de
+## frente lleva cinco, una escorada y lejana lleva dos.
+static func _tamano_barrera(pos: Vector2, ataca_local: bool) -> int:
+	var geo := factor_geometria(pos, ataca_local)
+	return clampi(2 + int(round(geo * 6.0)), 2, 5)
+
+
+## Dónde se para cada uno en un tiro libre directo.
+##
+## Antes esto era una sola línea que empujaba a los rivales cercanos en
+## dirección OPUESTA a la pelota, cada uno hacia donde estuviera parado.
+## Dos consecuencias, las dos visibles en la cancha: no había barrera —
+## nadie se ponía entre la pelota y el arco— y al que había quedado del
+## lado de adelante lo mandaba todavía más adelante, o sea que la defensa
+## se iba ATRÁS DE LA PELOTA y el pateador quedaba solo de frente al
+## arco. Con eso, una falta de afuera del área era gol casi seguro.
+static func _marca_en_tiro_libre(e: Dictionary, pos: Vector2, ataca_local: bool) -> Vector2:
+	var arco := arco_rival(ataca_local)
+	var hacia_arco: Vector2 = (arco - pos).normalized()
+
+	if e["equipo_local"] != ataca_local:
+		# Barrera: los N defensores más cercanos se paran EN LA LÍNEA de
+		# la pelota al arco, a los 9,15 reglamentarios, hombro con hombro.
+		var puesto := int(e.get("puesto_barrera", -1))
+		if puesto >= 0:
+			var lateral := Vector2(-hacia_arco.y, hacia_arco.x)
+			return pos + hacia_arco * 9.15 + lateral * (float(puesto) - 1.0) * 0.8
+		# El resto defiende: vuelve a su casillero, pero nunca por delante
+		# de la pelota. Un defensor adelantado de la pelota no defiende
+		# nada, y es exactamente lo que se veía.
+		var base: Vector2 = e["base"]
+		var limite: float = pos.x + hacia_arco.x * 1.0
+		return Vector2(
+			minf(base.x, limite) if hacia_arco.x < 0.0 else maxf(base.x, limite),
+			base.y)
+
+	# Los compañeros del pateador también respetan los 9,15.
+	var d: float = pos.distance_to(e["pos"])
+	if d < 9.15:
+		var salida: Vector2 = (e["pos"] - pos)
+		if salida.length() < 0.1:
+			salida = -hacia_arco
+		return pos + salida.normalized() * 9.15
+	return e["pos"]
 
 
 ## Un reinicio se JUEGA, no se arranca corriendo: se la toca al compañero

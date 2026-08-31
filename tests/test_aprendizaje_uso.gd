@@ -22,8 +22,8 @@ func _init() -> void:
 
 func _test_los_dos_motores_dan_el_mismo_total(rng: RandomNumberGenerator) -> void:
 	print("=== Los dos motores entregan el mismo XP total por titular ===")
-	var peor_esp := 99.0
-	var peor_abs := 99.0
+	var peor_esp := 0.0
+	var peor_abs := 0.0
 	var mejor_esp := -1.0
 	var mejor_abs := -1.0
 	for i in range(12):
@@ -39,32 +39,39 @@ func _test_los_dos_motores_dan_el_mismo_total(rng: RandomNumberGenerator) -> voi
 		var r3 := RandomNumberGenerator.new()
 		r3.seed = 100 + i
 		var abs_r := MatchEngine.simular(a2, b2, r3, false)
-		peor_esp = minf(peor_esp, _total_minimo_titular(a, esp["xp"]["home"]))
+		peor_esp += _total_equipo(esp["xp"]["home"])
 		mejor_esp = maxf(mejor_esp, _total_maximo(esp["xp"]["home"]))
-		peor_abs = minf(peor_abs, _total_minimo_titular(a2, abs_r["xp"]["home"]))
+		peor_abs += _total_equipo(abs_r["xp"]["home"])
 		mejor_abs = maxf(mejor_abs, _total_maximo(abs_r["xp"]["home"]))
-	# Un titular que juega los 90 suma 1.0; los que salen, menos.
+	peor_esp /= 12.0
+	peor_abs /= 12.0
+	# Lo que este test dice en el titulo es PARIDAD, asi que se compara el
+	# TOTAL que reparte cada motor por partido. Antes se comparaba el
+	# minimo del plantel contra un umbral fijo, y el minimo es siempre el
+	# ultimo suplente en entrar: el test no medía la paridad sino a que
+	# minuto habia caido el tercer cambio, y cualquier cambio del motor
+	# que corriera el RNG lo daba vuelta. Ya pasó dos veces.
 	var ok: bool = mejor_esp <= 1.01 and mejor_abs <= 1.01
-	ok = ok and peor_esp > 0.2 and peor_abs > 0.2
+	ok = ok and absf(peor_esp - peor_abs) / maxf(peor_abs, 0.01) <= 0.15
 	if ok:
-		print("OK: espacial max %.2f min %.2f | abstracto max %.2f min %.2f (tope 1.00 por partido)." % [
-			mejor_esp, peor_esp, mejor_abs, peor_abs])
+		print("OK: %.2f de XP por partido el espacial contra %.2f el abstracto (tope 1.00 por jugador)." % [
+			peor_esp, peor_abs])
 	else:
-		print("FALLA: espacial max %.2f min %.2f | abstracto max %.2f min %.2f" % [
+		print("FALLA: espacial max %.2f total %.2f | abstracto max %.2f total %.2f" % [
 			mejor_esp, peor_esp, mejor_abs, peor_abs])
 
 
-func _total_minimo_titular(equipo: Team, xp: Dictionary) -> float:
-	var minimo := 99.0
-	for j in equipo.jugadores:
-		var d = xp.get(j["id"], null)
-		if d == null:
-			return 0.0
-		var s := 0.0
-		for a in d:
-			s += float(d[a])
-		minimo = minf(minimo, s)
-	return minimo
+## Todo el XP que reparte un motor en un partido. El total de cada
+## jugador ES la fraccion de partido que jugo, asi que la suma del equipo
+## son los "jugadores-partido" que se pagaron: si un motor reparte mucho
+## menos que el otro, sus planteles crecen mas lento y el desbalance se
+## acumula temporada tras temporada.
+func _total_equipo(xp: Dictionary) -> float:
+	var total := 0.0
+	for id in xp:
+		for a in xp[id]:
+			total += float(xp[id][a])
+	return total
 
 
 func _total_maximo(xp: Dictionary) -> float:

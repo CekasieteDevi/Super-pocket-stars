@@ -37,7 +37,6 @@ var label_tabla_leyenda: Label
 var label_resultado: Label
 var contenedor_ultimo_partido: VBoxContainer
 var boton_jugar_fecha: Button
-var boton_ver_animado: Button
 var boton_simular_temporada: Button
 ## En un solo lugar: estaba escrito a mano al construirlo y al terminar de
 ## simular, y bastaba tocar uno para que el boton cambiara de nombre solo.
@@ -1325,8 +1324,8 @@ func _construir_panel_partido(padre: Control) -> void:
 	#
 	# Antes iba todo en un VBox suelto y el panel no scrollea: con el
 	# relato de un partido largo el contenido pasaba el alto de la pantalla
-	# y los botones del final —"Ver partido animado" y "Simular resto de la
-	# temporada"— quedaban abajo del borde, sin forma de llegar. Parecian
+	# y el boton del final —"Simular resto de la temporada"— quedaba abajo
+	# del borde, sin forma de llegar. Parecia
 	# borrados.
 	var barra := HFlowContainer.new()
 	barra.add_theme_constant_override("h_separation", 12)
@@ -1358,16 +1357,6 @@ func _construir_panel_partido(padre: Control) -> void:
 	Tema.primario(boton_jugar_fecha)
 	boton_jugar_fecha.pressed.connect(_on_jugar_fecha)
 	acciones.add_child(boton_jugar_fecha)
-
-	boton_ver_animado = Button.new()
-	# Mismo texto que le pone _on_jugar_fecha al habilitarlo: con dos
-	# distintos el boton se renombraba solo al terminar un partido.
-	boton_ver_animado.text = "Ver partido animado"
-	boton_ver_animado.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
-	boton_ver_animado.tooltip_text = "Reproduce tu ultimo partido con la vista de cancha."
-	boton_ver_animado.disabled = true
-	boton_ver_animado.pressed.connect(_mostrar_partido_animado)
-	acciones.add_child(boton_ver_animado)
 
 	boton_simular_temporada = Button.new()
 	boton_simular_temporada.text = TEXTO_SIMULAR_TEMPORADA
@@ -4500,7 +4489,6 @@ func _refrescar_ultimo_partido() -> void:
 	var r: Dictionary = GameState.ultimo_resultado
 	if r.is_empty():
 		label_resultado.text = "Todavia no jugaste ninguna fecha."
-		_refrescar_boton_animado()
 		return
 
 	# El contexto del partido va como subtitulo y no mezclado con el
@@ -4523,7 +4511,6 @@ func _refrescar_ultimo_partido() -> void:
 		"Lo que paso" if not hitos.is_empty() else "No paso nada para contar"))
 	for h in hitos:
 		contenedor_ultimo_partido.add_child(h)
-	_refrescar_boton_animado()
 
 
 ## El marcador, grande, con tu equipo marcado en ambar.
@@ -4698,15 +4685,6 @@ func _nombre_de_id(r: Dictionary, id: int) -> String:
 		if not j.is_empty():
 			return _nombre_jugador(j)
 	return "?"
-
-
-## La repeticion necesita los FOTOGRAMAS, que no se guardan por tamano, no
-## los eventos. Al cargar una partida hay resultado pero no repeticion, y
-## el boton tiene que decir por que en vez de quedar gris y mudo.
-func _refrescar_boton_animado() -> void:
-	var hay: bool = not GameState.ultimos_fotogramas.is_empty()
-	boton_ver_animado.disabled = not hay
-	boton_ver_animado.text = "Ver partido animado" if hay 		else "Ver partido animado (la repeticion no se guarda)"
 
 
 ## Empezar de cero de verdad. "Borrar guardado" solo borraba el ARCHIVO y
@@ -5277,18 +5255,6 @@ func _refrescar_portada() -> void:
 	btn_form.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
 	btn_form.pressed.connect(func(): _mostrar_seccion("equipo"))
 	fila_acciones.add_child(btn_form)
-
-	# La repeticion aparece SOLO cuando hay: necesita los fotogramas, que
-	# no se guardan por tamano, asi que existe unicamente entre que jugas
-	# la fecha y que cargas otra partida. Un boton gris permanente en la
-	# portada seria ruido; aca es una oferta que aparece cuando sirve.
-	if not GameState.ultimos_fotogramas.is_empty():
-		var btn_animado := Button.new()
-		btn_animado.text = "Ver partido animado"
-		btn_animado.custom_minimum_size = Vector2(240, Tema.ALTO_TACTIL)
-		btn_animado.tooltip_text = "Reproduce tu ultimo partido con la vista de cancha. Se pierde al cerrar el juego."
-		btn_animado.pressed.connect(_mostrar_partido_animado)
-		fila_acciones.add_child(btn_animado)
 
 	# Simular tambien vive aca y no solo en Partido: la portada es desde
 	# donde se juega, y mandar al jugador a otra seccion a buscar el boton
