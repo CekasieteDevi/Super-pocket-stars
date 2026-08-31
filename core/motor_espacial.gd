@@ -1267,14 +1267,36 @@ static func _duelo_simple(atacante: Dictionary, attr_a: String, eq_a: Team,
 ## que el que la tenía salía corriendo desde el círculo — el mismo bug
 ## que ya se había arreglado para el arranque de cada tiempo, pero por
 ## este otro camino.
-static func _reiniciar_desde_medio(estado: Dictionary, saca_local: bool, mitad: int = 0) -> void:
-	# Quién la saca: el MCO del equipo que corresponde.
-	var sacador := -1
+## Quién saca del medio.
+##
+## Buscaba el MCO y nada más, y si el equipo no tenía uno devolvía -1: el
+## saque quedaba SIN armar, nadie tomaba la pelota y el tiempo entero no
+## se jugaba. De las cinco formaciones solo el 4-2-3-1 tiene MCO, así que
+## en cuanto los clubes de la IA dejaron de jugar todos 4-2-3-1, cuatro de
+## cada cinco partidos se morían enteros — 33 de 40 medidos.
+##
+## Ahora hay cadena de suplentes y el último eslabón es "cualquiera que no
+## sea el arquero": mientras el equipo tenga a alguien en cancha, el saque
+## sale. La preferencia es por quién se para más cerca del círculo.
+const ROLES_PARA_SACAR := ["MCO", "DC", "MC", "EXT", "LAT", "DFC"]
+
+
+static func _quien_saca_del_medio(estado: Dictionary, saca_local: bool) -> int:
+	for rol in ROLES_PARA_SACAR:
+		for id in estado["jugadores"]:
+			var e: Dictionary = estado["jugadores"][id]
+			if e["equipo_local"] == saca_local and e["rol"] == rol:
+				return id
+	# Ni uno de los roles conocidos: con tal de que no sea el arquero.
 	for id in estado["jugadores"]:
 		var e: Dictionary = estado["jugadores"][id]
-		if e["equipo_local"] == saca_local and e["rol"] == "MCO":
-			sacador = id
-			break
+		if e["equipo_local"] == saca_local and e["rol"] != "ARQ":
+			return id
+	return -1
+
+
+static func _reiniciar_desde_medio(estado: Dictionary, saca_local: bool, mitad: int = 0) -> void:
+	var sacador := _quien_saca_del_medio(estado, saca_local)
 
 	# En un saque del medio TODOS tienen que estar en su propia mitad. Las
 	# posiciones base de los de arriba (EXT en x=8, DC en x=14) están en
