@@ -56,8 +56,8 @@ static func _elegir(jugadores: Array, rng: RandomNumberGenerator) -> Dictionary:
 ## (equipo/racha/armonía/capitán/familiaridad táctica §7.4.5), bloque C (local + choque de estilos
 ## §8.6.3 + rasgo del DT según el marcador §8.6.4 + clima §8.4#18/20 +
 ## estado de la cancha §8.4#21 + árbitro casero §8.4#23 + público §8.4#22
-## + varianza de clásico §8.4#14 + objetivo de directiva en riesgo
-## §8.4#30) y bloque D (personalidad + habilidad de ESE jugador en ESE
+## + varianza de clásico §8.4#14) y bloque D (motivación §8.4#26-30 —
+## por ahora solo #30, objetivo de directiva en riesgo— (personalidad + habilidad de ESE jugador en ESE
 ## duelo, §6/§5 — Ansioso de visitante, Egoísta priorizando su propio
 ## tiro, Cañón sumando en sus duelos de tiro si ya se manifestó).
 ## `companero_id` es el otro jugador del MISMO equipo que participa de la
@@ -106,9 +106,14 @@ static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atri
 	if equipo.local:
 		bloque_c += Publico.modificador(equipo.fans)
 	bloque_c += Rivalidad.variacion(Rivalidad.es_clasico(equipo, rival), rng)
-	if equipo.objetivo_en_riesgo:
-		bloque_c += Objetivos.MALUS_EN_RIESGO
 	var bloque_d := Personalidad.modificador_partido(jugador, equipo, rival, atributo, minuto) + Habilidades.modificador_partido(jugador, atributo)
+	# §8.4#30, objetivo de directiva en riesgo. Estaba sumado al bloque C
+	# y el GDD lo pone en el D: los modificadores 26 a 30 son los de
+	# MOTIVACION. No es cosmetico —cada bloque tiene su propio tope, asi
+	# que estar en el bloque equivocado cambia con quien compite por
+	# entrar— y ademas el D estaba practicamente vacio.
+	if equipo.objetivo_en_riesgo:
+		bloque_d += Objetivos.MALUS_EN_RIESGO
 	return {"A": bloque_a, "B": bloque_b, "C": bloque_c, "D": bloque_d}
 
 
