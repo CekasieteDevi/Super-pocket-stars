@@ -149,8 +149,23 @@ const ALCANCE_ESTIRADA := 2.0
 ## sin que aburra a x1.
 ## El penal es la pausa mas larga de todas a proposito: es el unico
 ## momento del partido en que todos se quedan quietos mirando a uno.
-const TICKS_DETENIDO := {"falta": 12, "corner": 13, "gol": 10, "saque_inicial": 12,
-	"lateral": 7, "saque_arco": 8, "penal": 20}
+const TICKS_DETENIDO := {"falta": 14, "corner": 13, "gol": 10, "saque_inicial": 12,
+	"lateral": 10, "saque_arco": 8, "penal": 20}
+
+## Dos segundos en los que NADIE se mueve, antes de acomodarse para el
+## tiro libre. Es donde se ve la infraccion: el que la hizo parado donde
+## la hizo, el otro en el piso, y la tarjeta si sale.
+##
+## Antes no existia: en el mismo tick de la falta se teletransportaba a
+## los 22 a sus puestos de balon parado, asi que el infractor aparecia a
+## veinte metros de la jugada y la amarilla salia sobre una cancha ya
+## acomodada. No se entendia quien habia hecho que.
+const TICKS_CONGELADO_FALTA := 8
+
+## Desde mas lejos que esto no se llega a la barrera antes de que la
+## pateen, asi que el que esta mas lejos no va: la barrera queda mas
+## chica, igual que en una cancha.
+const DIST_MAX_A_LA_BARRERA := 14.0
 
 ## El punto del penal: 11 m del arco.
 const DIST_PENAL := 11.0
@@ -2740,12 +2755,30 @@ static func _chequeos_tarjeta(estado: Dictionary) -> int:
 ## sacar dos amarillas en la misma entrada y quedar expulsado en el acto,
 ## que no existe en el fútbol. Con las tiradas encadenadas sin corte
 ## salían 1,10 rojas por partido contra las ~0,4 del motor abstracto.
+##
+## Y las tiradas se reparten por TODO el equipo, no todas sobre el que
+## acaba de hacer la falta. El presupuesto representa las infracciones
+## que este motor no simula —hay 10 faltas por partido contra las 22 de
+## un partido real— y esas las cometieron otros. Cargándolas todas al
+## mismo jugador, las amarillas se concentraban en poca gente y salían
+## 0,88 rojas por partido, con expulsado en 2 de cada 3 partidos, contra
+## 0,43 del motor abstracto y 0,25 reales. Casi todas por doble amarilla.
+## Medido con tests/_diag_faltas.gd.
+##
+## La primera tirada sí es para el infractor: esa falta la hizo él y se
+## vio. Las demás son para cualquiera de sus compañeros en cancha.
 static func _chequear_tarjeta_repetido(estado: Dictionary, defensor: Dictionary,
 		eq_d: Team, eq_a: Team, minuto: int) -> void:
 	var veces := _chequeos_tarjeta(estado)
+	var en_cancha := eq_d.jugadores_en_cancha()
 	for i in range(veces):
+		var quien := defensor
+		if i > 0 and not en_cancha.is_empty():
+			var candidato: Dictionary = en_cancha[estado["rng"].randi() % en_cancha.size()]
+			if str(candidato.get("posicion", "")) != "ARQ":
+				quien = candidato
 		var antes: int = estado["eventos"].size()
-		MatchEngine._chequear_tarjeta(defensor, eq_d, eq_a, estado["rng"], estado["eventos"], minuto, true, estado["log"])
+		MatchEngine._chequear_tarjeta(quien, eq_d, eq_a, estado["rng"], estado["eventos"], minuto, true, estado["log"])
 		if estado["eventos"].size() > antes:
 			return  # ya cobró: una entrada, una tarjeta
 
@@ -2941,7 +2974,9 @@ static func _tiro_libre(estado: Dictionary, punto: Vector2, ataca_local: bool, _
 	if ejecutor == -1:
 		_dar_pelota_al_arquero(estado, ataca_local, true)
 		return
-	_detener_juego(estado, pos, ataca_local, ejecutor, tipo, int(TICKS_DETENIDO["falta"]), true)
+	# La falta se congela DONDE PASO y despues se acomodan trotando.
+	_detener_juego(estado, pos, ataca_local, ejecutor, tipo,
+		int(TICKS_DETENIDO["falta"]), false, TICKS_CONGELADO_FALTA)
 
 
 ## Quién la ejecuta. En el tiro libre directo manda `tiros_libres`; en el
@@ -2977,7 +3012,8 @@ static func _elegir_ejecutor(estado: Dictionary, pos: Vector2, ataca_local: bool
 ## transición. El resto de los reinicios (lateral, córner, saque de arco)
 ## siguen con la gente acomodándose, que ahí sí se ve bien.
 static func _detener_juego(estado: Dictionary, pos: Vector2, ataca_local: bool,
-		ejecutor: int, tipo: String, ticks: int, corte: bool = false) -> void:
+		ejecutor: int, tipo: String, ticks: int, corte: bool = false,
+		congelar: int = 0) -> void:
 	var pelota: Dictionary = estado["pelota"]
 	# La pelota NO se pone en el punto todavía: se queda DONDE QUEDÓ
 	# —afuera de la cancha, en las manos del arquero, donde fue la falta—
@@ -2994,7 +3030,15 @@ static func _detener_juego(estado: Dictionary, pos: Vector2, ataca_local: bool,
 	pelota.erase("pared_a")
 	_marcar_posiciones(estado, pos, ataca_local, ejecutor, tipo)
 	estado["balon_parado"] = {"tipo": tipo, "pos": pos, "ataca_local": ataca_local, "ejecutor": ejecutor}
-	estado["detenido"] = ticks
+	estado["detenido"] = ticks + congelar
+	if congelar > 0:
+		# Nadie se acomoda todavia: quedan CONGELADOS donde estaban. Las
+		# marcas ya estan puestas, asi que cuando se termine el congelado
+		# trotan hasta ellas — no se teletransportan, que es lo que hacia
+		# que la falta no se leyera.
+		estado["quietos"] = congelar
+		estado["corte_este_tick"] = true
+		return
 	if corte:
 		for id in estado["jugadores"]:
 			var e_c: Dictionary = estado["jugadores"][id]
@@ -3023,12 +3067,20 @@ static func _marcar_posiciones(estado: Dictionary, pos: Vector2, ataca_local: bo
 	for id in estado["jugadores"]:
 		estado["jugadores"][id]["puesto_barrera"] = -1
 	if tipo == "directo":
+		# Se eligen por cercania AL PUESTO de la barrera y no a la pelota:
+		# son los que menos tienen que caminar para llegar a tiempo.
+		var puesto_barrera := pos + (arco - pos).normalized() * 9.15
 		var candidatos := []
 		for id in estado["jugadores"]:
 			var e_b: Dictionary = estado["jugadores"][id]
 			if e_b["equipo_local"] == ataca_local or e_b["rol"] == "ARQ" or id == ejecutor:
 				continue
-			candidatos.append({"id": id, "d": pos.distance_to(e_b["pos"])})
+			var d_puesto: float = puesto_barrera.distance_to(e_b["pos"])
+			# Mas lejos que esto no llega a tiempo: quedaria a mitad de
+			# camino cuando el otro ya la pateo, que es peor que no ir.
+			if d_puesto > DIST_MAX_A_LA_BARRERA:
+				continue
+			candidatos.append({"id": id, "d": d_puesto})
 		candidatos.sort_custom(func(a, b): return float(a["d"]) < float(b["d"]))
 		var cuantos := mini(_tamano_barrera(pos, ataca_local), candidatos.size())
 		for i in range(cuantos):
@@ -3086,14 +3138,29 @@ static func _marca_en_tiro_libre(e: Dictionary, pos: Vector2, ataca_local: bool)
 		if puesto >= 0:
 			var lateral := Vector2(-hacia_arco.y, hacia_arco.x)
 			return pos + hacia_arco * 9.15 + lateral * (float(puesto) - 1.0) * 0.8
-		# El resto defiende: vuelve a su casillero, pero nunca por delante
-		# de la pelota. Un defensor adelantado de la pelota no defiende
-		# nada, y es exactamente lo que se veía.
-		var base: Vector2 = e["base"]
-		var limite: float = pos.x + hacia_arco.x * 1.0
-		return Vector2(
-			minf(base.x, limite) if hacia_arco.x < 0.0 else maxf(base.x, limite),
-			base.y)
+		# El resto se queda DONDE ESTA, corrido a lo justo: afuera de los
+		# 9,15 y, si le toca defender, del lado del arco.
+		#
+		# Antes volvian a su casillero de formacion, que esta a veinte
+		# metros. Con el teletransporte no se notaba, pero desde que se
+		# acomodan trotando no llegaban nunca: la barrera se armaba a
+		# medias y media defensa quedaba en el camino. Un defensor
+		# tampoco vuelve a su puesto en un tiro libre — baja unos metros
+		# y marca, que es lo que hace esto.
+		#
+		# Y los de arriba NO bajan: un delantero no se vuelve 28 metros
+		# porque le cobraron una falta a su equipo. Se queda arriba
+		# esperando el rechazo, solo respetando la distancia.
+		var p: Vector2 = e["pos"]
+		if not ROLES_QUE_ATACAN.has(str(e["rol"])):
+			var limite: float = pos.x + hacia_arco.x * 1.0
+			p.x = minf(p.x, limite) if hacia_arco.x < 0.0 else maxf(p.x, limite)
+		if pos.distance_to(p) < 9.15:
+			var fuera: Vector2 = (p - pos)
+			if fuera.length() < 0.1:
+				fuera = hacia_arco
+			p = pos + fuera.normalized() * 9.15
+		return p
 
 	# Los compañeros del pateador también respetan los 9,15.
 	var d: float = pos.distance_to(e["pos"])

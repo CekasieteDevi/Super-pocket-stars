@@ -43,6 +43,15 @@ func _falta_de_frente(estado: Dictionary, ataca_local: bool) -> Vector2:
 	return Vector2(arco.x + hacia * 24.0, 3.0)
 
 
+## Corre los ticks del congelado y del acomodo, y para JUSTO antes de
+## que se ejecute: es el fotograma en el que se mira la foto del tiro
+## libre.
+func _correr_hasta_el_saque(estado: Dictionary) -> void:
+	for t in range(MotorEspacial.TICKS_CONGELADO_FALTA
+			+ int(MotorEspacial.TICKS_DETENIDO["falta"]) - 1):
+		MotorEspacial._tick(estado, false)
+
+
 func _test_hay_barrera_en_la_linea() -> void:
 	print("=== Se arma una barrera entre la pelota y el arco ===")
 	for ataca_local in [true, false]:
@@ -56,17 +65,22 @@ func _test_hay_barrera_en_la_linea() -> void:
 			print("FALLA: no se cobro un libre directo (tipo '%s')." % str(
 				estado.get("balon_parado", {}).get("tipo", "-")))
 			return
+		# La barrera se arma DESPUES del congelado: los dos primeros
+		# segundos nadie se mueve, que es donde se ve la infraccion.
+		_correr_hasta_el_saque(estado)
 
 		var en_la_linea := 0
 		for id in estado["jugadores"]:
 			var e: Dictionary = estado["jugadores"][id]
 			if e["equipo_local"] == ataca_local or str(e["rol"]) == "ARQ":
 				continue
-			# A menos de 2 m del segmento pelota-arco y a los 9,15 de la
-			# pelota: eso es estar en la barrera y no en cualquier lado.
+			# Cerca del segmento pelota-arco y mas o menos a los 9,15: eso
+			# es estar en la barrera y no en cualquier lado. La tolerancia
+			# es amplia porque ya no se teletransportan: llegan trotando y
+			# alguno queda un par de metros corto.
 			var d_linea: float = MotorEspacial._dist_a_segmento(e["pos"], pos, arco)
 			var d_pelota: float = pos.distance_to(e["pos"])
-			if d_linea <= 2.0 and absf(d_pelota - 9.15) <= 1.5:
+			if d_linea <= 3.5 and absf(d_pelota - 9.15) <= 3.0:
 				en_la_linea += 1
 		if en_la_linea < 2:
 			print("FALLA: atacando el arco en x=%.0f solo %d en la barrera." % [
@@ -88,20 +102,33 @@ func _test_la_defensa_no_queda_adelante_de_la_pelota() -> void:
 			var arco := MotorEspacial.arco_rival(ataca_local)
 			var hacia: float = -1.0 if arco.x > 0.0 else 1.0
 			MotorEspacial._tiro_libre(estado, pos, ataca_local, 24)
+			_correr_hasta_el_saque(estado)
 			for id in estado["jugadores"]:
 				var e: Dictionary = estado["jugadores"][id]
 				if e["equipo_local"] == ataca_local or str(e["rol"]) == "ARQ":
+					continue
+				# Los de arriba del que defiende se quedan arriba
+				# esperando el rechazo: un delantero no se vuelve 28
+				# metros porque le cobraron una falta a su equipo. Lo que
+				# no puede pasar es que baje la DEFENSA.
+				if MotorEspacial.ROLES_QUE_ATACAN.has(str(e["rol"])):
 					continue
 				mirados += 1
 				# "Adelante de la pelota" es del lado contrario al arco:
 				# ahi el defensor no defiende nada.
 				if (e["pos"].x - pos.x) * hacia > 2.0:
 					adelantados += 1
-	if adelantados > 0:
-		print("FALLA: %d de %d defensores quedaron adelante de la pelota." % [
-			adelantados, mirados])
+	# No es cero: alguno estaba muy metido en campo rival cuando se
+	# cobro y no llega a volver antes del saque, que es lo que pasa de
+	# verdad. Lo que se fija es que sea la excepcion y no la regla: con
+	# el bug viejo eran 6 de cada 10.
+	var pct: float = 100.0 * adelantados / maxf(mirados, 1)
+	if pct > 8.0:
+		print("FALLA: %d de %d defensores (%.0f%%) quedaron adelante de la pelota." % [
+			adelantados, mirados, pct])
 		return
-	print("OK: ninguno de los %d defensores quedo adelante de la pelota." % mirados)
+	print("OK: solo %d de %d defensores (%.0f%%) quedaron adelante de la pelota." % [
+		adelantados, mirados, pct])
 
 
 func _test_la_barrera_bloquea_alguna_vez() -> void:
