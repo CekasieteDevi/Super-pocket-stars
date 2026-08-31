@@ -1192,6 +1192,12 @@ func _construir_panel_partido_animado(padre: Control) -> void:
 	vista_partido.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	panel.add_child(vista_partido)
 	vista_partido.hud.menu_pedido.connect(_mostrar_partido)
+	# Cuando el partido termina —de corrido o por Saltar— se vuelve solo al
+	# resumen. Dejar la cancha congelada obligaba a descubrir el boton Menu
+	# para saber que habia pasado.
+	vista_partido.terminado.connect(func():
+		if paneles["partido_animado"].visible:
+			_mostrar_partido())
 
 
 ## §11: la economia del club. Cuatro cajas separadas —fichajes,
@@ -4181,6 +4187,14 @@ func _on_jugar_fecha() -> void:
 	_refrescar_plantel()
 	_refrescar_informe_rival()
 	_refrescar_objetivo()
+
+	# El partido se VE. Antes se simulaba en silencio, te aparecia el
+	# marcador ya hecho y recien despues podias pedir la repeticion, que es
+	# como leer el diario antes de mirar el partido. Ahora se abre solo, y
+	# adentro estan los controles para acelerar (x1 a x16) o saltar directo
+	# al resultado.
+	if not GameState.ultimos_fotogramas.is_empty():
+		_mostrar_partido_animado()
 
 
 ## Resumen de estadisticas post-partido (posesion/tiros/pases) — pensado
