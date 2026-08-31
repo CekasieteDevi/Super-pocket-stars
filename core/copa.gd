@@ -51,6 +51,10 @@ func jugar_siguiente_ronda(rng: RandomNumberGenerator) -> Array:
 	for partido in partidos_pendientes:
 		var home: Team = partido[0]
 		var away: Team = partido[1]
+		# §8.4#28: el efecto copa vale en la copa. Se prende para el cruce
+		# y se apaga al final, porque el mismo objeto Team juega la liga.
+		home.en_copa = true
+		away.en_copa = true
 		var r := MatchEngine.simular(home, away, rng, false)
 		var gl: int = r["goles_local"]
 		var gv: int = r["goles_visitante"]
@@ -79,6 +83,8 @@ func jugar_siguiente_ronda(rng: RandomNumberGenerator) -> Array:
 			"definicion": definicion, "penales_texto": penales_texto,
 		})
 		ganadores.append(ganador)
+		home.en_copa = false
+		away.en_copa = false
 	historial.append(resultados)
 
 	var siguiente_pool: Array = ganadores + equipos_con_bye

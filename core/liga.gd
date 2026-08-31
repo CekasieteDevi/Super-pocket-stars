@@ -112,6 +112,9 @@ func inicializar(nombres_equipos: Array, rng: RandomNumberGenerator, id_inicial:
 	var siguiente_id := id_inicial
 	for nombre in nombres_equipos:
 		var equipo := Team.generar(nombre, rng, siguiente_id, potencial, "Uruguay", realizacion)
+		# §8.4#28: el club tiene que saber en que categoria juega, si no un
+		# cruce de copa no puede saber que esta cruzando divisiones.
+		equipo.division_actual = division
 		siguiente_id += Team.RANGO_IDS_RESERVADO
 		equipos.append(equipo)
 		tabla[nombre] = _fila_vacia()

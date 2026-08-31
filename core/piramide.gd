@@ -39,7 +39,15 @@ func guardar() -> Dictionary:
 static func cargar(datos: Dictionary) -> Piramide:
 	var p := Piramide.new()
 	for ld in datos["divisiones"]:
-		p.divisiones.append(Liga.cargar(ld))
+		var liga_cargada := Liga.cargar(ld)
+		# Liga no guarda su propia categoria, pero la piramide las guarda
+		# EN ORDEN: el indice es la fuente de verdad. Sin esto, al cargar
+		# una partida nadie sabia en que division jugaba y el efecto copa
+		# (§8.4#28) no se disparaba nunca.
+		liga_cargada.division = p.divisiones.size()
+		for e in liga_cargada.equipos:
+			e.division_actual = liga_cargada.division
+		p.divisiones.append(liga_cargada)
 	# El escalon no se guarda: es la posicion en el array (ver Liga.division).
 	for d in range(p.divisiones.size()):
 		p.divisiones[d].division = d
@@ -168,6 +176,7 @@ func _ejecutar_ascensos_y_descensos(ordenes: Array, rng: RandomNumberGenerator) 
 			var equipo: Team = orden_peor[i]
 			peor.equipos.erase(equipo)
 			mejor.equipos.append(equipo)
+			equipo.division_actual = limite
 			Fans.actualizar_por_movimiento_de_division(equipo, true)
 			movimientos.append({"equipo": equipo.nombre, "tipo": "ascenso directo", "de_division": limite + 2, "a_division": limite + 1})
 
@@ -179,6 +188,8 @@ func _ejecutar_ascensos_y_descensos(ordenes: Array, rng: RandomNumberGenerator) 
 			mejor.equipos.append(candidato)
 			mejor.equipos.erase(defensor)
 			peor.equipos.append(defensor)
+			candidato.division_actual = limite
+			defensor.division_actual = limite + 1
 			Fans.actualizar_por_movimiento_de_division(candidato, true)
 			Fans.actualizar_por_movimiento_de_division(defensor, false)
 			movimientos.append({"equipo": candidato.nombre, "tipo": "ascenso por playoff", "de_division": limite + 2, "a_division": limite + 1})
@@ -188,6 +199,7 @@ func _ejecutar_ascensos_y_descensos(ordenes: Array, rng: RandomNumberGenerator) 
 			var equipo: Team = orden_mejor[i]
 			mejor.equipos.erase(equipo)
 			peor.equipos.append(equipo)
+			equipo.division_actual = limite + 1
 			Fans.actualizar_por_movimiento_de_division(equipo, false)
 			movimientos.append({"equipo": equipo.nombre, "tipo": "descenso directo", "de_division": limite + 1, "a_division": limite + 2})
 

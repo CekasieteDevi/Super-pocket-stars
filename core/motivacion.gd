@@ -10,17 +10,15 @@ extends RefCounted
 ## modificadores que el GDD le asigna, cuatro no existían y el único que
 ## sí (#30) estaba sumado al bloque C por error.
 ##
-## Acá viven los dos que se pueden construir con lo que el juego ya sabe:
+## Acá viven los que se pueden construir con lo que el juego ya sabe:
 ##
 ##   #26 Ex club — +4 contra su ex equipo.
 ##   #27 Título o descenso en juego en las últimas 5 fechas — +4.
 ##
-## Los otros dos siguen sin existir y necesitan sistemas que no hay:
+##   #28 David vs Goliat — +3 al de división muy inferior en copa.
 ##
-##   #28 David vs Goliat (+3 al de división muy inferior en copa) necesita
-##       que el partido sepa que es de copa y de qué división es cada uno.
-##       Hoy ni Team ni el motor saben en qué división juegan: la pirámide
-##       lo sabe desde afuera.
+## El único que sigue sin existir es:
+##
 ##   #29 Presión de la prensa (−3 tras una nota negativa) necesita prensa
 ##       que corra DURANTE la temporada. Hoy las noticias se generan solo
 ##       al cerrar el año, así que no hay nada que pueda pesar en la fecha
@@ -32,6 +30,16 @@ const BONUS_EX_CLUB := 4.0
 ## §8.4#27. Quedan pocas fechas y hay algo en juego de verdad.
 const BONUS_RECTA_FINAL := 4.0
 const FECHAS_DE_RECTA_FINAL := 5
+
+## §8.4#28. El efecto copa: el chico que se cruza a uno de arriba juega
+## el partido de su vida. Solo el CHICO lo recibe.
+const BONUS_DAVID := 3.0
+
+## Cuántas categorías de diferencia hacen falta para que el cruce cuente
+## como "división muy inferior". Con una sola no alcanza: un club de
+## quinta contra uno de cuarta es un rival difícil, no una hazaña.
+const DIVISIONES_DE_DIFERENCIA := 2
+
 
 ## Cuántos puestos desde arriba cuentan como "peleando el título" y desde
 ## abajo como "peleando el descenso". Coinciden con las zonas reales de
@@ -48,7 +56,23 @@ static func modificador(jugador: Dictionary, equipo: Team, rival: Team) -> float
 		total += BONUS_EX_CLUB
 	if equipo.recta_final_caliente:
 		total += BONUS_RECTA_FINAL
+	if es_david(equipo, rival):
+		total += BONUS_DAVID
 	return total
+
+
+## ¿Es el chico de un cruce de copa contra alguien de mucho mas arriba?
+##
+## `division_actual` es 0 para primera, asi que un numero MAS ALTO es una
+## categoria peor. Si alguno de los dos no sabe en que division esta
+## (-1), no hay efecto copa: es mejor no dar nada que dar el bonus al
+## que no corresponde.
+static func es_david(equipo: Team, rival: Team) -> bool:
+	if not equipo.en_copa:
+		return false
+	if equipo.division_actual < 0 or rival.division_actual < 0:
+		return false
+	return equipo.division_actual - rival.division_actual >= DIVISIONES_DE_DIFERENCIA
 
 
 static func es_ex_club(jugador: Dictionary, rival: Team) -> bool:

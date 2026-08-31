@@ -1,8 +1,9 @@
 extends SceneTree
 
-## §8.4 #26 (ex club) y #27 (titulo o descenso en juego en las ultimas 5
-## fechas). Son dos de los cinco modificadores de motivacion que el GDD le
-## asigna al bloque D, que estaba vacio en el 91% de los duelos.
+## §8.4 #26 (ex club), #27 (titulo o descenso en juego en las ultimas 5
+## fechas) y #28 (efecto copa). Tres de los cinco modificadores de
+## motivacion que el GDD le asigna al bloque D, que estaba vacio en el
+## 91% de los duelos.
 
 const SEED := 24680
 
@@ -16,6 +17,8 @@ func _init() -> void:
 	_test_la_recta_final_solo_al_final(rng)
 	_test_la_recta_final_es_para_los_extremos(rng)
 	_test_entra_en_el_bloque_d(rng)
+	_test_efecto_copa(rng)
+	_test_la_categoria_sigue_al_club(rng)
 
 	quit()
 
@@ -144,3 +147,65 @@ func _test_entra_en_el_bloque_d(rng: RandomNumberGenerator) -> void:
 		return
 	print("OK: bloque D %.1f sin motivacion y %.1f con ex club + recta final." % [
 		float(sin["D"]), float(con["D"])])
+
+
+func _test_efecto_copa(rng: RandomNumberGenerator) -> void:
+	print("
+=== El chico de un cruce de copa juega el partido de su vida ===")
+	var grande := Team.generar("Grande", rng, 0)
+	var chico := Team.generar("Chico", rng, 400)
+	var vecino := Team.generar("Vecino", rng, 800)
+	grande.division_actual = 0
+	chico.division_actual = Motivacion.DIVISIONES_DE_DIFERENCIA
+	vecino.division_actual = Motivacion.DIVISIONES_DE_DIFERENCIA - 1
+
+	# Fuera de la copa no pasa nada, por mas diferencia que haya.
+	if Motivacion.es_david(chico, grande):
+		print("FALLA: en la liga no tendria que haber efecto copa.")
+		return
+
+	chico.en_copa = true
+	grande.en_copa = true
+	if not Motivacion.es_david(chico, grande):
+		print("FALLA: el chico no recibio el efecto copa.")
+		return
+	if Motivacion.es_david(grande, chico):
+		print("FALLA: el grande NO tendria que recibirlo.")
+		return
+
+	# Una sola categoria de diferencia no es una hazaña.
+	vecino.en_copa = true
+	if Motivacion.es_david(vecino, grande):
+		print("FALLA: con %d division de diferencia no tendria que aplicar." % (
+			Motivacion.DIVISIONES_DE_DIFERENCIA - 1))
+		return
+
+	# Y si alguno no sabe en que division juega, no se regala el bonus.
+	var perdido := Team.generar("Perdido", rng, 1200)
+	perdido.en_copa = true
+	if Motivacion.es_david(perdido, grande):
+		print("FALLA: sin saber la division no tendria que dar nada.")
+		return
+	print("OK: +%.0f al chico con %d divisiones de diferencia, 0 al grande, 0 con %d, y 0 sin saber la division." % [
+		Motivacion.BONUS_DAVID, Motivacion.DIVISIONES_DE_DIFERENCIA,
+		Motivacion.DIVISIONES_DE_DIFERENCIA - 1])
+
+
+func _test_la_categoria_sigue_al_club(rng: RandomNumberGenerator) -> void:
+	print("
+=== Cada club sabe en que division juega, y lo sigue sabiendo tras guardar ===")
+	var p := Piramide.generar(rng)
+	for d in range(10):
+		for e in p.divisiones[d].equipos:
+			if e.division_actual != d:
+				print("FALLA: %s esta en division %d y cree estar en %d." % [
+					e.nombre, d, e.division_actual])
+				return
+	var vuelta := Piramide.cargar(p.guardar())
+	for d in range(10):
+		for e in vuelta.divisiones[d].equipos:
+			if e.division_actual != d:
+				print("FALLA: tras cargar, %s en division %d cree estar en %d." % [
+					e.nombre, d, e.division_actual])
+				return
+	print("OK: los 200 clubes saben su categoria, y la conservan al guardar y cargar.")

@@ -65,6 +65,17 @@ var objetivo_en_riesgo: bool = false  # transitorio, lo recalcula GameState ante
 ## menos. Transitorio como el de arriba: lo recalcula Liga antes de cada
 ## fecha para los veinte equipos — ver core/motivacion.gd.
 var recta_final_caliente: bool = false
+
+## §8.4#28: en que categoria juega el club, 0 = primera. Hasta ahora esto
+## lo sabia solo la piramide desde AFUERA, asi que un partido no tenia
+## forma de saber que estaba cruzando divisiones. Lo pone Liga al
+## inicializarse y lo actualizan los ascensos y descensos.
+var division_actual: int = -1
+
+## §8.4#28: este partido es de copa. Transitorio: lo prende la Copa antes
+## de simular el cruce y lo apaga despues, porque el mismo club juega la
+## liga con los mismos objetos.
+var en_copa: bool = false
 var foco_individual: Dictionary = {}  # jugador_id -> atributo (String), foco de ESTA temporada — ver core/entrenamiento.gd
 ## Fans (§8.4 #22, ver core/fans.gd) — a diferencia de estilo/DT/cancha,
 ## arranca en 0 para todos ("no va nadie al estadio") y evoluciona con
