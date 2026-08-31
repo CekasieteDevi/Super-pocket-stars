@@ -147,7 +147,13 @@ const ALCANCE_ESTIRADA := 2.0
 ## son 0,25 s, así que 10 ticks son 2,5 segundos de reloj de partido: lo
 ## suficiente para que se vea que el juego paró y que la gente se acomoda,
 ## sin que aburra a x1.
-const TICKS_DETENIDO := {"falta": 12, "corner": 13, "gol": 10, "saque_inicial": 12, "lateral": 7, "saque_arco": 8}
+## El penal es la pausa mas larga de todas a proposito: es el unico
+## momento del partido en que todos se quedan quietos mirando a uno.
+const TICKS_DETENIDO := {"falta": 12, "corner": 13, "gol": 10, "saque_inicial": 12,
+	"lateral": 7, "saque_arco": 8, "penal": 20}
+
+## El punto del penal: 11 m del arco.
+const DIST_PENAL := 11.0
 
 ## Cuánto le achica el margen de error de desmarque el rasgo Enfocado.
 ## No es cero: hasta el delantero más atento se va alguna vez, y ponerlo
@@ -2703,11 +2709,17 @@ static func _cobrar_falta(estado: Dictionary, punto: Vector2, victima_local: boo
 	_tiro_libre(estado, punto, victima_local, minuto)
 
 
-## Penal: lo patea el de mejor `tiro` del equipo, contra el arquero. Se
-## resuelve con el mismo duelo de siempre pero con una ventaja grande para
-## el pateador, que es lo que es un penal.
+## Cobra el penal: PARA el juego y acomoda la cancha. No lo ejecuta.
+##
+## Antes se resolvia en el mismo tick en que se cobraba, asi que en la
+## cancha se veia la falta y la pelota adentro del arco sin nada en el
+## medio: ni corte, ni jugadores saliendo del area, ni el pateador
+## tomandose su tiempo. Un penal es la jugada mas detenida que hay y se
+## veia como la mas rapida.
+##
+## La ejecucion vive en _ejecutar_penal, que la llama _ejecutar_balon_parado
+## cuando se termina la pausa — el mismo camino que la falta y el corner.
 static func _cobrar_penal(estado: Dictionary, ataca_local: bool, minuto: int) -> void:
-	var f: Dictionary = pesos()["fisica"]
 	var eq_a := _equipo_de(estado, ataca_local)
 	var eq_d := _equipo_de(estado, not ataca_local)
 	estado["penales"] = int(estado.get("penales", 0)) + 1
@@ -2716,6 +2728,74 @@ static func _cobrar_penal(estado: Dictionary, ataca_local: bool, minuto: int) ->
 	for j in eq_a.jugadores_en_cancha():
 		if pateador.is_empty() or j["atributos"]["tiro"] > pateador["atributos"]["tiro"]:
 			pateador = j
+	var arquero := eq_d.arquero()
+	if pateador.is_empty() or arquero.is_empty():
+		_dar_pelota_al_arquero(estado, not ataca_local, true)
+		return
+
+	var arco := arco_rival(ataca_local)
+	var hacia: float = -1.0 if arco.x > 0.0 else 1.0
+	var punto := Vector2(arco.x + hacia * DIST_PENAL, 0.0)
+	var clave_pat := clave_de(int(pateador["id"]), ataca_local)
+	var clave_arq := clave_de(int(arquero["id"]), not ataca_local)
+
+	# Todos afuera del area salvo el pateador y el arquero. Es la regla y
+	# es lo que hace que la foto se lea como un penal.
+	var borde_x: float = arco.x + hacia * 16.5
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		e["vel"] = Vector2.ZERO
+		e["rapidez"] = 0.0
+		if id == clave_pat:
+			# Unos metros DETRAS de la pelota: el pateador toma carrera.
+			e["pos"] = punto - Vector2(hacia * 3.0, 0.0)
+			e["marca"] = e["pos"]
+			continue
+		if id == clave_arq:
+			e["pos"] = Vector2(arco.x - hacia * 0.2, 0.0)
+			e["marca"] = e["pos"]
+			continue
+		# Si esta adentro del area, se va al borde por el camino mas corto,
+		# repartidos en abanico para que no queden todos en el mismo punto.
+		var p: Vector2 = e["pos"]
+		if absf(arco.x - p.x) <= 16.5 and absf(p.y) <= 20.16:
+			# `hacia` apunta del arco hacia el medio, asi que SUMARLO es
+			# alejarse del arco. Restarlo los metia mas adentro del area,
+			# que es lo contrario de sacarlos.
+			p.x = borde_x + hacia * estado["rng"].randf_range(0.5, 4.0)
+			p.y = clampf(p.y + estado["rng"].randf_range(-6.0, 6.0),
+				-MEDIO_ANCHO + 2.0, MEDIO_ANCHO - 2.0)
+		e["pos"] = p
+		e["marca"] = p
+
+	var pelota: Dictionary = estado["pelota"]
+	pelota["pos"] = punto
+	pelota["vel"] = Vector2.ZERO
+	pelota["en_vuelo"] = false
+	pelota["es_remate"] = false
+	pelota["altura_max"] = 0.0
+	pelota["z"] = 0.0
+	pelota["poseedor_id"] = -1
+	pelota["ticks_con_pelota"] = 0
+
+	estado["balon_parado"] = {
+		"tipo": "penal", "ataca_local": ataca_local, "minuto": minuto,
+		"pateador_id": int(pateador["id"]), "pos": punto,
+	}
+	estado["detenido"] = int(TICKS_DETENIDO["penal"])
+	estado["quietos"] = int(TICKS_DETENIDO["penal"])
+	estado["corte_este_tick"] = true
+
+
+## Ejecuta el penal ya cobrado: el duelo de siempre con una ventaja
+## grande para el pateador, que es lo que es un penal.
+static func _ejecutar_penal(estado: Dictionary, bp: Dictionary) -> void:
+	var f: Dictionary = pesos()["fisica"]
+	var ataca_local: bool = bool(bp["ataca_local"])
+	var minuto: int = int(bp["minuto"])
+	var eq_a := _equipo_de(estado, ataca_local)
+	var eq_d := _equipo_de(estado, not ataca_local)
+	var pateador := _dict_jugador(estado, eq_a, int(bp["pateador_id"]))
 	var arquero := eq_d.arquero()
 	if pateador.is_empty() or arquero.is_empty():
 		_dar_pelota_al_arquero(estado, not ataca_local, true)
@@ -2735,6 +2815,11 @@ static func _cobrar_penal(estado: Dictionary, ataca_local: bool, minuto: int) ->
 
 	_accion(estado, clave_de(int(pateador["id"]), ataca_local), ACCION_PATEA)
 	_accion(estado, clave_de(int(arquero["id"]), not ataca_local), ACCION_VUELA)
+	# La pelota SALE del punto: sin esto el remate no se veia viajar, que
+	# es justo lo que se venia a mirar.
+	var arco_p := arco_rival(ataca_local)
+	estado["pelota"]["pos"] = bp["pos"]
+	estado["pelota"]["poseedor_id"] = -1
 	estado["eventos"].append({
 		"minuto": minuto, "tipo": "penal", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 		"jugador_posicion": pateador["posicion"],
@@ -2919,6 +3004,9 @@ static func _ejecutar_balon_parado(estado: Dictionary) -> void:
 		return
 	if str(bp["tipo"]) == "saque_medio":
 		_reiniciar_desde_medio(estado, bool(bp["saca_local"]))
+		return
+	if str(bp["tipo"]) == "penal":
+		_ejecutar_penal(estado, bp)
 		return
 	if str(bp["tipo"]) == "saque_inicial":
 		# El saque del medio es un PASE, no un arranque: se la toca a un
