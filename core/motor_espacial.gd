@@ -533,6 +533,32 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 	var mi_valor := valor_posicion(pos, es_local)
 	var opciones := []
 
+	# §4.2: con rivales metidos en tu propio tercio, el arquero la manda
+	# lejos en vez de repartirla corto.
+	#
+	# La medicion no mostraba que el arquero eligiera MAL —el companero al
+	# que se la da esta libre (presion 0,02) y la tasa de pase del motor es
+	# 73%, que es realista— pero salir jugando con tres rivales rondando el
+	# area es una decision, y en el futbol de verdad solo la toma el que
+	# sabe. Lo pondera la INTELIGENCIA: un arquero lucido la revienta, uno
+	# limitado insiste en salir jugando y regala la pelota en la puerta del
+	# area, que es justo el error que uno espera de una division baja.
+	var arquero_apurado := 0.0
+	if es_arquero:
+		var arco_propio := arco_rival(not es_local)
+		var invasores := 0
+		for id_r in estado["jugadores"]:
+			var er: Dictionary = estado["jugadores"][id_r]
+			if er["equipo_local"] == es_local:
+				continue
+			if absf(arco_propio.x - er["pos"].x) <= float(pesos()["fisica"]["tercio_propio_arquero"]):
+				invasores += 1
+		var lucidez_arq: float = clampf(
+			float(jugador["atributos"]["inteligencia"]) / 100.0, 0.0, 1.0)
+		arquero_apurado = clampf(
+			float(invasores) / float(pesos()["fisica"]["invasores_para_reventarla"]),
+			0.0, 1.0) * lucidez_arq
+
 	# --- Conducir -----------------------------------------------------
 	if not es_arquero:
 		var wc: Dictionary = w["conducir"]
@@ -659,7 +685,7 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 			var u_largo: float = wl["base"] \
 				+ wl["progreso"] * (valor_posicion(comp["pos"], es_local) - mi_valor) \
 				+ wl["presion"] * presion \
-				+ wl["salida"] * (1.0 - mi_valor)
+				+ wl["salida"] * (1.0 - mi_valor) 				+ wl["arquero_apurado"] * arquero_apurado
 			opciones.append({
 				"tipo": "pase_largo", "utilidad": u_largo, "objetivo_id": id,
 				"detalle": {"dist": dist, "presion": presion},
@@ -670,7 +696,7 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 		var u_pase: float = wp["base"] \
 			+ wp["progreso"] * progreso \
 			+ wp["seguridad"] * (1.0 - riesgo) \
-			- wp["distancia"] * (dist / max_dist)
+			- wp["distancia"] * (dist / max_dist) 			- wp["arquero_apurado"] * arquero_apurado
 		opciones.append({
 			"tipo": "pase", "utilidad": u_pase, "objetivo_id": id,
 			"detalle": {"progreso": progreso, "riesgo": riesgo, "dist": dist},

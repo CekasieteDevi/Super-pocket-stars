@@ -9,7 +9,8 @@
     "base": 0.25,
     "progreso": 1.0,
     "seguridad": 0.45,
-    "distancia": 0.55
+    "distancia": 0.55,
+    "arquero_apurado": 1.6
   },
   "_gambeta": "Encarar a un rival puntual. base bajo porque no deberia ser la opcion por defecto; habilidad la hace atractiva para los buenos de control; presion la desalienta cuando hay varios encima.",
   "gambeta": {
@@ -41,7 +42,8 @@
     "base": 0.2,
     "progreso": 0.7,
     "presion": 0.55,
-    "salida": 0.45
+    "salida": 0.45,
+    "arquero_apurado": 1.6
   },
   "_pase_hueco": "Pase al espacio por delante del companero, no a los pies. Progreso alto y riesgo alto: rompe la linea rival pero la pelota viaja mas y por zona disputada. Solo lo ve quien tiene vision suficiente.",
   "pase_hueco": {
@@ -185,6 +187,8 @@
     "tiradas_tarjeta_tope": 90,
     "_tiradas_tarjeta_tope": "Tope por infraccion. Subirlo casi no cambia nada: con ~90 tiradas la chance de amonestar ya es del 85% y el limite real es que una falta no puede dar mas de una tarjeta. Existe para que una sequia larga no vuelva automatica a la siguiente.",
     "prob_falta_en_gambeta": 0.22,
-    "_prob_falta_en_gambeta": "Chance de que el defensor pasado haga falta en vez de dejarlo pasar limpio. Va aparte de prob_falta porque encarar y quitar no son la misma situacion."
+    "_prob_falta_en_gambeta": "Chance de que el defensor pasado haga falta en vez de dejarlo pasar limpio. Va aparte de prob_falta porque encarar y quitar no son la misma situacion.",
+    "tercio_propio_arquero": 30.0,
+    "invasores_para_reventarla": 3.0
   }
 }
