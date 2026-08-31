@@ -673,6 +673,19 @@ func hay_partida_guardada() -> bool:
 	return FileAccess.file_exists(RUTA_PARTIDA)
 
 
+## Datos del archivo guardado, para que la pantalla pueda decir QUE hay
+## en vez de solo "hay una partida guardada".
+func info_partida_guardada() -> Dictionary:
+	if not hay_partida_guardada():
+		return {}
+	var t := Time.get_datetime_dict_from_unix_time(
+		int(FileAccess.get_modified_time(RUTA_PARTIDA)))
+	return {
+		"cuando": "%02d/%02d/%d %02d:%02d" % [t["day"], t["month"], t["year"], t["hour"], t["minute"]],
+		"megas": float(FileAccess.open(RUTA_PARTIDA, FileAccess.READ).get_length()) / 1048576.0,
+	}
+
+
 func guardar_partida() -> void:
 	var datos := {
 		"version": 1,

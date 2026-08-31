@@ -67,6 +67,7 @@ var label_cantera_mentor: Label
 var label_partida_estado: Label
 var boton_cargar_partida: Button
 var boton_borrar_partida: Button
+var dialogo_borrar_partida: ConfirmationDialog
 
 
 func _ready() -> void:
@@ -3984,17 +3985,44 @@ func _construir_panel_partida_guardado(padre: Control) -> void:
 	boton_borrar_partida.text = "Borrar guardado"
 	boton_borrar_partida.custom_minimum_size = Vector2(180, Tema.ALTO_TACTIL)
 	boton_borrar_partida.add_theme_color_override("font_color", Tema.ROJO)
-	boton_borrar_partida.pressed.connect(_on_borrar_partida)
+	boton_borrar_partida.pressed.connect(func(): dialogo_borrar_partida.popup_centered())
 	barra.add_child(boton_borrar_partida)
+
+	# Borrar el guardado no se puede deshacer y hasta ahora un solo toque
+	# alcanzaba. Va con confirmacion, como cualquier cosa que no tiene
+	# vuelta atras.
+	dialogo_borrar_partida = ConfirmationDialog.new()
+	dialogo_borrar_partida.title = "Borrar la partida guardada"
+	dialogo_borrar_partida.dialog_text = "Se borra el archivo guardado y no se puede recuperar.\n\nLa partida que estás jugando ahora NO se toca: sigue como está, solo que sin copia de respaldo."
+	dialogo_borrar_partida.ok_button_text = "Borrar"
+	dialogo_borrar_partida.cancel_button_text = "Cancelar"
+	dialogo_borrar_partida.confirmed.connect(_on_borrar_partida)
+	add_child(dialogo_borrar_partida)
 
 
 func _refrescar_partida_guardado() -> void:
 	var hay_guardado := GameState.hay_partida_guardada()
 	boton_cargar_partida.disabled = not hay_guardado
 	boton_borrar_partida.disabled = not hay_guardado
+
+	# Un boton apagado y mudo se lee como un boton roto: se toca, no pasa
+	# nada, y la conclusion es que el juego fallo. Los dos dicen por que
+	# no se pueden usar, y cuando SI hay guardado la pantalla dice de
+	# cuando es, que es lo unico que hace falta para decidir si cargarlo.
+	if not hay_guardado:
+		var motivo := "Todavia no guardaste nada, asi que Cargar y Borrar no tienen nada que hacer."
+		boton_cargar_partida.tooltip_text = motivo
+		boton_borrar_partida.tooltip_text = motivo
+		if label_partida_estado.text == "":
+			label_partida_estado.text = motivo
+		return
+
+	var info := GameState.info_partida_guardada()
+	boton_cargar_partida.tooltip_text = "Reemplaza TODO lo que este pasando ahora por lo del archivo."
+	boton_borrar_partida.tooltip_text = "Borra el archivo. No toca la partida en curso."
 	if label_partida_estado.text == "":
-		label_partida_estado.text = "Hay una partida guardada." if hay_guardado \
-			else "No hay ninguna partida guardada todavia."
+		label_partida_estado.text = "Guardado del %s  ·  %.1f MB." % [
+			str(info.get("cuando", "?")), float(info.get("megas", 0.0))]
 
 
 func _on_guardar_partida() -> void:
@@ -4053,7 +4081,11 @@ func _refrescar_boton_animado() -> void:
 
 func _on_borrar_partida() -> void:
 	GameState.borrar_partida()
-	label_partida_estado.text = "Partida guardada borrada."
+	# Se comprueba que HAYA desaparecido en vez de dar por hecho que si.
+	if GameState.hay_partida_guardada():
+		label_partida_estado.text = "No se pudo borrar el archivo guardado."
+	else:
+		label_partida_estado.text = "Guardado borrado. Tu partida en curso sigue igual."
 	_refrescar_partida_guardado()
 
 
