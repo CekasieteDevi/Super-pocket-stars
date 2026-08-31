@@ -23,6 +23,7 @@ const PIEL := Color(0.95, 0.78, 0.62)
 const PIEL_OSCURA := Color(0.80, 0.63, 0.48)
 const PELO := Color(0.22, 0.14, 0.08)
 const OJO := Color(0.12, 0.10, 0.10)
+## El pantalon por defecto, para los 199 clubes que no eligen nada.
 const SHORT := Color(0.13, 0.13, 0.16)
 const MEDIAS := Color(0.90, 0.90, 0.92)
 const BOTIN := Color(0.06, 0.06, 0.06)
@@ -224,14 +225,19 @@ static func direccion_desde(delta_pantalla: Vector2) -> int:
 ## Sprite compuesto. Se cachea por (dirección, pose, color): en cancha hay
 ## dos equipos y unas pocas poses, así que son decenas de texturas, no una
 ## por jugador y por frame.
-static func jugador(color_camiseta: Color, direccion: int = ABAJO, pose: String = QUIETO) -> ImageTexture:
-	var clave := "j_%s_%d_%s" % [color_camiseta.to_html(false), direccion, pose]
+## `color_short` TRANSPARENT = el pantalon por defecto. Entra en la clave
+## del cache: dos clubes con la misma camiseta y distinto pantalon son dos
+## sprites distintos, y sin esto el segundo se dibujaba con el del primero.
+static func jugador(color_camiseta: Color, direccion: int = ABAJO, pose: String = QUIETO,
+		color_short: Color = Color.TRANSPARENT) -> ImageTexture:
+	var clave := "j_%s_%s_%d_%s" % [
+		color_camiseta.to_html(false), color_short.to_html(true), direccion, pose]
 	if _cache.has(clave):
 		return _cache[clave]
 
 	var espejo := direccion in [ABAJO_IZQ, IZQUIERDA, ARRIBA_IZQ]
 	if pose == BARRIDA:
-		var tendida := _construir(BARRIDA_TENDIDA, _paleta(color_camiseta), espejo)
+		var tendida := _construir(BARRIDA_TENDIDA, _paleta(color_camiseta, color_short), espejo)
 		_cache[clave] = tendida
 		return tendida
 	var base := direccion
@@ -242,16 +248,18 @@ static func jugador(color_camiseta: Color, direccion: int = ABAJO, pose: String 
 	var filas: Array = CUERPOS[base].duplicate()
 	filas.append_array(PIERNAS.get(pose, PIERNAS[QUIETO]))
 
-	var tex := _construir(filas, _paleta(color_camiseta), espejo)
+	var tex := _construir(filas, _paleta(color_camiseta, color_short), espejo)
 	_cache[clave] = tex
 	return tex
 
 
-static func arquero_volando(color_camiseta: Color, hacia_izquierda: bool) -> ImageTexture:
-	var clave := "arq_%s_%s" % [color_camiseta.to_html(false), str(hacia_izquierda)]
+static func arquero_volando(color_camiseta: Color, hacia_izquierda: bool,
+		color_short: Color = Color.TRANSPARENT) -> ImageTexture:
+	var clave := "arq_%s_%s_%s" % [
+		color_camiseta.to_html(false), color_short.to_html(true), str(hacia_izquierda)]
 	if _cache.has(clave):
 		return _cache[clave]
-	var tex := _construir(ARQUERO_VUELA, _paleta(color_camiseta), hacia_izquierda)
+	var tex := _construir(ARQUERO_VUELA, _paleta(color_camiseta, color_short), hacia_izquierda)
 	_cache[clave] = tex
 	return tex
 
@@ -288,11 +296,11 @@ static func sombra() -> ImageTexture:
 	return tex
 
 
-static func _paleta(camiseta: Color) -> Dictionary:
+static func _paleta(camiseta: Color, short: Color = Color.TRANSPARENT) -> Dictionary:
 	return {
 		".": TRANSPARENTE, "H": PELO, "S": PIEL, "d": PIEL_OSCURA, "o": OJO,
 		"J": camiseta, "b": camiseta.darkened(0.35),
-		"D": SHORT, "M": MEDIAS, "B": BOTIN,
+		"D": short if short.a > 0.0 else SHORT, "M": MEDIAS, "B": BOTIN,
 	}
 
 

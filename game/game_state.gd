@@ -82,7 +82,8 @@ func _ready() -> void:
 ## para que el mundo sea reproducible mientras se desarrolla; una partida
 ## nueva pedida desde el menu no, porque volver a jugar el mismo mundo con
 ## los mismos 200 clubes no es empezar de nuevo.
-func partida_nueva(semilla: int = -1) -> void:
+func partida_nueva(semilla: int = -1, nombre_club: String = "",
+		camiseta: Color = Color.TRANSPARENT, short: Color = Color.TRANSPARENT) -> void:
 	rng = RandomNumberGenerator.new()
 	if semilla < 0:
 		rng.randomize()
@@ -90,6 +91,16 @@ func partida_nueva(semilla: int = -1) -> void:
 		rng.seed = semilla
 
 	piramide = Piramide.generar(rng)
+	# El club del jugador se renombra ACA, antes de que se armen la
+	# confederacion y las copas: de ahi en mas el nombre ya viajo a
+	# demasiados indices como para cambiarlo sin romper algo.
+	var mio: Team = piramide.divisiones[DIVISION_INICIAL].equipos[0]
+	if nombre_club.strip_edges() != "":
+		piramide.renombrar(mio, nombre_club)
+	if camiseta.a > 0.0:
+		mio.color_camiseta = camiseta
+	if short.a > 0.0:
+		mio.color_short = short
 	_sembrar_presupuestos()
 	confederacion = Confederacion.generar(piramide, rng)
 	seleccion = Seleccion.new()

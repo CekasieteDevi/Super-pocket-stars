@@ -3,13 +3,10 @@ extends RefCounted
 
 ## De qué color juega cada club.
 ##
-## OJO: el GDD habla de la camiseta del club, pero `Team` HOY NO GUARDA
-## ningún color — no existe el dato. Mientras tanto se deriva del nombre,
-## que es estable (el mismo club siempre sale del mismo color) y
-## determinista entre sesiones sin tocar el save.
-##
-## Cuando se agreguen camisetas de verdad, ESTE es el único archivo a
-## cambiar: el resto de la vista ya pide el color por acá.
+## El club del jugador ELIGE sus colores al empezar la partida y esos
+## mandan. Los otros 199 no eligen nada, así que su color se deriva del
+## nombre: es estable (el mismo club sale siempre del mismo color) y
+## determinista entre sesiones sin ocupar lugar en el guardado.
 
 const PALETA := [
 	Color(0.90, 0.16, 0.18),  # rojo
@@ -24,9 +21,37 @@ const PALETA := [
 	Color(0.62, 0.35, 0.16),  # marrón
 ]
 
+## En el mismo orden que PALETA. Los usa la pantalla de inicio para que
+## una fila de cuadraditos de color se pueda leer con el dedo encima.
+const NOMBRES := ["Rojo", "Azul", "Amarillo", "Verde", "Violeta",
+	"Naranja", "Celeste", "Blanco", "Negro", "Marrón"]
+
 
 static func de(nombre: String) -> Color:
 	return PALETA[absi(hash(nombre)) % PALETA.size()]
+
+
+## El color de un club concreto: el que eligió si eligió, y si no el que
+## le toca por su nombre.
+static func de_equipo(equipo: Team) -> Color:
+	if equipo != null and equipo.color_camiseta.a > 0.0:
+		return equipo.color_camiseta
+	return de(equipo.nombre if equipo != null else "")
+
+
+## El par de un partido, respetando lo que cada club eligió. Si los dos
+## terminan pareciéndose, se le corre el color al VISITANTE, que es lo que
+## pasa en la realidad: el local juega siempre con la suya.
+static func par_equipos(local: Team, visitante: Team) -> Array:
+	var c_local := de_equipo(local)
+	var c_visita := de_equipo(visitante)
+	var idx := 0
+	var intentos := 0
+	while _parecidos(c_local, c_visita) and intentos < PALETA.size():
+		c_visita = PALETA[idx]
+		idx += 1
+		intentos += 1
+	return [c_local, c_visita]
 
 
 ## Los dos equipos de un partido no pueden verse parecido: si el visitante

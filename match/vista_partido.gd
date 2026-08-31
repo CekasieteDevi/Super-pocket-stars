@@ -35,6 +35,8 @@ var pausado := false
 
 var color_local := Color.WHITE
 var color_visitante := Color.WHITE
+var color_short_local: Color = Color.TRANSPARENT
+var color_short_visitante: Color = Color.TRANSPARENT
 ## El arquero va de otro color, como en la cancha: con los 22 de dos
 ## colores no había forma de saber cuál de los del fondo era el arquero.
 var color_arquero_local := Color.WHITE
@@ -107,10 +109,16 @@ static func construir_nombres(local: Team, visitante: Team) -> Dictionary:
 
 func iniciar(lista: Array, c_local: Color, c_visitante: Color,
 		nombre_local: String = "", nombre_visitante: String = "",
-		tabla_nombres: Dictionary = {}, estado_cancha: String = "regular") -> void:
+		tabla_nombres: Dictionary = {}, estado_cancha: String = "regular",
+		short_local: Color = Color.TRANSPARENT,
+		short_visitante: Color = Color.TRANSPARENT) -> void:
 	fotogramas = lista
 	color_local = c_local
 	color_visitante = c_visitante
+	# TRANSPARENT = pantalon por defecto, que es lo que usan los clubes que
+	# no eligieron nada (ver match/sprites_partido.gd).
+	color_short_local = short_local
+	color_short_visitante = short_visitante
 	var arqueros := ColoresClub.arqueros(c_local, c_visitante)
 	color_arquero_local = arqueros[0]
 	color_arquero_visitante = arqueros[1]
@@ -322,6 +330,7 @@ func _mostrar(idx: int, t: float) -> void:
 		var ent := {
 			"tipo": "jugador", "z": 0.0, "pos": p,
 			"color": _color_de(j),
+			"color_short": color_short_local if j["equipo_local"] else color_short_visitante,
 			"direccion": _direccion(avance),
 			"pose": pose,
 		}

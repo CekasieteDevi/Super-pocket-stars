@@ -390,9 +390,11 @@ func _dibujar_cuerpo(ent: Dictionary) -> void:
 	var pose := str(ent.get("pose", SpritesPartido.QUIETO))
 	var tex: ImageTexture
 	if pose == SpritesPartido.VUELA:
-		tex = SpritesPartido.arquero_volando(ent["color"], bool(ent.get("espejo", false)))
+		tex = SpritesPartido.arquero_volando(ent["color"], bool(ent.get("espejo", false)),
+			ent.get("color_short", Color.TRANSPARENT))
 	else:
-		tex = SpritesPartido.jugador(ent["color"], int(ent.get("direccion", SpritesPartido.ABAJO)), pose)
+		tex = SpritesPartido.jugador(ent["color"], int(ent.get("direccion", SpritesPartido.ABAJO)),
+			pose, ent.get("color_short", Color.TRANSPARENT))
 	# El ancho se deriva del ancho del sprite y no es fijo: así el arquero
 	# volando (que es más ancho que alto) se dibuja con píxeles del mismo
 	# tamaño que los demás en vez de aplastado al ancho de un jugador.

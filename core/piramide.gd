@@ -163,6 +163,56 @@ func fin_de_temporada(rng: RandomNumberGenerator, equipo_protegido: Team = null,
 		"transferencias_entre_divisiones": transferencias}
 
 
+## ¿Ya hay un club con ese nombre? Importa porque el nombre es la CLAVE
+## de la tabla de posiciones y de media docena de indices mas: dos clubes
+## con el mismo nombre se pisarian los puntos.
+func existe_nombre(nombre: String) -> bool:
+	for liga in divisiones:
+		for e in liga.equipos:
+			if e.nombre == nombre:
+				return true
+	return false
+
+
+## Le cambia el nombre a un club arreglando todo lo que lo referencia por
+## texto. Devuelve false si el nombre esta tomado o vacio.
+##
+## Hay que hacerlo temprano —al empezar la partida, antes de que se armen
+## la confederacion y las copas— porque de ahi en mas el nombre viaja a
+## demasiados lados: la tabla lo usa de clave, los clasicos lo guardan
+## como texto, y cada jugador lleva de que club viene.
+func renombrar(equipo: Team, nuevo: String) -> bool:
+	var limpio := nuevo.strip_edges()
+	if limpio == "" or existe_nombre(limpio):
+		return false
+	var viejo := equipo.nombre
+
+	for liga in divisiones:
+		if not liga.equipos.has(equipo):
+			continue
+		# La tabla esta indexada por nombre: hay que mover la fila, no
+		# agregar una nueva, o el club aparece dos veces.
+		if liga.tabla.has(viejo):
+			liga.tabla[limpio] = liga.tabla[viejo]
+			liga.tabla.erase(viejo)
+		# El clasico se guarda como texto en los dos sentidos.
+		for otro in liga.equipos:
+			if otro.rival_directo == viejo:
+				otro.rival_directo = limpio
+
+	# De donde viene cada jugador (§8.4#26).
+	for j in equipo.todos_los_jugadores():
+		if str(j.get("club_actual", "")) == viejo:
+			j["club_actual"] = limpio
+		var ex: Array = j.get("ex_clubes", [])
+		for i in range(ex.size()):
+			if str(ex[i]) == viejo:
+				ex[i] = limpio
+
+	equipo.nombre = limpio
+	return true
+
+
 func _ejecutar_ascensos_y_descensos(ordenes: Array, rng: RandomNumberGenerator) -> Array:
 	var movimientos := []
 

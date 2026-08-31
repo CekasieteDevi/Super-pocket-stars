@@ -67,6 +67,17 @@ var label_cantera_mentor: Label
 var label_partida_estado: Label
 var boton_cargar_partida: Button
 var boton_borrar_partida: Button
+var capa_inicio: CanvasLayer
+var menu_inicio: VBoxContainer
+var formulario_inicio: VBoxContainer
+var campo_nombre_club: LineEdit
+var fila_camiseta: HBoxContainer
+var fila_short: HBoxContainer
+var boton_comenzar: Button
+var boton_cargar_inicio: Button
+var label_inicio_estado: Label
+var color_camiseta_elegido := 0
+var color_short_elegido := 8
 var dialogo_borrar_partida: ConfirmationDialog
 var boton_partida_nueva: Button
 var dialogo_partida_nueva: ConfirmationDialog
@@ -136,6 +147,228 @@ func _ready() -> void:
 	# deslizables con el dedo (ver _ajustar_para_tactil).
 	_ajustar_para_tactil(self)
 
+	_construir_pantalla_inicio()
+	_mostrar_seccion("club")
+	_mostrar_inicio()
+
+
+## La pantalla que se ve al abrir el juego. Tapa TODO —el riel incluido—
+## porque hasta que no elegis partida no hay club que mirar: antes el
+## juego abria directo en la portada de un club que nadie habia elegido.
+##
+## Vive como un CanvasLayer aparte y no como un panel mas: los paneles se
+## muestran y se ocultan entre ellos, y esto tiene que quedar por encima
+## de todo sin participar de ese baile.
+func _construir_pantalla_inicio() -> void:
+	capa_inicio = CanvasLayer.new()
+	capa_inicio.layer = 10
+	add_child(capa_inicio)
+
+	var fondo := PanelContainer.new()
+	fondo.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var estilo := StyleBoxFlat.new()
+	estilo.bg_color = Tema.FONDO
+	fondo.add_theme_stylebox_override("panel", estilo)
+	capa_inicio.add_child(fondo)
+
+	var centro := CenterContainer.new()
+	fondo.add_child(centro)
+	var caja := VBoxContainer.new()
+	caja.custom_minimum_size = Vector2(560, 0)
+	caja.add_theme_constant_override("separation", 14)
+	centro.add_child(caja)
+
+	var titulo := Label.new()
+	titulo.text = "Super Pocket Stars"
+	titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	Tema.numero(titulo, 44, Tema.AMBAR)
+	caja.add_child(titulo)
+
+	# --- Menu -------------------------------------------------------------
+	menu_inicio = VBoxContainer.new()
+	menu_inicio.add_theme_constant_override("separation", 10)
+	caja.add_child(menu_inicio)
+
+	var btn_nueva := Button.new()
+	btn_nueva.text = "Nueva partida"
+	btn_nueva.custom_minimum_size = Vector2(0, 64)
+	Tema.primario(btn_nueva)
+	btn_nueva.pressed.connect(func():
+		menu_inicio.visible = false
+		formulario_inicio.visible = true
+		campo_nombre_club.grab_focus())
+	menu_inicio.add_child(btn_nueva)
+
+	boton_cargar_inicio = Button.new()
+	boton_cargar_inicio.text = "Cargar partida"
+	boton_cargar_inicio.custom_minimum_size = Vector2(0, 64)
+	boton_cargar_inicio.pressed.connect(_on_cargar_desde_inicio)
+	menu_inicio.add_child(boton_cargar_inicio)
+
+	label_inicio_estado = Label.new()
+	label_inicio_estado.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label_inicio_estado.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label_inicio_estado.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	label_inicio_estado.add_theme_color_override("font_color", Tema.SUAVE)
+	caja.add_child(label_inicio_estado)
+
+	# --- Formulario de club nuevo ----------------------------------------
+	formulario_inicio = VBoxContainer.new()
+	formulario_inicio.visible = false
+	formulario_inicio.add_theme_constant_override("separation", 10)
+	caja.add_child(formulario_inicio)
+
+	formulario_inicio.add_child(Tema.etiqueta_seccion("Nombre del club"))
+	campo_nombre_club = LineEdit.new()
+	campo_nombre_club.placeholder_text = "Como se llama tu equipo"
+	campo_nombre_club.max_length = 28
+	campo_nombre_club.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	campo_nombre_club.text_changed.connect(func(_t): _validar_club_nuevo())
+	formulario_inicio.add_child(campo_nombre_club)
+
+	formulario_inicio.add_child(Tema.etiqueta_seccion("Camiseta"))
+	fila_camiseta = _fila_de_colores(true)
+	formulario_inicio.add_child(fila_camiseta)
+
+	formulario_inicio.add_child(Tema.etiqueta_seccion("Pantalón"))
+	fila_short = _fila_de_colores(false)
+	formulario_inicio.add_child(fila_short)
+
+	var acciones := HBoxContainer.new()
+	acciones.add_theme_constant_override("separation", 10)
+	formulario_inicio.add_child(acciones)
+
+	var btn_volver := Button.new()
+	btn_volver.text = "Volver"
+	btn_volver.custom_minimum_size = Vector2(140, Tema.ALTO_TACTIL)
+	btn_volver.pressed.connect(func():
+		formulario_inicio.visible = false
+		menu_inicio.visible = true
+		_refrescar_inicio())
+	acciones.add_child(btn_volver)
+
+	boton_comenzar = Button.new()
+	boton_comenzar.text = "Comenzar"
+	boton_comenzar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	boton_comenzar.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	Tema.primario(boton_comenzar)
+	boton_comenzar.pressed.connect(_on_comenzar_partida)
+	acciones.add_child(boton_comenzar)
+
+
+## Los diez colores como botones cuadrados. Se marca el elegido con un
+## borde ambar: sobre una fila de colores, cualquier otra señal (un tilde,
+## una sombra) se pierde contra el propio color del boton.
+func _fila_de_colores(es_camiseta: bool) -> HBoxContainer:
+	var fila := HBoxContainer.new()
+	fila.add_theme_constant_override("separation", 8)
+	for i in range(ColoresClub.PALETA.size()):
+		var c: Color = ColoresClub.PALETA[i]
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(46, 46)
+		b.tooltip_text = ColoresClub.NOMBRES[i]
+		_pintar_muestra(b, c, false)
+		var idx := i
+		b.pressed.connect(func():
+			if es_camiseta:
+				color_camiseta_elegido = idx
+			else:
+				color_short_elegido = idx
+			_refrescar_colores_elegidos())
+		fila.add_child(b)
+	return fila
+
+
+func _pintar_muestra(boton: Button, color: Color, elegido: bool) -> void:
+	for estado in ["normal", "hover", "pressed", "focus"]:
+		var caja := StyleBoxFlat.new()
+		caja.bg_color = color
+		caja.corner_radius_top_left = 8
+		caja.corner_radius_top_right = 8
+		caja.corner_radius_bottom_left = 8
+		caja.corner_radius_bottom_right = 8
+		if elegido:
+			caja.border_width_top = 3
+			caja.border_width_bottom = 3
+			caja.border_width_left = 3
+			caja.border_width_right = 3
+			caja.border_color = Tema.AMBAR
+		boton.add_theme_stylebox_override(estado, caja)
+
+
+func _refrescar_colores_elegidos() -> void:
+	for i in range(fila_camiseta.get_child_count()):
+		_pintar_muestra(fila_camiseta.get_child(i), ColoresClub.PALETA[i],
+			i == color_camiseta_elegido)
+	for i in range(fila_short.get_child_count()):
+		_pintar_muestra(fila_short.get_child(i), ColoresClub.PALETA[i],
+			i == color_short_elegido)
+	_validar_club_nuevo()
+
+
+## Comenzar solo se habilita con un nombre usable, y si no lo es dice por
+## que: un boton apagado y mudo se lee como un boton roto.
+func _validar_club_nuevo() -> void:
+	var nombre := campo_nombre_club.text.strip_edges()
+	var motivo := ""
+	if nombre == "":
+		motivo = "Poné el nombre de tu club."
+	elif GameState.piramide != null and GameState.piramide.existe_nombre(nombre):
+		motivo = "Ya hay un club con ese nombre en la pirámide. Elegí otro."
+	elif color_camiseta_elegido == color_short_elegido:
+		motivo = "La camiseta y el pantalón no pueden ser del mismo color."
+	boton_comenzar.disabled = motivo != ""
+	label_inicio_estado.text = motivo
+
+
+func _mostrar_inicio() -> void:
+	capa_inicio.visible = true
+	menu_inicio.visible = true
+	formulario_inicio.visible = false
+	_refrescar_inicio()
+
+
+func _refrescar_inicio() -> void:
+	var hay := GameState.hay_partida_guardada()
+	boton_cargar_inicio.disabled = not hay
+	if hay:
+		var info := GameState.info_partida_guardada()
+		label_inicio_estado.text = "Hay una partida guardada del %s." % str(info.get("cuando", "?"))
+	else:
+		label_inicio_estado.text = "Todavía no hay ninguna partida guardada."
+
+
+func _on_cargar_desde_inicio() -> void:
+	if not GameState.cargar_partida():
+		label_inicio_estado.text = "No se pudo cargar la partida (archivo corrupto)."
+		return
+	_entrar_al_juego()
+
+
+func _on_comenzar_partida() -> void:
+	GameState.partida_nueva(-1, campo_nombre_club.text.strip_edges(),
+		ColoresClub.PALETA[color_camiseta_elegido],
+		ColoresClub.PALETA[color_short_elegido])
+	_entrar_al_juego()
+
+
+## Sale de la pantalla de inicio hacia el juego, con todo repintado: lo
+## que la UI tuviera cargado es de otro mundo o de ninguno.
+func _entrar_al_juego() -> void:
+	plantel_elegido = -1
+	ficha_jugador_id = -1
+	resultados_mercado = []
+	filtros_mercado = BusquedaMercado.filtros_vacios()
+	_refrescar_ultimo_partido()
+	_refrescar_formacion()
+	_refrescar_plantel()
+	_refrescar_tabla()
+	_refrescar_economia()
+	_refrescar_cantera()
+	_refrescar_noticias()
+	_refrescar_instalaciones()
+	_refrescar_partida_guardado()
+	capa_inicio.visible = false
 	_mostrar_seccion("club")
 
 
@@ -4377,12 +4610,13 @@ func _mostrar_partido_animado() -> void:
 	var visitante: Team = _equipo_de_la_liga(str(r["visitante"]))
 	if local == null or visitante == null:
 		return
-	var colores := ColoresClub.par(local.nombre, visitante.nombre)
+	var colores := ColoresClub.par_equipos(local, visitante)
 	vista_partido.iniciar(
 		GameState.ultimos_fotogramas, colores[0], colores[1],
 		local.nombre, visitante.nombre,
 		VistaPartido.construir_nombres(local, visitante),
-		VistaCancha.estado_desde_calidad(local.calidad_cancha))
+		VistaCancha.estado_desde_calidad(local.calidad_cancha),
+		local.color_short, visitante.color_short)
 
 
 func _equipo_de_la_liga(nombre: String) -> Team:
