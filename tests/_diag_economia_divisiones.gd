@@ -10,7 +10,7 @@ func _init() -> void:
 	rng.seed = 777
 	var piramide := Piramide.generar(rng)
 
-	print("div | valor plantel | ingresos prom |    neto prom | presup.fichajes | fichajes/valor | mejor jugador")
+	print("div | valor plantel | ingresos prom |    neto prom | presup.fichajes | fichajes/valor | mejor jugador | temporadas | rojo")
 	for d in range(10):
 		var liga: Liga = piramide.divisiones[d]
 		var n: int = liga.equipos.size()
@@ -31,20 +31,28 @@ func _init() -> void:
 			if float(r["neto"]) < 0.0:
 				en_rojo += 1
 		var suma_valor := 0.0
-		var mejor_jug := 0.0
+		# El mejor jugador de UNA division es una sola tirada y salta como
+		# loco entre divisiones vecinas (el escalon de elite de
+		# ValorJugador amplifica cualquier diferencia de media). Se toma el
+		# promedio del mejor de CADA club: veinte muestras en vez de una.
+		var suma_mejores := 0.0
 		for e2 in liga.equipos:
+			var mejor_del_club := 0.0
 			for j in e2.jugadores:
 				var v := ValorJugador.calcular(j, 50.0, 3)
 				suma_valor += v
-				mejor_jug = maxf(mejor_jug, v)
+				mejor_del_club = maxf(mejor_del_club, v)
+			suma_mejores += mejor_del_club
+		var mejor_jug := suma_mejores / n
 		var valor_prom := suma_valor / n
 		var fichajes: float = (suma_neto / n) * Economia.PRESUPUESTO_PORCENTAJES["fichajes"]
-		print("%3d | %13s | %13s | %12s | %15s | %13.0f%% | %13s" % [
+		print("%3d | %13s | %13s | %12s | %15s | %13.0f%% | %13s | %5.1fx | %2d/%d" % [
 			d + 1,
 			Economia.formato_dinero(valor_prom),
 			Economia.formato_dinero(suma_ing / n),
 			Economia.formato_dinero(suma_neto / n),
 			Economia.formato_dinero(fichajes),
 			fichajes / maxf(valor_prom, 1.0) * 100.0,
-			Economia.formato_dinero(mejor_jug)])
+			Economia.formato_dinero(mejor_jug),
+			mejor_jug / maxf(fichajes, 1.0), en_rojo, n])
 	quit()

@@ -62,7 +62,33 @@ const PREMIO_POR_POSICION := {1: 50000.0, 2: 30000.0, 3: 15000.0}
 ## cobran, el sueldo es el 10% del valor— ordenes de magnitud mas, asi que
 ## los ingresos tienen que acompañar o primera nace quebrada. De division
 ## 4 para abajo no cambia nada, igual que los precios.
-const MULTIPLICADOR_DIVISION := [228.0, 42.0, 8.00, 4.25, 3.35, 2.64, 2.08, 1.64, 1.29, 1.00]
+##
+## RECALIBRADO midiendo las diez ligas ENTERAS (tests/
+## _diag_economia_divisiones.gd), no un club por division como la vez
+## anterior. Lo que se encontro con esa medicion:
+##
+##  - El 228 de primera era deuda de antes de que `base_salarial` sacara
+##    el escalon de elite de los SUELDOS. Existia porque los sueldos de
+##    primera llegaban a $535k; hoy los egresos promedio de primera son
+##    $492k, pero el multiplicador producia $41,6M de ingresos.
+##  - El poder de compra relativo no era monotono: bajaba parejo de
+##    decima (41% del valor del plantel) hasta tercera (11%) y ahi
+##    rebotaba a 16% y 28%. Un club de tercera no podia fichar a NADIE de
+##    su propia division: el mejor jugador costaba 2,8 temporadas de
+##    presupuesto mientras en decima costaba media.
+##
+## El objetivo elegido: el mejor jugador de tu division cuesta entre 2 y 3
+## temporadas de presupuesto de fichajes —o sea, para traerlo hay que
+## vender— y la plata crece fuerte con la categoria. El "mejor jugador"
+## se mide como el promedio del mejor de CADA club de la division: el
+## mejor de la division a secas es una sola tirada y salta como loco entre
+## divisiones vecinas.
+##
+## Decima deja de ser 1.0. Ese escalon estaba calibrado junto con
+## PRECIO_ENTRADA para que "una temporada de ahorro te compre un par de
+## refuerzos reales", y eso es justamente lo contrario del objetivo
+## nuevo: ahora el refuerzo tope hay que ganarselo vendiendo.
+const MULTIPLICADOR_DIVISION := [88.2, 32.3, 9.67, 3.31, 2.00, 1.18, 0.89, 0.69, 0.543, 0.43]
 
 
 ## -1 (liga suelta, sin escalon en la piramide) = sin multiplicador.
