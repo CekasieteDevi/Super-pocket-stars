@@ -61,6 +61,10 @@ var calidad_cancha: float = 0.0  # -8..+3, ver core/estado_cancha.gd — rige cu
 var clima_partido: String = ""  # transitorio, solo dentro de un partido — "" (normal) / Lluvia / Calor / Viento, ver core/clima.gd
 var arbitro_partido: String = ""  # transitorio, solo dentro de un partido — Estricto/Permisivo/Casero, ver core/arbitro.gd
 var objetivo_en_riesgo: bool = false  # transitorio, lo recalcula GameState antes de cada fecha — ver core/objetivos.gd
+## §8.4#27: te estas jugando el titulo o el descenso y quedan 5 fechas o
+## menos. Transitorio como el de arriba: lo recalcula Liga antes de cada
+## fecha para los veinte equipos — ver core/motivacion.gd.
+var recta_final_caliente: bool = false
 var foco_individual: Dictionary = {}  # jugador_id -> atributo (String), foco de ESTA temporada — ver core/entrenamiento.gd
 ## Fans (§8.4 #22, ver core/fans.gd) — a diferencia de estilo/DT/cancha,
 ## arranca en 0 para todos ("no va nadie al estadio") y evoluciona con
@@ -580,6 +584,17 @@ const FACTOR_CLAUSULA := 1.8
 ## base_salarial, que no lleva el escalon de elite: ver ValorJugador.
 func _registrar_fichaje(jugador: Dictionary, valor: float, contrato_anios: int = 3) -> void:
 	var id: int = jugador["id"]
+	# §8.4#26: de donde viene. Se sella al LLEGAR y no al irse: irse tiene
+	# ocho puntos de salida distintos (mercado, libres, prestamos,
+	# quiebra...) y basta olvidarse de uno para que el rasgo mienta;
+	# llegar tiene este, que ademas ya lo llama todo el mundo.
+	var anterior := str(jugador.get("club_actual", ""))
+	if anterior != "" and anterior != nombre:
+		var ex: Array = jugador.get("ex_clubes", [])
+		if not ex.has(anterior):
+			ex.append(anterior)
+		jugador["ex_clubes"] = ex
+	jugador["club_actual"] = nombre
 	var base := ValorJugador.base_salarial(jugador, 50.0, contrato_anios)
 	sueldos[id] = Economia.sueldo_sugerido(base) * Personalidad.factor_sueldo(jugador)
 	contratos[id] = contrato_anios

@@ -19,9 +19,12 @@ func _init() -> void:
 	var saturados := {"A": 0, "B": 0, "C": 0, "D": 0}
 	var no_cero := {"A": 0, "B": 0, "C": 0, "D": 0}
 
-	# Media temporada alcanza: ya hay forma, lesiones, amarillas, rachas y
-	# el clima cambia fecha a fecha.
-	for fecha in range(20):
+	# La temporada ENTERA: media no alcanza. Los modificadores de
+	# motivacion (§8.4#26 y #27) recien aparecen tarde —el ex club
+	# necesita que el mercado haya movido gente, y la recta final son las
+	# ultimas cinco fechas— asi que a la fecha 20 el bloque D todavia
+	# esta vacio y parece que no hicieran nada.
+	for fecha in range(38):
 		gs.jugar_siguiente_fecha()
 		var liga: Liga = gs.liga_jugador()
 		for e in liga.equipos:
@@ -42,7 +45,7 @@ func _init() -> void:
 					if absf(v) > 0.01:
 						no_cero[k] += 1
 
-	print("Medido en %d duelos de una media temporada real:\n" % cuenta)
+	print("Medido en %d duelos de una temporada entera:\n" % cuenta)
 	print("bloque | promedio |  pico | tope | saturado | usado (no cero)")
 	for k in ["A", "B", "C", "D"]:
 		var tope: float = 12.0 if k == "D" else 15.0

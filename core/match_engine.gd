@@ -114,6 +114,7 @@ static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atri
 	# entrar— y ademas el D estaba practicamente vacio.
 	if equipo.objetivo_en_riesgo:
 		bloque_d += Objetivos.MALUS_EN_RIESGO
+	bloque_d += Motivacion.modificador(jugador, equipo, rival)
 	return {"A": bloque_a, "B": bloque_b, "C": bloque_c, "D": bloque_d}
 
 
