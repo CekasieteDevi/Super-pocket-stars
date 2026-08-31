@@ -73,18 +73,45 @@ var motivo_fin_partida: String = ""
 func _ready() -> void:
 	if hay_partida_guardada() and cargar_partida():
 		return
+	partida_nueva(99)
 
+
+## Arranca un mundo nuevo, tirando TODO lo que hubiera en memoria.
+##
+## `semilla` -1 = al azar. El arranque de la primera vez usa la 99 fija
+## para que el mundo sea reproducible mientras se desarrolla; una partida
+## nueva pedida desde el menu no, porque volver a jugar el mismo mundo con
+## los mismos 200 clubes no es empezar de nuevo.
+func partida_nueva(semilla: int = -1) -> void:
 	rng = RandomNumberGenerator.new()
-	rng.seed = 99
+	if semilla < 0:
+		rng.randomize()
+	else:
+		rng.seed = semilla
 
 	piramide = Piramide.generar(rng)
 	_sembrar_presupuestos()
 	confederacion = Confederacion.generar(piramide, rng)
 	seleccion = Seleccion.new()
+	division_jugador = DIVISION_INICIAL
 	equipo_jugador = piramide.divisiones[DIVISION_INICIAL].equipos[0]
 	equipo_jugador.objetivo_temporada = Objetivos.generar(
 		equipo_jugador, _es_ultima_division(DIVISION_INICIAL), liga_jugador().equipos.size(), rng)
 	_armar_copas()
+
+	# Todo lo que no vive en la piramide y quedaria colgado de la partida
+	# anterior: el calendario, el ultimo partido, las noticias, el balance.
+	fecha_actual = 0
+	temporada_actual = 1
+	ultimo_resultado = {}
+	ultimo_log = []
+	ultimos_eventos = []
+	ultimos_fotogramas = []
+	noticias = []
+	ultimo_informe_economico = {}
+	ultima_posicion_final = {}
+	juego_terminado = false
+	motivo_fin_partida = ""
 
 
 ## El presupuesto de la PRIMERA temporada. Sin esto todos los clubes

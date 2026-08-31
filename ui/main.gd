@@ -68,6 +68,8 @@ var label_partida_estado: Label
 var boton_cargar_partida: Button
 var boton_borrar_partida: Button
 var dialogo_borrar_partida: ConfirmationDialog
+var boton_partida_nueva: Button
+var dialogo_partida_nueva: ConfirmationDialog
 
 
 func _ready() -> void:
@@ -3952,7 +3954,7 @@ func _construir_panel_partida_guardado(padre: Control) -> void:
 	dentro.add_child(label_partida_estado)
 
 	var advertencia := Label.new()
-	advertencia.text = "Guardar pisa lo que hubiera. Cargar reemplaza TODO lo que este pasando ahora por lo del archivo. Borrar elimina el archivo y no toca la partida en curso."
+	advertencia.text = "Guardar pisa lo que hubiera. Cargar reemplaza TODO lo que este pasando ahora por lo del archivo. Borrar elimina el ARCHIVO y no toca la partida en curso: para arrancar de cero con otro club y otro mundo, usa Partida nueva."
 	advertencia.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	advertencia.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
 	advertencia.add_theme_color_override("font_color", Tema.SUAVE)
@@ -3974,6 +3976,21 @@ func _construir_panel_partida_guardado(padre: Control) -> void:
 	boton_cargar_partida.custom_minimum_size = Vector2(180, Tema.ALTO_TACTIL)
 	boton_cargar_partida.pressed.connect(_on_cargar_partida)
 	barra.add_child(boton_cargar_partida)
+
+	boton_partida_nueva = Button.new()
+	boton_partida_nueva.text = "Partida nueva"
+	boton_partida_nueva.custom_minimum_size = Vector2(180, Tema.ALTO_TACTIL)
+	boton_partida_nueva.tooltip_text = "Tira la partida actual y genera un mundo nuevo desde cero."
+	boton_partida_nueva.pressed.connect(func(): dialogo_partida_nueva.popup_centered())
+	barra.add_child(boton_partida_nueva)
+
+	dialogo_partida_nueva = ConfirmationDialog.new()
+	dialogo_partida_nueva.title = "Empezar una partida nueva"
+	dialogo_partida_nueva.dialog_text = "Se tira TODO lo que estas jugando —tu club, la temporada, el mercado— y se genera un mundo nuevo: otros 200 clubes, otro equipo, division 10 y fecha 1.\n\nEl archivo guardado NO se toca: si tenias uno, sigue ahi y podes volver con Cargar."
+	dialogo_partida_nueva.ok_button_text = "Empezar de cero"
+	dialogo_partida_nueva.cancel_button_text = "Cancelar"
+	dialogo_partida_nueva.confirmed.connect(_on_partida_nueva)
+	add_child(dialogo_partida_nueva)
 
 	var hueco := Control.new()
 	hueco.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -4077,6 +4094,30 @@ func _refrescar_boton_animado() -> void:
 	var hay: bool = not GameState.ultimos_fotogramas.is_empty()
 	boton_ver_animado.disabled = not hay
 	boton_ver_animado.text = "Ver partido animado" if hay 		else "Ver partido animado (la repeticion no se guarda)"
+
+
+## Empezar de cero de verdad. "Borrar guardado" solo borraba el ARCHIVO y
+## dejaba la partida corriendo igual, asi que quien queria arrancar una
+## nueva tocaba borrar, no pasaba nada visible, y con razon concluia que
+## el juego estaba roto.
+func _on_partida_nueva() -> void:
+	GameState.partida_nueva()
+	# Todo lo que la UI tenia en la mano apunta a jugadores y clubes del
+	# mundo viejo, que ya no existen.
+	plantel_elegido = -1
+	ficha_jugador_id = -1
+	resultados_mercado = []
+	filtros_mercado = BusquedaMercado.filtros_vacios()
+	_refrescar_ultimo_partido()
+	_refrescar_formacion()
+	_refrescar_plantel()
+	_refrescar_tabla()
+	_refrescar_economia()
+	_refrescar_cantera()
+	_refrescar_noticias()
+	_refrescar_instalaciones()
+	_refrescar_partida_guardado()
+	_mostrar_seccion("club")
 
 
 func _on_borrar_partida() -> void:
