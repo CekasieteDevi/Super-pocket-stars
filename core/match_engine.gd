@@ -59,7 +59,10 @@ static func _elegir(jugadores: Array, rng: RandomNumberGenerator) -> Dictionary:
 ## §8.4#30) y bloque D (personalidad + habilidad de ESE jugador en ESE
 ## duelo, §6/§5 — Ansioso de visitante, Egoísta priorizando su propio
 ## tiro, Cañón sumando en sus duelos de tiro si ya se manifestó).
-static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atributo: String, minuto: int, rng: RandomNumberGenerator) -> Dictionary:
+## `companero_id` es el otro jugador del MISMO equipo que participa de la
+## accion —el receptor de un pase— o -1 si la accion es de uno solo. La
+## quimica (§7.4.6) es de a pares y solo entra cuando hay par.
+static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atributo: String, minuto: int, rng: RandomNumberGenerator, companero_id: int = -1) -> Dictionary:
 	var jugador_id: int = jugador["id"]
 	var bloque_a := equipo.forma_partido
 	var bloque_b: float = equipo.armonia + clamp(float(equipo.racha), 0.0, 10.0)
@@ -69,6 +72,9 @@ static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atri
 	# estrenada a +5 dominada. Va en bloque B porque es del EQUIPO, no de
 	# este jugador ni del entorno.
 	bloque_b += Familiaridad.modificador(equipo)
+	# §8.4#10 / §7.4.6: lo que se entienden estos dos en particular.
+	if companero_id >= 0:
+		bloque_b += Quimica.bonus(equipo, jugador_id, companero_id)
 	var bloque_c := 5.0 if equipo.local else 0.0
 	bloque_c += Estilos.modificador(equipo.estilo, rival.estilo)
 	bloque_c += DT.modificador_partido(equipo, rival, atributo, minuto)
@@ -166,7 +172,8 @@ static func _chequear_tarjeta(defensor: Dictionary, equipo_defensor: Team, equip
 
 static func _duelo(atacante: Dictionary, atacante_attr: String, equipo_atacante: Team,
 		defensor: Dictionary, defensor_attr: String, equipo_defensor: Team, rng: RandomNumberGenerator,
-		eventos: Array = [], minuto: int = 0, con_log: bool = false, log: Array = []) -> Dictionary:
+		eventos: Array = [], minuto: int = 0, con_log: bool = false, log: Array = [],
+		companero_id: int = -1) -> Dictionary:
 	var ata_eff := Duel.atributo_efectivo(
 		atacante["atributos"][atacante_attr], _grupo_de(atacante_attr),
 		equipo_atacante.resistencia_pct(atacante["id"]))
@@ -175,7 +182,7 @@ static func _duelo(atacante: Dictionary, atacante_attr: String, equipo_atacante:
 		equipo_defensor.resistencia_pct(defensor["id"]))
 	var resultado := Duel.resolver(
 		ata_eff, def_eff,
-		_bloques_equipo(equipo_atacante, equipo_defensor, atacante, atacante_attr, minuto, rng),
+		_bloques_equipo(equipo_atacante, equipo_defensor, atacante, atacante_attr, minuto, rng, companero_id),
 		_bloques_equipo(equipo_defensor, equipo_atacante, defensor, defensor_attr, minuto, rng))
 	equipo_atacante.desgastar(atacante["id"], atacante["atributos"]["energia"])
 	equipo_defensor.desgastar(defensor["id"], defensor["atributos"]["energia"])
@@ -207,7 +214,13 @@ static func _jugar_periodo(equipo_inicial: Team, home: Team, away: Team, ticks: 
 
 			var atacante := _elegir(medios, rng)
 			var defensor := _elegir(marcadores, rng)
-			var resultado := _duelo(atacante, "pases", posesion, defensor, "quite", rival, rng, eventos, minuto, con_log, log)
+			# §7.4.6: un pase va DE alguien A alguien. El motor abstracto no
+			# modelaba al receptor porque nunca lo habia necesitado; ahora
+			# se elige uno de los que estarian en posicion de recibirla,
+			# para que la quimica de la dupla tenga a quien mirar.
+			var receptor := _elegir(
+				posesion.jugadores_disponibles_por_posiciones(["MC", "MCO", "EXT", "DC"]), rng)
+			var resultado := _duelo(atacante, "pases", posesion, defensor, "quite", rival, rng, eventos, minuto, con_log, log, int(receptor["id"]))
 			var exito := Duel.gana_atacante(resultado, rng)
 
 			if con_log:

@@ -2429,8 +2429,19 @@ static func _gana_intercepcion(estado: Dictionary, clave_def: int, dist: float, 
 	var ata := Duel.atributo_efectivo(
 		float(pasador["atributos"][attr_pas]), "tecnico", eq_pas.resistencia_pct(pasador["id"]))
 	var def := Duel.atributo_efectivo(lectura, "defensivo", eq_def.resistencia_pct(defensor["id"]))
+	# §7.4.6: el pase va a alguien concreto, y la pelota ya lo sabe. Es el
+	# unico lugar del motor espacial donde hay una dupla de verdad.
+	var destino_clave: int = int(estado["pelota"].get("destino_id", -1))
+	var companero_id := -1
+	if destino_clave != -1 and estado["jugadores"].has(destino_clave):
+		var e_dest: Dictionary = estado["jugadores"][destino_clave]
+		# Solo si el destino es un COMPAÑERO. Un centro al area o un
+		# pelotazo pueden tener como destino a un rival, y ahi no hay
+		# dupla que valga.
+		if bool(e_dest["equipo_local"]) == pasador_local:
+			companero_id = int(e_dest["jugador_id"])
 	var res := Duel.resolver(ata, def,
-		MatchEngine._bloques_equipo(eq_pas, eq_def, pasador, "pases", minuto, estado["rng"]),
+		MatchEngine._bloques_equipo(eq_pas, eq_def, pasador, "pases", minuto, estado["rng"], companero_id),
 		MatchEngine._bloques_equipo(eq_def, eq_pas, defensor, "quite", minuto, estado["rng"]))
 	# gana_atacante = el pase pasa. Si el atacante pierde, hay intercepción.
 	return not Duel.gana_atacante(res, estado["rng"])

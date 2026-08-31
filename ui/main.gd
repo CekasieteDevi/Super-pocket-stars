@@ -362,9 +362,13 @@ func _refrescar_ficha_lateral() -> void:
 		caja.add_child(l)
 
 	caja.add_child(Tema.etiqueta_seccion("En qué es fuerte"))
-	for attr in _mejores_atributos(j, 5):
+	# Cuatro y no cinco: con la quimica agregada abajo, la ficha se pasaba
+	# de alto y el boton del final quedaba fuera de la pantalla.
+	for attr in _mejores_atributos(j, 4):
 		caja.add_child(Componentes.barra_atributo(
 			attr, int(j["atributos"][attr]), int(Progresion.techo_de(j, attr))))
+
+	_agregar_quimica(caja, equipo, j)
 
 	var contrato := Label.new()
 	contrato.text = "Contrato %d año(s)  ·  sueldo %s" % [
@@ -379,6 +383,70 @@ func _refrescar_ficha_lateral() -> void:
 	var id := plantel_elegido
 	btn.pressed.connect(func(): _mostrar_ficha(id))
 	caja.add_child(btn)
+
+
+## §7.4.6: con quien se entiende este jugador.
+##
+## Va en la ficha lateral y no como columna de la lista porque la quimica
+## es de a PARES: no hay un numero de quimica de un jugador solo, hay uno
+## por cada compañero. Lo que se muestra son sus mejores duplas, que es lo
+## que hace falta para decidir a quien no tocar.
+func _agregar_quimica(caja: VBoxContainer, equipo: Team, j: Dictionary) -> void:
+	var duplas := Quimica.mejores_duplas(equipo, int(j["id"]), 3)
+	caja.add_child(Tema.etiqueta_seccion("Química · con quién se entiende"))
+
+	if duplas.is_empty():
+		var vacio := Label.new()
+		vacio.text = "Todavía con nadie. Hacen falta %d partidos juntos en el once para que una dupla empiece a rendir." % int(Quimica.PARTIDOS_MINIMOS)
+		vacio.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		vacio.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		vacio.add_theme_color_override("font_color", Tema.SUAVE)
+		caja.add_child(vacio)
+		return
+
+	for d in duplas:
+		var otro := _buscar_jugador_por_id(equipo, int(d["id"]))
+		if otro.is_empty():
+			continue
+		var fila := HBoxContainer.new()
+		caja.add_child(fila)
+
+		var nombre := Componentes.celda(
+			_nombre_jugador(otro), 130, Tema.TEXTO)
+		nombre.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		fila.add_child(nombre)
+
+		# La barra mide contra el TOPE de la mecanica, no contra la mejor
+		# dupla del plantel: asi se ve cuanto le queda por crecer.
+		var barra := ProgressBar.new()
+		barra.min_value = 0.0
+		barra.max_value = Quimica.PARTIDOS_TOPE
+		barra.value = float(d["partidos"])
+		barra.show_percentage = false
+		barra.custom_minimum_size = Vector2(0, 9)
+		barra.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		barra.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		barra.tooltip_text = "%d partidos juntos en el once." % int(d["partidos"])
+		var fondo := StyleBoxFlat.new()
+		fondo.bg_color = Color("#2a3a33")
+		fondo.corner_radius_top_left = 5
+		fondo.corner_radius_top_right = 5
+		fondo.corner_radius_bottom_left = 5
+		fondo.corner_radius_bottom_right = 5
+		barra.add_theme_stylebox_override("background", fondo)
+		var relleno := StyleBoxFlat.new()
+		relleno.bg_color = Tema.CELESTE
+		relleno.corner_radius_top_left = 5
+		relleno.corner_radius_top_right = 5
+		relleno.corner_radius_bottom_left = 5
+		relleno.corner_radius_bottom_right = 5
+		barra.add_theme_stylebox_override("fill", relleno)
+		fila.add_child(barra)
+
+		var bonus := Componentes.celda_numero(
+			"+%.1f" % float(d["bonus"]), 54, Tema.CELESTE, HORIZONTAL_ALIGNMENT_RIGHT)
+		bonus.tooltip_text = "Lo que suman en los pases ENTRE ELLOS."
+		fila.add_child(bonus)
 
 
 func _caja_numero(etiqueta: String, valor: String, color: Color) -> Control:

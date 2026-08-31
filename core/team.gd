@@ -121,6 +121,10 @@ var suspendidos: Dictionary = {}  # jugador_id -> partidos que todavia tiene que
 ## Ver core/familiaridad.gd.
 var familiaridad: Dictionary = {}
 
+## §7.4.6: partidos que jugo junta cada dupla ("idA-idB" -> partidos).
+## Ver core/quimica.gd.
+var quimica: Dictionary = {}
+
 var caja: Dictionary = {}  # "fichajes"/"contratos"/"mejoras"/"mantenimiento" -> moneda
 ## Lo que se sumo a cada categoria en el ultimo cierre de temporada, y como
 ## quedo la caja justo despues de esa inyeccion (antes de que el mercado
@@ -294,7 +298,7 @@ func guardar() -> Dictionary:
 		"sueldos": _claves_a_texto(sueldos), "contratos": _claves_a_texto(contratos),
 		"clausulas": _claves_a_texto(clausulas),
 		"reputacion": reputacion, "quebrado": quebrado, "scouts": scouts, "instalaciones": instalaciones,
-		"familiaridad": familiaridad,
+		"familiaridad": familiaridad, "quimica": quimica,
 		"config_cambios": config_cambios,
 		"objetivo_temporada": objetivo_temporada, "objetivos_incumplidos_seguidos": objetivos_incumplidos_seguidos,
 		"foco_individual": _claves_a_texto(foco_individual),
@@ -406,6 +410,11 @@ static func cargar(datos: Dictionary) -> Team:
 		t.familiaridad = Familiaridad.inicial(t.formacion, t.estilo)
 	for k in t.familiaridad:
 		t.familiaridad[k] = float(t.familiaridad[k])
+	# Una partida anterior a §7.4.6 arranca sin ninguna dupla hecha, que es
+	# lo correcto: no hay forma de saber quien jugo con quien.
+	t.quimica = datos.get("quimica", {})
+	for k in t.quimica:
+		t.quimica[k] = float(t.quimica[k])
 	t.config_cambios = datos.get("config_cambios", "equilibrado")
 	# JSON.parse() vuelve todos los numeros como float -- "posicion_maxima"
 	# despues se compara con un int (posicion_final) via <=, que en GDScript

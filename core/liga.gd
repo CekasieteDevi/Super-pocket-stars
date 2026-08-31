@@ -285,6 +285,9 @@ func _actualizar_estado_jugadores(home: Team, away: Team, r: Dictionary) -> void
 	# espacial y el abstracto entran los dos por este mismo camino.
 	Familiaridad.despues_de_partido(home)
 	Familiaridad.despues_de_partido(away)
+	# §7.4.6: la quimica se hace jugando juntos, asi que se cuenta el once.
+	Quimica.despues_de_partido(home)
+	Quimica.despues_de_partido(away)
 	# §7.3: el uso del partido se acumula en el jugador y lo consume
 	# Progresion al cerrar la temporada. Los dos motores entregan el mismo
 	# shape, así que esto no sabe cuál se usó — y no tiene por qué.
