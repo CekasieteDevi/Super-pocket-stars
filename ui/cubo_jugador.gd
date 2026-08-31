@@ -21,11 +21,14 @@ const ALTO := 78
 var jugador_id: int = -1
 var _rol: String = ""
 var _nombre: String = ""
+var _puesto_natural: String = ""
 var _media: float = 0.0
 var _energia: float = 1.0
 var _animo: float = 50.0
 var _lesionado: bool = false
 var _es_banco: bool = false
+## §8.4#4: lo que le cuesta el puesto que ocupa, 0 si esta en el suyo.
+var _castigo_puesto: float = 0.0
 ## Cuanto se achica respecto del tamaño completo. La cancha la calcula
 ## segun el alto que le toco (ver CanchaFormacion._escala_cubos).
 var escala: float = 1.0
@@ -36,12 +39,14 @@ static func crear(jugador: Dictionary, rol: String, equipo: Team, es_banco: bool
 	var c := CuboJugador.new()
 	c.jugador_id = int(jugador["id"])
 	c._rol = rol
+	c._puesto_natural = str(jugador.get("posicion", rol))
 	c._nombre = str(jugador.get("apellido", jugador.get("nombre", "?")))
 	c._media = float(jugador["media"])
 	c._energia = equipo.resistencia_pct(c.jugador_id)
 	c._animo = float(equipo.animo.get(c.jugador_id, 50.0))
 	c._lesionado = equipo.esta_lesionado(c.jugador_id)
 	c._es_banco = es_banco
+	c._castigo_puesto = 0.0 if es_banco else equipo.penalizacion_puesto(c.jugador_id)
 	c.escala = escala_inicial
 	c._armar()
 	return c
@@ -62,8 +67,23 @@ func _armar() -> void:
 	arriba.add_theme_constant_override("separation", 4)
 	arriba.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	caja.add_child(arriba)
-	var chip := Componentes.chip(_rol, Color("#4a2a28") if _lesionado else Color("#2f4a3c"))
+	# El chip del puesto se pone rojo si el jugador NO es de ahi: es el
+	# aviso de que ese cambio esta costando algo.
+	var color_chip := Color("#4a2a28") if _lesionado else Color("#2f4a3c")
+	if _castigo_puesto < 0.0:
+		color_chip = Color("#4a3a28")
+	var chip := Componentes.chip(_rol, color_chip)
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# El chip trae tamaño fijo del componente y el resto del cubo escala:
+	# con la cancha chica, un chip de tres letras (ARQ, MCO) se comia el
+	# ancho y la media salia cortada ("42." en vez de "42.5").
+	chip.add_theme_font_size_override("font_size", int(Tema.TAM_ETIQUETA * escala))
+	# Y con menos aire a los costados: con los 8 px del componente, un
+	# "ARQ" dejaba 30 px para la media y "42.5" no entraba.
+	var caja_chip: StyleBoxFlat = chip.get_theme_stylebox("normal").duplicate()
+	caja_chip.content_margin_left = 4
+	caja_chip.content_margin_right = 4
+	chip.add_theme_stylebox_override("normal", caja_chip)
 	arriba.add_child(chip)
 	var media := Label.new()
 	media.text = "%.1f" % _media
@@ -86,6 +106,17 @@ func _armar() -> void:
 	# falta al armar el equipo y no entran como números en 104 px.
 	caja.add_child(_barrita(_energia, "Energía %d%%" % int(round(_energia * 100.0))))
 	caja.add_child(_barrita(_animo / 100.0, "Ánimo %d" % int(_animo)))
+
+	if _castigo_puesto < 0.0:
+		var aviso := Label.new()
+		aviso.text = "%s  %.0f" % [_puesto_natural, _castigo_puesto]
+		aviso.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		aviso.clip_text = true
+		aviso.add_theme_font_size_override("font_size", int(Tema.TAM_ETIQUETA * escala))
+		aviso.add_theme_color_override("font_color", Tema.AMBAR)
+		aviso.tooltip_text = "Es %s, no %s: pierde %.0f puntos en todos sus duelos." % [
+			_puesto_natural, _rol, absf(_castigo_puesto)]
+		caja.add_child(aviso)
 
 
 func _barrita(valor: float, ayuda: String) -> Control:

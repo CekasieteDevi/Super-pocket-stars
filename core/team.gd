@@ -1008,6 +1008,49 @@ func avanzar_dias(dias: int) -> Array:
 ## despues solo se promueve a los mejores de cada camada, eso hacia
 ## trinquete: la piramide entera derivaba hacia arriba temporada tras
 ## temporada en vez de quedarse quieta.
+## §8.4 #4: lo que le cuesta a este jugador el puesto que ocupa en el
+## once. 0 si esta en el suyo, o si esta en el banco (no esta jugando
+## fuera de posicion: no esta jugando).
+##
+## El puesto sale del SLOT de la formacion, que es de donde lo saca el
+## motor espacial. En el motor abstracto los planteles de la IA calzan
+## con su formacion, asi que ahi da 0 casi siempre — como corresponde:
+## el que mueve gente de lugar es el jugador humano.
+func penalizacion_puesto(jugador_id: int) -> float:
+	var roles: Array = Formaciones.roles(formacion)
+	for i in range(mini(roles.size(), jugadores.size())):
+		if int(jugadores[i]["id"]) == jugador_id:
+			return Puestos.modificador_de(jugadores[i], str(roles[i]))
+	return 0.0
+
+
+## §8.4 #25: "partido cada 3 dias — −5 acumulativo si no rotaste".
+##
+## Se mide en partidos seguidos de titular y no en dias del calendario:
+## el contador ya existe, ya se guarda, y es exactamente la pregunta que
+## el modificador hace —¿lo estas haciendo jugar todo?—. Los dias entre
+## fechas los decide GameState y no llegan hasta aca.
+##
+## `Madrugador` lo cancela: "rinde bien en partidos seguidos".
+const PARTIDOS_SEGUIDOS_SIN_COSTO := 5
+const COSTO_POR_PARTIDO_SEGUIDO := 1.5
+const COSTO_MAXIMO_SEGUIDOS := 5.0
+
+
+func penalizacion_partidos_seguidos(jugador_id: int) -> float:
+	for j in jugadores:
+		if int(j["id"]) != jugador_id:
+			continue
+		if Personalidad.tiene(j, "Madrugador"):
+			return 0.0
+		var seguidos: int = int(j.get("partidos_seguidos_titular", 0))
+		if seguidos <= PARTIDOS_SEGUIDOS_SIN_COSTO:
+			return 0.0
+		return -minf(COSTO_MAXIMO_SEGUIDOS,
+			float(seguidos - PARTIDOS_SEGUIDOS_SIN_COSTO) * COSTO_POR_PARTIDO_SEGUIDO)
+	return 0.0
+
+
 func nivel_potencial() -> int:
 	var plantel := todos_los_jugadores()
 	if plantel.is_empty():

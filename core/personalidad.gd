@@ -12,10 +12,11 @@ extends RefCounted
 ## una" para las comunes y dejan las fuertes genuinamente raras, que es
 ## la intención explícita del texto ("raras").
 ##
-## De los ~30 rasgos quedan sin conectar 2, que piden un sistema que el
-## motor todavía no tiene en absoluto: Adaptable (no hay penalización de
-## "fuera de posición" que cancelar) y Madrugador (no hay noción de
-## calendario denso ni de días entre partidos). Los otros tres que
+## Ya no queda ningún rasgo suelto. Los dos últimos —Adaptable y
+## Madrugador— pedían modificadores del §8.4 que el motor no tenía, así
+## que se construyeron: #4 fuera de posición (core/puestos.gd, que
+## Adaptable cancela entero) y #25 partidos seguidos sin rotar
+## (Team.penalizacion_partidos_seguidos, que Madrugador cancela). Los tres que
 ## estaban pendientes los desbloqueó el motor espacial y ya están
 ## conectados: Enfocado (mide mejor el desmarque y casi no se va en
 ## offside), Metódico (baja la temperatura del softmax — juega al libro y

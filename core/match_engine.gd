@@ -51,7 +51,8 @@ static func _elegir(jugadores: Array, rng: RandomNumberGenerator) -> Dictionary:
 	return jugadores[rng.randi() % jugadores.size()]
 
 
-## §8.5: bloque A (forma del día, ver Team.forma_partido), bloque B
+## §8.5: bloque A (forma del día ver Team.forma_partido, fuera de
+## posición §8.4#4 y partidos seguidos §8.4#25), bloque B
 ## (equipo/racha/armonía/capitán/familiaridad táctica §7.4.5), bloque C (local + choque de estilos
 ## §8.6.3 + rasgo del DT según el marcador §8.6.4 + clima §8.4#18/20 +
 ## estado de la cancha §8.4#21 + árbitro casero §8.4#23 + público §8.4#22
@@ -64,7 +65,11 @@ static func _elegir(jugadores: Array, rng: RandomNumberGenerator) -> Dictionary:
 ## quimica (§7.4.6) es de a pares y solo entra cuando hay par.
 static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atributo: String, minuto: int, rng: RandomNumberGenerator, companero_id: int = -1) -> Dictionary:
 	var jugador_id: int = jugador["id"]
-	var bloque_a := equipo.forma_partido
+	# §8.4 #4 y #25. Los dos son del JUGADOR, asi que van en bloque A, y
+	# los dos motores los ven porque los dos pasan por aca.
+	var bloque_a := equipo.forma_partido \
+		+ equipo.penalizacion_puesto(jugador_id) \
+		+ equipo.penalizacion_partidos_seguidos(jugador_id)
 	var bloque_b: float = equipo.armonia + clamp(float(equipo.racha), 0.0, 10.0)
 	if jugador_id == equipo.capitan_id:
 		bloque_b += 2.0

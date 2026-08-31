@@ -24,7 +24,12 @@ var _cubos: Array = []
 
 ## Alto de referencia con el que los cubos se ven a tamaño completo. Por
 ## debajo se achican en proporcion en vez de pisarse unos a otros.
-const ALTO_REFERENCIA := 440.0
+## Alto de cancha con el que los cubos van a tamaño completo. Es MAYOR
+## que la cancha real que entra en pantalla a proposito: con 440 los
+## cubos salian casi a escala 1 y en las formaciones densas —3-5-2, con
+## tres centrales y cinco del medio— el de al lado tapaba media ficha del
+## anterior, y lo tapado se leia como un numero cortado.
+const ALTO_REFERENCIA := 540.0
 
 ## Aire entre el borde de la cancha y el del control.
 const MARGEN := 8.0
