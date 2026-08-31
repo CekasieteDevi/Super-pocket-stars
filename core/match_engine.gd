@@ -70,7 +70,23 @@ static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atri
 	var bloque_a := equipo.forma_partido \
 		+ equipo.penalizacion_puesto(jugador_id) \
 		+ equipo.penalizacion_partidos_seguidos(jugador_id)
-	var bloque_b: float = equipo.armonia + clamp(float(equipo.racha), 0.0, 10.0)
+	# La racha de acciones aporta MEDIO punto por accion con tope +5, y no
+	# uno con tope +10 como decia el §8.4 original.
+	#
+	# Ese "+1% por accion, tope +10%" es de los 7 modificadores viejos,
+	# escritos antes de que existiera la estructura de bloques del §8.5.
+	# Con el tope de +10, la racha sola se comia dos tercios del bloque B
+	# —tope ±15— y ahi todo lo demas que vive en ese bloque deja de
+	# existir. Medido: el bloque B promediaba 11,63 de 15 y se saturaba en
+	# el 27% de los duelos, tirando 0,77 pp por duelo a la basura, mientras
+	# los otros tres bloques estaban casi vacios. Los que pagaban el precio
+	# eran la familiaridad tactica y la quimica, que viven ahi.
+	# La armonia entra acotada a la banda que le pone el §8.4:
+	# +5 / +2 / 0 / -3 / -5. Team.armonia es la SUMA cruda de los rasgos de
+	# los 18 del plantel mas una tirada, y medido sobre 200 clubes va de
+	# -9,4 a +9,2 — casi el doble de la banda. Sin acotarla, el vestuario
+	# solo se comia un tercio del bloque B.
+	var bloque_b: float = clampf(equipo.armonia, -5.0, 5.0) 		+ clamp(float(equipo.racha) * 0.5, 0.0, 5.0)
 	if jugador_id == equipo.capitan_id:
 		bloque_b += 2.0
 	# §8.4#11 / §7.4.5: la tactica que estas usando, de -8 recien
