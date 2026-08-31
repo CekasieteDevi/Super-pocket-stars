@@ -1535,26 +1535,17 @@ func _mostrar_resumen_partido() -> void:
 		l.add_theme_color_override("font_color", Tema.SUAVE)
 		contenedor_resumen.add_child(l)
 
-	var acciones := HBoxContainer.new()
-	acciones.add_theme_constant_override("separation", 10)
-	contenedor_resumen.add_child(acciones)
-
-	var btn_ver := Button.new()
-	btn_ver.text = "Seguir viendo"
-	btn_ver.custom_minimum_size = Vector2(180, Tema.ALTO_TACTIL)
-	btn_ver.tooltip_text = "Vuelve a la cancha con el partido terminado."
-	btn_ver.pressed.connect(func(): resumen_partido.visible = false)
-	acciones.add_child(btn_ver)
-
+	# Una sola salida. Estuvo un "Seguir viendo" que sacaba el cuadro y te
+	# devolvia a la cancha, pero al final del partido ya no hay nada que
+	# mirar: los 22 quedan parados en el ultimo fotograma.
 	var btn_cerrar := Button.new()
 	btn_cerrar.text = "Cerrar"
-	btn_cerrar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn_cerrar.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
 	Tema.primario(btn_cerrar)
 	btn_cerrar.pressed.connect(func():
 		resumen_partido.visible = false
 		_mostrar_partido())
-	acciones.add_child(btn_cerrar)
+	contenedor_resumen.add_child(btn_cerrar)
 
 	resumen_partido.visible = true
 
