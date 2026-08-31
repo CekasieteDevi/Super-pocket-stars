@@ -51,6 +51,8 @@ var label_informe_rival: Label
 const OPCIONES_CAMBIOS := ["equilibrado", "descanso", "rendimiento"]
 const ETIQUETAS_CAMBIOS := {"equilibrado": "Equilibrado", "descanso": "Priorizar descanso", "rendimiento": "Priorizar rendimiento"}
 var vista_partido: VistaPartido
+var resumen_partido: CenterContainer
+var contenedor_resumen: VBoxContainer
 var contenedor_economia: VBoxContainer
 var lista_cantera: RichTextLabel
 var contenedor_cantera_botones: VBoxContainer
@@ -1425,12 +1427,206 @@ func _construir_panel_partido_animado(padre: Control) -> void:
 	vista_partido.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	panel.add_child(vista_partido)
 	vista_partido.hud.menu_pedido.connect(_mostrar_partido)
-	# Cuando el partido termina —de corrido o por Saltar— se vuelve solo al
-	# resumen. Dejar la cancha congelada obligaba a descubrir el boton Menu
-	# para saber que habia pasado.
+	# Al terminar NO se cierra solo. Aparece el resumen encima de la
+	# cancha y de ahi se sale a mano: cerrar de una no dejaba ver el
+	# ultimo minuto ni enterarse de como termino.
 	vista_partido.terminado.connect(func():
 		if paneles["partido_animado"].visible:
-			_mostrar_partido())
+			_mostrar_resumen_partido())
+
+	_construir_resumen_partido(panel)
+
+
+## El cuadro de fin de partido: marcador grande y las estadisticas.
+##
+## Va ENCIMA de la cancha y no en otra pantalla, para poder mirar el
+## ultimo fotograma mientras se leen los numeros.
+func _construir_resumen_partido(padre: Control) -> void:
+	resumen_partido = CenterContainer.new()
+	resumen_partido.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	resumen_partido.visible = false
+	padre.add_child(resumen_partido)
+
+	var tarjeta := PanelContainer.new()
+	tarjeta.custom_minimum_size = Vector2(560, 0)
+	var estilo := StyleBoxFlat.new()
+	estilo.bg_color = Color(Tema.PANEL.r, Tema.PANEL.g, Tema.PANEL.b, 0.97)
+	estilo.corner_radius_top_left = Tema.RADIO
+	estilo.corner_radius_top_right = Tema.RADIO
+	estilo.corner_radius_bottom_left = Tema.RADIO
+	estilo.corner_radius_bottom_right = Tema.RADIO
+	estilo.border_width_top = 2
+	estilo.border_width_bottom = 2
+	estilo.border_width_left = 2
+	estilo.border_width_right = 2
+	estilo.border_color = Tema.AMBAR
+	estilo.content_margin_left = 24
+	estilo.content_margin_right = 24
+	estilo.content_margin_top = 18
+	estilo.content_margin_bottom = 18
+	tarjeta.add_theme_stylebox_override("panel", estilo)
+	resumen_partido.add_child(tarjeta)
+
+	contenedor_resumen = VBoxContainer.new()
+	contenedor_resumen.add_theme_constant_override("separation", 10)
+	tarjeta.add_child(contenedor_resumen)
+
+
+func _mostrar_resumen_partido() -> void:
+	for hijo in contenedor_resumen.get_children():
+		hijo.queue_free()
+	var r: Dictionary = GameState.ultimo_resultado
+	if r.is_empty():
+		_mostrar_partido()
+		return
+
+	contenedor_resumen.add_child(Tema.etiqueta_seccion("Final del partido"))
+
+	var marcador := Label.new()
+	marcador.text = "%s   %d - %d   %s" % [r["local"], r["gl"], r["gv"], r["visitante"]]
+	marcador.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	marcador.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	Tema.numero(marcador, 28)
+	contenedor_resumen.add_child(marcador)
+
+	# Quien gano, dicho con todas las letras: un marcador solo obliga a
+	# acordarse de cual de los dos sos.
+	var mio: String = GameState.equipo_jugador.nombre
+	var propios: int = int(r["gl"]) if str(r["local"]) == mio else int(r["gv"])
+	var ajenos: int = int(r["gv"]) if str(r["local"]) == mio else int(r["gl"])
+	var veredicto := Label.new()
+	if propios > ajenos:
+		veredicto.text = "Ganaste"
+		veredicto.add_theme_color_override("font_color", Tema.VERDE)
+	elif propios < ajenos:
+		veredicto.text = "Perdiste"
+		veredicto.add_theme_color_override("font_color", Tema.ROJO)
+	else:
+		veredicto.text = "Empate"
+		veredicto.add_theme_color_override("font_color", Tema.SUAVE)
+	veredicto.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	contenedor_resumen.add_child(veredicto)
+
+	var stats := EstadisticasPartido.calcular(
+		GameState.ultimos_eventos, str(r["local"]), str(r["visitante"]))
+	var loc: Dictionary = stats[str(r["local"])]
+	var vis: Dictionary = stats[str(r["visitante"])]
+	contenedor_resumen.add_child(_fila_estadistica(
+		"Posesión", "%.0f%%" % loc["posesion_pct"], "%.0f%%" % vis["posesion_pct"],
+		float(loc["posesion_pct"]), float(vis["posesion_pct"])))
+	contenedor_resumen.add_child(_fila_estadistica(
+		"Tiros", str(loc["tiros"]), str(vis["tiros"]),
+		float(loc["tiros"]), float(vis["tiros"])))
+	contenedor_resumen.add_child(_fila_estadistica(
+		"Tiros al arco", str(loc["tiros_al_arco"]), str(vis["tiros_al_arco"]),
+		float(loc["tiros_al_arco"]), float(vis["tiros_al_arco"])))
+	contenedor_resumen.add_child(_fila_estadistica(
+		"Pases completados",
+		"%d/%d" % [loc["pases_completados"], loc["pases_intentados"]],
+		"%d/%d" % [vis["pases_completados"], vis["pases_intentados"]],
+		float(loc["pases_completados"]), float(vis["pases_completados"])))
+
+	var goleadores := _texto_goleadores()
+	if goleadores != "":
+		var l := Label.new()
+		l.text = goleadores
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		l.add_theme_color_override("font_color", Tema.SUAVE)
+		contenedor_resumen.add_child(l)
+
+	var acciones := HBoxContainer.new()
+	acciones.add_theme_constant_override("separation", 10)
+	contenedor_resumen.add_child(acciones)
+
+	var btn_ver := Button.new()
+	btn_ver.text = "Seguir viendo"
+	btn_ver.custom_minimum_size = Vector2(180, Tema.ALTO_TACTIL)
+	btn_ver.tooltip_text = "Vuelve a la cancha con el partido terminado."
+	btn_ver.pressed.connect(func(): resumen_partido.visible = false)
+	acciones.add_child(btn_ver)
+
+	var btn_cerrar := Button.new()
+	btn_cerrar.text = "Cerrar"
+	btn_cerrar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_cerrar.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	Tema.primario(btn_cerrar)
+	btn_cerrar.pressed.connect(func():
+		resumen_partido.visible = false
+		_mostrar_partido())
+	acciones.add_child(btn_cerrar)
+
+	resumen_partido.visible = true
+
+
+## Una fila de la comparacion, con barra: el numero solo no dice quien
+## domino, y la barra se lee de un vistazo aunque el numero sea chico.
+func _fila_estadistica(titulo: String, izq: String, der: String,
+		valor_izq: float, valor_der: float) -> Control:
+	var caja := VBoxContainer.new()
+	caja.add_theme_constant_override("separation", 2)
+
+	var fila := HBoxContainer.new()
+	caja.add_child(fila)
+	var l_izq := Componentes.celda_numero(izq, 80, Tema.TEXTO)
+	fila.add_child(l_izq)
+	var l_medio := Label.new()
+	l_medio.text = titulo
+	l_medio.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l_medio.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l_medio.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	l_medio.add_theme_color_override("font_color", Tema.SUAVE)
+	fila.add_child(l_medio)
+	fila.add_child(Componentes.celda_numero(der, 80, Tema.TEXTO,
+		HORIZONTAL_ALIGNMENT_RIGHT))
+
+	var barras := HBoxContainer.new()
+	barras.add_theme_constant_override("separation", 3)
+	caja.add_child(barras)
+	var total: float = maxf(valor_izq + valor_der, 0.001)
+	barras.add_child(_barra_mitad(valor_izq / total, Tema.CELESTE, false))
+	barras.add_child(_barra_mitad(valor_der / total, Tema.AMBAR, true))
+	return caja
+
+
+func _barra_mitad(fraccion: float, color: Color, derecha: bool) -> Control:
+	var p := Panel.new()
+	p.custom_minimum_size = Vector2(0, 7)
+	p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	p.size_flags_stretch_ratio = maxf(fraccion, 0.02)
+	var e := StyleBoxFlat.new()
+	e.bg_color = color
+	if derecha:
+		e.corner_radius_top_right = 4
+		e.corner_radius_bottom_right = 4
+	else:
+		e.corner_radius_top_left = 4
+		e.corner_radius_bottom_left = 4
+	p.add_theme_stylebox_override("panel", e)
+	return p
+
+
+## Quien hizo los goles, que es lo primero que se busca al terminar.
+func _texto_goleadores() -> String:
+	var r: Dictionary = GameState.ultimo_resultado
+	var local := _equipo_de_la_liga(str(r.get("local", "")))
+	var visitante := _equipo_de_la_liga(str(r.get("visitante", "")))
+	var partes := []
+	for gol in r.get("goles_log", []):
+		# El log guarda el ID, no el nombre: se resuelve contra los dos
+		# planteles, que es donde estan los jugadores de este partido.
+		var nombre := "?"
+		for equipo in [local, visitante]:
+			if equipo == null:
+				continue
+			var j := _buscar_jugador_por_id(equipo, int(gol.get("jugador_id", -1)))
+			if not j.is_empty():
+				nombre = _nombre_jugador(j)
+				break
+		partes.append("%d' %s" % [int(gol.get("minuto", 0)), nombre])
+	if partes.is_empty():
+		return ""
+	return "Goles:  %s" % "   ·   ".join(partes)
 
 
 ## §11: la economia del club. Cuatro cajas separadas —fichajes,
@@ -4595,6 +4791,8 @@ func _on_config_cambios_seleccionado(idx: int) -> void:
 func _mostrar_partido_animado() -> void:
 	_ocultar_todos()
 	paneles["partido_animado"].visible = true
+	if resumen_partido != null:
+		resumen_partido.visible = false
 	var r: Dictionary = GameState.ultimo_resultado
 	# El estilo del rival ya no hace falta acá: dejó de ser un ajuste
 	# visual y pasó a mover a los jugadores dentro del propio motor
