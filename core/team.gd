@@ -234,7 +234,7 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 	t.foco_equipo = FocoEquipo.para_estilo(t.estilo)
 	t.dt = DT.generar(rng)
 	t.config_cambios = DT.config_cambios_de(t.dt["nivel"])
-	t.reputacion = clamp(t.media_equipo(), 20.0, 80.0)
+	t.reputacion = Economia.reputacion_inicial(t.media_equipo())
 	t.calidad_cancha = EstadoCancha.generar(t.reputacion, rng)
 	t.scouts = [{"nivel": 1}]
 	# §9.4: todo club arranca con un investigador de 1 estrella. Tarda

@@ -251,6 +251,31 @@ static func sueldo_sugerido(valor: float) -> float:
 
 ## "$1234567.8" -> "$1,234,568" (redondeado). Para que los montos se lean
 ## de un vistazo en vez de tener que contar ceros.
+## Con cuanta reputacion nace un club, a partir de la media de su once.
+##
+## Antes era `clamp(media, 20, 80)`, o sea la media a secas con un techo.
+## El techo esta bien —80 a 100 es lo que se GANA ganando, no con lo que
+## te toco al empezar— pero recortar en vez de reescalar aplastaba lo de
+## arriba: division 1 (media 86.8) y division 2 (media 80.2) daban las dos
+## 80, y con eso el mismo aforo, el mismo ingreso por entradas y la misma
+## resistencia a vender. Seis puntos de plantel no se notaban en ningun
+## lado.
+##
+## Ahora el rango util de medias se estira sobre el rango de reputacion,
+## asi que las diez divisiones quedan separadas y el techo se conserva.
+const REPUTACION_INICIAL_MIN := 20.0
+const REPUTACION_INICIAL_MAX := 80.0
+const MEDIA_REFERENCIA_MIN := 20.0
+const MEDIA_REFERENCIA_MAX := 90.0
+
+
+static func reputacion_inicial(media: float) -> float:
+	var t: float = clampf(
+		(media - MEDIA_REFERENCIA_MIN) / (MEDIA_REFERENCIA_MAX - MEDIA_REFERENCIA_MIN),
+		0.0, 1.0)
+	return lerpf(REPUTACION_INICIAL_MIN, REPUTACION_INICIAL_MAX, t)
+
+
 static func formato_dinero(valor: float) -> String:
 	var negativo := valor < 0.0
 	var entero := int(round(abs(valor)))
