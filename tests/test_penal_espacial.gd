@@ -14,6 +14,8 @@ func _init() -> void:
 	_test_el_penal_para_el_juego()
 	_test_el_area_queda_vacia()
 	_test_se_ejecuta_al_terminar_la_pausa()
+	_test_el_pateador_esta_detras_de_la_pelota()
+	_test_el_remate_se_ve_viajar()
 	quit()
 
 
@@ -112,3 +114,60 @@ func _test_se_ejecuta_al_terminar_la_pausa() -> void:
 		print("FALLA: se cobraron %d penales y se ejecutaron %d." % [penales, resueltos])
 		return
 	print("OK: los %d penales cobrados se patearon al terminar la pausa." % penales)
+
+
+## El pateador tiene que estar DETRAS de la pelota, o sea mas lejos del
+## arco que el punto. Estaba al reves: quedaba entre la pelota y el arco,
+## de espaldas, como si pateara para el otro lado.
+func _test_el_pateador_esta_detras_de_la_pelota() -> void:
+	print("\n=== El pateador queda detras de la pelota ===")
+	# Los dos arcos, porque el error de signo solo se ve si se miran los dos.
+	for saca_local in [true, false]:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = SEED + 3
+		var estado := _armar_estado(rng)
+		MotorEspacial._cobrar_penal(estado, saca_local, 30)
+		var bp: Dictionary = estado["balon_parado"]
+		var arco := MotorEspacial.arco_rival(saca_local)
+		var pat: Dictionary = estado["jugadores"][MotorEspacial.clave_de(
+			int(bp["pateador_id"]), saca_local)]
+		var d_pelota: float = absf(arco.x - float(bp["pos"].x))
+		var d_pateador: float = absf(arco.x - pat["pos"].x)
+		if d_pateador <= d_pelota:
+			print("FALLA: atacando el arco en x=%.0f el pateador quedo a %.1f m del arco y la pelota a %.1f: esta adelante." % [
+				arco.x, d_pateador, d_pelota])
+			return
+	print("OK: en los dos arcos el pateador toma carrera desde atras.")
+
+
+## El remate tiene que VIAJAR: la pelota sale del punto y tarda en
+## llegar. Antes se aplicaba en el mismo tick, asi que del corte se
+## pasaba a la pelota adentro del arco sin ver el disparo ni la atajada.
+func _test_el_remate_se_ve_viajar() -> void:
+	print("\n=== La pelota del penal viaja hasta el arco ===")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = SEED + 4
+	var volaron := 0
+	var se_tiro_el_arquero := 0
+	for i in range(20):
+		var estado := _armar_estado(rng)
+		MotorEspacial._cobrar_penal(estado, true, 30)
+		var arco := MotorEspacial.arco_rival(true)
+		for t in range(MotorEspacial.TICKS_DETENIDO["penal"]):
+			MotorEspacial._tick(estado, false)
+		# Justo despues de la pausa, la pelota tiene que estar en el aire
+		# y todavia lejos del arco.
+		var pelota: Dictionary = estado["pelota"]
+		if bool(pelota["en_vuelo"]) and pelota["pos"].distance_to(arco) > 3.0:
+			volaron += 1
+		# Y el arquero tiene adonde tirarse mientras la pelota viaja: sin
+		# eso se queda clavado y la pelota le pasa por al lado.
+		if pelota.get("remate", {}).has("destino_arquero"):
+			se_tiro_el_arquero += 1
+	if volaron != 20:
+		print("FALLA: solo %d de 20 penales salieron viajando." % volaron)
+		return
+	if se_tiro_el_arquero < 15:
+		print("FALLA: el arquero se tiro en %d de 20." % se_tiro_el_arquero)
+		return
+	print("OK: los 20 remates viajan y el arquero se tira en %d." % se_tiro_el_arquero)

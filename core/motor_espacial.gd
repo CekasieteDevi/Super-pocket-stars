@@ -1623,23 +1623,34 @@ static func _aplicar_remate(estado: Dictionary, datos: Dictionary) -> void:
 		return
 
 	var gol: bool = tipo == "gol"
+	# El penal llega por acá igual que cualquier remate, pero se cuenta
+	# como penal: no es un tiro más en las estadísticas.
+	var es_penal: bool = bool(datos.get("penal", false))
 	estado["eventos"].append({
-		"minuto": minuto, "tipo": "tiro_puerta", "equipo": eq_a.nombre, "rival": eq_d.nombre,
+		"minuto": minuto, "tipo": "penal" if es_penal else "tiro_puerta",
+		"equipo": eq_a.nombre, "rival": eq_d.nombre,
 		"jugador_posicion": datos["rol"], "clave": datos["clave"],
-		"resultado": "gol" if gol else "atajada",
+		"resultado": ("gol" if gol else ("atajado" if es_penal else "atajada")),
 	})
 	var jugador: Dictionary = datos.get("jugador", {})
 	var dist: float = float(datos.get("dist", 0.0))
 	if gol:
 		eq_a.goles += 1
 		estado["goles_log"].append({"minuto": minuto, "equipo": eq_a.nombre, "jugador_id": jugador.get("id", -1)})
-		estado["log"].append("min %d - GOL de %s %s (%s) desde %.0f m" % [
-			minuto, jugador.get("nombre", ""), jugador.get("apellido", ""), eq_a.nombre, dist])
+		if es_penal:
+			estado["log"].append("min %d - PENAL: gol de %s %s (%s)" % [
+				minuto, jugador.get("nombre", ""), jugador.get("apellido", ""), eq_a.nombre])
+		else:
+			estado["log"].append("min %d - GOL de %s %s (%s) desde %.0f m" % [
+				minuto, jugador.get("nombre", ""), jugador.get("apellido", ""), eq_a.nombre, dist])
 		_festejar_gol(estado, not es_local)
 		return
 
-	estado["log"].append("min %d - %s (%s) remata desde %.0f m, ataja el arquero" % [
-		minuto, datos["rol"], eq_a.nombre, dist])
+	if es_penal:
+		estado["log"].append("min %d - PENAL: lo ataja el arquero de %s" % [minuto, eq_d.nombre])
+	else:
+		estado["log"].append("min %d - %s (%s) remata desde %.0f m, ataja el arquero" % [
+			minuto, datos["rol"], eq_a.nombre, dist])
 	# El arquero no siempre la retiene: si la manotea, sale al córner.
 	# Cuanto mejor su agarre, más veces la queda.
 	if rng.randf() > float(datos.get("agarre", 0.5)):
@@ -2774,7 +2785,10 @@ static func _cobrar_penal(estado: Dictionary, ataca_local: bool, minuto: int) ->
 		e["rapidez"] = 0.0
 		if id == clave_pat:
 			# Unos metros DETRAS de la pelota: el pateador toma carrera.
-			e["pos"] = punto - Vector2(hacia * 3.0, 0.0)
+			# `hacia` apunta del arco hacia el medio, asi que SUMARLO es
+			# alejarse del arco. Restarlo lo dejaba entre la pelota y el
+			# arco, o sea de espaldas, pateando para el otro lado.
+			e["pos"] = punto + Vector2(hacia * 3.0, 0.0)
 			e["marca"] = e["pos"]
 			continue
 		if id == clave_arq:
@@ -2839,28 +2853,28 @@ static func _ejecutar_penal(estado: Dictionary, bp: Dictionary) -> void:
 		MatchEngine._bloques_equipo(eq_d, eq_a, arquero, "reflejos", minuto, estado["rng"]))
 	var gol := Duel.gana_atacante(res, estado["rng"])
 
-	_accion(estado, clave_de(int(pateador["id"]), ataca_local), ACCION_PATEA)
-	_accion(estado, clave_de(int(arquero["id"]), not ataca_local), ACCION_VUELA)
-	# La pelota SALE del punto: sin esto el remate no se veia viajar, que
-	# es justo lo que se venia a mirar.
-	var arco_p := arco_rival(ataca_local)
-	estado["pelota"]["pos"] = bp["pos"]
-	estado["pelota"]["poseedor_id"] = -1
-	estado["eventos"].append({
-		"minuto": minuto, "tipo": "penal", "equipo": eq_a.nombre, "rival": eq_d.nombre,
-		"jugador_posicion": pateador["posicion"],
-		"clave": clave_de(int(pateador["id"]), ataca_local),
-		"resultado": "gol" if gol else "atajado",
-	})
-	if gol:
-		eq_a.goles += 1
-		estado["goles_log"].append({"minuto": minuto, "equipo": eq_a.nombre, "jugador_id": pateador["id"]})
-		estado["log"].append("min %d - PENAL: gol de %s %s (%s)" % [
-			minuto, pateador["nombre"], pateador["apellido"], eq_a.nombre])
-		_reiniciar_desde_medio(estado, not ataca_local)
-	else:
-		estado["log"].append("min %d - PENAL: lo ataja el arquero de %s" % [minuto, eq_d.nombre])
-		_dar_pelota_al_arquero(estado, not ataca_local)
+	# El resultado ya esta decidido, pero el remate VIAJA como cualquier
+	# otro: la pelota sale del punto, tarda en llegar y el arquero se tira
+	# mientras vuela. Antes se aplicaba en el mismo tick en que se pateaba,
+	# asi que del corte se pasaba a la pelota adentro del arco sin ver ni
+	# el disparo ni la atajada — justo lo unico que se venia a mirar.
+	var clave_pat := clave_de(int(pateador["id"]), ataca_local)
+	var punto: Vector2 = bp["pos"]
+	var arco := arco_rival(ataca_local)
+	var hacia: float = -1.0 if arco.x > 0.0 else 1.0
+	# Se acerca a la pelota para pegarle: venia esperando 3 m atras.
+	if estado["jugadores"].has(clave_pat):
+		estado["jugadores"][clave_pat]["pos"] = punto + Vector2(hacia * 0.8, 0.0)
+	_accion(estado, clave_pat, ACCION_PATEA)
+	_lanzar_remate(estado,
+		{"pos": punto, "clave": clave_pat, "rol": str(pateador["posicion"])},
+		{
+			"tipo": "gol" if gol else "atajada", "penal": true,
+			"es_local": ataca_local, "clave": clave_pat,
+			"rol": str(pateador["posicion"]), "jugador": pateador,
+			"agarre": float(arquero["atributos"]["agarre"]) / 100.0,
+			"dist": DIST_PENAL,
+		})
 
 
 ## Tiro libre: la pone el mejor ejecutante disponible, los rivales se

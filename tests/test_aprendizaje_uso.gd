@@ -82,11 +82,15 @@ func _test_el_espacial_reparte_segun_lo_que_paso(_rng: RandomNumberGenerator) ->
 === El motor espacial reparte segun lo que cada puesto hace ===")
 	# Un partido suelto no alcanza: hay delanteros que no rematan ninguna
 	# vez. Se agrega sobre varios, que es como se acumula en una temporada.
+	#
+	# Con 10 partidos el margen del quite era del 12% y se daba vuelta con
+	# cualquier cambio del motor que corriera el RNG, aunque el reparto
+	# siguiera bien. Con 30 la diferencia entre DFC y DC es de verdad.
 	var tiro_dc := 0.0
 	var tiro_dfc := 0.0
 	var quite_dc := 0.0
 	var quite_dfc := 0.0
-	for i in range(10):
+	for i in range(30):
 		var r1 := RandomNumberGenerator.new()
 		r1.seed = 300 + i
 		var a := Team.generar("A", r1)
@@ -106,7 +110,7 @@ func _test_el_espacial_reparte_segun_lo_que_paso(_rng: RandomNumberGenerator) ->
 	# Hay 2 DFC por cada DC, asi que se compara per capita.
 	var ok: bool = tiro_dc > tiro_dfc / 2.0 and quite_dfc / 2.0 > quite_dc
 	if ok:
-		print("OK: en 10 partidos, tiro DC %.2f vs DFC %.2f (per capita) y quite DFC %.2f vs DC %.2f." % [
+		print("OK: en 30 partidos, tiro DC %.2f vs DFC %.2f (per capita) y quite DFC %.2f vs DC %.2f." % [
 			tiro_dc, tiro_dfc / 2.0, quite_dfc / 2.0, quite_dc])
 	else:
 		print("FALLA: tiro dc=%.2f dfc=%.2f | quite dc=%.2f dfc=%.2f" % [
