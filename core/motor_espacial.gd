@@ -131,6 +131,10 @@ const SALIDAS_DE_EMERGENCIA := ["despeje", "pase_largo", "tiro"]
 ## un movimiento y no como un salto de un fotograma al otro.
 const FACTOR_TROTE_PARADO := 0.45
 
+## El que va a ejecutar el balon parado se mueve MAS RAPIDO que el resto:
+## los demas se acomodan, el va a buscar la pelota.
+const FACTOR_CORRE_A_LA_PELOTA := 1.0
+
 ## Qué parte de la interrupción se pasa completamente quieto antes de que
 ## los jugadores empiecen a acomodarse. Es lo que hace que se LEA que el
 ## juego se cortó: con poco tiempo quieto, los 22 arrancan a trotar casi
@@ -155,7 +159,7 @@ const ALCANCE_ESTIRADA := 2.0
 ## sin que aburra a x1.
 ## El penal es la pausa mas larga de todas a proposito: es el unico
 ## momento del partido en que todos se quedan quietos mirando a uno.
-const TICKS_DETENIDO := {"falta": 14, "corner": 13, "gol": 10, "saque_inicial": 12,
+const TICKS_DETENIDO := {"falta": 14, "corner": 20, "gol": 10, "saque_inicial": 12,
 	"lateral": 10, "saque_arco": 8, "penal": 20}
 
 ## Cuanto puede estirarse una mitad para terminar lo que quedo pendiente.
@@ -183,6 +187,17 @@ static func _hay_algo_sin_terminar(estado: Dictionary) -> bool:
 ## veinte metros de la jugada y la amarilla salia sobre una cancha ya
 ## acomodada. No se entendia quien habia hecho que.
 const TICKS_CONGELADO_FALTA := 8
+
+## Lo mismo para el corner, mas corto: aca lo que hay que ver no es una
+## infraccion sino de donde salio la pelota. Los segundos de "todos
+## ubicados esperando el centro" salen del tiempo de acomodo, porque el
+## que llega a su marca se queda parado.
+const TICKS_CONGELADO_CORNER := 4
+
+## Desde mas lejos que esto nadie va a buscar la pelota para ejecutar un
+## corner o un centro: no llega caminando en lo que dura la pausa y
+## terminaria apareciendo encima de la pelota de golpe.
+const DIST_MAX_AL_EJECUTOR := 22.0
 
 ## Desde mas lejos que esto no se llega a la barrera antes de que la
 ## pateen, asi que el que esta mas lejos no va: la barrera queda mas
@@ -1941,7 +1956,14 @@ static func _saque_de_esquina(estado: Dictionary, ataca_local: bool, lado_arriba
 	# El córner también para el juego: antes los dos equipos aparecían de
 	# golpe adentro del área y la pelota salía en el mismo tick. Ahora se
 	# ve cómo suben.
-	_detener_juego(estado, esquina, ataca_local, ejecutor, "corner", int(TICKS_DETENIDO["corner"]))
+	# El corner se toma con calma: un rato congelado donde salio la pelota,
+	# y despues tiempo de sobra para que los que suben lleguen al area y el
+	# que lo tira se pare en el banderin. Como el que llega a su marca se
+	# queda quieto, ese sobrante son los segundos de "todos ubicados,
+	# esperando el centro" — que es lo que faltaba: no se veia quien lo
+	# pateaba, la pelota salia de la nada.
+	_detener_juego(estado, esquina, ataca_local, ejecutor, "corner",
+		int(TICKS_DETENIDO["corner"]), false, TICKS_CONGELADO_CORNER)
 	estado["eventos"].append({
 		"minuto": _minuto_int(estado), "tipo": "corner",
 		"equipo": _equipo_de(estado, ataca_local).nombre,
@@ -2246,9 +2268,16 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 				if bp_pos.has("pos"):
 					pelota["pos"] = bp_pos["pos"]
 		else:
+			var ejecutor_bp: int = int(estado.get("balon_parado", {}).get("ejecutor", -1))
 			for id in estado["jugadores"]:
 				var e_p: Dictionary = estado["jugadores"][id]
-				_mover_hacia(e_p, e_p.get("marca", e_p["pos"]), FACTOR_TROTE_PARADO)
+				# El que va a ejecutar no se "acomoda": va a BUSCAR la
+				# pelota, y va corriendo. Con el trote de los demas no
+				# llegaba —medido, se quedaba a 12 m del banderin— y
+				# terminaba apareciendo encima de la pelota al momento
+				# del centro. Por eso no se veia quien pateaba.
+				var factor: float = FACTOR_CORRE_A_LA_PELOTA if id == ejecutor_bp 					else FACTOR_TROTE_PARADO
+				_mover_hacia(e_p, e_p.get("marca", e_p["pos"]), factor)
 		if int(estado["detenido"]) == 0:
 			_ejecutar_balon_parado(estado)
 			# Mismo motivo que en el paso 2: si el reinicio fue un pase,
@@ -3089,11 +3118,25 @@ static func _elegir_ejecutor(estado: Dictionary, pos: Vector2, ataca_local: bool
 		return _mas_cercano_del_equipo(estado, pos, ataca_local)
 	var atributo := "tiros_libres" if tipo == "directo" else "centros"
 	var equipo := _equipo_de(estado, ataca_local)
+	# El mejor ejecutante DE LOS QUE PUEDEN LLEGAR. Antes se elegia al
+	# mejor del equipo sin mirar donde estaba: medido, el que tiraba el
+	# corner estaba a 74 metros de media del banderin, o sea que no
+	# llegaba caminando ni en diez segundos y aparecia ahi de golpe al
+	# momento del centro. Por eso "no se ve quien patea": no camina hasta
+	# la pelota, se teletransporta encima de ella.
 	var mejor := -1.0
 	var elegido := -1
+	var mas_cerca := -1
+	var dist_mas_cerca: float = INF
 	for id in estado["jugadores"]:
 		var e: Dictionary = estado["jugadores"][id]
 		if e["equipo_local"] != ataca_local or e["rol"] == "ARQ":
+			continue
+		var d: float = pos.distance_to(e["pos"])
+		if d < dist_mas_cerca:
+			dist_mas_cerca = d
+			mas_cerca = id
+		if d > DIST_MAX_AL_EJECUTOR:
 			continue
 		var j := _dict_jugador(estado, equipo, e["jugador_id"])
 		if j.is_empty():
@@ -3101,7 +3144,9 @@ static func _elegir_ejecutor(estado: Dictionary, pos: Vector2, ataca_local: bool
 		if float(j["atributos"][atributo]) > mejor:
 			mejor = float(j["atributos"][atributo])
 			elegido = id
-	return elegido if elegido != -1 else _mas_cercano_del_equipo(estado, pos, ataca_local)
+	if elegido != -1:
+		return elegido
+	return mas_cerca if mas_cerca != -1 else _mas_cercano_del_equipo(estado, pos, ataca_local)
 
 
 ## Para el juego, deja la pelota en el punto y le da a cada uno su marca.
