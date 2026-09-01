@@ -656,7 +656,11 @@ func _oferta_por_id(oferta_id: int) -> Dictionary:
 ## (o sea, pagar lo que te contraofertaron) te deja en acuerdo de clubes y
 ## el contrato lo arreglas vos.
 func responder_oferta(oferta_id: int, accion: String, monto: float = 0.0) -> Dictionary:
-	if not hay_mercado_abierto():
+	# Rechazar se puede SIEMPRE. Decir que no es bajarse de la mesa, no una
+	# operacion de mercado, y bloquearlo dejaba al jugador encerrado: con
+	# una negociacion vieja abierta y el libro cerrado no podia ni
+	# aceptarla ni sacarsela de encima.
+	if accion != "rechazar" and not hay_mercado_abierto():
 		return _mercado_cerrado()
 	var oferta := _oferta_por_id(oferta_id)
 	if oferta.is_empty():
@@ -1012,6 +1016,17 @@ func cargar_partida() -> bool:
 	ultimo_informe_economico = datos["ultimo_informe_economico"]
 	ultima_posicion_final = datos["ultima_posicion_final"]
 	juego_terminado = datos.get("juego_terminado", false)
+
+	# Una partida guardada ANTES del libro de pases puede traer
+	# negociaciones abiertas en un mes sin mercado: el cierre solo se
+	# dispara el dia en que la ventana se cierra, y ese dia ya paso. Sin
+	# esto quedaban colgadas para siempre — visibles, imposibles de
+	# aceptar y (hasta recien) imposibles de rechazar. Va DESPUES de
+	# cargar las noticias: si no, el aviso se pisa.
+	if not hay_mercado_abierto():
+		for aviso in Ofertas.cancelar_por_cierre_de_mercado(equipo_jugador):
+			_agregar_noticia("MERCADO: %s" % aviso)
+		Ofertas.archivar(equipo_jugador)
 	motivo_fin_partida = datos.get("motivo_fin_partida", "")
 
 	# Migración: un guardado hecho en la temporada 1 ANTES de que

@@ -21,6 +21,7 @@ func _init() -> void:
 	_test_fuera_de_ventana_no_se_puede_operar()
 	_test_al_cerrar_se_cae_lo_que_estaba_abierto()
 	_test_lo_rechazado_y_lo_vencido_desaparece()
+	_test_una_partida_vieja_no_queda_con_ofertas_colgadas()
 	quit()
 
 
@@ -197,3 +198,36 @@ func _test_lo_rechazado_y_lo_vencido_desaparece() -> void:
 			print("FALLA: la oferta vencida sigue en la lista viva.")
 			return
 	print("OK: la rechazada y la vencida se van de la lista y quedan en el historial.")
+
+
+func _test_una_partida_vieja_no_queda_con_ofertas_colgadas() -> void:
+	print("\n=== Cargar en un mes sin mercado limpia lo que quedo abierto ===")
+	# El caso real: una partida guardada ANTES del libro de pases, con
+	# negociaciones abiertas y el calendario en mayo. El cierre solo se
+	# dispara el dia en que la ventana se cierra, y ese dia ya paso, asi
+	# que quedaban colgadas para siempre.
+	var gs := GUION.new()
+	gs.partida_nueva(SEED + 4)
+	var comprador: Team = null
+	for e in gs.liga_jugador().equipos:
+		if e != gs.equipo_jugador:
+			comprador = e
+			break
+	var mio: Dictionary = gs.equipo_jugador.jugadores[0]
+	gs.equipo_jugador.ofertas.append(
+		Ofertas.nueva(9101, comprador.nombre, mio, 3101.0, true, gs.rng))
+
+	if gs.hay_mercado_abierto():
+		print("FALLA: el test arranca con el mercado abierto.")
+		return
+	# Rechazar tiene que poder SIEMPRE: decir que no es bajarse de la
+	# mesa, no una operacion de mercado.
+	var r: Dictionary = gs.responder_oferta(9101, "rechazar")
+	if not bool(r.get("exito", false)):
+		print("FALLA: no se pudo rechazar con el mercado cerrado (%s)." % str(r.get("motivo", "")))
+		return
+	for o in gs.equipo_jugador.ofertas:
+		if int(o["id"]) == 9101:
+			print("FALLA: la oferta rechazada sigue viva.")
+			return
+	print("OK: con el mercado cerrado igual se puede rechazar, y la oferta se va.")
