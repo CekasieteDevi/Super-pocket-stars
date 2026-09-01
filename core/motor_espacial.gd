@@ -120,6 +120,12 @@ const ROLES_QUE_REPLIEGAN := ["DFC", "LAT", "MC"]
 ## (ver _objetivo_sin_pelota), que es de donde salen los goles.
 const ROLES_QUE_ATACAN := ["MCO", "EXT", "DC"]
 
+## Lo unico que se puede hacer con la pelota estando acorralado en la
+## propia area: sacarla de ahi. El remate entra porque un rechazo que
+## salga disparado al arco rival tambien la saca, y no vale la pena
+## prohibirlo — no va a elegirlo desde su propio campo.
+const SALIDAS_DE_EMERGENCIA := ["despeje", "pase_largo", "tiro"]
+
 ## Con el juego detenido nadie corre: se acomodan trotando. Además de que
 ## es lo que se ve en una cancha, sirve para que el reacomodo se lea como
 ## un movimiento y no como un salto de un fotograma al otro.
@@ -151,6 +157,22 @@ const ALCANCE_ESTIRADA := 2.0
 ## momento del partido en que todos se quedan quietos mirando a uno.
 const TICKS_DETENIDO := {"falta": 14, "corner": 13, "gol": 10, "saque_inicial": 12,
 	"lateral": 10, "saque_arco": 8, "penal": 20}
+
+## Cuanto puede estirarse una mitad para terminar lo que quedo pendiente.
+## Son 15 ticks = casi 4 minutos de reloj mostrado: alcanza para ejecutar
+## un penal cobrado sobre la hora y su reanudacion.
+const TICKS_DE_DESCUENTO := 15
+
+
+## Hay una jugada sin terminar que no puede quedar en el aire: una pelota
+## parada por ejecutar, o un remate viajando hacia el arco.
+static func _hay_algo_sin_terminar(estado: Dictionary) -> bool:
+	if estado.has("balon_parado"):
+		return true
+	if int(estado.get("detenido", 0)) > 0:
+		return true
+	return bool(estado["pelota"].get("es_remate", false))
+
 
 ## Dos segundos en los que NADIE se mueve, antes de acomodarse para el
 ## tiro libre. Es donde se ve la infraccion: el que la hizo parado donde
@@ -573,6 +595,24 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 	var mi_valor := valor_posicion(pos, es_local)
 	var opciones := []
 
+	# ACORRALADO: en tu propia zona y con gente encima, la unica salida es
+	# sacarla de ahi. No se pondera contra el resto — se DESCARTA el resto.
+	#
+	# Subirle el peso al despeje no alcanzaba y el motivo es estructural,
+	# no de calibracion: el pase largo se evalua UNA VEZ POR CADA
+	# companero alcanzable, asi que compiten diez opciones contra una sola
+	# de despeje y el maximo de diez casi siempre gana. Medido, un
+	# defensor con la pelota en su propia area y presion media 0,72
+	# despejaba 1 de cada 23 veces; multiplicando por 3,6 el peso de la
+	# presion, 4 de 23. El problema no era cuanto vale despejar sino
+	# contra cuantos rivales compite.
+	#
+	# Se dejan el despeje y el pelotazo: las dos sacan la pelota del area,
+	# que es lo que importa. Lo que se va son el pase corto, la conduccion,
+	# la gambeta, la pared y el pase al hueco — todo lo que implica seguir
+	# jugando con la pelota en la puerta del propio arco.
+	var acorralado: bool = mi_valor <= float(f["zona_despeje"]) 		and presion >= float(f["presion_despeje"])
+
 	# §4.2: con rivales metidos en tu propio tercio, el arquero la manda
 	# lejos en vez de repartirla corto.
 	#
@@ -809,6 +849,16 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 
 	_aplicar_pie_preferido(estado, opciones, poseedor, jugador, es_local,
 		float(sesgos["pie_preferido_penalizacion"]))
+	# Ver `acorralado` arriba: con la pelota en tu propia zona y gente
+	# encima, se descartan las opciones de seguir jugandola. Se filtra al
+	# final y no en cada bloque para que la regla se lea de una sola vez.
+	if acorralado:
+		var salidas := []
+		for o in opciones:
+			if SALIDAS_DE_EMERGENCIA.has(str(o["tipo"])):
+				salidas.append(o)
+		if not salidas.is_empty():
+			return salidas
 	return opciones
 
 
@@ -3325,8 +3375,19 @@ static func _tocar_corto(estado: Dictionary, saca_local: bool) -> void:
 	var max_corto: float = _por_atributo(jugador, attr,
 		f["max_dist_pase_malo"], f["max_dist_pase_bueno"], 1.0)
 
+	# Hacia donde se juega el reinicio depende de DONDE ES.
+	#
+	# En campo propio se la toca al mas atrasado: es poner la pelota en
+	# juego sin riesgo. Pero esa regla estaba aplicada SIEMPRE, asi que
+	# una falta a favor en campo rival tambien se jugaba para atras — el
+	# equipo retrocedia treinta metros cada vez que le cobraban una falta,
+	# que es lo contrario de lo que hace cualquier equipo.
+	#
+	# De la mitad para adelante se busca al que este MAS ADELANTADO
+	# dentro del alcance, que es jugar la falta rapido.
+	var hacia_adelante: bool = valor_posicion(poseedor["pos"], saca_local) 		>= float(f["avance_para_jugar_la_falta_adelante"])
 	var mejor := -1
-	var mejor_valor: float = INF
+	var mejor_valor: float = INF if not hacia_adelante else -INF
 	# Y por si no hay nadie cerca: el más cercano de todos, para reventarla
 	# hacia él en vez de quedarse con la pelota.
 	var mas_cerca := -1
@@ -3341,9 +3402,9 @@ static func _tocar_corto(estado: Dictionary, saca_local: bool) -> void:
 			mas_cerca = id
 		if dist > max_corto:
 			continue
-		# Más atrás = mejor. valor_posicion es 1 pegado al arco rival.
+		# valor_posicion es 1 pegado al arco rival.
 		var valor := valor_posicion(e["pos"], saca_local)
-		if valor < mejor_valor:
+		if (valor > mejor_valor) if hacia_adelante else (valor < mejor_valor):
 			mejor_valor = valor
 			mejor = id
 	if mejor != -1:
@@ -3705,7 +3766,13 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 	for mitad in range(2):
 		_reiniciar_desde_medio(estado, mitad == 0, mitad + 1)
 		estado["minuto"] = MINUTOS_MOSTRADOS_POR_MITAD * mitad
-		for t in range(TICKS_POR_MITAD):
+		for t in range(TICKS_POR_MITAD + TICKS_DE_DESCUENTO):
+			# DESCUENTO. El tiempo no se termina con una pelota parada sin
+			# ejecutar: se cobro un penal y el partido se acabo antes de
+			# que lo patearan. Pasados los 45, se sigue solo mientras haya
+			# algo pendiente, y como mucho hasta el tope de descuento.
+			if t >= TICKS_POR_MITAD and not _hay_algo_sin_terminar(estado):
+				break
 			_tick(estado, con_fotogramas)
 			if not ventanas.is_empty() and estado["minuto"] >= ventanas[0]:
 				var minuto_ventana: int = ventanas.pop_front()

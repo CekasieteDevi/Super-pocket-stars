@@ -64,7 +64,7 @@
     "porteria_base": 0.49,
     "porteria_calidad": 0.5,
     "palo": 0.05,
-    "fuerza_base": 0.92
+    "fuerza_base": 0.84
   },
   "temperatura": {
     "base": 0.55,
@@ -116,6 +116,8 @@
     "prob_falta_en_quite_ganado": 0.1,
     "ventaja_penal": 45.0,
     "geometria_minima_tiro_libre": 0.14,
+    "_avance_para_jugar_la_falta_adelante": "De la mitad de la cancha para adelante, un reinicio se juega hacia ADELANTE. Antes se buscaba siempre al companero mas atrasado —bien para un lateral propio, mal para una falta a favor en campo rival: el equipo retrocedia treinta metros cada vez que le cobraban una falta.",
+    "avance_para_jugar_la_falta_adelante": 0.5,
     "zona_despeje": 0.42,
     "presion_despeje": 0.45,
     "despeje_corto": 30.0,
@@ -201,6 +203,7 @@
     "invasores_para_reventarla": 3.0,
     "_mezcla_fisica_rango_tiro": "Cuanto del rango de tiro es fisico y cuanto relativo al nivel del partido. 0 = decima y quinta rematan desde la misma distancia; 1 = primera remata desde tan lejos que suma 3 remates por partido y se va a 3,25 goles contra 2,50 del motor abstracto. Se barre con tests/_diag_goles_motores.gd y tests/_diag_remates.gd.",
     "mezcla_fisica_rango_tiro": 0.8,
-    "_apoyo_del_nueve": "Cuanto del apoyo le toca al 9. En cero: no baja, se queda de referencia. Medido, que baje aunque sea un poco cuesta 0,4 goles por partido en las tres divisiones — el equipo se queda sin nadie en el area. Los que bajan a recibir son el enganche y los extremos."
+    "_apoyo_del_nueve": "Cuanto del apoyo le toca al 9. En cero: no baja, se queda de referencia. Medido, que baje aunque sea un poco cuesta 0,4 goles por partido en las tres divisiones — el equipo se queda sin nadie en el area. Los que bajan a recibir son el enganche y los extremos.",
+    "_presion_despeje": "Presion a partir de la cual, en zona propia, aparece el despeje Y se DESCARTAN las opciones de seguir jugando la pelota: quedan solo el despeje y el pelotazo. Es una regla y no un peso — subirle el peso al despeje no alcanzaba porque el pase largo se evalua una vez por cada companero, asi que competian diez opciones contra una sola y el maximo de diez ganaba casi siempre. Medido: despejes en el area propia 4% -> 20%, y la pelota sale del area el 58% de las veces."
   }
 }
