@@ -2477,6 +2477,12 @@ func _refrescar_ofertas(contenedor: VBoxContainer, entrantes: bool) -> void:
 	for o in equipo.ofertas:
 		if bool(o["entrante"]) != entrantes:
 			continue
+		# Solo las VIVAS. Las rechazadas y las que se cayeron al cerrar el
+		# mercado se van al historial: seguian apareciendo en la lista, con
+		# su boton de "Ver oferta", como si todavia hubiera algo que
+		# decidir.
+		if not Ofertas.abierta(o):
+			continue
 		hubo = true
 		contenedor.add_child(_fila_oferta(o))
 	if not hubo:

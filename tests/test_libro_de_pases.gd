@@ -20,6 +20,7 @@ func _init() -> void:
 	_test_la_temporada_arranca_siempre_en_marzo()
 	_test_fuera_de_ventana_no_se_puede_operar()
 	_test_al_cerrar_se_cae_lo_que_estaba_abierto()
+	_test_lo_rechazado_y_lo_vencido_desaparece()
 	quit()
 
 
@@ -147,3 +148,52 @@ func _test_al_cerrar_se_cae_lo_que_estaba_abierto() -> void:
 			print("FALLA: quedo una negociacion abierta con el mercado cerrado.")
 			return
 	print("OK: las %d negociaciones abiertas se cayeron al cerrar el mercado." % abiertas_antes)
+
+
+func _test_lo_rechazado_y_lo_vencido_desaparece() -> void:
+	print("\n=== Rechazar y vencer sacan la oferta de la lista ===")
+	var gs := GUION.new()
+	gs.partida_nueva(SEED + 3)
+	gs.dia_absoluto = Calendario.primer_dia_de_mercado()
+
+	# Una oferta ENTRANTE por uno de los nuestros.
+	var comprador: Team = null
+	for e in gs.liga_jugador().equipos:
+		if e != gs.equipo_jugador:
+			comprador = e
+			break
+	var mio: Dictionary = gs.equipo_jugador.jugadores[0]
+	var entrante := Ofertas.nueva(9001, comprador.nombre, mio, 100000.0, true, gs.rng)
+	gs.equipo_jugador.ofertas.append(entrante)
+
+	var r: Dictionary = gs.responder_oferta(9001, "rechazar")
+	if not bool(r.get("exito", false)):
+		print("FALLA: no se pudo rechazar (%s)." % str(r.get("motivo", "")))
+		return
+	for o in gs.equipo_jugador.ofertas:
+		if int(o["id"]) == 9001:
+			print("FALLA: la oferta rechazada sigue en la lista viva.")
+			return
+	var en_historial := false
+	for o in gs.equipo_jugador.historial_mercado:
+		if int(o["id"]) == 9001:
+			en_historial = true
+	if not en_historial:
+		print("FALLA: la oferta rechazada no quedo en el historial.")
+		return
+
+	# Y una que queda abierta cuando se cierra el mercado.
+	var otra := Ofertas.nueva(9002, comprador.nombre, mio, 100000.0, true, gs.rng)
+	gs.equipo_jugador.ofertas.append(otra)
+	var pasos := 0
+	while gs.hay_mercado_abierto() and pasos < 400:
+		pasos += 1
+		if gs.hay_partido_hoy():
+			gs.jugar_siguiente_fecha()
+		else:
+			gs.avanzar_un_dia()
+	for o in gs.equipo_jugador.ofertas:
+		if int(o["id"]) == 9002:
+			print("FALLA: la oferta vencida sigue en la lista viva.")
+			return
+	print("OK: la rechazada y la vencida se van de la lista y quedan en el historial.")

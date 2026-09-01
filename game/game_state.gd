@@ -326,6 +326,9 @@ func avanzar_un_dia() -> Array:
 		caidas = Ofertas.cancelar_por_cierre_de_mercado(equipo_jugador)
 		for texto in caidas:
 			_agregar_noticia("MERCADO: %s" % texto)
+		# Al historial en el acto: con el mercado cerrado no queda nada
+		# que decidir, asi que no tienen por que seguir en la lista.
+		Ofertas.archivar(equipo_jugador)
 
 	var novedades := []
 	for id in lesionados_antes:
@@ -664,6 +667,9 @@ func responder_oferta(oferta_id: int, accion: String, monto: float = 0.0) -> Dic
 	match accion:
 		"rechazar":
 			Ofertas.rechazar(oferta)
+			# Se archiva EN EL ACTO: rechazar algo y que siga en la lista
+			# hasta que pase un dia es no haberlo rechazado.
+			Ofertas.archivar(equipo_jugador)
 			return {"exito": true, "oferta": oferta}
 		"contraofertar":
 			if not bool(oferta["entrante"]) and equipo_jugador.caja["fichajes"] < monto:
