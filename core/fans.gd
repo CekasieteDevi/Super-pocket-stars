@@ -10,12 +10,14 @@ extends RefCounted
 ## Team.racha del motor de partido — esa es dentro de un partido, esta es
 ## entre partidos).
 ##
-## Deliberadamente NO toca los ingresos por entradas (Economia.
-## procesar_temporada) en esta iteración — esa fórmula ya está calibrada
-## con cuidado (ver el comentario de PRECIO_ENTRADA en economia.gd) y
-## mezclar otra variable ahí exigiría el mismo tipo de testeo largo que
-## esa calibración, no algo para hacer de paso. Por ahora Fans solo
-## alimenta el modificador de bloque C de "público" (ver core/publico.gd).
+## Alimenta dos cosas: el modificador de bloque C de "público" (ver
+## core/publico.gd) y la OCUPACION del estadio, donde suma hasta un +30%
+## encima de la base de reputación (Economia.BONUS_OCUPACION_FANS).
+##
+## Lo segundo llegó después y este comentario decía lo contrario —que
+## Fans deliberadamente no tocaba los ingresos— durante varias
+## iteraciones, que es peor que no tener comentario: manda a buscar la
+## plata de las entradas al lugar equivocado.
 
 const GANANCIA_POR_VICTORIA := 0.5
 const UMBRAL_RACHA_SIN_GANAR := 5  # partidos seguidos sin ganar antes de empezar a perder fans

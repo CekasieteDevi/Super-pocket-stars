@@ -948,6 +948,12 @@ func _construir_panel_formacion(padre: Control) -> void:
 	label_carga_efecto.add_theme_color_override("font_color", Tema.SUAVE)
 	label_carga_efecto.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
 	label_carga_efecto.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	# RECORTADO. Sin esto el label pide todo el ancho que necesita su
+	# texto, estira la fila mas alla de la ventana y empuja el BANCO —que
+	# esta a la derecha de la cancha— fuera de la pantalla. Un texto largo
+	# en el pie no puede tener el poder de borrar media pantalla.
+	label_carga_efecto.clip_text = true
+	label_carga_efecto.custom_minimum_size = Vector2(280, 0)
 	pie.add_child(label_carga_efecto)
 
 	var cuerpo := HBoxContainer.new()
@@ -1080,10 +1086,10 @@ func _refrescar_formacion() -> void:
 	# El pie de la formacion recuerda como viene el entrenamiento, aunque
 	# se elija en su propia solapa: la familiaridad tactica de abajo
 	# depende del foco, asi que el dato tiene que estar a mano.
-	label_carga_efecto.text = "Carga %s  ·  foco %s  —  %s" % [
+	label_carga_efecto.text = "Carga %s  ·  foco %s" % [
 		CargaEntrenamiento.ETIQUETAS.get(equipo.carga_entrenamiento, "?"),
-		FocoEquipo.ETIQUETAS.get(equipo.foco_equipo, "?"),
-		_texto_carga(equipo)]
+		FocoEquipo.ETIQUETAS.get(equipo.foco_equipo, "?")]
+	label_carga_efecto.tooltip_text = _texto_carga(equipo)
 
 	_refrescar_familiaridad(equipo)
 
