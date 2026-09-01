@@ -3176,6 +3176,17 @@ static func _marca_en_tiro_libre(e: Dictionary, pos: Vector2, ataca_local: bool)
 ## más atrasado que esté a distancia de pase. Vale para el saque del
 ## medio, el lateral y el tiro libre lejano — en los tres el que la pone
 ## en juego no sale conduciendo.
+##
+## Si no hay NADIE a distancia de pase corto, la revienta hacia adelante.
+## Nunca se queda con la pelota: quedarse era el bug — el ejecutor la
+## tomaba y salía corriendo, que no es reanudar el juego, y encima el
+## rival lo tenía que ir a buscar como si nada hubiera pasado.
+##
+## El alcance sale del pasador, no de una constante. Antes el corte era
+## `max_dist_pase_malo`, o sea el alcance del PEOR pasador posible, para
+## todos: cualquiera que no tuviera un compañero ahí nomás se quedaba
+## conduciendo. Y al bajar ese peso de 22 a 16 metros —recalibrando el
+## alcance por division— el caso pasó de raro a común.
 static func _tocar_corto(estado: Dictionary, saca_local: bool) -> void:
 	var poseedor_id: int = int(estado["pelota"]["poseedor_id"])
 	if poseedor_id == -1 or not estado["jugadores"].has(poseedor_id):
@@ -3186,23 +3197,41 @@ static func _tocar_corto(estado: Dictionary, saca_local: bool) -> void:
 	if jugador.is_empty():
 		return
 
+	var f: Dictionary = pesos()["fisica"]
+	var attr := atributo_pase(jugador, 0.0)
+	var max_corto: float = _por_atributo(jugador, attr,
+		f["max_dist_pase_malo"], f["max_dist_pase_bueno"], 1.0)
+
 	var mejor := -1
 	var mejor_valor: float = INF
+	# Y por si no hay nadie cerca: el más cercano de todos, para reventarla
+	# hacia él en vez de quedarse con la pelota.
+	var mas_cerca := -1
+	var dist_mas_cerca: float = INF
 	for id in estado["jugadores"]:
 		var e: Dictionary = estado["jugadores"][id]
 		if e["equipo_local"] != saca_local or id == poseedor_id or e["rol"] == "ARQ":
 			continue
 		var dist: float = poseedor["pos"].distance_to(e["pos"])
-		if dist > float(pesos()["fisica"]["max_dist_pase_malo"]):
+		if dist < dist_mas_cerca:
+			dist_mas_cerca = dist
+			mas_cerca = id
+		if dist > max_corto:
 			continue
 		# Más atrás = mejor. valor_posicion es 1 pegado al arco rival.
 		var valor := valor_posicion(e["pos"], saca_local)
 		if valor < mejor_valor:
 			mejor_valor = valor
 			mejor = id
-	if mejor == -1:
+	if mejor != -1:
+		_lanzar_pase(estado, poseedor, mejor, jugador)
 		return
-	_lanzar_pase(estado, poseedor, mejor, jugador)
+	if mas_cerca != -1:
+		# Pelotazo: no llega un pase, pero la pelota SALE igual.
+		_lanzar_pase(estado, poseedor, mas_cerca, jugador, null, true)
+		return
+	# Sin un solo compañero en cancha (once expulsado) no hay a quién
+	# tocarsela; ahi si se queda con ella y juega.
 
 
 ## Se reanuda: el ejecutor toca la pelota y la jugada arranca.
@@ -3253,7 +3282,11 @@ static func _ejecutar_balon_parado(estado: Dictionary) -> void:
 		"centro", "corner":
 			var objetivo := _mejor_en_el_area(estado, ataca_local, ejecutor)
 			if objetivo == -1:
-				return  # nadie llegó al área: sigue jugando en corto
+				# Nadie llego al area: se juega en corto. Antes se salia
+				# sin hacer nada y el ejecutor arrancaba a conducir con la
+				# pelota, que no es reanudar un centro ni un corner.
+				_tocar_corto(estado, ataca_local)
+				return
 			_lanzar_pase(estado, e_ej, objetivo, jugador)
 			estado["pelota"]["altura_max"] = float(pesos()["fisica"]["altura_centro"])
 			estado["pelota"]["es_centro"] = true
