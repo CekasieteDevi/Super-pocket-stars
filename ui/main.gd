@@ -31,17 +31,15 @@ var label_formacion_estado: Label
 var contenedor_tabla: VBoxContainer
 var _fila_propia_tabla: Control = null
 var label_tabla_leyenda: Label
-var label_resultado: Label
 var contenedor_ultimo_partido: VBoxContainer
-var boton_jugar_fecha: Button
-var boton_simular_temporada: Button
+var contenedor_lista_partidos: VBoxContainer
+## Cual de los partidos guardados se esta mirando (0 = el mas reciente).
+var historial_elegido: int = 0
 ## En un solo lugar: estaba escrito a mano al construirlo y al terminar de
 ## simular, y bastaba tocar uno para que el boton cambiara de nombre solo.
 const TEXTO_SIMULAR_TEMPORADA := "Simular resto de la temporada"
-var label_objetivo: Label
 var option_estilo: OptionButton
 var option_cambios: OptionButton
-var label_informe_rival: Label
 
 const OPCIONES_CAMBIOS := ["equilibrado", "descanso", "rendimiento"]
 const ETIQUETAS_CAMBIOS := {"equilibrado": "Equilibrado", "descanso": "Priorizar descanso", "rendimiento": "Priorizar rendimiento"}
@@ -123,7 +121,7 @@ func _ready() -> void:
 	_construir_panel_portada(contenedor)
 	_construir_panel_plantel(contenedor)
 	_construir_panel_tabla(contenedor)
-	_construir_panel_partido(contenedor)
+	_construir_panel_historial(contenedor)
 	_construir_panel_entrenamiento(contenedor)
 	_construir_panel_partido_animado(contenedor)
 	_construir_panel_economia(contenedor)
@@ -358,7 +356,7 @@ func _entrar_al_juego() -> void:
 	ficha_jugador_id = -1
 	resultados_mercado = []
 	filtros_mercado = BusquedaMercado.filtros_vacios()
-	_refrescar_ultimo_partido()
+	_refrescar_historial_partidos()
 	_refrescar_formacion()
 	_refrescar_plantel()
 	_refrescar_tabla()
@@ -417,10 +415,36 @@ var contenedor_ficha_lateral: VBoxContainer
 
 
 func _construir_panel_plantel(padre: Control) -> void:
+	var raiz := VBoxContainer.new()
+	raiz.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	padre.add_child(raiz)
+	paneles["plantel"] = raiz
+
+	# Estilo de juego y cambios automaticos viven ACA, con el plantel: son
+	# decisiones sobre los once que van a jugar. Estaban en la pantalla de
+	# resultados, que es donde se MIRA lo que ya paso.
+	var barra := HBoxContainer.new()
+	barra.add_theme_constant_override("separation", 12)
+	raiz.add_child(barra)
+
+	option_estilo = OptionButton.new()
+	for estilo in Estilos.LISTA:
+		option_estilo.add_item(estilo)
+	option_estilo.custom_minimum_size = Vector2(190, Tema.ALTO_TACTIL)
+	option_estilo.item_selected.connect(_on_estilo_seleccionado)
+	barra.add_child(_grupo_filtro("Estilo de juego", option_estilo))
+
+	option_cambios = OptionButton.new()
+	for opcion in OPCIONES_CAMBIOS:
+		option_cambios.add_item(ETIQUETAS_CAMBIOS[opcion])
+	option_cambios.custom_minimum_size = Vector2(230, Tema.ALTO_TACTIL)
+	option_cambios.item_selected.connect(_on_config_cambios_seleccionado)
+	barra.add_child(_grupo_filtro("Cambios automaticos", option_cambios))
+
 	var panel := HBoxContainer.new()
-	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	padre.add_child(panel)
-	paneles["plantel"] = panel
+	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	raiz.add_child(panel)
 
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -1301,99 +1325,42 @@ func _centrar_tabla_en_mi_club() -> void:
 		_fila_propia_tabla.position.y - scroll.size.y * 0.5))
 
 
-func _construir_panel_partido(padre: Control) -> void:
-	var panel := VBoxContainer.new()
+## Historial de NUESTROS partidos: la lista a la izquierda, el detalle del
+## que elijas a la derecha.
+##
+## Reemplaza a la vieja pantalla "Partido", que mezclaba tres cosas que no
+## van juntas: los controles del equipo (estilo, cambios), los botones que
+## avanzan el calendario y el resumen del ultimo partido. Los dos primeros
+## se fueron a Plantel y a Club, que es donde se decide; aca queda solo lo
+## que se MIRA, y ya no solo del ultimo partido.
+func _construir_panel_historial(padre: Control) -> void:
+	var panel := HBoxContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	panel.visible = false
 	padre.add_child(panel)
-	paneles["partido"] = panel
+	paneles["historial"] = panel
 
-	# Los controles y los tres botones ARRIBA, y todo lo que cambia de alto
-	# —resultado, estadisticas, relato— abajo y adentro de un scroll.
-	#
-	# Antes iba todo en un VBox suelto y el panel no scrollea: con el
-	# relato de un partido largo el contenido pasaba el alto de la pantalla
-	# y el boton del final —"Simular resto de la temporada"— quedaba abajo
-	# del borde, sin forma de llegar. Parecia
-	# borrados.
-	var barra := HFlowContainer.new()
-	barra.add_theme_constant_override("h_separation", 12)
-	barra.add_theme_constant_override("v_separation", 8)
-	panel.add_child(barra)
-
-	option_estilo = OptionButton.new()
-	for estilo in Estilos.LISTA:
-		option_estilo.add_item(estilo)
-	option_estilo.custom_minimum_size = Vector2(190, Tema.ALTO_TACTIL)
-	option_estilo.item_selected.connect(_on_estilo_seleccionado)
-	barra.add_child(_grupo_filtro("Estilo de juego", option_estilo))
-
-	option_cambios = OptionButton.new()
-	for opcion in OPCIONES_CAMBIOS:
-		option_cambios.add_item(ETIQUETAS_CAMBIOS[opcion])
-	option_cambios.custom_minimum_size = Vector2(230, Tema.ALTO_TACTIL)
-	option_cambios.item_selected.connect(_on_config_cambios_seleccionado)
-	barra.add_child(_grupo_filtro("Cambios automaticos", option_cambios))
-
-	var acciones := HBoxContainer.new()
-	acciones.add_theme_constant_override("separation", 8)
-	barra.add_child(_grupo_filtro(" ", acciones))
-
-	boton_jugar_fecha = Button.new()
-	# El texto lo pone _refrescar_boton_jugar segun el dia: con el
-	# calendario ya no siempre hay partido para jugar.
-	boton_jugar_fecha.text = "Jugar el partido"
-	boton_jugar_fecha.custom_minimum_size = Vector2(230, Tema.ALTO_TACTIL)
-	# La accion principal de la pantalla de partido: la unica ambar de aca.
-	Tema.primario(boton_jugar_fecha)
-	boton_jugar_fecha.pressed.connect(func():
-		if GameState.hay_partido_hoy():
-			_on_jugar_fecha()
-		else:
-			_avanzar_dias(false)
-		_refrescar_boton_jugar())
-	acciones.add_child(boton_jugar_fecha)
-
-	boton_simular_temporada = Button.new()
-	boton_simular_temporada.text = TEXTO_SIMULAR_TEMPORADA
-	boton_simular_temporada.custom_minimum_size = Vector2(280, Tema.ALTO_TACTIL)
-	boton_simular_temporada.tooltip_text = "Juega de una todas las fechas que quedan, las tuyas incluidas: no vas a poder tocar nada hasta el final."
-	boton_simular_temporada.pressed.connect(_on_simular_temporada)
-	acciones.add_child(boton_simular_temporada)
-
-	label_objetivo = Label.new()
-	label_objetivo.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label_objetivo.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
-	label_objetivo.add_theme_color_override("font_color", Tema.SUAVE)
-	panel.add_child(label_objetivo)
+	var izq := VBoxContainer.new()
+	izq.custom_minimum_size = Vector2(340, 0)
+	panel.add_child(izq)
+	izq.add_child(Tema.etiqueta_seccion("Tus partidos"))
+	var scroll_lista := ScrollContainer.new()
+	scroll_lista.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll_lista.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	izq.add_child(scroll_lista)
+	contenedor_lista_partidos = VBoxContainer.new()
+	contenedor_lista_partidos.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll_lista.add_child(contenedor_lista_partidos)
 
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.add_child(scroll)
-	var dentro := VBoxContainer.new()
-	dentro.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(dentro)
-
-	label_informe_rival = Label.new()
-	label_informe_rival.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	dentro.add_child(label_informe_rival)
-
-	label_resultado = Label.new()
-	label_resultado.text = "Todavia no jugaste ninguna fecha."
-	label_resultado.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label_resultado.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
-	label_resultado.add_theme_color_override("font_color", Tema.SUAVE)
-	dentro.add_child(label_resultado)
-
-	# El resumen del ultimo partido: marcador, comparacion y linea de
-	# tiempo. Era lo ultimo que quedaba en texto monoespaciado, con las
-	# columnas alineadas a fuerza de espacios y el relato como un parrafo.
 	contenedor_ultimo_partido = VBoxContainer.new()
 	contenedor_ultimo_partido.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	contenedor_ultimo_partido.add_theme_constant_override("separation", 10)
-	dentro.add_child(contenedor_ultimo_partido)
+	scroll.add_child(contenedor_ultimo_partido)
 
 
 ## Reproduce el último partido propio con la vista de /match: proyección
@@ -1491,6 +1458,8 @@ func _mostrar_resumen_partido() -> void:
 	veredicto.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	contenedor_resumen.add_child(veredicto)
 
+	# Aca SI van los eventos del partido recien jugado: este cuadro sale
+	# apenas termina, antes de que se guarde nada.
 	var stats := EstadisticasPartido.calcular(
 		GameState.ultimos_eventos, str(r["local"]), str(r["visitante"]))
 	var loc: Dictionary = stats[str(r["local"])]
@@ -4484,7 +4453,7 @@ func _on_cargar_partida() -> void:
 		label_partida_estado.text = "Partida cargada: temporada %d, division %d, %s." % [
 			GameState.temporada_actual, GameState.division_jugador + 1, GameState.equipo_jugador.nombre
 		]
-		_refrescar_ultimo_partido()
+		_refrescar_historial_partidos()
 		_mostrar_plantel()
 	else:
 		label_partida_estado.text = "No se pudo cargar la partida (archivo corrupto o inexistente)."
@@ -4495,55 +4464,75 @@ func _on_cargar_partida() -> void:
 ## falta al CARGAR: el resultado viaja en el guardado, pero la pantalla se
 ## había armado con el texto inicial y se quedaba diciendo "todavía no
 ## jugaste ninguna fecha" con una temporada entera encima.
-## El boton principal de la pantalla Partido dice lo que hace HOY.
-func _refrescar_boton_jugar() -> void:
-	if boton_jugar_fecha == null:
-		return
-	if not GameState.hay_fecha_pendiente():
-		boton_jugar_fecha.text = "Temporada terminada"
-		boton_jugar_fecha.disabled = true
-		return
-	boton_jugar_fecha.disabled = GameState.juego_terminado
-	if GameState.hay_partido_hoy():
-		boton_jugar_fecha.text = "Jugar el partido"
-		boton_jugar_fecha.tooltip_text = "Hoy se juega."
-	else:
-		boton_jugar_fecha.text = "Avanzar un dia  (%s)" % Calendario.en_cuantos_dias(
-			GameState.dias_hasta_el_partido())
-		boton_jugar_fecha.tooltip_text = "Hoy no hay partido: pasa un dia."
+func _mostrar_historial_partidos() -> void:
+	_ocultar_todos()
+	paneles["historial"].visible = true
+	_refrescar_historial_partidos()
 
 
-func _refrescar_ultimo_partido() -> void:
-	if contenedor_ultimo_partido == null:
+## La lista de partidos y el detalle del elegido.
+##
+## Antes esto mostraba SOLO el ultimo partido, y lo hacia leyendo
+## GameState.ultimos_eventos — que se pisan en cuanto jugas otro. Ahora se
+## lee del historial guardado, que trae el resumen ya calculado de cada
+## partido y sobrevive al guardado.
+func _refrescar_historial_partidos() -> void:
+	if contenedor_lista_partidos == null:
 		return
+	for hijo in contenedor_lista_partidos.get_children():
+		hijo.queue_free()
 	for hijo in contenedor_ultimo_partido.get_children():
 		hijo.queue_free()
 
-	var r: Dictionary = GameState.ultimo_resultado
-	if r.is_empty():
-		label_resultado.text = "Todavia no jugaste ninguna fecha."
+	var historial: Array = GameState.historial_partidos
+	if historial.is_empty():
+		contenedor_lista_partidos.add_child(_texto_suave("Todavia no jugaste ningun partido."))
 		return
 
-	# El contexto del partido va como subtitulo y no mezclado con el
-	# marcador: clima y arbitro se leen una vez, el resultado se mira.
-	var contexto := ""
-	if not GameState.ultimo_log.is_empty():
-		var clima: String = GameState.equipo_jugador.clima_partido
-		contexto = "Clima %s  ·  árbitro %s" % [
-			clima, GameState.equipo_jugador.arbitro_partido] if clima != "" \
-			else "Árbitro %s" % GameState.equipo_jugador.arbitro_partido
-	label_resultado.text = contexto
+	historial_elegido = clampi(historial_elegido, 0, historial.size() - 1)
+	for i in range(historial.size()):
+		contenedor_lista_partidos.add_child(_fila_de_historial(historial[i], i))
+	_detalle_de_partido(historial[historial_elegido])
 
-	contenedor_ultimo_partido.add_child(_tarjeta_marcador(r))
+
+## Una linea de la lista: fecha, rival y resultado, con el color de si
+## ganaste. El elegido queda marcado.
+func _fila_de_historial(reg: Dictionary, indice: int) -> Control:
+	var mio: String = GameState.equipo_jugador.nombre
+	var propios: int = int(reg["gl"]) if str(reg["local"]) == mio else int(reg["gv"])
+	var ajenos: int = int(reg["gv"]) if str(reg["local"]) == mio else int(reg["gl"])
+	var rival: String = str(reg["visitante"]) if str(reg["local"]) == mio else str(reg["local"])
+	var color := Tema.VERDE if propios > ajenos else (Tema.ROJO if propios < ajenos else Tema.SUAVE)
+
+	var btn := Button.new()
+	btn.text = "T%d F%d   %s %d-%d   %s" % [
+		int(reg.get("temporada", 1)), int(reg.get("fecha", 0)),
+		"L" if str(reg["local"]) == mio else "V", propios, ajenos, rival]
+	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	btn.clip_text = true
+	btn.custom_minimum_size = Vector2(0, 40)
+	btn.add_theme_color_override("font_color", color)
+	btn.tooltip_text = "%s  ·  Division %d" % [
+		Calendario.texto_medio(int(reg.get("dia", 0))), int(reg.get("division", 0))]
+	Tema.seleccionado(btn, indice == historial_elegido)
+	btn.pressed.connect(func():
+		historial_elegido = indice
+		_refrescar_historial_partidos())
+	return btn
+
+
+## El detalle: marcador, las cuatro comparaciones y la linea de tiempo.
+func _detalle_de_partido(reg: Dictionary) -> void:
+	contenedor_ultimo_partido.add_child(_tarjeta_marcador(reg))
 	contenedor_ultimo_partido.add_child(Tema.etiqueta_seccion("Cómo se jugó"))
-	for fila in _filas_de_estadisticas(r):
+	for fila in _filas_de_estadisticas(reg):
 		contenedor_ultimo_partido.add_child(fila)
 
-	var hitos := _hitos_del_partido(r)
+	var hitos: Array = reg.get("hitos", [])
 	contenedor_ultimo_partido.add_child(Tema.etiqueta_seccion(
 		"Lo que paso" if not hitos.is_empty() else "No paso nada para contar"))
-	for h in hitos:
-		contenedor_ultimo_partido.add_child(h)
+	for i in range(hitos.size()):
+		contenedor_ultimo_partido.add_child(_fila_hito(hitos[i], i % 2 == 0))
 
 
 ## El marcador, grande, con tu equipo marcado en ambar.
@@ -4554,8 +4543,9 @@ func _tarjeta_marcador(r: Dictionary) -> Control:
 	tarjeta.add_child(caja)
 
 	var fecha := Label.new()
-	fecha.text = "Fecha %d de %d" % [
-		GameState.fecha_actual, GameState.liga_jugador().fixture.size()]
+	fecha.text = "Temporada %d  ·  fecha %d  ·  %s" % [
+		int(r.get("temporada", 1)), int(r.get("fecha", 0)),
+		Calendario.texto_medio(int(r.get("dia", 0)))]
 	fecha.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
 	fecha.add_theme_color_override("font_color", Tema.SUAVE)
 	caja.add_child(fecha)
@@ -4620,38 +4610,6 @@ func _filas_de_estadisticas(r: Dictionary) -> Array:
 			"%d/%d" % [vis["pases_completados"], vis["pases_intentados"]],
 			float(loc["pases_completados"]), float(vis["pases_completados"])),
 	]
-
-
-## La linea de tiempo: goles, tarjetas y cambios, en orden de minuto.
-##
-## Se arma con los eventos ESTRUCTURADOS y con goles_log, no filtrando el
-## relato por texto. Antes se buscaba "GOL" o "TARJETA" adentro de la
-## linea de log, que funciona hasta que alguien cambia una palabra.
-func _hitos_del_partido(r: Dictionary) -> Array:
-	var hitos := []
-	for gol in r.get("goles_log", []):
-		hitos.append({
-			"minuto": int(gol.get("minuto", 0)), "tipo": "gol",
-			"equipo": str(gol.get("equipo", "")),
-			"quien": _nombre_de_id(r, int(gol.get("jugador_id", -1))),
-			"detalle": "",
-		})
-	for ev in GameState.ultimos_eventos:
-		var tipo := str(ev.get("tipo", ""))
-		if tipo != "tarjeta" and tipo != "cambio":
-			continue
-		hitos.append({
-			"minuto": int(ev.get("minuto", 0)), "tipo": tipo,
-			"equipo": str(ev.get("equipo", "")),
-			"quien": str(ev.get("jugador_posicion", "")),
-			"detalle": str(ev.get("resultado", "")),
-		})
-	hitos.sort_custom(func(a, b): return int(a["minuto"]) < int(b["minuto"]))
-
-	var filas := []
-	for i in range(hitos.size()):
-		filas.append(_fila_hito(hitos[i], i % 2 == 0))
-	return filas
 
 
 func _fila_hito(h: Dictionary, par: bool) -> Control:
@@ -4732,7 +4690,7 @@ func _on_partida_nueva() -> void:
 	ficha_jugador_id = -1
 	resultados_mercado = []
 	filtros_mercado = BusquedaMercado.filtros_vacios()
-	_refrescar_ultimo_partido()
+	_refrescar_historial_partidos()
 	_refrescar_formacion()
 	_refrescar_plantel()
 	_refrescar_tabla()
@@ -4769,21 +4727,20 @@ func _on_jugar_fecha() -> void:
 		_refrescar_objetivo()
 		return
 	if not GameState.hay_fecha_pendiente():
-		label_resultado.text = "Temporada terminada."
 		return
 
 	var temporada_antes := GameState.temporada_actual
 	GameState.jugar_siguiente_fecha()
 
-	_refrescar_ultimo_partido()
+	_refrescar_historial_partidos()
 	if GameState.temporada_actual != temporada_antes:
-		label_resultado.text += _texto_cierre_temporada()
+		dialogo_novedades.dialog_text = _texto_cierre_temporada()
+		dialogo_novedades.popup_centered()
 
 	_refrescar_tabla()
 	_refrescar_plantel()
-	_refrescar_informe_rival()
 	_refrescar_objetivo()
-	_refrescar_boton_jugar()
+	_refrescar_objetivo()
 	_refrescar_barra_contexto()
 
 	# El partido se VE. Antes se simulaba en silencio, te aparecia el
@@ -4800,29 +4757,23 @@ func _on_simular_temporada() -> void:
 		_refrescar_objetivo()
 		return
 	if not GameState.hay_fecha_pendiente():
-		label_resultado.text = "Temporada terminada."
 		return
 
-	# Simular una temporada entera bloquea el hilo unos segundos. Sin
-	# esto el boton se quedaba igual y parecia que el toque no habia
-	# entrado. Los dos await dejan que Godot dibuje el cambio ANTES de
-	# empezar a laburar: sin ellos el texto nuevo no llega a pintarse.
-	boton_simular_temporada.text = "Simulando..."
-	boton_simular_temporada.disabled = true
-	label_resultado.text = "Simulando la temporada, esto tarda unos segundos..."
+	# Simular una temporada entera bloquea el hilo unos segundos. Los dos
+	# await dejan que Godot dibuje el aviso ANTES de empezar a laburar:
+	# sin ellos la pantalla se congela sin explicacion.
+	dialogo_novedades.dialog_text = "Simulando la temporada, esto tarda unos segundos..."
+	dialogo_novedades.popup_centered()
 	await get_tree().process_frame
 	await get_tree().process_frame
 
 	var temporada_antes := GameState.temporada_actual
 	GameState.simular_temporada_completa()
-
-	boton_simular_temporada.text = TEXTO_SIMULAR_TEMPORADA
-	boton_simular_temporada.disabled = false
+	dialogo_novedades.hide()
 
 	if GameState.temporada_actual != temporada_antes:
-		label_resultado.text = "[debug] Temporada simulada entera." + _texto_cierre_temporada()
-	else:
-		label_resultado.text = "[debug] Se jugaron las fechas que quedaban."
+		dialogo_novedades.dialog_text = _texto_cierre_temporada()
+		dialogo_novedades.popup_centered()
 
 	# A diferencia de "jugar fecha", esto simula muchas fechas de una — no
 	# tiene sentido mostrar el log/animado de sólo el último partido
@@ -4830,17 +4781,24 @@ func _on_simular_temporada() -> void:
 	GameState.ultimo_resultado = {}
 	GameState.ultimo_log = []
 	GameState.ultimos_eventos = []
-	_refrescar_ultimo_partido()
+	_refrescar_historial_partidos()
 
 	_refrescar_tabla()
 	_refrescar_plantel()
-	_refrescar_informe_rival()
+	_refrescar_objetivo()
 	_refrescar_objetivo()
 
 
 func _mostrar_plantel() -> void:
 	_ocultar_todos()
 	paneles["plantel"].visible = true
+	# Los desplegables se sincronizan aca: son del equipo, no de la
+	# pantalla, y pueden haber cambiado desde otro lado.
+	if option_estilo != null:
+		option_estilo.select(maxi(Estilos.LISTA.find(GameState.equipo_jugador.estilo), 0))
+	if option_cambios != null:
+		option_cambios.select(maxi(
+			OPCIONES_CAMBIOS.find(GameState.equipo_jugador.config_cambios), 0))
 	_refrescar_plantel()
 
 
@@ -4868,7 +4826,7 @@ func _mostrar_partido() -> void:
 	option_estilo.select(max(idx_actual, 0))
 	var idx_cambios := OPCIONES_CAMBIOS.find(GameState.equipo_jugador.config_cambios)
 	option_cambios.select(max(idx_cambios, 0))
-	_refrescar_informe_rival()
+	_refrescar_objetivo()
 	_refrescar_objetivo()
 
 
@@ -4876,24 +4834,29 @@ func _mostrar_partido() -> void:
 ## game over si la directiva ya te destituyó (2 temporadas seguidas sin
 ## cumplir). Cuando termina el juego se deshabilitan los botones que
 ## avanzarían el calendario — la única salida es borrar la partida.
+## El objetivo y el game over se muestran en la PORTADA, que es la
+## pantalla desde la que se juega. Antes vivian en la pantalla "Partido",
+## que ademas apagaba ahi mismo sus dos botones — y esos botones ya no
+## existen: los de verdad estan en la portada y se apagan solos.
 func _refrescar_objetivo() -> void:
-	if GameState.juego_terminado:
-		label_objetivo.text = "GAME OVER: %s" % GameState.motivo_fin_partida
-		boton_jugar_fecha.disabled = true
-		boton_simular_temporada.disabled = true
-		return
+	if paneles.has("portada") and paneles["portada"].visible:
+		_refrescar_portada()
 
-	boton_jugar_fecha.disabled = false
-	boton_simular_temporada.disabled = false
+
+## Texto del objetivo de la directiva, con la advertencia si vas camino a
+## que te echen.
+func _texto_objetivo() -> String:
+	if GameState.juego_terminado:
+		return "GAME OVER: %s" % GameState.motivo_fin_partida
 	var objetivo: Dictionary = GameState.equipo_jugador.objetivo_temporada
 	if objetivo.is_empty():
-		label_objetivo.text = ""
-		return
+		return ""
 	var incumplidos: int = GameState.equipo_jugador.objetivos_incumplidos_seguidos
 	var advertencia := ""
 	if incumplidos > 0:
-		advertencia = "  (⚠ %d/%d temporadas sin cumplir — te destituyen a la 2ª seguida)" % [incumplidos, Objetivos.MAX_INCUMPLIDOS_SEGUIDOS]
-	label_objetivo.text = "Objetivo de la directiva: %s%s" % [objetivo["descripcion"], advertencia]
+		advertencia = "  (⚠ %d/%d temporadas sin cumplir — te destituyen a la 2ª seguida)" % [
+			incumplidos, Objetivos.MAX_INCUMPLIDOS_SEGUIDOS]
+	return "Objetivo de la directiva: %s%s" % [objetivo["descripcion"], advertencia]
 
 
 ## §8.6.3/§8.6.5: le muestra al jugador con qué rival juega la próxima
@@ -4923,8 +4886,7 @@ func _avanzar_dias(hasta_el_partido: bool) -> void:
 	_refrescar_plantel()
 	_refrescar_mercado()
 	_refrescar_objetivo()
-	_refrescar_informe_rival()
-	_refrescar_boton_jugar()
+	_refrescar_objetivo()
 	_refrescar_barra_contexto()
 	if not novedades.is_empty():
 		dialogo_novedades.dialog_text = "%s
@@ -4951,11 +4913,13 @@ func _proximo_rival() -> Team:
 	return null
 
 
-func _refrescar_informe_rival() -> void:
+## Lo que se sabe del proximo rival. Devuelve el texto en vez de escribir
+## en un label: lo pinta la portada, que es donde se decide con que estilo
+## salir a jugarle.
+func _texto_informe_rival() -> String:
 	var rival := _proximo_rival()
 	if rival == null:
-		label_informe_rival.text = ""
-		return
+		return ""
 	var mio: String = GameState.equipo_jugador.estilo
 	var mod := Estilos.modificador(mio, rival.estilo)
 	var pista := ""
@@ -4969,12 +4933,12 @@ func _refrescar_informe_rival() -> void:
 	var clasico_texto := ""
 	if Rivalidad.es_clasico(GameState.equipo_jugador, rival):
 		clasico_texto = " — ⚔ ¡ES TU CLÁSICO! (más tarjetas, más caos)"
-	label_informe_rival.text = "Próximo rival: %s — estilo %s%s%s%s" % [rival.nombre, rival.estilo, pista, dt_texto, clasico_texto]
+	return "Rival: %s — estilo %s%s%s%s" % [rival.nombre, rival.estilo, pista, dt_texto, clasico_texto]
 
 
 func _on_estilo_seleccionado(idx: int) -> void:
 	GameState.equipo_jugador.estilo = Estilos.LISTA[idx]
-	_refrescar_informe_rival()
+	_refrescar_objetivo()
 
 
 func _on_config_cambios_seleccionado(idx: int) -> void:
@@ -5115,8 +5079,8 @@ const SECCIONES := [
 		["plantel", "Plantel"], ["formacion", "Formacion"],
 		["entrenamiento", "Entrenamiento"],
 		["cantera", "Cantera"], ["instalaciones", "Instalaciones"]]},
-	{"clave": "partido", "nombre": "Partido", "paneles": [
-		["partido", "Partido"], ["tabla", "Tabla"]]},
+	{"clave": "partido", "nombre": "Liga", "paneles": [
+		["tabla", "Tabla"], ["historial", "Historial"]]},
 	{"clave": "mercado", "nombre": "Mercado", "paneles": [
 		["mercado", "Mercado"], ["libres", "Libres"], ["prestamos", "Prestamos"]]},
 	{"clave": "mas", "nombre": "Mas", "paneles": [
@@ -5254,7 +5218,7 @@ func _mostrar_panel_de_seccion(clave: String) -> void:
 		"plantel": "_mostrar_plantel", "formacion": "_mostrar_formacion",
 		"entrenamiento": "_mostrar_entrenamiento",
 		"cantera": "_mostrar_cantera", "instalaciones": "_mostrar_instalaciones",
-		"partido": "_mostrar_partido", "tabla": "_mostrar_tabla",
+		"tabla": "_mostrar_tabla", "historial": "_mostrar_historial_partidos",
 		"mercado": "_mostrar_mercado", "libres": "_mostrar_libres",
 		"prestamos": "_mostrar_prestamos", "economia": "_mostrar_economia",
 		"noticias": "_mostrar_noticias", "seleccion": "_mostrar_seleccion",
@@ -5345,6 +5309,17 @@ func _refrescar_portada() -> void:
 		titulo.text = "Sin partido hoy"
 	Tema.numero(titulo, 24, Tema.TEXTO if hay_partido else Tema.SUAVE)
 	caja_partido.add_child(titulo)
+
+	# Lo que se sabe del rival: estilo, DT y si es clasico. Vivia en la
+	# pantalla "Partido", pero es con lo que se elige el estilo propio, y
+	# eso se decide antes de jugar.
+	if rival != null:
+		var informe := Label.new()
+		informe.text = _texto_informe_rival()
+		informe.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		informe.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		informe.add_theme_color_override("font_color", Tema.SUAVE)
+		caja_partido.add_child(informe)
 
 	if rival != null and not hay_partido:
 		var falta := GameState.dias_hasta_el_partido()
@@ -5437,10 +5412,15 @@ func _refrescar_portada() -> void:
 	# --- Estado del club ---------------------------------------------------
 	contenedor_portada.add_child(Tema.etiqueta_seccion("El club"))
 	var estado := _tarjeta(contenedor_portada)
-	var objetivo: Dictionary = equipo.objetivo_temporada
-	if not objetivo.is_empty():
+	# El objetivo con su advertencia de destitucion, que antes vivia en la
+	# pantalla "Partido": es informacion para decidir, y se decide aca.
+	var texto_objetivo := _texto_objetivo()
+	if texto_objetivo != "":
 		var l := Label.new()
-		l.text = "Objetivo: %s" % objetivo["descripcion"]
+		l.text = texto_objetivo
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		if GameState.juego_terminado:
+			l.add_theme_color_override("font_color", Tema.ROJO)
 		estado.add_child(l)
 	var linea := Label.new()
 	linea.text = "Media del once %.1f   ·   disponibles %d de %d   ·   carga %s   ·   foco %s" % [

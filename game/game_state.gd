@@ -66,6 +66,13 @@ var ultimos_eventos: Array = []
 ## (son ~21.600 fotogramas) y se pierde al cerrar el juego, igual que el log.
 var ultimos_fotogramas: Array = []
 
+## Los partidos NUESTROS ya jugados, el mas reciente primero. Se guarda un
+## resumen COMPACTO —marcador, las cuatro comparaciones y los hitos ya
+## resueltos a nombres— y no los eventos crudos: un partido genera cientos
+## de eventos y el archivo de guardado ya pesa varios megas.
+var historial_partidos: Array = []
+const MAX_HISTORIAL_PARTIDOS := 120
+
 ## Copas en curso. Ya no se resuelven de una sola vez al cerrar la
 ## temporada: se arman al empezarla y se juegan una ronda por semana
 ## entre fechas de liga (ver _jugar_ronda_de_copas).
@@ -134,6 +141,7 @@ func partida_nueva(semilla: int = -1, nombre_club: String = "",
 	dia_absoluto = 0
 	dia_proximo_partido = 0
 	dia_proxima_copa = -1
+	historial_partidos = []
 	ultimo_resultado = {}
 	ultimo_log = []
 	ultimos_eventos = []
@@ -238,6 +246,7 @@ func jugar_siguiente_fecha() -> void:
 				ultimo_log = r["log_seguido"]
 				ultimos_eventos = r["eventos_seguido"]
 				ultimos_fotogramas = r.get("fotogramas_seguido", [])
+				_registrar_en_historial()
 		else:
 			liga.jugar_fecha(fecha_actual, rng)
 
@@ -374,6 +383,66 @@ func avanzar_hasta_el_partido() -> Array:
 		if not dia.is_empty():
 			break
 	return todo
+
+
+## Guarda el partido recien jugado como un resumen que se basta solo: la
+## pantalla de historial no vuelve a mirar los eventos ni los planteles,
+## que para entonces ya cambiaron de jugadores y hasta de division.
+func _registrar_en_historial() -> void:
+	if ultimo_resultado.is_empty():
+		return
+	var local := str(ultimo_resultado.get("local", ""))
+	var visitante := str(ultimo_resultado.get("visitante", ""))
+	var stats := EstadisticasPartido.calcular(ultimos_eventos, local, visitante)
+
+	var hitos := []
+	for gol in ultimo_resultado.get("goles_log", []):
+		hitos.append({
+			"minuto": int(gol.get("minuto", 0)), "tipo": "gol",
+			"equipo": str(gol.get("equipo", "")),
+			"quien": _nombre_de_jugador(int(gol.get("jugador_id", -1)), local, visitante),
+			"detalle": "",
+		})
+	for ev in ultimos_eventos:
+		var tipo := str(ev.get("tipo", ""))
+		if tipo != "tarjeta" and tipo != "cambio":
+			continue
+		hitos.append({
+			"minuto": int(ev.get("minuto", 0)), "tipo": tipo,
+			"equipo": str(ev.get("equipo", "")),
+			"quien": str(ev.get("jugador_posicion", "")),
+			"detalle": str(ev.get("resultado", "")),
+		})
+	hitos.sort_custom(func(a, b): return int(a["minuto"]) < int(b["minuto"]))
+
+	historial_partidos.push_front({
+		"temporada": temporada_actual,
+		"fecha": fecha_actual + 1,
+		"dia": dia_absoluto,
+		"division": division_jugador + 1,
+		"local": local, "visitante": visitante,
+		"gl": int(ultimo_resultado.get("gl", 0)),
+		"gv": int(ultimo_resultado.get("gv", 0)),
+		"stats": stats, "hitos": hitos,
+	})
+	if historial_partidos.size() > MAX_HISTORIAL_PARTIDOS:
+		historial_partidos.resize(MAX_HISTORIAL_PARTIDOS)
+
+
+## De id de jugador a nombre, buscando en los dos planteles del partido.
+## Se resuelve ACA, al registrar: mas adelante el jugador puede haberse
+## ido del club y el historial mostraria "?".
+func _nombre_de_jugador(id: int, local: String, visitante: String) -> String:
+	if id < 0:
+		return "?"
+	for nombre in [local, visitante]:
+		for e in liga_jugador().equipos:
+			if e.nombre != nombre:
+				continue
+			for j in e.jugadores + e.banco + e.cantera:
+				if int(j["id"]) == id:
+					return "%s %s" % [j.get("nombre", "?"), j.get("apellido", "")]
+	return "?"
 
 
 func _avanzar_dias_todos(dias: int) -> void:
@@ -941,6 +1010,7 @@ func guardar_partida() -> void:
 		"dia_absoluto": dia_absoluto,
 		"dia_proximo_partido": dia_proximo_partido,
 		"dia_proxima_copa": dia_proxima_copa,
+		"historial_partidos": historial_partidos,
 		"noticias": noticias,
 		"ultimo_informe_economico": ultimo_informe_economico,
 		"ultima_posicion_final": ultima_posicion_final,
@@ -1013,6 +1083,7 @@ func cargar_partida() -> bool:
 	temporada_actual = datos["temporada_actual"]
 	restaurar_calendario(datos, liga_jugador().fixture.size())
 	noticias = datos["noticias"]
+	historial_partidos = datos.get("historial_partidos", [])
 	ultimo_informe_economico = datos["ultimo_informe_economico"]
 	ultima_posicion_final = datos["ultima_posicion_final"]
 	juego_terminado = datos.get("juego_terminado", false)
