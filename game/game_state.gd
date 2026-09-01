@@ -277,6 +277,21 @@ func hay_partido_hoy() -> bool:
 	return hay_fecha_pendiente() and dia_temporada >= dia_proximo_partido
 
 
+## Estamos en ventana de mercado: se puede ofertar y te pueden ofertar.
+func hay_mercado_abierto() -> bool:
+	return Calendario.hay_mercado(dia_absoluto)
+
+
+## Dias que le quedan a la ventana (-1 si esta cerrada).
+func dias_de_mercado() -> int:
+	return Calendario.dias_de_mercado_restantes(dia_absoluto)
+
+
+## Estamos en receso: terminó la temporada y todavía no arrancó la nueva.
+func en_receso() -> bool:
+	return dia_temporada < 0
+
+
 ## Cuantos dias faltan para el proximo partido (0 = hoy).
 func dias_hasta_el_partido() -> int:
 	if not hay_fecha_pendiente():
@@ -297,9 +312,20 @@ func avanzar_un_dia() -> Array:
 	# reenvia. Comparar la lista de lesionados propios es mas simple que
 	# cambiar esa firma, y solo interesan los nuestros.
 	var lesionados_antes := equipo_jugador.lesiones.keys()
+	var habia_mercado := hay_mercado_abierto()
 	_avanzar_dias_todos(1)
 	dia_temporada += 1
 	dia_absoluto += 1
+
+	# Se cerro el libro de pases: se cae todo lo que estaba en el aire,
+	# incluso lo que ya tenia acuerdo entre clubes. Es lo que le da peso a
+	# la ventana — si aceptas una oferta el ultimo dia y no la firmas,
+	# perdiste la oportunidad.
+	var caidas := []
+	if habia_mercado and not hay_mercado_abierto():
+		caidas = Ofertas.cancelar_por_cierre_de_mercado(equipo_jugador)
+		for texto in caidas:
+			_agregar_noticia("MERCADO: %s" % texto)
 
 	var novedades := []
 	for id in lesionados_antes:
@@ -322,6 +348,13 @@ func avanzar_un_dia() -> Array:
 	# ver el ultimo resultado ni a cobrar los ultimos dias.
 	if not hay_fecha_pendiente() and dia_temporada >= dia_proximo_partido:
 		_cerrar_temporada()
+
+	# La apertura y el cierre del mercado se avisan siempre: son los dos
+	# dias del ano en que cambia lo que se puede hacer.
+	if not habia_mercado and hay_mercado_abierto():
+		novedades.append("Se abrio el libro de pases: %d dias de mercado." % dias_de_mercado())
+	elif habia_mercado and not hay_mercado_abierto():
+		novedades.append("Se cerro el libro de pases.")
 
 	for i in range(noticias_antes, noticias.size()):
 		novedades.append(str(noticias[i]))
@@ -346,11 +379,14 @@ func _avanzar_dias_todos(dias: int) -> void:
 	# §9.3: las negociaciones corren con el calendario. Acá se resuelven
 	# las que esperaban respuesta del otro club y aparecen las ofertas
 	# nuevas por jugadores nuestros.
-	for oferta in Ofertas.avanzar(equipo_jugador, dias, piramide, rng, temporada_actual, division_jugador):
-		if not oferta["log"].is_empty():
-			_agregar_noticia("MERCADO: %s" % oferta["log"][-1])
-	for nueva in Ofertas.generar_entrantes(equipo_jugador, piramide, rng, dias, division_jugador):
-		_agregar_noticia("MERCADO: %s" % nueva["log"][-1])
+	# Las negociaciones solo corren con el mercado ABIERTO: fuera de la
+	# ventana nadie contesta ni viene a buscar a nadie.
+	if hay_mercado_abierto():
+		for oferta in Ofertas.avanzar(equipo_jugador, dias, piramide, rng, temporada_actual, division_jugador):
+			if not oferta["log"].is_empty():
+				_agregar_noticia("MERCADO: %s" % oferta["log"][-1])
+		for nueva in Ofertas.generar_entrantes(equipo_jugador, piramide, rng, dias, division_jugador):
+			_agregar_noticia("MERCADO: %s" % nueva["log"][-1])
 	Ofertas.archivar(equipo_jugador)
 	_procesar_retornos_de_medio_ano()
 
@@ -487,10 +523,17 @@ func _cerrar_temporada() -> void:
 
 	temporada_actual += 1
 	fecha_actual = 0
-	# El calendario arranca de nuevo: dia 0 de temporada, primera jornada
-	# hoy. `dia_absoluto` NO se reinicia — es el que lleva la fecha real y
-	# tiene que seguir corriendo de una temporada a la otra.
-	dia_temporada = 0
+	# Entre temporada y temporada hay RECESO: la nueva arranca siempre el
+	# mismo dia de marzo, no al dia siguiente de terminar la anterior. Sin
+	# eso el almanaque se corria —la temporada dura 266 dias, asi que la
+	# segunda iria de noviembre a agosto y la tercera de agosto a mayo— y
+	# los meses de mercado caerian en un momento distinto de cada
+	# temporada. El receso ademas es cuando cae la ventana de enero.
+	#
+	# `dia_temporada` arranca NEGATIVO y va subiendo: mientras sea menor
+	# que 0 no hay fecha que jugar, solo dias que pasar. `dia_absoluto` no
+	# se reinicia nunca: es el que lleva la fecha real.
+	dia_temporada = -Calendario.dias_hasta_el_arranque(dia_absoluto)
 	dia_proximo_partido = 0
 	dia_proxima_copa = -1
 	# Cuadros nuevos con los equipos YA movidos de división.
@@ -547,7 +590,18 @@ func _jugar_amistoso_seleccion() -> void:
 ## Oferta del jugador humano por un jugador de otro club (pantalla de
 ## Mercado). Wrapper sobre Mercado.ofertar_por_jugador() que además deja
 ## una noticia si la oferta se concreta.
+## Mensaje unico de mercado cerrado: lo comparten todas las operaciones y
+## la UI, para que digan exactamente lo mismo.
+const MERCADO_CERRADO := "El libro de pases esta cerrado. Se abre en enero y en julio."
+
+
+func _mercado_cerrado() -> Dictionary:
+	return {"exito": false, "motivo": MERCADO_CERRADO}
+
+
 func ofertar_por_jugador(vendedor: Team, jugador_objetivo_id: int) -> Dictionary:
+	if not hay_mercado_abierto():
+		return _mercado_cerrado()
 	# Compra al contado, la misma operacion que hace la IA: cualquiera del
 	# plantel o de la cantera del vendedor, de la division que sea.
 	var resultado := Mercado.comprar_al_contado(equipo_jugador, vendedor, jugador_objetivo_id, rng)
@@ -563,6 +617,8 @@ func ofertar_por_jugador(vendedor: Team, jugador_objetivo_id: int) -> Dictionary
 ## abierta y el club se toma unos dias (ver core/ofertas.gd), asi que el
 ## mercado pasa a ser algo que hay que administrar: mandas tres y esperas.
 func enviar_oferta(vendedor: Team, jugador_id: int, monto: float) -> Dictionary:
+	if not hay_mercado_abierto():
+		return _mercado_cerrado()
 	if Negociacion.bloqueado(vendedor, jugador_id, temporada_actual):
 		return {"exito": false, "motivo": "%s no te quiere escuchar por este jugador hasta la temporada que viene." % vendedor.nombre}
 	var donde := Mercado.ubicar(vendedor, jugador_id)
@@ -597,6 +653,8 @@ func _oferta_por_id(oferta_id: int) -> Dictionary:
 ## (o sea, pagar lo que te contraofertaron) te deja en acuerdo de clubes y
 ## el contrato lo arreglas vos.
 func responder_oferta(oferta_id: int, accion: String, monto: float = 0.0) -> Dictionary:
+	if not hay_mercado_abierto():
+		return _mercado_cerrado()
 	var oferta := _oferta_por_id(oferta_id)
 	if oferta.is_empty():
 		return {"exito": false, "motivo": "Esa negociación ya no existe."}
@@ -629,6 +687,8 @@ func responder_oferta(oferta_id: int, accion: String, monto: float = 0.0) -> Dic
 ## que te lo saquen, pero a el lo encierra y lo cobra (ver
 ## Negociacion.PESO_CLAUSULA).
 func cerrar_fichaje(oferta_id: int, sueldo: float, anios: int, clausula: float) -> Dictionary:
+	if not hay_mercado_abierto():
+		return _mercado_cerrado()
 	var oferta := _oferta_por_id(oferta_id)
 	if oferta.is_empty() or str(oferta["estado"]) != Ofertas.ACUERDO_CLUB or bool(oferta["entrante"]):
 		return {"exito": false, "motivo": "Esa negociación no está para firmar."}
@@ -675,6 +735,8 @@ func cerrar_fichaje(oferta_id: int, sueldo: float, anios: int, clausula: float) 
 ## `duracion` es una clave de Prestamos.DURACIONES.
 func pedir_prestamo(dueno: Team, jugador_id: int, duracion: String,
 		porcentaje_sueldo: float, opcion_compra: float) -> Dictionary:
+	if not hay_mercado_abierto():
+		return _mercado_cerrado()
 	var donde := Mercado.ubicar(dueno, jugador_id)
 	if donde.is_empty():
 		return {"exito": false, "motivo": "Ese jugador ya no está en ese club."}
@@ -747,6 +809,8 @@ func _division_de(club: Team) -> int:
 ## Fuerza la venta pagando la cláusula de rescisión completa — sin la
 ## resistencia que puede rechazar una oferta común (Mercado.pagar_clausula).
 func pagar_clausula(vendedor: Team, jugador_objetivo_id: int) -> Dictionary:
+	if not hay_mercado_abierto():
+		return _mercado_cerrado()
 	var resultado := Mercado.comprar_al_contado(equipo_jugador, vendedor, jugador_objetivo_id, rng, true)
 	if resultado["exito"]:
 		_agregar_noticia("CLÁUSULA: %s paga la cláusula de un %s de %s por %s" % [
@@ -760,6 +824,8 @@ func pagar_clausula(vendedor: Team, jugador_objetivo_id: int) -> Dictionary:
 ## sin fee de transferencia, solo el sueldo. El jugador que reemplazás pasa
 ## a integrar el pool en tu lugar.
 func fichar_agente_libre(jugador_id: int, indice_saliente: int, es_banco: bool) -> Dictionary:
+	if not hay_mercado_abierto():
+		return _mercado_cerrado()
 	var resultado := AgentesLibres.fichar(equipo_jugador, liga_jugador().agentes_libres, jugador_id, indice_saliente, es_banco)
 	if resultado["exito"]:
 		_agregar_noticia("AGENTE LIBRE: %s ficha a un %s libre (sale un %s al pool)." % [
@@ -771,6 +837,8 @@ func fichar_agente_libre(jugador_id: int, indice_saliente: int, es_banco: bool) 
 ## Cedés a un jugador de TU banco o cantera a préstamo por una temporada
 ## (Prestamos.ceder). Vuelve solo al cierre de la temporada de retorno.
 func ceder_a_prestamo(jugador_id: int, club_destino: Team) -> Dictionary:
+	if not hay_mercado_abierto():
+		return _mercado_cerrado()
 	var resultado := Prestamos.ceder(equipo_jugador, club_destino, jugador_id, float(temporada_actual))
 	if resultado["exito"]:
 		_agregar_noticia("PRÉSTAMO: %s cede un %s a %s por esta temporada." % [

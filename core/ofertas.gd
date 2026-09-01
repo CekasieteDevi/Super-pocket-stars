@@ -79,6 +79,24 @@ static func abierta(oferta: Dictionary) -> bool:
 	return ABIERTAS.has(str(oferta["estado"]))
 
 
+## Se cerro el mercado: todo lo que estaba en el aire se cae, incluidas
+## las que ya tenian acuerdo entre clubes pero no se firmaron. Es la
+## regla del libro de pases y es lo que le da peso a la ventana — si
+## aceptas una el ultimo dia y no la cerras, perdiste la oportunidad.
+##
+## Devuelve el texto de las que se cayeron, para poder contarlas.
+static func cancelar_por_cierre_de_mercado(equipo) -> Array:
+	var caidas := []
+	for oferta in equipo.ofertas:
+		if not abierta(oferta):
+			continue
+		oferta["estado"] = RECHAZADA
+		_anotar(oferta, "Se cerro el libro de pases: la negociacion se cayo.")
+		caidas.append("Se cayo la negociacion por %s: cerro el mercado." % str(
+			oferta.get("jugador", "un jugador")))
+	return caidas
+
+
 static func _anotar(oferta: Dictionary, texto: String) -> void:
 	oferta["log"].append(texto)
 

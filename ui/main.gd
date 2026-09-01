@@ -5127,6 +5127,7 @@ var label_barra_club: Label
 var label_barra_posicion: Label
 var label_barra_plata: Label
 var label_barra_fecha: Label
+var label_barra_mercado: Label
 
 
 func _construir_riel(padre: HBoxContainer) -> void:
@@ -5162,6 +5163,12 @@ func _construir_barra_contexto(padre: VBoxContainer) -> void:
 	label_barra_posicion.add_theme_color_override("font_color", Tema.SUAVE)
 	barra.add_child(label_barra_posicion)
 
+	# Solo aparece con el mercado abierto: fuera de la ventana no se puede
+	# ofertar ni te ofertan, y eso hay que verlo sin entrar a Mercado.
+	label_barra_mercado = Label.new()
+	Tema.numero(label_barra_mercado, Tema.TAM_CHICO, Tema.VERDE)
+	barra.add_child(label_barra_mercado)
+
 	var espacio := Control.new()
 	espacio.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	barra.add_child(espacio)
@@ -5193,6 +5200,13 @@ func _refrescar_barra_contexto() -> void:
 	var puesto: int = tabla.find(equipo.nombre) + 1
 	label_barra_posicion.text = "  Division %d  ·  %d° de %d" % [
 		GameState.division_jugador + 1, puesto, tabla.size()]
+	if label_barra_mercado != null:
+		var dias := GameState.dias_de_mercado()
+		label_barra_mercado.visible = dias >= 0
+		# Con la cuenta regresiva: sin ella el ultimo dia te agarra sin
+		# avisar y perdes la negociacion que tenias en curso.
+		label_barra_mercado.text = "   PERIODO DE TRANSFERENCIAS  ·  %s" % (
+			"ultimo dia" if dias == 0 else "%d dias" % dias)
 	label_barra_plata.text = Economia.formato_dinero(equipo.caja["fichajes"])
 	# La fecha del calendario, no el numero de jornada: es el dato que se
 	# mira todo el tiempo desde que los dias pasan de a uno.

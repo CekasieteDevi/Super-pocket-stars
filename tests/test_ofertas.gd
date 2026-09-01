@@ -38,6 +38,9 @@ func _partida(division := 4) -> Dictionary:
 	# arranca en cero y nadie puede ofertar nada (ver _sembrar_presupuestos).
 	gs._sembrar_presupuestos()
 	gs.equipo_jugador.caja["fichajes"] = 500000000.0
+	# El libro de pases solo abre en enero, febrero y julio, y una
+	# partida arranca en marzo: sin esto toda operacion se rechaza.
+	gs.dia_absoluto = Calendario.primer_dia_de_mercado()
 	return {"piramide": piramide, "rng": rng, "mio": gs.equipo_jugador,
 		"otro": piramide.divisiones[division].equipos[1]}
 

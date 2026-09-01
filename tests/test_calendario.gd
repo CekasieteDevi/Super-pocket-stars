@@ -103,15 +103,26 @@ func _test_una_temporada_entera_cierra_bien() -> void:
 	if gs.temporada_actual == temporada:
 		print("FALLA: no cerro la temporada en %d pasos." % vueltas)
 		return
-	if gs.dia_temporada != 0 or gs.dia_proximo_partido != 0:
-		print("FALLA: la temporada nueva arranca en el dia %d con partido el %d." % [
+	# La temporada nueva NO arranca al dia siguiente: hay receso, y el
+	# calendario queda parado antes del dia 0 hasta llegar a marzo. Sin
+	# receso la temporada se corre en el almanaque —dura 266 dias— y los
+	# meses del libro de pases caerian en otro momento cada ano.
+	if gs.dia_temporada >= 0 or gs.dia_proximo_partido != 0:
+		print("FALLA: no quedo en receso: dia %d, partido el %d." % [
 			gs.dia_temporada, gs.dia_proximo_partido])
+		return
+	var receso: int = -gs.dia_temporada
+	while gs.en_receso():
+		gs.avanzar_un_dia()
+	var f := Calendario.fecha(gs.dia_absoluto)
+	if int(f["month"]) != Calendario.MES_INICIAL or int(f["day"]) != Calendario.DIA_INICIAL:
+		print("FALLA: la temporada nueva arranca el %d/%d." % [int(f["day"]), int(f["month"])])
 		return
 	if gs.dia_absoluto <= 0:
 		print("FALLA: el dia absoluto quedo en %d." % gs.dia_absoluto)
 		return
-	print("OK: cerro la temporada %d y la nueva arranca en el dia 0 (%s)." % [
-		temporada, Calendario.texto_largo(gs.dia_absoluto)])
+	print("OK: cerro la temporada %d, %d dias de receso, y la nueva arranca el %s." % [
+		temporada, receso, Calendario.texto_largo(gs.dia_absoluto)])
 
 
 func _test_el_guardado_viejo_no_se_rompe() -> void:

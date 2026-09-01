@@ -26,6 +26,53 @@ const MESES_CORTOS := ["ene", "feb", "mar", "abr", "may", "jun",
 
 const SEGUNDOS_POR_DIA := 86400
 
+## Los meses con mercado abierto. Fuera de estos no se puede ofertar por
+## nadie ni nadie oferta por vos, y lo que quedo abierto se cae.
+const MESES_DE_MERCADO := [1, 2, 7]
+
+
+## Un dia cualquiera con el mercado abierto. Lo usan los tests: sin esto,
+## cada uno tiene que salir a buscar en que dia cae enero.
+static func primer_dia_de_mercado() -> int:
+	var d := 0
+	while d < 400 and not hay_mercado(d):
+		d += 1
+	return d
+
+
+static func hay_mercado(dia: int) -> bool:
+	return MESES_DE_MERCADO.has(int(fecha(dia)["month"]))
+
+
+## Cuantos dias faltan para que se cierre el mercado (-1 si esta cerrado).
+## Es lo que hace que la ventana se sienta: sin la cuenta regresiva, el
+## ultimo dia te agarra sin avisar y perdes la negociacion.
+static func dias_de_mercado_restantes(dia: int) -> int:
+	if not hay_mercado(dia):
+		return -1
+	var d := 0
+	while hay_mercado(dia + d + 1) and d < 400:
+		d += 1
+	return d
+
+
+## Cuantos dias hay desde `dia` hasta el proximo arranque de temporada.
+## Las temporadas se anclan al almanaque —siempre arrancan el mismo dia
+## de marzo— para que enero, febrero y julio caigan siempre en el mismo
+## momento del ano. Sin esto la temporada se corria: dura 266 dias y
+## arrancaba el mismo dia que terminaba la anterior, asi que la segunda
+## iba de noviembre a agosto y la tercera de agosto a mayo.
+static func dias_hasta_el_arranque(dia: int) -> int:
+	var f := fecha(dia)
+	var anio: int = int(f["year"])
+	if int(f["month"]) > MES_INICIAL or (int(f["month"]) == MES_INICIAL and int(f["day"]) >= DIA_INICIAL):
+		anio += 1
+	var destino: int = int(Time.get_unix_time_from_datetime_dict({
+		"year": anio, "month": MES_INICIAL, "day": DIA_INICIAL,
+		"hour": 12, "minute": 0, "second": 0,
+	}))
+	return int(round(float(destino - _origen()) / float(SEGUNDOS_POR_DIA))) - dia
+
 
 ## Timestamp del dia 0. Se calcula una vez.
 static func _origen() -> int:
