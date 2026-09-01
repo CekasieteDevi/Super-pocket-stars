@@ -42,7 +42,8 @@ static func crear(jugador: Dictionary, rol: String, equipo: Team, es_banco: bool
 	c._puesto_natural = str(jugador.get("posicion", rol))
 	c._nombre = str(jugador.get("apellido", jugador.get("nombre", "?")))
 	c._media = float(jugador["media"])
-	c._energia = equipo.resistencia_pct(c.jugador_id)
+	# La del PROXIMO partido, no la del ultimo: ver Team.energia_proximo_partido.
+	c._energia = equipo.energia_proximo_partido(c.jugador_id)
 	c._animo = float(equipo.animo.get(c.jugador_id, 50.0))
 	c._lesionado = equipo.esta_lesionado(c.jugador_id)
 	c._es_banco = es_banco

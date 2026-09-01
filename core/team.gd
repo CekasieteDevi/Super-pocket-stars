@@ -941,6 +941,20 @@ func resistencia_pct(jugador_id: int) -> float:
 	return resistencia.get(jugador_id, 1.0)
 
 
+## Con cuanta energia va a EMPEZAR el proximo partido. Es lo unico que
+## tiene sentido mostrar entre fecha y fecha.
+##
+## `resistencia` es la energia DENTRO de un partido y se queda congelada
+## con el valor del pitazo final hasta el reset_partido() siguiente; la
+## que recupera con los dias es `fatiga_acumulada`. La UI mostraba la
+## primera, asi que un delantero que termino al 65% se veia al 65% toda
+## la semana aunque el lunes ya estuviera al 100%. Con eso el jugador
+## rotaba el equipo para nada y le sobraban suplentes que creia que le
+## faltaban.
+func energia_proximo_partido(jugador_id: int) -> float:
+	return fatiga_acumulada.get(jugador_id, 1.0)
+
+
 ## Desgaste simple por participación en un duelo. La resistencia nunca baja
 ## de 0.55 dentro de un partido. §8.4 #19: con Calor, un 30% más rápido.
 ## multiplicador: cuánto pesa ESTE duelo en el desgaste. MatchEngine usa

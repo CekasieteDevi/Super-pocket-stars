@@ -139,6 +139,7 @@ func _ready() -> void:
 	_construir_panel_partida_guardado(contenedor)
 	_construir_panel_ficha(contenedor)
 	_construir_panel_formacion(contenedor)
+	_construir_dialogo_novedades()
 	_construir_dialogo_negociacion()
 	_construir_dialogo_prestamo()
 	_construir_dialogo_investigador()
@@ -835,10 +836,11 @@ func _refrescar_ficha() -> void:
 [b]Estado[/b]
 "
 	if not ajeno:
-		# La energia es del partido en curso: de un jugador ajeno no se
-		# sabe, y ademas no significa nada fuera de su propio calendario.
+		# La energia con la que va a EMPEZAR el proximo partido, no la del
+		# ultimo (ver Team.energia_proximo_partido). De un jugador ajeno
+		# no se sabe, y ademas no significa nada fuera de su calendario.
 		t += "  energia      %3d%%
-" % int(round(equipo.resistencia_pct(j["id"]) * 100.0))
+" % int(round(equipo.energia_proximo_partido(j["id"]) * 100.0))
 	t += "  animo        %3d
 " % int(equipo.animo.get(j["id"], 50))
 	if equipo.esta_lesionado(j["id"]):
@@ -1351,11 +1353,18 @@ func _construir_panel_partido(padre: Control) -> void:
 	barra.add_child(_grupo_filtro(" ", acciones))
 
 	boton_jugar_fecha = Button.new()
-	boton_jugar_fecha.text = "Jugar siguiente fecha"
+	# El texto lo pone _refrescar_boton_jugar segun el dia: con el
+	# calendario ya no siempre hay partido para jugar.
+	boton_jugar_fecha.text = "Jugar el partido"
 	boton_jugar_fecha.custom_minimum_size = Vector2(230, Tema.ALTO_TACTIL)
 	# La accion principal de la pantalla de partido: la unica ambar de aca.
 	Tema.primario(boton_jugar_fecha)
-	boton_jugar_fecha.pressed.connect(_on_jugar_fecha)
+	boton_jugar_fecha.pressed.connect(func():
+		if GameState.hay_partido_hoy():
+			_on_jugar_fecha()
+		else:
+			_avanzar_dias(false)
+		_refrescar_boton_jugar())
 	acciones.add_child(boton_jugar_fecha)
 
 	boton_simular_temporada = Button.new()
@@ -2543,6 +2552,19 @@ func _refrescar_historial() -> void:
 ## el momento. Lo que se negocia no es el precio sino los terminos —
 ## cuanto dura, cuanto del sueldo le sacas de encima, y si te lo atas con
 ## una opcion de compra.
+## Lo que paso mientras pasaban los dias. Sin esto, avanzar el dia seria
+## un boton que no dice nada — y enterarse es la mitad del punto de tener
+## calendario.
+var dialogo_novedades: AcceptDialog
+
+
+func _construir_dialogo_novedades() -> void:
+	dialogo_novedades = AcceptDialog.new()
+	dialogo_novedades.title = "Novedades"
+	dialogo_novedades.ok_button_text = "Entendido"
+	add_child(dialogo_novedades)
+
+
 var dialogo_prestamo: AcceptDialog
 var prestamo_dueno: Team = null
 var prestamo_jugador_id: int = -1
@@ -4480,6 +4502,24 @@ func _on_cargar_partida() -> void:
 ## falta al CARGAR: el resultado viaja en el guardado, pero la pantalla se
 ## había armado con el texto inicial y se quedaba diciendo "todavía no
 ## jugaste ninguna fecha" con una temporada entera encima.
+## El boton principal de la pantalla Partido dice lo que hace HOY.
+func _refrescar_boton_jugar() -> void:
+	if boton_jugar_fecha == null:
+		return
+	if not GameState.hay_fecha_pendiente():
+		boton_jugar_fecha.text = "Temporada terminada"
+		boton_jugar_fecha.disabled = true
+		return
+	boton_jugar_fecha.disabled = GameState.juego_terminado
+	if GameState.hay_partido_hoy():
+		boton_jugar_fecha.text = "Jugar el partido"
+		boton_jugar_fecha.tooltip_text = "Hoy se juega."
+	else:
+		boton_jugar_fecha.text = "Avanzar un dia  (%s)" % Calendario.en_cuantos_dias(
+			GameState.dias_hasta_el_partido())
+		boton_jugar_fecha.tooltip_text = "Hoy no hay partido: pasa un dia."
+
+
 func _refrescar_ultimo_partido() -> void:
 	if contenedor_ultimo_partido == null:
 		return
@@ -4750,6 +4790,8 @@ func _on_jugar_fecha() -> void:
 	_refrescar_plantel()
 	_refrescar_informe_rival()
 	_refrescar_objetivo()
+	_refrescar_boton_jugar()
+	_refrescar_barra_contexto()
 
 	# El partido se VE. Antes se simulaba en silencio, te aparecia el
 	# marcador ya hecho y recien despues podias pedir la repeticion, que es
@@ -4853,6 +4895,43 @@ func _refrescar_objetivo() -> void:
 ## §8.6.3/§8.6.5: le muestra al jugador con qué rival juega la próxima
 ## fecha y cómo pega el choque de estilos, para que elija táctica con
 ## información en vez de a ciegas.
+## Si el proximo partido lo juega de local.
+func _juega_de_local() -> bool:
+	if not GameState.hay_fecha_pendiente():
+		return false
+	var liga := GameState.liga_jugador()
+	for partido in liga.fixture[GameState.fecha_actual]:
+		if liga.equipos[partido[0]] == GameState.equipo_jugador:
+			return true
+	return false
+
+
+## Pasa el dia (o los dias, hasta el partido) y CUENTA que paso.
+##
+## Contar es la mitad del punto: un boton que avanza el dia sin decir nada
+## seria un boton que no informa. Y el salto al proximo partido frena en
+## cuanto pasa algo —una respuesta de un club, una lesion, una noticia—
+## porque saltar a ciegas seria volver al problema que esto viene a
+## resolver: enterarse de todo junto cuando ya no se puede hacer nada.
+func _avanzar_dias(hasta_el_partido: bool) -> void:
+	var novedades: Array = GameState.avanzar_hasta_el_partido() if hasta_el_partido 		else GameState.avanzar_un_dia()
+	_refrescar_portada()
+	_refrescar_plantel()
+	_refrescar_mercado()
+	_refrescar_objetivo()
+	_refrescar_informe_rival()
+	_refrescar_boton_jugar()
+	_refrescar_barra_contexto()
+	if not novedades.is_empty():
+		dialogo_novedades.dialog_text = "%s
+
+%s" % [
+			Calendario.texto_largo(GameState.dia_absoluto),
+			"
+".join(novedades.map(func(n): return "  ·  %s" % str(n)))]
+		dialogo_novedades.popup_centered()
+
+
 func _proximo_rival() -> Team:
 	var liga := GameState.liga_jugador()
 	if not GameState.hay_fecha_pendiente():
@@ -5097,6 +5176,13 @@ func _construir_barra_contexto(padre: VBoxContainer) -> void:
 	Tema.numero(label_barra_fecha, Tema.TAM_BASE, Tema.TEXTO)
 	barra.add_child(label_barra_fecha)
 
+	# Un respiro al final: sin esto el ultimo dato de la barra queda
+	# pegado al borde derecho de la pantalla y se ve cortado. Se veia en
+	# cualquier captura, con la fecha partida al medio.
+	var margen_derecho := Control.new()
+	margen_derecho.custom_minimum_size = Vector2(14, 0)
+	barra.add_child(margen_derecho)
+
 
 func _refrescar_barra_contexto() -> void:
 	if label_barra_club == null:
@@ -5108,8 +5194,9 @@ func _refrescar_barra_contexto() -> void:
 	label_barra_posicion.text = "  Division %d  ·  %d° de %d" % [
 		GameState.division_jugador + 1, puesto, tabla.size()]
 	label_barra_plata.text = Economia.formato_dinero(equipo.caja["fichajes"])
-	label_barra_fecha.text = "%d / %d" % [
-		GameState.fecha_actual + 1, GameState.liga_jugador().fixture.size()]
+	# La fecha del calendario, no el numero de jornada: es el dato que se
+	# mira todo el tiempo desde que los dias pasan de a uno.
+	label_barra_fecha.text = Calendario.texto_corto(GameState.dia_absoluto)
 
 
 func _mostrar_seccion(clave: String) -> void:
@@ -5219,37 +5306,64 @@ func _refrescar_portada() -> void:
 		hijo.queue_free()
 	var equipo := GameState.equipo_jugador
 
-	# --- Proximo partido, con su boton -------------------------------------
-	var caja_partido := _tarjeta(contenedor_portada, Tema.AMBAR)
-	caja_partido.add_child(Tema.etiqueta_seccion(
-		"Proximo partido  ·  fecha %d" % (GameState.fecha_actual + 1)))
+	# --- El dia de hoy, con lo que se puede hacer hoy -----------------------
+	#
+	# Antes esta tarjeta era solo "proximo partido" y el boton jugaba la
+	# fecha, pasando los 7 dias de un saque. Ahora es el calendario: dice
+	# que dia es, y el boton juega el partido o pasa el dia segun toque.
+	var hay_partido: bool = GameState.hay_partido_hoy()
+	var caja_partido := _tarjeta(contenedor_portada, Tema.AMBAR if hay_partido else Tema.BORDE)
+	caja_partido.add_child(Tema.etiqueta_seccion(Calendario.texto_largo(GameState.dia_absoluto)))
 	var rival := _proximo_rival()
 	var titulo := Label.new()
 	if rival == null:
 		titulo.text = "Temporada terminada."
-	else:
-		var de_local := false
-		var liga := GameState.liga_jugador()
-		for partido in liga.fixture[GameState.fecha_actual]:
-			if liga.equipos[partido[0]] == equipo:
-				de_local = true
+	elif hay_partido:
 		titulo.text = "%s  vs  %s   (%s)" % [
-			equipo.nombre, rival.nombre, "de local" if de_local else "de visitante"]
-	Tema.numero(titulo, 24, Tema.TEXTO)
+			equipo.nombre, rival.nombre, "de local" if _juega_de_local() else "de visitante"]
+	else:
+		titulo.text = "Sin partido hoy"
+	Tema.numero(titulo, 24, Tema.TEXTO if hay_partido else Tema.SUAVE)
 	caja_partido.add_child(titulo)
+
+	if rival != null and not hay_partido:
+		var falta := GameState.dias_hasta_el_partido()
+		var sub := Label.new()
+		sub.text = "Fecha %d  ·  %s vs %s  ·  %s" % [
+			GameState.fecha_actual + 1, equipo.nombre, rival.nombre,
+			Calendario.en_cuantos_dias(falta)]
+		sub.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		sub.add_theme_color_override("font_color", Tema.SUAVE)
+		caja_partido.add_child(sub)
 
 	var fila_acciones := HBoxContainer.new()
 	caja_partido.add_child(fila_acciones)
-	var btn_jugar := Button.new()
-	btn_jugar.text = "Jugar la fecha"
-	btn_jugar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	Tema.primario(btn_jugar)
-	btn_jugar.disabled = rival == null or GameState.juego_terminado
-	btn_jugar.pressed.connect(func():
-		_on_jugar_fecha()
-		_refrescar_portada()
-	)
-	fila_acciones.add_child(btn_jugar)
+	if hay_partido:
+		var btn_jugar := Button.new()
+		btn_jugar.text = "Jugar el partido"
+		btn_jugar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		Tema.primario(btn_jugar)
+		btn_jugar.disabled = rival == null or GameState.juego_terminado
+		btn_jugar.pressed.connect(func():
+			_on_jugar_fecha()
+			_refrescar_portada()
+		)
+		fila_acciones.add_child(btn_jugar)
+	else:
+		var btn_dia := Button.new()
+		btn_dia.text = "Avanzar un dia"
+		btn_dia.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		Tema.primario(btn_dia)
+		btn_dia.disabled = GameState.juego_terminado
+		btn_dia.pressed.connect(func(): _avanzar_dias(false))
+		fila_acciones.add_child(btn_dia)
+		var btn_salto := Button.new()
+		btn_salto.text = "Ir al proximo partido"
+		btn_salto.custom_minimum_size = Vector2(230, Tema.ALTO_TACTIL)
+		btn_salto.tooltip_text = "Pasa los dias de corrido, pero frena si pasa algo que necesita una decision."
+		btn_salto.disabled = GameState.juego_terminado
+		btn_salto.pressed.connect(func(): _avanzar_dias(true))
+		fila_acciones.add_child(btn_salto)
 	var btn_form := Button.new()
 	btn_form.text = "Ver formacion"
 	btn_form.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)

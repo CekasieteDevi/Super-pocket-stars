@@ -42,6 +42,22 @@ var equipo_jugador: Team
 var fecha_actual: int = 0
 var temporada_actual: int = 1
 
+## El calendario, en dias. Antes al jugar una fecha pasaban los 7 dias de
+## un saque: todo lo que vencia en el medio —la respuesta de un club, una
+## recuperacion, un informe— aparecia junto al final y no habia forma de
+## reaccionar antes. El motor ya corria por dias (Team.avanzar_dias, los
+## plazos de Ofertas); lo que faltaba era poder pasarlos de a uno.
+##
+## `dia_temporada` cuenta desde el arranque de la temporada y es el que
+## decide que pasa hoy. `dia_absoluto` cuenta desde el arranque de la
+## partida y solo sirve para la fecha que se muestra.
+var dia_temporada: int = 0
+var dia_absoluto: int = 0
+## En que dia de la temporada se juega la proxima jornada de liga, y la
+## proxima ronda de copa (-1 si no hay uno programado).
+var dia_proximo_partido: int = 0
+var dia_proxima_copa: int = -1
+
 var ultimo_resultado: Dictionary = {}
 var ultimo_log: Array = []
 var ultimos_eventos: Array = []
@@ -114,6 +130,10 @@ func partida_nueva(semilla: int = -1, nombre_club: String = "",
 	# anterior: el calendario, el ultimo partido, las noticias, el balance.
 	fecha_actual = 0
 	temporada_actual = 1
+	dia_temporada = 0
+	dia_absoluto = 0
+	dia_proximo_partido = 0
+	dia_proxima_copa = -1
 	ultimo_resultado = {}
 	ultimo_log = []
 	ultimos_eventos = []
@@ -223,19 +243,101 @@ func jugar_siguiente_fecha() -> void:
 
 	fecha_actual += 1
 
-	# La semana se reparte según si hay o no partido entre semana. Los
-	# días son los que recuperan fatiga (Team.avanzar_dias), así que una
-	# semana de dos partidos deja al plantel a media máquina — que es
-	# justamente el punto de la carga de entrenamiento.
+	# Los dias NO pasan aca: los pasa avanzar_un_dia(), de a uno, para que
+	# se pueda ver y frenar lo que vence en el medio. Lo unico que se hace
+	# es AGENDAR: la proxima jornada a los 7 dias y, si toca, la ronda de
+	# copa el miercoles del medio. La semana apretada sigue existiendo
+	# igual —dos partidos en 7 dias— que es lo que le da sentido a elegir
+	# la carga de entrenamiento.
+	dia_proximo_partido = dia_temporada + DIAS_ENTRE_FECHAS
 	if _toca_ronda_de_copa():
-		_avanzar_dias_todos(DIAS_HASTA_COPA)
-		_jugar_ronda_de_copas()
-		_avanzar_dias_todos(DIAS_DESPUES_DE_COPA)
-	else:
-		_avanzar_dias_todos(DIAS_ENTRE_FECHAS)
+		dia_proxima_copa = dia_temporada + DIAS_HASTA_COPA
 
+
+## Hoy hay partido de liga y no se puede avanzar el dia sin jugarlo.
+## Repone el calendario de un guardado. Una partida guardada ANTES de que
+## existiera el calendario no tiene ningun dia: se derivan de la jornada y
+## queda parada EN el dia del proximo partido, que es exactamente donde
+## estaba. Sin esto, esas partidas se perderian.
+##
+## Esta aparte y recibe `fechas_por_temporada` para poder probarla sin
+## tocar el archivo de guardado de verdad.
+func restaurar_calendario(datos: Dictionary, fechas_por_temporada: int) -> void:
+	dia_temporada = int(datos.get("dia_temporada", fecha_actual * DIAS_ENTRE_FECHAS))
+	dia_proximo_partido = int(datos.get("dia_proximo_partido", dia_temporada))
+	dia_proxima_copa = int(datos.get("dia_proxima_copa", -1))
+	# El dia absoluto solo alimenta la fecha que se muestra, asi que para
+	# un guardado viejo alcanza con estimarlo.
+	dia_absoluto = int(datos.get("dia_absoluto",
+		(temporada_actual - 1) * maxi(fechas_por_temporada, 1) * DIAS_ENTRE_FECHAS
+			+ dia_temporada))
+
+
+func hay_partido_hoy() -> bool:
+	return hay_fecha_pendiente() and dia_temporada >= dia_proximo_partido
+
+
+## Cuantos dias faltan para el proximo partido (0 = hoy).
+func dias_hasta_el_partido() -> int:
 	if not hay_fecha_pendiente():
+		return -1
+	return maxi(dia_proximo_partido - dia_temporada, 0)
+
+
+## Pasa UN dia. Devuelve lo que paso ese dia, para que la UI lo cuente:
+## sin eso, avanzar el dia seria un boton que no da ninguna informacion.
+##
+## Si hoy hay partido no avanza nada: primero se juega.
+func avanzar_un_dia() -> Array:
+	if juego_terminado or hay_partido_hoy():
+		return []
+	var noticias_antes: int = noticias.size()
+	# Los que se recuperan se preguntan ANTES y DESPUES: Team.avanzar_dias
+	# los devuelve, pero pasa por Liga, que resuelve los 20 clubes y no los
+	# reenvia. Comparar la lista de lesionados propios es mas simple que
+	# cambiar esa firma, y solo interesan los nuestros.
+	var lesionados_antes := equipo_jugador.lesiones.keys()
+	_avanzar_dias_todos(1)
+	dia_temporada += 1
+	dia_absoluto += 1
+
+	var novedades := []
+	for id in lesionados_antes:
+		if equipo_jugador.esta_lesionado(int(id)):
+			continue
+		for j in equipo_jugador.todos_los_jugadores():
+			if int(j["id"]) == int(id):
+				novedades.append("%s %s se recupero de su lesion." % [
+					j["nombre"], j["apellido"]])
+				break
+
+	# La ronda de copa cae el miercoles: es el segundo partido de una
+	# semana apretada, no un evento aparte del calendario.
+	if dia_proxima_copa >= 0 and dia_temporada >= dia_proxima_copa:
+		dia_proxima_copa = -1
+		_jugar_ronda_de_copas()
+
+	# La temporada cierra cuando no quedan fechas Y ya paso la semana de
+	# la ultima: si cerrara en el pitazo final, el jugador no llegaria a
+	# ver el ultimo resultado ni a cobrar los ultimos dias.
+	if not hay_fecha_pendiente() and dia_temporada >= dia_proximo_partido:
 		_cerrar_temporada()
+
+	for i in range(noticias_antes, noticias.size()):
+		novedades.append(str(noticias[i]))
+	return novedades
+
+
+## Avanza hasta el proximo partido, pero FRENA si pasa algo que merece una
+## decision. Saltar a ciegas seria volver al problema de antes.
+func avanzar_hasta_el_partido() -> Array:
+	var todo := []
+	while not hay_partido_hoy() and not juego_terminado:
+		var dia := avanzar_un_dia()
+		todo.append_array(dia)
+		if not dia.is_empty():
+			break
+	return todo
 
 
 func _avanzar_dias_todos(dias: int) -> void:
@@ -385,6 +487,12 @@ func _cerrar_temporada() -> void:
 
 	temporada_actual += 1
 	fecha_actual = 0
+	# El calendario arranca de nuevo: dia 0 de temporada, primera jornada
+	# hoy. `dia_absoluto` NO se reinicia — es el que lleva la fecha real y
+	# tiene que seguir corriendo de una temporada a la otra.
+	dia_temporada = 0
+	dia_proximo_partido = 0
+	dia_proxima_copa = -1
 	# Cuadros nuevos con los equipos YA movidos de división.
 	_armar_copas()
 
@@ -688,8 +796,23 @@ func mejorar_instalacion(categoria: String) -> Dictionary:
 ## para siempre. Hay que cortar por el número de temporada, no por fecha.
 func simular_temporada_completa() -> void:
 	var temporada_inicial := temporada_actual
-	while temporada_actual == temporada_inicial and hay_fecha_pendiente():
-		jugar_siguiente_fecha()
+	# Se alterna jugar y pasar dias, igual que lo hace el jugador. Con el
+	# calendario, jugar_siguiente_fecha() ya no adelanta el tiempo: solo
+	# agenda. Encadenando fechas sin dias en el medio, el plantel no
+	# recuperaria fatiga, las ofertas no venceriann nunca y la temporada
+	# no cerraria — la temporada entera se jugaria en un mismo dia.
+	#
+	# El tope de pasos es una red: son ~270 dias de temporada y si algun
+	# dia dejara de avanzar, esto colgaria el juego en vez de fallar.
+	var pasos := 0
+	while temporada_actual == temporada_inicial and pasos < 5000:
+		pasos += 1
+		if hay_partido_hoy():
+			jugar_siguiente_fecha()
+			continue
+		# Las novedades se descartan a proposito: esto es el modo
+		# "saltar la temporada", no se frena por nada.
+		avanzar_un_dia()
 
 
 func _agregar_noticia(texto: String) -> void:
@@ -736,6 +859,10 @@ func guardar_partida() -> void:
 		"equipo_jugador_nombre": equipo_jugador.nombre,
 		"fecha_actual": fecha_actual,
 		"temporada_actual": temporada_actual,
+		"dia_temporada": dia_temporada,
+		"dia_absoluto": dia_absoluto,
+		"dia_proximo_partido": dia_proximo_partido,
+		"dia_proxima_copa": dia_proxima_copa,
 		"noticias": noticias,
 		"ultimo_informe_economico": ultimo_informe_economico,
 		"ultima_posicion_final": ultima_posicion_final,
@@ -806,6 +933,7 @@ func cargar_partida() -> bool:
 	equipo_jugador = nuevo_equipo_jugador
 	fecha_actual = datos["fecha_actual"]
 	temporada_actual = datos["temporada_actual"]
+	restaurar_calendario(datos, liga_jugador().fixture.size())
 	noticias = datos["noticias"]
 	ultimo_informe_economico = datos["ultimo_informe_economico"]
 	ultima_posicion_final = datos["ultima_posicion_final"]

@@ -38,8 +38,11 @@ const ABIERTAS := [PENDIENTE_ELLOS, PENDIENTE_NOSOTROS, ACUERDO_CLUB]
 ## Cuánto tarda el otro club en contestar. Que no sea instantáneo es lo
 ## que convierte el mercado en algo que hay que administrar: mandás tres
 ## ofertas y esperás.
+## Con el calendario dia a dia estos plazos por fin se SIENTEN: antes al
+## jugar una fecha pasaban 7 dias de golpe, o sea que toda respuesta
+## llegaba junta al terminar el partido y el plazo daba lo mismo.
 const DIAS_RESPUESTA_MIN := 2
-const DIAS_RESPUESTA_MAX := 6
+const DIAS_RESPUESTA_MAX := 5
 
 ## Cuántas veces puede ir y venir una negociación antes de que el otro se
 ## canse. Sin tope, regatear sería gratis y siempre convendría.
