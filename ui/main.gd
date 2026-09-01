@@ -20,9 +20,6 @@ var ficha_jugador_id := -1
 var ficha_club: Team = null
 var boton_volver_ficha: Button
 var option_formacion: OptionButton
-var option_carga: OptionButton
-var option_foco: OptionButton
-var label_foco_efecto: Label
 var barra_familiaridad: ProgressBar
 var label_familiaridad: Label
 var label_carga_efecto: Label
@@ -127,6 +124,7 @@ func _ready() -> void:
 	_construir_panel_plantel(contenedor)
 	_construir_panel_tabla(contenedor)
 	_construir_panel_partido(contenedor)
+	_construir_panel_entrenamiento(contenedor)
 	_construir_panel_partido_animado(contenedor)
 	_construir_panel_economia(contenedor)
 	_construir_panel_mercado(contenedor)
@@ -906,23 +904,9 @@ func _construir_panel_formacion(padre: Control) -> void:
 	option_formacion.item_selected.connect(_on_formacion_elegida)
 	fila.add_child(option_formacion)
 
-	fila.add_child(Tema.etiqueta_seccion("Carga"))
-	option_carga = OptionButton.new()
-	for nivel in CargaEntrenamiento.NIVELES:
-		option_carga.add_item(CargaEntrenamiento.ETIQUETAS[nivel])
-	option_carga.item_selected.connect(_on_carga_elegida)
-	fila.add_child(option_carga)
-
-	fila.add_child(Tema.etiqueta_seccion("Foco"))
-	option_foco = OptionButton.new()
-	for area in FocoEquipo.AREAS:
-		option_foco.add_item(FocoEquipo.ETIQUETAS[area])
-	option_foco.item_selected.connect(_on_foco_equipo_elegido)
-	fila.add_child(option_foco)
-
-	label_foco_efecto = Label.new()
-	label_foco_efecto.visible = false
-	panel.add_child(label_foco_efecto)
+	# Carga y foco se mudaron a la solapa Entrenamiento. Aca eran dos
+	# desplegables sin explicacion al lado del selector tactico, como si
+	# fueran parte de armar el equipo: nadie entendia que hacian.
 
 	# §7.4.5: cuanto conoce el equipo la tactica puesta. Va PEGADO a los
 	# desplegables que la cambian: es el dato con el que se decide si el
@@ -1093,16 +1077,13 @@ func _refrescar_formacion() -> void:
 	var idx := Formaciones.lista().find(equipo.formacion)
 	if idx >= 0:
 		option_formacion.selected = idx
-	var idx_carga := CargaEntrenamiento.NIVELES.find(equipo.carga_entrenamiento)
-	if idx_carga >= 0:
-		option_carga.selected = idx_carga
-	label_carga_efecto.text = _texto_carga(equipo)
-	option_carga.tooltip_text = CargaEntrenamiento.resumen(equipo.carga_entrenamiento)
-	var idx_foco := FocoEquipo.AREAS.find(equipo.foco_equipo)
-	if idx_foco >= 0:
-		option_foco.selected = idx_foco
-	option_foco.tooltip_text = "%s%s" % [
-		FocoEquipo.resumen(equipo.foco_equipo), _reparto_foco_texto(equipo)]
+	# El pie de la formacion recuerda como viene el entrenamiento, aunque
+	# se elija en su propia solapa: la familiaridad tactica de abajo
+	# depende del foco, asi que el dato tiene que estar a mano.
+	label_carga_efecto.text = "Carga %s  ·  foco %s  —  %s" % [
+		CargaEntrenamiento.ETIQUETAS.get(equipo.carga_entrenamiento, "?"),
+		FocoEquipo.ETIQUETAS.get(equipo.foco_equipo, "?"),
+		_texto_carga(equipo)]
 
 	_refrescar_familiaridad(equipo)
 
@@ -1423,7 +1404,7 @@ func _construir_panel_partido_animado(padre: Control) -> void:
 	vista_partido = VistaPartido.new()
 	vista_partido.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	panel.add_child(vista_partido)
-	vista_partido.hud.menu_pedido.connect(_mostrar_partido)
+	vista_partido.hud.menu_pedido.connect(_volver_al_club)
 	# Al terminar NO se cierra solo. Aparece el resumen encima de la
 	# cancha y de ahi se sale a mano: cerrar de una no dejaba ver el
 	# ultimo minuto ni enterarse de como termino.
@@ -1474,7 +1455,7 @@ func _mostrar_resumen_partido() -> void:
 		hijo.queue_free()
 	var r: Dictionary = GameState.ultimo_resultado
 	if r.is_empty():
-		_mostrar_partido()
+		_volver_al_club()
 		return
 
 	contenedor_resumen.add_child(Tema.etiqueta_seccion("Final del partido"))
@@ -1541,7 +1522,7 @@ func _mostrar_resumen_partido() -> void:
 	Tema.primario(btn_cerrar)
 	btn_cerrar.pressed.connect(func():
 		resumen_partido.visible = false
-		_mostrar_partido())
+		_volver_al_club())
 	contenedor_resumen.add_child(btn_cerrar)
 
 	resumen_partido.visible = true
@@ -4863,6 +4844,17 @@ func _mostrar_tabla() -> void:
 	_refrescar_tabla()
 
 
+## Salir del partido devuelve al CLUB, que es desde donde se sigue
+## jugando: ahi estan "Avanzar un dia" e "Ir al proximo partido".
+##
+## Antes iba al panel Partido y, como no pasaba por _mostrar_seccion, el
+## riel seguia marcando Club: se veia el boton Club resaltado con el
+## contenido de Partido adelante, y tocar Club parecia no hacer nada
+## porque ya estaba "elegido".
+func _volver_al_club() -> void:
+	_mostrar_seccion("club")
+
+
 func _mostrar_partido() -> void:
 	_ocultar_todos()
 	paneles["partido"].visible = true
@@ -5115,6 +5107,7 @@ const SECCIONES := [
 	{"clave": "club", "nombre": "Club", "paneles": []},
 	{"clave": "equipo", "nombre": "Equipo", "paneles": [
 		["plantel", "Plantel"], ["formacion", "Formacion"],
+		["entrenamiento", "Entrenamiento"],
 		["cantera", "Cantera"], ["instalaciones", "Instalaciones"]]},
 	{"clave": "partido", "nombre": "Partido", "paneles": [
 		["partido", "Partido"], ["tabla", "Tabla"]]},
@@ -5253,6 +5246,7 @@ func _mostrar_seccion(clave: String) -> void:
 func _mostrar_panel_de_seccion(clave: String) -> void:
 	var metodos := {
 		"plantel": "_mostrar_plantel", "formacion": "_mostrar_formacion",
+		"entrenamiento": "_mostrar_entrenamiento",
 		"cantera": "_mostrar_cantera", "instalaciones": "_mostrar_instalaciones",
 		"partido": "_mostrar_partido", "tabla": "_mostrar_tabla",
 		"mercado": "_mostrar_mercado", "libres": "_mostrar_libres",
@@ -5487,3 +5481,179 @@ func _pendientes_de_portada() -> Array:
 			break
 	return salida
 
+
+
+# ---------------------------------------------------------------------------
+# Entrenamiento
+# ---------------------------------------------------------------------------
+
+## Foco y carga viven ACA y no en Formacion. Estaban metidos en la fila de
+## la formacion, al lado del desplegable tactico, como si fueran parte de
+## armar el equipo: eran dos combos sin explicacion en una pantalla que
+## habla de otra cosa. Son las dos decisiones que gobiernan como crece el
+## plantel y merecen su propia seccion, con lo que hace cada opcion a la
+## vista y no escondido en un tooltip.
+var contenedor_entrenamiento: VBoxContainer
+var option_carga_entr: OptionButton
+var option_foco_entr: OptionButton
+var label_reparto_foco: Label
+
+
+func _construir_panel_entrenamiento(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	padre.add_child(panel)
+	paneles["entrenamiento"] = panel
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+	contenedor_entrenamiento = VBoxContainer.new()
+	contenedor_entrenamiento.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	contenedor_entrenamiento.add_theme_constant_override("separation", 10)
+	scroll.add_child(contenedor_entrenamiento)
+
+
+func _mostrar_entrenamiento() -> void:
+	_ocultar_todos()
+	paneles["entrenamiento"].visible = true
+	_refrescar_entrenamiento()
+
+
+func _refrescar_entrenamiento() -> void:
+	if contenedor_entrenamiento == null:
+		return
+	for hijo in contenedor_entrenamiento.get_children():
+		hijo.queue_free()
+	var equipo := GameState.equipo_jugador
+
+	# --- Carga: cuanto se entrena --------------------------------------
+	var caja_carga := _tarjeta(contenedor_entrenamiento, Tema.BORDE)
+	caja_carga.add_child(Tema.etiqueta_seccion("Carga  ·  cuanto se entrena"))
+	var fila_carga := HBoxContainer.new()
+	fila_carga.add_theme_constant_override("separation", 10)
+	caja_carga.add_child(fila_carga)
+	option_carga_entr = OptionButton.new()
+	option_carga_entr.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
+	for nivel in CargaEntrenamiento.NIVELES:
+		option_carga_entr.add_item(CargaEntrenamiento.ETIQUETAS[nivel])
+	var idx_carga := CargaEntrenamiento.NIVELES.find(equipo.carga_entrenamiento)
+	if idx_carga >= 0:
+		option_carga_entr.selected = idx_carga
+	option_carga_entr.item_selected.connect(func(i):
+		_on_carga_elegida(i)
+		_refrescar_entrenamiento())
+	fila_carga.add_child(option_carga_entr)
+	caja_carga.add_child(_texto_suave(
+		"Mas carga hace crecer mas rapido, pero recuperas peor entre partidos y te lesionas mas. " \
+		+ "Lo que decide la progresion es el PROMEDIO de la temporada, no la carga de hoy."))
+
+	# La tabla completa: sin verla, elegir es adivinar.
+	for nivel in CargaEntrenamiento.NIVELES:
+		var actual: bool = nivel == equipo.carga_entrenamiento
+		var fila := Componentes.fila(CargaEntrenamiento.NIVELES.find(nivel) % 2 == 0)
+		var dentro := Componentes.contenido(fila)
+		dentro.add_child(Componentes.celda(
+			str(CargaEntrenamiento.ETIQUETAS[nivel]), 150,
+			Tema.AMBAR if actual else Tema.TEXTO))
+		dentro.add_child(Componentes.celda_numero(
+			"crecimiento x%.2f" % CargaEntrenamiento.factor_crecimiento(nivel), 170, Tema.SUAVE))
+		dentro.add_child(Componentes.celda_numero(
+			"recuperacion x%.2f" % CargaEntrenamiento.factor_recuperacion(nivel), 180, Tema.SUAVE))
+		dentro.add_child(Componentes.celda_numero(
+			"lesiones x%.2f" % CargaEntrenamiento.factor_lesion(nivel), 150, Tema.SUAVE))
+		caja_carga.add_child(fila)
+	if equipo.carga_semanas > 0.0:
+		caja_carga.add_child(_texto_suave(
+			"Esta temporada venis en x%.2f de crecimiento acumulado." % equipo.factor_carga_temporada()))
+
+	# --- Foco: que se entrena ------------------------------------------
+	var caja_foco := _tarjeta(contenedor_entrenamiento, Tema.BORDE)
+	caja_foco.add_child(Tema.etiqueta_seccion("Foco  ·  que se entrena"))
+	var fila_foco := HBoxContainer.new()
+	fila_foco.add_theme_constant_override("separation", 10)
+	caja_foco.add_child(fila_foco)
+	option_foco_entr = OptionButton.new()
+	option_foco_entr.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
+	for area in FocoEquipo.AREAS:
+		option_foco_entr.add_item(FocoEquipo.ETIQUETAS[area])
+	var idx_foco := FocoEquipo.AREAS.find(equipo.foco_equipo)
+	if idx_foco >= 0:
+		option_foco_entr.selected = idx_foco
+	option_foco_entr.item_selected.connect(func(i):
+		_on_foco_equipo_elegido(i)
+		_refrescar_entrenamiento())
+	fila_foco.add_child(option_foco_entr)
+	caja_foco.add_child(_texto_suave(
+		"El presupuesto es FIJO: lo que ganan los atributos del area se lo sacas al resto. " \
+		+ "Y se reparte entre los atributos del area, asi que un area chica da un empujon grande " \
+		+ "a pocos y una grande da un empujon chico a muchos. Nadie retrocede: lo desatendido " \
+		+ "crece mas despacio."))
+
+	for area in FocoEquipo.AREAS:
+		caja_foco.add_child(_fila_area_de_foco(area, equipo))
+
+	# Cuanto pesa cada area en la temporada: cambiar a mitad de ano
+	# reparte, no reinicia, y eso hay que poder verlo.
+	var reparto := equipo.reparto_foco()
+	if not reparto.is_empty():
+		var partes := []
+		for area in reparto:
+			partes.append("%s %d%%" % [
+				FocoEquipo.ETIQUETAS.get(area, area),
+				int(round(float(reparto[area]) * 100.0))])
+		caja_foco.add_child(_texto_suave(
+			"Lo que va pesando esta temporada: %s." % ", ".join(partes)))
+
+
+## Una fila por area, con sus atributos y cuanto multiplica cada cosa.
+func _fila_area_de_foco(area: String, equipo: Team) -> Control:
+	var actual: bool = area == equipo.foco_equipo
+	var fila := Componentes.fila(FocoEquipo.AREAS.find(area) % 2 == 0)
+	if actual:
+		var e: StyleBoxFlat = fila.get_theme_stylebox("panel").duplicate()
+		e.bg_color = Tema.PANEL_ALTO
+		e.border_width_left = 3
+		e.border_color = Tema.AMBAR
+		fila.add_theme_stylebox_override("panel", e)
+	var dentro := Componentes.contenido(fila)
+	dentro.add_child(Componentes.celda(
+		str(FocoEquipo.ETIQUETAS[area]), 130, Tema.AMBAR if actual else Tema.TEXTO))
+
+	var atributos: Array = FocoEquipo.atributos_de(area)
+	# Los multiplicadores reales, con la cuenta del propio sistema y no a
+	# ojo: 19 atributos tiene un jugador de campo.
+	var n_campo := 19
+	var texto_mult := "todo parejo"
+	if not atributos.is_empty():
+		var n: int = atributos.size()
+		texto_mult = "x%.2f   resto x%.2f" % [
+			1.0 + FocoEquipo.PRESUPUESTO / float(n),
+			maxf(FocoEquipo.MULTIPLICADOR_MINIMO,
+				1.0 - FocoEquipo.PRESUPUESTO / float(n_campo - n))]
+	# 250 y no 190: con menos, "el resto x0.79" se cortaba justo en el
+	# numero, que es el dato por el que se elige.
+	dentro.add_child(Componentes.celda_numero(texto_mult, 250, Tema.SUAVE))
+
+	var detalle := Label.new()
+	detalle.text = "%s %s" % [
+		FocoEquipo.DESCRIPCIONES.get(area, ""),
+		"" if atributos.is_empty() else "(%s)" % ", ".join(atributos)]
+	detalle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	detalle.clip_text = true
+	detalle.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	detalle.add_theme_color_override("font_color", Tema.SUAVE)
+	dentro.add_child(detalle)
+	return fila
+
+
+func _texto_suave(texto: String) -> Label:
+	var l := Label.new()
+	l.text = texto
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	l.add_theme_color_override("font_color", Tema.SUAVE)
+	return l
