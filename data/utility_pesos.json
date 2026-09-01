@@ -64,7 +64,7 @@
     "porteria_base": 0.49,
     "porteria_calidad": 0.5,
     "palo": 0.05,
-    "fuerza_base": 0.78
+    "fuerza_base": 0.92
   },
   "temperatura": {
     "base": 0.55,
@@ -105,6 +105,12 @@
     "z_inalcanzable": 2.5,
     "_offside": "Margen de error al medir el desmarque: un delantero inteligente se queda al filo de la linea, uno limitado se pasa. Sin margen nadie se iria nunca en offside y la infraccion no existiria.",
     "offside_margen_torpe": 5.5,
+    "_apoyo_del_delantero": "Desde que avance de campo el delantero se para en el hombro del ultimo defensor, y cuanto BAJA a recibir cuando la pelota esta lejos. Sin esto los de arriba quedaban clavados contra la linea rival aunque la pelota estuviera a sesenta metros, el equipo quedaba partido en dos y la unica forma de llegarles era el pelotazo.",
+    "avance_para_jugar_en_el_hombro": 0.45,
+    "apoyo_del_delantero": 0.35,
+    "apoyo_del_nueve": 0.0,
+    "_desplazamiento_por_estilo": "Cuantos metros corre la linea el estilo cuando el equipo NO tiene la pelota. Presion alta la sube, Defensivo la baja. Es un desplazamiento y no un multiplicador de cuanto se sigue a la pelota: multiplicar hacia que Presion alta defendiera MAS ATRAS que el estilo por defecto, porque defendiendo la pelota esta en campo propio.",
+    "desplazamiento_por_estilo": 16.0,
     "_faltas": "Las tarjetas cuelgan de las faltas, no de cada quite: antes se amonestaba sin que hubiera infraccion. prob_falta se calibra para que las amarillas por partido queden a la par del motor abstracto.",
     "prob_falta": 0.42,
     "prob_falta_en_quite_ganado": 0.1,
@@ -194,6 +200,7 @@
     "tercio_propio_arquero": 30.0,
     "invasores_para_reventarla": 3.0,
     "_mezcla_fisica_rango_tiro": "Cuanto del rango de tiro es fisico y cuanto relativo al nivel del partido. 0 = decima y quinta rematan desde la misma distancia; 1 = primera remata desde tan lejos que suma 3 remates por partido y se va a 3,25 goles contra 2,50 del motor abstracto. Se barre con tests/_diag_goles_motores.gd y tests/_diag_remates.gd.",
-    "mezcla_fisica_rango_tiro": 0.8
+    "mezcla_fisica_rango_tiro": 0.8,
+    "_apoyo_del_nueve": "Cuanto del apoyo le toca al 9. En cero: no baja, se queda de referencia. Medido, que baje aunque sea un poco cuesta 0,4 goles por partido en las tres divisiones — el equipo se queda sin nadie en el area. Los que bajan a recibir son el enganche y los extremos."
   }
 }

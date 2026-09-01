@@ -58,3 +58,21 @@ const RETROCESO_DEFAULT := 0.5
 
 static func retroceso_sin_pelota(estilo: String) -> float:
 	return RETROCESO_SIN_PELOTA.get(estilo, RETROCESO_DEFAULT)
+
+
+## Cuantos jugadores de campo suben AL AREA en un corner propio, sin
+## contar al que lo tira. El resto no se queda en su casillero: sube a la
+## mitad de la cancha a jugar el rebote.
+##
+## Es lo que hace que la filosofia se vea en la pelota parada. Un equipo
+## fisico manda a todos, incluidos los centrales, que es de donde saca sus
+## goles; uno de contragolpe deja gente atras esperando justamente eso.
+const SUBEN_AL_CORNER := {
+	"Físico": 8, "Juego directo": 7, "Presión alta": 7,
+	"Tiki taka": 5, "Defensivo": 4, "Contragolpe": 4,
+}
+const SUBEN_AL_CORNER_DEFAULT := 5
+
+
+static func suben_al_corner(estilo: String) -> int:
+	return int(SUBEN_AL_CORNER.get(estilo, SUBEN_AL_CORNER_DEFAULT))

@@ -1168,15 +1168,31 @@ static func _objetivo_sin_pelota(estado: Dictionary, e: Dictionary, equipo: Team
 	var ax: float = ATRACCION_X.get(rol, 0.6)
 	var ay: float = ATRACCION_Y.get(rol, 0.3)
 
-	if not tiene_pelota_mi_equipo:
-		# Estilos.retroceso_sin_pelota: negativo = presiona hacia adelante
-		# en vez de replegarse. Acá deja de ser un ajuste visual y pasa a
-		# mover al jugador de verdad.
-		var retroceso: float = Estilos.retroceso_sin_pelota(equipo.estilo)
-		ax *= clampf(1.0 - retroceso, 0.3, 1.6)
-
 	var objetivo_x: float = base.x + pelota_pos.x * ax
 	var objetivo_y: float = base.y + (pelota_pos.y - base.y) * ay
+
+	if not tiene_pelota_mi_equipo:
+		# El estilo CORRE LA LÍNEA hacia el arco rival o hacia el propio.
+		#
+		# Antes multiplicaba `ax`, o sea cuánto sigue el jugador a la
+		# pelota. Eso no corre la línea: la amplifica en las DOS
+		# direcciones, y como la pelota pasa tiempo en las dos mitades, el
+		# efecto se cancela solo. Medido con tests/_diag_estilos_linea.gd:
+		# los seis estilos defendían entre 40,3 y 41,8 m de su arco, o sea
+		# un metro y medio de diferencia entre Presión alta y Defensivo.
+		# Elegir estilo no cambiaba nada visible, que era el reporte.
+		#
+		# Como desplazamiento, la línea va de 31,9 m (Defensivo) a 44,0 m
+		# (Presión alta): doce metros, que sí se ven.
+		# El desplazamiento se mide contra el estilo POR DEFECTO, no
+		# contra cero: asi el equilibrio del motor —que se calibro con
+		# todos los estilos en la misma linea— no se mueve, y lo unico que
+		# cambia es la diferencia ENTRE estilos. Restando el valor crudo,
+		# los seis estilos defendian ocho metros mas atras y los goles
+		# caian de 2,4 a 1,8 por partido en las tres divisiones.
+		var retroceso: float = Estilos.retroceso_sin_pelota(equipo.estilo) 			- Estilos.RETROCESO_DEFAULT
+		var hacia_rival: float = 1.0 if e["equipo_local"] else -1.0
+		objetivo_x += -retroceso * float(f["desplazamiento_por_estilo"]) * hacia_rival
 	if rol == "ARQ":
 		# Su propio corral: entre la línea y el borde del área.
 		if e["equipo_local"]:
@@ -1207,7 +1223,30 @@ static func _objetivo_sin_pelota(estado: Dictionary, e: Dictionary, equipo: Team
 	# rival se quedaba a 24 metros del arco pudiendo estar a 10, el equipo
 	# nunca entraba al área y todos los remates salían de afuera (mediana
 	# 23m, casi ningún gol).
+	# ...pero SOLO cuando la pelota ya está cerca. Con la pelota en campo
+	# propio el delantero baja a recibir, que es lo que hace un 9 de
+	# verdad. Antes el pin al hombro del último defensor era incondicional
+	# —un maxf sin excusa— asi que los de arriba quedaban clavados contra
+	# la linea del rival aunque la pelota estuviera a sesenta metros: se
+	# los veia parados en offside detrás de los centrales mientras el
+	# equipo salia jugando, y la unica manera de llegarles era el
+	# pelotazo. El equipo quedaba partido en dos.
 	if tiene_pelota_mi_equipo and ROLES_QUE_ATACAN.has(rol):
+		var avance: float = valor_posicion(pelota_pos, e["equipo_local"])
+		# El 9 baja MUCHO MENOS que el resto: es la referencia y tiene que
+		# quedar alguien arriba. Los que vienen a buscarla son el enganche
+		# y los extremos, que es como se reparte de verdad. Bajando los
+		# tres por igual, el equipo se quedaba sin nadie en el area y los
+		# remates caian a la mitad.
+		if avance < float(f["avance_para_jugar_en_el_hombro"]):
+			# Baja a ofrecerse: se acerca a la pelota en vez de esperarla.
+			var apoyo: float = float(f["apoyo_del_delantero"])
+			if rol == "DC":
+				apoyo *= float(f["apoyo_del_nueve"])
+			objetivo_x = lerpf(objetivo_x, pelota_pos.x, apoyo)
+			objetivo_y = lerpf(objetivo_y, pelota_pos.y, apoyo * 0.5)
+			return Vector2(clampf(objetivo_x, -LIMITE_X, LIMITE_X),
+				clampf(objetivo_y, -MEDIO_ANCHO + 1.0, MEDIO_ANCHO - 1.0))
 		var linea_ataque: Dictionary = estado["linea_offside"]
 		# Dónde se para respecto de la línea: el que mide bien el
 		# desmarque se queda un metro detrás, el que no la calcula se pasa
@@ -1402,9 +1441,22 @@ static func _reiniciar_desde_medio(estado: Dictionary, saca_local: bool, mitad: 
 		var p := Vector2(x, base.y)
 		# Fuera del círculo central: la pelota la toca UNO solo. Es la
 		# regla real y es lo que hace que el saque se lea como un saque.
+		#
+		# Y se sale del círculo HACIA ATRÁS, nunca hacia adelante. Con la
+		# dirección cruda, alguien parado apenas del lado propio de la
+		# mitad salía empujado a campo rival: se veía un rival parado en
+		# tu campo mientras vos sacabas del medio, que no puede pasar.
 		if id != sacador and p.length() < RADIO_CIRCULO + 0.5:
-			var dir: Vector2 = p.normalized() if p.length() > 0.01 else Vector2(-1.0 if e["equipo_local"] else 1.0, 0.0)
+			var atras: float = -1.0 if e["equipo_local"] else 1.0
+			var dir: Vector2 = p.normalized() if p.length() > 0.01 else Vector2(atras, 0.0)
+			if dir.x * atras < 0.0:
+				dir.x = -dir.x
 			p = dir * (RADIO_CIRCULO + 0.5)
+		# Nadie del lado equivocado de la mitad. La compresión y el empujón
+		# del círculo pueden pasarse los dos, y en un saque del medio los
+		# 11 que no sacan tienen que estar en su propio campo.
+		if id != sacador:
+			p.x = minf(p.x, -0.5) if e["equipo_local"] else maxf(p.x, 0.5)
 		e["pos"] = p
 		e["vel"] = Vector2.ZERO
 		e["rapidez"] = 0.0
@@ -3066,6 +3118,14 @@ static func _marcar_posiciones(estado: Dictionary, pos: Vector2, ataca_local: bo
 	# en la fila es lo que después los pone hombro con hombro.
 	for id in estado["jugadores"]:
 		estado["jugadores"][id]["puesto_barrera"] = -1
+	if tipo == "corner" or tipo == "centro":
+		# El centro de un tiro libre es mas medido que un corner: suben
+		# dos menos, porque la jugada arranca con el juego en marcha y
+		# hay que quedar parado por si sale mal.
+		var suben := Estilos.suben_al_corner(_equipo_de(estado, ataca_local).estilo)
+		if tipo == "centro":
+			suben = maxi(suben - 2, 2)
+		_repartir_para_el_corner(estado, ataca_local, ejecutor, suben)
 	if tipo == "directo":
 		# Se eligen por cercania AL PUESTO de la barrera y no a la pelota:
 		# son los que menos tienen que caminar para llegar a tiempo.
@@ -3095,11 +3155,30 @@ static func _marcar_posiciones(estado: Dictionary, pos: Vector2, ataca_local: bo
 			continue
 
 		if tipo == "centro" or tipo == "corner":
-			# Sube el que ataca de arriba y baja TODA la defensa rival: es
-			# el mismo reparto del córner, porque es la misma jugada.
-			var sube: bool = ROLES_QUE_ATACAN.has(e["rol"]) if e["equipo_local"] == ataca_local else true
-			if sube:
+			# CUANTOS suben al area lo decide el ESTILO, no el rol. Antes
+			# subian solo los roles de ataque (MCO/EXT/DC), asi que un
+			# 5-3-2 mandaba dos jugadores y el corner era un ataque de dos
+			# contra once; despues los mande a todos, que tampoco es. Un
+			# equipo Fisico sube ocho, incluidos los centrales, que es de
+			# donde saca sus goles; uno de Contragolpe sube cuatro y deja
+			# gente atras esperando justamente el contragolpe.
+			#
+			# Y el que no sube al area TAMPOCO se queda en su casillero:
+			# se para en la mitad de la cancha a jugar el rebote, que es
+			# donde termina la mitad de los corners.
+			var mio: bool = e["equipo_local"] == ataca_local
+			if not mio:
+				# Defendiendo baja todo el mundo: eso no depende de nada.
 				e["marca"] = Vector2(dentro_x + rng.randf_range(-5.0, 5.0), rng.randf_range(-14.0, 14.0))
+				continue
+			if int(e.get("sube_al_area", 0)) == 1:
+				e["marca"] = Vector2(dentro_x + rng.randf_range(-5.0, 5.0), rng.randf_range(-14.0, 14.0))
+				continue
+			if int(e.get("sube_al_area", 0)) == 0:
+				# A la mitad de la cancha, del lado del arco rival.
+				var hacia_medio: float = 1.0 if ataca_local else -1.0
+				e["marca"] = Vector2(hacia_medio * rng.randf_range(2.0, 10.0),
+					clampf(float(e["base"].y), -20.0, 20.0))
 				continue
 			e["marca"] = e["base"]
 			continue
@@ -3108,6 +3187,50 @@ static func _marcar_posiciones(estado: Dictionary, pos: Vector2, ataca_local: bo
 			e["marca"] = _marca_en_tiro_libre(e, pos, ataca_local)
 			continue
 		e["marca"] = e["base"]
+
+
+## Cuántos se quedan SIEMPRE atrás en un córner propio, además del
+## arquero: aunque el estilo sea de mandar a todos, alguien cubre.
+const RESGUARDO_MINIMO_EN_CORNER := 1
+
+
+## Reparte al equipo que ataca un córner en tres grupos, según el estilo:
+## los que suben al área (1), los que se paran en la mitad a jugar el
+## rebote (0) y los que se quedan de resguardo (-1). El arquero siempre
+## se queda.
+##
+## Quién sube no es por rol sino por amenaza aérea: un central que cabecea
+## bien sube antes que un lateral chiquito, que es exactamente lo que pasa
+## en una cancha.
+static func _repartir_para_el_corner(estado: Dictionary, ataca_local: bool,
+		ejecutor: int, cuantos: int) -> void:
+	var equipo := _equipo_de(estado, ataca_local)
+	var candidatos := []
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		e["sube_al_area"] = -1
+		if e["equipo_local"] != ataca_local:
+			continue
+		if str(e["rol"]) == "ARQ" or id == ejecutor:
+			continue
+		# Amenaza en el área: cabecear y saltar. Los de arriba suman por
+		# oficio de área, no por atributo.
+		var j := _dict_jugador(estado, equipo, e["jugador_id"])
+		var amenaza := 100.0
+		if not j.is_empty():
+			amenaza = float(j["atributos"]["cabezazo"]) + float(j["atributos"]["salto"])
+		if ROLES_QUE_ATACAN.has(str(e["rol"])):
+			amenaza += 40.0
+		candidatos.append({"id": id, "amenaza": amenaza})
+	candidatos.sort_custom(func(a, b): return float(a["amenaza"]) > float(b["amenaza"]))
+
+	var tope: int = mini(cuantos, maxi(candidatos.size() - RESGUARDO_MINIMO_EN_CORNER, 0))
+	for i in range(candidatos.size()):
+		var clave: int = int(candidatos[i]["id"])
+		if i < tope:
+			estado["jugadores"][clave]["sube_al_area"] = 1
+		elif i < candidatos.size() - RESGUARDO_MINIMO_EN_CORNER:
+			estado["jugadores"][clave]["sube_al_area"] = 0
 
 
 ## Cuántos se paran en la barrera. Cuanto más de frente y más cerca del

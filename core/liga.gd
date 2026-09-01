@@ -43,7 +43,16 @@ static func cargar(datos: Dictionary) -> Liga:
 	var l := Liga.new()
 	for ed in datos["equipos"]:
 		l.equipos.append(Team.cargar(ed))
-	l.tabla = datos["tabla"]
+	# JSON devuelve TODO numero como float, asi que una tabla cargada
+	# traia los puntos como 42.0 y se mostraban asi. Son partidos, goles y
+	# puntos: enteros. Se convierten aca, en la carga, y no al pintarlos —
+	# si no, cada pantalla que muestre la tabla tiene que acordarse.
+	l.tabla = {}
+	for nombre in datos["tabla"]:
+		var fila := {}
+		for clave in datos["tabla"][nombre]:
+			fila[clave] = int(datos["tabla"][nombre][clave])
+		l.tabla[nombre] = fila
 	l.fixture = datos["fixture"]
 	l.noticias = datos.get("noticias", [])
 	l.agentes_libres = datos.get("agentes_libres", [])
