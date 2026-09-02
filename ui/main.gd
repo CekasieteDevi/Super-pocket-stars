@@ -33,6 +33,10 @@ var _fila_propia_tabla: Control = null
 var label_tabla_leyenda: Label
 var contenedor_ultimo_partido: VBoxContainer
 var contenedor_lista_partidos: VBoxContainer
+var contenedor_jugadores_liga: VBoxContainer
+var contenedor_encabezado_jugadores: VBoxContainer
+var botones_ranking: Dictionary = {}
+var ranking_elegido: String = "goles"
 ## Cual de los partidos guardados se esta mirando (0 = el mas reciente).
 var historial_elegido: int = 0
 ## En un solo lugar: estaba escrito a mano al construirlo y al terminar de
@@ -121,6 +125,7 @@ func _ready() -> void:
 	_construir_panel_portada(contenedor)
 	_construir_panel_plantel(contenedor)
 	_construir_panel_tabla(contenedor)
+	_construir_panel_jugadores_liga(contenedor)
 	_construir_panel_historial(contenedor)
 	_construir_panel_entrenamiento(contenedor)
 	_construir_panel_partido_animado(contenedor)
@@ -1323,6 +1328,141 @@ func _centrar_tabla_en_mi_club() -> void:
 		return
 	scroll.scroll_vertical = int(maxf(0.0,
 		_fila_propia_tabla.position.y - scroll.size.y * 0.5))
+
+
+## Los mejores de la division, en las cuatro listas que se miran de
+## verdad: goleadores, asistencias, vallas invictas y amarillas.
+##
+## Sale de TODOS los partidos de la liga y no solo de los nuestros (ver
+## core/estadisticas_liga.gd): la gracia es saber que el 9 del puntero te
+## lleva cinco goles, no cuantos hizo el tuyo, que eso ya se ve en Plantel.
+const RANKINGS := [
+	["goles", "Goleadores", "Goles"],
+	["asistencias", "Asistencias", "Asist."],
+	["vallas", "Porterias invictas", "Vallas"],
+	["amarillas", "Amarillas", "Amar."],
+]
+
+
+func _construir_panel_jugadores_liga(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	padre.add_child(panel)
+	paneles["jugadores_liga"] = panel
+
+	var barra := HBoxContainer.new()
+	panel.add_child(barra)
+	for entrada in RANKINGS:
+		var btn := Button.new()
+		btn.text = str(entrada[1])
+		btn.custom_minimum_size = Vector2(0, 44)
+		var clave := str(entrada[0])
+		btn.pressed.connect(func():
+			ranking_elegido = clave
+			_refrescar_jugadores_liga())
+		barra.add_child(btn)
+		botones_ranking[clave] = btn
+
+	# El encabezado cambia de titulo con la solapa (Goles / Asist. /
+	# Vallas), asi que se repinta junto con la lista.
+	contenedor_encabezado_jugadores = VBoxContainer.new()
+	panel.add_child(contenedor_encabezado_jugadores)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+	contenedor_jugadores_liga = VBoxContainer.new()
+	contenedor_jugadores_liga.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	contenedor_jugadores_liga.add_theme_constant_override("separation", 0)
+	scroll.add_child(contenedor_jugadores_liga)
+
+
+func _mostrar_jugadores_liga() -> void:
+	_ocultar_todos()
+	paneles["jugadores_liga"].visible = true
+	_refrescar_jugadores_liga()
+
+
+func _refrescar_jugadores_liga() -> void:
+	var titulo_columna := "Goles"
+	for entrada in RANKINGS:
+		var clave := str(entrada[0])
+		Tema.seleccionado(botones_ranking[clave], clave == ranking_elegido)
+		if clave == ranking_elegido:
+			titulo_columna = str(entrada[2])
+
+	for hijo in contenedor_encabezado_jugadores.get_children():
+		hijo.queue_free()
+	contenedor_encabezado_jugadores.add_child(_encabezado_jugadores_liga(titulo_columna))
+
+	for hijo in contenedor_jugadores_liga.get_children():
+		hijo.queue_free()
+
+	var liga := GameState.liga_jugador()
+	var filas := EstadisticasLiga.ranking(liga.estadisticas, ranking_elegido, 40)
+	if filas.is_empty():
+		# Sin partidos jugados la lista esta vacia, y una lista vacia sin
+		# explicacion parece un bug.
+		contenedor_jugadores_liga.add_child(_texto_suave(
+			"Todavia no hay nada para mostrar: la temporada recien empieza."))
+		return
+
+	var mio: String = GameState.equipo_jugador.nombre
+	var puesto := 0
+	var anterior := -1
+	for i in range(filas.size()):
+		var f: Dictionary = filas[i]
+		var valor := int(f[ranking_elegido])
+		# Los empatados comparten puesto: dos con 12 goles son los dos
+		# primeros, y el que sigue es tercero.
+		if valor != anterior:
+			puesto = i + 1
+			anterior = valor
+		var soy_yo: bool = str(f["equipo"]) == mio
+		var fila := Componentes.fila(i % 2 == 0)
+		var dentro := Componentes.contenido(fila)
+		dentro.add_child(Componentes.acento_lateral(
+			Tema.AMBAR if soy_yo else Color.TRANSPARENT))
+		var color: Color = Tema.AMBAR if soy_yo else Tema.TEXTO
+		dentro.add_child(Componentes.celda_numero(
+			str(puesto), Componentes.COL_POSICION, Tema.SUAVE, HORIZONTAL_ALIGNMENT_RIGHT))
+		dentro.add_child(Componentes.celda(
+			str(f["nombre"]), Componentes.COL_NOMBRE + 40, color))
+		dentro.add_child(Componentes.celda(
+			str(f["posicion"]), Componentes.COL_POS, Tema.SUAVE))
+		dentro.add_child(Componentes.celda(
+			str(f["equipo"]), Componentes.COL_EQUIPO, Tema.SUAVE))
+		dentro.add_child(Componentes.celda_numero(
+			str(valor), Componentes.COL_GOLES, color, HORIZONTAL_ALIGNMENT_RIGHT))
+		# En la lista de amarillas interesa tambien quien se fue expulsado.
+		if ranking_elegido == "amarillas":
+			var rojas := int(f["rojas"])
+			dentro.add_child(Componentes.celda_numero(
+				str(rojas) if rojas > 0 else "-", Componentes.COL_GOLES,
+				Tema.ROJO if rojas > 0 else Tema.SUAVE, HORIZONTAL_ALIGNMENT_RIGHT))
+		contenedor_jugadores_liga.add_child(fila)
+
+
+func _encabezado_jugadores_liga(titulo_columna: String) -> PanelContainer:
+	var fila := Componentes.fila(false)
+	var dentro := Componentes.contenido(fila)
+	dentro.add_child(Componentes.acento_lateral(Color.TRANSPARENT))
+	var cols := [
+		["#", Componentes.COL_POSICION, HORIZONTAL_ALIGNMENT_RIGHT],
+		["Jugador", Componentes.COL_NOMBRE + 40, HORIZONTAL_ALIGNMENT_LEFT],
+		["Pos", Componentes.COL_POS, HORIZONTAL_ALIGNMENT_LEFT],
+		["Equipo", Componentes.COL_EQUIPO, HORIZONTAL_ALIGNMENT_LEFT],
+		[titulo_columna, Componentes.COL_GOLES, HORIZONTAL_ALIGNMENT_RIGHT],
+	]
+	if ranking_elegido == "amarillas":
+		cols.append(["Rojas", Componentes.COL_GOLES, HORIZONTAL_ALIGNMENT_RIGHT])
+	for c in cols:
+		var l := Componentes.celda(str(c[0]), int(c[1]), Tema.SUAVE, int(c[2]))
+		l.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+		dentro.add_child(l)
+	return fila
 
 
 ## Historial de NUESTROS partidos: la lista a la izquierda, el detalle del
@@ -5080,7 +5220,8 @@ const SECCIONES := [
 		["entrenamiento", "Entrenamiento"],
 		["cantera", "Cantera"], ["instalaciones", "Instalaciones"]]},
 	{"clave": "partido", "nombre": "Liga", "paneles": [
-		["tabla", "Tabla"], ["historial", "Historial"]]},
+		["tabla", "Tabla"], ["jugadores_liga", "Jugadores"],
+		["historial", "Historial"]]},
 	{"clave": "mercado", "nombre": "Mercado", "paneles": [
 		["mercado", "Mercado"], ["libres", "Libres"], ["prestamos", "Prestamos"]]},
 	{"clave": "mas", "nombre": "Mas", "paneles": [
@@ -5218,7 +5359,8 @@ func _mostrar_panel_de_seccion(clave: String) -> void:
 		"plantel": "_mostrar_plantel", "formacion": "_mostrar_formacion",
 		"entrenamiento": "_mostrar_entrenamiento",
 		"cantera": "_mostrar_cantera", "instalaciones": "_mostrar_instalaciones",
-		"tabla": "_mostrar_tabla", "historial": "_mostrar_historial_partidos",
+		"tabla": "_mostrar_tabla", "jugadores_liga": "_mostrar_jugadores_liga",
+		"historial": "_mostrar_historial_partidos",
 		"mercado": "_mostrar_mercado", "libres": "_mostrar_libres",
 		"prestamos": "_mostrar_prestamos", "economia": "_mostrar_economia",
 		"noticias": "_mostrar_noticias", "seleccion": "_mostrar_seleccion",

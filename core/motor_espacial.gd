@@ -497,6 +497,9 @@ static func crear_estado(home: Team, away: Team, rng: RandomNumberGenerator) -> 
 		"rng": rng,
 		"log": [],
 		"goles_log": [],
+		# {de, a, local} del último pase completado: de quién salió, a qué
+		# clave llegó y de qué equipo. Lo consume _asistente_de().
+		"ultimo_pase": {},
 		"eventos": [],
 		"fotogramas": [],
 		# Ver _accion: actos físicos del tick en curso, para la animación.
@@ -1767,6 +1770,19 @@ static func _festejar_gol(estado: Dictionary, saca_local: bool) -> void:
 	estado["quietos"] = int(round(TICKS_DETENIDO["gol"] * FRACCION_QUIETOS))
 
 
+## Quién le dio el último pase al que acaba de convertir, o -1 si la trajo
+## solo (gambeta, rebote, tiro libre que pateó él mismo). Pide que el
+## goleador sea EL MISMO que recibió ese pase: si la pelota rebotó y le
+## quedó a otro, el pase ya no fue la asistencia del gol.
+static func _asistente_de(estado: Dictionary, es_local: bool, clave_goleador: int) -> int:
+	var up: Dictionary = estado.get("ultimo_pase", {})
+	if up.is_empty():
+		return -1
+	if bool(up["local"]) != es_local or int(up["a"]) != clave_goleador:
+		return -1
+	return int(up["de"])
+
+
 ## Llegó: recién ahora se cuenta el gol, se reanuda o saca el arquero.
 static func _aplicar_remate(estado: Dictionary, datos: Dictionary) -> void:
 	if datos.is_empty():
@@ -1804,7 +1820,9 @@ static func _aplicar_remate(estado: Dictionary, datos: Dictionary) -> void:
 	var dist: float = float(datos.get("dist", 0.0))
 	if gol:
 		eq_a.goles += 1
-		estado["goles_log"].append({"minuto": minuto, "equipo": eq_a.nombre, "jugador_id": jugador.get("id", -1)})
+		estado["goles_log"].append({"minuto": minuto, "equipo": eq_a.nombre,
+			"jugador_id": jugador.get("id", -1),
+			"asistencia_id": _asistente_de(estado, es_local, int(datos["clave"]))})
 		if es_penal:
 			estado["log"].append("min %d - PENAL: gol de %s %s (%s)" % [
 				minuto, jugador.get("nombre", ""), jugador.get("apellido", ""), eq_a.nombre])
@@ -2702,6 +2720,20 @@ static func _gana_intercepcion(estado: Dictionary, clave_def: int, dist: float, 
 
 static func _entregar_pelota(estado: Dictionary, clave: int) -> void:
 	var pelota: Dictionary = estado["pelota"]
+	# Quién se la dio a quién: es todo lo que hace falta para saber si el
+	# gol que venga después tuvo asistencia. Se anota al RECIBIRLA y no al
+	# patearla, porque un pase que interceptan no le asiste a nadie. Vale
+	# igual para el centro cabeceado: el centro también entra por acá.
+	var receptor: Dictionary = estado["jugadores"][clave]
+	if bool(pelota.get("es_pase", false)) \
+			and bool(pelota.get("pasador_local", false)) == bool(receptor["equipo_local"]) \
+			and int(pelota.get("pasador_id", -1)) != int(receptor["jugador_id"]):
+		estado["ultimo_pase"] = {
+			"de": int(pelota["pasador_id"]), "a": clave,
+			"local": bool(receptor["equipo_local"]),
+		}
+	else:
+		estado["ultimo_pase"] = {}
 	pelota["poseedor_id"] = clave
 	pelota["en_vuelo"] = false
 	pelota["vel"] = Vector2.ZERO
@@ -3175,6 +3207,8 @@ static func _detener_juego(estado: Dictionary, pos: Vector2, ataca_local: bool,
 	pelota["altura_max"] = 0.0
 	pelota["z"] = 0.0
 	pelota.erase("pared_a")
+	# El juego se cortó: el pase de hace diez segundos ya no asiste nada.
+	estado["ultimo_pase"] = {}
 	_marcar_posiciones(estado, pos, ataca_local, ejecutor, tipo)
 	estado["balon_parado"] = {"tipo": tipo, "pos": pos, "ataca_local": ataca_local, "ejecutor": ejecutor}
 	estado["detenido"] = ticks + congelar

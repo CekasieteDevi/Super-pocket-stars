@@ -51,6 +51,42 @@ static func _elegir(jugadores: Array, rng: RandomNumberGenerator) -> Dictionary:
 	return jugadores[rng.randi() % jugadores.size()]
 
 
+## Parte de los goles no lleva asistencia: rebotes, jugadas individuales,
+## penales. La proporcion no se invento — sale medida del motor espacial,
+## que si sigue la pelota de pie en pie (tests/_diag_asistencias.gd): 74%
+## de los goles asistidos, que es tambien lo que da el futbol real.
+const GOLES_SIN_ASISTENCIA := 0.26
+
+
+## Quien le dio el ultimo pase al que acaba de convertir.
+##
+## Este motor no sigue la pelota: el pase, la gambeta y el tiro eligen
+## jugador por separado, asi que no hay un "ultimo que la toco" para leer.
+## Se reconstruye con los puestos que participan de la jugada de gol, y
+## pesado por `pases` para que el que arma sea el que asista — usar el
+## pase de salida en su lugar daba el 98% de las asistencias a MC y LAT,
+## sin un solo delantero ni extremo en la lista, que es exactamente al
+## reves de lo que mide el motor espacial.
+static func _asistente(equipo: Team, goleador_id: int, rng: RandomNumberGenerator) -> int:
+	if rng.randf() < GOLES_SIN_ASISTENCIA:
+		return -1
+	var candidatos := equipo.jugadores_disponibles_por_posiciones(["EXT", "DC", "MCO", "MC"])
+	var total := 0.0
+	for j in candidatos:
+		if int(j["id"]) != goleador_id:
+			total += float(j["atributos"]["pases"])
+	if total <= 0.0:
+		return -1
+	var tirada := rng.randf() * total
+	for j in candidatos:
+		if int(j["id"]) == goleador_id:
+			continue
+		tirada -= float(j["atributos"]["pases"])
+		if tirada <= 0.0:
+			return int(j["id"])
+	return -1
+
+
 ## §8.5: bloque A (forma del día ver Team.forma_partido, fuera de
 ## posición §8.4#4 y partidos seguidos §8.4#25), bloque B
 ## (equipo/racha/armonía/capitán/familiaridad táctica §7.4.5), bloque C (local + choque de estilos
@@ -296,7 +332,9 @@ static func _jugar_periodo(equipo_inicial: Team, home: Team, away: Team, ticks: 
 				var tiro := _resolver_tiro(posesion, rival, atacante, rng, con_log, log, eventos, minuto)
 				if tiro["gol"]:
 					posesion.goles += 1
-					goles_log.append({"minuto": minuto, "equipo": posesion.nombre, "jugador_id": tiro["goleador_id"]})
+					goles_log.append({"minuto": minuto, "equipo": posesion.nombre,
+						"jugador_id": tiro["goleador_id"],
+						"asistencia_id": _asistente(posesion, int(tiro["goleador_id"]), rng)})
 				posesion.racha = 0
 				posesion = rival
 				zona = "build"

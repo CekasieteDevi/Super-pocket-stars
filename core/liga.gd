@@ -24,6 +24,10 @@ var division: int = -1
 ## el resto del mercado.
 var agentes_libres: Array = []
 
+## Estadisticas individuales de la temporada (goleadores, asistencias,
+## vallas invictas, tarjetas) de TODA la liga. Ver core/estadisticas_liga.gd.
+var estadisticas: Dictionary = {}
+
 
 ## Guardado de partida — ver Team.guardar() para el detalle de por qué se
 ## puede guardar entero como JSON. fixture es una lista de [int,int]
@@ -36,6 +40,7 @@ func guardar() -> Dictionary:
 	return {
 		"equipos": equipos_datos, "tabla": tabla, "fixture": fixture,
 		"noticias": noticias, "agentes_libres": agentes_libres,
+		"estadisticas": estadisticas,
 	}
 
 
@@ -56,6 +61,7 @@ static func cargar(datos: Dictionary) -> Liga:
 	l.fixture = datos["fixture"]
 	l.noticias = datos.get("noticias", [])
 	l.agentes_libres = datos.get("agentes_libres", [])
+	l.estadisticas = EstadisticasLiga.cargar(datos.get("estadisticas", {}))
 	return l
 
 
@@ -220,6 +226,7 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 		_servir_suspensiones(away, suspendidos_previos_away)
 
 		_actualizar_tabla(home.nombre, away.nombre, r["goles_local"], r["goles_visitante"])
+		EstadisticasLiga.registrar_partido(estadisticas, home, away, r)
 		_actualizar_estado_jugadores(home, away, r)
 		resultados_texto.append("%s %d-%d %s" % [home.nombre, r["goles_local"], r["goles_visitante"], away.nombre])
 		if con_log:
@@ -280,7 +287,10 @@ func _resolver_forfeit(home: Team, away: Team, home_corto: bool, away_corto: boo
 		home.caja["mantenimiento"] -= MULTA_NO_PRESENTARSE
 		away.caja["mantenimiento"] -= MULTA_NO_PRESENTARSE
 		noticias.append("%s y %s no pudieron presentar %d disponibles cada uno: empate administrativo, ambos multados." % [home.nombre, away.nombre, MINIMO_DISPONIBLES])
-	return {"goles_local": gl, "goles_visitante": gv, "log": [], "goles_log": [], "eventos": []}
+	# `forfeit` lo mira EstadisticasLiga: un 0-3 administrativo no le da
+	# la valla invicta a un arquero que no jugo.
+	return {"goles_local": gl, "goles_visitante": gv, "log": [], "goles_log": [],
+		"eventos": [], "forfeit": true}
 
 
 ## Fase 5: §3 (ánimo según el resultado) y la fatiga acumulada que arranca
@@ -496,6 +506,9 @@ func _procesar_cantera(equipo: Team, rng: RandomNumberGenerator, es_protegido: b
 ## ascendidos/descendidos).
 func iniciar_temporada() -> void:
 	tabla.clear()
+	# Las individuales son DE LA TEMPORADA, igual que la tabla: arrancan
+	# de cero con el fixture nuevo.
+	estadisticas.clear()
 	for equipo in equipos:
 		tabla[equipo.nombre] = _fila_vacia()
 	fixture = generar_fixture_ida_vuelta(equipos.size())
