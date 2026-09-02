@@ -103,6 +103,20 @@ func jugar_siguiente_ronda(rng: RandomNumberGenerator) -> Array:
 	return resultados
 
 
+## El que perdio la final, por nombre. "" si la copa todavia no termino.
+## Lo necesita el premio al finalista: llegar a la final tambien paga.
+func finalista() -> String:
+	if campeon == null or historial.is_empty():
+		return ""
+	var final_: Array = historial[historial.size() - 1]
+	if final_.is_empty():
+		return ""
+	var partido: Dictionary = final_[0]
+	if str(partido["ganador"]) == str(partido["local"]):
+		return str(partido["visitante"])
+	return str(partido["local"])
+
+
 ## §10.5/§15 (Objetivos de directiva, ver core/objetivos.gd): cuántas
 ## rondas ganó este equipo en total en esta copa — 0 si perdió su primer
 ## partido, historial.size() si salió campeón. Un bye (ronda en la que no

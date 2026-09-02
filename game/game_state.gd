@@ -87,6 +87,9 @@ var copas_internacionales: Dictionary = {}
 ## Cuadro terminado del Rey y de la copa interna de la temporada pasada.
 ## Ver _guardar_copas_de_la_temporada.
 var copas_pasadas: Dictionary = {}
+## Todo lo que gano el club del jugador, en orden: [{temporada, titulo,
+## detalle, anio}]. Ver _anotar_en_la_vitrina.
+var vitrina: Array = []
 var noticias: Array = []
 var ultimo_informe_economico: Dictionary = {}  # ingresos/egresos/neto del ultimo cierre de temporada
 var ultima_posicion_final: Dictionary = {}  # {"posicion","total","division"} del cierre de temporada mas reciente
@@ -153,6 +156,7 @@ func partida_nueva(semilla: int = -1, nombre_club: String = "",
 	historial_partidos = []
 	copas_internacionales = {}
 	copas_pasadas = {}
+	vitrina = []
 	ultimo_resultado = {}
 	ultimo_log = []
 	ultimos_eventos = []
@@ -331,6 +335,60 @@ func _guardar_copas_de_la_temporada() -> void:
 			"rondas": interna.historial,
 			"campeon": interna.campeon.nombre if interna.campeon != null else "",
 		}
+
+
+## Le paga al campeon y al finalista de una copa. `factor` es 1.0 para las
+## que no escalan con la division (el Rey y las internacionales, que son
+## la misma competencia para todos) y el factor de la division para la
+## copa interna. Devuelve lo que cobro el campeon, para la noticia.
+##
+## No va a la caja: la caja se REINICIA en el cierre de temporada, y las
+## copas terminan justo ahi. Se acumula en Team.premios_copa y lo cobra
+## Economia.procesar_temporada como un ingreso mas de la temporada.
+func _pagar_premio_de_copa(copa: Copa, premios: Dictionary, factor: float) -> float:
+	if copa == null or copa.campeon == null:
+		return 0.0
+	var al_campeon: float = float(premios[1]) * factor
+	copa.campeon.premios_copa += al_campeon
+	var perdedor := _club_por_nombre(copa.finalista())
+	if perdedor != null:
+		perdedor.premios_copa += float(premios[2]) * factor
+	return al_campeon
+
+
+## Los titulos que ganaste esta temporada. Va al cerrarla, con las copas
+## ya terminadas y ANTES de que los ascensos muevan de division: el titulo
+## se gano en la division en la que se jugo.
+##
+## Se guarda el titulo, no el objeto: dentro de tres temporadas la copa,
+## la liga y hasta el plantel van a ser otros, y lo unico que sigue
+## valiendo es la linea que dice que lo ganaste.
+func _anotar_en_la_vitrina(posicion_final: int, internacional: Dictionary) -> void:
+	var division := division_jugador + 1
+	if posicion_final == 1:
+		_sumar_titulo("Liga", "División %d" % division)
+	if division_jugador < copas_division.size():
+		var interna: Copa = copas_division[division_jugador]
+		if interna.campeon == equipo_jugador:
+			_sumar_titulo("Copa de división", "División %d" % division)
+	if copa_nacional != null and copa_nacional.campeon == equipo_jugador:
+		_sumar_titulo("Copa del Rey", "las diez divisiones")
+	for clave in ["campeones", "guerreros", "emergentes"]:
+		if not internacional.has(clave):
+			continue
+		if internacional[clave]["campeon"] == equipo_jugador:
+			_sumar_titulo("Copa de %s" % clave.capitalize(), "internacional")
+
+
+func _sumar_titulo(titulo: String, detalle: String) -> void:
+	vitrina.append({
+		"temporada": temporada_actual, "titulo": titulo, "detalle": detalle,
+		# El año del calendario: "temporada 4" no le dice nada a nadie
+		# dentro de tres partidas, la fecha si.
+		"anio": int(Calendario.fecha(dia_absoluto)["year"]),
+	})
+	_agregar_noticia("VITRINA: %s gana %s (%s)." % [
+		equipo_jugador.nombre, titulo, detalle], "campeones")
 
 
 ## Quien se rompio en la fecha, con que y por cuanto tiempo. Va al feed
@@ -611,14 +669,21 @@ func _jugar_ronda_de_copas() -> void:
 	if toca_nacional and copa_nacional != null and copa_nacional.campeon == null:
 		copa_nacional.jugar_siguiente_ronda(rng)
 		if copa_nacional.campeon != null:
-			_agregar_noticia("COPA DEL REY: campeón %s." % copa_nacional.campeon.nombre, "campeones")
+			var plata := _pagar_premio_de_copa(copa_nacional, Economia.PREMIO_COPA_REY, 1.0)
+			_agregar_noticia("COPA DEL REY: campeón %s (%s)." % [
+				copa_nacional.campeon.nombre, Economia.formato_dinero(plata)], "campeones")
 		return
 	for i in range(copas_division.size()):
 		var c: Copa = copas_division[i]
 		if c.campeon == null:
 			c.jugar_siguiente_ronda(rng)
 			if c.campeon != null:
-				_agregar_noticia("COPA DIVISIÓN %d: campeón %s." % [i + 1, c.campeon.nombre], "campeones")
+				# La copa de division SI escala con la division: es una
+				# competencia de esa division y su plata vale lo que vale ahi.
+				var plata := _pagar_premio_de_copa(c, Economia.PREMIO_COPA_DIVISION,
+					Economia.factor_division(i))
+				_agregar_noticia("COPA DIVISIÓN %d: campeón %s (%s)." % [
+					i + 1, c.campeon.nombre, Economia.formato_dinero(plata)], "campeones")
 
 
 ## Copas + internacional con la temporada recién jugada, después ascensos/
@@ -655,7 +720,12 @@ func _cerrar_temporada() -> void:
 	for copa_nombre in ["campeones", "guerreros", "emergentes"]:
 		var campeon: Team = resultado_internacional[copa_nombre]["campeon"]
 		if campeon != null:
-			_agregar_noticia("INTERNACIONAL (%s): campeón %s." % [copa_nombre.capitalize(), campeon.nombre], "campeones")
+			var plata := _pagar_premio_de_copa(
+				resultado_internacional[copa_nombre]["knockout"],
+				Economia.PREMIO_COPA_INTERNACIONAL, 1.0)
+			_agregar_noticia("INTERNACIONAL (%s): campeón %s (%s)." % [
+				copa_nombre.capitalize(), campeon.nombre,
+				Economia.formato_dinero(plata)], "campeones")
 
 	# division_jugador todavia apunta a la division donde jugo esta
 	# temporada — fin_de_temporada() es lo que procesa cantera (necesario
@@ -748,6 +818,7 @@ func _cerrar_temporada() -> void:
 	# unico que tiene campeon— no se llegaba a ver nunca. Se guarda el de
 	# la que a esta altura ya se jugo entera.
 	_guardar_copas_de_la_temporada()
+	_anotar_en_la_vitrina(posicion_final, resultado_internacional)
 	# Cuadros nuevos con los equipos YA movidos de división.
 	_armar_copas()
 
@@ -1191,6 +1262,7 @@ func guardar_partida() -> void:
 		"historial_partidos": historial_partidos,
 		"copas_internacionales": copas_internacionales,
 		"copas_pasadas": copas_pasadas,
+		"vitrina": vitrina,
 		"noticias": noticias,
 		"ultimo_informe_economico": ultimo_informe_economico,
 		"ultima_posicion_final": ultima_posicion_final,
@@ -1270,6 +1342,7 @@ func cargar_partida() -> bool:
 	historial_partidos = datos.get("historial_partidos", [])
 	copas_internacionales = datos.get("copas_internacionales", {})
 	copas_pasadas = datos.get("copas_pasadas", {})
+	vitrina = datos.get("vitrina", [])
 	ultimo_informe_economico = datos["ultimo_informe_economico"]
 	ultima_posicion_final = datos["ultima_posicion_final"]
 	juego_terminado = datos.get("juego_terminado", false)

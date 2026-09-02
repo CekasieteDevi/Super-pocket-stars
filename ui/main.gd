@@ -54,6 +54,7 @@ var contenedor_economia: VBoxContainer
 var lista_cantera: RichTextLabel
 var contenedor_cantera_botones: VBoxContainer
 var contenedor_noticias: VBoxContainer
+var contenedor_vitrina: VBoxContainer
 var contenedor_copa: VBoxContainer
 var label_copa_titulo: Label
 var label_copa_camino: Label
@@ -138,6 +139,7 @@ func _ready() -> void:
 	_construir_panel_jugadores_liga(contenedor)
 	_construir_panel_historial(contenedor)
 	_construir_panel_copas(contenedor)
+	_construir_panel_vitrina(contenedor)
 	_construir_panel_entrenamiento(contenedor)
 	_construir_panel_partido_animado(contenedor)
 	_construir_panel_economia(contenedor)
@@ -1938,13 +1940,18 @@ func _refrescar_economia() -> void:
 	var informe: Dictionary = GameState.ultimo_informe_economico
 	if informe.is_empty():
 		var vacio := Label.new()
-		vacio.text = "Todavia no cerraste una temporada. La plata entra al terminar la fecha 38: entradas, sponsor y premio segun donde termines en la tabla."
+		vacio.text = "Todavia no cerraste una temporada. La plata entra al terminar la fecha 38: entradas, sponsor, premio segun donde termines en la tabla y lo que hayas ganado en las copas."
 		vacio.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		vacio.add_theme_color_override("font_color", Tema.SUAVE)
 		caja_balance.add_child(vacio)
 	else:
 		caja_balance.add_child(_linea_balance(
 			"Ingresos", informe["ingresos"], Tema.VERDE, 0, true))
+		# Solo si hubo: una linea en cero todas las temporadas es ruido.
+		var premios: float = float(informe.get("premios_copa", 0.0))
+		if premios > 0.0:
+			caja_balance.add_child(_linea_balance(
+				"de los cuales, premios de copa", premios, Tema.AMBAR, 24))
 		caja_balance.add_child(_linea_balance(
 			"Egresos", -absf(informe["egresos"]), Tema.ROJO, 0, true))
 		caja_balance.add_child(_linea_balance(
@@ -4505,6 +4512,110 @@ func _on_promover_juvenil(id: int) -> void:
 	_refrescar_plantel()
 
 
+## LA VITRINA: todo lo que ganó el club, arriba el resumen y abajo el
+## detalle temporada por temporada.
+##
+## El feed de noticias cuenta cada título el día que pasa y después lo
+## entierra bajo doscientas noticias más; la tabla y el cuadro solo saben
+## de la temporada en curso. Sin esto no había ningún lado donde ver que
+## ganaste algo hace cuatro años.
+const ORDEN_VITRINA := ["Copa de Campeones", "Copa de Guerreros",
+	"Copa de Emergentes", "Copa del Rey", "Liga", "Copa de división"]
+
+
+func _construir_panel_vitrina(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	padre.add_child(panel)
+	paneles["vitrina"] = panel
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+	contenedor_vitrina = VBoxContainer.new()
+	contenedor_vitrina.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	contenedor_vitrina.add_theme_constant_override("separation", 10)
+	scroll.add_child(contenedor_vitrina)
+
+
+func _mostrar_vitrina() -> void:
+	_ocultar_todos()
+	paneles["vitrina"].visible = true
+	_refrescar_vitrina()
+
+
+func _refrescar_vitrina() -> void:
+	for hijo in contenedor_vitrina.get_children():
+		hijo.queue_free()
+
+	var lista: Array = GameState.vitrina
+	if lista.is_empty():
+		var vacio := Componentes.tarjeta()
+		var l := Label.new()
+		l.text = "La vitrina está vacía. Se llena sola: acá van las ligas, las copas de división, la Copa del Rey y las internacionales que gane %s." % GameState.equipo_jugador.nombre
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.add_theme_color_override("font_color", Tema.SUAVE)
+		vacio.add_child(l)
+		contenedor_vitrina.add_child(vacio)
+		return
+
+	# El resumen: cuántos de cada uno. Es lo que se mira primero — "tres
+	# ligas y una copa" se lee de un vistazo, una lista de doce líneas no.
+	var cuentas := {}
+	for t in lista:
+		var titulo := str(t["titulo"])
+		cuentas[titulo] = int(cuentas.get(titulo, 0)) + 1
+
+	contenedor_vitrina.add_child(Tema.etiqueta_seccion(
+		"%d título%s en total" % [lista.size(), "" if lista.size() == 1 else "s"]))
+	var fila := HBoxContainer.new()
+	fila.add_theme_constant_override("separation", 10)
+	contenedor_vitrina.add_child(fila)
+	# En el orden de importancia y no en el que se ganaron: la vitrina de
+	# un club se lee de arriba para abajo, no por fecha.
+	for titulo in ORDEN_VITRINA:
+		if cuentas.has(titulo):
+			fila.add_child(_caja_numero(titulo, str(int(cuentas[titulo])), Tema.AMBAR))
+	for titulo in cuentas:
+		if not ORDEN_VITRINA.has(titulo):
+			fila.add_child(_caja_numero(titulo, str(int(cuentas[titulo])), Tema.AMBAR))
+
+	contenedor_vitrina.add_child(Tema.etiqueta_seccion("Uno por uno"))
+	# Del más reciente al más viejo, que es como se pregunta "¿qué ganamos
+	# el año pasado?".
+	for i in range(lista.size() - 1, -1, -1):
+		contenedor_vitrina.add_child(_fila_de_vitrina(lista[i]))
+
+
+func _fila_de_vitrina(t: Dictionary) -> Control:
+	var tarjeta := Componentes.tarjeta(Tema.AMBAR)
+	var caja := HBoxContainer.new()
+	caja.add_theme_constant_override("separation", 14)
+	tarjeta.add_child(caja)
+
+	var anio := Label.new()
+	anio.text = str(int(t.get("anio", 0)))
+	anio.custom_minimum_size = Vector2(76, 0)
+	Tema.numero(anio, Tema.TAM_BASE, Tema.SUAVE)
+	caja.add_child(anio)
+
+	var titulo := Label.new()
+	titulo.text = str(t["titulo"])
+	titulo.custom_minimum_size = Vector2(260, 0)
+	Tema.numero(titulo, Tema.TAM_BASE, Tema.AMBAR)
+	caja.add_child(titulo)
+
+	var detalle := Label.new()
+	detalle.text = "%s  ·  temporada %d" % [str(t.get("detalle", "")), int(t.get("temporada", 0))]
+	detalle.add_theme_color_override("font_color", Tema.SUAVE)
+	detalle.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	caja.add_child(detalle)
+	return tarjeta
+
+
 ## La pantalla de COPAS: el cuadro de cada una, como en un cuadro de
 ## verdad — cada cruce alineado entre los dos de los que sale.
 ##
@@ -4615,7 +4726,7 @@ func _pintar_copa_viva(copa: Copa, clave_pasada: String, titulo: String,
 		return
 	if copa == null:
 		label_copa_titulo.text = titulo
-		contenedor_copa.add_child(_texto_suave("Esta copa todavía no arrancó."))
+		contenedor_copa.add_child(_parrafo_de_copa("Esta copa todavía no arrancó."))
 		return
 	label_copa_titulo.text = titulo
 	var mio: String = GameState.equipo_jugador.nombre
@@ -4634,7 +4745,7 @@ func _pintar_copa_viva(copa: Copa, clave_pasada: String, titulo: String,
 		label_copa_camino.add_theme_color_override("font_color", Tema.ROJO)
 
 	if copa.historial.is_empty() and copa.partidos_pendientes.is_empty():
-		contenedor_copa.add_child(_texto_suave("Esta copa todavía no arrancó."))
+		contenedor_copa.add_child(_parrafo_de_copa("Esta copa todavía no arrancó."))
 		return
 	_pintar_cuadro(CuadroCopa.desde_copa(copa), mio)
 
@@ -4666,7 +4777,7 @@ func _pintar_copa_internacional(clave: String) -> void:
 	var guardadas: Dictionary = GameState.copas_internacionales
 	if not guardadas.has(clave):
 		label_copa_titulo.text = "Copa de %s" % clave.capitalize()
-		contenedor_copa.add_child(_texto_suave(
+		contenedor_copa.add_child(_parrafo_de_copa(
 			"Las copas internacionales se juegan enteras al cerrar la temporada, "
 			+ "con los cupos que reparte el coeficiente de cada país. Todavía no "
 			+ "se jugó ninguna: vas a ver el cuadro cuando termine este año."))
@@ -4823,6 +4934,17 @@ func _celda_de_cruce(cruce: Dictionary, alto: int, mio: String) -> Control:
 	elif not jugado:
 		caja.add_child(_texto_mini("por jugarse"))
 	return centro
+
+
+## Un parrafo adentro del scroll del cuadro. Necesita ancho PROPIO: ese
+## scroll tambien scrollea a lo ancho, asi que el ancho disponible que les
+## pasa a sus hijos es cero y una etiqueta con autowrap se parte en una
+## letra por linea. Se veia en el mensaje de "todavia no se jugo ninguna
+## copa internacional", escrito en vertical.
+func _parrafo_de_copa(texto: String) -> Label:
+	var l := _texto_suave(texto)
+	l.custom_minimum_size = Vector2(880, 0)
+	return l
 
 
 func _texto_mini(texto: String) -> Label:
@@ -5931,7 +6053,7 @@ const SECCIONES := [
 	{"clave": "mercado", "nombre": "Mercado", "paneles": [
 		["mercado", "Mercado"], ["libres", "Libres"], ["prestamos", "Prestamos"]]},
 	{"clave": "mas", "nombre": "Mas", "paneles": [
-		["noticias", "Noticias"],
+		["noticias", "Noticias"], ["vitrina", "Vitrina"],
 		["seleccion", "Seleccion"], ["partida", "Partida"]]},
 ]
 
@@ -6073,7 +6195,7 @@ func _mostrar_panel_de_seccion(clave: String) -> void:
 		"copa_emergentes": "_mostrar_copa_emergentes",
 		"mercado": "_mostrar_mercado", "libres": "_mostrar_libres",
 		"prestamos": "_mostrar_prestamos", "economia": "_mostrar_economia",
-		"noticias": "_mostrar_noticias", "seleccion": "_mostrar_seleccion",
+		"noticias": "_mostrar_noticias", "vitrina": "_mostrar_vitrina", "seleccion": "_mostrar_seleccion",
 		"partida": "_mostrar_partida_panel",
 	}
 	if metodos.has(clave):

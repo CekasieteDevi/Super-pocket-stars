@@ -44,6 +44,27 @@ const MANTENIMIENTO_FIJO := 25000.0
 const RESERVA_MANTENIMIENTO := 12500.0
 const PREMIO_POR_POSICION := {1: 50000.0, 2: 30000.0, 3: 15000.0}
 
+## Premios de copa. 1 = campeon, 2 = finalista.
+##
+## La copa de DIVISION escala con la division, igual que el premio de
+## liga: es una competencia de esa division y su plata tiene que valer lo
+## que vale ahi. Con esta base paga el 40% de lo que paga salir campeon
+## —cinco partidos contra treinta y ocho— en las diez divisiones.
+const PREMIO_COPA_DIVISION := {1: 20000.0, 2: 8000.0}
+
+## La Copa del Rey NO escala: la juegan los 200 clubes de las diez
+## divisiones, es la MISMA competencia para todos. Si escalara, ganarla
+## desde decima —la hazaña mas grande que se puede hacer en el juego,
+## ganarle a los 199— pagaria $8.600 y ganarla desde primera pagaria
+## $1,76M, o sea al reves. Fijo, son casi cinco temporadas de ingresos
+## para un club de decima y un extra lindo para uno de primera.
+const PREMIO_COPA_REY := {1: 250000.0, 2: 100000.0}
+
+## Las internacionales tampoco escalan, por lo mismo, y pagan mas porque
+## se juegan contra los mejores del continente. Solo llegan clubes de
+## primera, donde el titulo de liga paga $4,4M: esto es un cuarto de eso.
+const PREMIO_COPA_INTERNACIONAL := {1: 1000000.0, 2: 400000.0}
+
 ## Cuanto multiplica los ingresos la CATEGORIA del club (indice 0 =
 ## primera). Aforo, sponsors y derechos de TV no son iguales en primera
 ## que en decima, pero AFORO_BASE, SPONSOR_BASE y PRECIO_ENTRADA son
@@ -129,7 +150,12 @@ static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos:
 	var ingreso_entradas: float = PARTIDOS_DE_LOCAL * asistencia * PRECIO_ENTRADA
 	var ingreso_sponsor: float = SPONSOR_BASE + (total_equipos - posicion_tabla) * 1000.0
 	var premio: float = PREMIO_POR_POSICION.get(posicion_tabla, 0.0)
-	var ingresos: float = (ingreso_entradas + ingreso_sponsor + premio) * factor_division(division)
+	# Los de copa entran YA calculados (ver GameState._pagar_premio_de_copa):
+	# el de division ya trae aplicado el factor y los de Rey/internacional
+	# no lo llevan a proposito, asi que van afuera del multiplicador.
+	var premios_copa: float = equipo.premios_copa
+	var ingresos: float = (ingreso_entradas + ingreso_sponsor + premio) 		* factor_division(division) + premios_copa
+	equipo.premios_copa = 0.0
 
 	var total_sueldos := 0.0
 	for id in equipo.sueldos:
@@ -176,6 +202,7 @@ static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos:
 
 	return {
 		"ingresos": ingresos, "egresos": egresos, "neto": neto,
+		"premios_copa": premios_copa,
 		"sueldos": total_sueldos, "mantenimiento": MANTENIMIENTO_FIJO,
 		"caja_total": estado["caja_total"], "valor_plantel": estado["valor_plantel"], "quebrado": estado["quebrado"],
 	}
