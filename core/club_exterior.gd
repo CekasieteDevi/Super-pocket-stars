@@ -12,10 +12,25 @@ extends RefCounted
 
 var nombre: String
 var pais: String
-var fuerza_equipo: float  # 0-100, con deriva lenta temporada a temporada
+## La MEDIA que tiene que dar su plantel, en la misma escala que las
+## divisiones de la piramide (ver NivelDivision): 86 es una primera
+## division como la de acá, 62 es una cuarta. Deriva despacio de una
+## temporada a la otra.
+##
+## Antes era un numero suelto de 0 a 100 que se pasaba como POTENCIAL a
+## Team.generar, con la realizacion por defecto. Eso lo dejaba muy por
+## debajo de lo que el numero decia: un club "de 75" terminaba con media
+## ~56, contra los 86 de la primera division uruguaya, y los cruces
+## internacionales daban 18-0. NivelDivision llego despues que esto y
+## nunca se conecto — ver MEDIA_MIN/MEDIA_MAX en Confederacion.
+var fuerza_equipo: float
 var id_base: int  # rango de ids reservado para cuando se materialice
 
 var _equipo: Team = null  # cache: null hasta el primer cruce
+
+## Version de la escala de fuerza_equipo. 1 = la vieja (0-100 usado como
+## potencial), 2 = media de NivelDivision. Ver cargar().
+const ESCALA := 2
 
 
 static func generar(nombre: String, pais: String, fuerza_equipo: float, id_base: int) -> ClubExterior:
@@ -31,7 +46,10 @@ static func generar(nombre: String, pais: String, fuerza_equipo: float, id_base:
 ## "generación perezosa"), _equipo sigue null y no hay plantel que guardar;
 ## se recupera igual de perezoso la próxima vez que se cruce.
 func guardar() -> Dictionary:
-	var datos := {"nombre": nombre, "pais": pais, "fuerza_equipo": fuerza_equipo, "id_base": id_base}
+	# `escala` marca que fuerza_equipo esta en la escala de medias de
+	# NivelDivision. Sin la marca, cargar() sabe que viene de la vieja.
+	var datos := {"nombre": nombre, "pais": pais, "fuerza_equipo": fuerza_equipo,
+		"id_base": id_base, "escala": ESCALA}
 	if _equipo != null:
 		datos["equipo"] = _equipo.guardar()
 	return datos
@@ -41,9 +59,21 @@ static func cargar(datos: Dictionary) -> ClubExterior:
 	var c := ClubExterior.new()
 	c.nombre = datos["nombre"]
 	c.pais = datos["pais"]
-	c.fuerza_equipo = datos["fuerza_equipo"]
 	c.id_base = datos["id_base"]
-	if datos.has("equipo"):
+	var vieja: bool = int(datos.get("escala", 1)) < ESCALA
+	c.fuerza_equipo = float(datos["fuerza_equipo"])
+	if vieja:
+		# Partida guardada con la escala vieja (0-100 usado como
+		# potencial): se lleva a la banda nueva de medias. El plantel que
+		# hubiera quedado cacheado se tira — se genero con el nivel viejo
+		# y nunca mas se iba a corregir solo. Se puede tirar sin miedo:
+		# ningun club del exterior es tuyo ni te debe nada, y las copas
+		# internacionales se juegan enteras de un saque al cerrar la
+		# temporada, asi que nunca hay una a medias.
+		c.fuerza_equipo = clamp(
+			remap(c.fuerza_equipo, 20.0, 95.0, Confederacion.MEDIA_MIN, Confederacion.MEDIA_MAX),
+			Confederacion.MEDIA_MIN, Confederacion.MEDIA_MAX)
+	elif datos.has("equipo"):
 		c._equipo = Team.cargar(datos["equipo"])
 	return c
 
@@ -51,7 +81,13 @@ static func cargar(datos: Dictionary) -> ClubExterior:
 ## Devuelve el Team materializado, generándolo la primera vez que se pide.
 func obtener_equipo(rng: RandomNumberGenerator) -> Team:
 	if _equipo == null:
-		_equipo = Team.generar(nombre, rng, id_base, int(round(fuerza_equipo)), pais)
+		# Se genera con el MISMO molde que un club de la piramide: el nivel
+		# de division que da esa media, con su potencial y su realizacion.
+		# Sin la realizacion el plantel sale crudo y la media queda muy por
+		# debajo del numero que pide fuerza_equipo.
+		var nivel := NivelDivision.division_para_media(fuerza_equipo)
+		_equipo = Team.generar(nombre, rng, id_base, NivelDivision.potencial(nivel),
+			pais, NivelDivision.realizacion(nivel))
 	return _equipo
 
 
@@ -62,4 +98,5 @@ func obtener_equipo(rng: RandomNumberGenerator) -> Team:
 ## tiempo — acá solo se mueve el número de referencia para el próximo
 ## cruce que todavía no generó plantel.
 func derivar_fuerza(rng: RandomNumberGenerator) -> void:
-	fuerza_equipo = clamp(fuerza_equipo + rng.randf_range(-3.0, 3.0), 20.0, 95.0)
+	fuerza_equipo = clamp(fuerza_equipo + rng.randf_range(-2.0, 2.0),
+		Confederacion.MEDIA_MIN, Confederacion.MEDIA_MAX)

@@ -83,7 +83,7 @@ static func _generar_copa(equipo: Team) -> Dictionary:
 		rondas = 1
 	return {
 		"categoria": "copa",
-		"descripcion": "Copa Nacional: ganar al menos %d ronda%s." % [rondas, "" if rondas == 1 else "s"],
+		"descripcion": "Copa del Rey: ganar al menos %d ronda%s." % [rondas, "" if rondas == 1 else "s"],
 		"rondas_minimas": rondas,
 	}
 

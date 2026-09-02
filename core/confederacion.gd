@@ -28,6 +28,19 @@ const PAISES_INICIALES := [
 ]
 
 const CLUBES_POR_PAIS := 10
+
+## Banda de MEDIA de un club del exterior, en la escala de NivelDivision
+## (86 = primera division de acá, 62 = cuarta).
+##
+## Los diez clubes de cada pais son su primera division, asi que ninguno
+## puede salir de sexta: el peor pais de la confederacion tiene el nivel
+## de una cuarta de acá, no el de una décima. Con la escala vieja
+## —fuerza_equipo iba de 20 a 95 y se usaba como potencial, sin
+## realizacion— convivian en la misma copa equipos de media 37 y de media
+## 88 y salian resultados de 18-0, que es lo que estas constantes vienen a
+## arreglar.
+const MEDIA_MIN := 60.0
+const MEDIA_MAX := 86.0
 const LIMITE_TIER_ALTO := 6
 
 var paises: Array = []  # [{"nombre", "coeficiente_score", "clubes":Array[ClubExterior], "es_uruguay":bool}]
@@ -49,9 +62,10 @@ static func generar(piramide: Piramide, rng: RandomNumberGenerator) -> Confedera
 			"es_uruguay": es_uruguay,
 		}
 		if not es_uruguay:
-			var fuerza_base: float = lerp(75.0, 45.0, float(i) / 10.0)
+			var fuerza_base: float = lerp(MEDIA_MAX, MEDIA_MIN + 6.0, float(i) / 11.0)
 			for j in range(CLUBES_POR_PAIS):
-				var fuerza: float = clamp(fuerza_base + rng.randf_range(-15.0, 15.0), 20.0, 95.0)
+				var fuerza: float = clamp(
+					fuerza_base + rng.randf_range(-6.0, 6.0), MEDIA_MIN, MEDIA_MAX)
 				var nombre_club := GeneradorNombresInternacional.nombre_club(nombre_pais, rng, nombres_usados)
 				var club := ClubExterior.generar(nombre_club, nombre_pais, fuerza, siguiente_id)
 				siguiente_id += Team.RANGO_IDS_RESERVADO

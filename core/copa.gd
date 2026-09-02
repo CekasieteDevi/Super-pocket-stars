@@ -7,6 +7,10 @@ extends RefCounted
 ## potencia de 2, la cantidad sobrante juega una ronda previa y el resto
 ## pasa con bye, para que de ahí en adelante el cuadro quede parejo.
 ##
+## El CUADRO es fijo: se sortea una sola vez, al iniciar, y de ahí en
+## adelante cada equipo se enfrenta al ganador del cruce de al lado hasta
+## que quedan dos. Ver _intercalar.
+##
 ## Empates: si 90' terminan igualados se juega el alargue (2x15',
 ## MatchEngine.simular_alargue) y si sigue empatado se define por penales
 ## (Penales.definir) — partido único a eliminación directa real (§8.7).
@@ -87,14 +91,14 @@ func jugar_siguiente_ronda(rng: RandomNumberGenerator) -> Array:
 		away.en_copa = false
 	historial.append(resultados)
 
-	var siguiente_pool: Array = ganadores + equipos_con_bye
+	var siguiente_pool: Array = _intercalar(ganadores, equipos_con_bye)
 	equipos_con_bye = []
 
 	if siguiente_pool.size() == 1:
 		campeon = siguiente_pool[0]
 		partidos_pendientes = []
 	else:
-		partidos_pendientes = _armar_pares(_mezclar(siguiente_pool, rng))
+		partidos_pendientes = _armar_pares(siguiente_pool)
 
 	return resultados
 
@@ -113,6 +117,38 @@ func rondas_ganadas(equipo: Team) -> int:
 					rondas += 1
 				break
 	return rondas
+
+
+## El pool de la ronda que viene, en el ORDEN DEL CUADRO.
+##
+## El sorteo se hace UNA sola vez, en iniciar(): de ahi en adelante el
+## ganador de cada cruce ya sabe con quien se juega la ronda siguiente —el
+## ganador del cruce de al lado— como en cualquier cuadro de copa. Antes
+## se volvia a sortear despues de cada ronda, asi que el cuadro no existia
+## como tal: cada ronda era un sorteo nuevo entre los que quedaban.
+##
+## Los que pasaron sin jugar se intercalan con los ganadores en vez de ir
+## todos juntos al final: asi al que le toco bye le toca despues un equipo
+## que SI jugo, que es como se arma una ronda previa de verdad. Cuando hay
+## mas byes que ganadores, los que sobran se cruzan entre ellos.
+static func _intercalar(ganadores: Array, con_bye: Array) -> Array:
+	if con_bye.is_empty():
+		return ganadores
+	var salida := []
+	var i := 0
+	var j := 0
+	while i < con_bye.size() and j < ganadores.size():
+		salida.append(con_bye[i])
+		salida.append(ganadores[j])
+		i += 1
+		j += 1
+	while i < con_bye.size():
+		salida.append(con_bye[i])
+		i += 1
+	while j < ganadores.size():
+		salida.append(ganadores[j])
+		j += 1
+	return salida
 
 
 static func _armar_pares(equipos: Array) -> Array:

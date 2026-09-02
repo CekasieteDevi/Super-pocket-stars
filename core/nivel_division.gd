@@ -31,17 +31,20 @@ extends RefCounted
 ## Índice 0 = primera división. Media del once que da cada fila, medida
 ## con tests/_diag_gradiente.gd — si se tocan estos números hay que
 ## volver a correrlo, no estimarlos.
+## `media` es la que da esa fila, medida — no una estimacion. La necesita
+## quien tiene una media objetivo y quiere el nivel que la produce (los
+## clubes del exterior, ver ClubExterior).
 const NIVELES := [
-	{"potencial": 97, "realizacion": Vector2(0.87, 0.99)},  # media ~86
-	{"potencial": 93, "realizacion": Vector2(0.81, 0.96)},  # media ~80
-	{"potencial": 86, "realizacion": Vector2(0.77, 0.93)},  # media ~74
-	{"potencial": 82, "realizacion": Vector2(0.73, 0.92)},  # media ~68
-	{"potencial": 79, "realizacion": Vector2(0.68, 0.90)},  # media ~62
-	{"potencial": 74, "realizacion": Vector2(0.64, 0.88)},  # media ~56
-	{"potencial": 69, "realizacion": Vector2(0.61, 0.86)},  # media ~51
-	{"potencial": 65, "realizacion": Vector2(0.58, 0.84)},  # media ~46
-	{"potencial": 60, "realizacion": Vector2(0.56, 0.82)},  # media ~41
-	{"potencial": 55, "realizacion": Vector2(0.55, 0.80)},  # media ~37
+	{"potencial": 97, "realizacion": Vector2(0.87, 0.99), "media": 86},
+	{"potencial": 93, "realizacion": Vector2(0.81, 0.96), "media": 80},
+	{"potencial": 86, "realizacion": Vector2(0.77, 0.93), "media": 74},
+	{"potencial": 82, "realizacion": Vector2(0.73, 0.92), "media": 68},
+	{"potencial": 79, "realizacion": Vector2(0.68, 0.90), "media": 62},
+	{"potencial": 74, "realizacion": Vector2(0.64, 0.88), "media": 56},
+	{"potencial": 69, "realizacion": Vector2(0.61, 0.86), "media": 51},
+	{"potencial": 65, "realizacion": Vector2(0.58, 0.84), "media": 46},
+	{"potencial": 60, "realizacion": Vector2(0.56, 0.82), "media": 41},
+	{"potencial": 55, "realizacion": Vector2(0.55, 0.80), "media": 37},
 ]
 
 ## Cuánto del techo realizado trae un suplente respecto de un titular de
@@ -70,3 +73,24 @@ static func realizacion(division: int) -> Vector2:
 ## La misma banda, achicada, para el banco.
 static func realizacion_suplente(division: int) -> Vector2:
 	return realizacion(division) * FACTOR_SUPLENTE
+
+
+## La division cuyo plantel da esta media. Es la inversa de la tabla: se
+## usa para generar un club que no esta en la piramide —uno del exterior—
+## a un nivel comparable con las divisiones de acá, en vez de inventarle
+## una escala propia que despues no se pueda comparar con nada.
+static func division_para_media(media: float) -> int:
+	var mejor := 0
+	var mejor_dif := 999.0
+	for d in range(NIVELES.size()):
+		var dif: float = absf(float(NIVELES[d]["media"]) - media)
+		if dif < mejor_dif:
+			mejor_dif = dif
+			mejor = d
+	return mejor
+
+
+## La media que da una division, para poder comparar un club del exterior
+## con uno de la piramide sin generarle el plantel.
+static func media_de(division: int) -> float:
+	return float(_fila(division)["media"])

@@ -80,6 +80,13 @@ const MAX_HISTORIAL_PARTIDOS := 120
 ## entre fechas de liga (ver _jugar_ronda_de_copas).
 var copa_nacional: Copa = null
 var copas_division: Array = []
+## Resumen de las tres copas internacionales de la ULTIMA temporada
+## cerrada: {"temporada": int, "campeones": {...}, ...}. Ver
+## _guardar_copas_internacionales. Vacio hasta que se cierre la primera.
+var copas_internacionales: Dictionary = {}
+## Cuadro terminado del Rey y de la copa interna de la temporada pasada.
+## Ver _guardar_copas_de_la_temporada.
+var copas_pasadas: Dictionary = {}
 var noticias: Array = []
 var ultimo_informe_economico: Dictionary = {}  # ingresos/egresos/neto del ultimo cierre de temporada
 var ultima_posicion_final: Dictionary = {}  # {"posicion","total","division"} del cierre de temporada mas reciente
@@ -144,6 +151,8 @@ func partida_nueva(semilla: int = -1, nombre_club: String = "",
 	dia_proximo_partido = 0
 	dia_proxima_copa = -1
 	historial_partidos = []
+	copas_internacionales = {}
+	copas_pasadas = {}
 	ultimo_resultado = {}
 	ultimo_log = []
 	ultimos_eventos = []
@@ -203,7 +212,7 @@ func _armar_copas() -> void:
 	for liga in piramide.divisiones:
 		for equipo in liga.equipos:
 			todos.append(equipo)
-	copa_nacional = Copa.iniciar("Copa Nacional", todos, rng)
+	copa_nacional = Copa.iniciar("Copa del Rey", todos, rng)
 	copas_division = []
 	for d in range(piramide.divisiones.size()):
 		copas_division.append(Copa.iniciar(
@@ -267,6 +276,61 @@ func jugar_siguiente_fecha() -> void:
 	dia_proximo_partido = dia_temporada + DIAS_ENTRE_FECHAS
 	if _toca_ronda_de_copa():
 		dia_proxima_copa = dia_temporada + DIAS_HASTA_COPA
+
+
+## Las tres internacionales se juegan ENTERAS al cerrar la temporada y su
+## resultado se usaba solo para una noticia y se tiraba: no quedaba nada
+## que mirar despues. Se guarda un resumen plano —tabla de la fase de
+## liga, playoff y las rondas del knockout— con el que la pantalla de
+## Copas puede dibujar el cuadro sin tener que reproducir la simulacion.
+##
+## Se guarda solo la ULTIMA temporada. Un historico de todas las
+## internacionales de todas las temporadas engordaria el guardado sin que
+## nadie lo vaya a leer.
+func _guardar_copas_internacionales(resultado: Dictionary) -> void:
+	copas_internacionales = {"temporada": temporada_actual}
+	for clave in ["campeones", "guerreros", "emergentes"]:
+		if not resultado.has(clave):
+			continue
+		var r: Dictionary = resultado[clave]
+		var fase: FaseLiga = r["fase_liga"]
+		var tabla := []
+		for nombre in fase.tabla_ordenada():
+			var fila: Dictionary = fase.tabla[nombre].duplicate()
+			fila["equipo"] = nombre
+			tabla.append(fila)
+		var knockout: Copa = r["knockout"]
+		var campeon: Team = r["campeon"]
+		copas_internacionales[clave] = {
+			"nombre": fase.nombre,
+			"tabla": tabla,
+			"playoff": r.get("partidos_playoff", []),
+			"rondas": knockout.historial,
+			"campeon": campeon.nombre if campeon != null else "",
+		}
+
+
+## El cuadro terminado del Rey y de la copa de TU division. La de las
+## otras nueve no se guarda: son cuadros de veinte clubes que no volves a
+## mirar, y el guardado no tiene por que cargarlos.
+##
+## `division` se anota porque si ascendiste o descendiste, la copa interna
+## que jugaste no es la de la division en la que vas a estar el año que
+## viene, y decir "Copa de la División 9" cuando ya estas en la 8 seria
+## contar mal la historia.
+func _guardar_copas_de_la_temporada() -> void:
+	copas_pasadas = {"temporada": temporada_actual, "division": division_jugador + 1}
+	if copa_nacional != null:
+		copas_pasadas["rey"] = {
+			"rondas": copa_nacional.historial,
+			"campeon": copa_nacional.campeon.nombre if copa_nacional.campeon != null else "",
+		}
+	if division_jugador < copas_division.size():
+		var interna: Copa = copas_division[division_jugador]
+		copas_pasadas["interna"] = {
+			"rondas": interna.historial,
+			"campeon": interna.campeon.nombre if interna.campeon != null else "",
+		}
 
 
 ## Quien se rompio en la fecha, con que y por cuanto tiempo. Va al feed
@@ -547,7 +611,7 @@ func _jugar_ronda_de_copas() -> void:
 	if toca_nacional and copa_nacional != null and copa_nacional.campeon == null:
 		copa_nacional.jugar_siguiente_ronda(rng)
 		if copa_nacional.campeon != null:
-			_agregar_noticia("COPA NACIONAL: campeón %s." % copa_nacional.campeon.nombre, "campeones")
+			_agregar_noticia("COPA DEL REY: campeón %s." % copa_nacional.campeon.nombre, "campeones")
 		return
 	for i in range(copas_division.size()):
 		var c: Copa = copas_division[i]
@@ -586,6 +650,7 @@ func _cerrar_temporada() -> void:
 	while _hay_copa_pendiente():
 		_jugar_ronda_de_copas()
 	var resultado_internacional := confederacion.jugar_temporada_internacional(rng)
+	_guardar_copas_internacionales(resultado_internacional)
 
 	for copa_nombre in ["campeones", "guerreros", "emergentes"]:
 		var campeon: Team = resultado_internacional[copa_nombre]["campeon"]
@@ -678,6 +743,11 @@ func _cerrar_temporada() -> void:
 	dia_temporada = -Calendario.dias_hasta_el_arranque(dia_absoluto)
 	dia_proximo_partido = 0
 	dia_proxima_copa = -1
+	# Antes de tirarlos: las copas TERMINAN al cerrar la temporada y los
+	# cuadros nuevos las pisan en el acto, asi que el cuadro terminado —el
+	# unico que tiene campeon— no se llegaba a ver nunca. Se guarda el de
+	# la que a esta altura ya se jugo entera.
+	_guardar_copas_de_la_temporada()
 	# Cuadros nuevos con los equipos YA movidos de división.
 	_armar_copas()
 
@@ -1119,6 +1189,8 @@ func guardar_partida() -> void:
 		"dia_proximo_partido": dia_proximo_partido,
 		"dia_proxima_copa": dia_proxima_copa,
 		"historial_partidos": historial_partidos,
+		"copas_internacionales": copas_internacionales,
+		"copas_pasadas": copas_pasadas,
 		"noticias": noticias,
 		"ultimo_informe_economico": ultimo_informe_economico,
 		"ultima_posicion_final": ultima_posicion_final,
@@ -1196,6 +1268,8 @@ func cargar_partida() -> bool:
 	for n in datos["noticias"]:
 		noticias.append(Noticias.normalizar(n))
 	historial_partidos = datos.get("historial_partidos", [])
+	copas_internacionales = datos.get("copas_internacionales", {})
+	copas_pasadas = datos.get("copas_pasadas", {})
 	ultimo_informe_economico = datos["ultimo_informe_economico"]
 	ultima_posicion_final = datos["ultima_posicion_final"]
 	juego_terminado = datos.get("juego_terminado", false)

@@ -54,6 +54,10 @@ var contenedor_economia: VBoxContainer
 var lista_cantera: RichTextLabel
 var contenedor_cantera_botones: VBoxContainer
 var contenedor_noticias: VBoxContainer
+var contenedor_copa: VBoxContainer
+var label_copa_titulo: Label
+var label_copa_camino: Label
+var copa_elegida: String = "copa_interna"
 var noticias_solapa: String = "todas"
 var botones_solapa_noticias: Dictionary = {}
 var capa_modal_jugador: CanvasLayer
@@ -133,6 +137,7 @@ func _ready() -> void:
 	_construir_panel_tabla(contenedor)
 	_construir_panel_jugadores_liga(contenedor)
 	_construir_panel_historial(contenedor)
+	_construir_panel_copas(contenedor)
 	_construir_panel_entrenamiento(contenedor)
 	_construir_panel_partido_animado(contenedor)
 	_construir_panel_economia(contenedor)
@@ -4500,6 +4505,373 @@ func _on_promover_juvenil(id: int) -> void:
 	_refrescar_plantel()
 
 
+## La pantalla de COPAS: el cuadro de cada una, como en un cuadro de
+## verdad — cada cruce alineado entre los dos de los que sale.
+##
+## Cinco solapas: la copa de tu division, la Copa del Rey (los 200 clubes
+## de las diez divisiones) y las tres internacionales. Hasta ahora las
+## copas existian y se jugaban solas: lo unico que se veia de ellas era
+## una linea en el feed de noticias cuando salia el campeon.
+##
+## El armado del cuadro vive en core/cuadro_copa.gd — aca solo se pinta.
+const COPAS := [
+	["copa_interna", "Interna"],
+	["copa_rey", "Rey"],
+	["copa_campeones", "Campeones"],
+	["copa_guerreros", "Guerreros"],
+	["copa_emergentes", "Emergentes"],
+]
+
+## Alto de la celda de la PRIMERA columna. Cada columna a la derecha vale
+## el doble, que es lo que hace que cada cruce quede centrado entre los
+## dos de los que sale sin tener que calcular una sola coordenada.
+const ALTO_CRUCE := 60
+const ANCHO_CRUCE := 186
+
+
+func _construir_panel_copas(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	padre.add_child(panel)
+	paneles["copas"] = panel
+
+	label_copa_titulo = Label.new()
+	Tema.numero(label_copa_titulo, Tema.TAM_BASE)
+	panel.add_child(label_copa_titulo)
+
+	label_copa_camino = Label.new()
+	# Una sola linea: el cuadro necesita todo el alto que se le pueda dar,
+	# y con autowrap esta cabecera se comia dos renglones mas.
+	label_copa_camino.clip_text = true
+	label_copa_camino.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	label_copa_camino.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	panel.add_child(label_copa_camino)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+	contenedor_copa = VBoxContainer.new()
+	contenedor_copa.add_theme_constant_override("separation", 12)
+	scroll.add_child(contenedor_copa)
+
+
+func _mostrar_copa_interna() -> void:
+	_mostrar_copa("copa_interna")
+
+
+func _mostrar_copa_rey() -> void:
+	_mostrar_copa("copa_rey")
+
+
+func _mostrar_copa_campeones() -> void:
+	_mostrar_copa("copa_campeones")
+
+
+func _mostrar_copa_guerreros() -> void:
+	_mostrar_copa("copa_guerreros")
+
+
+func _mostrar_copa_emergentes() -> void:
+	_mostrar_copa("copa_emergentes")
+
+
+func _mostrar_copa(clave: String) -> void:
+	copa_elegida = clave
+	_ocultar_todos()
+	paneles["copas"].visible = true
+	_refrescar_copas()
+
+
+func _refrescar_copas() -> void:
+	for hijo in contenedor_copa.get_children():
+		hijo.queue_free()
+	label_copa_camino.text = ""
+	label_copa_camino.add_theme_color_override("font_color", Tema.SUAVE)
+
+	match copa_elegida:
+		"copa_interna":
+			_pintar_copa_viva(GameState.copas_division[GameState.division_jugador],
+				"interna", "Copa de la División %d" % (GameState.division_jugador + 1),
+				"Los 20 clubes de tu división, a partido único.")
+		"copa_rey":
+			_pintar_copa_viva(GameState.copa_nacional, "rey", "Copa del Rey",
+				"Los 200 clubes de las diez divisiones, a partido único.")
+		_:
+			_pintar_copa_internacional(copa_elegida.replace("copa_", ""))
+
+
+## Una copa que se esta jugando ahora (la interna y el Rey): sale del
+## objeto Copa vivo, con su ronda pendiente incluida.
+func _pintar_copa_viva(copa: Copa, clave_pasada: String, titulo: String,
+		subtitulo: String) -> void:
+	# El cuadro de esta temporada todavia esta vacio en el receso: la copa
+	# TERMINA al cerrar la temporada y el cuadro nuevo la pisa en el acto.
+	# Mientras no se juegue una ronda del nuevo, se muestra el del año
+	# pasado, que es el que tiene campeon.
+	if (copa == null or copa.historial.is_empty()) 			and GameState.copas_pasadas.has(clave_pasada):
+		_pintar_copa_pasada(clave_pasada, titulo)
+		return
+	if copa == null:
+		label_copa_titulo.text = titulo
+		contenedor_copa.add_child(_texto_suave("Esta copa todavía no arrancó."))
+		return
+	label_copa_titulo.text = titulo
+	var mio: String = GameState.equipo_jugador.nombre
+	var pendientes := []
+	for p in copa.partidos_pendientes:
+		pendientes.append([p[0].nombre, p[1].nombre])
+	var bye := []
+	for e in copa.equipos_con_bye:
+		bye.append(e.nombre)
+	var camino := CuadroCopa.camino_de(copa.historial, pendientes, bye,
+		copa.campeon.nombre if copa.campeon != null else "", mio)
+	label_copa_camino.text = "%s   ·   %s" % [subtitulo, camino]
+	if camino.begins_with("Campeón"):
+		label_copa_camino.add_theme_color_override("font_color", Tema.VERDE)
+	elif camino.begins_with("Eliminado"):
+		label_copa_camino.add_theme_color_override("font_color", Tema.ROJO)
+
+	if copa.historial.is_empty() and copa.partidos_pendientes.is_empty():
+		contenedor_copa.add_child(_texto_suave("Esta copa todavía no arrancó."))
+		return
+	_pintar_cuadro(CuadroCopa.desde_copa(copa), mio)
+
+
+## El cuadro terminado de la temporada pasada, con su campeon.
+func _pintar_copa_pasada(clave: String, titulo: String) -> void:
+	var guardadas: Dictionary = GameState.copas_pasadas
+	var datos: Dictionary = guardadas[clave]
+	var mio: String = GameState.equipo_jugador.nombre
+	var campeon := str(datos.get("campeon", ""))
+	if clave == "interna":
+		titulo = "Copa de la División %d" % int(guardadas.get("division", 0))
+	label_copa_titulo.text = "%s — temporada %d" % [
+		titulo, int(guardadas.get("temporada", 0))]
+	var partes := ["El cuadro nuevo de esta temporada arranca con la primera ronda."]
+	if campeon != "":
+		partes.append("Campeón: %s" % campeon)
+	partes.append(CuadroCopa.camino_de(datos.get("rondas", []), [], [], campeon, mio))
+	label_copa_camino.text = "   ·   ".join(partes)
+	if campeon == mio:
+		label_copa_camino.add_theme_color_override("font_color", Tema.VERDE)
+	_pintar_cuadro(CuadroCopa.desde_datos(datos), mio)
+
+
+## Las tres internacionales se juegan ENTERAS al cerrar la temporada, asi
+## que lo que hay para mostrar es el resumen de la ultima (ver
+## GameState._guardar_copas_internacionales).
+func _pintar_copa_internacional(clave: String) -> void:
+	var guardadas: Dictionary = GameState.copas_internacionales
+	if not guardadas.has(clave):
+		label_copa_titulo.text = "Copa de %s" % clave.capitalize()
+		contenedor_copa.add_child(_texto_suave(
+			"Las copas internacionales se juegan enteras al cerrar la temporada, "
+			+ "con los cupos que reparte el coeficiente de cada país. Todavía no "
+			+ "se jugó ninguna: vas a ver el cuadro cuando termine este año."))
+		return
+
+	var datos: Dictionary = guardadas[clave]
+	label_copa_titulo.text = str(datos["nombre"])
+	var mio: String = GameState.equipo_jugador.nombre
+	var campeon := str(datos.get("campeon", ""))
+	var partes := ["Temporada %d" % int(guardadas.get("temporada", 0))]
+	if campeon != "":
+		partes.append("campeón %s" % campeon)
+	partes.append(CuadroCopa.camino_de(datos.get("rondas", []), [], [], campeon, mio))
+	label_copa_camino.text = "   ·   ".join(partes)
+	if campeon == mio:
+		label_copa_camino.add_theme_color_override("font_color", Tema.VERDE)
+
+	_pintar_cuadro(CuadroCopa.desde_datos(datos), mio)
+
+	# La fase de liga es la mitad de la competencia: sin ella no se
+	# entiende por que ocho entraron directo a octavos y otros dieciseis
+	# tuvieron que jugar un playoff.
+	var tabla: Array = datos.get("tabla", [])
+	if not tabla.is_empty():
+		contenedor_copa.add_child(Tema.etiqueta_seccion(
+			"Fase de liga  ·  del 1° al 8° van directo a octavos, del 9° al 24° juegan el playoff"))
+		contenedor_copa.add_child(_tabla_fase_de_liga(tabla, mio))
+
+
+func _pintar_cuadro(cuadro: Dictionary, mio: String) -> void:
+	# Las dos aclaraciones en UNA linea: cada renglon de arriba es un
+	# renglon menos de cuadro.
+	var notas := []
+	var ocultas := int(cuadro.get("rondas_ocultas", 0))
+	if ocultas > 0:
+		notas.append("El cuadro arranca en %s (antes se jugaron %d ronda%s con demasiados cruces para mostrarlas)" % [
+			str(cuadro["columnas"][0]["titulo"]).to_lower(), ocultas,
+			"" if ocultas == 1 else "s"])
+	var esperando: Array = cuadro.get("esperando", [])
+	if not esperando.is_empty():
+		notas.append("%d club%s pasan sin jugar esta ronda%s" % [
+			esperando.size(), "" if esperando.size() == 1 else "es",
+			", el tuyo incluido" if esperando.has(mio) else ""])
+	if not notas.is_empty():
+		var nota := _texto_suave("%s." % "  ·  ".join(notas))
+		nota.autowrap_mode = TextServer.AUTOWRAP_OFF
+		nota.clip_text = true
+		nota.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		contenedor_copa.add_child(nota)
+
+	var fila := HBoxContainer.new()
+	fila.add_theme_constant_override("separation", 12)
+	contenedor_copa.add_child(fila)
+
+	var columnas: Array = cuadro["columnas"]
+	for c in range(columnas.size()):
+		var col: Dictionary = columnas[c]
+		var caja := VBoxContainer.new()
+		caja.add_theme_constant_override("separation", 0)
+		fila.add_child(caja)
+		var titulo := Label.new()
+		titulo.text = str(col["titulo"])
+		titulo.custom_minimum_size = Vector2(ANCHO_CRUCE, 0)
+		titulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		titulo.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+		titulo.add_theme_color_override("font_color", Tema.AMBAR)
+		caja.add_child(titulo)
+		# Cada columna a la derecha duplica el alto de celda: es lo que
+		# alinea cada cruce con los dos de los que sale.
+		var alto: int = ALTO_CRUCE * int(pow(2, c))
+		for cruce in col["cruces"]:
+			caja.add_child(_celda_de_cruce(cruce, alto, mio))
+
+	var campeon := str(cuadro.get("campeon", ""))
+	if campeon != "":
+		var caja_campeon := VBoxContainer.new()
+		fila.add_child(caja_campeon)
+		var t := Label.new()
+		t.text = "Campeón"
+		t.custom_minimum_size = Vector2(ANCHO_CRUCE, 0)
+		t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		t.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+		t.add_theme_color_override("font_color", Tema.AMBAR)
+		caja_campeon.add_child(t)
+		var centro := CenterContainer.new()
+		centro.custom_minimum_size = Vector2(
+			ANCHO_CRUCE, ALTO_CRUCE * int(pow(2, columnas.size() - 1)))
+		caja_campeon.add_child(centro)
+		var tarjeta := Componentes.tarjeta(Tema.AMBAR)
+		tarjeta.custom_minimum_size = Vector2(ANCHO_CRUCE, 0)
+		centro.add_child(tarjeta)
+		var l := Label.new()
+		l.text = campeon
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		Tema.numero(l, Tema.TAM_CHICO, Tema.AMBAR if campeon != mio else Tema.VERDE)
+		tarjeta.add_child(l)
+
+
+func _celda_de_cruce(cruce: Dictionary, alto: int, mio: String) -> Control:
+	var centro := CenterContainer.new()
+	centro.custom_minimum_size = Vector2(ANCHO_CRUCE, alto)
+
+	if bool(cruce.get("bye", false)):
+		var suave := _texto_suave("%s\npasó sin jugar" % str(cruce.get("equipo", "")))
+		suave.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		suave.custom_minimum_size = Vector2(ANCHO_CRUCE, 0)
+		centro.add_child(suave)
+		return centro
+
+	var jugado: bool = bool(cruce.get("jugado", false))
+	var ganador := str(cruce.get("ganador", ""))
+	var acento := Color.TRANSPARENT
+	if str(cruce["local"]) == mio or str(cruce["visitante"]) == mio:
+		acento = Tema.AMBAR
+	var tarjeta := Componentes.tarjeta(acento)
+	tarjeta.custom_minimum_size = Vector2(ANCHO_CRUCE, 0)
+	# Menos margen adentro que una tarjeta normal: en una celda de 186 px
+	# los 16 de cada lado se los sacan al nombre del club, que es lo unico
+	# que hay que poder leer.
+	var estilo: StyleBoxFlat = tarjeta.get_theme_stylebox("panel")
+	estilo.content_margin_left = 8
+	estilo.content_margin_right = 8
+	estilo.content_margin_top = 6
+	estilo.content_margin_bottom = 6
+	centro.add_child(tarjeta)
+	var caja := VBoxContainer.new()
+	caja.add_theme_constant_override("separation", 1)
+	tarjeta.add_child(caja)
+
+	for lado in ["local", "visitante"]:
+		var nombre := str(cruce[lado])
+		var goles: int = int(cruce["gl"] if lado == "local" else cruce["gv"])
+		var linea := HBoxContainer.new()
+		caja.add_child(linea)
+		var color := Tema.TEXTO
+		if jugado:
+			color = Tema.VERDE if nombre == ganador else Tema.SUAVE
+		if nombre == mio:
+			color = Tema.AMBAR
+		var l := Componentes.celda(nombre, ANCHO_CRUCE - 42, color,
+			HORIZONTAL_ALIGNMENT_LEFT, Tema.TAM_CHICO)
+		linea.add_child(l)
+		linea.add_child(Componentes.celda_numero(
+			str(goles) if jugado else "-", 26, color,
+			HORIZONTAL_ALIGNMENT_RIGHT, Tema.TAM_CHICO))
+
+	# Como se definio, si no fue en los 90: es la mitad de la historia de
+	# un cruce de copa y en el marcador no se ve.
+	var definicion := str(cruce.get("definicion", ""))
+	if jugado and definicion != "" and definicion != "90 minutos":
+		var extra := str(cruce.get("penales_texto", "")).strip_edges()
+		caja.add_child(_texto_mini(extra if extra != "" else "(en el alargue)"))
+	elif not jugado:
+		caja.add_child(_texto_mini("por jugarse"))
+	return centro
+
+
+func _texto_mini(texto: String) -> Label:
+	var l := Label.new()
+	l.text = texto
+	l.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+	l.add_theme_color_override("font_color", Tema.SUAVE)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	return l
+
+
+func _tabla_fase_de_liga(tabla: Array, mio: String) -> Control:
+	var caja := VBoxContainer.new()
+	caja.add_theme_constant_override("separation", 0)
+	var cols := [["#", 40], ["Equipo", 240], ["PJ", 46], ["PG", 46], ["PE", 46],
+		["PP", 46], ["GF", 46], ["GC", 46], ["DG", 52], ["Pts", 52]]
+	var enc := Componentes.fila(false)
+	var dentro := Componentes.contenido(enc)
+	for c in cols:
+		var l := Componentes.celda(str(c[0]), int(c[1]), Tema.SUAVE,
+			HORIZONTAL_ALIGNMENT_RIGHT if c[0] != "Equipo" else HORIZONTAL_ALIGNMENT_LEFT)
+		l.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+		dentro.add_child(l)
+	caja.add_child(enc)
+
+	for i in range(tabla.size()):
+		var f: Dictionary = tabla[i]
+		var nombre := str(f["equipo"])
+		var soy_yo: bool = nombre == mio
+		var fila := Componentes.fila(i % 2 == 0)
+		var d := Componentes.contenido(fila)
+		var color: Color = Tema.AMBAR if soy_yo else Tema.TEXTO
+		d.add_child(Componentes.celda_numero(str(i + 1), 40, Tema.SUAVE,
+			HORIZONTAL_ALIGNMENT_RIGHT, Tema.TAM_CHICO))
+		d.add_child(Componentes.celda(nombre, 240, color,
+			HORIZONTAL_ALIGNMENT_LEFT, Tema.TAM_CHICO))
+		for clave in ["pj", "pg", "pe", "pp", "gf", "gc"]:
+			d.add_child(Componentes.celda_numero(str(int(f.get(clave, 0))), 46,
+				Tema.SUAVE, HORIZONTAL_ALIGNMENT_RIGHT, Tema.TAM_CHICO))
+		var dg := int(f.get("dg", 0))
+		d.add_child(Componentes.celda_numero(("+%d" % dg) if dg > 0 else str(dg), 52,
+			Tema.VERDE if dg > 0 else (Tema.ROJO if dg < 0 else Tema.SUAVE),
+			HORIZONTAL_ALIGNMENT_RIGHT, Tema.TAM_CHICO))
+		d.add_child(Componentes.celda_numero(str(int(f.get("pts", 0))), 52, color,
+			HORIZONTAL_ALIGNMENT_RIGHT, Tema.TAM_CHICO))
+		caja.add_child(fila)
+	return caja
+
+
 ## Las noticias de la temporada, separadas por categoria y con los
 ## jugadores que se nombran clickeables.
 ##
@@ -5552,6 +5924,10 @@ const SECCIONES := [
 	{"clave": "partido", "nombre": "Liga", "paneles": [
 		["tabla", "Tabla"], ["jugadores_liga", "Jugadores"],
 		["historial", "Historial"]]},
+	{"clave": "copas", "nombre": "Copas", "paneles": [
+		["copa_interna", "Interna"], ["copa_rey", "Rey"],
+		["copa_campeones", "Campeones"], ["copa_guerreros", "Guerreros"],
+		["copa_emergentes", "Emergentes"]]},
 	{"clave": "mercado", "nombre": "Mercado", "paneles": [
 		["mercado", "Mercado"], ["libres", "Libres"], ["prestamos", "Prestamos"]]},
 	{"clave": "mas", "nombre": "Mas", "paneles": [
@@ -5691,6 +6067,10 @@ func _mostrar_panel_de_seccion(clave: String) -> void:
 		"cantera": "_mostrar_cantera", "instalaciones": "_mostrar_instalaciones",
 		"tabla": "_mostrar_tabla", "jugadores_liga": "_mostrar_jugadores_liga",
 		"historial": "_mostrar_historial_partidos",
+		"copa_interna": "_mostrar_copa_interna", "copa_rey": "_mostrar_copa_rey",
+		"copa_campeones": "_mostrar_copa_campeones",
+		"copa_guerreros": "_mostrar_copa_guerreros",
+		"copa_emergentes": "_mostrar_copa_emergentes",
 		"mercado": "_mostrar_mercado", "libres": "_mostrar_libres",
 		"prestamos": "_mostrar_prestamos", "economia": "_mostrar_economia",
 		"noticias": "_mostrar_noticias", "seleccion": "_mostrar_seleccion",
