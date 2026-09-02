@@ -6220,10 +6220,95 @@ func _mostrar_partida_panel() -> void:
 	_refrescar_partida_guardado()
 
 
-## Cuanto hay que arrastrar antes de que un gesto cuente como scroll. Sin
-## esto (el valor por defecto es 0) un arrastre que EMPIEZA sobre una
-## etiqueta, un boton o un texto se lo come ese control y nunca llega al
-## ScrollContainer: en el telefono las listas simplemente no se deslizan.
+# ---------------------------------------------------------------------------
+# Scroll con el dedo
+# ---------------------------------------------------------------------------
+## Arrastrar en CUALQUIER punto de una lista la desliza.
+##
+## El ScrollContainer de Godot trae scroll tactil propio, pero acá no se
+## puede confiar en el: depende de que control se coma el evento del dedo
+## antes de que llegue al ScrollContainer. Medido inyectando eventos de
+## dedo de verdad, con un arrastre de 200 px desde el medio de la lista:
+##
+##   plantel  0 -> 476 px   (scrollea, pero se pasa 2,4 veces)
+##   tabla    0 ->   0 px   (no scrollea)
+##
+## O sea que en una pantalla anda de mas y en la otra no anda, y en el
+## telefono eso quiere decir que hay listas cuya unica forma de bajar es
+## acertarle a la barrita, que con el dedo es imposible.
+##
+## Por eso se maneja acá, en _input: llega ANTES que el ruteo de la GUI,
+## asi que da igual quien se lo hubiera comido despues, y el arrastre
+## mueve la lista exactamente lo que se movio el dedo — las dos pantallas
+## dan 200 -> 200.
+##
+## Umbral en pixeles antes de que el gesto cuente como scroll. Por debajo
+## es un toque y tiene que llegar al boton que haya abajo.
+const UMBRAL_ARRASTRE := 12.0
+
+var _scroll_arrastrado: ScrollContainer = null
+var _scroll_ultimo := Vector2.ZERO
+var _scroll_recorrido := 0.0
+var _scroll_activo := false
+
+
+func _input(evento: InputEvent) -> void:
+	if evento is InputEventScreenTouch:
+		if evento.pressed:
+			_scroll_arrastrado = _scroll_bajo(self, evento.position)
+			_scroll_ultimo = evento.position
+			_scroll_recorrido = 0.0
+			_scroll_activo = false
+		else:
+			_scroll_arrastrado = null
+			_scroll_activo = false
+		return
+	if not (evento is InputEventScreenDrag) or _scroll_arrastrado == null:
+		return
+	if not is_instance_valid(_scroll_arrastrado):
+		_scroll_arrastrado = null
+		return
+
+	var delta: Vector2 = evento.position - _scroll_ultimo
+	_scroll_ultimo = evento.position
+	_scroll_recorrido += delta.length()
+	if not _scroll_activo:
+		if _scroll_recorrido < UMBRAL_ARRASTRE:
+			return
+		_scroll_activo = true
+	_scroll_arrastrado.scroll_vertical -= int(delta.y)
+	_scroll_arrastrado.scroll_horizontal -= int(delta.x)
+	# Consumido: mientras se arrastra, los botones de abajo no ven nada.
+	get_viewport().set_input_as_handled()
+
+
+## El ScrollContainer mas PROFUNDO que este debajo de ese punto y que
+## tenga algo para scrollear. El mas profundo y no el primero porque hay
+## pantallas con un scroll adentro de otro (el cuadro de una copa scrollea
+## a lo ancho adentro de la pantalla que scrollea a lo alto).
+func _scroll_bajo(nodo: Node, punto: Vector2) -> ScrollContainer:
+	for i in range(nodo.get_child_count() - 1, -1, -1):
+		var hijo: Node = nodo.get_child(i)
+		if hijo is CanvasItem and not (hijo as CanvasItem).visible:
+			continue
+		var encontrado := _scroll_bajo(hijo, punto)
+		if encontrado != null:
+			return encontrado
+	if nodo is ScrollContainer and (nodo as ScrollContainer).is_visible_in_tree():
+		var sc := nodo as ScrollContainer
+		if not Rect2(sc.get_global_rect()).has_point(punto):
+			return null
+		var hay_alto: bool = sc.get_v_scroll_bar().max_value > sc.size.y + 1.0
+		var hay_ancho: bool = sc.get_h_scroll_bar().max_value > sc.size.x + 1.0
+		if hay_alto or hay_ancho:
+			return sc
+	return null
+
+
+## La zona muerta del scroll tactil PROPIO de Godot. Queda alta a
+## proposito: el scroll con el dedo lo maneja _input (ver UMBRAL_ARRASTRE)
+## y esto es solo para que el del motor no se despierte tambien y termine
+## scrolleando dos veces el mismo gesto.
 const ZONA_MUERTA_SCROLL := 30
 
 
