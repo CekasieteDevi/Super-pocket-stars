@@ -29,6 +29,12 @@ const MAPA := {
 	"DC": {"linea": 4, "banda": false},
 }
 
+## Los siete puestos que existen, de atrás hacia adelante. Es la lista
+## canónica: la usa Formaciones para armar un banco que cubra TODOS los
+## puestos y no solo los de la formación con la que arranca el club.
+const TODOS := ["ARQ", "DFC", "LAT", "MC", "MCO", "EXT", "DC"]
+
+
 ## Puntos por cada escalón de distancia, hasta el tope del GDD.
 const POR_ESCALON := 4.0
 const MAXIMO := 12.0

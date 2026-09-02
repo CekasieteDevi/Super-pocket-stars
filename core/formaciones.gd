@@ -81,28 +81,54 @@ static func slots(nombre: String) -> Array:
 ## que su formación no usa— y le faltaba cubrir el tercer central: perder
 ## un defensor lo obligaba a poner a alguien fuera de posición, que en el
 ## §8.4 cuesta de −4 a −12.
+## Cuantos jugadores tiene el banco.
+const TAMANO_BANCO := 7
+
+## Cuantos jugadores tiene que haber de CADA puesto en el plantel, entre
+## titulares y banco: uno para jugar y uno de recambio.
+const MINIMO_POR_PUESTO := 2
+
+
+## Los puestos del banco.
+##
+## Lo primero es la COBERTURA: que ningun puesto de los siete se quede sin
+## dos jugadores. Antes el banco salia de los puestos de la formacion con
+## la que arrancaba el club y de ninguno mas, asi que un club que arrancaba
+## en 5-3-2 —ARQ, DFC, LAT, MC, DC— no tenia un solo EXT ni un solo MCO en
+## todo el plantel. Si despues querias pasarte a 4-3-3 no habia con quien:
+## los dos puestos de extremo quedaban vacios y no se podia ni poner a
+## alguien fuera de posicion, porque no habia a quien poner. Terminabas
+## atado a la formacion que te toco al empezar.
+##
+## Lo que sobra despues de cubrir va a los puestos que MAS usa la
+## formacion, para que el banco siga pareciendose a lo que el club juega.
 static func banco_para(nombre: String) -> Array:
 	var roles := roles(nombre)
-	var conteo := {}
-	var distintos := []
+	var titulares := {}
+	for p in Puestos.TODOS:
+		titulares[p] = 0
 	for r in roles:
-		if not conteo.has(r):
-			conteo[r] = 0
-			distintos.append(r)
-		conteo[r] += 1
+		titulares[r] = int(titulares.get(r, 0)) + 1
 
-	var banco := distintos.duplicate()
-	# De campo, y de los que más hay primero: el arquero suplente ya está.
+	var banco := []
+	var total := titulares.duplicate()
+	for p in Puestos.TODOS:
+		while int(total[p]) < MINIMO_POR_PUESTO and banco.size() < TAMANO_BANCO:
+			banco.append(p)
+			total[p] = int(total[p]) + 1
+
+	# El relleno: de campo (el arquero suplente ya esta cubierto arriba) y
+	# de los que mas usa la formacion primero.
 	var relleno := []
-	for r in distintos:
-		if r != "ARQ":
-			relleno.append(r)
-	relleno.sort_custom(func(a, b): return int(conteo[a]) > int(conteo[b]))
+	for p in Puestos.TODOS:
+		if p != "ARQ" and int(titulares[p]) > 0:
+			relleno.append(p)
+	relleno.sort_custom(func(a, b): return int(titulares[a]) > int(titulares[b]))
 	var i := 0
-	while banco.size() < 7 and not relleno.is_empty():
+	while banco.size() < TAMANO_BANCO and not relleno.is_empty():
 		banco.append(relleno[i % relleno.size()])
 		i += 1
-	return banco.slice(0, 7)
+	return banco.slice(0, TAMANO_BANCO)
 
 
 ## Solo los roles, que es lo que necesita la UI para etiquetar cada slot.
