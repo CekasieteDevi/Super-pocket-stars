@@ -2013,6 +2013,8 @@ var contenedor_mercado_tabla: VBoxContainer
 var label_mercado_resumen: Label
 var option_pos_mercado: OptionButton
 var option_div_mercado: OptionButton
+var option_club_mercado: OptionButton
+var grupo_club_mercado: Control
 var spin_edad_min: SpinBox
 var spin_edad_max: SpinBox
 var spin_contrato: SpinBox
@@ -2121,7 +2123,17 @@ func _construir_solapa_jugadores(padre: Control) -> Control:
 	for d in range(10):
 		option_div_mercado.add_item("D%d" % (d + 1))
 	option_div_mercado.custom_minimum_size = Vector2(150, Tema.ALTO_TACTIL)
+	option_div_mercado.item_selected.connect(func(_i): _refrescar_clubes_del_filtro())
 	filtros.add_child(_grupo_filtro("Division", option_div_mercado))
+
+	# El club solo aparece con una division elegida: sin eso serian los 200
+	# clubes de la piramide en una sola lista, que no se puede tocar en un
+	# telefono.
+	option_club_mercado = OptionButton.new()
+	option_club_mercado.custom_minimum_size = Vector2(210, Tema.ALTO_TACTIL)
+	grupo_club_mercado = _grupo_filtro("Club", option_club_mercado)
+	grupo_club_mercado.visible = false
+	filtros.add_child(grupo_club_mercado)
 
 	var caja_edad := HBoxContainer.new()
 	caja_edad.add_theme_constant_override("separation", 6)
@@ -2157,6 +2169,7 @@ func _construir_solapa_jugadores(padre: Control) -> Control:
 	btn_limpiar.pressed.connect(func():
 		option_pos_mercado.selected = 0
 		option_div_mercado.selected = 0
+		_refrescar_clubes_del_filtro()
 		spin_edad_min.value = 0
 		spin_edad_max.value = 0
 		spin_contrato.value = 0
@@ -2243,10 +2256,31 @@ func _spin(minimo: int, maximo: int, valor: int) -> SpinBox:
 
 
 ## 0 en un spin = "sin filtro", por eso se traduce a -1.
+## Llena el desplegable de clubes con los de la division elegida. Se
+## rearma cada vez porque los 20 clubes de una division cambian entre
+## temporadas: los que ascienden y descienden se van.
+func _refrescar_clubes_del_filtro() -> void:
+	var division: int = option_div_mercado.selected - 1
+	option_club_mercado.clear()
+	grupo_club_mercado.visible = division >= 0
+	if division < 0:
+		return
+	option_club_mercado.add_item("Cualquiera")
+	var nombres := []
+	for club in GameState.piramide.divisiones[division].equipos:
+		# El propio no: el buscador del mercado nunca muestra tus jugadores.
+		if club != GameState.equipo_jugador:
+			nombres.append(club.nombre)
+	nombres.sort()
+	for n in nombres:
+		option_club_mercado.add_item(n)
+
+
 func _on_buscar_mercado() -> void:
 	filtros_mercado = {
 		"posicion": "" if option_pos_mercado.selected <= 0 else option_pos_mercado.get_item_text(option_pos_mercado.selected),
 		"division": option_div_mercado.selected - 1,
+		"club": "" if option_club_mercado.selected <= 0 			else option_club_mercado.get_item_text(option_club_mercado.selected),
 		"edad_min": -1 if int(spin_edad_min.value) == 0 else int(spin_edad_min.value),
 		"edad_max": -1 if int(spin_edad_max.value) == 0 else int(spin_edad_max.value),
 		"contrato_max": -1 if int(spin_contrato.value) == 0 else int(spin_contrato.value),

@@ -37,7 +37,8 @@ const COLUMNAS := [
 
 ## Filtros vacíos: todo opcional, -1 = sin filtro.
 static func filtros_vacios() -> Dictionary:
-	return {"posicion": "", "edad_min": -1, "edad_max": -1, "contrato_max": -1, "division": -1}
+	return {"posicion": "", "edad_min": -1, "edad_max": -1, "contrato_max": -1,
+		"division": -1, "club": ""}
 
 
 ## Todos los jugadores de la pirámide que pasan los filtros, MENOS los
@@ -50,12 +51,19 @@ static func buscar(piramide, equipo_propio: Team, filtros: Dictionary) -> Array:
 	var edad_max := int(filtros.get("edad_max", -1))
 	var contrato_max := int(filtros.get("contrato_max", -1))
 	var division := int(filtros.get("division", -1))
+	# El club solo tiene sentido dentro de una division elegida (asi lo
+	# ofrece la UI), pero se filtra por NOMBRE y no por indice para no
+	# depender de eso: si el club no esta en la division filtrada, no sale
+	# nadie, que es la respuesta correcta.
+	var club_filtro := str(filtros.get("club", ""))
 
 	for d in range(piramide.divisiones.size()):
 		if division != -1 and d != division:
 			continue
 		for club in piramide.divisiones[d].equipos:
 			if club == equipo_propio:
+				continue
+			if club_filtro != "" and club.nombre != club_filtro:
 				continue
 			for grupo in [[club.jugadores, "titular"], [club.banco, "banco"], [club.cantera, "cantera"]]:
 				for j in grupo[0]:

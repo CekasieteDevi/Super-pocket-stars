@@ -14,6 +14,7 @@ func _init() -> void:
 	_test_sin_filtros_trae_toda_la_piramide(piramide, mio)
 	_test_no_aparezco_yo(piramide, mio)
 	_test_los_filtros_acotan(piramide, mio)
+	_test_filtro_de_club(piramide, mio)
 	_test_orden_alfabetico(piramide, mio)
 	_test_la_niebla_tapa_todo_menos_nombre_y_puesto(piramide, mio)
 	_test_investigar_destapa(piramide, mio, rng)
@@ -179,3 +180,40 @@ func _test_las_habilidades_dormidas_no_se_ven() -> void:
 	else:
 		print("FALLA: ajeno dormido=%s, ajeno despierto=%s, propio dormido=%s" % [
 			ajeno_dormido, ajeno_despierto, propio_dormido])
+
+
+func _test_filtro_de_club(piramide: Piramide, mio: Team) -> void:
+	print("
+=== El filtro de club deja solo a los de ese club ===")
+	var otro: Team = piramide.divisiones[3].equipos[5]
+	var filtros := BusquedaMercado.filtros_vacios()
+	filtros["division"] = 3
+	filtros["club"] = otro.nombre
+	var r := BusquedaMercado.buscar(piramide, mio, filtros)
+	var esperados: int = otro.jugadores.size() + otro.banco.size() + otro.cantera.size()
+	var intrusos := 0
+	for entrada in r:
+		if entrada["equipo"] != otro:
+			intrusos += 1
+	if r.size() == esperados and intrusos == 0:
+		print("OK: %d jugadores, todos de %s." % [r.size(), otro.nombre])
+	else:
+		print("FALLA: %d jugadores (esperaba %d) con %d de otros clubes." % [
+			r.size(), esperados, intrusos])
+
+	# El propio nunca sale, ni filtrando por el.
+	filtros["division"] = 7
+	filtros["club"] = mio.nombre
+	if BusquedaMercado.buscar(piramide, mio, filtros).is_empty():
+		print("OK: filtrar por tu propio club no trae a nadie.")
+	else:
+		print("FALLA: filtrando por tu club aparecen tus jugadores en el mercado.")
+
+	# Un club que no esta en la division elegida no trae a nadie, en vez
+	# de ignorar el filtro y traer la division entera.
+	filtros["division"] = 0
+	filtros["club"] = otro.nombre
+	if BusquedaMercado.buscar(piramide, mio, filtros).is_empty():
+		print("OK: un club que no es de esa division no trae a nadie.")
+	else:
+		print("FALLA: el filtro de club se ignoro al no coincidir con la division.")
