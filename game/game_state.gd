@@ -90,6 +90,9 @@ var copas_pasadas: Dictionary = {}
 ## Todo lo que gano el club del jugador, en orden: [{temporada, titulo,
 ## detalle, anio}]. Ver _anotar_en_la_vitrina.
 var vitrina: Array = []
+## La foto de la ultima temporada cerrada, para la pantalla de resumen.
+## Ver _guardar_resumen_de_temporada.
+var resumen_temporada: Dictionary = {}
 var noticias: Array = []
 var ultimo_informe_economico: Dictionary = {}  # ingresos/egresos/neto del ultimo cierre de temporada
 var ultima_posicion_final: Dictionary = {}  # {"posicion","total","division"} del cierre de temporada mas reciente
@@ -157,6 +160,7 @@ func partida_nueva(semilla: int = -1, nombre_club: String = "",
 	copas_internacionales = {}
 	copas_pasadas = {}
 	vitrina = []
+	resumen_temporada = {}
 	ultimo_resultado = {}
 	ultimo_log = []
 	ultimos_eventos = []
@@ -374,6 +378,54 @@ func _avanzar_sponsors() -> void:
 			equipo_jugador, division_jugador, puesto, tabla.size(), rng):
 		_agregar_noticia("SPONSOR: %s quiere poner su marca en tu camiseta (%s por partido)." % [
 			oferta["nombre"], Economia.formato_dinero(oferta["pago"])])
+
+
+## La foto de la temporada que se termina: la tabla final, los mejores de
+## la liga y todos los campeones. La pantalla de resumen se dibuja de aca
+## y no de los objetos vivos porque para cuando el jugador la mira ya se
+## reseteo la tabla, ya se repartieron los ascensos y los cuadros de copa
+## nuevos pisaron a los viejos.
+func _guardar_resumen_de_temporada(tabla_final: Array, posicion_final: int,
+		internacional: Dictionary) -> void:
+	var liga := liga_jugador()
+	var filas := []
+	for nombre in tabla_final:
+		var f: Dictionary = liga.tabla[nombre].duplicate()
+		f["equipo"] = nombre
+		filas.append(f)
+
+	var campeones := []
+	if not tabla_final.is_empty():
+		campeones.append({
+			"que": "Liga · División %d" % (division_jugador + 1),
+			"quien": str(tabla_final[0])})
+	if division_jugador < copas_division.size():
+		var interna: Copa = copas_division[division_jugador]
+		if interna.campeon != null:
+			campeones.append({
+				"que": "Copa de la División %d" % (division_jugador + 1),
+				"quien": interna.campeon.nombre})
+	if copa_nacional != null and copa_nacional.campeon != null:
+		campeones.append({"que": "Copa del Rey", "quien": copa_nacional.campeon.nombre})
+	for clave in ["campeones", "guerreros", "emergentes"]:
+		if not internacional.has(clave):
+			continue
+		var c: Team = internacional[clave]["campeon"]
+		if c != null:
+			campeones.append({"que": "Copa de %s" % clave.capitalize(), "quien": c.nombre})
+
+	resumen_temporada = {
+		"temporada": temporada_actual,
+		"anio": int(Calendario.fecha(dia_absoluto)["year"]),
+		"division": division_jugador + 1,
+		"posicion": posicion_final,
+		"total": tabla_final.size(),
+		"tabla": filas,
+		"goleadores": EstadisticasLiga.ranking(liga.estadisticas, "goles", 3),
+		"asistencias": EstadisticasLiga.ranking(liga.estadisticas, "asistencias", 3),
+		"vallas": EstadisticasLiga.ranking(liga.estadisticas, "vallas", 3),
+		"campeones": campeones,
+	}
 
 
 ## Los titulos que ganaste esta temporada. Va al cerrarla, con las copas
@@ -738,6 +790,10 @@ func _cerrar_temporada() -> void:
 		_jugar_ronda_de_copas()
 	var resultado_internacional := confederacion.jugar_temporada_internacional(rng)
 	_guardar_copas_internacionales(resultado_internacional)
+	# ACA y no mas abajo: fin_de_temporada() resetea la tabla y las
+	# estadisticas individuales para la temporada nueva, asi que despues
+	# de esa linea ya no hay tabla final ni goleador que mostrar.
+	_guardar_resumen_de_temporada(tabla_final, posicion_final, resultado_internacional)
 
 	for copa_nombre in ["campeones", "guerreros", "emergentes"]:
 		var campeon: Team = resultado_internacional[copa_nombre]["campeon"]
@@ -843,8 +899,9 @@ func _cerrar_temporada() -> void:
 	_anotar_en_la_vitrina(posicion_final, resultado_internacional)
 
 	# Los sponsors miran la tabla final: el que pidio algo y no lo tuvo se
-	# va. Va ANTES de fin_de_temporada, que es quien cobra
-	# ingresos_sponsors y despues resetea la tabla.
+	# va. Va DESPUES de fin_de_temporada a proposito: ahi es donde
+	# procesar_temporada cobra lo que juntaron, asi que el que se va cobra
+	# igual la temporada que jugo y recien despues deja el lugar libre.
 	for s in Sponsors.evaluar_temporada(equipo_jugador, posicion_final, tabla_final.size()):
 		_agregar_noticia("SPONSOR: %s corta el contrato con %s — pedia %s" % [
 			s["nombre"], equipo_jugador.nombre,
@@ -1292,7 +1349,7 @@ func guardar_partida() -> void:
 		"historial_partidos": historial_partidos,
 		"copas_internacionales": copas_internacionales,
 		"copas_pasadas": copas_pasadas,
-		"vitrina": vitrina,
+		"vitrina": vitrina, "resumen_temporada": resumen_temporada,
 		"noticias": noticias,
 		"ultimo_informe_economico": ultimo_informe_economico,
 		"ultima_posicion_final": ultima_posicion_final,
@@ -1373,6 +1430,7 @@ func cargar_partida() -> bool:
 	copas_internacionales = datos.get("copas_internacionales", {})
 	copas_pasadas = datos.get("copas_pasadas", {})
 	vitrina = datos.get("vitrina", [])
+	resumen_temporada = datos.get("resumen_temporada", {})
 	ultimo_informe_economico = datos["ultimo_informe_economico"]
 	ultima_posicion_final = datos["ultima_posicion_final"]
 	juego_terminado = datos.get("juego_terminado", false)

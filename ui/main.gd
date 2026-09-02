@@ -54,6 +54,8 @@ var contenedor_economia: VBoxContainer
 var lista_cantera: RichTextLabel
 var contenedor_cantera_botones: VBoxContainer
 var contenedor_noticias: VBoxContainer
+var capa_resumen: CanvasLayer
+var contenedor_resumen_temporada: VBoxContainer
 var contenedor_vitrina: VBoxContainer
 var contenedor_sponsors: VBoxContainer
 var label_sponsors_estado: Label
@@ -166,6 +168,7 @@ func _ready() -> void:
 	_ajustar_para_tactil(self)
 
 	_construir_modal_jugador()
+	_construir_pantalla_resumen()
 	_construir_pantalla_inicio()
 	_mostrar_seccion("club")
 	_mostrar_inicio()
@@ -2806,13 +2809,48 @@ func _refrescar_historial() -> void:
 ## un boton que no dice nada — y enterarse es la mitad del punto de tener
 ## calendario.
 var dialogo_novedades: AcceptDialog
+var label_novedades: Label
+
+
+## El ancho y el alto del cuerpo del dialogo. Fijos a proposito: el
+## AcceptDialog crece solo para entrar todo su contenido, y al cerrar la
+## temporada las novedades son decenas de lineas — el dialogo terminaba
+## mas alto que la pantalla y el boton "Entendido" quedaba FUERA. En el
+## telefono eso deja el juego trabado en el cambio de temporada, sin forma
+## de cerrar el cartel ni de seguir jugando.
+const ANCHO_NOVEDADES := 820
+const ALTO_NOVEDADES := 360
 
 
 func _construir_dialogo_novedades() -> void:
 	dialogo_novedades = AcceptDialog.new()
 	dialogo_novedades.title = "Novedades"
 	dialogo_novedades.ok_button_text = "Entendido"
+
+	# El texto va adentro de un scroll y no en dialog_text: asi el dialogo
+	# mide siempre lo mismo y lo que sobra se scrollea.
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(ANCHO_NOVEDADES, ALTO_NOVEDADES)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	dialogo_novedades.add_child(scroll)
+	label_novedades = Label.new()
+	label_novedades.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label_novedades.custom_minimum_size = Vector2(ANCHO_NOVEDADES - 20, 0)
+	label_novedades.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(label_novedades)
 	add_child(dialogo_novedades)
+
+
+## Muestra el cartel de novedades. Todo pasa por aca para que nadie vuelva
+## a escribir dialog_text, que es lo que hacia crecer el dialogo.
+func _mostrar_novedades(texto: String) -> void:
+	label_novedades.text = texto
+	# Arriba de todo: si quedo scrolleado del cartel anterior, el nuevo
+	# abriria por la mitad.
+	var scroll := label_novedades.get_parent() as ScrollContainer
+	if scroll != null:
+		scroll.scroll_vertical = 0
+	dialogo_novedades.popup_centered()
 
 
 var dialogo_prestamo: AcceptDialog
@@ -4728,6 +4766,203 @@ func _on_aceptar_sponsor(nombre: String) -> void:
 	_refrescar_sponsors()
 
 
+## EL RESUMEN DE LA TEMPORADA: la pantalla que cierra el año.
+##
+## Antes esto era un AcceptDialog con una linea de texto y, si el cierre
+## caia avanzando dias, con las 225 novedades de los 200 clubes adentro:
+## crecia mas alto que la pantalla, el boton de cerrar quedaba afuera y el
+## juego se trababa sin forma de pasar a la temporada siguiente.
+##
+## Ahora es una pantalla propia con la tabla final, los mejores de la liga
+## y todos los campeones del año, y un solo boton para arrancar la que
+## viene. Es un CanvasLayer y no un panel mas porque tiene que taparlo
+## todo: la temporada termino y no hay nada mas que hacer hasta empezar la
+## siguiente.
+func _construir_pantalla_resumen() -> void:
+	capa_resumen = CanvasLayer.new()
+	capa_resumen.layer = 11
+	capa_resumen.visible = false
+	add_child(capa_resumen)
+
+	var fondo := PanelContainer.new()
+	fondo.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var estilo := StyleBoxFlat.new()
+	estilo.bg_color = Tema.FONDO
+	fondo.add_theme_stylebox_override("panel", estilo)
+	capa_resumen.add_child(fondo)
+
+	var margen := MarginContainer.new()
+	for lado in ["left", "right", "top", "bottom"]:
+		margen.add_theme_constant_override("margin_%s" % lado, 16)
+	fondo.add_child(margen)
+
+	contenedor_resumen_temporada = VBoxContainer.new()
+	contenedor_resumen_temporada.add_theme_constant_override("separation", 8)
+	margen.add_child(contenedor_resumen_temporada)
+
+
+func _mostrar_resumen_temporada() -> void:
+	if GameState.resumen_temporada.is_empty():
+		return
+	_refrescar_resumen_temporada()
+	capa_resumen.visible = true
+
+
+func _refrescar_resumen_temporada() -> void:
+	for hijo in contenedor_resumen_temporada.get_children():
+		hijo.queue_free()
+	var r: Dictionary = GameState.resumen_temporada
+
+	var titulo := Label.new()
+	titulo.text = "Terminó la temporada %d  ·  %d" % [
+		int(r.get("temporada", 0)), int(r.get("anio", 0))]
+	Tema.numero(titulo, 28, Tema.AMBAR)
+	contenedor_resumen_temporada.add_child(titulo)
+
+	var puesto := int(r.get("posicion", 0))
+	var sub := Label.new()
+	sub.text = "%s terminó %d° de %d en la División %d." % [
+		GameState.equipo_jugador.nombre, puesto,
+		int(r.get("total", 0)), int(r.get("division", 0))]
+	sub.add_theme_color_override("font_color", Tema.VERDE if puesto <= 3 else Tema.SUAVE)
+	contenedor_resumen_temporada.add_child(sub)
+
+	var columnas := HBoxContainer.new()
+	columnas.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	columnas.add_theme_constant_override("separation", 12)
+	contenedor_resumen_temporada.add_child(columnas)
+
+	# --- Izquierda: la tabla final ----------------------------------------
+	var izq := VBoxContainer.new()
+	izq.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	izq.add_theme_constant_override("separation", 2)
+	columnas.add_child(izq)
+	izq.add_child(Tema.etiqueta_seccion("Tabla final"))
+	# Sin encabezado, "38 30 2 6 +141 92" no se entiende.
+	izq.add_child(_encabezado_resumen_tabla())
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	izq.add_child(scroll)
+	var lista := VBoxContainer.new()
+	lista.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lista.add_theme_constant_override("separation", 0)
+	scroll.add_child(lista)
+	var mio: String = GameState.equipo_jugador.nombre
+	var tabla: Array = r.get("tabla", [])
+	for i in range(tabla.size()):
+		lista.add_child(_fila_resumen_tabla(tabla[i], i + 1, mio))
+
+	# --- Derecha: los mejores y los campeones -----------------------------
+	var der := VBoxContainer.new()
+	der.custom_minimum_size = Vector2(480, 0)
+	der.add_theme_constant_override("separation", 8)
+	columnas.add_child(der)
+
+	der.add_child(Tema.etiqueta_seccion("Los mejores de la División %d" % int(r.get("division", 0))))
+	var tarjeta := Componentes.tarjeta()
+	der.add_child(tarjeta)
+	var caja := VBoxContainer.new()
+	caja.add_theme_constant_override("separation", 4)
+	tarjeta.add_child(caja)
+	for par in [["goleadores", "goles", "Goleador"],
+			["asistencias", "asistencias", "Asistencias"],
+			["vallas", "vallas", "Vallas invictas"]]:
+		caja.add_child(_linea_del_mejor(r, str(par[0]), str(par[1]), str(par[2]), mio))
+
+	der.add_child(Tema.etiqueta_seccion("Campeones"))
+	var t2 := Componentes.tarjeta()
+	der.add_child(t2)
+	var caja2 := VBoxContainer.new()
+	caja2.add_theme_constant_override("separation", 4)
+	t2.add_child(caja2)
+	var campeones: Array = r.get("campeones", [])
+	if campeones.is_empty():
+		caja2.add_child(_texto_suave("No se coronó nadie."))
+	for c in campeones:
+		var fila := HBoxContainer.new()
+		caja2.add_child(fila)
+		fila.add_child(Componentes.celda(str(c["que"]), 200, Tema.SUAVE,
+			HORIZONTAL_ALIGNMENT_LEFT, Tema.TAM_CHICO))
+		var quien := str(c["quien"])
+		fila.add_child(Componentes.celda(quien, 260,
+			Tema.VERDE if quien == mio else Tema.TEXTO,
+			HORIZONTAL_ALIGNMENT_LEFT, Tema.TAM_CHICO))
+
+	var relleno := Control.new()
+	relleno.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	der.add_child(relleno)
+
+	var btn := Button.new()
+	btn.text = "Comenzar la temporada %d" % (int(r.get("temporada", 0)) + 1)
+	btn.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	Tema.primario(btn)
+	btn.pressed.connect(func():
+		capa_resumen.visible = false
+		_mostrar_seccion("club"))
+	der.add_child(btn)
+
+
+func _encabezado_resumen_tabla() -> Control:
+	var fila := Componentes.fila(false)
+	var dentro := Componentes.contenido(fila)
+	dentro.add_child(Componentes.acento_lateral(Color.TRANSPARENT))
+	var cols := [["#", 40, HORIZONTAL_ALIGNMENT_RIGHT],
+		["Equipo", 220, HORIZONTAL_ALIGNMENT_LEFT],
+		["PJ", 40, HORIZONTAL_ALIGNMENT_RIGHT], ["PG", 40, HORIZONTAL_ALIGNMENT_RIGHT],
+		["PE", 40, HORIZONTAL_ALIGNMENT_RIGHT], ["PP", 40, HORIZONTAL_ALIGNMENT_RIGHT],
+		["DG", 48, HORIZONTAL_ALIGNMENT_RIGHT], ["Pts", 48, HORIZONTAL_ALIGNMENT_RIGHT]]
+	for c in cols:
+		var l := Componentes.celda(str(c[0]), int(c[1]), Tema.SUAVE, int(c[2]))
+		l.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+		dentro.add_child(l)
+	return fila
+
+
+func _fila_resumen_tabla(f: Dictionary, puesto: int, mio: String) -> Control:
+	var nombre := str(f.get("equipo", ""))
+	var soy_yo: bool = nombre == mio
+	var fila := Componentes.fila(puesto % 2 == 0)
+	var dentro := Componentes.contenido(fila)
+	dentro.add_child(Componentes.acento_lateral(
+		Tema.AMBAR if soy_yo else Color.TRANSPARENT))
+	var color: Color = Tema.AMBAR if soy_yo else Tema.TEXTO
+	dentro.add_child(Componentes.celda_numero(str(puesto), 40, Tema.SUAVE,
+		HORIZONTAL_ALIGNMENT_RIGHT, Tema.TAM_CHICO))
+	dentro.add_child(Componentes.celda(nombre, 220, color,
+		HORIZONTAL_ALIGNMENT_LEFT, Tema.TAM_CHICO))
+	for clave in ["pj", "pg", "pe", "pp"]:
+		dentro.add_child(Componentes.celda_numero(str(int(f.get(clave, 0))), 40,
+			Tema.SUAVE, HORIZONTAL_ALIGNMENT_RIGHT, Tema.TAM_CHICO))
+	var dg := int(f.get("dg", 0))
+	dentro.add_child(Componentes.celda_numero(("+%d" % dg) if dg > 0 else str(dg), 48,
+		Tema.VERDE if dg > 0 else (Tema.ROJO if dg < 0 else Tema.SUAVE),
+		HORIZONTAL_ALIGNMENT_RIGHT, Tema.TAM_CHICO))
+	dentro.add_child(Componentes.celda_numero(str(int(f.get("pts", 0))), 48, color,
+		HORIZONTAL_ALIGNMENT_RIGHT, Tema.TAM_CHICO))
+	return fila
+
+
+func _linea_del_mejor(r: Dictionary, clave: String, campo: String,
+		titulo: String, mio: String) -> Control:
+	var fila := HBoxContainer.new()
+	fila.add_child(Componentes.celda(titulo, 150, Tema.SUAVE,
+		HORIZONTAL_ALIGNMENT_LEFT, Tema.TAM_CHICO))
+	var lista: Array = r.get(clave, [])
+	if lista.is_empty():
+		fila.add_child(_texto_suave("—"))
+		return fila
+	var mejor: Dictionary = lista[0]
+	var es_mio: bool = str(mejor.get("equipo", "")) == mio
+	fila.add_child(Componentes.celda(str(mejor.get("nombre", "")), 190,
+		Tema.VERDE if es_mio else Tema.TEXTO, HORIZONTAL_ALIGNMENT_LEFT, Tema.TAM_CHICO))
+	fila.add_child(Componentes.celda_numero(str(int(mejor.get(campo, 0))), 36,
+		Tema.AMBAR, HORIZONTAL_ALIGNMENT_RIGHT, Tema.TAM_CHICO))
+	fila.add_child(Componentes.celda(str(mejor.get("equipo", "")), 0, Tema.SUAVE,
+		HORIZONTAL_ALIGNMENT_LEFT, Tema.TAM_CHICO))
+	return fila
+
+
 ## LA VITRINA: todo lo que ganó el club, arriba el resumen y abajo el
 ## detalle temporada por temporada.
 ##
@@ -5913,9 +6148,7 @@ func _on_jugar_fecha() -> void:
 	GameState.jugar_siguiente_fecha()
 
 	_refrescar_historial_partidos()
-	if GameState.temporada_actual != temporada_antes:
-		dialogo_novedades.dialog_text = _texto_cierre_temporada()
-		dialogo_novedades.popup_centered()
+	var cerro_temporada: bool = GameState.temporada_actual != temporada_antes
 
 	_refrescar_tabla()
 	_refrescar_plantel()
@@ -5930,6 +6163,10 @@ func _on_jugar_fecha() -> void:
 	# al resultado.
 	if not GameState.ultimos_fotogramas.is_empty():
 		_mostrar_partido_animado()
+	# El resumen va DESPUES del partido animado: primero se mira el ultimo
+	# partido del año y despues se cierra el año.
+	if cerro_temporada:
+		_mostrar_resumen_temporada()
 
 
 func _on_simular_temporada() -> void:
@@ -5942,8 +6179,7 @@ func _on_simular_temporada() -> void:
 	# Simular una temporada entera bloquea el hilo unos segundos. Los dos
 	# await dejan que Godot dibuje el aviso ANTES de empezar a laburar:
 	# sin ellos la pantalla se congela sin explicacion.
-	dialogo_novedades.dialog_text = "Simulando la temporada, esto tarda unos segundos..."
-	dialogo_novedades.popup_centered()
+	_mostrar_novedades("Simulando la temporada, esto tarda unos segundos...")
 	await get_tree().process_frame
 	await get_tree().process_frame
 
@@ -5952,8 +6188,7 @@ func _on_simular_temporada() -> void:
 	dialogo_novedades.hide()
 
 	if GameState.temporada_actual != temporada_antes:
-		dialogo_novedades.dialog_text = _texto_cierre_temporada()
-		dialogo_novedades.popup_centered()
+		_mostrar_resumen_temporada()
 
 	# A diferencia de "jugar fecha", esto simula muchas fechas de una — no
 	# tiene sentido mostrar el log/animado de sólo el último partido
@@ -6061,6 +6296,7 @@ func _juega_de_local() -> bool:
 ## porque saltar a ciegas seria volver al problema que esto viene a
 ## resolver: enterarse de todo junto cuando ya no se puede hacer nada.
 func _avanzar_dias(hasta_el_partido: bool) -> void:
+	var temporada_antes := GameState.temporada_actual
 	var novedades: Array = GameState.avanzar_hasta_el_partido() if hasta_el_partido 		else GameState.avanzar_un_dia()
 	_refrescar_portada()
 	_refrescar_plantel()
@@ -6068,14 +6304,54 @@ func _avanzar_dias(hasta_el_partido: bool) -> void:
 	_refrescar_objetivo()
 	_refrescar_objetivo()
 	_refrescar_barra_contexto()
+	# El cierre de temporada tiene su propia pantalla: el cartel de
+	# novedades con las 225 lineas del cierre adentro era justamente lo que
+	# trababa el juego. Lo que no entra sigue estando en Noticias.
+	if GameState.temporada_actual != temporada_antes:
+		_mostrar_resumen_temporada()
+		return
 	if not novedades.is_empty():
-		dialogo_novedades.dialog_text = "%s
+		_mostrar_novedades("%s
 
 %s" % [
 			Calendario.texto_largo(GameState.dia_absoluto),
-			"
-".join(novedades.map(func(n): return "  ·  %s" % str(n)))]
-		dialogo_novedades.popup_centered()
+			_texto_de_novedades(novedades)])
+
+
+## Cuantas novedades entran en el cartel antes de mandar el resto a
+## Noticias. El cierre de temporada genera 225 lineas —los 200 clubes de
+## la piramide fichando, liberando y subiendo juveniles— y un cartel con
+## eso adentro no se lee: es una pared de texto donde lo tuyo esta perdido.
+const MAX_NOVEDADES := 24
+
+
+## El texto del cartel. Lo TUYO primero: el cierre de temporada mete al
+## final las noticias de rutina de los 200 clubes, y como se leen de la
+## mas nueva a la mas vieja, terminaban arriba y tu posicion final, tu
+## objetivo y tu ascenso quedaban debajo de doscientas lineas de "un MCO
+## queda libre de un club que no conoces".
+func _texto_de_novedades(novedades: Array) -> String:
+	var mio: String = GameState.equipo_jugador.nombre
+	var mias := []
+	var resto := []
+	for n in novedades:
+		if str(n).contains(mio):
+			mias.append(str(n))
+		else:
+			resto.append(str(n))
+
+	var lineas := []
+	for n in mias:
+		lineas.append("  ·  %s" % n)
+	var cupo: int = maxi(MAX_NOVEDADES - lineas.size(), 0)
+	for i in range(mini(cupo, resto.size())):
+		lineas.append("  ·  %s" % resto[i])
+	var quedaron: int = resto.size() - mini(cupo, resto.size())
+	if quedaron > 0:
+		lineas.append("")
+		lineas.append("Y %d novedad(es) mas del resto de la piramide, en Mas › Noticias." % quedaron)
+	return "
+".join(lineas)
 
 
 func _proximo_rival() -> Team:
