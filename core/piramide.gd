@@ -143,16 +143,22 @@ func fin_de_temporada(rng: RandomNumberGenerator, equipo_protegido: Team = null,
 	var transferencias := Mercado.ventana_entre_divisiones(self, rng, equipo_protegido)
 	for t in transferencias:
 		var liga_destino: Liga = divisiones[t["a_division"] - 1]
+		var quien: Dictionary = t.get("jugador", {})
+		var como: String = ("%s %s" % [
+			quien.get("nombre", ""), quien.get("apellido", "")]).strip_edges()
+		var mencion := [Noticias.mencion(quien, str(t["a"]))] if not quien.is_empty() else []
 		if t["joya"]:
-			liga_destino.noticias.append(
-				"FICHAJES: %s (division %d) se lleva a una joven promesa de %s (division %d) por %s — media %d, techo %d." % [
-					t["a"], t["a_division"], t["de"], t["de_division"],
-					Economia.formato_dinero(t["valor"]), int(t["media"]), t["potencial"]])
+			liga_destino.noticias.append(Noticias.crear(
+				"FICHAJES: %s (division %d) se lleva a %s (%s), una joven promesa de %s (division %d), por %s — media %d, techo %d." % [
+					t["a"], t["a_division"], como, t["posicion"], t["de"], t["de_division"],
+					Economia.formato_dinero(t["valor"]), int(t["media"]), t["potencial"]],
+				"fichajes", mencion))
 		else:
-			liga_destino.noticias.append(
-				"FICHAJES: %s (division %d) refuerza el puesto de %s con un jugador de %s (division %d) por %s." % [
-					t["a"], t["a_division"], t["posicion"], t["de"], t["de_division"],
-					Economia.formato_dinero(t["valor"])])
+			liga_destino.noticias.append(Noticias.crear(
+				"FICHAJES: %s (division %d) refuerza el puesto de %s con %s, de %s (division %d), por %s." % [
+					t["a"], t["a_division"], t["posicion"], como, t["de"], t["de_division"],
+					Economia.formato_dinero(t["valor"])],
+				"fichajes", mencion))
 
 	var movimientos := _ejecutar_ascensos_y_descensos(ordenes, rng)
 

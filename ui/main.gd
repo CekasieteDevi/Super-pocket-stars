@@ -12,7 +12,7 @@ extends Control
 
 var paneles: Dictionary = {}  # nombre -> Control, para mostrar/ocultar en bloque
 
-var lista_ficha: RichTextLabel
+var contenedor_ficha: VBoxContainer
 var ficha_jugador_id := -1
 ## De que club es el jugador de la ficha. null = uno propio. Si es ajeno,
 ## la ficha se dibuja en modo AJENO: sin lo que solo sabe un club de su
@@ -54,6 +54,12 @@ var contenedor_economia: VBoxContainer
 var lista_cantera: RichTextLabel
 var contenedor_cantera_botones: VBoxContainer
 var contenedor_noticias: VBoxContainer
+var noticias_solapa: String = "todas"
+var botones_solapa_noticias: Dictionary = {}
+var capa_modal_jugador: CanvasLayer
+var contenedor_modal_jugador: VBoxContainer
+var modal_jugador_id: int = -1
+var label_modal_jugador_estado: String = ""
 var label_mercado_estado: Label
 var contenedor_libres_botones: VBoxContainer
 var label_libres_estado: Label
@@ -149,6 +155,7 @@ func _ready() -> void:
 	# deslizables con el dedo (ver _ajustar_para_tactil).
 	_ajustar_para_tactil(self)
 
+	_construir_modal_jugador()
 	_construir_pantalla_inicio()
 	_mostrar_seccion("club")
 	_mostrar_inicio()
@@ -775,11 +782,14 @@ func _construir_panel_ficha(padre: Control) -> void:
 	)
 	panel.add_child(boton_volver_ficha)
 
-	lista_ficha = RichTextLabel.new()
-	lista_ficha.bbcode_enabled = true
-	lista_ficha.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	lista_ficha.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.add_child(lista_ficha)
+	# Todo se repinta de cero en _refrescar_ficha: la ficha cambia entera
+	# entre un jugador y otro (un arquero trae seis atributos mas) y no
+	# hay nada que valga la pena conservar entre una y otra.
+	contenedor_ficha = VBoxContainer.new()
+	contenedor_ficha.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	contenedor_ficha.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	contenedor_ficha.add_theme_constant_override("separation", 8)
+	panel.add_child(contenedor_ficha)
 
 
 ## club = null para uno propio; el Team dueño si es ajeno (viene del
@@ -792,33 +802,19 @@ func _mostrar_ficha(jugador_id: int, club: Team = null) -> void:
 	_refrescar_ficha()
 
 
-## Barra de texto para un atributo. Se pinta con color segun el valor
-## porque una grilla de 25 numeros sueltos no se lee: lo que se quiere ver
-## de un vistazo es en que es bueno y en que no.
-func _barra_atributo(nombre: String, valor: int, techo: int) -> String:
-	var llenos: int = int(round(valor / 10.0))
-	var color := "#c0392b"
-	if valor >= 75:
-		color = "#27ae60"
-	elif valor >= 55:
-		color = "#7fb069"
-	elif valor >= 40:
-		color = "#d4a017"
-	# El techo de ESTE atributo (§7.2) es lo que dice si todavia le queda
-	# margen ahi o si ya llego: dos jugadores con el mismo potencial global
-	# pueden tener techos muy distintos atributo por atributo.
-	var margen := ""
-	if techo > valor + 1:
-		margen = "  [color=#7f8c8d]-> %d[/color]" % techo
-	else:
-		margen = "  [color=#7f8c8d](al tope)[/color]"
-	return "  %-14s [color=%s]%3d %s[/color]%s
-" % [
-		nombre.replace("_", " "), color, valor,
-		"█".repeat(llenos) + "░".repeat(10 - llenos), margen]
-
-
+## La ficha ENTERA, en dos columnas para que entre sin scroll: los 19
+## atributos de un jugador de campo (25 si es arquero) no se leen en una
+## lista vertical de la que solo se ve la mitad.
+##
+## Antes era un RichTextLabel con barras hechas de bloques de texto. Se
+## veia de otra epoca que el resto del juego y ademas no alineaba: la
+## fuente no es monoespaciada, asi que las columnas bailaban fila a fila.
+## Ahora usa los mismos componentes que la ficha lateral del plantel, que
+## es la que el jugador ya conoce.
 func _refrescar_ficha() -> void:
+	for hijo in contenedor_ficha.get_children():
+		hijo.queue_free()
+
 	var ajeno: bool = ficha_club != null
 	var equipo: Team = ficha_club if ajeno else GameState.equipo_jugador
 	boton_volver_ficha.text = "< Volver al mercado" if ajeno else "< Volver al plantel"
@@ -827,83 +823,175 @@ func _refrescar_ficha() -> void:
 	# vuelve a chequear igual: la ficha se puede quedar abierta mientras
 	# pasa el tiempo y el jugador puede haber cambiado de club.
 	if ajeno and not Investigadores.conoce(GameState.equipo_jugador, ficha_jugador_id):
-		lista_ficha.text = "Todavia no lo investigaste."
+		contenedor_ficha.add_child(_texto_suave("Todavia no lo investigaste."))
 		return
 
 	# _buscar_jugador_por_id ya mira titulares, banco y cantera.
 	var j := _buscar_jugador_por_id(equipo, ficha_jugador_id)
 	if j.is_empty():
-		lista_ficha.text = "Ese jugador ya no esta en %s." % (equipo.nombre if ajeno else "el plantel")
+		contenedor_ficha.add_child(_texto_suave(
+			"Ese jugador ya no esta en %s." % (equipo.nombre if ajeno else "el plantel")))
 		return
 
-	var t := "[b]%s[/b]   %s, %d anos
-" % [_nombre_jugador(j), j["posicion"], j["edad"]]
-	if ajeno:
-		t += "[color=#8ecae6]%s[/color]
-" % equipo.nombre
-	t += "media %.1f   potencial %d   genetica %s
-" % [j["media"], j["potencial"], j["genetica_tier"]]
-	t += "pie %s
-" % ("izquierdo" if Personalidad.pie_preferido(j) < 0 else "derecho")
+	contenedor_ficha.add_child(_cabecera_de_ficha(equipo, j, ajeno))
 
-	var p: Dictionary = j.get("personalidades", {})
-	if p.is_empty():
-		t += "sin rasgos de personalidad
-"
-	else:
-		t += "[color=#27ae60]%s[/color]  /  [color=#c0392b]%s[/color]
-" % [
-			p.get("positiva", "-"), p.get("negativa", "-")]
+	var columnas := HBoxContainer.new()
+	columnas.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	columnas.add_theme_constant_override("separation", 10)
+	contenedor_ficha.add_child(columnas)
+
+	# El reparto busca que las columnas midan parecido, no que cada una
+	# tenga la misma cantidad de grupos: fisicos (7) + defensivos (2) de un
+	# lado y tecnicos (8) + mentales (2) del otro dan 9 y 10 filas, que es
+	# lo que entra de alto sin scroll.
+	#
+	# El arquero tiene seis atributos mas —25 en total— y en dos columnas
+	# no entran de ninguna manera, asi que se abre una tercera. Es la unica
+	# diferencia entre las dos fichas y se nota poco: la primera columna es
+	# la misma en los dos casos.
+	var es_arquero: bool = j["posicion"] == "ARQ"
+	var reparto := [["fisicos", "defensivos"], ["tecnicos", "mentales"]]
+	if es_arquero:
+		reparto = [["fisicos", "defensivos"], ["tecnicos"], ["arquero", "mentales"]]
+
+	var grupos: Dictionary = PlayerGenerator.get_attribute_groups()
+	for lista in reparto:
+		var caja := VBoxContainer.new()
+		caja.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		caja.add_theme_constant_override("separation", 8)
+		columnas.add_child(caja)
+		for grupo in lista:
+			if grupos.has(grupo):
+				caja.add_child(_bloque_de_atributos(j, str(grupo), grupos[grupo]))
+		# Empuja los bloques hacia arriba: sin esto las columnas estiran
+		# sus tarjetas para llenar el alto y las barras quedan separadas
+		# por huecos distintos de una columna a la otra.
+		var relleno := Control.new()
+		relleno.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		caja.add_child(relleno)
+
+
+## Quien es y como esta: la franja de arriba, a todo el ancho.
+func _cabecera_de_ficha(equipo: Team, j: Dictionary, ajeno: bool) -> Control:
+	var id: int = int(j["id"])
+	var tarjeta := Componentes.tarjeta()
+	var caja := VBoxContainer.new()
+	caja.add_theme_constant_override("separation", 6)
+	tarjeta.add_child(caja)
+
+	# Los datos a la izquierda y los numeros a la derecha, en la misma
+	# franja: apilados uno abajo del otro la cabecera se comia un tercio de
+	# la pantalla y los atributos no entraban sin scroll, que es todo el
+	# punto de esta pantalla.
+	var franja := HBoxContainer.new()
+	franja.add_theme_constant_override("separation", 16)
+	caja.add_child(franja)
+	var datos := VBoxContainer.new()
+	datos.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	datos.add_theme_constant_override("separation", 2)
+	franja.add_child(datos)
+
+	var linea_nombre := HBoxContainer.new()
+	datos.add_child(linea_nombre)
+	var titulo := Label.new()
+	titulo.text = _nombre_jugador(j)
+	Tema.numero(titulo, 26)
+	linea_nombre.add_child(titulo)
+	if ajeno:
+		var club := Label.new()
+		club.text = "   %s" % equipo.nombre
+		club.add_theme_color_override("font_color", Tema.CELESTE)
+		club.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		linea_nombre.add_child(club)
+
+	var sub := Label.new()
+	sub.text = "%s  ·  %d años  ·  %s  ·  pie %s" % [
+		j["posicion"], int(j["edad"]), j["genetica_tier"],
+		"izquierdo" if Personalidad.pie_preferido(j) < 0 else "derecho"]
+	sub.add_theme_color_override("font_color", Tema.SUAVE)
+	sub.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	datos.add_child(sub)
+
+	# Rasgos y habilidad en la misma linea: son tres chips, no tres
+	# parrafos, y arriba de todo hay que ahorrar alto.
+	var fila_tags := HBoxContainer.new()
+	datos.add_child(fila_tags)
+	var rasgos: Dictionary = j.get("personalidades", {})
+	if str(rasgos.get("positiva", "")) != "":
+		fila_tags.add_child(Componentes.chip(
+			str(rasgos["positiva"]), Color("#23402f"), Color("#7fd6a0")))
+	if str(rasgos.get("negativa", "")) != "":
+		fila_tags.add_child(Componentes.chip(
+			str(rasgos["negativa"]), Color("#3f2523"), Color("#e29d95")))
 	var tag := _tag_habilidad(j, ajeno)
 	if tag != "":
-		t += "habilidad:%s
-" % tag
+		var l := Label.new()
+		l.text = "  Habilidad:%s" % tag
+		l.add_theme_color_override("font_color", Tema.AMBAR)
+		l.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		fila_tags.add_child(l)
 
-	t += "
-[b]Estado[/b]
-"
-	if not ajeno:
-		# La energia con la que va a EMPEZAR el proximo partido, no la del
-		# ultimo (ver Team.energia_proximo_partido). De un jugador ajeno
-		# no se sabe, y ademas no significa nada fuera de su calendario.
-		t += "  energia      %3d%%
-" % int(round(equipo.energia_proximo_partido(j["id"]) * 100.0))
-	t += "  animo        %3d
-" % int(equipo.animo.get(j["id"], 50))
-	if equipo.esta_lesionado(j["id"]):
-		var les: Dictionary = equipo.lesiones[j["id"]]
-		t += "  [color=#c0392b]lesionado: %s, %d dias[/color]
-" % [les["tipo"], les["dias_restantes"]]
-	if not ajeno:
-		var susp: int = int(equipo.suspendidos.get(j["id"], 0))
-		if susp > 0:
-			t += "  [color=#c0392b]suspendido %d fecha(s)[/color]
-" % susp
-	t += "  contrato     %d año(s),  sueldo %s
-" % [
-		int(equipo.contratos.get(j["id"], 0)), Economia.formato_dinero(equipo.sueldos.get(j["id"], 0))]
-	if equipo.clausulas.has(j["id"]):
-		t += "  clausula     %s
-" % Economia.formato_dinero(equipo.clausulas[j["id"]])
+	var nums := HBoxContainer.new()
+	nums.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	franja.add_child(nums)
+	nums.add_child(_caja_numero("Media", "%.1f" % float(j["media"]), Tema.TEXTO))
+	nums.add_child(_caja_numero("Techo", str(int(j["potencial"])), Tema.AMBAR))
+	var animo := int(equipo.animo.get(id, 50))
+	nums.add_child(_caja_numero("Ánimo", str(animo), Componentes.color_de_valor(animo)))
 	if ajeno:
-		t += "  valor        %s
-" % Economia.formato_dinero(
-			ValorJugador.calcular(j, equipo.animo.get(j["id"], 50.0), equipo.contratos.get(j["id"], 3)))
+		nums.add_child(_caja_numero("Valor", Economia.formato_dinero(
+			ValorJugador.calcular(j, equipo.animo.get(id, 50.0),
+				equipo.contratos.get(id, 3))), Tema.VERDE))
+	else:
+		# La energia con la que va a EMPEZAR el proximo partido, no la del
+		# ultimo (ver Team.energia_proximo_partido). De un jugador ajeno no
+		# se sabe, y ademas no significa nada fuera de su calendario.
+		var energia := int(round(equipo.energia_proximo_partido(id) * 100.0))
+		nums.add_child(_caja_numero(
+			"Energía", "%d%%" % energia, Componentes.color_de_valor(energia)))
 
-	# Atributos por grupo. El de arquero solo si es arquero: a un delantero
-	# no le sirve saber su `estirada`.
-	var grupos: Dictionary = PlayerGenerator.get_attribute_groups()
+	var pie := []
+	pie.append("Contrato %d año(s)  ·  sueldo %s" % [
+		int(equipo.contratos.get(id, 0)),
+		Economia.formato_dinero(equipo.sueldos.get(id, 0))])
+	if equipo.clausulas.has(id):
+		pie.append("cláusula %s" % Economia.formato_dinero(equipo.clausulas[id]))
+	datos.add_child(_texto_suave("   ·   ".join(pie)))
+
+	# Lo que lo deja afuera va en rojo y al final, que es donde se mira
+	# cuando la pregunta es "¿puede jugar el domingo?".
+	var bajas := []
+	if equipo.esta_lesionado(id):
+		var les: Dictionary = equipo.lesiones[id]
+		bajas.append("Lesionado: %s, %d días" % [les["tipo"], int(les["dias_restantes"])])
+	if not ajeno:
+		var susp: int = int(equipo.suspendidos.get(id, 0))
+		if susp > 0:
+			bajas.append("Suspendido %d fecha(s)" % susp)
+	if not bajas.is_empty():
+		var l := Label.new()
+		l.text = "   ·   ".join(bajas)
+		l.add_theme_color_override("font_color", Tema.ROJO)
+		l.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		datos.add_child(l)
+
+	return tarjeta
+
+
+func _bloque_de_atributos(j: Dictionary, grupo: String, atributos: Array) -> Control:
+	var tarjeta := Componentes.tarjeta()
+	var caja := VBoxContainer.new()
+	caja.add_theme_constant_override("separation", 2)
+	tarjeta.add_child(caja)
+	caja.add_child(Tema.etiqueta_seccion(grupo.capitalize()))
 	var attrs: Dictionary = j["atributos"]
-	for grupo in grupos:
-		if grupo == "arquero" and j["posicion"] != "ARQ":
-			continue
-		t += "
-[b]%s[/b]
-" % grupo.capitalize()
-		for a in grupos[grupo]:
-			if attrs.has(a):
-				t += _barra_atributo(a, int(attrs[a]), Progresion.techo_de(j, a))
-	lista_ficha.text = t
+	for a in atributos:
+		if attrs.has(a):
+			caja.add_child(Componentes.barra_atributo(
+				str(a), int(attrs[a]), int(Progresion.techo_de(j, a)), true))
+	return tarjeta
+
 
 
 ## §8.1: elegir formacion y mover jugadores. La formacion define los 11
@@ -2552,15 +2640,22 @@ func _indice_de_jugadores() -> Dictionary:
 
 
 func _on_investigar(vendedor: Team, jugador_id: int) -> void:
-	var donde := Mercado.ubicar(vendedor, jugador_id)
-	var nombre := _nombre_jugador(donde["jugador"]) if not donde.is_empty() else ""
-	var r := Investigadores.investigar(GameState.equipo_jugador, jugador_id, vendedor.nombre, nombre)
-	if r["exito"]:
-		label_mercado_estado.text = "Investigador de %d estrellas asignado: el informe tarda %d dias." % [
-			int(r["investigador"]["estrellas"]), int(round(float(r["dias_totales"])))]
-	else:
-		label_mercado_estado.text = "No se pudo: %s" % r["motivo"]
+	label_mercado_estado.text = _asignar_investigador(vendedor, jugador_id)
 	_on_buscar_mercado()
+
+
+## Le manda un investigador y devuelve que paso, en texto. Devuelve el
+## mensaje en vez de escribirlo: lo piden dos pantallas distintas (la
+## tabla del mercado y el modal del jugador que sale de una noticia) y
+## cada una lo muestra en su lugar.
+func _asignar_investigador(club: Team, jugador_id: int) -> String:
+	var donde := Mercado.ubicar(club, jugador_id)
+	var nombre := _nombre_jugador(donde["jugador"]) if not donde.is_empty() else ""
+	var r := Investigadores.investigar(GameState.equipo_jugador, jugador_id, club.nombre, nombre)
+	if r["exito"]:
+		return "Investigador de %d estrellas asignado: el informe tarda %d dias." % [
+			int(r["investigador"]["estrellas"]), int(round(float(r["dias_totales"])))]
+	return "No se pudo: %s" % r["motivo"]
 
 
 ## Las dos solapas de negociaciones abiertas. `entrantes` = las que
@@ -4405,15 +4500,33 @@ func _on_promover_juvenil(id: int) -> void:
 	_refrescar_plantel()
 
 
-## Las noticias de la temporada. Van en tarjetas y de la mas NUEVA a la
-## mas vieja: en un parrafo corrido de treinta lineas lo ultimo que paso
-## quedaba al fondo, que es justo lo que se viene a leer.
+## Las noticias de la temporada, separadas por categoria y con los
+## jugadores que se nombran clickeables.
+##
+## Antes era una sola lista de treinta tarjetas donde un fichaje, una
+## lesion y un campeon se leian igual, y el jugador que se mencionaba era
+## texto muerto: para saber quien era habia que ir al buscador del mercado
+## y filtrar a ciegas. Ahora el nombre abre su ficha de mercado y, si
+## tenes un investigador libre, se lo manda desde ahi mismo.
 func _construir_panel_noticias(padre: Control) -> void:
 	var panel := VBoxContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	panel.visible = false
 	padre.add_child(panel)
 	paneles["noticias"] = panel
+
+	var barra := HBoxContainer.new()
+	panel.add_child(barra)
+	for entrada in Noticias.SOLAPAS:
+		var btn := Button.new()
+		btn.text = str(entrada[1])
+		btn.custom_minimum_size = Vector2(0, 44)
+		var clave := str(entrada[0])
+		btn.pressed.connect(func():
+			noticias_solapa = clave
+			_refrescar_noticias())
+		barra.add_child(btn)
+		botones_solapa_noticias[clave] = btn
 
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -4432,40 +4545,257 @@ func _acento_de_noticia(texto: String) -> Color:
 	var t := texto.to_lower()
 	# El descenso primero: "desciende" no contiene "ascien" (lleva una "e"
 	# delante), pero conviene no depender de eso.
-	if t.contains("descen") or t.contains("descien") or t.contains("quiebra") 			or t.contains("lesion"):
+	if t.contains("descen") or t.contains("descien") or t.contains("quiebra") \
+			or t.contains("lesion"):
 		return Tema.ROJO
-	if t.contains("ascen") or t.contains("ascien") or t.contains("campe") 			or t.contains("gana"):
+	if t.contains("ascen") or t.contains("ascien") or t.contains("campe") \
+			or t.contains("gana"):
 		return Tema.VERDE
 	if t.contains("fich") or t.contains("transfer") or t.contains("prestamo"):
 		return Tema.CELESTE
 	return Tema.BORDE
 
 
+const VACIO_POR_SOLAPA := {
+	"todas": "Todavia no hay noticias.",
+	"rumores": "Todavia no se habla de nadie. Los rumores salen con el libro de pases abierto.",
+	"fichajes": "Todavia no se movio nadie.",
+	"lesiones": "Nadie se rompio todavia. Ojala siga asi.",
+	"campeones": "Todavia no se corono nadie: los titulos se reparten al cerrar la temporada.",
+}
+
+
 func _refrescar_noticias() -> void:
 	if contenedor_noticias == null:
 		return
+	for clave in botones_solapa_noticias:
+		Tema.seleccionado(botones_solapa_noticias[clave], clave == noticias_solapa)
 	for hijo in contenedor_noticias.get_children():
 		hijo.queue_free()
 
-	if GameState.noticias.is_empty():
+	var lista := Noticias.filtrar(GameState.noticias, noticias_solapa)
+	if lista.is_empty():
 		var vacio := Componentes.tarjeta()
 		var l := Label.new()
-		l.text = "Todavia no hay noticias: se generan al cerrar cada temporada."
+		l.text = str(VACIO_POR_SOLAPA.get(noticias_solapa, "Todavia no hay nada aca."))
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		l.add_theme_color_override("font_color", Tema.SUAVE)
 		vacio.add_child(l)
 		contenedor_noticias.add_child(vacio)
 		return
 
-	var total := GameState.noticias.size()
-	for i in range(total - 1, -1, -1):
-		var texto := str(GameState.noticias[i])
-		var tarjeta := Componentes.tarjeta(_acento_de_noticia(texto))
+	# De la mas NUEVA a la mas vieja, que es como estan guardadas
+	# (_agregar_noticia mete adelante). Estaba recorrida al reves y lo
+	# primero que se leia era lo mas viejo del feed.
+	for n in lista:
+		contenedor_noticias.add_child(_tarjeta_de_noticia(n))
+
+
+func _tarjeta_de_noticia(n: Dictionary) -> Control:
+	var texto := str(n["texto"])
+	var tarjeta := Componentes.tarjeta(_acento_de_noticia(texto))
+	var l := RichTextLabel.new()
+	l.bbcode_enabled = true
+	l.fit_content = true
+	l.scroll_active = false
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l.add_theme_font_size_override("normal_font_size", Tema.TAM_BASE)
+	l.text = _texto_con_menciones(texto, n.get("jugadores", []))
+	l.meta_clicked.connect(func(meta): _abrir_ficha_de_mencion(str(meta)))
+	tarjeta.add_child(l)
+	return tarjeta
+
+
+## Convierte el nombre de cada jugador mencionado en un enlace. El meta
+## que viaja es "id|club": el club hace falta para mandar un investigador,
+## que trabaja sobre un jugador DE un club.
+##
+## Se reemplaza solo la PRIMERA aparicion: en "X ficha a Juan Perez de Y",
+## el nombre aparece una vez y alcanza; si por alguna razon apareciera dos
+## veces, dos enlaces al mismo lugar solo ensucian la linea.
+func _texto_con_menciones(texto: String, menciones: Array) -> String:
+	var salida := texto
+	for m in menciones:
+		var nombre := str(m.get("nombre", "")).strip_edges()
+		if nombre == "" or not salida.contains(nombre):
+			continue
+		salida = salida.replace(nombre, "[url=%d|%s][color=#8ecae6]%s[/color][/url]" % [
+			int(m.get("id", -1)), str(m.get("club", "")), nombre])
+	return salida
+
+
+func _abrir_ficha_de_mencion(meta: String) -> void:
+	var partes := meta.split("|", true, 1)
+	if partes.is_empty():
+		return
+	_mostrar_modal_jugador(int(partes[0]))
+
+
+# ---------------------------------------------------------------------------
+# El modal del jugador mencionado
+# ---------------------------------------------------------------------------
+## Lo mismo que se ve de el en el mercado, sin salir de la noticia: quien
+## es, que se sabe de el y el boton para mandarle un investigador. Es un
+## CanvasLayer y no un panel mas porque tiene que taparlo todo sin
+## participar del baile de mostrar/ocultar paneles — igual que la pantalla
+## de inicio.
+func _construir_modal_jugador() -> void:
+	capa_modal_jugador = CanvasLayer.new()
+	capa_modal_jugador.layer = 9
+	capa_modal_jugador.visible = false
+	add_child(capa_modal_jugador)
+
+	var fondo := PanelContainer.new()
+	fondo.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var estilo := StyleBoxFlat.new()
+	estilo.bg_color = Color(0, 0, 0, 0.65)
+	fondo.add_theme_stylebox_override("panel", estilo)
+	capa_modal_jugador.add_child(fondo)
+
+	var centro := CenterContainer.new()
+	fondo.add_child(centro)
+	var caja := Componentes.tarjeta()
+	caja.custom_minimum_size = Vector2(520, 0)
+	caja.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	centro.add_child(caja)
+
+	contenedor_modal_jugador = VBoxContainer.new()
+	contenedor_modal_jugador.add_theme_constant_override("separation", 8)
+	caja.add_child(contenedor_modal_jugador)
+
+
+func _mostrar_modal_jugador(jugador_id: int) -> void:
+	modal_jugador_id = jugador_id
+	capa_modal_jugador.visible = true
+	_refrescar_modal_jugador()
+
+
+func _cerrar_modal_jugador() -> void:
+	capa_modal_jugador.visible = false
+
+
+func _refrescar_modal_jugador() -> void:
+	for hijo in contenedor_modal_jugador.get_children():
+		hijo.queue_free()
+
+	var equipo := GameState.equipo_jugador
+	var indice := _indice_de_jugadores()
+	if not indice.has(modal_jugador_id):
+		# Pudo colgarse, retirarse o irse al pool de libres entre que salio
+		# la noticia y la fuiste a leer.
+		contenedor_modal_jugador.add_child(_texto_suave(
+			"Ese jugador ya no esta en ningun club de la piramide."))
+		contenedor_modal_jugador.add_child(_boton_cerrar_modal())
+		return
+
+	var entrada: Dictionary = indice[modal_jugador_id]
+	var j: Dictionary = entrada["jugador"]
+	var club: Team = entrada["club"]
+	var propio: bool = club == equipo
+	# BusquedaMercado.ficha pide la entrada con la forma del buscador
+	# (equipo/origen); el indice la arma con "club" y sin origen.
+	var f := BusquedaMercado.ficha(equipo, {
+		"jugador": j, "equipo": club,
+		"division": int(entrada["division"]), "origen": "plantel"})
+
+	var titulo := Label.new()
+	titulo.text = _nombre_jugador(j)
+	Tema.numero(titulo, 24)
+	contenedor_modal_jugador.add_child(titulo)
+
+	var sub := Label.new()
+	sub.text = "%s  ·  %d años  ·  %s  ·  División %d" % [
+		j["posicion"], int(j["edad"]), club.nombre, int(entrada["division"])]
+	sub.add_theme_color_override("font_color", Tema.CELESTE if not propio else Tema.AMBAR)
+	contenedor_modal_jugador.add_child(sub)
+
+	if propio:
+		contenedor_modal_jugador.add_child(_texto_suave("Es tuyo."))
+
+	# De un ajeno sin informe no se sabe NADA de esto: es exactamente el
+	# agujero que el investigador viene a llenar.
+	var conocido: bool = propio or bool(f["conocido"])
+	if conocido:
+		var nums := HBoxContainer.new()
+		contenedor_modal_jugador.add_child(nums)
+		nums.add_child(_caja_numero("Media", "%.1f" % float(j["media"]), Tema.TEXTO))
+		nums.add_child(_caja_numero("Techo", str(int(j["potencial"])), Tema.AMBAR))
+		var animo := int(club.animo.get(modal_jugador_id, 50))
+		nums.add_child(_caja_numero("Ánimo", str(animo), Componentes.color_de_valor(animo)))
+		nums.add_child(_caja_numero("Valor", Economia.formato_dinero(
+			ValorJugador.calcular(j, club.animo.get(modal_jugador_id, 50.0),
+				club.contratos.get(modal_jugador_id, 3))), Tema.VERDE))
+		contenedor_modal_jugador.add_child(_texto_suave(
+			"Contrato %d año(s)  ·  sueldo %s" % [
+				int(club.contratos.get(modal_jugador_id, 0)),
+				Economia.formato_dinero(club.sueldos.get(modal_jugador_id, 0))]))
+	elif float(f["progreso"]) >= 0.0:
+		contenedor_modal_jugador.add_child(Componentes.bloque_investigando(
+			460, Investigadores.progreso(equipo, modal_jugador_id),
+			_dias_que_faltan(equipo, modal_jugador_id)))
+	else:
+		contenedor_modal_jugador.add_child(_texto_suave(
+			"No lo investigaste: no se le ve la media, ni el valor, ni el sueldo."))
+
+	if club.esta_lesionado(modal_jugador_id):
+		var les: Dictionary = club.lesiones[modal_jugador_id]
 		var l := Label.new()
-		l.text = texto
-		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		tarjeta.add_child(l)
-		contenedor_noticias.add_child(tarjeta)
+		l.text = "Lesionado: %s, %d días" % [les["tipo"], int(les["dias_restantes"])]
+		l.add_theme_color_override("font_color", Tema.ROJO)
+		contenedor_modal_jugador.add_child(l)
+
+	var acciones := HBoxContainer.new()
+	contenedor_modal_jugador.add_child(acciones)
+
+	if conocido:
+		var btn_ficha := Button.new()
+		btn_ficha.text = "Ficha completa"
+		btn_ficha.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+		btn_ficha.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var id := modal_jugador_id
+		var dueno: Team = null if propio else club
+		btn_ficha.pressed.connect(func():
+			_cerrar_modal_jugador()
+			_mostrar_ficha(id, dueno))
+		acciones.add_child(btn_ficha)
+
+	if not propio and not conocido:
+		var btn_inv := Button.new()
+		btn_inv.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+		btn_inv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if float(f["progreso"]) >= 0.0:
+			btn_inv.text = "Ya lo estás investigando"
+			btn_inv.disabled = true
+		elif Investigadores.libres(equipo).is_empty():
+			btn_inv.text = "Sin investigadores libres"
+			btn_inv.disabled = true
+			btn_inv.tooltip_text = "Se contratan en Equipo › Instalaciones."
+		else:
+			btn_inv.text = "Investigar"
+			btn_inv.add_theme_color_override("font_color", Tema.AMBAR)
+			btn_inv.pressed.connect(func():
+				label_modal_jugador_estado = _asignar_investigador(club, modal_jugador_id)
+				_refrescar_modal_jugador())
+		acciones.add_child(btn_inv)
+
+	acciones.add_child(_boton_cerrar_modal())
+
+	if not label_modal_jugador_estado.is_empty():
+		var aviso := Label.new()
+		aviso.text = label_modal_jugador_estado
+		aviso.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		aviso.add_theme_color_override("font_color", Tema.AMBAR)
+		aviso.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		contenedor_modal_jugador.add_child(aviso)
+		label_modal_jugador_estado = ""
+
+
+func _boton_cerrar_modal() -> Button:
+	var btn := Button.new()
+	btn.text = "Cerrar"
+	btn.custom_minimum_size = Vector2(120, Tema.ALTO_TACTIL)
+	btn.pressed.connect(_cerrar_modal_jugador)
+	return btn
 
 
 ## Guardado de partida (§12) — un solo slot: Guardar pisa lo que hubiera,
@@ -5217,7 +5547,7 @@ const SECCIONES := [
 	{"clave": "club", "nombre": "Club", "paneles": []},
 	{"clave": "equipo", "nombre": "Equipo", "paneles": [
 		["plantel", "Plantel"], ["formacion", "Formacion"],
-		["entrenamiento", "Entrenamiento"],
+		["entrenamiento", "Entrenamiento"], ["economia", "Economia"],
 		["cantera", "Cantera"], ["instalaciones", "Instalaciones"]]},
 	{"clave": "partido", "nombre": "Liga", "paneles": [
 		["tabla", "Tabla"], ["jugadores_liga", "Jugadores"],
@@ -5225,7 +5555,7 @@ const SECCIONES := [
 	{"clave": "mercado", "nombre": "Mercado", "paneles": [
 		["mercado", "Mercado"], ["libres", "Libres"], ["prestamos", "Prestamos"]]},
 	{"clave": "mas", "nombre": "Mas", "paneles": [
-		["economia", "Economia"], ["noticias", "Noticias"],
+		["noticias", "Noticias"],
 		["seleccion", "Seleccion"], ["partida", "Partida"]]},
 ]
 

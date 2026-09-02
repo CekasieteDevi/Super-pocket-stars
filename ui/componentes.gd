@@ -185,9 +185,15 @@ static func bloque_investigando(ancho: int, progreso: float, dias: int) -> Panel
 
 ## Una barra de atributo con su techo: cuánto tiene y cuánto le queda por
 ## crecer. El color dice de un vistazo si es fuerte o flojo.
-static func barra_atributo(nombre: String, valor: int, techo: int) -> HBoxContainer:
+## `compacta` baja la letra un punto: es lo que usa la ficha entera, donde
+## hay que meter 19 atributos (25 en un arquero) en una pantalla sin
+## scroll. En la ficha lateral, que muestra cuatro, no hace falta.
+static func barra_atributo(nombre: String, valor: int, techo: int,
+		compacta: bool = false) -> HBoxContainer:
+	var tam: int = Tema.TAM_CHICO if compacta else 0
 	var fila := HBoxContainer.new()
-	fila.add_child(celda(nombre.replace("_", " "), 130, Tema.SUAVE))
+	fila.add_child(celda(nombre.replace("_", " "), 96 if compacta else 130,
+		Tema.SUAVE, HORIZONTAL_ALIGNMENT_LEFT, tam))
 
 	var barra := ProgressBar.new()
 	barra.min_value = 0.0
@@ -213,11 +219,13 @@ static func barra_atributo(nombre: String, valor: int, techo: int) -> HBoxContai
 	barra.add_theme_stylebox_override("fill", relleno)
 	fila.add_child(barra)
 
-	fila.add_child(celda_numero(str(valor), 42, Tema.TEXTO))
+	fila.add_child(celda_numero(str(valor), 42, Tema.TEXTO,
+		HORIZONTAL_ALIGNMENT_RIGHT if compacta else HORIZONTAL_ALIGNMENT_LEFT, tam))
 	# El techo de ESTE atributo: dos jugadores con el mismo potencial global
 	# pueden tener techos muy distintos atributo por atributo.
 	var margen := "→%d" % techo if techo > valor + 1 else "al tope"
-	fila.add_child(celda(margen, 62, Tema.SUAVE))
+	fila.add_child(celda(margen, 54 if compacta else 62, Tema.SUAVE,
+		HORIZONTAL_ALIGNMENT_LEFT, tam))
 	return fila
 
 

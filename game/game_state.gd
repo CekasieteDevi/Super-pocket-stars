@@ -25,7 +25,9 @@ const FECHAS_ENTRE_RONDAS_COPA := 4
 const DIAS_HASTA_COPA := 3
 const DIAS_DESPUES_DE_COPA := 4
 const DIVISION_INICIAL := 9  # 0-indexado: división 10, la última (GDD original)
-const MAX_NOTICIAS_GUARDADAS := 200
+const MAX_NOTICIAS_GUARDADAS := 400
+## Cuantas se guardan de CADA categoria. Ver _recortar_noticias.
+const MAX_POR_CATEGORIA := 60
 
 var rng: RandomNumberGenerator
 var piramide: Piramide
@@ -247,6 +249,10 @@ func jugar_siguiente_fecha() -> void:
 				ultimos_eventos = r["eventos_seguido"]
 				ultimos_fotogramas = r.get("fotogramas_seguido", [])
 				_registrar_en_historial()
+			# Solo las de NUESTRA division: las de las otras nueve son
+			# doscientos clubes de los que no se sabe ni el nombre de un
+			# jugador, y taparian el feed.
+			_noticias_de_lesiones(r.get("lesionados", []))
 		else:
 			liga.jugar_fecha(fecha_actual, rng)
 
@@ -261,6 +267,23 @@ func jugar_siguiente_fecha() -> void:
 	dia_proximo_partido = dia_temporada + DIAS_ENTRE_FECHAS
 	if _toca_ronda_de_copa():
 		dia_proxima_copa = dia_temporada + DIAS_HASTA_COPA
+
+
+## Quien se rompio en la fecha, con que y por cuanto tiempo. Va al feed
+## con el jugador clickeable: de ahi se le abre la ficha y, si es de otro
+## club, se lo puede mandar a investigar — un titular lesionado tres meses
+## es exactamente cuando un club escucha ofertas.
+func _noticias_de_lesiones(lesionados: Array) -> void:
+	for les in lesionados:
+		var j: Dictionary = les["jugador"]
+		var club := str(les["club"])
+		_agregar_noticia("%s (%s, %s) se lesiona: %s, %d dias afuera." % [
+			_nombre_completo(j), j["posicion"], club, les["tipo"], int(les["dias"])],
+			"lesiones", [Noticias.mencion(j, club)])
+
+
+static func _nombre_completo(j: Dictionary) -> String:
+	return "%s %s" % [j.get("nombre", ""), j.get("apellido", "")]
 
 
 ## Hoy hay partido de liga y no se puede avanzar el dia sin jugarlo.
@@ -349,6 +372,13 @@ func avanzar_un_dia() -> Array:
 					j["nombre"], j["apellido"]])
 				break
 
+	# Los rumores son de todos los dias de mercado: es la parte del feed
+	# que te dice a quien mirar mientras la ventana esta abierta.
+	if hay_mercado_abierto():
+		for r in Rumores.generar(liga_jugador(), rng, equipo_jugador):
+			_agregar_noticia(str(r["texto"]), "rumores",
+				[Noticias.mencion(r["jugador"], str(r["club"]))])
+
 	# La ronda de copa cae el miercoles: es el segundo partido de una
 	# semana apretada, no un evento aparte del calendario.
 	if dia_proxima_copa >= 0 and dia_temporada >= dia_proxima_copa:
@@ -368,8 +398,17 @@ func avanzar_un_dia() -> Array:
 	elif habia_mercado and not hay_mercado_abierto():
 		novedades.append("Se cerro el libro de pases.")
 
-	for i in range(noticias_antes, noticias.size()):
-		novedades.append(str(noticias[i]))
+	# Las nuevas quedan ADELANTE: _agregar_noticia hace push_front. Leerlas
+	# desde `noticias_antes` hacia el final devolvia las mas viejas del
+	# feed —las que quedaron corridas— y no las que acababan de pasar.
+	for i in range(noticias.size() - noticias_antes):
+		# Los rumores no frenan el calendario. Van al feed igual, pero
+		# "Ir al proximo partido" mira esta lista para saber si paso algo
+		# que merece una decision, y con un rumor por dia de mercado el
+		# boton no avanzaba nunca mas de un dia.
+		if str(noticias[i].get("cat", "")) == "rumores":
+			continue
+		novedades.append(str(noticias[i]["texto"]))
 	return novedades
 
 
@@ -445,6 +484,24 @@ func _nombre_de_jugador(id: int, local: String, visitante: String) -> String:
 	return "?"
 
 
+## El jugador por el que va una negociacion, para que su nombre quede
+## clickeable en el feed. Puede ser de otro club (oferta nuestra) o del
+## nuestro (oferta que nos hacen), asi que se busca en los dos lados.
+func _mencion_de_oferta(oferta: Dictionary) -> Array:
+	var id := int(oferta.get("jugador_id", -1))
+	if id < 0:
+		return []
+	for j in equipo_jugador.todos_los_jugadores():
+		if int(j["id"]) == id:
+			return [Noticias.mencion(j, equipo_jugador.nombre)]
+	var club := _club_por_nombre(str(oferta.get("club", "")))
+	if club != null:
+		var donde := Mercado.ubicar(club, id)
+		if not donde.is_empty():
+			return [Noticias.mencion(donde["jugador"], club.nombre)]
+	return []
+
+
 func _avanzar_dias_todos(dias: int) -> void:
 	for liga in piramide.divisiones:
 		liga.avanzar_dias(dias)
@@ -456,9 +513,11 @@ func _avanzar_dias_todos(dias: int) -> void:
 	if hay_mercado_abierto():
 		for oferta in Ofertas.avanzar(equipo_jugador, dias, piramide, rng, temporada_actual, division_jugador):
 			if not oferta["log"].is_empty():
-				_agregar_noticia("MERCADO: %s" % oferta["log"][-1])
+				_agregar_noticia("MERCADO: %s" % oferta["log"][-1],
+					"fichajes", _mencion_de_oferta(oferta))
 		for nueva in Ofertas.generar_entrantes(equipo_jugador, piramide, rng, dias, division_jugador):
-			_agregar_noticia("MERCADO: %s" % nueva["log"][-1])
+			_agregar_noticia("MERCADO: %s" % nueva["log"][-1],
+				"fichajes", _mencion_de_oferta(nueva))
 	Ofertas.archivar(equipo_jugador)
 	_procesar_retornos_de_medio_ano()
 
@@ -488,14 +547,14 @@ func _jugar_ronda_de_copas() -> void:
 	if toca_nacional and copa_nacional != null and copa_nacional.campeon == null:
 		copa_nacional.jugar_siguiente_ronda(rng)
 		if copa_nacional.campeon != null:
-			_agregar_noticia("COPA NACIONAL: campeón %s" % copa_nacional.campeon.nombre)
+			_agregar_noticia("COPA NACIONAL: campeón %s." % copa_nacional.campeon.nombre, "campeones")
 		return
 	for i in range(copas_division.size()):
 		var c: Copa = copas_division[i]
 		if c.campeon == null:
 			c.jugar_siguiente_ronda(rng)
 			if c.campeon != null:
-				_agregar_noticia("COPA DIVISIÓN %d: campeón %s" % [i + 1, c.campeon.nombre])
+				_agregar_noticia("COPA DIVISIÓN %d: campeón %s." % [i + 1, c.campeon.nombre], "campeones")
 
 
 ## Copas + internacional con la temporada recién jugada, después ascensos/
@@ -512,6 +571,15 @@ func _cerrar_temporada() -> void:
 		equipo_jugador.nombre, posicion_final, tabla_final.size(), division_jugador + 1
 	])
 
+	# El campeon de cada division. Es el titulo mas grande del año y no
+	# estaba en ningun lado: se sabia quien ascendia, no quien salio
+	# campeon. Va antes de las copas para que quede arriba en el feed.
+	for d in range(piramide.divisiones.size()):
+		var orden: Array = piramide.divisiones[d].tabla_ordenada()
+		if not orden.is_empty():
+			_agregar_noticia("LIGA: campeón de la División %d: %s." % [
+				d + 1, orden[0]], "campeones")
+
 	# Las copas vienen jugándose entre semana desde la primera fecha; si
 	# quedó alguna ronda sin jugar (temporada corta, pocas fechas), se
 	# termina acá para que siempre haya campeón.
@@ -522,7 +590,7 @@ func _cerrar_temporada() -> void:
 	for copa_nombre in ["campeones", "guerreros", "emergentes"]:
 		var campeon: Team = resultado_internacional[copa_nombre]["campeon"]
 		if campeon != null:
-			_agregar_noticia("INTERNACIONAL (%s): campeón %s" % [copa_nombre.capitalize(), campeon.nombre])
+			_agregar_noticia("INTERNACIONAL (%s): campeón %s." % [copa_nombre.capitalize(), campeon.nombre], "campeones")
 
 	# division_jugador todavia apunta a la division donde jugo esta
 	# temporada — fin_de_temporada() es lo que procesa cantera (necesario
@@ -577,8 +645,10 @@ func _cerrar_temporada() -> void:
 			_agregar_noticia("DIRECTIVA: te destituyen. Fin de la partida.")
 
 	for liga in piramide.divisiones:
+		# Liga manda casi todo como String pelado y alguna ya estructurada
+		# (los fichajes, que nombran al jugador): normalizar acepta las dos.
 		for n in liga.noticias:
-			_agregar_noticia(n)
+			_agregar_entrada(Noticias.normalizar(n))
 		liga.noticias.clear()
 
 	# Al final de todo: con 200 clubes generando noticias de rutina (fichajes
@@ -678,10 +748,11 @@ func ofertar_por_jugador(vendedor: Team, jugador_objetivo_id: int) -> Dictionary
 	# plantel o de la cantera del vendedor, de la division que sea.
 	var resultado := Mercado.comprar_al_contado(equipo_jugador, vendedor, jugador_objetivo_id, rng)
 	if resultado["exito"]:
-		_agregar_noticia("FICHAJE: %s ficha a un %s de %s por %s" % [
-			equipo_jugador.nombre, resultado["posicion"], vendedor.nombre,
-			Economia.formato_dinero(resultado["precio"])
-		])
+		_agregar_noticia("FICHAJE: %s ficha a %s (%s) de %s por %s." % [
+			equipo_jugador.nombre, _nombre_completo(resultado["jugador"]),
+			resultado["posicion"], vendedor.nombre,
+			Economia.formato_dinero(resultado["precio"])],
+			"fichajes", [Noticias.mencion(resultado["jugador"], equipo_jugador.nombre)])
 	return resultado
 
 
@@ -799,9 +870,10 @@ func cerrar_fichaje(oferta_id: int, sueldo: float, anios: int, clausula: float) 
 	oferta["estado"] = Ofertas.CERRADA
 	oferta["log"].append("Firmado: %d año(s) a %s, cláusula %s." % [
 		anios, Economia.formato_dinero(sueldo), Economia.formato_dinero(clausula)])
-	_agregar_noticia("FICHAJE: %s se lleva a un %s de %s por %s." % [
-		equipo_jugador.nombre, r["posicion"], vendedor.nombre,
-		Economia.formato_dinero(oferta["monto"])])
+	_agregar_noticia("FICHAJE: %s se lleva a %s (%s) de %s por %s." % [
+		equipo_jugador.nombre, _nombre_completo(jugador), r["posicion"],
+		vendedor.nombre, Economia.formato_dinero(oferta["monto"])],
+		"fichajes", [Noticias.mencion(jugador, equipo_jugador.nombre)])
 	return r
 
 
@@ -843,10 +915,11 @@ func pedir_prestamo(dueno: Team, jugador_id: int, duracion: String,
 	if not cierre["exito"]:
 		return cierre
 	Investigadores.marcar_conocido(equipo_jugador, jugador_id)
-	_agregar_noticia("PRÉSTAMO: %s se lleva a un %s de %s por %s (fee %s)." % [
-		equipo_jugador.nombre, jugador["posicion"], dueno.nombre,
-		Prestamos.ETIQUETAS_DURACION.get(duracion, duracion),
-		Economia.formato_dinero(cierre["fee"])])
+	_agregar_noticia("PRÉSTAMO: %s se lleva a %s (%s) de %s por %s (fee %s)." % [
+		equipo_jugador.nombre, _nombre_completo(jugador), jugador["posicion"],
+		dueno.nombre, Prestamos.ETIQUETAS_DURACION.get(duracion, duracion),
+		Economia.formato_dinero(cierre["fee"])],
+		"fichajes", [Noticias.mencion(jugador, equipo_jugador.nombre)])
 	return cierre
 
 
@@ -892,10 +965,11 @@ func pagar_clausula(vendedor: Team, jugador_objetivo_id: int) -> Dictionary:
 		return _mercado_cerrado()
 	var resultado := Mercado.comprar_al_contado(equipo_jugador, vendedor, jugador_objetivo_id, rng, true)
 	if resultado["exito"]:
-		_agregar_noticia("CLÁUSULA: %s paga la cláusula de un %s de %s por %s" % [
-			equipo_jugador.nombre, resultado["posicion"], vendedor.nombre,
-			Economia.formato_dinero(resultado["precio"])
-		])
+		_agregar_noticia("CLÁUSULA: %s paga la cláusula de %s (%s, %s) por %s." % [
+			equipo_jugador.nombre, _nombre_completo(resultado["jugador"]),
+			resultado["posicion"], vendedor.nombre,
+			Economia.formato_dinero(resultado["precio"])],
+			"fichajes", [Noticias.mencion(resultado["jugador"], equipo_jugador.nombre)])
 	return resultado
 
 
@@ -907,9 +981,10 @@ func fichar_agente_libre(jugador_id: int, indice_saliente: int, es_banco: bool) 
 		return _mercado_cerrado()
 	var resultado := AgentesLibres.fichar(equipo_jugador, liga_jugador().agentes_libres, jugador_id, indice_saliente, es_banco)
 	if resultado["exito"]:
-		_agregar_noticia("AGENTE LIBRE: %s ficha a un %s libre (sale un %s al pool)." % [
-			equipo_jugador.nombre, resultado["entra"]["posicion"], resultado["sale"]["posicion"]
-		])
+		_agregar_noticia("AGENTE LIBRE: %s ficha a %s (%s), libre (sale un %s al pool)." % [
+			equipo_jugador.nombre, _nombre_completo(resultado["entra"]),
+			resultado["entra"]["posicion"], resultado["sale"]["posicion"]],
+			"fichajes", [Noticias.mencion(resultado["entra"], equipo_jugador.nombre)])
 	return resultado
 
 
@@ -920,9 +995,10 @@ func ceder_a_prestamo(jugador_id: int, club_destino: Team) -> Dictionary:
 		return _mercado_cerrado()
 	var resultado := Prestamos.ceder(equipo_jugador, club_destino, jugador_id, float(temporada_actual))
 	if resultado["exito"]:
-		_agregar_noticia("PRÉSTAMO: %s cede un %s a %s por esta temporada." % [
-			equipo_jugador.nombre, resultado["jugador"]["posicion"], club_destino.nombre
-		])
+		_agregar_noticia("PRÉSTAMO: %s cede a %s (%s) a %s por esta temporada." % [
+			equipo_jugador.nombre, _nombre_completo(resultado["jugador"]),
+			resultado["jugador"]["posicion"], club_destino.nombre],
+			"fichajes", [Noticias.mencion(resultado["jugador"], club_destino.nombre)])
 	return resultado
 
 
@@ -962,10 +1038,42 @@ func simular_temporada_completa() -> void:
 		avanzar_un_dia()
 
 
-func _agregar_noticia(texto: String) -> void:
-	noticias.push_front(texto)
-	if noticias.size() > MAX_NOTICIAS_GUARDADAS:
-		noticias.resize(MAX_NOTICIAS_GUARDADAS)
+## `categoria` vacia = que la adivine el texto (ver Noticias.clasificar).
+## `jugadores` son las menciones clickeables de la noticia: con eso el
+## feed puede abrir la ficha del que se nombra.
+func _agregar_noticia(texto: String, categoria: String = "",
+		jugadores: Array = []) -> void:
+	_agregar_entrada(Noticias.crear(texto, categoria, jugadores))
+
+
+func _agregar_entrada(entrada: Dictionary) -> void:
+	noticias.push_front(entrada)
+	_recortar_noticias()
+
+
+## El tope es POR CATEGORIA y no del feed entero.
+##
+## Con un tope global, el cierre de temporada metia de un saque cientos de
+## noticias de rutina de los 200 clubes de la piramide —cantera,
+## aprendizaje, agentes libres, todas "club"— y empujaba fuera del tope
+## todo lo demas: la solapa de campeones quedaba vacia el mismo dia en que
+## se repartieron los titulos, y las lesiones de la temporada tampoco
+## llegaban a verse.
+func _recortar_noticias() -> void:
+	if noticias.size() <= MAX_POR_CATEGORIA:
+		return
+	var vistas := {}
+	var quedan := []
+	for n in noticias:
+		var cat := str(n.get("cat", "club"))
+		var cuantas: int = int(vistas.get(cat, 0))
+		if cuantas >= MAX_POR_CATEGORIA:
+			continue
+		vistas[cat] = cuantas + 1
+		quedan.append(n)
+	if quedan.size() > MAX_NOTICIAS_GUARDADAS:
+		quedan.resize(MAX_NOTICIAS_GUARDADAS)
+	noticias = quedan
 
 
 ## Guardado de partida (§12 del GDD) — un solo slot por ahora (no pedido
@@ -1082,7 +1190,11 @@ func cargar_partida() -> bool:
 	fecha_actual = datos["fecha_actual"]
 	temporada_actual = datos["temporada_actual"]
 	restaurar_calendario(datos, liga_jugador().fixture.size())
-	noticias = datos["noticias"]
+	# Las de una partida vieja son Strings pelados: se envuelven y se les
+	# adivina la categoria por el texto en vez de tirarlas.
+	noticias = []
+	for n in datos["noticias"]:
+		noticias.append(Noticias.normalizar(n))
 	historial_partidos = datos.get("historial_partidos", [])
 	ultimo_informe_economico = datos["ultimo_informe_economico"]
 	ultima_posicion_final = datos["ultima_posicion_final"]

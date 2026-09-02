@@ -113,6 +113,9 @@ static func ejecutar_ventana(liga: Liga, rng: RandomNumberGenerator, equipo_prot
 
 		transferencias.append({
 			"jugador_id": mejor_jugador["id"], "posicion": posicion,
+			# El jugador entero para que la noticia pueda nombrarlo y para
+			# que se le pueda abrir la ficha desde el feed.
+			"jugador": mejor_jugador,
 			"de": mejor_club.nombre, "a": peor_club.nombre, "valor": valor_mejor,
 		})
 
@@ -377,6 +380,7 @@ static func _intentar_compra(piramide, division_compradora: int, comprador: Team
 
 	return {
 		"jugador_id": mejor_id, "posicion": posicion, "joya": es_joya,
+		"jugador": objetivo,
 		"de": vendedor.nombre, "de_division": objetivo_div + 1,
 		"a": comprador.nombre, "a_division": division_compradora + 1,
 		"valor": valor, "media": float(objetivo["media"]), "potencial": int(objetivo["potencial"]),

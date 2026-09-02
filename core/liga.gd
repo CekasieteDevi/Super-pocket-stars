@@ -181,6 +181,11 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 	Motivacion.marcar_recta_final(self, idx)
 	var fecha: Array = fixture[idx]
 	var resultados_texto := []
+	# Los que se rompen en esta fecha, para el feed de noticias. Se
+	# detectan comparando antes/despues de cada partido y no dentro del
+	# motor porque los dos motores lesionan por caminos distintos y este
+	# es el unico lugar por el que pasan los dos.
+	var lesionados := []
 	var resultado_seguido = null
 	var log_seguido := []
 	var eventos_seguido := []
@@ -208,6 +213,10 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 		# expulsión de hoy se perdonaría sola en el mismo cierre.
 		var suspendidos_previos_home: Array = home.suspendidos.keys().duplicate()
 		var suspendidos_previos_away: Array = away.suspendidos.keys().duplicate()
+		var lesionados_previos := {
+			home: home.lesiones.keys().duplicate(),
+			away: away.lesiones.keys().duplicate(),
+		}
 
 		var r: Dictionary
 		if home_corto or away_corto:
@@ -225,6 +234,8 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 		_servir_suspensiones(home, suspendidos_previos_home)
 		_servir_suspensiones(away, suspendidos_previos_away)
 
+		for eq in lesionados_previos:
+			lesionados.append_array(_lesionados_nuevos(eq, lesionados_previos[eq]))
 		_actualizar_tabla(home.nombre, away.nombre, r["goles_local"], r["goles_visitante"])
 		EstadisticasLiga.registrar_partido(estadisticas, home, away, r)
 		_actualizar_estado_jugadores(home, away, r)
@@ -243,7 +254,26 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 		"resultados_texto": resultados_texto, "resultado_seguido": resultado_seguido,
 		"log_seguido": log_seguido, "eventos_seguido": eventos_seguido,
 		"fotogramas_seguido": fotogramas_seguido,
+		"lesionados": lesionados,
 	}
+
+
+## Los que se lesionaron en el partido que acaba de terminar: los que
+## estan en la lista de lesionados y no estaban antes de jugar.
+func _lesionados_nuevos(equipo: Team, previos: Array) -> Array:
+	var salida := []
+	for id in equipo.lesiones:
+		if previos.has(id):
+			continue
+		var j := _buscar_en_plantel(equipo, int(id))
+		if j.is_empty():
+			continue
+		var les: Dictionary = equipo.lesiones[id]
+		salida.append({
+			"jugador": j, "club": equipo.nombre,
+			"tipo": str(les["tipo"]), "dias": int(les["dias_restantes"]),
+		})
+	return salida
 
 
 func _convocar_emergencia(equipo: Team) -> void:
@@ -406,7 +436,13 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 
 	var transferencias := Mercado.ejecutar_ventana(self, rng, equipo_protegido)
 	for t in transferencias:
-		noticias.append("FICHAJES: jugador #%d (%s) pasa de %s a %s por $%.0f" % [t["jugador_id"], t["posicion"], t["de"], t["a"], t["valor"]])
+		var quien: Dictionary = t.get("jugador", {})
+		var como := "%s %s" % [quien.get("nombre", ""), quien.get("apellido", "")]
+		noticias.append(Noticias.crear(
+			"FICHAJES: %s (%s) pasa de %s a %s por %s." % [
+				como.strip_edges(), t["posicion"], t["de"], t["a"],
+				Economia.formato_dinero(t["valor"])],
+			"fichajes", [Noticias.mencion(quien, str(t["a"]))]))
 
 	var reporte_cantera := []
 	for equipo in equipos:
