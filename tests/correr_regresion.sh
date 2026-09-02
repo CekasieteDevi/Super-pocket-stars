@@ -37,7 +37,9 @@ trap 'rm -rf "$SALIDA"' EXIT
 # libro_de_pases 203s, calendario 88s, gamestate_flujo 74s, noticias 74s.
 # Esos cinco son 684 de los 894 — los otros 76 tests juntos son 210s. Si
 # se agrega uno pesado, va aca.
-LENTOS="test_gradiente_persiste test_libro_de_pases test_calendario 	test_gamestate_flujo test_noticias test_phase2 test_phase7_internacional"
+LENTOS="test_gradiente_persiste test_libro_de_pases test_calendario"
+LENTOS="$LENTOS test_gamestate_flujo test_noticias test_phase2"
+LENTOS="$LENTOS test_phase7_internacional"
 ORDEN=""
 for n in $LENTOS; do
 	[ -f "tests/$n.gd" ] && ORDEN="$ORDEN tests/$n.gd"
