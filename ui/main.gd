@@ -55,6 +55,8 @@ var lista_cantera: RichTextLabel
 var contenedor_cantera_botones: VBoxContainer
 var contenedor_noticias: VBoxContainer
 var contenedor_vitrina: VBoxContainer
+var contenedor_sponsors: VBoxContainer
+var label_sponsors_estado: Label
 var contenedor_copa: VBoxContainer
 var label_copa_titulo: Label
 var label_copa_camino: Label
@@ -140,6 +142,7 @@ func _ready() -> void:
 	_construir_panel_historial(contenedor)
 	_construir_panel_copas(contenedor)
 	_construir_panel_vitrina(contenedor)
+	_construir_panel_sponsors(contenedor)
 	_construir_panel_entrenamiento(contenedor)
 	_construir_panel_partido_animado(contenedor)
 	_construir_panel_economia(contenedor)
@@ -1952,6 +1955,10 @@ func _refrescar_economia() -> void:
 		if premios > 0.0:
 			caja_balance.add_child(_linea_balance(
 				"de los cuales, premios de copa", premios, Tema.AMBAR, 24))
+		var por_sponsors: float = float(informe.get("sponsors", 0.0))
+		if por_sponsors > 0.0:
+			caja_balance.add_child(_linea_balance(
+				"de los cuales, sponsors", por_sponsors, Tema.AMBAR, 24))
 		caja_balance.add_child(_linea_balance(
 			"Egresos", -absf(informe["egresos"]), Tema.ROJO, 0, true))
 		caja_balance.add_child(_linea_balance(
@@ -4512,6 +4519,181 @@ func _on_promover_juvenil(id: int) -> void:
 	_refrescar_plantel()
 
 
+## SPONSORS: los diez lugares de la camiseta.
+##
+## Te escriben solos cuando te va bien, ocupan un lugar, pagan por partido
+## de liga y te cortan el contrato si no cumplís lo que pidieron. La
+## decisión está en que no llegan ofertas si no hay lugar libre: si
+## llenaste los diez con kioscos del barrio, el sponsor grande no te
+## escribe hasta que le hagas sitio.
+##
+## La lógica vive en core/sponsors.gd; acá solo se dibuja.
+func _construir_panel_sponsors(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	padre.add_child(panel)
+	paneles["sponsors"] = panel
+
+	label_sponsors_estado = Label.new()
+	label_sponsors_estado.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	panel.add_child(label_sponsors_estado)
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+	contenedor_sponsors = VBoxContainer.new()
+	contenedor_sponsors.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	contenedor_sponsors.add_theme_constant_override("separation", 8)
+	scroll.add_child(contenedor_sponsors)
+
+
+func _mostrar_sponsors() -> void:
+	_ocultar_todos()
+	paneles["sponsors"].visible = true
+	_refrescar_sponsors()
+
+
+func _refrescar_sponsors() -> void:
+	for hijo in contenedor_sponsors.get_children():
+		hijo.queue_free()
+	var equipo := GameState.equipo_jugador
+	var libres: int = Sponsors.LUGARES - equipo.sponsors.size()
+
+	var resumen := "%d de %d lugares ocupados   ·   %s por partido de liga   ·   %s cobrados esta temporada" % [
+		equipo.sponsors.size(), Sponsors.LUGARES,
+		Economia.formato_dinero(Sponsors.pago_por_partido(equipo)),
+		Economia.formato_dinero(equipo.ingresos_sponsors)]
+	label_sponsors_estado.text = resumen
+
+	# --- Ofertas ----------------------------------------------------------
+	contenedor_sponsors.add_child(Tema.etiqueta_seccion("Ofertas"))
+	if equipo.sponsors_ofertas.is_empty():
+		var texto := "No hay ofertas ahora. Llegan solas, y llegan más seguido cuanto mejor vayas en la tabla."
+		if libres <= 0:
+			texto = "No te queda ningún lugar libre, así que no te va a escribir nadie. Cancelá un contrato si querés que te lleguen ofertas mejores."
+		contenedor_sponsors.add_child(_tarjeta_texto(texto))
+	else:
+		for o in equipo.sponsors_ofertas:
+			contenedor_sponsors.add_child(_tarjeta_oferta_sponsor(o, libres > 0))
+
+	# --- Contratos --------------------------------------------------------
+	contenedor_sponsors.add_child(Tema.etiqueta_seccion(
+		"Tus sponsors  ·  cobran por cada partido de liga"))
+	if equipo.sponsors.is_empty():
+		contenedor_sponsors.add_child(_tarjeta_texto(
+			"Todavía no firmaste con nadie. Los diez lugares están libres."))
+	for s in equipo.sponsors:
+		contenedor_sponsors.add_child(_tarjeta_sponsor(s))
+	if libres > 0 and not equipo.sponsors.is_empty():
+		contenedor_sponsors.add_child(_tarjeta_texto(
+			"%d lugar%s libre%s." % [libres, "" if libres == 1 else "es", "" if libres == 1 else "s"]))
+
+
+func _tarjeta_texto(texto: String) -> Control:
+	var tarjeta := Componentes.tarjeta()
+	var l := Label.new()
+	l.text = texto
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.add_theme_color_override("font_color", Tema.SUAVE)
+	tarjeta.add_child(l)
+	return tarjeta
+
+
+func _tarjeta_oferta_sponsor(o: Dictionary, hay_lugar: bool) -> Control:
+	var tarjeta := Componentes.tarjeta(Tema.AMBAR)
+	var caja := HBoxContainer.new()
+	caja.add_theme_constant_override("separation", 12)
+	tarjeta.add_child(caja)
+
+	var datos := VBoxContainer.new()
+	datos.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	datos.add_theme_constant_override("separation", 2)
+	caja.add_child(datos)
+
+	var nombre := Label.new()
+	nombre.text = str(o["nombre"])
+	Tema.numero(nombre, Tema.TAM_BASE, Tema.TEXTO)
+	datos.add_child(nombre)
+	datos.add_child(_texto_suave("%s por partido   ·   %s   ·   caduca en %d día(s)" % [
+		Economia.formato_dinero(o["pago"]),
+		str(Sponsors.TEXTO_REQUISITO.get(str(o["requisito"]), "")),
+		int(o["dias"])]))
+
+	var nombre_sponsor := str(o["nombre"])
+	var btn_ok := Button.new()
+	btn_ok.text = "Aceptar"
+	btn_ok.custom_minimum_size = Vector2(130, Tema.ALTO_TACTIL)
+	btn_ok.disabled = not hay_lugar
+	if not hay_lugar:
+		btn_ok.tooltip_text = "No te quedan lugares libres."
+	btn_ok.pressed.connect(func(): _on_aceptar_sponsor(nombre_sponsor))
+	caja.add_child(btn_ok)
+
+	var btn_no := Button.new()
+	btn_no.text = "Rechazar"
+	btn_no.custom_minimum_size = Vector2(130, Tema.ALTO_TACTIL)
+	btn_no.pressed.connect(func():
+		Sponsors.rechazar(GameState.equipo_jugador, nombre_sponsor)
+		_refrescar_sponsors())
+	caja.add_child(btn_no)
+	return tarjeta
+
+
+func _tarjeta_sponsor(s: Dictionary) -> Control:
+	var tarjeta := Componentes.tarjeta(Tema.VERDE)
+	var caja := HBoxContainer.new()
+	caja.add_theme_constant_override("separation", 12)
+	tarjeta.add_child(caja)
+
+	var datos := VBoxContainer.new()
+	datos.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	datos.add_theme_constant_override("separation", 2)
+	caja.add_child(datos)
+
+	var nombre := Label.new()
+	nombre.text = str(s["nombre"])
+	Tema.numero(nombre, Tema.TAM_BASE, Tema.TEXTO)
+	datos.add_child(nombre)
+	datos.add_child(_texto_suave("%s por partido   ·   %s   ·   %s en %d partido(s) esta temporada" % [
+		Economia.formato_dinero(s["pago"]),
+		str(Sponsors.TEXTO_REQUISITO.get(str(s["requisito"]), "")),
+		Economia.formato_dinero(s["cobrado"]), int(s["partidos"])]))
+
+	# Si el requisito no se está cumpliendo AHORA, se avisa: enterarte al
+	# cerrar la temporada de que perdiste a tu mejor sponsor es tarde.
+	var tabla := GameState.liga_jugador().tabla_ordenada()
+	var puesto: int = tabla.find(GameState.equipo_jugador.nombre) + 1
+	if puesto > 0 and not Sponsors.cumple(str(s["requisito"]), puesto, tabla.size()):
+		var aviso := Label.new()
+		aviso.text = "Si la temporada terminara hoy, cortan el contrato."
+		aviso.add_theme_color_override("font_color", Tema.ROJO)
+		aviso.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		datos.add_child(aviso)
+
+	var nombre_sponsor := str(s["nombre"])
+	var btn := Button.new()
+	btn.text = "Cancelar"
+	btn.custom_minimum_size = Vector2(130, Tema.ALTO_TACTIL)
+	btn.tooltip_text = "Libera el lugar para que te puedan escribir sponsors mejores."
+	btn.pressed.connect(func():
+		Sponsors.cancelar(GameState.equipo_jugador, nombre_sponsor)
+		_refrescar_sponsors())
+	caja.add_child(btn)
+	return tarjeta
+
+
+func _on_aceptar_sponsor(nombre: String) -> void:
+	var r := Sponsors.aceptar(
+		GameState.equipo_jugador, nombre, GameState.temporada_actual)
+	if not r["exito"]:
+		label_sponsors_estado.text = str(r["motivo"])
+		return
+	_refrescar_sponsors()
+
+
 ## LA VITRINA: todo lo que ganó el club, arriba el resumen y abajo el
 ## detalle temporada por temporada.
 ##
@@ -6041,8 +6223,10 @@ const SECCIONES := [
 	{"clave": "club", "nombre": "Club", "paneles": []},
 	{"clave": "equipo", "nombre": "Equipo", "paneles": [
 		["plantel", "Plantel"], ["formacion", "Formacion"],
-		["entrenamiento", "Entrenamiento"], ["economia", "Economia"],
+		["entrenamiento", "Entrenamiento"],
 		["cantera", "Cantera"], ["instalaciones", "Instalaciones"]]},
+	{"clave": "finanzas", "nombre": "Economia", "paneles": [
+		["economia", "Presupuesto"], ["sponsors", "Sponsors"]]},
 	{"clave": "partido", "nombre": "Liga", "paneles": [
 		["tabla", "Tabla"], ["jugadores_liga", "Jugadores"],
 		["historial", "Historial"]]},
@@ -6195,7 +6379,8 @@ func _mostrar_panel_de_seccion(clave: String) -> void:
 		"copa_emergentes": "_mostrar_copa_emergentes",
 		"mercado": "_mostrar_mercado", "libres": "_mostrar_libres",
 		"prestamos": "_mostrar_prestamos", "economia": "_mostrar_economia",
-		"noticias": "_mostrar_noticias", "vitrina": "_mostrar_vitrina", "seleccion": "_mostrar_seleccion",
+		"noticias": "_mostrar_noticias", "vitrina": "_mostrar_vitrina",
+		"sponsors": "_mostrar_sponsors", "seleccion": "_mostrar_seleccion",
 		"partida": "_mostrar_partida_panel",
 	}
 	if metodos.has(clave):

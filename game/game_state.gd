@@ -269,6 +269,10 @@ func jugar_siguiente_fecha() -> void:
 		else:
 			liga.jugar_fecha(fecha_actual, rng)
 
+	# Los sponsors cobran POR PARTIDO: es lo unico que le entra plata al
+	# club durante la temporada y no al cerrarla.
+	Sponsors.cobrar_partido(equipo_jugador)
+
 	fecha_actual += 1
 
 	# Los dias NO pasan aca: los pasa avanzar_un_dia(), de a uno, para que
@@ -354,6 +358,22 @@ func _pagar_premio_de_copa(copa: Copa, premios: Dictionary, factor: float) -> fl
 	if perdedor != null:
 		perdedor.premios_copa += float(premios[2]) * factor
 	return al_campeon
+
+
+## Un dia de sponsors: se caen las ofertas viejas y puede llegar una
+## nueva. Solo llega si hay lugar libre — es lo que obliga a cancelar un
+## contrato chico para hacerle sitio a uno grande.
+func _avanzar_sponsors() -> void:
+	for caida in Sponsors.avanzar_dias(equipo_jugador, 1):
+		_agregar_noticia("SPONSOR: %s se cansó de esperar y retiró su oferta." % caida["nombre"])
+	var tabla := liga_jugador().tabla_ordenada()
+	var puesto: int = tabla.find(equipo_jugador.nombre) + 1
+	if puesto <= 0:
+		puesto = tabla.size()
+	for oferta in Sponsors.tirar_ofertas(
+			equipo_jugador, division_jugador, puesto, tabla.size(), rng):
+		_agregar_noticia("SPONSOR: %s quiere poner su marca en tu camiseta (%s por partido)." % [
+			oferta["nombre"], Economia.formato_dinero(oferta["pago"])])
 
 
 ## Los titulos que ganaste esta temporada. Va al cerrarla, con las copas
@@ -493,6 +513,8 @@ func avanzar_un_dia() -> Array:
 				novedades.append("%s %s se recupero de su lesion." % [
 					j["nombre"], j["apellido"]])
 				break
+
+	_avanzar_sponsors()
 
 	# Los rumores son de todos los dias de mercado: es la parte del feed
 	# que te dice a quien mirar mientras la ventana esta abierta.
@@ -819,6 +841,14 @@ func _cerrar_temporada() -> void:
 	# la que a esta altura ya se jugo entera.
 	_guardar_copas_de_la_temporada()
 	_anotar_en_la_vitrina(posicion_final, resultado_internacional)
+
+	# Los sponsors miran la tabla final: el que pidio algo y no lo tuvo se
+	# va. Va ANTES de fin_de_temporada, que es quien cobra
+	# ingresos_sponsors y despues resetea la tabla.
+	for s in Sponsors.evaluar_temporada(equipo_jugador, posicion_final, tabla_final.size()):
+		_agregar_noticia("SPONSOR: %s corta el contrato con %s — pedia %s" % [
+			s["nombre"], equipo_jugador.nombre,
+			str(Sponsors.TEXTO_REQUISITO.get(s["requisito"], "")).to_lower()])
 	# Cuadros nuevos con los equipos YA movidos de división.
 	_armar_copas()
 

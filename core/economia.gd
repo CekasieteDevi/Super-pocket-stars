@@ -154,8 +154,13 @@ static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos:
 	# el de division ya trae aplicado el factor y los de Rey/internacional
 	# no lo llevan a proposito, asi que van afuera del multiplicador.
 	var premios_copa: float = equipo.premios_copa
-	var ingresos: float = (ingreso_entradas + ingreso_sponsor + premio) 		* factor_division(division) + premios_copa
+	# Los sponsors ya cobraron partido a partido con el pago de SU
+	# division (ver Sponsors.pago_de), asi que tampoco pasan por el
+	# multiplicador: se lo aplicaron ellos cuando firmaron.
+	var por_sponsors: float = equipo.ingresos_sponsors
+	var ingresos: float = (ingreso_entradas + ingreso_sponsor + premio) 		* factor_division(division) + premios_copa + por_sponsors
 	equipo.premios_copa = 0.0
+	equipo.ingresos_sponsors = 0.0
 
 	var total_sueldos := 0.0
 	for id in equipo.sueldos:
@@ -202,7 +207,7 @@ static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos:
 
 	return {
 		"ingresos": ingresos, "egresos": egresos, "neto": neto,
-		"premios_copa": premios_copa,
+		"premios_copa": premios_copa, "sponsors": por_sponsors,
 		"sueldos": total_sueldos, "mantenimiento": MANTENIMIENTO_FIJO,
 		"caja_total": estado["caja_total"], "valor_plantel": estado["valor_plantel"], "quebrado": estado["quebrado"],
 	}

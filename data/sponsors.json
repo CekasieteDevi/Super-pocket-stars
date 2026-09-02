@@ -1,0 +1,1024 @@
+{
+  "divisiones": [
+    [
+      {
+        "nombre": "Rulemanes Don Aldo",
+        "requisito": "ninguno",
+        "factor": 0.85
+      },
+      {
+        "nombre": "Mate Listo",
+        "requisito": "ninguno",
+        "factor": 0.874
+      },
+      {
+        "nombre": "Alfajores Tres Tapas",
+        "requisito": "ninguno",
+        "factor": 0.897
+      },
+      {
+        "nombre": "Seguros La Confiada",
+        "requisito": "ninguno",
+        "factor": 0.921
+      },
+      {
+        "nombre": "Aguas Puritan",
+        "requisito": "ninguno",
+        "factor": 0.945
+      },
+      {
+        "nombre": "Cerveza Quilombes",
+        "requisito": "no_ultimo",
+        "factor": 0.968
+      },
+      {
+        "nombre": "Gaseosa Pipsi",
+        "requisito": "no_ultimo",
+        "factor": 0.992
+      },
+      {
+        "nombre": "Deportiva Adibas",
+        "requisito": "no_ultimo",
+        "factor": 1.016
+      },
+      {
+        "nombre": "Neumaticos Pirellon",
+        "requisito": "no_ultimo",
+        "factor": 1.039
+      },
+      {
+        "nombre": "Cafe Starducks",
+        "requisito": "no_ultimo",
+        "factor": 1.063
+      },
+      {
+        "nombre": "Snacks Papitas Locas",
+        "requisito": "no_ultimo",
+        "factor": 1.087
+      },
+      {
+        "nombre": "Aerolineas Condor",
+        "requisito": "mitad_tabla",
+        "factor": 1.111
+      },
+      {
+        "nombre": "Delivery RappiTo",
+        "requisito": "mitad_tabla",
+        "factor": 1.134
+      },
+      {
+        "nombre": "Banco Galiciar",
+        "requisito": "mitad_tabla",
+        "factor": 1.158
+      },
+      {
+        "nombre": "Autos Toyoto",
+        "requisito": "mitad_tabla",
+        "factor": 1.182
+      },
+      {
+        "nombre": "Netflax",
+        "requisito": "top5",
+        "factor": 1.205
+      },
+      {
+        "nombre": "Amazonia Prime",
+        "requisito": "top5",
+        "factor": 1.229
+      },
+      {
+        "nombre": "MacroSoft",
+        "requisito": "top5",
+        "factor": 1.253
+      },
+      {
+        "nombre": "YouPhone",
+        "requisito": "top3",
+        "factor": 1.276
+      },
+      {
+        "nombre": "Sumsung",
+        "requisito": "campeon",
+        "factor": 1.3
+      }
+    ],
+    [
+      {
+        "nombre": "Pinturas Arcoiris",
+        "requisito": "ninguno",
+        "factor": 0.85
+      },
+      {
+        "nombre": "Optica Lente20",
+        "requisito": "ninguno",
+        "factor": 0.874
+      },
+      {
+        "nombre": "Fideos Trigal",
+        "requisito": "ninguno",
+        "factor": 0.897
+      },
+      {
+        "nombre": "Jabones Espumita",
+        "requisito": "ninguno",
+        "factor": 0.921
+      },
+      {
+        "nombre": "Pilas DuraMucho",
+        "requisito": "ninguno",
+        "factor": 0.945
+      },
+      {
+        "nombre": "Yerba Taragua",
+        "requisito": "no_ultimo",
+        "factor": 0.968
+      },
+      {
+        "nombre": "Chocolates Milcabra",
+        "requisito": "no_ultimo",
+        "factor": 0.992
+      },
+      {
+        "nombre": "Ropa TopperSur",
+        "requisito": "no_ultimo",
+        "factor": 1.016
+      },
+      {
+        "nombre": "Supermercados Carrefu",
+        "requisito": "no_ultimo",
+        "factor": 1.039
+      },
+      {
+        "nombre": "Electro Fravegon",
+        "requisito": "no_ultimo",
+        "factor": 1.063
+      },
+      {
+        "nombre": "Nafta AxionSur",
+        "requisito": "no_ultimo",
+        "factor": 1.087
+      },
+      {
+        "nombre": "Hamburguesas McDonaldo",
+        "requisito": "mitad_tabla",
+        "factor": 1.111
+      },
+      {
+        "nombre": "Pollos Fritos KFT",
+        "requisito": "mitad_tabla",
+        "factor": 1.134
+      },
+      {
+        "nombre": "Telefonia Movistrella",
+        "requisito": "mitad_tabla",
+        "factor": 1.158
+      },
+      {
+        "nombre": "Seguros Sancorro",
+        "requisito": "mitad_tabla",
+        "factor": 1.182
+      },
+      {
+        "nombre": "MercadoPibe",
+        "requisito": "top5",
+        "factor": 1.205
+      },
+      {
+        "nombre": "PedidosPa",
+        "requisito": "top5",
+        "factor": 1.229
+      },
+      {
+        "nombre": "LinkedAI",
+        "requisito": "top5",
+        "factor": 1.253
+      },
+      {
+        "nombre": "Uberto",
+        "requisito": "top3",
+        "factor": 1.276
+      },
+      {
+        "nombre": "Gugle",
+        "requisito": "campeon",
+        "factor": 1.3
+      }
+    ],
+    [
+      {
+        "nombre": "Ferreteria HierroFuerte",
+        "requisito": "ninguno",
+        "factor": 0.85
+      },
+      {
+        "nombre": "Vinos Cepa Vieja",
+        "requisito": "ninguno",
+        "factor": 0.874
+      },
+      {
+        "nombre": "Turismo ViajeFeliz",
+        "requisito": "ninguno",
+        "factor": 0.897
+      },
+      {
+        "nombre": "Autopartes MotorSano",
+        "requisito": "ninguno",
+        "factor": 0.921
+      },
+      {
+        "nombre": "Papelera CartonSur",
+        "requisito": "ninguno",
+        "factor": 0.945
+      },
+      {
+        "nombre": "Lacteos La Vaquita",
+        "requisito": "no_ultimo",
+        "factor": 0.968
+      },
+      {
+        "nombre": "Galletitas Crocantin",
+        "requisito": "no_ultimo",
+        "factor": 0.992
+      },
+      {
+        "nombre": "Aceites Girasol de Oro",
+        "requisito": "no_ultimo",
+        "factor": 1.016
+      },
+      {
+        "nombre": "Cervezeria Lupulon",
+        "requisito": "no_ultimo",
+        "factor": 1.039
+      },
+      {
+        "nombre": "Gaseosa Burbuja",
+        "requisito": "no_ultimo",
+        "factor": 1.063
+      },
+      {
+        "nombre": "Zapatillas RunFast",
+        "requisito": "no_ultimo",
+        "factor": 1.087
+      },
+      {
+        "nombre": "Neumaticos Bridgestein",
+        "requisito": "mitad_tabla",
+        "factor": 1.111
+      },
+      {
+        "nombre": "Farmacias FarmaTodo",
+        "requisito": "mitad_tabla",
+        "factor": 1.134
+      },
+      {
+        "nombre": "Helados Frigor",
+        "requisito": "mitad_tabla",
+        "factor": 1.158
+      },
+      {
+        "nombre": "Supermercados Diarcos",
+        "requisito": "mitad_tabla",
+        "factor": 1.182
+      },
+      {
+        "nombre": "Banco del Sur",
+        "requisito": "top5",
+        "factor": 1.205
+      },
+      {
+        "nombre": "TeleSur Movil",
+        "requisito": "top5",
+        "factor": 1.229
+      },
+      {
+        "nombre": "Combustibles Petrosur",
+        "requisito": "top5",
+        "factor": 1.253
+      },
+      {
+        "nombre": "Aerolinea LatAmigo",
+        "requisito": "top3",
+        "factor": 1.276
+      },
+      {
+        "nombre": "Deportiva Pumba",
+        "requisito": "campeon",
+        "factor": 1.3
+      }
+    ],
+    [
+      {
+        "nombre": "Colchones DormiBien",
+        "requisito": "ninguno",
+        "factor": 0.85
+      },
+      {
+        "nombre": "Muebles NordicoSur",
+        "requisito": "ninguno",
+        "factor": 0.874
+      },
+      {
+        "nombre": "Regalos Detallitos",
+        "requisito": "ninguno",
+        "factor": 0.897
+      },
+      {
+        "nombre": "Textiles HiloFino",
+        "requisito": "ninguno",
+        "factor": 0.921
+      },
+      {
+        "nombre": "Bebidas Refresquita",
+        "requisito": "ninguno",
+        "factor": 0.945
+      },
+      {
+        "nombre": "Cafe TostaOro",
+        "requisito": "no_ultimo",
+        "factor": 0.968
+      },
+      {
+        "nombre": "Motos Zumbadora",
+        "requisito": "no_ultimo",
+        "factor": 0.992
+      },
+      {
+        "nombre": "Pinturerias ColorMax",
+        "requisito": "no_ultimo",
+        "factor": 1.016
+      },
+      {
+        "nombre": "Snacks Salados Crack",
+        "requisito": "no_ultimo",
+        "factor": 1.039
+      },
+      {
+        "nombre": "Optica VisionPlus",
+        "requisito": "no_ultimo",
+        "factor": 1.063
+      },
+      {
+        "nombre": "Farmacias VidaSana",
+        "requisito": "no_ultimo",
+        "factor": 1.087
+      },
+      {
+        "nombre": "Gimnasios PesaFit",
+        "requisito": "mitad_tabla",
+        "factor": 1.111
+      },
+      {
+        "nombre": "Ropa Deportiva SudaMas",
+        "requisito": "mitad_tabla",
+        "factor": 1.134
+      },
+      {
+        "nombre": "Delivery YaLlego",
+        "requisito": "mitad_tabla",
+        "factor": 1.158
+      },
+      {
+        "nombre": "Hamburguesas BigBife",
+        "requisito": "mitad_tabla",
+        "factor": 1.182
+      },
+      {
+        "nombre": "Banco del Barrio",
+        "requisito": "top5",
+        "factor": 1.205
+      },
+      {
+        "nombre": "Telefonica HablaClaro",
+        "requisito": "top5",
+        "factor": 1.229
+      },
+      {
+        "nombre": "Cadena Farma Mas",
+        "requisito": "top5",
+        "factor": 1.253
+      },
+      {
+        "nombre": "Supermercados PrecioJusto",
+        "requisito": "top3",
+        "factor": 1.276
+      },
+      {
+        "nombre": "Cerveza Doble Malta",
+        "requisito": "campeon",
+        "factor": 1.3
+      }
+    ],
+    [
+      {
+        "nombre": "Vidrieria Cristal Claro",
+        "requisito": "ninguno",
+        "factor": 0.85
+      },
+      {
+        "nombre": "Corralon San Roque",
+        "requisito": "ninguno",
+        "factor": 0.874
+      },
+      {
+        "nombre": "Jugueteria Pim Pum",
+        "requisito": "ninguno",
+        "factor": 0.897
+      },
+      {
+        "nombre": "Tintoreria Blanca Nieve",
+        "requisito": "ninguno",
+        "factor": 0.921
+      },
+      {
+        "nombre": "Zapateria Pisa Firme",
+        "requisito": "ninguno",
+        "factor": 0.945
+      },
+      {
+        "nombre": "Materiales BuildCasa",
+        "requisito": "no_ultimo",
+        "factor": 0.968
+      },
+      {
+        "nombre": "Transporte El Rapido",
+        "requisito": "no_ultimo",
+        "factor": 0.992
+      },
+      {
+        "nombre": "Inmobiliaria Techo Propio",
+        "requisito": "no_ultimo",
+        "factor": 1.016
+      },
+      {
+        "nombre": "Panificados Miga de Oro",
+        "requisito": "no_ultimo",
+        "factor": 1.039
+      },
+      {
+        "nombre": "Cafe Aroma Nuestro",
+        "requisito": "no_ultimo",
+        "factor": 1.063
+      },
+      {
+        "nombre": "Helados Frigolandia",
+        "requisito": "no_ultimo",
+        "factor": 1.087
+      },
+      {
+        "nombre": "Seguros La Prudente",
+        "requisito": "mitad_tabla",
+        "factor": 1.111
+      },
+      {
+        "nombre": "Muebles ConfortHogar",
+        "requisito": "mitad_tabla",
+        "factor": 1.134
+      },
+      {
+        "nombre": "Telefonia CelularYa",
+        "requisito": "mitad_tabla",
+        "factor": 1.158
+      },
+      {
+        "nombre": "Cerveza Roblecito",
+        "requisito": "mitad_tabla",
+        "factor": 1.182
+      },
+      {
+        "nombre": "Pastas Dona Nona",
+        "requisito": "top5",
+        "factor": 1.205
+      },
+      {
+        "nombre": "Neumaticos RodaMas",
+        "requisito": "top5",
+        "factor": 1.229
+      },
+      {
+        "nombre": "Yerba Amarga Rica",
+        "requisito": "top5",
+        "factor": 1.253
+      },
+      {
+        "nombre": "Fitness MusculoTotal",
+        "requisito": "top3",
+        "factor": 1.276
+      },
+      {
+        "nombre": "Cadena Supermercados Titon",
+        "requisito": "campeon",
+        "factor": 1.3
+      }
+    ],
+    [
+      {
+        "nombre": "Bicicleteria Rueda Libre",
+        "requisito": "ninguno",
+        "factor": 0.85
+      },
+      {
+        "nombre": "Libreria El Renglon",
+        "requisito": "ninguno",
+        "factor": 0.874
+      },
+      {
+        "nombre": "Sandwicheria El Refuerzo",
+        "requisito": "ninguno",
+        "factor": 0.897
+      },
+      {
+        "nombre": "Parrillada El Fogon",
+        "requisito": "ninguno",
+        "factor": 0.921
+      },
+      {
+        "nombre": "Cafe Media Luna",
+        "requisito": "ninguno",
+        "factor": 0.945
+      },
+      {
+        "nombre": "Autoservicio Dona Mari",
+        "requisito": "no_ultimo",
+        "factor": 0.968
+      },
+      {
+        "nombre": "Panaderia La Espiga",
+        "requisito": "no_ultimo",
+        "factor": 0.992
+      },
+      {
+        "nombre": "Pintureria Color Total",
+        "requisito": "no_ultimo",
+        "factor": 1.016
+      },
+      {
+        "nombre": "Electrodomesticos El Enchufe",
+        "requisito": "no_ultimo",
+        "factor": 1.039
+      },
+      {
+        "nombre": "Ferreteria El Tornillo Feliz",
+        "requisito": "no_ultimo",
+        "factor": 1.063
+      },
+      {
+        "nombre": "Colchones Sueno Real",
+        "requisito": "no_ultimo",
+        "factor": 1.087
+      },
+      {
+        "nombre": "Optica Ver Bien",
+        "requisito": "mitad_tabla",
+        "factor": 1.111
+      },
+      {
+        "nombre": "Farmacia Salud Total",
+        "requisito": "mitad_tabla",
+        "factor": 1.134
+      },
+      {
+        "nombre": "Restaurante Pizzita Rica",
+        "requisito": "mitad_tabla",
+        "factor": 1.158
+      },
+      {
+        "nombre": "Supermercado Tito",
+        "requisito": "mitad_tabla",
+        "factor": 1.182
+      },
+      {
+        "nombre": "Distribuidora El Mayorista",
+        "requisito": "top5",
+        "factor": 1.205
+      },
+      {
+        "nombre": "Bebidas La Fuente",
+        "requisito": "top5",
+        "factor": 1.229
+      },
+      {
+        "nombre": "Frigorifico El Novillo",
+        "requisito": "top5",
+        "factor": 1.253
+      },
+      {
+        "nombre": "Constructora Ladrillo Rojo",
+        "requisito": "top3",
+        "factor": 1.276
+      },
+      {
+        "nombre": "Automotores Del Centro",
+        "requisito": "campeon",
+        "factor": 1.3
+      }
+    ],
+    [
+      {
+        "nombre": "Remises El Tero",
+        "requisito": "ninguno",
+        "factor": 0.85
+      },
+      {
+        "nombre": "Mueblería Tres Patas",
+        "requisito": "ninguno",
+        "factor": 0.874
+      },
+      {
+        "nombre": "Carniceria El Costillar",
+        "requisito": "ninguno",
+        "factor": 0.897
+      },
+      {
+        "nombre": "Almacen La Confianza",
+        "requisito": "ninguno",
+        "factor": 0.921
+      },
+      {
+        "nombre": "Heladeria Frio Polar",
+        "requisito": "ninguno",
+        "factor": 0.945
+      },
+      {
+        "nombre": "Vivero Semillita",
+        "requisito": "no_ultimo",
+        "factor": 0.968
+      },
+      {
+        "nombre": "Taller Chapa y Pintura Beto",
+        "requisito": "no_ultimo",
+        "factor": 0.992
+      },
+      {
+        "nombre": "Fiambreria El Corte",
+        "requisito": "no_ultimo",
+        "factor": 1.016
+      },
+      {
+        "nombre": "Verduleria Los Hermanos",
+        "requisito": "no_ultimo",
+        "factor": 1.039
+      },
+      {
+        "nombre": "Bar La Curva",
+        "requisito": "no_ultimo",
+        "factor": 1.063
+      },
+      {
+        "nombre": "Rotiseria Dona Tere",
+        "requisito": "no_ultimo",
+        "factor": 1.087
+      },
+      {
+        "nombre": "Gomeria El Pinchazo",
+        "requisito": "mitad_tabla",
+        "factor": 1.111
+      },
+      {
+        "nombre": "Pizzeria A la Piedra",
+        "requisito": "mitad_tabla",
+        "factor": 1.134
+      },
+      {
+        "nombre": "Lavadero El Chorro",
+        "requisito": "mitad_tabla",
+        "factor": 1.158
+      },
+      {
+        "nombre": "Peluqueria Wanda",
+        "requisito": "mitad_tabla",
+        "factor": 1.182
+      },
+      {
+        "nombre": "Corralon Don Ramon",
+        "requisito": "top5",
+        "factor": 1.205
+      },
+      {
+        "nombre": "Panaderia El Trigal",
+        "requisito": "top5",
+        "factor": 1.229
+      },
+      {
+        "nombre": "Optica Buen Ojo",
+        "requisito": "top5",
+        "factor": 1.253
+      },
+      {
+        "nombre": "Farmacia La Esquina",
+        "requisito": "top3",
+        "factor": 1.276
+      },
+      {
+        "nombre": "Autoservicio Central",
+        "requisito": "campeon",
+        "factor": 1.3
+      }
+    ],
+    [
+      {
+        "nombre": "Kiosco Kiosquito",
+        "requisito": "ninguno",
+        "factor": 0.85
+      },
+      {
+        "nombre": "Fotocopias Al Toque",
+        "requisito": "ninguno",
+        "factor": 0.874
+      },
+      {
+        "nombre": "Locutorio El Cable",
+        "requisito": "ninguno",
+        "factor": 0.897
+      },
+      {
+        "nombre": "Empanadas Dona Chola",
+        "requisito": "ninguno",
+        "factor": 0.921
+      },
+      {
+        "nombre": "Cotillon Fiesta Loca",
+        "requisito": "ninguno",
+        "factor": 0.945
+      },
+      {
+        "nombre": "Herreria El Yunque",
+        "requisito": "no_ultimo",
+        "factor": 0.968
+      },
+      {
+        "nombre": "Chapisteria Don Julio",
+        "requisito": "no_ultimo",
+        "factor": 0.992
+      },
+      {
+        "nombre": "Tapiceria La Aguja",
+        "requisito": "no_ultimo",
+        "factor": 1.016
+      },
+      {
+        "nombre": "Cristaleria Transparente",
+        "requisito": "no_ultimo",
+        "factor": 1.039
+      },
+      {
+        "nombre": "Bazar Todo x Dos",
+        "requisito": "no_ultimo",
+        "factor": 1.063
+      },
+      {
+        "nombre": "Semilleria El Surco",
+        "requisito": "no_ultimo",
+        "factor": 1.087
+      },
+      {
+        "nombre": "Panaderia Pan Caliente",
+        "requisito": "mitad_tabla",
+        "factor": 1.111
+      },
+      {
+        "nombre": "Rotiseria El Pollo Feliz",
+        "requisito": "mitad_tabla",
+        "factor": 1.134
+      },
+      {
+        "nombre": "Bicicleteria Pedaleo",
+        "requisito": "mitad_tabla",
+        "factor": 1.158
+      },
+      {
+        "nombre": "Ferreteria Dos Tuercas",
+        "requisito": "mitad_tabla",
+        "factor": 1.182
+      },
+      {
+        "nombre": "Distribuidora El Camion",
+        "requisito": "top5",
+        "factor": 1.205
+      },
+      {
+        "nombre": "Mayorista La Bolsa",
+        "requisito": "top5",
+        "factor": 1.229
+      },
+      {
+        "nombre": "Almacen Grande Chico",
+        "requisito": "top5",
+        "factor": 1.253
+      },
+      {
+        "nombre": "Carniceria El Buen Corte",
+        "requisito": "top3",
+        "factor": 1.276
+      },
+      {
+        "nombre": "Supermercado Del Pueblo",
+        "requisito": "campeon",
+        "factor": 1.3
+      }
+    ],
+    [
+      {
+        "nombre": "Kiosco de Ana",
+        "requisito": "ninguno",
+        "factor": 0.85
+      },
+      {
+        "nombre": "Papeleria Pepe",
+        "requisito": "ninguno",
+        "factor": 0.874
+      },
+      {
+        "nombre": "Salon de fiestas Lucho",
+        "requisito": "ninguno",
+        "factor": 0.897
+      },
+      {
+        "nombre": "Bizcocheria La Esquina",
+        "requisito": "ninguno",
+        "factor": 0.921
+      },
+      {
+        "nombre": "Cerrajeria Don Nelson",
+        "requisito": "ninguno",
+        "factor": 0.945
+      },
+      {
+        "nombre": "Peluqueria Marta",
+        "requisito": "no_ultimo",
+        "factor": 0.968
+      },
+      {
+        "nombre": "Lavadero Burbujas",
+        "requisito": "no_ultimo",
+        "factor": 0.992
+      },
+      {
+        "nombre": "Pizzeria El Molde",
+        "requisito": "no_ultimo",
+        "factor": 1.016
+      },
+      {
+        "nombre": "Gomeria Dos Ruedas",
+        "requisito": "no_ultimo",
+        "factor": 1.039
+      },
+      {
+        "nombre": "Rotiseria La Olla",
+        "requisito": "no_ultimo",
+        "factor": 1.063
+      },
+      {
+        "nombre": "Bar El Descuento",
+        "requisito": "no_ultimo",
+        "factor": 1.087
+      },
+      {
+        "nombre": "Verduleria La Huerta",
+        "requisito": "mitad_tabla",
+        "factor": 1.111
+      },
+      {
+        "nombre": "Fiambreria Don Queso",
+        "requisito": "mitad_tabla",
+        "factor": 1.134
+      },
+      {
+        "nombre": "Taller Mecanico Cacho",
+        "requisito": "mitad_tabla",
+        "factor": 1.158
+      },
+      {
+        "nombre": "Vivero Hoja Verde",
+        "requisito": "mitad_tabla",
+        "factor": 1.182
+      },
+      {
+        "nombre": "Heladeria Copa Grande",
+        "requisito": "top5",
+        "factor": 1.205
+      },
+      {
+        "nombre": "Almacen La Vecina",
+        "requisito": "top5",
+        "factor": 1.229
+      },
+      {
+        "nombre": "Carniceria Media Res",
+        "requisito": "top5",
+        "factor": 1.253
+      },
+      {
+        "nombre": "Mueble Usado Lito",
+        "requisito": "top3",
+        "factor": 1.276
+      },
+      {
+        "nombre": "Remises Punto Fijo",
+        "requisito": "campeon",
+        "factor": 1.3
+      }
+    ],
+    [
+      {
+        "nombre": "Kiosco Don Beto",
+        "requisito": "ninguno",
+        "factor": 0.85
+      },
+      {
+        "nombre": "Fotocopias La Hoja",
+        "requisito": "ninguno",
+        "factor": 0.874
+      },
+      {
+        "nombre": "Cortina Metalica Tito",
+        "requisito": "ninguno",
+        "factor": 0.897
+      },
+      {
+        "nombre": "Empanadas Al Paso",
+        "requisito": "ninguno",
+        "factor": 0.921
+      },
+      {
+        "nombre": "Globos y Cotillon Susy",
+        "requisito": "ninguno",
+        "factor": 0.945
+      },
+      {
+        "nombre": "Cerrajeria Llave Maestra",
+        "requisito": "no_ultimo",
+        "factor": 0.968
+      },
+      {
+        "nombre": "Peluqueria Tijera Loca",
+        "requisito": "no_ultimo",
+        "factor": 0.992
+      },
+      {
+        "nombre": "Lavadero A Mano",
+        "requisito": "no_ultimo",
+        "factor": 1.016
+      },
+      {
+        "nombre": "Pizzeria Media Masa",
+        "requisito": "no_ultimo",
+        "factor": 1.039
+      },
+      {
+        "nombre": "Gomeria El Parche",
+        "requisito": "no_ultimo",
+        "factor": 1.063
+      },
+      {
+        "nombre": "Bar La Ultima",
+        "requisito": "no_ultimo",
+        "factor": 1.087
+      },
+      {
+        "nombre": "Verduleria El Cajon",
+        "requisito": "mitad_tabla",
+        "factor": 1.111
+      },
+      {
+        "nombre": "Fiambreria La Feta",
+        "requisito": "mitad_tabla",
+        "factor": 1.134
+      },
+      {
+        "nombre": "Bicicleteria Rayo",
+        "requisito": "mitad_tabla",
+        "factor": 1.158
+      },
+      {
+        "nombre": "Panaderia Facturas Lu",
+        "requisito": "mitad_tabla",
+        "factor": 1.182
+      },
+      {
+        "nombre": "Rotiseria Milanesa Grande",
+        "requisito": "top5",
+        "factor": 1.205
+      },
+      {
+        "nombre": "Almacen La Fiada",
+        "requisito": "top5",
+        "factor": 1.229
+      },
+      {
+        "nombre": "Carniceria El Asado",
+        "requisito": "top5",
+        "factor": 1.253
+      },
+      {
+        "nombre": "Vivero Macetita",
+        "requisito": "top3",
+        "factor": 1.276
+      },
+      {
+        "nombre": "Kiosco 24 Horas",
+        "requisito": "campeon",
+        "factor": 1.3
+      }
+    ]
+  ]
+}

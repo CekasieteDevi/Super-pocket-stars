@@ -166,6 +166,13 @@ var caja_al_cierre: Dictionary = {}
 ## REINICIA: un premio cobrado en el acto se perdia unos minutos despues,
 ## en el mismo cierre que lo pago.
 var premios_copa: float = 0.0
+
+## Sponsors del club (§ ver core/sponsors.gd): los contratos que ocupan
+## uno de los diez lugares, las ofertas esperando respuesta y lo que
+## llevan pagado esta temporada. Solo los tiene el club del jugador.
+var sponsors: Array = []
+var sponsors_ofertas: Array = []
+var ingresos_sponsors: float = 0.0
 var sueldos: Dictionary = {}  # jugador_id -> sueldo anual
 var contratos: Dictionary = {}  # jugador_id -> años restantes
 ## §9.3 extendido: pagando exactamente esto por un jugador, la venta es
@@ -335,6 +342,8 @@ func guardar() -> Dictionary:
 		"suspendidos": _claves_a_texto(suspendidos),
 		"caja": caja, "presupuesto_temporada": presupuesto_temporada, "caja_al_cierre": caja_al_cierre,
 		"premios_copa": premios_copa,
+		"sponsors": sponsors, "sponsors_ofertas": sponsors_ofertas,
+		"ingresos_sponsors": ingresos_sponsors,
 		"sueldos": _claves_a_texto(sueldos), "contratos": _claves_a_texto(contratos),
 		"clausulas": _claves_a_texto(clausulas),
 		"reputacion": reputacion, "quebrado": quebrado, "scouts": scouts, "instalaciones": instalaciones,
@@ -438,6 +447,9 @@ static func cargar(datos: Dictionary) -> Team:
 	t.presupuesto_temporada = datos["presupuesto_temporada"]
 	t.caja_al_cierre = datos["caja_al_cierre"]
 	t.premios_copa = float(datos.get("premios_copa", 0.0))
+	t.sponsors = datos.get("sponsors", [])
+	t.sponsors_ofertas = datos.get("sponsors_ofertas", [])
+	t.ingresos_sponsors = float(datos.get("ingresos_sponsors", 0.0))
 	t.sueldos = _claves_a_entero(datos["sueldos"])
 	t.contratos = _claves_a_entero(datos["contratos"])
 	t.clausulas = _claves_a_entero(datos.get("clausulas", {}))
