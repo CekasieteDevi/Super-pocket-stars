@@ -18,8 +18,25 @@ func _init() -> void:
 		var tipos := {}
 		for e in r["eventos"]:
 			tipos[str(e.get("tipo", ""))] = int(tipos.get(str(e.get("tipo", "")), 0)) + 1
-		if fotogramas.size() < Laboratorio.TICKS:
-			print("FALLA: %s genero solo %d fotogramas." % [s["clave"], fotogramas.size()])
+		# Ni tan corto que no se vea nada ni tan largo que sea un partido:
+		# la primera version corria 200 ticks fijos —53 segundos— para una
+		# jugada de 1 a 5.
+		if fotogramas.size() < 20 or fotogramas.size() > 120:
+			print("FALLA: %s genero %d fotogramas (se esperan entre 20 y 120)." % [
+				s["clave"], fotogramas.size()])
+			fallas += 1
+			continue
+		# El evento que le da nombre a la jugada tiene que estar PEGADO a
+		# un fotograma del principio: la vista lee los eventos de cada
+		# cuadro para narrar y mostrar la tarjeta, y los que se emiten
+		# fuera de un tick no los ve nadie.
+		var con_evento := -1
+		for f in range(mini(fotogramas.size(), 12)):
+			if not fotogramas[f].get("eventos", []).is_empty():
+				con_evento = f
+				break
+		if con_evento < 0:
+			print("FALLA: %s no engancha ningun evento a los primeros fotogramas." % s["clave"])
 			fallas += 1
 			continue
 		# Que los 22 (o 21 tras la roja) esten y que la pelota exista.

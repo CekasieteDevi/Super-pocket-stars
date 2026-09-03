@@ -442,10 +442,21 @@ static func _mezclar(a: Vector2, b: Vector2, t: float) -> Vector2:
 func _seguir_camara(idx: int, delta: float) -> void:
 	var pa: Dictionary = fotogramas[idx]["pelota"]
 	var actual := Vector2(pa["x"], pa["y"])
+	# El fotograma puede pedir que se mire otra cosa: con un expulsado
+	# yendose, la accion es el, no la pelota parada a treinta metros.
+	var foco = fotogramas[idx].get("foco", null)
+	if foco != null:
+		actual = Vector2(float(foco["x"]), float(foco["y"]))
 	var vel := Vector2.ZERO
 	if idx + 1 < fotogramas.size():
-		var pb: Dictionary = fotogramas[idx + 1]["pelota"]
-		var d := Vector2(pb["x"], pb["y"]) - actual
+		var siguiente = fotogramas[idx + 1].get("foco", null)
+		var destino := actual
+		if foco != null and siguiente != null:
+			destino = Vector2(float(siguiente["x"]), float(siguiente["y"]))
+		elif foco == null:
+			var pb: Dictionary = fotogramas[idx + 1]["pelota"]
+			destino = Vector2(pb["x"], pb["y"])
+		var d := destino - actual
 		if d.length() < SALTO_MAXIMO_M:
 			vel = d / MotorEspacial.TICK_SEG
 	var en_area: bool = absf(actual.x) > ProyeccionPartido.MEDIO_LARGO - 16.5

@@ -3801,9 +3801,19 @@ static func _push_fotograma(estado: Dictionary, eventos_del_tick: Array = []) ->
 			"id": id, "x": e["pos"].x, "y": e["pos"].y,
 			"equipo_local": e["equipo_local"], "rol": e["rol"],
 		})
+	# Adonde tiene que mirar la camara. Normalmente null y la vista sigue
+	# la pelota; con un expulsado caminando hacia afuera la accion es el
+	# jugador y no la pelota, que se quedo quieta en el punto de la falta
+	# a 30 metros de ahi.
+	var foco = null
+	var saliendo: int = int(estado.get("expulsado", {}).get("clave", -1))
+	if saliendo != -1 and estado["jugadores"].has(saliendo):
+		var e_f: Dictionary = estado["jugadores"][saliendo]
+		foco = {"x": e_f["pos"].x, "y": e_f["pos"].y}
 	estado["fotogramas"].append({
 		"tick": estado["tick"],
 		"minuto": estado["minuto"],
+		"foco": foco,
 		"pelota": {
 			"x": estado["pelota"]["pos"].x, "y": estado["pelota"]["pos"].y,
 			# Altura en metros: hoy la animación la ignora (dibuja en 2D),

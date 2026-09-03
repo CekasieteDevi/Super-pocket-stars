@@ -15,10 +15,22 @@ extends RefCounted
 ## Vive en core/ y no en tests/ a propósito: la idea es poder mirarlo
 ## también desde el teléfono, que es donde la animación se ve de verdad.
 
-## Cuántos ticks se simulan después de montar la situación. 200 ticks son
-## 50 segundos de juego, de sobra para el balón parado más largo (la
-## salida de un expulsado puede llevar 11 segundos).
-const TICKS := 200
+## El clip TERMINA cuando termina la jugada, no a los N ticks.
+##
+## La primera version corria 200 ticks fijos —53 segundos— para una jugada
+## que dura entre 1 y 5. El resto era futbol comun y corriente que no
+## tenia nada que ver con lo que se venia a mirar.
+##
+## Ahora son dos etapas: se espera a que la jugada montada se resuelva
+## —que se termine la pausa del balon parado y que el expulsado salga— y
+## despues un rato fijo para ver como sigue.
+const TICKS_DE_CIERRE := 32
+const TICKS_TOPE := 200
+
+## Cuantos ticks de juego normal antes de montar la jugada. Pocos: son
+## para que los 22 no esten clavados en el circulo central, no para ver un
+## partido.
+const TICKS_PREVIOS := 6
 
 ## Las situaciones que se pueden pedir: clave, nombre y qué se ve.
 const SITUACIONES := [
@@ -65,8 +77,15 @@ static func generar(clave: String, local: Team, visitante: Team,
 	MotorEspacial._reiniciar_desde_medio(estado, true, 1)
 	# Unos ticks de juego normal antes de la situación: sin eso todos
 	# arrancan clavados en el círculo central y no se entiende nada.
-	for i in range(12):
+	for i in range(TICKS_PREVIOS):
 		MotorEspacial._tick(estado, true)
+
+	# Los eventos que emita el montaje tienen que quedar PEGADOS a un
+	# fotograma: la vista lee los eventos de cada cuadro para mostrar la
+	# tarjeta y el relato, y los que se emiten fuera de un tick no los ve
+	# nadie. Por eso se anota cuantos habia antes y se empuja un fotograma
+	# con los nuevos.
+	var eventos_antes: int = estado["eventos"].size()
 
 	match clave:
 		"expulsion":
@@ -84,7 +103,18 @@ static func generar(clave: String, local: Team, visitante: Team,
 		"saque_arco":
 			_montar_saque_arco(estado)
 
-	for i in range(TICKS):
+	MotorEspacial._push_fotograma(estado, estado["eventos"].slice(eventos_antes))
+
+	# Etapa 1: hasta que se resuelva lo que se monto.
+	for i in range(TICKS_TOPE):
+		if not _jugada_en_curso(estado):
+			break
+		MotorEspacial._tick(estado, true)
+	# Etapa 2: un rato fijo para ver como sigue. Fijo y no "hasta que se
+	# calme": despues de la jugada el partido sigue para siempre, y
+	# esperar a que no pase nada terminaba dando el clip entero de 200
+	# ticks otra vez.
+	for i in range(TICKS_DE_CIERRE):
 		MotorEspacial._tick(estado, true)
 
 	return {
@@ -95,6 +125,17 @@ static func generar(clave: String, local: Team, visitante: Team,
 		"eventos": estado["eventos"],
 		"fotogramas": estado["fotogramas"],
 	}
+
+
+## ¿Todavia esta pasando la jugada que se monto? Solo mira lo que la
+## jugada misma controla: la pausa del balon parado y el expulsado que
+## camina. NO mira si la pelota esta en el aire — despues del saque el
+## partido sigue y siempre hay alguna pelota volando, asi que con eso el
+## clip no terminaba nunca.
+static func _jugada_en_curso(estado: Dictionary) -> bool:
+	if int(estado.get("detenido", 0)) > 0:
+		return true
+	return not estado.get("expulsado", {}).is_empty()
 
 
 ## Roja al defensor del equipo visitante más cercano a la pelota, y falta
@@ -119,7 +160,18 @@ static func _montar_expulsion(estado: Dictionary) -> void:
 	MotorEspacial._tiro_libre(estado, punto, true, MotorEspacial._minuto_int(estado))
 
 
+## En un partido el penal llega por _cobrar_falta, que emite la falta
+## ANTES de mandar a _cobrar_penal. Llamando directo a _cobrar_penal esa
+## falta no existe y la vista no narra nada hasta el remate, asi que se
+## emite igual.
 static func _montar_penal(estado: Dictionary) -> void:
+	var eq_a: Team = MotorEspacial._equipo_de(estado, true)
+	var eq_d: Team = MotorEspacial._equipo_de(estado, false)
+	estado["eventos"].append({
+		"minuto": MotorEspacial._minuto_int(estado), "tipo": "falta",
+		"equipo": eq_d.nombre, "rival": eq_a.nombre,
+		"jugador_posicion": "DFC", "resultado": "falta",
+	})
 	MotorEspacial._cobrar_penal(estado, true, MotorEspacial._minuto_int(estado))
 
 
@@ -131,7 +183,58 @@ static func _montar_corner(estado: Dictionary) -> void:
 ## y se ve.
 static func _montar_tiro_libre(estado: Dictionary) -> void:
 	var arco := MotorEspacial.arco_rival(true)
-	var punto := Vector2(arco.x - 25.0, 8.0)
+	var hacia: float = -1.0 if arco.x > 0.0 else 1.0
+	# 20 metros y bastante centrado: la barrera solo se arma en un tiro
+	# libre DIRECTO, y eso lo decide factor_geometria contra el umbral de
+	# geometria_minima_tiro_libre (0,14). A 24 m y 7 de costado daba 0,134
+	# —se clasificaba como centro— y por seis milesimas no habia barrera.
+	var punto := Vector2(arco.x + hacia * 20.0, 5.0)
+	var eq_a: Team = MotorEspacial._equipo_de(estado, true)
+	var eq_d: Team = MotorEspacial._equipo_de(estado, false)
+
+	# Se monta la SITUACION entera, no solo la pelota. La barrera la
+	# forman los defensores que estan a menos de DIST_MAX_A_LA_BARRERA del
+	# punto, y en una jugada armada a mano el equipo defensor esta en el
+	# medio de la cancha: sin acercarlos no hay barrera que valga, que es
+	# justo lo que se venia a mirar. Tampoco es hacer trampa — es la foto
+	# que habria si la falta hubiera pasado de verdad ahi.
+	# Se los pone entre la pelota y SU arco, cerca del puesto de la
+	# barrera pero no encima: asi se los ve trotar a formarla en vez de
+	# aparecer ya alineados. El puesto esta a 9,15 m del punto en la
+	# linea al arco, y solo entran a la barrera los que estan a menos de
+	# DIST_MAX_A_LA_BARRERA de ahi.
+	var hacia_arco: Vector2 = (arco - punto).normalized()
+	var lateral := Vector2(-hacia_arco.y, hacia_arco.x)
+	var puesto_barrera: Vector2 = punto + hacia_arco * 9.15
+	var atras: Array = []
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		if e["equipo_local"] or str(e["rol"]) == "ARQ":
+			continue
+		atras.append(e)
+	for i in range(mini(atras.size(), 7)):
+		var lado: float = -1.0 if i % 2 == 0 else 1.0
+		if i < 5:
+			# Los que van a formar la barrera: alrededor del puesto.
+			atras[i]["pos"] = puesto_barrera + hacia_arco * 3.5 				+ lateral * lado * (1.5 + 1.2 * i)
+		else:
+			# Y un par mas atras, marcando.
+			atras[i]["pos"] = punto + hacia_arco * (16.0 + 3.0 * i) 				+ lateral * lado * 8.0
+		atras[i]["vel"] = Vector2.ZERO
+		atras[i]["rapidez"] = 0.0
+
+	# La pelota YA en el punto: si no, se queda donde estaba —el circulo
+	# central— durante toda la pausa y despues aparece de un salto.
+	estado["pelota"]["pos"] = punto
+	estado["pelota"]["poseedor_id"] = -1
+	estado["pelota"]["en_vuelo"] = false
+	estado["pelota"]["vel"] = Vector2.ZERO
+
+	estado["eventos"].append({
+		"minuto": MotorEspacial._minuto_int(estado), "tipo": "falta",
+		"equipo": eq_d.nombre, "rival": eq_a.nombre,
+		"jugador_posicion": "DFC", "resultado": "falta",
+	})
 	MotorEspacial._tiro_libre(estado, punto, true, MotorEspacial._minuto_int(estado))
 
 
@@ -159,7 +262,23 @@ static func _montar_gol(estado: Dictionary) -> void:
 	estado["jugadores"][clave]["pos"] = punto
 	MotorEspacial._entregar_pelota(estado, clave)
 	estado["pelota"]["pos"] = punto
-	MotorEspacial._resolver_tiro(estado, estado["jugadores"][clave], mejor)
+	# Que sea gol de verdad: si el remate se va afuera o lo atajan, el clip
+	# que se pidio —"gol y festejo"— no muestra ni el gol ni el festejo. Se
+	# reintenta hasta que entre.
+	var goles_antes: int = eq_a.goles
+	for intento in range(40):
+		MotorEspacial._resolver_tiro(estado, estado["jugadores"][clave], mejor)
+		# El remate viaja: hay que dejarlo llegar para saber si entro.
+		for t in range(24):
+			MotorEspacial._tick(estado, true)
+			if eq_a.goles > goles_antes:
+				break
+		if eq_a.goles > goles_antes:
+			return
+		# No entro: se vuelve a poner la pelota y se repite.
+		estado["jugadores"][clave]["pos"] = punto
+		MotorEspacial._entregar_pelota(estado, clave)
+		estado["pelota"]["pos"] = punto
 
 
 static func _montar_saque_arco(estado: Dictionary) -> void:
