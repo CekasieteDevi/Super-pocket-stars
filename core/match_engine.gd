@@ -23,24 +23,52 @@ extends RefCounted
 
 const TICKS_POR_MITAD := 90
 
-## Pases consecutivos exitosos que hacen falta para llegar al último tercio.
-## Sin esto, con ~50% de éxito por duelo parejo se genera un tiro casi cada
-## 2 ticks y el marcador se dispara a números de básquet. Simula la posesión
-## sostenida real en vez de un solo pase mágico que atraviesa la cancha.
+## Cuantos duelos dura un ataque, y cuantos hay que ganar para rematar.
 ##
-## Se probó (tests/_diag_estilos_goles.gd) hacer que esto varíe por Estilo
-## para que Tiki taka construya con más toques — se descartó: la
-## probabilidad de encadenar N pases exitosos es ~p^N, así que hasta ±1
-## alrededor de la base (Tiki taka=4, Contragolpe=2) triplicaba los
-## goles/partido de Contragolpe respecto a Tiki taka. Es una palanca
-## demasiado sensible para usarla como diferenciador de estilo sin romper
-## el balance de goles ya calibrado — queda fija para los 6 estilos.
-const AVANCE_REQUERIDO := 3
+## Antes llegar a rematar pedia ganar cuatro duelos SEGUIDOS —tres pases y
+## una gambeta— y cualquier fallo devolvia la pelota. Pedir una RACHA es lo
+## que hacia que una ventaja chica se volviera enorme: la probabilidad de
+## la racha va a la cuarta potencia, asi que con 50% por duelo llegabas el
+## 6,3% de las veces y con 60% el 13%, el doble de llegadas por ser apenas
+## mejor. Repetido 38 fechas daba campeones de 111 puntos con 4 goles en
+## contra y ultimos con 4 goles a favor, y goleadas de 24-0 entre
+## divisiones.
+##
+## Ahora el ataque dura una cantidad FIJA de duelos y hace falta ganar
+## tantos de esos: es una CUENTA y no una racha, mucho menos sensible al
+## desnivel. Como el ataque tiene largo fijo y la pelota cambia de dueño al
+## terminar, la cantidad de ataques por partido tampoco depende de lo bueno
+## que seas — lo que cambia es cuantos terminan en remate, que es como
+## funciona el futbol: hasta el peor equipo llega al area, la diferencia
+## esta en si la mete.
+##
+## Sigue habiendo UN duelo por tick, asi que las tarjetas, las lesiones y
+## el desgaste salen al mismo ritmo de siempre.
+##
+## Los dos numeros salen de calibrar contra el motor espacial, que juega
+## los partidos del jugador y ya se comportaba bien con desnivel — ver
+## tests/_diag_barrido.gd.
+static var DUELOS_POR_ATAQUE := 11
+static var ACIERTOS_PARA_REMATAR := 6
 
 const GRUPO_POR_ATRIBUTO := {
 	"pases": "tecnico", "control": "tecnico", "tiro": "tecnico",
 	"quite": "defensivo", "barrida": "defensivo",
 }
+
+
+## SOLO PARA CALIBRAR (tests/_diag_barrido.gd): corre un partido con otros
+## valores de los dos parametros del bucle.
+static func simular_con(home: Team, away: Team, rng: RandomNumberGenerator,
+		w: int, l: int) -> Dictionary:
+	var w0 := DUELOS_POR_ATAQUE
+	var l0 := ACIERTOS_PARA_REMATAR
+	DUELOS_POR_ATAQUE = w
+	ACIERTOS_PARA_REMATAR = l
+	var r := simular(home, away, rng, false)
+	DUELOS_POR_ATAQUE = w0
+	ACIERTOS_PARA_REMATAR = l0
+	return r
 
 
 static func _grupo_de(attr: String) -> String:
@@ -265,83 +293,87 @@ static func _jugar_periodo(equipo_inicial: Team, home: Team, away: Team, ticks: 
 		minuto_offset: int, minutos_reales: float, rng: RandomNumberGenerator, con_log: bool,
 		log: Array, goles_log: Array, eventos: Array) -> void:
 	var posesion: Team = equipo_inicial
-	var zona := "build"
+	## Duelos jugados y ganados en el ataque en curso.
+	var duelos := 0
+	var aciertos := 0
 
 	for tick in range(ticks):
 		var minuto: int = minuto_offset + int(tick / (ticks / minutos_reales)) + 1
 		var rival: Team = away if posesion == home else home
+		# El ultimo duelo del ataque es el que define: se juega como
+		# gambeta en zona final. Los anteriores son la construccion.
+		var es_final: bool = duelos == DUELOS_POR_ATAQUE - 1
+		var exito := false
 
-		if zona == "build":
+		if not es_final:
 			var medios := posesion.jugadores_disponibles_por_posiciones(["MC", "MCO", "LAT"])
 			var marcadores := rival.jugadores_disponibles_por_posiciones(["DFC", "LAT", "MC"])
-
 			var atacante := _elegir(medios, rng)
 			var defensor := _elegir(marcadores, rng)
-			# §7.4.6: un pase va DE alguien A alguien. El motor abstracto no
-			# modelaba al receptor porque nunca lo habia necesitado; ahora
-			# se elige uno de los que estarian en posicion de recibirla,
-			# para que la quimica de la dupla tenga a quien mirar.
+			# §7.4.6: un pase va DE alguien A alguien, para que la quimica
+			# de la dupla tenga a quien mirar.
 			var receptor := _elegir(
 				posesion.jugadores_disponibles_por_posiciones(["MC", "MCO", "EXT", "DC"]), rng)
-			var resultado := _duelo(atacante, "pases", posesion, defensor, "quite", rival, rng, eventos, minuto, con_log, log, int(receptor["id"]))
-			var exito := Duel.gana_atacante(resultado, rng)
-
+			var resultado := _duelo(atacante, "pases", posesion, defensor, "quite", rival,
+				rng, eventos, minuto, con_log, log, int(receptor["id"]))
+			exito = Duel.gana_atacante(resultado, rng)
 			if con_log:
 				log.append("min %d - PASE (%s) - %s (pases %d) vs %s (quite %d) -> %.1f%% -> %s" % [
 					minuto, posesion.nombre, atacante["posicion"], atacante["atributos"]["pases"],
 					defensor["posicion"], defensor["atributos"]["quite"],
-					resultado["final"], "avanza" if exito else "pierde"
-				])
+					resultado["final"], "avanza" if exito else "pierde"])
 			eventos.append({
 				"minuto": minuto, "tipo": "pase", "equipo": posesion.nombre, "rival": rival.nombre,
-				"jugador_posicion": atacante["posicion"], "resultado": "avanza" if exito else "pierde",
+				"jugador_posicion": atacante["posicion"],
+				"resultado": "avanza" if exito else "pierde",
 			})
-
-			if exito:
-				posesion.racha += 1
-				posesion.avance += 1
-				if posesion.avance >= AVANCE_REQUERIDO:
-					posesion.avance = 0
-					zona = "final"
-			else:
-				posesion.racha = 0
-				posesion.avance = 0
-				posesion = rival
-				zona = "build"
 		else:
 			var ofensivos := posesion.jugadores_disponibles_por_posiciones(["EXT", "DC", "MCO"])
 			var marcadores := rival.jugadores_disponibles_por_posiciones(["DFC", "LAT"])
-
 			var atacante := _elegir(ofensivos, rng)
 			var defensor := _elegir(marcadores, rng)
-			var resultado := _duelo(atacante, "control", posesion, defensor, "quite", rival, rng, eventos, minuto, con_log, log)
-			var exito := Duel.gana_atacante(resultado, rng)
-
+			var resultado := _duelo(atacante, "control", posesion, defensor, "quite", rival,
+				rng, eventos, minuto, con_log, log)
+			exito = Duel.gana_atacante(resultado, rng)
 			if con_log:
 				log.append("min %d - GAMBETA (%s) - %s (control %d) vs %s (quite %d) -> %.1f%% -> %s" % [
 					minuto, posesion.nombre, atacante["posicion"], atacante["atributos"]["control"],
 					defensor["posicion"], defensor["atributos"]["quite"],
-					resultado["final"], "tira" if exito else "pierde"
-				])
+					resultado["final"], "tira" if exito else "pierde"])
 			eventos.append({
 				"minuto": minuto, "tipo": "gambeta", "equipo": posesion.nombre, "rival": rival.nombre,
-				"jugador_posicion": atacante["posicion"], "resultado": "tira" if exito else "pierde",
+				"jugador_posicion": atacante["posicion"],
+				"resultado": "tira" if exito else "pierde",
 			})
 
-			if exito:
-				var tiro := _resolver_tiro(posesion, rival, atacante, rng, con_log, log, eventos, minuto)
+		duelos += 1
+		if exito:
+			aciertos += 1
+			posesion.racha += 1
+		else:
+			posesion.racha = 0
+
+		# ¿Se termino el ataque? Se termina de tres formas: se completo y
+		# hubo remate, se completo sin remate, o ya no le alcanza ni
+		# ganando todo lo que queda —ahi la perdio antes y la pelota pasa
+		# al rival, que es lo que hace que el mejor la tenga mas tiempo.
+		var quedan: int = DUELOS_POR_ATAQUE - duelos
+		var alcanza: bool = aciertos + quedan >= ACIERTOS_PARA_REMATAR
+		if duelos >= DUELOS_POR_ATAQUE or not alcanza:
+			if aciertos >= ACIERTOS_PARA_REMATAR:
+				var rematador := _elegir(
+					posesion.jugadores_disponibles_por_posiciones(["EXT", "DC", "MCO"]), rng)
+				var tiro := _resolver_tiro(posesion, rival, rematador, rng,
+					con_log, log, eventos, minuto)
 				if tiro["gol"]:
 					posesion.goles += 1
 					goles_log.append({"minuto": minuto, "equipo": posesion.nombre,
 						"jugador_id": tiro["goleador_id"],
 						"asistencia_id": _asistente(posesion, int(tiro["goleador_id"]), rng)})
-				posesion.racha = 0
-				posesion = rival
-				zona = "build"
-			else:
-				posesion.racha = 0
-				posesion = rival
-				zona = "build"
+			duelos = 0
+			aciertos = 0
+			posesion.racha = 0
+			posesion = rival
 
 
 ## §8.7: hasta 5 cambios entre los dos equipos, sacando primero a los

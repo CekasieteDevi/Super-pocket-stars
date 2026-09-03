@@ -320,45 +320,69 @@ func _test_comodon_congela_el_crecimiento(rng: RandomNumberGenerator) -> void:
 		print("FALLA: sin_racha=%d con_racha=%d" % [sin_racha["atributos"]["tiro"], con_racha["atributos"]["tiro"]])
 
 
-func _test_integracion_tarjetas_usa_el_factor_de_personalidad(rng: RandomNumberGenerator) -> void:
-	print("\n=== Integracion: un defensor Calenton junta mas tarjetas en el motor real que uno Canchero ===")
+func _test_integracion_tarjetas_usa_el_factor_de_personalidad(_rng: RandomNumberGenerator) -> void:
+	print("
+=== Integracion: un defensor Calenton junta mas tarjetas en el motor real que uno Canchero ===")
+	# Los dos bloques arrancan con equipos RECIEN generados y con la misma
+	# semilla propia, no con el rng compartido del test. Dos motivos:
+	#
+	# 1. Con el rng compartido, los equipos dependen de cuantos numeros
+	#    consumieron los sub-tests de arriba: agregar una prueba en otro
+	#    lado cambiaba los planteles de este y con ellos el resultado.
+	# 2. Reusar el mismo Team para los dos bloques no es una comparacion
+	#    justa: los 80 partidos del primero dejan al plantel fatigado,
+	#    lesionado y suspendido, asi que el segundo juega con otro equipo.
+	var muestras := 80
+	var calenton := _amarillas_con_rasgo(["", "Calenton"], muestras)
+	var canchero := _amarillas_con_rasgo(["Canchero", ""], muestras)
+
+	# Se pide una diferencia del 10% y no solo "mayor". El factor es 1.30
+	# contra 0.70, casi el doble de propension: si el efecto esta vivo se
+	# tiene que ver holgado. Pasar por cinco tarjetas sobre ciento veinte
+	# —que es como venia pasando— es pasar por ruido.
+	if calenton > canchero * 1.10:
+		print("OK: Calenton=%d amarillas en %d partidos, Canchero=%d (+%.0f%%)." % [
+			calenton, muestras, canchero,
+			100.0 * calenton / maxf(canchero, 1) - 100.0])
+	else:
+		print("FALLA: calenton=%d canchero=%d" % [calenton, canchero])
+
+
+## Cuantas amarillas junta un equipo cuyos MARCADORES —titulares y banco—
+## tienen todos el mismo rasgo. El banco tambien: si no, los cambios
+## meten gente con personalidad al azar y diluyen justo lo que se mide.
+func _amarillas_con_rasgo(rasgo: Array, muestras: int) -> int:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 31337
 	var home := Team.generar("HomeTarjetas", rng, 0)
 	var away := Team.generar("AwayTarjetas", rng, 100)
-
-	# Fuerzo la personalidad de TODOS los defensores de home para que el
-	# efecto se note claro en el agregado (con personalidades al azar el
-	# ruido tapa la señal, como paso con el test de posesion de estilos).
-	for j in home.jugadores:
+	for j in home.jugadores + home.banco:
 		if j["posicion"] in ["DFC", "LAT", "MC"]:
-			j["personalidades"] = {"positiva": "", "negativa": "Calenton"}
+			j["personalidades"] = {"positiva": rasgo[0], "negativa": rasgo[1]}
+	return _amarillas_de(home, away, muestras)
 
-	var muestras := 80
-	var tarjetas_calenton := 0
+
+## Cuantas AMARILLAS junta `home` en `muestras` partidos.
+##
+## No se cuentan eventos de tarjeta: la segunda amarilla no emite un
+## evento "amarilla" sino uno solo de roja por doble amarilla, asi que un
+## jugador MAS propenso convierte dos eventos en uno y el conteo baja.
+## Contando amarillas de verdad —la doble vale dos— el efecto se ve.
+func _amarillas_de(home: Team, away: Team, muestras: int) -> int:
+	var total := 0
 	for i in range(muestras):
 		var r := RandomNumberGenerator.new()
 		r.seed = 7000 + i
 		var res := MatchEngine.simular(home, away, r, false)
 		for ev in res["eventos"]:
-			if ev["tipo"] == "tarjeta" and ev["equipo"] == home.nombre:
-				tarjetas_calenton += 1
-
-	for j in home.jugadores:
-		if j["posicion"] in ["DFC", "LAT", "MC"]:
-			j["personalidades"] = {"positiva": "Canchero", "negativa": ""}
-
-	var tarjetas_canchero := 0
-	for i in range(muestras):
-		var r := RandomNumberGenerator.new()
-		r.seed = 7000 + i
-		var res := MatchEngine.simular(home, away, r, false)
-		for ev in res["eventos"]:
-			if ev["tipo"] == "tarjeta" and ev["equipo"] == home.nombre:
-				tarjetas_canchero += 1
-
-	if tarjetas_calenton > tarjetas_canchero:
-		print("OK: Calenton=%d tarjetas en %d partidos, Canchero=%d." % [tarjetas_calenton, muestras, tarjetas_canchero])
-	else:
-		print("FALLA: calenton=%d canchero=%d" % [tarjetas_calenton, tarjetas_canchero])
+			if ev["tipo"] != "tarjeta" or ev["equipo"] != home.nombre:
+				continue
+			match str(ev["resultado"]):
+				"amarilla":
+					total += 1
+				"roja_doble_amarilla":
+					total += 2
+	return total
 
 
 func _test_integracion_rachas_persisten_y_se_actualizan_jugando_de_verdad(rng: RandomNumberGenerator) -> void:
