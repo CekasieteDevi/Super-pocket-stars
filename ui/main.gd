@@ -66,6 +66,12 @@ var copa_elegida: String = "copa_interna"
 var noticias_solapa: String = "todas"
 var botones_solapa_noticias: Dictionary = {}
 var capa_modal_jugador: CanvasLayer
+var capa_modal_roles: CanvasLayer
+var capa_modal_alineacion: CanvasLayer
+var contenedor_modal_alineacion: VBoxContainer
+var contenedor_modal_roles: VBoxContainer
+var contenedor_roles: GridContainer
+var modal_rol_clave: String = ""
 var contenedor_modal_jugador: VBoxContainer
 var modal_jugador_id: int = -1
 var label_modal_jugador_estado: String = ""
@@ -146,6 +152,7 @@ func _ready() -> void:
 	_construir_panel_vitrina(contenedor)
 	_construir_panel_laboratorio(contenedor)
 	_construir_panel_sponsors(contenedor)
+	_construir_panel_roles(contenedor)
 	_construir_panel_entrenamiento(contenedor)
 	_construir_panel_partido_animado(contenedor)
 	_construir_panel_economia(contenedor)
@@ -169,9 +176,11 @@ func _ready() -> void:
 	_ajustar_para_tactil(self)
 
 	_construir_modal_jugador()
+	_construir_modal_roles()
+	_construir_modal_alineacion()
 	_construir_pantalla_resumen()
 	_construir_pantalla_inicio()
-	_mostrar_seccion("club")
+	_mostrar_seccion("jugar")
 	_mostrar_inicio()
 
 
@@ -392,7 +401,7 @@ func _entrar_al_juego() -> void:
 	_refrescar_instalaciones()
 	_refrescar_partida_guardado()
 	capa_inicio.visible = false
-	_mostrar_seccion("club")
+	_mostrar_seccion("jugar")
 
 
 ## Fix 10: nombre y apellido del jugador, para las listas de la UI.
@@ -1999,8 +2008,11 @@ func _refrescar_economia() -> void:
 			j, equipo.animo.get(j["id"], 50.0), equipo.contratos.get(j["id"], 1))
 
 	fila_club.add_child(_caja_numero("Reputación", "%.1f" % equipo.reputacion, Tema.TEXTO))
-	fila_club.add_child(_caja_numero("Hinchas", "%.1f" % equipo.fans,
-		Componentes.color_de_valor(int(equipo.fans))))
+	# El color va por el APOYO (que tan grande es para su categoria) y no
+	# por el numero: 30.000 hinchas es una barbaridad en decima y una
+	# miseria en primera.
+	fila_club.add_child(_caja_numero("Hinchas", Fans.texto(equipo.fans),
+		Componentes.color_de_valor(int(Fans.apoyo(equipo, equipo.division_actual) * 100.0))))
 	fila_club.add_child(_caja_numero("Masa salarial",
 		Economia.formato_dinero(sueldos), Tema.TEXTO))
 	fila_club.add_child(_caja_numero("Valor del plantel",
@@ -4606,7 +4618,7 @@ func _on_promover_juvenil(id: int) -> void:
 
 ## SPONSORS: los diez lugares de la camiseta.
 ##
-## Te escriben solos cuando te va bien, ocupan un lugar, pagan por partido
+## Te escriben solos cuando te va bien, ocupan un lugar, pagan por temporada
 ## de liga y te cortan el contrato si no cumplís lo que pidieron. La
 ## decisión está en que no llegan ofertas si no hay lugar libre: si
 ## llenaste los diez con kioscos del barrio, el sponsor grande no te
@@ -4647,10 +4659,13 @@ func _refrescar_sponsors() -> void:
 	var equipo := GameState.equipo_jugador
 	var libres: int = Sponsors.LUGARES - equipo.sponsors.size()
 
-	var resumen := "%d de %d lugares ocupados   ·   %s por partido de liga   ·   %s cobrados esta temporada" % [
+	var acumulado := 0.0
+	for s in equipo.sponsors:
+		acumulado += Sponsors.acumulado_de(s)
+	var resumen := "%d de %d lugares ocupados   ·   %s por temporada   ·   %s ganados hasta hoy" % [
 		equipo.sponsors.size(), Sponsors.LUGARES,
-		Economia.formato_dinero(Sponsors.pago_por_partido(equipo)),
-		Economia.formato_dinero(equipo.ingresos_sponsors)]
+		Economia.formato_dinero(Sponsors.pago_por_temporada(equipo)),
+		Economia.formato_dinero(acumulado)]
 	label_sponsors_estado.text = resumen
 
 	# --- Ofertas ----------------------------------------------------------
@@ -4702,10 +4717,12 @@ func _tarjeta_oferta_sponsor(o: Dictionary, hay_lugar: bool) -> Control:
 	nombre.text = str(o["nombre"])
 	Tema.numero(nombre, Tema.TAM_BASE, Tema.TEXTO)
 	datos.add_child(nombre)
-	datos.add_child(_texto_suave("%s por partido   ·   %s   ·   caduca en %d día(s)" % [
+	datos.add_child(_texto_suave("%s por temporada   ·   %s   ·   caduca en %d día(s)" % [
 		Economia.formato_dinero(o["pago"]),
 		str(Sponsors.TEXTO_REQUISITO.get(str(o["requisito"]), "")),
 		int(o["dias"])]))
+	datos.add_child(_texto_suave(
+		Sponsors.texto_minimos(str(o["requisito"]), GameState.division_jugador)))
 
 	var nombre_sponsor := str(o["nombre"])
 	var btn_ok := Button.new()
@@ -4742,18 +4759,28 @@ func _tarjeta_sponsor(s: Dictionary) -> Control:
 	nombre.text = str(s["nombre"])
 	Tema.numero(nombre, Tema.TAM_BASE, Tema.TEXTO)
 	datos.add_child(nombre)
-	datos.add_child(_texto_suave("%s por partido   ·   %s   ·   %s en %d partido(s) esta temporada" % [
+	datos.add_child(_texto_suave("%s por temporada   ·   %s   ·   lleva ganados %s en %d de %d fechas" % [
 		Economia.formato_dinero(s["pago"]),
 		str(Sponsors.TEXTO_REQUISITO.get(str(s["requisito"]), "")),
-		Economia.formato_dinero(s["cobrado"]), int(s["partidos"])]))
+		Economia.formato_dinero(Sponsors.acumulado_de(s)),
+		mini(int(s["partidos"]), Sponsors.partidos_de_liga()),
+		Sponsors.partidos_de_liga()]))
 
 	# Si el requisito no se está cumpliendo AHORA, se avisa: enterarte al
 	# cerrar la temporada de que perdiste a tu mejor sponsor es tarde.
 	var tabla := GameState.liga_jugador().tabla_ordenada()
 	var puesto: int = tabla.find(GameState.equipo_jugador.nombre) + 1
-	if puesto > 0 and not Sponsors.cumple(str(s["requisito"]), puesto, tabla.size()):
+	var llega_al_nombre := Sponsors.tiene_el_nombre(
+		GameState.equipo_jugador, str(s["requisito"]), GameState.division_jugador)
+	if not llega_al_nombre or (puesto > 0
+			and not Sponsors.cumple(str(s["requisito"]), puesto, tabla.size())):
 		var aviso := Label.new()
 		aviso.text = "Si la temporada terminara hoy, cortan el contrato."
+		if not llega_al_nombre:
+			# El club se le quedo chico: no alcanza con salir bien en la
+			# tabla, hay que decirle POR QUE lo pierde.
+			aviso.text += " " + Sponsors.texto_minimos(
+				str(s["requisito"]), GameState.division_jugador)
 		aviso.add_theme_color_override("font_color", Tema.ROJO)
 		aviso.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
 		datos.add_child(aviso)
@@ -4912,7 +4939,7 @@ func _refrescar_resumen_temporada() -> void:
 	Tema.primario(btn)
 	btn.pressed.connect(func():
 		capa_resumen.visible = false
-		_mostrar_seccion("club"))
+		_mostrar_seccion("jugar"))
 	der.add_child(btn)
 
 
@@ -6248,7 +6275,7 @@ func _on_partida_nueva() -> void:
 	_refrescar_noticias()
 	_refrescar_instalaciones()
 	_refrescar_partida_guardado()
-	_mostrar_seccion("club")
+	_mostrar_seccion("jugar")
 
 
 func _on_borrar_partida() -> void:
@@ -6276,6 +6303,19 @@ func _on_jugar_fecha() -> void:
 		_refrescar_objetivo()
 		return
 	if not GameState.hay_fecha_pendiente():
+		return
+	# Ningun lesionado ni suspendido sale a la cancha. Si hay alguno en el
+	# once, el partido espera a que se resuelva (ver el modal de
+	# alineacion): o lo arregla el juego, o lo arregla el jugador en
+	# Formacion y vuelve a darle a Jugar.
+	if _avisar_alineacion():
+		return
+	_jugar_fecha_ya()
+
+
+## El partido en si, ya con el once en orden.
+func _jugar_fecha_ya() -> void:
+	if GameState.juego_terminado or not GameState.hay_fecha_pendiente():
 		return
 
 	var temporada_antes := GameState.temporada_actual
@@ -6365,7 +6405,7 @@ func _mostrar_tabla() -> void:
 ## contenido de Partido adelante, y tocar Club parecia no hacer nada
 ## porque ya estaba "elegido".
 func _volver_al_club() -> void:
-	_mostrar_seccion("club")
+	_mostrar_seccion("jugar")
 
 
 func _mostrar_partido() -> void:
@@ -6749,11 +6789,15 @@ func _ajustar_para_tactil(nodo: Node) -> void:
 ## tocan: siguen siendo los mismos nodos en `paneles`, solo cambia por
 ## dónde se llega.
 const SECCIONES := [
-	{"clave": "club", "nombre": "Club", "paneles": []},
+	{"clave": "jugar", "nombre": "Jugar", "paneles": []},
 	{"clave": "equipo", "nombre": "Equipo", "paneles": [
 		["plantel", "Plantel"], ["formacion", "Formacion"],
-		["entrenamiento", "Entrenamiento"],
-		["cantera", "Cantera"], ["instalaciones", "Instalaciones"]]},
+		["roles", "Roles"], ["entrenamiento", "Entrenamiento"]]},
+	# Lo que es del CLUB y no del plantel: el edificio y los pibes. Antes
+	# vivian de colados en Equipo, que ya tenia cinco subsolapas y era la
+	# unica seccion que mezclaba las dos cosas.
+	{"clave": "club", "nombre": "Club", "paneles": [
+		["instalaciones", "Instalaciones"], ["cantera", "Cantera"]]},
 	{"clave": "finanzas", "nombre": "Economia", "paneles": [
 		["economia", "Presupuesto"], ["sponsors", "Sponsors"]]},
 	{"clave": "partido", "nombre": "Liga", "paneles": [
@@ -6771,7 +6815,7 @@ const SECCIONES := [
 		["partida", "Partida"]]},
 ]
 
-var seccion_actual: String = "club"
+var seccion_actual: String = "jugar"
 var panel_de_seccion_actual: String = ""
 var botones_seccion: Dictionary = {}
 var barra_subsolapas: HBoxContainer
@@ -6879,7 +6923,7 @@ func _mostrar_seccion(clave: String) -> void:
 			seccion = s
 	var subpaneles: Array = seccion.get("paneles", [])
 
-	if clave == "club":
+	if clave == "jugar":
 		_mostrar_portada()
 		return
 
@@ -6901,6 +6945,7 @@ func _mostrar_panel_de_seccion(clave: String) -> void:
 		"plantel": "_mostrar_plantel", "formacion": "_mostrar_formacion",
 		"entrenamiento": "_mostrar_entrenamiento",
 		"cantera": "_mostrar_cantera", "instalaciones": "_mostrar_instalaciones",
+		"roles": "_mostrar_roles",
 		"tabla": "_mostrar_tabla", "jugadores_liga": "_mostrar_jugadores_liga",
 		"historial": "_mostrar_historial_partidos",
 		"copa_interna": "_mostrar_copa_interna", "copa_rey": "_mostrar_copa_rey",
@@ -7333,3 +7378,384 @@ func _texto_suave(texto: String) -> Label:
 	l.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
 	l.add_theme_color_override("font_color", Tema.SUAVE)
 	return l
+
+
+## ROLES (core/roles.gd) — quien patea que y quien lleva la cinta.
+##
+## Cinco cuadrados, uno por rol. Cada uno muestra quien lo ocupa hoy y si
+## lo eligio el club o lo esta resolviendo el juego solo. Se toca el
+## cuadrado y se abre la lista del plantel para cambiarlo.
+##
+## Existe porque hasta ahora no lo elegia nadie: el motor buscaba al mejor
+## del atributo que correspondia, y en los penales eso incluia al arquero.
+func _construir_panel_roles(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	padre.add_child(panel)
+	paneles["roles"] = panel
+
+	panel.add_child(_texto_suave(
+		"Tocá un rol para cambiar quién lo ocupa. Si no elegís a nadie, "
+		+ "lo resuelve el juego con el mejor del plantel. El elegido pierde "
+		+ "el puesto mientras esté lesionado o suspendido, y lo patea otro "
+		+ "si no está en la cancha en ese momento."))
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+
+	contenedor_roles = GridContainer.new()
+	contenedor_roles.columns = 3
+	contenedor_roles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	contenedor_roles.add_theme_constant_override("h_separation", 10)
+	contenedor_roles.add_theme_constant_override("v_separation", 10)
+	scroll.add_child(contenedor_roles)
+
+
+func _mostrar_roles() -> void:
+	_ocultar_todos()
+	paneles["roles"].visible = true
+	_refrescar_roles()
+
+
+func _refrescar_roles() -> void:
+	if contenedor_roles == null:
+		return
+	for hijo in contenedor_roles.get_children():
+		hijo.queue_free()
+	var equipo := GameState.equipo_jugador
+	for clave in Roles.CLAVES:
+		contenedor_roles.add_child(_cuadrado_de_rol(equipo, str(clave)))
+
+
+## El cuadrado de un rol. El boton transparente de arriba de todo es lo
+## que lo hace clickeable entero: un Button no puede tener adentro una
+## columna de labels acomodada, asi que se dibuja la tarjeta y se le
+## apoya el boton encima ocupando todo.
+func _cuadrado_de_rol(equipo: Team, clave: String) -> Control:
+	var elegido := Roles.elegido(equipo, clave)
+	var ocupante := Roles.resolver(equipo, clave)
+	var automatico: bool = elegido == Roles.AUTOMATICO
+
+	var tarjeta := Componentes.tarjeta(Tema.AMBAR if not automatico else Color.TRANSPARENT)
+	tarjeta.custom_minimum_size = Vector2(0, 150)
+	tarjeta.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	var caja := VBoxContainer.new()
+	caja.add_theme_constant_override("separation", 3)
+	tarjeta.add_child(caja)
+
+	caja.add_child(Tema.etiqueta_seccion(str(Roles.NOMBRE[clave])))
+
+	var jugador := _jugador_del_plantel(equipo, ocupante)
+	if jugador.is_empty():
+		var vacio := Label.new()
+		vacio.text = "Sin nadie"
+		Tema.numero(vacio, Tema.TAM_BASE, Tema.SUAVE)
+		caja.add_child(vacio)
+	else:
+		var nombre := Label.new()
+		nombre.text = "%s %s" % [str(jugador["nombre"]), str(jugador["apellido"])]
+		nombre.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		Tema.numero(nombre, Tema.TAM_BASE, Tema.TEXTO)
+		caja.add_child(nombre)
+
+		var fila := HBoxContainer.new()
+		fila.add_theme_constant_override("separation", 8)
+		caja.add_child(fila)
+		fila.add_child(Componentes.chip(str(jugador["posicion"]), Tema.PANEL_ALTO, Tema.SUAVE))
+		var valor := Label.new()
+		valor.text = "%s %d" % [_etiqueta_de_atributo(clave), int(Roles.valor_de(jugador, clave))]
+		valor.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		valor.add_theme_color_override(
+			"font_color", Componentes.color_de_valor(int(Roles.valor_de(jugador, clave))))
+		fila.add_child(valor)
+
+	var estado := Label.new()
+	estado.text = "Automático" if automatico else "Elegido por vos"
+	estado.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+	estado.add_theme_color_override("font_color", Tema.SUAVE if automatico else Tema.AMBAR)
+	caja.add_child(estado)
+
+	# El aviso importa: un pateador designado que esta afuera no patea, y
+	# enterarte en el partido es tarde.
+	if not automatico and not jugador.is_empty() and not equipo.puede_jugar(int(jugador["id"])):
+		var aviso := Label.new()
+		aviso.text = "No disponible: lo cubre otro."
+		aviso.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+		aviso.add_theme_color_override("font_color", Tema.ROJO)
+		caja.add_child(aviso)
+
+	var espacio := Control.new()
+	espacio.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	caja.add_child(espacio)
+
+	caja.add_child(_texto_suave(str(Roles.DESCRIPCION[clave])))
+
+	var tapa := Button.new()
+	tapa.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	tapa.flat = true
+	tapa.tooltip_text = "Cambiar quién ocupa este rol"
+	tapa.pressed.connect(func(): _abrir_modal_roles(clave))
+	tarjeta.add_child(tapa)
+	return tarjeta
+
+
+func _etiqueta_de_atributo(clave: String) -> String:
+	var atributo := str(Roles.ATRIBUTO.get(clave, ""))
+	if atributo == "":
+		return "Media"
+	if atributo == "tiros_libres":
+		return "Tiros libres"
+	return atributo.capitalize()
+
+
+func _jugador_del_plantel(equipo: Team, jugador_id: int) -> Dictionary:
+	if jugador_id < 0:
+		return {}
+	for j in equipo.todos_los_jugadores():
+		if int(j["id"]) == jugador_id:
+			return j
+	return {}
+
+
+## El modal de un rol: la lista del plantel ordenada por el atributo que
+## le sirve a ESE rol, mas la opcion de dejarlo en automatico.
+func _construir_modal_roles() -> void:
+	capa_modal_roles = CanvasLayer.new()
+	capa_modal_roles.layer = 9
+	capa_modal_roles.visible = false
+	add_child(capa_modal_roles)
+
+	var fondo := PanelContainer.new()
+	fondo.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var estilo := StyleBoxFlat.new()
+	estilo.bg_color = Color(0, 0, 0, 0.65)
+	fondo.add_theme_stylebox_override("panel", estilo)
+	capa_modal_roles.add_child(fondo)
+
+	var centro := CenterContainer.new()
+	fondo.add_child(centro)
+	var caja := Componentes.tarjeta()
+	caja.custom_minimum_size = Vector2(560, 540)
+	caja.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	centro.add_child(caja)
+
+	contenedor_modal_roles = VBoxContainer.new()
+	contenedor_modal_roles.add_theme_constant_override("separation", 8)
+	caja.add_child(contenedor_modal_roles)
+
+
+func _abrir_modal_roles(clave: String) -> void:
+	modal_rol_clave = clave
+	capa_modal_roles.visible = true
+	_refrescar_modal_roles()
+
+
+func _cerrar_modal_roles() -> void:
+	capa_modal_roles.visible = false
+
+
+func _refrescar_modal_roles() -> void:
+	for hijo in contenedor_modal_roles.get_children():
+		hijo.queue_free()
+	var equipo := GameState.equipo_jugador
+	var clave := modal_rol_clave
+
+	var titulo := Label.new()
+	titulo.text = str(Roles.NOMBRE[clave])
+	Tema.numero(titulo, 26, Tema.TEXTO)
+	contenedor_modal_roles.add_child(titulo)
+	contenedor_modal_roles.add_child(_texto_suave(str(Roles.DESCRIPCION[clave])))
+
+	var elegido := Roles.elegido(equipo, clave)
+	var automatico := Roles.automatico(equipo, clave)
+
+	var btn_auto := Button.new()
+	var quien := _jugador_del_plantel(equipo, automatico)
+	btn_auto.text = "Automático" if quien.is_empty() else "Automático (hoy: %s)" % str(quien["apellido"])
+	btn_auto.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	Tema.seleccionado(btn_auto, elegido == Roles.AUTOMATICO)
+	btn_auto.pressed.connect(func(): _elegir_para_rol(Roles.AUTOMATICO))
+	contenedor_modal_roles.add_child(btn_auto)
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.custom_minimum_size = Vector2(0, 300)
+	contenedor_modal_roles.add_child(scroll)
+	var lista := VBoxContainer.new()
+	lista.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lista.add_theme_constant_override("separation", 4)
+	scroll.add_child(lista)
+
+	var titulares := {}
+	for j in equipo.jugadores:
+		titulares[int(j["id"])] = true
+
+	for j in Roles.candidatos(equipo, clave):
+		var id := int(j["id"])
+		var btn := Button.new()
+		btn.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		var marca := "" if titulares.has(id) else "  ·  banco"
+		if not equipo.puede_jugar(id):
+			marca = "  ·  no disponible"
+		btn.text = "%-3s  %s %s   %s %d%s" % [
+			str(j["posicion"]), str(j["nombre"]), str(j["apellido"]),
+			_etiqueta_de_atributo(clave), int(Roles.valor_de(j, clave)), marca]
+		Tema.seleccionado(btn, id == elegido)
+		btn.pressed.connect(func(): _elegir_para_rol(id))
+		lista.add_child(btn)
+
+	var cerrar := Button.new()
+	cerrar.text = "Cerrar"
+	cerrar.custom_minimum_size = Vector2(120, Tema.ALTO_TACTIL)
+	cerrar.pressed.connect(_cerrar_modal_roles)
+	contenedor_modal_roles.add_child(cerrar)
+
+
+func _elegir_para_rol(jugador_id: int) -> void:
+	Roles.asignar(GameState.equipo_jugador, modal_rol_clave, jugador_id)
+	_cerrar_modal_roles()
+	_refrescar_roles()
+
+
+## ALINEACION (core/alineacion.gd) — el aviso de que tenes titulares que
+## no pueden jugar.
+##
+## Sale al darle a Jugar, antes del partido. Antes no salia nada: el
+## lesionado salia a la cancha igual y lo sacaban en la primera ventana de
+## cambios, asi que tener el plantel roto no se notaba.
+func _construir_modal_alineacion() -> void:
+	capa_modal_alineacion = CanvasLayer.new()
+	capa_modal_alineacion.layer = 10
+	capa_modal_alineacion.visible = false
+	add_child(capa_modal_alineacion)
+
+	var fondo := PanelContainer.new()
+	fondo.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var estilo := StyleBoxFlat.new()
+	estilo.bg_color = Color(0, 0, 0, 0.72)
+	fondo.add_theme_stylebox_override("panel", estilo)
+	capa_modal_alineacion.add_child(fondo)
+
+	var centro := CenterContainer.new()
+	fondo.add_child(centro)
+	var caja := Componentes.tarjeta(Tema.ROJO)
+	caja.custom_minimum_size = Vector2(600, 0)
+	caja.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	centro.add_child(caja)
+
+	contenedor_modal_alineacion = VBoxContainer.new()
+	contenedor_modal_alineacion.add_theme_constant_override("separation", 10)
+	caja.add_child(contenedor_modal_alineacion)
+
+
+## true si habia algo que avisar (y entonces el partido NO se juega
+## todavia). false si el once esta sano y se puede seguir de largo.
+func _avisar_alineacion() -> bool:
+	var equipo := GameState.equipo_jugador
+	if not Alineacion.hay_problema(equipo):
+		return false
+	capa_modal_alineacion.visible = true
+	_refrescar_modal_alineacion()
+	return true
+
+
+func _cerrar_modal_alineacion() -> void:
+	capa_modal_alineacion.visible = false
+
+
+func _refrescar_modal_alineacion() -> void:
+	for hijo in contenedor_modal_alineacion.get_children():
+		hijo.queue_free()
+	var equipo := GameState.equipo_jugador
+	var pasos := Alineacion.plan(equipo)
+
+	var titulo := Label.new()
+	titulo.text = "Tenés %d titular%s que no puede jugar" % [
+		pasos.size(), "" if pasos.size() == 1 else "es"]
+	Tema.numero(titulo, 26, Tema.TEXTO)
+	contenedor_modal_alineacion.add_child(titulo)
+
+	for paso in pasos:
+		var sale: Dictionary = paso["sale"]
+		var entra: Dictionary = paso["entra"]
+		var fila := Componentes.tarjeta()
+		var caja := VBoxContainer.new()
+		caja.add_theme_constant_override("separation", 2)
+		fila.add_child(caja)
+
+		var quien := Label.new()
+		quien.text = "%s  %s %s" % [
+			str(sale["posicion"]), str(sale["nombre"]), str(sale["apellido"])]
+		Tema.numero(quien, Tema.TAM_BASE, Tema.TEXTO)
+		caja.add_child(quien)
+
+		var porque := Label.new()
+		porque.text = str(paso["motivo"]).capitalize()
+		porque.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		porque.add_theme_color_override("font_color", Tema.ROJO)
+		caja.add_child(porque)
+
+		var reemplazo := Label.new()
+		if entra.is_empty():
+			reemplazo.text = "No hay suplente sano para reemplazarlo."
+			reemplazo.add_theme_color_override("font_color", Tema.AMBAR)
+		else:
+			reemplazo.text = "Entra %s %s (%s, media %d)" % [
+				str(entra["nombre"]), str(entra["apellido"]),
+				str(entra["posicion"]), int(entra["media"])]
+			reemplazo.add_theme_color_override("font_color", Tema.VERDE)
+		reemplazo.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		caja.add_child(reemplazo)
+		contenedor_modal_alineacion.add_child(fila)
+
+	var sin_cubrir := Alineacion.sin_cubrir(equipo)
+	if sin_cubrir > 0:
+		contenedor_modal_alineacion.add_child(_texto_suave(
+			"Los que no tienen reemplazo se quedan en el once: sacarlos te dejaría "
+			+ "con menos de once. Si te faltan demasiados, el partido se pierde "
+			+ "por no presentarte."))
+
+	var acciones := HBoxContainer.new()
+	acciones.add_theme_constant_override("separation", 8)
+	contenedor_modal_alineacion.add_child(acciones)
+
+	var btn_auto := Button.new()
+	btn_auto.text = "Cambiar automáticamente"
+	btn_auto.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	btn_auto.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	Tema.primario(btn_auto)
+	btn_auto.pressed.connect(_on_arreglar_alineacion)
+	acciones.add_child(btn_auto)
+
+	var btn_mano := Button.new()
+	btn_mano.text = "Cambiar a mano"
+	btn_mano.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	btn_mano.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_mano.pressed.connect(func():
+		_cerrar_modal_alineacion()
+		# A Formacion, que es donde se mueve gente entre el once y el
+		# banco. De ahi el jugador vuelve solo y le da a Jugar otra vez.
+		_mostrar_seccion("equipo")
+		_mostrar_panel_de_seccion("formacion"))
+	acciones.add_child(btn_mano)
+
+
+## Arregla el once y sigue derecho al partido: el que aprieta
+## "automaticamente" ya dijo que no quiere decidir nada, hacerle apretar
+## Jugar de nuevo seria pedirle lo mismo dos veces.
+func _on_arreglar_alineacion() -> void:
+	var hechos := Alineacion.arreglar(GameState.equipo_jugador)
+	_cerrar_modal_alineacion()
+	_refrescar_plantel()
+	# Si no habia a quien poner, se juega igual: el partido no se puede
+	# posponer y el motor se arregla con los que haya. Si faltan
+	# demasiados, lo resuelve Liga._resolver_forfeit.
+	_jugar_fecha_ya()
+	_refrescar_portada()

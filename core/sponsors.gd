@@ -2,8 +2,8 @@ class_name Sponsors
 extends RefCounted
 
 ## Sponsors del club: te mandan ofertas, ocupan un lugar de los diez que
-## hay, pagan por partido jugado y te cortan el contrato si no cumplís lo
-## que te pidieron.
+## hay, te pagan al cerrar la temporada y te cortan el contrato si no
+## cumplís lo que te pidieron.
 ##
 ## La gracia es que el sponsor que te sirve hoy te sobra mañana: en
 ## división 10 te va a escribir el Kiosco Don Beto y en primera te escribe
@@ -21,22 +21,68 @@ const RUTA := "res://data/sponsors.json"
 ## Los lugares del club. Diez, como los slots de investigadores.
 const LUGARES := 10
 
-## Lo que paga por partido un sponsor de DIVISIÓN 10 en cada escalón de
+## Lo que paga POR TEMPORADA un sponsor de DIVISIÓN 10 en cada escalón de
 ## exigencia, antes de su factor propio. De ahí para arriba se multiplica
 ## por lo mismo que escala el resto de la economía (Economia.factor_division),
 ## así que un sponsor de primera con el mismo requisito paga ~205 veces más
 ## — igual que los ingresos de un club de primera.
 ##
-## Calibrado para que un plantel de diez sponsors razonables sea del orden
-## de un tercio del ingreso del club, no su ingreso entero: es una fuente
-## de plata que hay que administrar, no la única.
+## Antes el número era por partido y se cobraba fecha a fecha. Confundía:
+## la plata no entraba al presupuesto en el momento, porque el presupuesto
+## se arma una vez por año en el cierre de temporada. Un sponsor que dice
+## "paga por partido" y no mueve el presupuesto en ningún partido es una
+## mecánica que no se siente. Ahora el número es el del año y se cobra
+## cuando termina, así que va derecho al presupuesto del año siguiente.
+##
+## Son los mismos valores de antes multiplicados por las 38 fechas: la
+## economía no cambia, cambia cómo se dice y cuándo se cobra.
 const PAGO_D10 := {
-	"ninguno": 18.0,
-	"no_ultimo": 40.0,
-	"mitad_tabla": 65.0,
-	"top5": 95.0,
-	"top3": 135.0,
-	"campeon": 190.0,
+	"ninguno": 684.0,
+	"no_ultimo": 1520.0,
+	"mitad_tabla": 2470.0,
+	"top5": 3610.0,
+	"top3": 5130.0,
+	"campeon": 7220.0,
+}
+
+## Lo que le pide cada escalón al CLUB para siquiera escribirte, en
+## reputación y en hinchada. Es el "si cruzamos cierto número nos empiezan
+## a llegar sponsors": antes cualquier club de cualquier tamaño recibía
+## las mismas ofertas y conseguir sponsors era gratis.
+##
+## La reputación va como un ESCALÓN sobre lo que le corresponde a la
+## división (Reputacion.referencia): un sponsor de décima que pide
+## prestigio pide prestigio de décima. Sin eso, un mínimo absoluto de 60
+## dejaría a las divisiones de abajo sin ningún sponsor grande y a primera
+## con todos regalados.
+##
+## La hinchada va en APOYO (0..1, ver Fans.apoyo) por la misma razón: lo
+## que importa es ser grande para tu categoría. Un club recién generado
+## arranca en ~0.3, así que los dos primeros escalones le escriben desde
+## el dia uno y el resto hay que ganárselos.
+## Los escalones están corridos 5 puntos por debajo de la referencia
+## porque la reputación REAL de una división se queda un poco abajo de
+## ella: medido a ocho temporadas, la décima termina en 29 de media
+## contra una referencia de 35 —pierde sus dos mejores por ascenso cada
+## año y recibe descendidos con su -8, y no tiene nada más abajo que la
+## compense—. Con los escalones sin correr, un club normal de décima no
+## calificaba ni para un sponsor de media tabla.
+const MINIMO_REPUTACION := {
+	"ninguno": -17.0,
+	"no_ultimo": -11.0,
+	"mitad_tabla": -5.0,
+	"top5": 0.0,
+	"top3": 5.0,
+	"campeon": 10.0,
+}
+
+const MINIMO_APOYO := {
+	"ninguno": 0.0,
+	"no_ultimo": 0.20,
+	"mitad_tabla": 0.35,
+	"top5": 0.50,
+	"top3": 0.62,
+	"campeon": 0.75,
 }
 
 const TEXTO_REQUISITO := {
@@ -71,7 +117,7 @@ static func catalogo() -> Array:
 	return _cache
 
 
-## Lo que paga por partido un sponsor de esta división. `division` es
+## Lo que paga por temporada un sponsor de esta división. `division` es
 ## 0-indexada (0 = primera).
 static func pago_de(requisito: String, factor: float, division: int) -> float:
 	var base: float = float(PAGO_D10.get(requisito, PAGO_D10["ninguno"]))
@@ -94,8 +140,13 @@ static func generar_oferta(equipo: Team, division: int, rng: RandomNumberGenerat
 
 	var libres := []
 	for s in lista:
-		if not ocupados.has(str(s["nombre"])):
-			libres.append(s)
+		if ocupados.has(str(s["nombre"])):
+			continue
+		# El club tiene que estar a la altura: un sponsor que paga como
+		# los que pagan por salir campeon no le escribe a cualquiera.
+		if not tiene_el_nombre(equipo, str(s["requisito"]), division):
+			continue
+		libres.append(s)
 	if libres.is_empty():
 		return {}
 	var elegido: Dictionary = libres[rng.randi() % libres.size()]
@@ -183,21 +234,71 @@ static func cancelar(equipo: Team, nombre: String) -> bool:
 	return false
 
 
-## Se jugó un partido: cobran todos. Devuelve lo cobrado hoy.
+## Las fechas de liga que tiene una temporada. Es lo que se usa para
+## prorratear al sponsor que firma con el año empezado.
+static func partidos_de_liga() -> int:
+	return Economia.PARTIDOS_DE_LOCAL * 2
+
+
+## Lo que lleva ganado un sponsor en lo que va del año.
 ##
-## La plata no va a la caja en el momento: la caja se REINICIA en el
-## cierre de temporada, así que un ingreso cobrado durante el año se
-## perdería ahí. Se acumula en Team.ingresos_sponsors y entra como un
-## ingreso más de la temporada (mismo camino que los premios de copa).
-static func cobrar_partido(equipo: Team) -> float:
+## Se prorratea por fechas jugadas bajo contrato. El que firma en la
+## última fecha no cobra el año entero: si cobrara, la jugada óptima
+## sería dejar los diez lugares vacíos y llenarlos sobre el final.
+static func acumulado_de(sponsor: Dictionary) -> float:
+	var fechas: int = mini(int(sponsor["partidos"]), partidos_de_liga())
+	return float(sponsor["pago"]) * float(fechas) / float(partidos_de_liga())
+
+
+## Se jugó una fecha de liga. No entra plata: solo corre el contador que
+## después decide qué parte del año cobra cada sponsor.
+static func registrar_partido(equipo: Team) -> void:
+	for s in equipo.sponsors:
+		s["partidos"] = int(s["partidos"]) + 1
+		s["cobrado"] = acumulado_de(s)
+
+
+## Cierre de temporada: cobran todos. Devuelve el total.
+##
+## La plata no va a la caja: la caja se ARMA de cero en el cierre a
+## partir del ingreso del año. Se acumula en Team.ingresos_sponsors y
+## entra como un ingreso más de la temporada, igual que los premios de
+## copa. Va antes de Economia.procesar_temporada, que es quien la reparte
+## en el presupuesto del año que viene.
+static func cobrar_temporada(equipo: Team) -> float:
 	var total := 0.0
 	for s in equipo.sponsors:
-		var pago := float(s["pago"])
-		s["cobrado"] = float(s["cobrado"]) + pago
-		s["partidos"] = int(s["partidos"]) + 1
-		total += pago
+		var parte := acumulado_de(s)
+		s["cobrado"] = parte
+		total += parte
 	equipo.ingresos_sponsors += total
 	return total
+
+
+## Si el club llega al minimo de reputacion y de hinchada de este
+## escalon. Vale para las dos puntas: para que te escriban y para que se
+## queden. Un club que cae de division o que se vacia el estadio pierde a
+## los sponsors grandes al cerrar la temporada.
+static func tiene_el_nombre(equipo: Team, requisito: String, division: int) -> bool:
+	return (equipo.reputacion >= reputacion_minima(requisito, division)
+		and Fans.apoyo(equipo, division) >= float(MINIMO_APOYO.get(requisito, 0.0)))
+
+
+static func reputacion_minima(requisito: String, division: int) -> float:
+	return clampf(
+		Reputacion.referencia(division) + float(MINIMO_REPUTACION.get(requisito, 0.0)),
+		Reputacion.MINIMO, Reputacion.MAXIMO)
+
+
+## Que le pide este escalon al club, para mostrarlo en la ficha del
+## sponsor: no sirve de nada que te lo saquen si no sabias que te lo
+## pedian.
+static func texto_minimos(requisito: String, division: int) -> String:
+	var partes := ["reputación %d" % int(round(reputacion_minima(requisito, division)))]
+	var apoyo := float(MINIMO_APOYO.get(requisito, 0.0))
+	if apoyo > 0.0:
+		partes.append("hinchada de %s" % Fans.texto(Fans.fans_para_apoyo(apoyo, division)))
+	return "Pide " + " y ".join(partes) + "."
 
 
 static func cumple(requisito: String, posicion: int, total: int) -> bool:
@@ -219,11 +320,13 @@ static func cumple(requisito: String, posicion: int, total: int) -> bool:
 
 ## Cierre de temporada: el que pidió algo y no lo tuvo, se va. Devuelve
 ## los que se fueron, para el feed.
-static func evaluar_temporada(equipo: Team, posicion: int, total: int) -> Array:
+static func evaluar_temporada(equipo: Team, posicion: int, total: int,
+		division: int = -1) -> Array:
 	var caidos := []
 	var siguen := []
 	for s in equipo.sponsors:
-		if cumple(str(s["requisito"]), posicion, total):
+		var req := str(s["requisito"])
+		if cumple(req, posicion, total) and tiene_el_nombre(equipo, req, division):
 			# El contador de lo cobrado es POR TEMPORADA, como todo el
 			# resto de la economia: se reinicia con ella.
 			s["cobrado"] = 0.0
@@ -238,8 +341,8 @@ static func evaluar_temporada(equipo: Team, posicion: int, total: int) -> Array:
 	return caidos
 
 
-## Lo que entra por partido con los sponsors de hoy.
-static func pago_por_partido(equipo: Team) -> float:
+## Lo que entra por temporada con los sponsors de hoy, a año completo.
+static func pago_por_temporada(equipo: Team) -> float:
 	var total := 0.0
 	for s in equipo.sponsors:
 		total += float(s["pago"])

@@ -164,10 +164,16 @@ static func _punto_de_salida(desde: Vector2) -> Vector2:
 ## detenido para siempre esperando a que alguien salga.
 const TICKS_MAX_SALIENDO := 140
 
-## Tope de ticks que se pueden reponer por entradas y salidas en una
-## mitad. Es un seguro: sin el, un cambio que no termina nunca alargaria
-## el partido sin fin.
-const TICKS_REPUESTOS_TOPE := 200
+## Tope de ticks que se pueden reponer por entradas, salidas y esperas al
+## pateador designado en una mitad. Es un seguro: sin el, un cambio que no
+## termina nunca alargaria el partido sin fin.
+##
+## Subio de 200 a 400 al aparecer los roles. Esperar al pateador se
+## descuenta del tiempo jugado, pero el reloj corre igual, y con 200 la
+## mitad se cortaba por reloj antes de completar los minutos: medido, los
+## goles bajaban de 2,14 a 2,01 y los corners de 1,38 a 1,21 por partido
+## solo con asignar pateadores.
+const TICKS_REPUESTOS_TOPE := 400
 
 ## El que va a ejecutar el balon parado se mueve MAS RAPIDO que el resto:
 ## los demas se acomodan, el va a buscar la pelota.
@@ -236,6 +242,31 @@ const TICKS_CONGELADO_CORNER := 4
 ## corner o un centro: no llega caminando en lo que dura la pausa y
 ## terminaria apareciendo encima de la pelota de golpe.
 const DIST_MAX_AL_EJECUTOR := 22.0
+
+## Lo mismo, pero para el pateador que ELIGIO EL CLUB (ver core/roles.gd).
+##
+## El limite de arriba esta calibrado para lo que un jugador camina en la
+## pausa normal, y con el rol de corners recien puesto se midio que no
+## alcanzaba para nada: el designado esta a 64 metros del banderin de
+## mediana —aun eligiendo al mejor centrador del once— porque el corner se
+## arma en el instante en que sale la pelota, con todos donde los dejo la
+## jugada. Llegaba el 10% de las veces, o sea que elegir pateador no
+## servia.
+##
+## Al designado se lo espera: la pausa se estira lo que haga falta para
+## que llegue trotando, igual que en la cancha se espera al que patea los
+## corners. Mas lejos que esto la patea el que esta cerca, que tambien es
+## lo que pasa de verdad cuando el especialista esta en la otra punta y el
+## equipo quiere sacar rapido.
+const DIST_MAX_EJECUTOR_DESIGNADO := 80.0
+
+## Metros que cubre por tick el que va a buscar la pelota. Sale de la
+## calibracion de arriba: 22 metros en los 20 ticks de pausa del corner.
+const METROS_POR_TICK_EJECUTOR := 1.1
+
+## Ticks de mas que se le dan encima del viaje, para que se lo vea llegar
+## y acomodarse en vez de patear en el mismo tick en que pisa la pelota.
+const TICKS_MARGEN_EJECUTOR := 4
 
 ## Desde mas lejos que esto no se llega a la barrera antes de que la
 ## pateen, asi que el que esta mas lejos no va: la barrera queda mas
@@ -1999,6 +2030,7 @@ static func _lateral(estado: Dictionary, punto: Vector2, saca_local: bool) -> vo
 		"equipo": _equipo_de(estado, saca_local).nombre,
 		"rival": _equipo_de(estado, not saca_local).nombre,
 		"jugador_posicion": estado["jugadores"][ejecutor]["rol"], "clave": ejecutor,
+		"jugador_id": int(estado["jugadores"][ejecutor]["jugador_id"]),
 		"resultado": "saque",
 	})
 
@@ -2024,12 +2056,17 @@ static func _saque_de_esquina(estado: Dictionary, ataca_local: bool, lado_arriba
 	# esperando el centro" — que es lo que faltaba: no se veia quien lo
 	# pateaba, la pelota salia de la nada.
 	_detener_juego(estado, esquina, ataca_local, ejecutor, "corner",
-		int(TICKS_DETENIDO["corner"]), false, TICKS_CONGELADO_CORNER)
+		_ticks_de_pausa(estado, int(TICKS_DETENIDO["corner"])),
+		false, TICKS_CONGELADO_CORNER)
 	estado["eventos"].append({
 		"minuto": _minuto_int(estado), "tipo": "corner",
 		"equipo": _equipo_de(estado, ataca_local).nombre,
 		"rival": _equipo_de(estado, not ataca_local).nombre,
 		"jugador_posicion": estado["jugadores"][ejecutor]["rol"], "clave": ejecutor,
+		# Quien lo patea, por id y no solo por puesto: es lo que deja
+		# comprobar que el corner lo ejecuta el que eligio el club (ver
+		# core/roles.gd). El resto de los eventos ya lo traia.
+		"jugador_id": int(estado["jugadores"][ejecutor]["jugador_id"]),
 		"resultado": "saque",
 	})
 
@@ -3185,10 +3222,13 @@ static func _cobrar_penal(estado: Dictionary, ataca_local: bool, minuto: int) ->
 	var eq_d := _equipo_de(estado, not ataca_local)
 	estado["penales"] = int(estado.get("penales", 0)) + 1
 
-	var pateador := {}
-	for j in eq_a.jugadores_en_cancha():
-		if pateador.is_empty() or j["atributos"]["tiro"] > pateador["atributos"]["tiro"]:
-			pateador = j
+	# Lo patea el que eligio el club (Equipo > Roles). Si no eligio a
+	# nadie, o si el elegido no esta en la cancha, lo patea el de mas
+	# `tiro` DE CAMPO: antes el automatico recorria los once y el arquero
+	# entraba en la comparacion, asi que si tenia el mejor `tiro` se iba
+	# caminando hasta el punto del penal.
+	var pateador := _dict_jugador(
+		estado, eq_a, Roles.ejecutor(eq_a, Roles.PENALES, eq_a.en_cancha))
 	var arquero := eq_d.arquero()
 	if pateador.is_empty() or arquero.is_empty():
 		_dar_pelota_al_arquero(estado, not ataca_local, true)
@@ -3325,13 +3365,34 @@ static func _tiro_libre(estado: Dictionary, punto: Vector2, ataca_local: bool, _
 		return
 	# La falta se congela DONDE PASO y despues se acomodan trotando.
 	_detener_juego(estado, pos, ataca_local, ejecutor, tipo,
-		int(TICKS_DETENIDO["falta"]), false, TICKS_CONGELADO_FALTA)
+		_ticks_de_pausa(estado, int(TICKS_DETENIDO["falta"])),
+		false, TICKS_CONGELADO_FALTA)
+
+
+## La pausa de un balon parado: la de siempre, salvo que haya que esperar
+## a que el pateador designado llegue trotando. Deja marcado que se esta
+## esperando para que esos ticks no se cobren como tiempo de juego.
+static func _ticks_de_pausa(estado: Dictionary, base: int) -> int:
+	var espera: int = int(estado.get("ticks_espera_ejecutor", 0))
+	estado["ticks_espera_ejecutor"] = 0
+	if espera <= base:
+		estado["esperando_ejecutor"] = 0
+		return base
+	# Solo lo que EXCEDE la pausa normal es tiempo regalado: la pausa de
+	# siempre ya estaba contada en el reloj.
+	estado["esperando_ejecutor"] = espera - base
+	return espera
 
 
 ## Quién la ejecuta. En el tiro libre directo manda `tiros_libres`; en el
 ## que se cuelga al área, `centros`; en el corto, el que está más cerca,
 ## que es lo que hace que el juego se reanude rápido.
 static func _elegir_ejecutor(estado: Dictionary, pos: Vector2, ataca_local: bool, tipo: String) -> int:
+	# Se limpia SIEMPRE y de entrada: el tiro libre corto sale por el
+	# return de abajo sin pasar por la eleccion, y despues igual llama a
+	# _ticks_de_pausa — sin esto se comia la espera que habia calculado el
+	# corner anterior y frenaba el juego sin motivo.
+	estado["ticks_espera_ejecutor"] = 0
 	if tipo == "corto":
 		return _mas_cercano_del_equipo(estado, pos, ataca_local)
 	var atributo := "tiros_libres" if tipo == "directo" else "centros"
@@ -3342,10 +3403,23 @@ static func _elegir_ejecutor(estado: Dictionary, pos: Vector2, ataca_local: bool
 	# llegaba caminando ni en diez segundos y aparecia ahi de golpe al
 	# momento del centro. Por eso "no se ve quien patea": no camina hasta
 	# la pelota, se teletransporta encima de ella.
+	# A quien eligio el club para este balon parado (Equipo > Roles). No
+	# alcanza con que este designado: tiene que poder llegar a la pelota.
+	# El que esta a setenta metros no camina hasta ahi en el tiempo de la
+	# pausa, y si igual se lo hace patear, aparece encima de la pelota de
+	# golpe.
+	var rol := Roles.CORNERS if tipo == "corner" else (
+		Roles.LIBRES_CERCA if tipo == "directo" else Roles.LIBRES_LEJOS)
+	# El elegido POR EL CLUB, no el automatico: a este se lo espera aunque
+	# este lejos, y esa espera solo tiene sentido si hubo una decision.
+	var designado := Roles.explicito(equipo, rol, equipo.en_cancha)
+
 	var mejor := -1.0
 	var elegido := -1
 	var mas_cerca := -1
 	var dist_mas_cerca: float = INF
+	var clave_designado := -1
+	var dist_designado: float = INF
 	for id in estado["jugadores"]:
 		var e: Dictionary = estado["jugadores"][id]
 		if e["equipo_local"] != ataca_local or e["rol"] == "ARQ":
@@ -3354,6 +3428,10 @@ static func _elegir_ejecutor(estado: Dictionary, pos: Vector2, ataca_local: bool
 		if d < dist_mas_cerca:
 			dist_mas_cerca = d
 			mas_cerca = id
+		# Al designado se lo mide aparte: se lo espera desde mas lejos.
+		if int(e["jugador_id"]) == designado and d <= DIST_MAX_EJECUTOR_DESIGNADO:
+			clave_designado = id
+			dist_designado = d
 		if d > DIST_MAX_AL_EJECUTOR:
 			continue
 		var j := _dict_jugador(estado, equipo, e["jugador_id"])
@@ -3362,6 +3440,14 @@ static func _elegir_ejecutor(estado: Dictionary, pos: Vector2, ataca_local: bool
 		if float(j["atributos"][atributo]) > mejor:
 			mejor = float(j["atributos"][atributo])
 			elegido = id
+	if clave_designado != -1:
+		# Cuanto hay que esperarlo. Lo lee quien detiene el juego para
+		# estirar la pausa, y esos ticks no cuentan como tiempo jugado
+		# (ver `esperando_ejecutor` en simular).
+		estado["ticks_espera_ejecutor"] = int(
+			ceil(dist_designado / METROS_POR_TICK_EJECUTOR)) + TICKS_MARGEN_EJECUTOR
+		return clave_designado
+	estado["ticks_espera_ejecutor"] = 0
 	if elegido != -1:
 		return elegido
 	return mas_cerca if mas_cerca != -1 else _mas_cercano_del_equipo(estado, pos, ataca_local)
@@ -4059,9 +4145,16 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 				break
 			var en_transito: bool = not (estado["saliendo"].is_empty()
 				and estado["entrando"].is_empty())
+			# Esperar a que el pateador designado llegue al banderin
+			# tampoco es tiempo de juego. Sin esto, estirar la pausa le
+			# comeria minutos al partido y bajarian los goles — es la
+			# misma cuenta que se hizo con los cambios.
+			var esperando: int = int(estado.get("esperando_ejecutor", 0))
+			if esperando > 0:
+				estado["esperando_ejecutor"] = esperando - 1
 			_tick(estado, con_fotogramas)
 			reloj += 1
-			if not en_transito:
+			if not en_transito and esperando <= 0:
 				jugados += 1
 			# Tres expulsados dejan al equipo en 8 y el partido se termina
 			# ahi: gana el rival, no importa como iba el marcador.

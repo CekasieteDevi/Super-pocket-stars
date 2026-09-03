@@ -13,6 +13,7 @@ func _init() -> void:
 	fallas += _test_lugares()
 	fallas += _test_requisitos()
 	fallas += _test_peso_en_la_economia()
+	fallas += _test_cobro_por_temporada()
 	print("FALLOS=%d" % fallas)
 	quit()
 
@@ -54,7 +55,7 @@ func _test_escala() -> int:
 	if d1 < d10 * 100.0:
 		print("FALLA: primera paga %.0f y decima %.0f, muy poca diferencia." % [d1, d10])
 		return 1
-	print("OK: el mismo sponsor paga %s por partido en decima y %s en primera." % [
+	print("OK: el mismo sponsor paga %s por temporada en decima y %s en primera." % [
 		Economia.formato_dinero(d10), Economia.formato_dinero(d1)])
 	# Y el mas exigente paga mas que el que no pide nada.
 	if Sponsors.pago_de("campeon", 1.0, 9) <= Sponsors.pago_de("ninguno", 1.0, 9):
@@ -150,14 +151,22 @@ func _test_requisitos() -> int:
 	# Al cerrar la temporada se va el que no cumplio y se queda el que si.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = SEED
-	var equipo := Team.generar("Prueba", rng, 0)
+	# Un club de decima como la gente: desde la v1.5 los sponsors tambien
+	# miran reputacion e hinchada, asi que un equipo con reputacion 0 y
+	# cero hinchas perderia hasta el kiosco y no probaria lo que se
+	# quiere probar aca, que es el requisito DEPORTIVO.
+	var equipo := Team.generar("Prueba", rng, 0,
+		NivelDivision.potencial(9), "Uruguay", NivelDivision.realizacion(9))
+	equipo.division_actual = 9
+	equipo.reputacion = Reputacion.MAXIMO
+	equipo.fans = Fans.fans_para_apoyo(1.0, 9)
 	equipo.sponsors = [
 		{"nombre": "Kiosco", "requisito": "ninguno", "pago": 10.0, "division": 10,
 			"desde": 1, "cobrado": 380.0, "partidos": 38},
 		{"nombre": "Grande", "requisito": "campeon", "pago": 100.0, "division": 10,
 			"desde": 1, "cobrado": 3800.0, "partidos": 38},
 	]
-	var caidos := Sponsors.evaluar_temporada(equipo, 7, 20)
+	var caidos := Sponsors.evaluar_temporada(equipo, 7, 20, 9)
 	if caidos.size() == 1 and str(caidos[0]["nombre"]) == "Grande" \
 			and equipo.sponsors.size() == 1:
 		print("OK: saliendo 7°, el que pedia el campeonato se va y el otro se queda.")
@@ -184,9 +193,8 @@ func _test_peso_en_la_economia() -> int:
 		var equipo: Team = piramide.divisiones[d].equipos[0]
 		var r := Economia.procesar_temporada(equipo, 10, 20, d)
 		var ingreso: float = float(r["ingresos"])
-		# Diez sponsors del escalon medio de esa division.
-		var por_partido: float = Sponsors.pago_de("no_ultimo", 1.0, d) * 10.0
-		var por_temporada: float = por_partido * 38.0
+		# Diez sponsors del escalon medio de esa division, a año completo.
+		var por_temporada: float = Sponsors.pago_de("no_ultimo", 1.0, d) * 10.0
 		var pct: float = 100.0 * por_temporada / ingreso
 		print("   division %2d: 10 sponsors dan %s por temporada, %.0f%% del ingreso (%s)" % [
 			d + 1, Economia.formato_dinero(por_temporada), pct,
@@ -197,3 +205,66 @@ func _test_peso_en_la_economia() -> int:
 	if fallas == 0:
 		print("OK: en las tres divisiones medidas los sponsors pesan entre 10% y 60% del ingreso.")
 	return fallas
+
+
+## Los sponsors cobran al CERRAR la temporada, no fecha a fecha.
+##
+## Antes cobraban por partido y la plata iba a un acumulador que no se
+## veia hasta el cierre: un sponsor que decia "paga por partido" no movia
+## el presupuesto en ningun partido. Ahora el numero es el del año.
+func _test_cobro_por_temporada() -> int:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = SEED
+	var fallas := 0
+	var fechas := Sponsors.partidos_de_liga()
+
+	# Un sponsor que estuvo todo el año cobra el pago entero.
+	var entero := Team.generar("ClubEntero", rng, 0)
+	entero.sponsors = [_sponsor(1000.0)]
+	for f in range(fechas):
+		Sponsors.registrar_partido(entero)
+	# Durante la temporada NO entra plata.
+	if absf(entero.ingresos_sponsors) > 0.01:
+		print("FALLA: entro plata durante la temporada (%s)." % entero.ingresos_sponsors)
+		fallas += 1
+	var cobrado := Sponsors.cobrar_temporada(entero)
+	if absf(cobrado - 1000.0) > 0.01:
+		print("FALLA: el año completo cobro %.2f y tendria que cobrar 1000." % cobrado)
+		fallas += 1
+	if absf(entero.ingresos_sponsors - 1000.0) > 0.01:
+		print("FALLA: el acumulador del club quedo en %.2f." % entero.ingresos_sponsors)
+		fallas += 1
+
+	# El que firma con el año empezado cobra la parte proporcional.
+	var mitad := Team.generar("ClubMitad", rng, 0)
+	mitad.sponsors = [_sponsor(1000.0)]
+	for f in range(fechas / 2):
+		Sponsors.registrar_partido(mitad)
+	var parcial := Sponsors.cobrar_temporada(mitad)
+	if absf(parcial - 500.0) > 30.0:
+		print("FALLA: media temporada cobro %.2f y tendria que cobrar ~500." % parcial)
+		fallas += 1
+
+	# Y el que firma sobre el final casi no cobra: si cobrara el año
+	# entero, convendria dejar los diez lugares vacios hasta la ultima
+	# fecha.
+	var tarde := Team.generar("ClubTarde", rng, 0)
+	tarde.sponsors = [_sponsor(1000.0)]
+	Sponsors.registrar_partido(tarde)
+	var poco := Sponsors.cobrar_temporada(tarde)
+	if poco > 100.0:
+		print("FALLA: firmando en la ultima fecha cobro %.2f." % poco)
+		fallas += 1
+
+	if fallas == 0:
+		print("OK: %d fechas cobran %s, media temporada %s y una sola fecha %s." % [
+			fechas, Economia.formato_dinero(cobrado),
+			Economia.formato_dinero(parcial), Economia.formato_dinero(poco)])
+	return fallas
+
+
+func _sponsor(pago: float) -> Dictionary:
+	return {
+		"nombre": "Marca de prueba", "requisito": "ninguno", "pago": pago,
+		"division": 10, "desde": 1, "cobrado": 0.0, "partidos": 0,
+	}

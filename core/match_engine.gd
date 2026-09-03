@@ -212,7 +212,7 @@ static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atri
 	bloque_c += EstadoCancha.modificador(cancha_del_local, atributo)
 	bloque_c += Arbitro.modificador(equipo.arbitro_partido, equipo.local)
 	if equipo.local:
-		bloque_c += Publico.modificador(equipo.fans)
+		bloque_c += Publico.modificador(Fans.apoyo(equipo, equipo.division_actual))
 	bloque_c += Rivalidad.variacion(Rivalidad.es_clasico(equipo, rival), rng)
 	var bloque_d := Personalidad.modificador_partido(jugador, equipo, rival, atributo, minuto) + Habilidades.modificador_partido(jugador, atributo)
 	# §8.4#30, objetivo de directiva en riesgo. Estaba sumado al bloque C

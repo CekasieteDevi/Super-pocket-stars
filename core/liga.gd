@@ -130,6 +130,7 @@ func inicializar(nombres_equipos: Array, rng: RandomNumberGenerator, id_inicial:
 		# §8.4#28: el club tiene que saber en que categoria juega, si no un
 		# cruce de copa no puede saber que esta cruzando divisiones.
 		equipo.division_actual = division
+		equipo.fans = Fans.inicial(division)
 		siguiente_id += Team.RANGO_IDS_RESERVADO
 		equipos.append(equipo)
 		tabla[nombre] = _fila_vacia()
@@ -194,6 +195,14 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 	for partido in fecha:
 		var home: Team = equipos[partido[0]]
 		var away: Team = equipos[partido[1]]
+		# Nadie sale a la cancha lesionado ni suspendido. A los clubes de
+		# la IA se les arregla el once solo: no hay quien lo revise, y sin
+		# esto serian los unicos que juegan con gente que no puede jugar.
+		# Al club del jugador se le avisa antes, en la pantalla, para que
+		# elija el reemplazo — cuando llega aca ya viene arreglado, y esto
+		# queda de red por si acaso.
+		Alineacion.arreglar(home)
+		Alineacion.arreglar(away)
 		var con_log: bool = equipo_seguido != null and (home == equipo_seguido or away == equipo_seguido)
 
 		# §14 + §17: antes de dar por perdido el partido, el club echa mano
@@ -409,6 +418,11 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 		for equipo in equipos:
 			if equipo.nombre == nombre:
 				var informe := Economia.procesar_temporada(equipo, i + 1, orden_final.size(), division)
+				# El campeon de la division: el titulo pesa aparte de la
+				# tabla. Las copas las suma GameState, que es el unico que
+				# sabe quien las gano (ver Reputacion.por_titulo).
+				if i == 0:
+					Reputacion.sumar(equipo, Reputacion.por_titulo("Liga"))
 				informe["equipo"] = nombre
 				informes_economia.append(informe)
 

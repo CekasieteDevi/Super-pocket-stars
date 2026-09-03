@@ -83,10 +83,12 @@ var color_short: Color = Color.TRANSPARENT
 ## liga con los mismos objetos.
 var en_copa: bool = false
 var foco_individual: Dictionary = {}  # jugador_id -> atributo (String), foco de ESTA temporada — ver core/entrenamiento.gd
-## Fans (§8.4 #22, ver core/fans.gd) — a diferencia de estilo/DT/cancha,
-## arranca en 0 para todos ("no va nadie al estadio") y evoluciona con
-## resultados/ascensos. racha_sin_ganar es un contador AUXILIAR entre
-## partidos (distinto de "racha" de arriba, que es DENTRO de un partido).
+## Fans (§8.4 #22, ver core/fans.gd) — la CANTIDAD de hinchas, un numero
+## absoluto y exponencial: un club de decima tiene miles y uno de primera
+## decenas de millones. Lo pone Liga.inicializar segun la division
+## (Fans.inicial); el 0 de aca es solo el valor antes de generar.
+## racha_sin_ganar es un contador AUXILIAR entre partidos (distinto de
+## "racha" de arriba, que es DENTRO de un partido).
 var fans: float = 0.0
 var racha_sin_ganar: int = 0
 var rival_directo: String = ""  # nombre del clásico horneado (§8.4 #14) — ver core/rivalidad.gd
@@ -110,6 +112,13 @@ var racha: int = 0
 var avance: int = 0  # pases consecutivos exitosos en la zona de armado, ver MatchEngine
 var goles: int = 0
 var capitan_id: int = -1
+
+## Los roles que elige el club: quien patea los penales, los corners, las
+## faltas cerca y lejos, y quien lleva la cinta (ver core/roles.gd).
+## clave -> jugador_id, o Roles.AUTOMATICO si el club no eligio a nadie.
+## capitan_id de arriba es el capitan YA RESUELTO: sale de roles y lo
+## recalcula recalcular_capitan().
+var roles: Dictionary = {}
 var resistencia: Dictionary = {}  # jugador_id -> % de resistencia en el partido actual (0..1)
 
 ## §8.7 "hasta 5 cambios": quién está efectivamente en cancha AHORA, no
@@ -331,6 +340,7 @@ func guardar() -> Dictionary:
 		"foco_equipo": foco_equipo, "foco_semanas": foco_semanas,
 		"jugadores": jugadores, "banco": banco, "cantera": cantera,
 		"siguiente_id_cantera": siguiente_id_cantera, "capitan_id": capitan_id,
+		"roles": _claves_a_texto_roles(roles),
 		"investigadores": investigadores, "siguiente_id_investigador": siguiente_id_investigador,
 		"conocimiento": _claves_a_texto(conocimiento),
 		"bloqueos_mercado": _claves_a_texto(bloqueos_mercado),
@@ -438,7 +448,12 @@ static func cargar(datos: Dictionary) -> Team:
 		o["dias"] = float(o["dias"])
 	t.siguiente_id_oferta = int(datos.get("siguiente_id_oferta", 0))
 	t.historial_mercado = datos.get("historial_mercado", [])
-	t.capitan_id = datos["capitan_id"]
+	t.capitan_id = int(datos["capitan_id"])
+	# Partidas anteriores a los roles no traen la clave: quedan todas en
+	# automatico, que es exactamente como se comportaban.
+	t.roles = {}
+	for clave in datos.get("roles", {}):
+		t.roles[str(clave)] = int(datos["roles"][clave])
 	t.fatiga_acumulada = _claves_a_entero(datos["fatiga_acumulada"])
 	t.animo = _claves_a_entero(datos["animo"])
 	t.lesiones = _claves_a_entero(datos["lesiones"])
@@ -484,7 +499,12 @@ static func cargar(datos: Dictionary) -> Team:
 		t.objetivo_temporada["posicion_maxima"] = int(t.objetivo_temporada["posicion_maxima"])
 	t.objetivos_incumplidos_seguidos = int(datos.get("objetivos_incumplidos_seguidos", 0))
 	t.foco_individual = _claves_a_entero(datos.get("foco_individual", {}))
-	t.fans = datos.get("fans", 0.0)
+	# Ojo: hasta la v1.5 esto era un puntaje de 0 a 100 y ahora es la
+	# cantidad real de hinchas. La migracion NO va aca: necesita saber en
+	# que division juega el club y eso no se guarda —lo reconstruye la
+	# piramide por el orden de las ligas—, asi que la hace Piramide.cargar
+	# apenas asigna las divisiones (ver Fans.migrar_del_puntaje_viejo).
+	t.fans = float(datos.get("fans", 0.0))
 	t.racha_sin_ganar = int(datos.get("racha_sin_ganar", 0))
 	t.rival_directo = datos.get("rival_directo", "")
 	t.promociones_temporada = int(datos.get("promociones_temporada", 0))
@@ -589,12 +609,32 @@ func reparto_foco() -> Dictionary:
 	return salida
 
 
+## La cinta. Si el club eligio capitan, es ese; si no, el de mas media.
+## Se llama en todos lados donde el plantel cambia (mercado, libres,
+## quiebra, cierre de temporada), asi que es tambien el lugar donde se
+## limpian las elecciones de jugadores que ya no estan.
 func recalcular_capitan() -> void:
+	Roles.limpiar(self)
+	var elegido := Roles.elegido(self, Roles.CAPITAN)
+	if elegido != Roles.AUTOMATICO:
+		capitan_id = elegido
+		return
 	var mejor_media := -1.0
+	capitan_id = -1
 	for j in jugadores:
 		if j["media"] > mejor_media:
 			mejor_media = j["media"]
 			capitan_id = j["id"]
+
+
+## Las claves de roles son texto y los valores enteros. JSON convierte los
+## enteros a float al ida y vuelta, asi que se guardan como texto y se
+## reconstruyen enteros al cargar (mismo motivo que _claves_a_entero).
+func _claves_a_texto_roles(origen: Dictionary) -> Dictionary:
+	var salida := {}
+	for clave in origen:
+		salida[str(clave)] = int(origen[clave])
+	return salida
 
 
 ## Titulares + banco (18), sin la cantera/reserva — esos no son parte del

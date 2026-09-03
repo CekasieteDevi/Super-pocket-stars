@@ -46,11 +46,15 @@ func _init() -> void:
 	# --- El premio sobrevive al cierre de temporada ---------------------
 	# La caja se REINICIA en el cierre: si el premio se sumara a la caja en
 	# el momento de ganarlo, se perderia en el mismo cierre que lo pago.
+	# Cada llamada va sobre una COPIA fresca del club. procesar_temporada
+	# no es una consulta: ademas de devolver el informe le mueve al club
+	# la reputacion y la hinchada, asi que la segunda llamada sobre el
+	# mismo equipo mediria un club distinto del de la primera y la
+	# diferencia dejaria de ser el premio (daba $50.892 en vez de $50.000
+	# en decima, y -$439.671 en primera).
 	var equipo: Team = gs.equipo_jugador
-	equipo.premios_copa = 0.0
-	var sin_premio := Economia.procesar_temporada(equipo, 10, 20, 9)
-	equipo.premios_copa = 50000.0
-	var con_premio := Economia.procesar_temporada(equipo, 10, 20, 9)
+	var sin_premio := _cerrar(equipo, 0.0, 9)
+	var con_premio := _cerrar(equipo, 50000.0, 9)
 	var diferencia: float = float(con_premio["ingresos"]) - float(sin_premio["ingresos"])
 	if absf(diferencia - 50000.0) < 1.0:
 		print("OK: el premio entra entero al ingreso de la temporada (+%s)." % [
@@ -59,10 +63,15 @@ func _init() -> void:
 		print("FALLA: el premio de $50.000 movio el ingreso en %s." % [
 			Economia.formato_dinero(diferencia)])
 		fallas += 1
-	if absf(equipo.premios_copa) < 0.01:
+	# Que el acumulador se vacie se prueba sobre un club aparte, porque el
+	# de arriba ya es una copia.
+	var cobrador: Team = Team.cargar(equipo.guardar())
+	cobrador.premios_copa = 50000.0
+	Economia.procesar_temporada(cobrador, 10, 20, 9)
+	if absf(cobrador.premios_copa) < 0.01:
 		print("OK: cobrado el premio, el acumulador queda en cero.")
 	else:
-		print("FALLA: el acumulador quedo en %s despues de cobrarlo." % equipo.premios_copa)
+		print("FALLA: el acumulador quedo en %s despues de cobrarlo." % cobrador.premios_copa)
 		fallas += 1
 	if absf(float(con_premio["premios_copa"]) - 50000.0) < 1.0:
 		print("OK: el informe economico dice cuanto vino de copas.")
@@ -72,10 +81,8 @@ func _init() -> void:
 
 	# El premio NO puede pasar por el multiplicador de division: en primera
 	# lo multiplicaria por 88 y el Rey dejaria de ser un premio fijo.
-	equipo.premios_copa = 50000.0
-	var en_primera := Economia.procesar_temporada(equipo, 10, 20, 0)
-	equipo.premios_copa = 0.0
-	var sin_en_primera := Economia.procesar_temporada(equipo, 10, 20, 0)
+	var en_primera := _cerrar(equipo, 50000.0, 0)
+	var sin_en_primera := _cerrar(equipo, 0.0, 0)
 	var dif_primera: float = float(en_primera["ingresos"]) - float(sin_en_primera["ingresos"])
 	if absf(dif_primera - 50000.0) < 1.0:
 		print("OK: en primera el premio sigue valiendo lo mismo, no se multiplica por 88.")
@@ -87,3 +94,13 @@ func _init() -> void:
 	gs.free()
 	print("FALLOS=%d" % fallas)
 	quit()
+
+
+## Cierra la temporada de una COPIA del club, con estos premios de copa y
+## en esta division. La copia es lo importante: procesar_temporada
+## modifica al club que procesa, asi que comparar dos cierres exige que
+## los dos arranquen del mismo estado.
+func _cerrar(equipo: Team, premios: float, division: int) -> Dictionary:
+	var copia := Team.cargar(equipo.guardar())
+	copia.premios_copa = premios
+	return Economia.procesar_temporada(copia, 10, 20, division)

@@ -129,23 +129,43 @@ static func _fila_vacia_caja() -> Dictionary:
 	return c
 
 
-## §8.4 #22 extendido a la economía: Team.fans (core/fans.gd, arranca en 0
-## para todos y crece con resultados/ascensos) suma HASTA +30% de
-## ocupación ENCIMA de la base de reputación — nunca la reduce. En
-## temporada 1, con fans=0 en absolutamente todos los clubes, esto da
-## exactamente la misma ocupación que antes de que existiera Fans (la
-## fórmula vieja, ya calibrada con cuidado — ver PRECIO_ENTRADA más
-## abajo), así que no hay riesgo de repetir la ola de quiebras de la
-## calibración anterior. Con el tiempo, un club que se gana una hinchada
-## de verdad llena más la cancha que uno con la misma reputación pero sin
-## bancada — la recompensa es real pero acotada (clamp a 100% de aforo).
+## §8.4 #22 extendido a la economía: el APOYO de la hinchada (0..1, ver
+## Fans.apoyo — qué tan grande es para su categoría, no cuántos son) suma
+## hasta +30% de ocupación encima de la base de reputación, nunca la
+## reduce. Un club que se gana una hinchada de verdad llena más la cancha
+## que uno con la misma reputación y sin bancada; la recompensa es real
+## pero acotada (clamp a 100% de aforo).
+##
+## El párrafo que estaba acá decía que en temporada 1 esto daba
+## exactamente la ocupación de antes "con fans=0 en absolutamente todos
+## los clubes". Era cierto y era el bug: `fans` no se inicializaba nunca,
+## así que este bonus valía 0 para todo el mundo durante toda la partida
+## y la economía se calibró sin él. Ver OCUPACION_BASE, que es lo que
+## compensa haberlo arreglado.
 const BONUS_OCUPACION_FANS := 0.3
+
+## El piso de ocupación, antes de la reputación y de la hinchada.
+##
+## Era 0.30. Bajó a 0.20 cuando la hinchada empezó a valer de verdad: con
+## el bug viejo `fans` valía 0 para TODOS los clubes de la partida —nunca
+## se inicializaba— así que BONUS_OCUPACION_FANS no aportaba nada y toda
+## la economía quedó calibrada con la cancha llenándose solo por
+## reputación. Al arreglarlo, un club normal (apoyo ~0.32) pasaba a
+## recaudar 11% más en primera y 18% más en décima sin haber hecho nada.
+##
+## Con 0.20 el club promedio queda donde estaba y el que se gana una
+## hinchada grande gana hasta +0.20 de ocupación sobre eso: la hinchada
+## mueve la aguja en vez de regalar plata.
+const OCUPACION_BASE := 0.2
 
 
 ## Procesa una temporada terminada para un club. posicion_tabla es 1-indexado.
 static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos: int, division: int = -1) -> Dictionary:
-	var ocupacion_base: float = 0.3 + clamp(equipo.reputacion, 0.0, 100.0) / 100.0 * 0.7
-	var ocupacion: float = clamp(ocupacion_base + equipo.fans / 100.0 * BONUS_OCUPACION_FANS, 0.0, 1.0)
+	var ocupacion_base: float = OCUPACION_BASE + clamp(equipo.reputacion, 0.0, 100.0) / 100.0 * 0.7
+	# El APOYO y no la cantidad cruda: la hinchada es exponencial y lo que
+	# llena el estadio es ser grande para tu categoria, no el numero.
+	var ocupacion: float = clamp(
+		ocupacion_base + Fans.apoyo(equipo, division) * BONUS_OCUPACION_FANS, 0.0, 1.0)
 	var asistencia: float = AFORO_BASE * Instalaciones.factor_aforo(equipo) * ocupacion
 	var ingreso_entradas: float = PARTIDOS_DE_LOCAL * asistencia * PRECIO_ENTRADA
 	var ingreso_sponsor: float = SPONSOR_BASE + (total_equipos - posicion_tabla) * 1000.0
@@ -194,14 +214,13 @@ static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos:
 	# esta temporada (caja_al_cierre - caja_actual).
 	equipo.caja_al_cierre = equipo.caja.duplicate()
 
-	# Reputación: sube en la mitad de arriba de la tabla, baja en la de
-	# abajo — a un ritmo que se note en un puñado de temporadas de verdad
-	# buenas o malas (con 0.05 anterior, ganar el campeonato todas las
-	# temporadas tardaba ~90 temporadas en mover la reputación 40 puntos;
-	# con 0.25, tarda ~18, todavía gradual pero perceptible). Simplificado
-	# hasta que existan sponsors/prensa reales (§10.5).
-	var relativo: float = (float(total_equipos) / 2.0) - posicion_tabla
-	equipo.reputacion = clamp(equipo.reputacion + relativo * 0.25, 0.0, 100.0)
+	# Reputacion y hinchada: la posicion final mueve las dos. Los TITULOS y
+	# los ascensos tambien mueven la reputacion, pero eso lo aplica
+	# GameState, que es el unico que sabe quien gano que (ver
+	# Reputacion.por_titulo).
+	Reputacion.sumar(equipo, Reputacion.por_posicion(posicion_tabla, total_equipos))
+	Reputacion.tirar_a_la_referencia(equipo, division)
+	Fans.actualizar_por_temporada(equipo, posicion_tabla, total_equipos, division)
 
 	var estado := _recalcular_quiebra(equipo)
 

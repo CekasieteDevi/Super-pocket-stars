@@ -47,6 +47,11 @@ static func cargar(datos: Dictionary) -> Piramide:
 		liga_cargada.division = p.divisiones.size()
 		for e in liga_cargada.equipos:
 			e.division_actual = liga_cargada.division
+			# Partidas anteriores a la v1.5 guardaron `fans` como un
+			# puntaje de 0 a 100. Leido como cantidad, el pais entero
+			# quedaria con cuarenta hinchas por club.
+			if e.fans <= Fans.TOPE_ESCALA_VIEJA:
+				e.fans = Fans.migrar_del_puntaje_viejo(e.fans, e.division_actual)
 		p.divisiones.append(liga_cargada)
 	# El escalon no se guarda: es la posicion en el array (ver Liga.division).
 	for d in range(p.divisiones.size()):
@@ -234,6 +239,7 @@ func _ejecutar_ascensos_y_descensos(ordenes: Array, rng: RandomNumberGenerator) 
 			mejor.equipos.append(equipo)
 			equipo.division_actual = limite
 			Fans.actualizar_por_movimiento_de_division(equipo, true)
+			Reputacion.sumar(equipo, Reputacion.POR_ASCENSO)
 			movimientos.append({"equipo": equipo.nombre, "tipo": "ascenso directo", "de_division": limite + 2, "a_division": limite + 1})
 
 		var candidato: Team = orden_peor[2]
@@ -248,6 +254,8 @@ func _ejecutar_ascensos_y_descensos(ordenes: Array, rng: RandomNumberGenerator) 
 			defensor.division_actual = limite + 1
 			Fans.actualizar_por_movimiento_de_division(candidato, true)
 			Fans.actualizar_por_movimiento_de_division(defensor, false)
+			Reputacion.sumar(candidato, Reputacion.POR_ASCENSO)
+			Reputacion.sumar(defensor, Reputacion.POR_DESCENSO)
 			movimientos.append({"equipo": candidato.nombre, "tipo": "ascenso por playoff", "de_division": limite + 2, "a_division": limite + 1})
 			movimientos.append({"equipo": defensor.nombre, "tipo": "descenso por playoff", "de_division": limite + 1, "a_division": limite + 2})
 
@@ -257,6 +265,7 @@ func _ejecutar_ascensos_y_descensos(ordenes: Array, rng: RandomNumberGenerator) 
 			peor.equipos.append(equipo)
 			equipo.division_actual = limite + 1
 			Fans.actualizar_por_movimiento_de_division(equipo, false)
+			Reputacion.sumar(equipo, Reputacion.POR_DESCENSO)
 			movimientos.append({"equipo": equipo.nombre, "tipo": "descenso directo", "de_division": limite + 1, "a_division": limite + 2})
 
 	return movimientos

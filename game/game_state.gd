@@ -273,9 +273,10 @@ func jugar_siguiente_fecha() -> void:
 		else:
 			liga.jugar_fecha(fecha_actual, rng)
 
-	# Los sponsors cobran POR PARTIDO: es lo unico que le entra plata al
-	# club durante la temporada y no al cerrarla.
-	Sponsors.cobrar_partido(equipo_jugador)
+	# Los sponsors no cobran aca: solo se anota que jugaron una fecha mas
+	# bajo contrato. Cobran al cerrar la temporada, prorrateados por esas
+	# fechas (ver Sponsors.cobrar_temporada).
+	Sponsors.registrar_partido(equipo_jugador)
 
 	fecha_actual += 1
 
@@ -450,6 +451,29 @@ func _anotar_en_la_vitrina(posicion_final: int, internacional: Dictionary) -> vo
 			continue
 		if internacional[clave]["campeon"] == equipo_jugador:
 			_sumar_titulo("Copa de %s" % clave.capitalize(), "internacional")
+
+
+## Lo que suma ganar una copa, para TODOS los clubes y no solo el tuyo: si
+## el prestigio de los rivales no se moviera, en diez temporadas el unico
+## club con nombre del pais serias vos. La liga y los ascensos los suman
+## Liga.fin_de_temporada y Piramide; aca van las copas, que son lo unico
+## que solo GameState sabe quien gano.
+func _reputacion_por_copas(internacional: Dictionary) -> void:
+	# Los nombres de titulo son los MISMOS que van a la vitrina (ver
+	# _anotar_en_la_vitrina): asi no hay dos listas que se puedan
+	# desincronizar y lo que la vitrina dice que ganaste es exactamente lo
+	# que te sumo prestigio.
+	for copa in copas_division:
+		if copa != null and copa.campeon != null:
+			Reputacion.sumar(copa.campeon, Reputacion.por_titulo("Copa de división"))
+	if copa_nacional != null and copa_nacional.campeon != null:
+		Reputacion.sumar(copa_nacional.campeon, Reputacion.por_titulo("Copa del Rey"))
+	for clave in ["campeones", "guerreros", "emergentes"]:
+		if not internacional.has(clave):
+			continue
+		var campeon = internacional[clave].get("campeon")
+		if campeon is Team:
+			Reputacion.sumar(campeon, Reputacion.por_titulo("Copa de %s" % clave.capitalize()))
 
 
 func _sumar_titulo(titulo: String, detalle: String) -> void:
@@ -809,6 +833,11 @@ func _cerrar_temporada() -> void:
 	# temporada — fin_de_temporada() es lo que procesa cantera (necesario
 	# para el objetivo de categoria "cantera" mas abajo) ademas de
 	# economia/mercado/progresion y ascensos/descensos.
+	# Los sponsors cobran ACA: tiene que ser antes de fin_de_temporada,
+	# que es quien llama a Economia.procesar_temporada y arma con el
+	# ingreso del año el presupuesto del que viene.
+	Sponsors.cobrar_temporada(equipo_jugador)
+
 	var resultado_piramide := piramide.fin_de_temporada(rng, equipo_jugador, temporada_actual)
 	for m in resultado_piramide["movimientos"]:
 		if m["equipo"] == equipo_jugador.nombre:
@@ -896,16 +925,24 @@ func _cerrar_temporada() -> void:
 	# unico que tiene campeon— no se llegaba a ver nunca. Se guarda el de
 	# la que a esta altura ya se jugo entera.
 	_guardar_copas_de_la_temporada()
+	_reputacion_por_copas(resultado_internacional)
 	_anotar_en_la_vitrina(posicion_final, resultado_internacional)
 
 	# Los sponsors miran la tabla final: el que pidio algo y no lo tuvo se
 	# va. Va DESPUES de fin_de_temporada a proposito: ahi es donde
 	# procesar_temporada cobra lo que juntaron, asi que el que se va cobra
 	# igual la temporada que jugo y recien despues deja el lugar libre.
-	for s in Sponsors.evaluar_temporada(equipo_jugador, posicion_final, tabla_final.size()):
+	# La division es la que se JUGO: los ascensos todavia no corrieron.
+	for s in Sponsors.evaluar_temporada(
+			equipo_jugador, posicion_final, tabla_final.size(), division_jugador):
+		var motivo := str(Sponsors.TEXTO_REQUISITO.get(s["requisito"], "")).to_lower()
+		if Sponsors.cumple(str(s["requisito"]), posicion_final, tabla_final.size()):
+			# Cumplio en la cancha pero el club se le quedo chico: es el
+			# otro lado del requisito de reputacion y hinchada.
+			motivo = str(Sponsors.texto_minimos(
+				str(s["requisito"]), division_jugador)).to_lower().trim_prefix("pide ")
 		_agregar_noticia("SPONSOR: %s corta el contrato con %s — pedia %s" % [
-			s["nombre"], equipo_jugador.nombre,
-			str(Sponsors.TEXTO_REQUISITO.get(s["requisito"], "")).to_lower()])
+			s["nombre"], equipo_jugador.nombre, motivo])
 	# Cuadros nuevos con los equipos YA movidos de división.
 	_armar_copas()
 
