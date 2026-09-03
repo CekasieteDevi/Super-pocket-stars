@@ -241,8 +241,27 @@ func _test_los_cambios_se_ven() -> int:
 		if absf(ultima2.y) >= MotorEspacial.MEDIO_ANCHO:
 			print("FALLA: el suplente se quedo afuera (y=%.1f)." % ultima2.y)
 			fallas += 1
+	# La regla del cuarto arbitro: el suplente no entra hasta que el otro
+	# salio. Se comprueba con lo unico que importa de verdad — que no haya
+	# un solo cuadro con doce de un equipo adentro de la cancha.
+	var maximo := 0
+	var minimo := 99
+	for f in fg:
+		var dentro := 0
+		for j in f["jugadores"]:
+			if absf(float(j["y"])) < MotorEspacial.MEDIO_ANCHO:
+				dentro += 1
+		maximo = maxi(maximo, dentro)
+		minimo = mini(minimo, dentro)
+	if maximo > 22:
+		print("FALLA: hubo un cuadro con %d jugadores adentro de la cancha." % maximo)
+		fallas += 1
+	elif minimo >= 22:
+		print("FALLA: nunca bajo de 22 adentro, o sea que el suplente entro antes de que saliera el otro.")
+		fallas += 1
+
 	if fallas == 0:
-		print("OK: en el cambio salen 2 cruzando la linea y entran 2 desde afuera.")
+		print("OK: en el cambio salen 2 cruzando la linea y entran 2 desde afuera, sin pasar de 22 (baja a %d)." % minimo)
 	return fallas
 
 

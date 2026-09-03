@@ -2665,6 +2665,16 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 ## cancha según Team: entran los que ingresaron por un cambio, salen los
 ## sustituidos y los expulsados. Sin esto, un jugador que ya salió seguiría
 ## corriendo en la simulación y un expulsado jugaría igual.
+## ¿Esta clave todavia esta caminando hacia afuera?
+static func _sigue_saliendo(estado: Dictionary, clave: int) -> bool:
+	if clave < 0:
+		return false
+	for s in estado.get("saliendo", []):
+		if int(s["clave"]) == clave:
+			return true
+	return false
+
+
 ## Un paso de las salidas y las entradas. Devuelve true cuando no queda
 ## nadie en el medio — que es la condicion para reanudar el juego.
 ##
@@ -2695,6 +2705,13 @@ static func _avanzar_entradas_y_salidas(estado: Dictionary) -> bool:
 	for en in estado["entrando"]:
 		var clave_e: int = int(en["clave"])
 		if not estado["jugadores"].has(clave_e):
+			continue
+		# No entra hasta que el que sale llegue a la linea: dos jugadores
+		# de un equipo no pueden estar en la cancha a la vez, y ademas es
+		# lo que se ve en un partido — el cuarto arbitro no lo deja pasar
+		# hasta que el otro salio.
+		if _sigue_saliendo(estado, int(en.get("espera_a", -1))):
+			entrando.append(en)
 			continue
 		en["ticks"] = int(en["ticks"]) + 1
 		var e2: Dictionary = estado["jugadores"][clave_e]
@@ -2733,7 +2750,12 @@ static func _sincronizar_cambios(estado: Dictionary) -> void:
 				# El que entra hereda el SLOT del que sale (rol y
 				# casillero), no el de su propio puesto: un cambio ocupa
 				# el lugar que se libera, no inventa uno nuevo.
-				libres.append({"pos": e["pos"], "rol": e["rol"], "base": e["base"]})
+				libres.append({
+					"pos": e["pos"], "rol": e["rol"], "base": e["base"],
+					# Quien deja el hueco: el suplente lo espera en la
+					# linea antes de entrar.
+					"deja": clave,
+				})
 				_empezar_salida(estado, clave)
 
 		for clave in deben_estar:
@@ -2760,6 +2782,7 @@ static func _sincronizar_cambios(estado: Dictionary) -> void:
 			}
 			estado["entrando"].append({
 				"clave": clave, "destino": destino, "ticks": 0,
+				"espera_a": int(hueco["deja"]) if hueco.has("deja") else -1,
 			})
 
 	# Si arranco alguna salida o entrada, el juego se DETIENE: en el
