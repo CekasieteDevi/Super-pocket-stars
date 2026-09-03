@@ -24,7 +24,7 @@ extends RefCounted
 ## Ahora son dos etapas: se espera a que la jugada montada se resuelva
 ## —que se termine la pausa del balon parado y que el expulsado salga— y
 ## despues un rato fijo para ver como sigue.
-const TICKS_DE_CIERRE := 32
+const TICKS_DE_CIERRE := 20
 const TICKS_TOPE := 200
 
 ## Cuantos ticks de juego normal antes de montar la jugada. Pocos: son

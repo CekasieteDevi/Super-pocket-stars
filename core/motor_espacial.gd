@@ -135,15 +135,21 @@ const FACTOR_TROTE_PARADO := 0.45
 ## la cancha, y el juego no se reanuda hasta que sale. Antes desaparecia
 ## de un fotograma al otro: se veia la tarjeta y en el cuadro siguiente
 ## habia un jugador menos, sin que se entendiera quien se fue.
-const FACTOR_CAMINA_EXPULSADO := 0.65
+##
+## Los tres factores pasan de largo el 1.0 —o sea, mas rapido que la
+## velocidad tope del jugador— a proposito: el que sale y el que entra no
+## estan jugando, y la salida a paso real se hacia larga de mirar (diez
+## segundos con la pelota parada). Es una licencia de animacion, no una
+## capacidad fisica que se use en el juego.
+const FACTOR_CAMINA_EXPULSADO := 1.3
 
 ## El que ENTRA por un cambio no camina: entra al trote a ocupar su lugar.
-const FACTOR_ENTRA_SUPLENTE := 0.9
+const FACTOR_ENTRA_SUPLENTE := 1.8
 
 ## Y el que SALE por un cambio tampoco: se va al trote. Solo el expulsado
 ## camina, que ademas es como se ve en la cancha — uno se va rapido y sin
 ## drama y el otro se toma su tiempo.
-const FACTOR_SALE_CAMBIADO := 1.0
+const FACTOR_SALE_CAMBIADO := 2.0
 
 ## Por donde se sale y se entra: el lateral, a la altura de la mitad de la
 ## cancha. Es por donde salen y entran en el futbol de verdad, y tener un
