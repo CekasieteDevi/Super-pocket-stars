@@ -131,6 +131,17 @@ const SALIDAS_DE_EMERGENCIA := ["despeje", "pase_largo", "tiro"]
 ## un movimiento y no como un salto de un fotograma al otro.
 const FACTOR_TROTE_PARADO := 0.45
 
+## El expulsado se va CAMINANDO hasta el lateral, a la altura del medio de
+## la cancha, y el juego no se reanuda hasta que sale. Antes desaparecia
+## de un fotograma al otro: se veia la tarjeta y en el cuadro siguiente
+## habia un jugador menos, sin que se entendiera quien se fue.
+const FACTOR_CAMINA_EXPULSADO := 0.65
+
+## Tope de ticks caminando. Si por lo que sea no llega —lo empujaron
+## fuera, quedo trabado— se lo saca igual: un partido no puede quedar
+## detenido para siempre esperando a que alguien salga.
+const TICKS_MAX_SALIENDO := 140
+
 ## El que va a ejecutar el balon parado se mueve MAS RAPIDO que el resto:
 ## los demas se acomodan, el va a buscar la pelota.
 const FACTOR_CORRE_A_LA_PELOTA := 1.0
@@ -500,6 +511,9 @@ static func crear_estado(home: Team, away: Team, rng: RandomNumberGenerator) -> 
 		# {de, a, local} del último pase completado: de quién salió, a qué
 		# clave llegó y de qué equipo. Lo consume _asistente_de().
 		"ultimo_pase": {},
+		# {clave, destino, ticks} mientras un expulsado camina hacia
+		# afuera. Ver _mandar_a_las_duchas.
+		"expulsado": {},
 		"eventos": [],
 		"fotogramas": [],
 		# Ver _accion: actos físicos del tick en curso, para la animación.
@@ -2287,7 +2301,14 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 					pelota["pos"] = bp_pos["pos"]
 		else:
 			var ejecutor_bp: int = int(estado.get("balon_parado", {}).get("ejecutor", -1))
+			# El expulsado no se acomoda para el saque: se esta yendo. Sin
+			# esto lo movian los dos —este bucle hacia su marca y la
+			# caminata hacia el lateral— y quedaba forcejeando en el medio
+			# sin llegar nunca a salir.
+			var saliendo_bp: int = int(estado.get("expulsado", {}).get("clave", -1))
 			for id in estado["jugadores"]:
+				if id == saliendo_bp:
+					continue
 				var e_p: Dictionary = estado["jugadores"][id]
 				# El que va a ejecutar no se "acomoda": va a BUSCAR la
 				# pelota, y va corriendo. Con el trote de los demas no
@@ -2296,6 +2317,9 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 				# del centro. Por eso no se veia quien pateaba.
 				var factor: float = FACTOR_CORRE_A_LA_PELOTA if id == ejecutor_bp 					else FACTOR_TROTE_PARADO
 				_mover_hacia(e_p, e_p.get("marca", e_p["pos"]), factor)
+		# El expulsado camina hacia afuera y el saque espera a que salga.
+		if not _sacar_al_expulsado(estado):
+			estado["detenido"] = maxi(int(estado["detenido"]), 1)
 		if int(estado["detenido"]) == 0:
 			_ejecutar_balon_parado(estado)
 			# Mismo motivo que en el paso 2: si el reinicio fue un pase,
@@ -2618,7 +2642,34 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 ## cancha según Team: entran los que ingresaron por un cambio, salen los
 ## sustituidos y los expulsados. Sin esto, un jugador que ya salió seguiría
 ## corriendo en la simulación y un expulsado jugaría igual.
+## Un paso de la caminata del expulsado. Devuelve true cuando ya no hay
+## nadie saliendo — que es la condicion para reanudar el juego.
+static func _sacar_al_expulsado(estado: Dictionary) -> bool:
+	var info: Dictionary = estado.get("expulsado", {})
+	if info.is_empty():
+		return true
+	var clave: int = int(info["clave"])
+	if not estado["jugadores"].has(clave):
+		estado["expulsado"] = {}
+		return true
+	info["ticks"] = int(info["ticks"]) + 1
+	var e: Dictionary = estado["jugadores"][clave]
+	var destino: Vector2 = info["destino"]
+	_mover_hacia(e, destino, FACTOR_CAMINA_EXPULSADO)
+	if e["pos"].distance_to(destino) > 0.5 and int(info["ticks"]) < TICKS_MAX_SALIENDO:
+		return false
+	# Ya salio (o se acabo la paciencia): recien ahora se lo saca de la
+	# lista de los 22 y el equipo queda con uno menos.
+	estado["expulsado"] = {}
+	_sincronizar_cambios(estado)
+	return true
+
+
 static func _sincronizar_cambios(estado: Dictionary) -> void:
+	# El que esta CAMINANDO hacia afuera se queda: todavia se lo tiene que
+	# ver salir. Lo saca _sacar_al_expulsado cuando llega a la linea, y
+	# recien ahi este barrido se lo lleva.
+	var saliendo: int = int(estado.get("expulsado", {}).get("clave", -1))
 	for es_local in [true, false]:
 		var equipo := _equipo_de(estado, es_local)
 		var deben_estar := {}
@@ -2631,6 +2682,8 @@ static func _sincronizar_cambios(estado: Dictionary) -> void:
 		for clave in estado["jugadores"].keys():
 			var e: Dictionary = estado["jugadores"][clave]
 			if e["equipo_local"] != es_local:
+				continue
+			if clave == saliendo:
 				continue
 			if not deben_estar.has(clave):
 				# El que entra hereda el SLOT del que sale (rol y
@@ -2951,8 +3004,28 @@ static func _chequear_tarjeta_repetido(estado: Dictionary, defensor: Dictionary,
 			# segundos de promedio y hasta 3,5. Se ve, porque el partido se
 			# dibuja.
 			if eq_d.expulsados_partido.has(int(quien["id"])):
-				_sincronizar_cambios(estado)
+				_mandar_a_las_duchas(estado, int(quien["id"]), eq_d == _equipo_de(estado, true))
 			return  # ya cobró: una entrada, una tarjeta
+
+
+## Arranca la salida del expulsado: se queda en la cancha caminando hacia
+## el lateral y el juego no se reanuda hasta que sale.
+##
+## Va al lateral MAS CERCANO, a la altura de la mitad de la cancha, que es
+## por donde sale un expulsado de verdad. Un par de metros pasada la linea
+## para que se lo vea salir y no quedar pisandola.
+static func _mandar_a_las_duchas(estado: Dictionary, jugador_id: int, es_local: bool) -> void:
+	var clave := clave_de(jugador_id, es_local)
+	if not estado["jugadores"].has(clave):
+		_sincronizar_cambios(estado)
+		return
+	var e: Dictionary = estado["jugadores"][clave]
+	var lado: float = 1.0 if e["pos"].y >= 0.0 else -1.0
+	estado["expulsado"] = {
+		"clave": clave,
+		"destino": Vector2(0.0, lado * (MEDIO_ANCHO + 2.5)),
+		"ticks": 0,
+	}
 
 
 ## Deja a un jugador fuera de la disputa un rato: es la penalización por
@@ -3852,6 +3925,8 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 	# 75'. Se reusa _procesar_cambios sin tocarlo.
 	var ventanas := [45, 60, 75]
 	for mitad in range(2):
+		if bool(estado.get("cancelado", false)):
+			break
 		_reiniciar_desde_medio(estado, mitad == 0, mitad + 1)
 		estado["minuto"] = MINUTOS_MOSTRADOS_POR_MITAD * mitad
 		for t in range(TICKS_POR_MITAD + TICKS_DE_DESCUENTO):
@@ -3862,6 +3937,12 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 			if t >= TICKS_POR_MITAD and not _hay_algo_sin_terminar(estado):
 				break
 			_tick(estado, con_fotogramas)
+			# Tres expulsados dejan al equipo en 8 y el partido se termina
+			# ahi: gana el rival, no importa como iba el marcador.
+			if MatchEngine.cancelar_si_falta_gente(
+					home, away, _minuto_int(estado), estado["log"], estado["eventos"]):
+				estado["cancelado"] = true
+				break
 			if not ventanas.is_empty() and estado["minuto"] >= ventanas[0]:
 				var minuto_ventana: int = ventanas.pop_front()
 				MatchEngine._procesar_cambios(home, away, minuto_ventana, true, estado["log"], estado["eventos"])

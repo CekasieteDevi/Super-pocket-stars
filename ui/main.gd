@@ -144,6 +144,7 @@ func _ready() -> void:
 	_construir_panel_historial(contenedor)
 	_construir_panel_copas(contenedor)
 	_construir_panel_vitrina(contenedor)
+	_construir_panel_laboratorio(contenedor)
 	_construir_panel_sponsors(contenedor)
 	_construir_panel_entrenamiento(contenedor)
 	_construir_panel_partido_animado(contenedor)
@@ -4963,6 +4964,119 @@ func _linea_del_mejor(r: Dictionary, clave: String, campo: String,
 	return fila
 
 
+## EL LABORATORIO: disparar una animación sin esperar a que salga sola.
+##
+## Una expulsión aparece en 1 de cada 2 partidos y un penal en 1 de cada
+## 5, así que para mirar cómo quedó una animación había que jugar hasta
+## que la suerte la trajera. Acá se elige la situación y se ve en el acto,
+## con el motor de verdad: se monta la jugada y se tickea igual que en un
+## partido, así que lo que se ve es exactamente lo que va a pasar.
+##
+## La lógica de montar cada situación vive en core/laboratorio.gd.
+var laboratorio_estado: Label
+
+
+func _construir_panel_laboratorio(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	padre.add_child(panel)
+	paneles["laboratorio"] = panel
+
+	laboratorio_estado = Label.new()
+	laboratorio_estado.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	laboratorio_estado.text = "Elegí una jugada y se reproduce con el motor de verdad, sin esperar a que salga en un partido."
+	laboratorio_estado.add_theme_color_override("font_color", Tema.SUAVE)
+	panel.add_child(laboratorio_estado)
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+	var lista := VBoxContainer.new()
+	lista.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lista.add_theme_constant_override("separation", 8)
+	scroll.add_child(lista)
+
+	for s in Laboratorio.SITUACIONES:
+		lista.add_child(_fila_de_laboratorio(s))
+
+
+func _fila_de_laboratorio(s: Dictionary) -> Control:
+	var tarjeta := Componentes.tarjeta()
+	var caja := HBoxContainer.new()
+	caja.add_theme_constant_override("separation", 12)
+	tarjeta.add_child(caja)
+
+	var datos := VBoxContainer.new()
+	datos.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	datos.add_theme_constant_override("separation", 2)
+	caja.add_child(datos)
+	var titulo := Label.new()
+	titulo.text = str(s["nombre"])
+	Tema.numero(titulo, Tema.TAM_BASE)
+	datos.add_child(titulo)
+	datos.add_child(_texto_suave(str(s["que"])))
+
+	var clave := str(s["clave"])
+	var btn := Button.new()
+	btn.text = "Reproducir"
+	btn.custom_minimum_size = Vector2(150, Tema.ALTO_TACTIL)
+	Tema.primario(btn)
+	btn.pressed.connect(func(): _reproducir_laboratorio(clave))
+	caja.add_child(btn)
+	return tarjeta
+
+
+func _mostrar_laboratorio() -> void:
+	_ocultar_todos()
+	paneles["laboratorio"].visible = true
+
+
+func _reproducir_laboratorio(clave: String) -> void:
+	# Tu club contra el próximo rival, o contra el primero de la liga que
+	# no seas vos: así se ve con tus colores y tus jugadores.
+	var local: Team = GameState.equipo_jugador
+	var visitante: Team = _proximo_rival()
+	if visitante == null:
+		for e in GameState.liga_jugador().equipos:
+			if e != local:
+				visitante = e
+				break
+	if visitante == null:
+		laboratorio_estado.text = "No encontré un rival contra quien montarla."
+		return
+
+	# Se juega con COPIAS de los dos equipos. El motor lesiona y suspende
+	# de verdad —_chequear_lesion escribe en lesiones y una roja suma una
+	# fecha a suspendidos, y reset_partido() no limpia ninguna de las dos—
+	# asi que sin copiar, mirar una animacion te podia romper un titular.
+	var copia_local := Team.cargar(local.guardar())
+	var copia_visitante := Team.cargar(visitante.guardar())
+
+	# Y con un rng aparte: montar una jugada consume numeros al azar y no
+	# tiene por que mover el resto de la partida.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = GameState.rng.randi()
+	var r := Laboratorio.generar(clave, copia_local, copia_visitante, rng)
+	if r["fotogramas"].is_empty():
+		laboratorio_estado.text = "Esa jugada no genero nada."
+		return
+
+	_ocultar_todos()
+	paneles["partido_animado"].visible = true
+	if resumen_partido != null:
+		resumen_partido.visible = false
+	var colores := ColoresClub.par_equipos(copia_local, copia_visitante)
+	vista_partido.iniciar(
+		r["fotogramas"], colores[0], colores[1],
+		copia_local.nombre, copia_visitante.nombre,
+		VistaPartido.construir_nombres(copia_local, copia_visitante),
+		VistaCancha.estado_desde_calidad(copia_local.calidad_cancha),
+		copia_local.color_short, copia_visitante.color_short)
+
+
 ## LA VITRINA: todo lo que ganó el club, arriba el resumen y abajo el
 ## detalle temporada por temporada.
 ##
@@ -6633,7 +6747,8 @@ const SECCIONES := [
 		["mercado", "Mercado"], ["libres", "Libres"], ["prestamos", "Prestamos"]]},
 	{"clave": "mas", "nombre": "Mas", "paneles": [
 		["noticias", "Noticias"], ["vitrina", "Vitrina"],
-		["seleccion", "Seleccion"], ["partida", "Partida"]]},
+		["seleccion", "Seleccion"], ["laboratorio", "Laboratorio"],
+		["partida", "Partida"]]},
 ]
 
 var seccion_actual: String = "club"
@@ -6775,6 +6890,7 @@ func _mostrar_panel_de_seccion(clave: String) -> void:
 		"mercado": "_mostrar_mercado", "libres": "_mostrar_libres",
 		"prestamos": "_mostrar_prestamos", "economia": "_mostrar_economia",
 		"noticias": "_mostrar_noticias", "vitrina": "_mostrar_vitrina",
+		"laboratorio": "_mostrar_laboratorio",
 		"sponsors": "_mostrar_sponsors", "seleccion": "_mostrar_seleccion",
 		"partida": "_mostrar_partida_panel",
 	}

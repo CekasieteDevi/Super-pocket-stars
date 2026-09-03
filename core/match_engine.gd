@@ -51,6 +51,50 @@ const TICKS_POR_MITAD := 90
 static var DUELOS_POR_ATAQUE := 11
 static var ACIERTOS_PARA_REMATAR := 6
 
+## Cuantos jugadores hace falta tener en cancha para poder seguir
+## jugando. Es la regla de verdad (Regla 3): con menos de siete, el
+## partido se abandona. O sea que con 7 se juega y con 6 se termina, y
+## como se arranca con 11 eso son CINCO expulsados.
+##
+## Cuando pasa, gana el rival y no importa como iba el marcador.
+const MINIMO_EN_CANCHA := 7
+const EXPULSADOS_QUE_CANCELAN := 12 - MINIMO_EN_CANCHA
+
+## Con que resultado queda un partido cancelado. Mismo criterio que la
+## multa por no presentarse (Liga._resolver_forfeit): 3-0 para el rival.
+const GOLES_POR_CANCELACION := 3
+
+
+## ¿Se quedo sin gente? Se mira la cantidad de expulsados y no el largo de
+## en_cancha porque en_cancha no se toca al expulsar: al expulsado lo
+## filtra puede_jugar(), que es lo que mira todo el resto del motor.
+static func sin_jugadores(equipo: Team) -> bool:
+	return equipo.expulsados_partido.size() >= EXPULSADOS_QUE_CANCELAN
+
+
+## Deja el marcador de un partido cancelado y anota el evento. Devuelve
+## true si efectivamente habia que cancelarlo.
+static func cancelar_si_falta_gente(home: Team, away: Team, minuto: int,
+		log: Array, eventos: Array) -> bool:
+	for par in [[home, away], [away, home]]:
+		var castigado: Team = par[0]
+		var rival: Team = par[1]
+		if not sin_jugadores(castigado):
+			continue
+		castigado.goles = 0
+		rival.goles = GOLES_POR_CANCELACION
+		log.append("min %d - PARTIDO CANCELADO: %s se quedo con %d jugadores, menos de los %d que hacen falta. Gana %s %d-0." % [
+			minuto, castigado.nombre, 11 - EXPULSADOS_QUE_CANCELAN, MINIMO_EN_CANCHA,
+			rival.nombre, GOLES_POR_CANCELACION])
+		eventos.append({
+			"minuto": minuto, "tipo": "cancelado", "equipo": castigado.nombre,
+			"rival": rival.nombre, "jugador_posicion": "",
+			"resultado": "sin_jugadores",
+		})
+		return true
+	return false
+
+
 const GRUPO_POR_ATRIBUTO := {
 	"pases": "tecnico", "control": "tecnico", "tiro": "tecnico",
 	"quite": "defensivo", "barrida": "defensivo",
@@ -289,9 +333,10 @@ static func _duelo(atacante: Dictionary, atacante_attr: String, equipo_atacante:
 ## igual que cualquier otra franja del partido. Factorizado para que
 ## simular() (2 mitades de 45') y simular_alargue() (2 tiempos de 15')
 ## compartan la misma lógica sin duplicar el bucle.
+## Devuelve true si el partido se cancelo por falta de jugadores.
 static func _jugar_periodo(equipo_inicial: Team, home: Team, away: Team, ticks: int,
 		minuto_offset: int, minutos_reales: float, rng: RandomNumberGenerator, con_log: bool,
-		log: Array, goles_log: Array, eventos: Array) -> void:
+		log: Array, goles_log: Array, eventos: Array) -> bool:
 	var posesion: Team = equipo_inicial
 	## Duelos jugados y ganados en el ataque en curso.
 	var duelos := 0
@@ -374,6 +419,12 @@ static func _jugar_periodo(equipo_inicial: Team, home: Team, away: Team, ticks: 
 			aciertos = 0
 			posesion.racha = 0
 			posesion = rival
+
+		# Se chequea DESPUES del duelo: la tarjeta sale ahi adentro, y el
+		# partido se corta en el momento, no al final del periodo.
+		if cancelar_si_falta_gente(home, away, minuto, log, eventos):
+			return true
+	return false
 
 
 ## §8.7: hasta 5 cambios entre los dos equipos, sacando primero a los
@@ -459,8 +510,12 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_log:
 	var goles_log := []
 	var eventos := []
 
-	_jugar_periodo(home, home, away, TICKS_POR_MITAD, 0, 45.0, rng, con_log, log, goles_log, eventos)
-	_procesar_cambios(home, away, 45, con_log, log, eventos)  # entretiempo
+	# Cada periodo avisa si el partido se canceló por falta de jugadores;
+	# ahi se corta y no se juega nada mas.
+	var cancelado := _jugar_periodo(home, home, away, TICKS_POR_MITAD, 0, 45.0,
+		rng, con_log, log, goles_log, eventos)
+	if not cancelado:
+		_procesar_cambios(home, away, 45, con_log, log, eventos)  # entretiempo
 
 	# El segundo tiempo se parte en 3 tandas de 15' reales (30 ticks cada
 	# una, TICKS_POR_MITAD/3) para poder meter dos ventanas de cambio más
@@ -472,11 +527,17 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_log:
 	# mismo equipo, ningún lado termina con más saques que el otro por el
 	# solo hecho de que existan las ventanas de cambio.
 	var tanda := int(TICKS_POR_MITAD / 3.0)
-	_jugar_periodo(away, home, away, tanda, 45, 15.0, rng, con_log, log, goles_log, eventos)
-	_procesar_cambios(home, away, 60, con_log, log, eventos)
-	_jugar_periodo(home, home, away, tanda, 60, 15.0, rng, con_log, log, goles_log, eventos)
-	_procesar_cambios(home, away, 75, con_log, log, eventos)
-	_jugar_periodo(away, home, away, TICKS_POR_MITAD - 2 * tanda, 75, 15.0, rng, con_log, log, goles_log, eventos)
+	if not cancelado:
+		cancelado = _jugar_periodo(away, home, away, tanda, 45, 15.0,
+			rng, con_log, log, goles_log, eventos)
+	if not cancelado:
+		_procesar_cambios(home, away, 60, con_log, log, eventos)
+		cancelado = _jugar_periodo(home, home, away, tanda, 60, 15.0,
+			rng, con_log, log, goles_log, eventos)
+	if not cancelado:
+		_procesar_cambios(home, away, 75, con_log, log, eventos)
+		_jugar_periodo(away, home, away, TICKS_POR_MITAD - 2 * tanda, 75, 15.0,
+			rng, con_log, log, goles_log, eventos)
 
 	return {
 		"goles_local": home.goles,
