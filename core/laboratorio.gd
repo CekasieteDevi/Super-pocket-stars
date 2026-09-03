@@ -32,6 +32,13 @@ const TICKS_TOPE := 200
 ## partido.
 const TICKS_PREVIOS := 6
 
+## Semilla FIJA. Una jugada del laboratorio tiene que dar siempre lo
+## mismo: se viene a mirar como quedo la animacion, y si el resultado
+## cambia entre una reproduccion y la siguiente no se puede comparar nada
+## —ni saber si un cambio la mejoro—. Con esto, "Gol y festejo" es
+## siempre el mismo gol.
+const SEMILLA := 20260903
+
 ## Las situaciones que se pueden pedir: clave, nombre y qué se ve.
 const SITUACIONES := [
 	{"clave": "expulsion", "nombre": "Expulsión",
@@ -175,7 +182,33 @@ static func _montar_penal(estado: Dictionary) -> void:
 	MotorEspacial._cobrar_penal(estado, true, MotorEspacial._minuto_int(estado))
 
 
+## Corner con el area POBLADA.
+##
+## _saque_de_esquina reparte las marcas, pero los jugadores tienen que
+## trotar hasta ellas y en una jugada montada a mano arrancan en el
+## circulo central, a sesenta metros: cuando el ejecutor la pateaba no
+## habia llegado nadie y la tiraba corta o para atras, porque no tenia a
+## quien buscar. Se los pone ya cerca del area y de ahi terminan de
+## acomodarse solos.
 static func _montar_corner(estado: Dictionary) -> void:
+	var arco := MotorEspacial.arco_rival(true)
+	var hacia: float = -1.0 if arco.x > 0.0 else 1.0
+	# Adentro del area grande, repartidos a lo ancho.
+	var i := 0
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		if str(e["rol"]) == "ARQ":
+			continue
+		var dentro: float = arco.x + hacia * (6.0 + 8.0 * float(i % 3))
+		var ancho: float = -14.0 + 5.0 * float(i % 6)
+		if e["equipo_local"]:
+			e["pos"] = Vector2(dentro, ancho)
+		else:
+			# Los que defienden, un poco mas cerca de su arco.
+			e["pos"] = Vector2(dentro + hacia * 2.5, ancho + 2.0)
+		e["vel"] = Vector2.ZERO
+		e["rapidez"] = 0.0
+		i += 1
 	MotorEspacial._saque_de_esquina(estado, true, true)
 
 
@@ -242,11 +275,21 @@ static func _montar_lateral(estado: Dictionary) -> void:
 	MotorEspacial._lateral(estado, Vector2(10.0, MotorEspacial.MEDIO_ANCHO), true)
 
 
-## Remate desde el borde del área. Se le pone la pelota al mejor rematador
-## del local ahí y se lo deja decidir: si la mete, se ve el festejo y el
-## saque del medio.
+## Gol garantizado desde el borde del área.
+##
+## Antes se llamaba a _resolver_tiro, que tira el duelo contra el arquero:
+## el remate se podia ir afuera o lo podian atajar, y el clip que se pidio
+## —"gol y festejo"— no mostraba ni el gol ni el festejo. El primer
+## intento de arreglarlo fue reintentar hasta que entrara, y eso era peor:
+## cada intento fallido dejaba sus propios eventos, asi que el relato
+## cantaba cosas de mas.
+##
+## Ahora se saltea el duelo y se llama derecho a _lanzar_remate con
+## tipo "gol". La pelota viaja igual, el arquero se tira igual y el
+## festejo es el de siempre: lo unico que no pasa es la tirada.
 static func _montar_gol(estado: Dictionary) -> void:
 	var eq_a: Team = MotorEspacial._equipo_de(estado, true)
+	var eq_d: Team = MotorEspacial._equipo_de(estado, false)
 	var arco := MotorEspacial.arco_rival(true)
 	var hacia: float = -1.0 if arco.x > 0.0 else 1.0
 	var punto := Vector2(arco.x + hacia * 14.0, 2.0)
@@ -259,26 +302,19 @@ static func _montar_gol(estado: Dictionary) -> void:
 	var clave := MotorEspacial.clave_de(int(mejor["id"]), true)
 	if not estado["jugadores"].has(clave):
 		return
-	estado["jugadores"][clave]["pos"] = punto
+	var poseedor: Dictionary = estado["jugadores"][clave]
+	poseedor["pos"] = punto
 	MotorEspacial._entregar_pelota(estado, clave)
 	estado["pelota"]["pos"] = punto
-	# Que sea gol de verdad: si el remate se va afuera o lo atajan, el clip
-	# que se pidio —"gol y festejo"— no muestra ni el gol ni el festejo. Se
-	# reintenta hasta que entre.
-	var goles_antes: int = eq_a.goles
-	for intento in range(40):
-		MotorEspacial._resolver_tiro(estado, estado["jugadores"][clave], mejor)
-		# El remate viaja: hay que dejarlo llegar para saber si entro.
-		for t in range(24):
-			MotorEspacial._tick(estado, true)
-			if eq_a.goles > goles_antes:
-				break
-		if eq_a.goles > goles_antes:
-			return
-		# No entro: se vuelve a poner la pelota y se repite.
-		estado["jugadores"][clave]["pos"] = punto
-		MotorEspacial._entregar_pelota(estado, clave)
-		estado["pelota"]["pos"] = punto
+
+	var arquero := eq_d.arquero()
+	MotorEspacial._lanzar_remate(estado, poseedor, {
+		"tipo": "gol",
+		"es_local": true, "clave": clave, "rol": poseedor["rol"],
+		"jugador": mejor,
+		"agarre": float(arquero.get("atributos", {}).get("agarre", 50)) / 100.0,
+		"dist": punto.distance_to(arco),
+	})
 
 
 static func _montar_saque_arco(estado: Dictionary) -> void:

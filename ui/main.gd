@@ -1619,13 +1619,25 @@ func _construir_panel_partido_animado(padre: Control) -> void:
 	vista_partido = VistaPartido.new()
 	vista_partido.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	panel.add_child(vista_partido)
-	vista_partido.hud.menu_pedido.connect(_volver_al_club)
+	vista_partido.hud.menu_pedido.connect(func():
+		if viendo_laboratorio:
+			viendo_laboratorio = false
+			_mostrar_laboratorio()
+		else:
+			_volver_al_club())
 	# Al terminar NO se cierra solo. Aparece el resumen encima de la
 	# cancha y de ahi se sale a mano: cerrar de una no dejaba ver el
 	# ultimo minuto ni enterarse de como termino.
 	vista_partido.terminado.connect(func():
-		if paneles["partido_animado"].visible:
-			_mostrar_resumen_partido())
+		if not paneles["partido_animado"].visible:
+			return
+		# Un clip del laboratorio no tiene resumen de partido que mostrar:
+		# se vuelve a la lista para poder tirar la jugada siguiente.
+		if viendo_laboratorio:
+			viendo_laboratorio = false
+			_mostrar_laboratorio()
+			return
+		_mostrar_resumen_partido())
 
 	_construir_resumen_partido(panel)
 
@@ -4974,6 +4986,9 @@ func _linea_del_mejor(r: Dictionary, clave: String, campo: String,
 ##
 ## La lógica de montar cada situación vive en core/laboratorio.gd.
 var laboratorio_estado: Label
+## Si el clip que se esta viendo salio del laboratorio: al terminar se
+## vuelve ahi y no al club.
+var viendo_laboratorio := false
 
 
 func _construir_panel_laboratorio(padre: Control) -> void:
@@ -5055,15 +5070,20 @@ func _reproducir_laboratorio(clave: String) -> void:
 	var copia_local := Team.cargar(local.guardar())
 	var copia_visitante := Team.cargar(visitante.guardar())
 
-	# Y con un rng aparte: montar una jugada consume numeros al azar y no
-	# tiene por que mover el resto de la partida.
+	# Rng aparte y con SEMILLA FIJA: montar una jugada no tiene por que
+	# mover el resto de la partida, y ademas la misma jugada tiene que dar
+	# siempre lo mismo. Si el resultado cambia entre una reproduccion y la
+	# siguiente no se puede comparar nada ni saber si un cambio la mejoro.
 	var rng := RandomNumberGenerator.new()
-	rng.seed = GameState.rng.randi()
+	rng.seed = Laboratorio.SEMILLA
 	var r := Laboratorio.generar(clave, copia_local, copia_visitante, rng)
 	if r["fotogramas"].is_empty():
 		laboratorio_estado.text = "Esa jugada no genero nada."
 		return
 
+	# Al terminar (o al tocar Menu) se vuelve ACA, no al club: se esta
+	# probando animaciones y lo normal es querer ver la siguiente.
+	viendo_laboratorio = true
 	_ocultar_todos()
 	paneles["partido_animado"].visible = true
 	if resumen_partido != null:
