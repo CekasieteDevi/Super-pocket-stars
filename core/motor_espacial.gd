@@ -137,10 +137,31 @@ const FACTOR_TROTE_PARADO := 0.45
 ## habia un jugador menos, sin que se entendiera quien se fue.
 const FACTOR_CAMINA_EXPULSADO := 0.65
 
+## El que ENTRA por un cambio no camina: entra al trote a ocupar su lugar.
+const FACTOR_ENTRA_SUPLENTE := 0.9
+
+## Y el que SALE por un cambio tampoco: se va al trote. Solo el expulsado
+## camina, que ademas es como se ve en la cancha — uno se va rapido y sin
+## drama y el otro se toma su tiempo.
+const FACTOR_SALE_CAMBIADO := 1.0
+
+## Por donde se sale y se entra: el lateral, a la altura de la mitad de la
+## cancha. Es por donde salen y entran en el futbol de verdad, y tener un
+## solo punto hace que se lea la escena — el que sale y el que entra se
+## cruzan ahi.
+static func _punto_de_salida(desde: Vector2) -> Vector2:
+	var lado: float = 1.0 if desde.y >= 0.0 else -1.0
+	return Vector2(0.0, lado * (MEDIO_ANCHO + 2.5))
+
 ## Tope de ticks caminando. Si por lo que sea no llega —lo empujaron
 ## fuera, quedo trabado— se lo saca igual: un partido no puede quedar
 ## detenido para siempre esperando a que alguien salga.
 const TICKS_MAX_SALIENDO := 140
+
+## Tope de ticks que se pueden reponer por entradas y salidas en una
+## mitad. Es un seguro: sin el, un cambio que no termina nunca alargaria
+## el partido sin fin.
+const TICKS_REPUESTOS_TOPE := 200
 
 ## El que va a ejecutar el balon parado se mueve MAS RAPIDO que el resto:
 ## los demas se acomodan, el va a buscar la pelota.
@@ -511,9 +532,11 @@ static func crear_estado(home: Team, away: Team, rng: RandomNumberGenerator) -> 
 		# {de, a, local} del último pase completado: de quién salió, a qué
 		# clave llegó y de qué equipo. Lo consume _asistente_de().
 		"ultimo_pase": {},
-		# {clave, destino, ticks} mientras un expulsado camina hacia
-		# afuera. Ver _mandar_a_las_duchas.
-		"expulsado": {},
+		# Los que estan SALIENDO de la cancha (expulsados o cambiados) y
+		# los que estan ENTRANDO desde el lateral. Mientras haya alguno,
+		# el juego espera. Ver _avanzar_entradas_y_salidas.
+		"saliendo": [],
+		"entrando": [],
 		"eventos": [],
 		"fotogramas": [],
 		# Ver _accion: actos físicos del tick en curso, para la animación.
@@ -2305,9 +2328,8 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 			# esto lo movian los dos —este bucle hacia su marca y la
 			# caminata hacia el lateral— y quedaba forcejeando en el medio
 			# sin llegar nunca a salir.
-			var saliendo_bp: int = int(estado.get("expulsado", {}).get("clave", -1))
 			for id in estado["jugadores"]:
-				if id == saliendo_bp:
+				if _en_transito(estado, id):
 					continue
 				var e_p: Dictionary = estado["jugadores"][id]
 				# El que va a ejecutar no se "acomoda": va a BUSCAR la
@@ -2317,8 +2339,9 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 				# del centro. Por eso no se veia quien pateaba.
 				var factor: float = FACTOR_CORRE_A_LA_PELOTA if id == ejecutor_bp 					else FACTOR_TROTE_PARADO
 				_mover_hacia(e_p, e_p.get("marca", e_p["pos"]), factor)
-		# El expulsado camina hacia afuera y el saque espera a que salga.
-		if not _sacar_al_expulsado(estado):
+		# El que sale camina hacia afuera y el que entra trota a su lugar;
+		# el saque espera a que terminen.
+		if not _avanzar_entradas_y_salidas(estado):
 			estado["detenido"] = maxi(int(estado["detenido"]), 1)
 		if int(estado["detenido"]) == 0:
 			_ejecutar_balon_parado(estado)
@@ -2642,34 +2665,55 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 ## cancha según Team: entran los que ingresaron por un cambio, salen los
 ## sustituidos y los expulsados. Sin esto, un jugador que ya salió seguiría
 ## corriendo en la simulación y un expulsado jugaría igual.
-## Un paso de la caminata del expulsado. Devuelve true cuando ya no hay
-## nadie saliendo — que es la condicion para reanudar el juego.
-static func _sacar_al_expulsado(estado: Dictionary) -> bool:
-	var info: Dictionary = estado.get("expulsado", {})
-	if info.is_empty():
-		return true
-	var clave: int = int(info["clave"])
-	if not estado["jugadores"].has(clave):
-		estado["expulsado"] = {}
-		return true
-	info["ticks"] = int(info["ticks"]) + 1
-	var e: Dictionary = estado["jugadores"][clave]
-	var destino: Vector2 = info["destino"]
-	_mover_hacia(e, destino, FACTOR_CAMINA_EXPULSADO)
-	if e["pos"].distance_to(destino) > 0.5 and int(info["ticks"]) < TICKS_MAX_SALIENDO:
-		return false
-	# Ya salio (o se acabo la paciencia): recien ahora se lo saca de la
-	# lista de los 22 y el equipo queda con uno menos.
-	estado["expulsado"] = {}
-	_sincronizar_cambios(estado)
-	return true
+## Un paso de las salidas y las entradas. Devuelve true cuando no queda
+## nadie en el medio — que es la condicion para reanudar el juego.
+##
+## El que sale camina hasta el lateral y recien ahi se lo saca de los 22:
+## sacarlo antes es lo que hacia que los cambios y las expulsiones fueran
+## un jugador que desaparece de un fotograma al otro. El que entra aparece
+## en ese mismo punto del lateral y trota hasta el lugar que dejo libre el
+## que salio.
+static func _avanzar_entradas_y_salidas(estado: Dictionary) -> bool:
+	var siguen := []
+	for s in estado["saliendo"]:
+		var clave: int = int(s["clave"])
+		if not estado["jugadores"].has(clave):
+			continue
+		s["ticks"] = int(s["ticks"]) + 1
+		var e: Dictionary = estado["jugadores"][clave]
+		var destino: Vector2 = s["destino"]
+		var paso: float = FACTOR_CAMINA_EXPULSADO if bool(s.get("expulsado", false)) 			else FACTOR_SALE_CAMBIADO
+		_mover_hacia(e, destino, paso)
+		if e["pos"].distance_to(destino) > 0.5 and int(s["ticks"]) < TICKS_MAX_SALIENDO:
+			siguen.append(s)
+			continue
+		# Salio: recien ahora deja de estar en la cancha.
+		estado["jugadores"].erase(clave)
+	estado["saliendo"] = siguen
+
+	var entrando := []
+	for en in estado["entrando"]:
+		var clave_e: int = int(en["clave"])
+		if not estado["jugadores"].has(clave_e):
+			continue
+		en["ticks"] = int(en["ticks"]) + 1
+		var e2: Dictionary = estado["jugadores"][clave_e]
+		var destino_e: Vector2 = en["destino"]
+		_mover_hacia(e2, destino_e, FACTOR_ENTRA_SUPLENTE)
+		if e2["pos"].distance_to(destino_e) > 1.5 and int(en["ticks"]) < TICKS_MAX_SALIENDO:
+			entrando.append(en)
+	estado["entrando"] = entrando
+
+	return estado["saliendo"].is_empty() and estado["entrando"].is_empty()
 
 
+## Pone la cancha al dia con quien tiene que estar jugando: saca a los
+## que salieron (expulsados o cambiados) y mete a los que entraron.
+##
+## No teletransporta: al que sale lo manda a caminar hacia el lateral y al
+## que entra lo pone en ese mismo punto para que trote a su lugar. El
+## juego espera a que terminen (ver _avanzar_entradas_y_salidas).
 static func _sincronizar_cambios(estado: Dictionary) -> void:
-	# El que esta CAMINANDO hacia afuera se queda: todavia se lo tiene que
-	# ver salir. Lo saca _sacar_al_expulsado cuando llega a la linea, y
-	# recien ahi este barrido se lo lleva.
-	var saliendo: int = int(estado.get("expulsado", {}).get("clave", -1))
 	for es_local in [true, false]:
 		var equipo := _equipo_de(estado, es_local)
 		var deben_estar := {}
@@ -2678,21 +2722,19 @@ static func _sincronizar_cambios(estado: Dictionary) -> void:
 				continue
 			deben_estar[clave_de(j["id"], es_local)] = j
 
-		var libres := []  # posiciones que dejaron los que salieron
+		var libres := []  # los lugares que dejan los que se van
 		for clave in estado["jugadores"].keys():
 			var e: Dictionary = estado["jugadores"][clave]
 			if e["equipo_local"] != es_local:
 				continue
-			if clave == saliendo:
+			if _en_transito(estado, clave):
 				continue
 			if not deben_estar.has(clave):
 				# El que entra hereda el SLOT del que sale (rol y
 				# casillero), no el de su propio puesto: un cambio ocupa
 				# el lugar que se libera, no inventa uno nuevo.
 				libres.append({"pos": e["pos"], "rol": e["rol"], "base": e["base"]})
-				if estado["pelota"]["poseedor_id"] == clave:
-					_dar_pelota_al_arquero(estado, not es_local)
-				estado["jugadores"].erase(clave)
+				_empezar_salida(estado, clave)
 
 		for clave in deben_estar:
 			if estado["jugadores"].has(clave):
@@ -2706,13 +2748,26 @@ static func _sincronizar_cambios(estado: Dictionary) -> void:
 				base = s_def[0]
 				if not es_local:
 					base = Vector2(-base.x, base.y)
-			var pos: Vector2 = hueco["pos"] if hueco.has("pos") else base
+			# Adonde va: al lugar que dejo el que salio. Y de donde sale:
+			# del lateral, como en el futbol.
+			var destino: Vector2 = hueco["pos"] if hueco.has("pos") else base
+			var entra_por := _punto_de_salida(destino)
 			estado["jugadores"][clave] = {
 				"clave": clave, "jugador_id": j["id"], "equipo_local": es_local,
-				"rol": rol, "base": base, "pos": pos, "vel": Vector2.ZERO,
+				"rol": rol, "base": base, "pos": entra_por, "vel": Vector2.ZERO,
 				"objetivo": base, "vel_max": _vel_max(j),
 				"aceleracion": _aceleracion(j), "rapidez": 0.0,
 			}
+			estado["entrando"].append({
+				"clave": clave, "destino": destino, "ticks": 0,
+			})
+
+	# Si arranco alguna salida o entrada, el juego se DETIENE: en el
+	# futbol un cambio se hace con la pelota parada, y ademas es lo que
+	# hace que se vea. Sin esto los que estan en transito quedan quietos
+	# —el bucle normal no los mueve— mientras el partido sigue de largo.
+	if not (estado["saliendo"].is_empty() and estado["entrando"].is_empty()):
+		estado["detenido"] = maxi(int(estado.get("detenido", 0)), 1)
 
 
 ## ¿El defensor que se metió en la línea de pase llega a cortarla? Duelo
@@ -3015,17 +3070,37 @@ static func _chequear_tarjeta_repetido(estado: Dictionary, defensor: Dictionary,
 ## por donde sale un expulsado de verdad. Un par de metros pasada la linea
 ## para que se lo vea salir y no quedar pisandola.
 static func _mandar_a_las_duchas(estado: Dictionary, jugador_id: int, es_local: bool) -> void:
-	var clave := clave_de(jugador_id, es_local)
+	_empezar_salida(estado, clave_de(jugador_id, es_local), true)
+
+
+## Pone a alguien a caminar hacia afuera. Lo usan la expulsion y el cambio:
+## en los dos casos el que se va sale por el lateral y el juego lo espera.
+static func _empezar_salida(estado: Dictionary, clave: int, expulsado: bool = false) -> void:
 	if not estado["jugadores"].has(clave):
-		_sincronizar_cambios(estado)
 		return
-	var e: Dictionary = estado["jugadores"][clave]
-	var lado: float = 1.0 if e["pos"].y >= 0.0 else -1.0
-	estado["expulsado"] = {
+	for s in estado["saliendo"]:
+		if int(s["clave"]) == clave:
+			return
+	if int(estado["pelota"]["poseedor_id"]) == clave:
+		_dar_pelota_al_arquero(estado, not bool(estado["jugadores"][clave]["equipo_local"]))
+	estado["saliendo"].append({
 		"clave": clave,
-		"destino": Vector2(0.0, lado * (MEDIO_ANCHO + 2.5)),
+		"destino": _punto_de_salida(estado["jugadores"][clave]["pos"]),
 		"ticks": 0,
-	}
+		"expulsado": expulsado,
+	})
+
+
+## ¿Esta clave esta yendose o entrando? Los que estan en el medio de eso
+## no se acomodan para el saque ni los toca el barrido de cambios.
+static func _en_transito(estado: Dictionary, clave: int) -> bool:
+	for s in estado.get("saliendo", []):
+		if int(s["clave"]) == clave:
+			return true
+	for e in estado.get("entrando", []):
+		if int(e["clave"]) == clave:
+			return true
+	return false
 
 
 ## Deja a un jugador fuera de la disputa un rato: es la penalización por
@@ -3802,14 +3877,15 @@ static func _push_fotograma(estado: Dictionary, eventos_del_tick: Array = []) ->
 			"equipo_local": e["equipo_local"], "rol": e["rol"],
 		})
 	# Adonde tiene que mirar la camara. Normalmente null y la vista sigue
-	# la pelota; con un expulsado caminando hacia afuera la accion es el
-	# jugador y no la pelota, que se quedo quieta en el punto de la falta
-	# a 30 metros de ahi.
+	# la pelota; con alguien saliendo o entrando la accion es el jugador y
+	# no la pelota, que se quedo quieta a treinta metros de ahi.
 	var foco = null
-	var saliendo: int = int(estado.get("expulsado", {}).get("clave", -1))
-	if saliendo != -1 and estado["jugadores"].has(saliendo):
-		var e_f: Dictionary = estado["jugadores"][saliendo]
-		foco = {"x": e_f["pos"].x, "y": e_f["pos"].y}
+	var en_transito: Array = estado.get("saliendo", []) + estado.get("entrando", [])
+	if not en_transito.is_empty():
+		var clave_f: int = int(en_transito[0]["clave"])
+		if estado["jugadores"].has(clave_f):
+			var e_f: Dictionary = estado["jugadores"][clave_f]
+			foco = {"x": e_f["pos"].x, "y": e_f["pos"].y}
 	estado["fotogramas"].append({
 		"tick": estado["tick"],
 		"minuto": estado["minuto"],
@@ -3939,14 +4015,25 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 			break
 		_reiniciar_desde_medio(estado, mitad == 0, mitad + 1)
 		estado["minuto"] = MINUTOS_MOSTRADOS_POR_MITAD * mitad
-		for t in range(TICKS_POR_MITAD + TICKS_DE_DESCUENTO):
+		# `jugados` cuenta el tiempo DE JUEGO: los ticks que se van en una
+		# entrada o una salida no cuentan, igual que el arbitro repone lo
+		# que se pierde en un cambio. Sin esto, animar los cambios le
+		# comia el 10% del partido y los goles bajaban de 2,36 a 1,84.
+		var jugados := 0
+		var reloj := 0
+		while jugados < TICKS_POR_MITAD + TICKS_DE_DESCUENTO 				and reloj < TICKS_POR_MITAD + TICKS_DE_DESCUENTO + TICKS_REPUESTOS_TOPE:
 			# DESCUENTO. El tiempo no se termina con una pelota parada sin
 			# ejecutar: se cobro un penal y el partido se acabo antes de
 			# que lo patearan. Pasados los 45, se sigue solo mientras haya
 			# algo pendiente, y como mucho hasta el tope de descuento.
-			if t >= TICKS_POR_MITAD and not _hay_algo_sin_terminar(estado):
+			if jugados >= TICKS_POR_MITAD and not _hay_algo_sin_terminar(estado):
 				break
+			var en_transito: bool = not (estado["saliendo"].is_empty()
+				and estado["entrando"].is_empty())
 			_tick(estado, con_fotogramas)
+			reloj += 1
+			if not en_transito:
+				jugados += 1
 			# Tres expulsados dejan al equipo en 8 y el partido se termina
 			# ahi: gana el rival, no importa como iba el marcador.
 			if MatchEngine.cancelar_si_falta_gente(

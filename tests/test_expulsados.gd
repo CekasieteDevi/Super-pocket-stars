@@ -18,6 +18,8 @@ func _init() -> void:
 	var fallas := 0
 	fallas += _test_camina_y_sale()
 	fallas += _test_sin_gente_se_cancela()
+	fallas += _test_los_cambios_se_ven()
+	fallas += _test_el_tiempo_detenido_se_repone()
 	print("FALLOS=%d" % fallas)
 	quit()
 
@@ -172,3 +174,94 @@ func _test_sin_gente_se_cancela() -> int:
 			eventos.size(), log.size()])
 		fallas += 1
 	return fallas
+
+
+## Un cambio no es un jugador que desaparece y otro que aparece: el que
+## sale se va por el lateral y el suplente entra por ahi mismo.
+func _test_los_cambios_se_ven() -> int:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = SEED
+	var casa := Team.generar("Casa", rng, 0)
+	var visita := Team.generar("Visita", rng, 400)
+	var propio := RandomNumberGenerator.new()
+	propio.seed = Laboratorio.SEMILLA
+	var r := Laboratorio.generar("cambio", casa, visita, propio)
+	var fg: Array = r["fotogramas"]
+	var primeros := {}
+	for j in fg[0]["jugadores"]:
+		primeros[int(j["id"])] = true
+	var ultimos := {}
+	for j in fg[fg.size() - 1]["jugadores"]:
+		ultimos[int(j["id"])] = true
+
+	var fallas := 0
+	var salieron := []
+	var entraron := []
+	for k in primeros:
+		if not ultimos.has(k):
+			salieron.append(k)
+	for k in ultimos:
+		if not primeros.has(k):
+			entraron.append(k)
+	if salieron.size() != 2 or entraron.size() != 2:
+		print("FALLA: el clip del cambio tiene %d que salen y %d que entran (se esperan 2 y 2)." % [
+			salieron.size(), entraron.size()])
+		return 1
+	if ultimos.size() != 22:
+		print("FALLA: terminan %d en cancha y tienen que ser 22." % ultimos.size())
+		fallas += 1
+
+	# El que sale tiene que CRUZAR la linea, no evaporarse en el medio.
+	for clave in salieron:
+		var ultima := Vector2.ZERO
+		for f in fg:
+			for j in f["jugadores"]:
+				if int(j["id"]) == clave:
+					ultima = Vector2(float(j["x"]), float(j["y"]))
+		if absf(ultima.y) < MotorEspacial.MEDIO_ANCHO:
+			print("FALLA: el que sale desaparecio en y=%.1f, adentro de la cancha." % ultima.y)
+			fallas += 1
+
+	# Y el que entra tiene que aparecer AFUERA y terminar adentro.
+	for clave in entraron:
+		var primera := Vector2.ZERO
+		var ultima2 := Vector2.ZERO
+		var visto := false
+		for f in fg:
+			for j in f["jugadores"]:
+				if int(j["id"]) != clave:
+					continue
+				if not visto:
+					primera = Vector2(float(j["x"]), float(j["y"]))
+					visto = true
+				ultima2 = Vector2(float(j["x"]), float(j["y"]))
+		if absf(primera.y) < MotorEspacial.MEDIO_ANCHO:
+			print("FALLA: el suplente aparecio adentro de la cancha (y=%.1f)." % primera.y)
+			fallas += 1
+		if absf(ultima2.y) >= MotorEspacial.MEDIO_ANCHO:
+			print("FALLA: el suplente se quedo afuera (y=%.1f)." % ultima2.y)
+			fallas += 1
+	if fallas == 0:
+		print("OK: en el cambio salen 2 cruzando la linea y entran 2 desde afuera.")
+	return fallas
+
+
+## Animar los cambios detiene el juego, y ese tiempo se REPONE: si no, se
+## come el 10% del partido y los goles bajan de 2,36 a 1,84.
+func _test_el_tiempo_detenido_se_repone() -> int:
+	var goles := 0
+	var muestras := 15
+	for i in range(muestras):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = SEED + i
+		var casa := Team.generar("Casa", rng, 0)
+		var visita := Team.generar("Visita", rng, 400)
+		var r := MotorEspacial.simular(casa, visita, rng, false)
+		goles += int(r["goles_local"]) + int(r["goles_visitante"])
+	var media: float = float(goles) / muestras
+	# La referencia son los 2,3-2,4 que daba antes de animar los cambios.
+	if media >= 1.9:
+		print("OK: %.2f goles por partido, el tiempo de los cambios se repone." % media)
+		return 0
+	print("FALLA: %.2f goles por partido; animar los cambios le esta comiendo tiempo al juego." % media)
+	return 1

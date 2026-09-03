@@ -55,6 +55,8 @@ const SITUACIONES := [
 		"que": "Remate al arco desde el borde del área y el saque del medio posterior."},
 	{"clave": "saque_arco", "nombre": "Saque de arco",
 		"que": "La pelota se va por el fondo y el arquero la pone en juego."},
+	{"clave": "cambio", "nombre": "Cambio",
+		"que": "Se detiene el juego, el que sale camina hasta el lateral y el suplente entra por ahí mismo a ocupar su lugar."},
 ]
 
 
@@ -109,6 +111,8 @@ static func generar(clave: String, local: Team, visitante: Team,
 			_montar_gol(estado)
 		"saque_arco":
 			_montar_saque_arco(estado)
+		"cambio":
+			_montar_cambio(estado)
 
 	MotorEspacial._push_fotograma(estado, estado["eventos"].slice(eventos_antes))
 
@@ -319,3 +323,35 @@ static func _montar_gol(estado: Dictionary) -> void:
 
 static func _montar_saque_arco(estado: Dictionary) -> void:
 	MotorEspacial._dar_pelota_al_arquero(estado, false, true)
+
+
+## Un cambio de cada equipo a la vez: sale un titular y entra un suplente,
+## los dos por el lateral. Se hacen los dos juntos a proposito — es lo que
+## pasa en un partido cuando los dos tecnicos mueven en la misma pausa, y
+## asi se ve que la mecanica sirve para los dos equipos.
+static func _montar_cambio(estado: Dictionary) -> void:
+	for es_local in [true, false]:
+		var equipo: Team = MotorEspacial._equipo_de(estado, es_local)
+		if equipo.banco.is_empty():
+			continue
+		# Sale un jugador de campo (el arquero no) y entra el primero del
+		# banco que pueda jugar.
+		var sale := {}
+		for j in equipo.jugadores_en_cancha():
+			if str(j["posicion"]) != "ARQ":
+				sale = j
+				break
+		var entra := {}
+		for j in equipo.banco:
+			if equipo.puede_jugar(int(j["id"])):
+				entra = j
+				break
+		if sale.is_empty() or entra.is_empty():
+			continue
+		equipo.sustituir(int(sale["id"]), int(entra["id"]))
+		estado["eventos"].append({
+			"minuto": MotorEspacial._minuto_int(estado), "tipo": "cambio",
+			"equipo": equipo.nombre, "rival": "",
+			"jugador_posicion": str(sale["posicion"]), "resultado": "entra",
+		})
+	MotorEspacial._sincronizar_cambios(estado)
