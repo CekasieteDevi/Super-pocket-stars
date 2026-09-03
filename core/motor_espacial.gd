@@ -2943,6 +2943,15 @@ static func _chequear_tarjeta_repetido(estado: Dictionary, defensor: Dictionary,
 		var antes: int = estado["eventos"].size()
 		MatchEngine._chequear_tarjeta(quien, eq_d, eq_a, estado["rng"], estado["eventos"], minuto, true, estado["log"])
 		if estado["eventos"].size() > antes:
+			# Si fue roja, se lo saca de la cancha AHORA. La limpieza
+			# periodica corre cada 20 ticks (5 segundos de juego) y la roja
+			# puede caer en cualquiera de ellos, asi que el expulsado
+			# seguia corriendo y disputando la pelota hasta la limpieza
+			# siguiente: medido, 11 de 14 expulsados seguian jugando 2,4
+			# segundos de promedio y hasta 3,5. Se ve, porque el partido se
+			# dibuja.
+			if eq_d.expulsados_partido.has(int(quien["id"])):
+				_sincronizar_cambios(estado)
 			return  # ya cobró: una entrada, una tarjeta
 
 
