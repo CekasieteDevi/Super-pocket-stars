@@ -122,6 +122,26 @@ const ROLES_QUE_REPLIEGAN := ["DFC", "LAT", "MC"]
 ## falta a su equipo, asi que sigue contando aca.
 const ROLES_QUE_ATACAN := ["MCO", "EXT", "DC"]
 
+## Que pelotas paradas ubican a la gente de una vez, en vez de dejarla
+## acomodarse trotando (ver _ubicar_para_el_balon_parado).
+##
+## Son las dos que EXIGEN que el jugador viaje: el corner y la falta que
+## se cuelga al area mandan medio equipo treinta metros mas adelante, y
+## trotando no llegaban. En un lateral, un saque de arco o una falta
+## lejana nadie tiene que ir a ningun lado: el juego se reanuda donde
+## estaba y ubicarlos ahi no arregla nada.
+##
+## No es una distincion de gusto, se midio (120 partidos,
+## tests/_diag_goles_motores.gd). Ubicando TODAS las paradas, los 22
+## quedan perfectamente ordenados en cada lateral y cada saque de arco,
+## que son decenas por partido, y ese orden gratis favorece al equipo
+## bueno: primera se iba a 2,92 goles por partido contra 2,59 del motor
+## abstracto, y decima caia a 1,45. Limitado a estas dos queda en
+## 1,63/2,11/2,50 contra 1,61/1,93/2,43 de antes del cambio, o sea que
+## decima no se mueve y quinta se acerca al ancla.
+const TIPOS_QUE_SE_UBICAN := ["corner", "centro"]
+
+
 ## Quienes se paran EN EL HOMBRO del ultimo defensor cuando el equipo
 ## ataca (ver _objetivo_sin_pelota), que es de donde salen los goles.
 ##
@@ -2520,11 +2540,16 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 				estado["jugadores"][id]["vel"] = Vector2.ZERO
 				estado["jugadores"][id]["rapidez"] = 0.0
 			if int(estado["quietos"]) == 0:
-				# Se terminó de ver dónde quedó: ahora sí se acomoda para
-				# el saque y la gente empieza a moverse.
+				# Se terminó de ver dónde quedó: se acomoda la pelota en el
+				# punto y cada uno aparece en su marca.
+				# Solo si hay balon parado de verdad. El gol y el saque inicial
+				# tambien paran el juego, pero se ubican solos y NO pasan por
+				# _marcar_posiciones: ahi `marca` es la del corner anterior y
+				# ubicar por ella los mandaria a todos al area equivocada.
 				var bp_pos: Dictionary = estado.get("balon_parado", {})
 				if bp_pos.has("pos"):
 					pelota["pos"] = bp_pos["pos"]
+					_ubicar_para_el_balon_parado(estado)
 		else:
 			var ejecutor_bp: int = int(estado.get("balon_parado", {}).get("ejecutor", -1))
 			# El expulsado no se acomoda para el saque: se esta yendo. Sin
@@ -3636,6 +3661,42 @@ static func _elegir_ejecutor(estado: Dictionary, pos: Vector2, ataca_local: bool
 ## donde el reinicio tiene que leerse como un corte y no como una
 ## transición. El resto de los reinicios (lateral, córner, saque de arco)
 ## siguen con la gente acomodándose, que ahí sí se ve bien.
+## Pone a cada uno EN su marca de una vez, apenas se termina el
+## congelado del corte. Es lo que ya hacia el penal —que fija
+## quietos = detenido y por eso nunca troto nadie— y ahora hacen las
+## paradas de TIPOS_QUE_SE_UBICAN.
+##
+## Antes se acomodaban trotando durante la pausa, y no llegaban: medido
+## con tests/_diag_area_parada.gd, un equipo Fisico mandaba 7,8
+## jugadores al area en un corner y al momento del saque habia 2,0
+## adentro, con 24,5 m de deuda promedio. La pausa del corner son 5 s y
+## el 60%% se va en el congelado, asi que quedaban 2 s de trote a 0,45
+## de la velocidad: unos 6 m contra los 25 que hacian falta. O sea que
+## el reparto por estilo (Estilos.SUBEN_AL_CORNER) existia pero no
+## llegaba a la cancha.
+##
+## El congelado se mantiene: primero se VE donde se corto la jugada y
+## recien despues aparecen ubicados, que es como se lee un corte. Los
+## ticks que sobran de la pausa son los de todos parados esperando el
+## saque.
+##
+## Volver es al reves: no se teletransporta nadie. Terminada la jugada
+## el que subio vuelve corriendo con el movimiento de siempre, o baja
+## marcando si el rival sale de contra.
+static func _ubicar_para_el_balon_parado(estado: Dictionary) -> void:
+	if not TIPOS_QUE_SE_UBICAN.has(str(estado.get("balon_parado", {}).get("tipo", ""))):
+		return
+	for id in estado["jugadores"]:
+		# El que se esta yendo o entrando NO se ubica: esta caminando
+		# hacia el lateral y lo mueve _avanzar_entradas_y_salidas.
+		if _en_transito(estado, id):
+			continue
+		var e: Dictionary = estado["jugadores"][id]
+		e["pos"] = e.get("marca", e["pos"])
+		e["vel"] = Vector2.ZERO
+		e["rapidez"] = 0.0
+
+
 static func _detener_juego(estado: Dictionary, pos: Vector2, ataca_local: bool,
 		ejecutor: int, tipo: String, ticks: int, corte: bool = false,
 		congelar: int = 0) -> void:
@@ -4341,11 +4402,19 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 				MatchEngine._procesar_cambios(home, away, minuto_ventana, true, estado["log"], estado["eventos"])
 				_sincronizar_cambios(estado)
 
+	# Ver MatchEngine.simular: el 3-0 de la cancelacion no lo hizo nadie y
+	# pisa los goles que hubiera habido, asi que el log de goleadores se
+	# vacia. Sin esto la tabla y las estadisticas individuales de la liga
+	# dejan de cerrar.
+	if bool(estado.get("cancelado", false)):
+		estado["goles_log"] = []
+
 	return {
 		"goles_local": home.goles,
 		"goles_visitante": away.goles,
 		"log": estado["log"],
 		"goles_log": estado["goles_log"],
+		"cancelado": bool(estado.get("cancelado", false)),
 		"eventos": estado["eventos"],
 		"fotogramas": estado["fotogramas"],
 		# §7.3: cuánto entrenó cada jugador cada atributo, normalizado.

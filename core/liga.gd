@@ -245,6 +245,12 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 
 		for eq in lesionados_previos:
 			lesionados.append_array(_lesionados_nuevos(eq, lesionados_previos[eq]))
+		# Un partido cancelado por falta de jugadores no dejaba ningun
+		# rastro en la liga: se otorgaba el 3-0 y el usuario no se
+		# enteraba de por que su rival tenia tres goles de la nada.
+		if bool(r.get("cancelado", false)):
+			var castigado: String = home.nombre if int(r["goles_local"]) == 0 else away.nombre
+			noticias.append("%s se quedo sin jugadores en cancha: pierde 0-3 y el partido se cancela." % castigado)
 		_actualizar_tabla(home.nombre, away.nombre, r["goles_local"], r["goles_visitante"])
 		EstadisticasLiga.registrar_partido(estadisticas, home, away, r)
 		_actualizar_estado_jugadores(home, away, r)

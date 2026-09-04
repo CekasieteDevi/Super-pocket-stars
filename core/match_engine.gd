@@ -536,8 +536,18 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_log:
 			rng, con_log, log, goles_log, eventos)
 	if not cancelado:
 		_procesar_cambios(home, away, 75, con_log, log, eventos)
-		_jugar_periodo(away, home, away, TICKS_POR_MITAD - 2 * tanda, 75, 15.0,
+		cancelado = _jugar_periodo(away, home, away, TICKS_POR_MITAD - 2 * tanda, 75, 15.0,
 			rng, con_log, log, goles_log, eventos)
+
+	# Cancelado: el 3-0 que se otorga NO lo hizo nadie, y los goles que se
+	# habian hecho antes dejan de existir porque el marcador se pisa. Si el
+	# log se deja como estaba, la tabla de la liga suma tres goles sin
+	# autor mientras las estadisticas individuales acreditan los viejos, y
+	# los dos totales dejan de cerrar. Es el mismo trato que ya recibe el
+	# 0-3 administrativo de Liga._resolver_forfeit, que devuelve el log
+	# vacio.
+	if cancelado:
+		goles_log.clear()
 
 	return {
 		"goles_local": home.goles,
@@ -545,6 +555,8 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_log:
 		"log": log,
 		"goles_log": goles_log,
 		"eventos": eventos,
+		# Lo lee Liga para avisar por que el partido no se jugo entero.
+		"cancelado": cancelado,
 		# §7.3: este motor no sabe quién hizo qué, así que estima el
 		# reparto por puesto. Ver xp_estimada.
 		"xp": {"home": xp_estimada(home), "away": xp_estimada(away)},
