@@ -268,19 +268,53 @@ const TICKS_DETENIDO := {"falta": 14, "corner": 20, "gol": 10, "saque_inicial": 
 	"lateral": 10, "saque_arco": 8, "penal": 20}
 
 ## Cuanto puede estirarse una mitad para terminar lo que quedo pendiente.
-## Son 15 ticks = casi 4 minutos de reloj mostrado: alcanza para ejecutar
-## un penal cobrado sobre la hora y su reanudacion.
-const TICKS_DE_DESCUENTO := 15
+## Es un SEGURO, no el final: la mitad se cierra sola en cuanto la jugada
+## termina (ver el bucle de `simular`). Este numero solo evita que un
+## estado raro deje el partido corriendo para siempre.
+##
+## Eran 15 ticks, con un comentario que decia "casi 4 minutos": la cuenta
+## era vieja, con TICKS_POR_MITAD en 480 son 1,4 minutos mostrados. Un
+## corner esta 24 ticks detenido antes de patearse, asi que 15 nunca
+## alcanzaban: medido con semilla 909, 4 de 120 mitades se cerraban con un
+## corner, un lateral o un tiro libre cobrado y sin ejecutar.
+##
+## 90 ticks = 8,4 minutos mostrados. Es el peor caso encadenado que se
+## permite: un corner (24 detenido + centro + cabezazo) que termina en
+## penal (20 detenido + patada).
+const TICKS_DE_DESCUENTO := 90
 
 
 ## Hay una jugada sin terminar que no puede quedar en el aire: una pelota
-## parada por ejecutar, o un remate viajando hacia el arco.
+## parada por ejecutar, un centro viajando o un remate yendo al arco.
 static func _hay_algo_sin_terminar(estado: Dictionary) -> bool:
-	if estado.has("balon_parado"):
+	var tipo := str(estado.get("balon_parado", {}).get("tipo", ""))
+	# El saque del medio NO es una jugada pendiente: un gol sobre la hora
+	# TERMINA la mitad. Antes contaba como pendiente y se iba el descuento
+	# entero en el festejo — 8 de 120 mitades medidas se cerraban asi.
+	if tipo == "saque_medio" or tipo == "saque_inicial":
+		return false
+	if tipo != "":
 		return true
 	if int(estado.get("detenido", 0)) > 0:
 		return true
-	return bool(estado["pelota"].get("es_remate", false))
+	var pelota: Dictionary = estado["pelota"]
+	# La pelota en el aire tampoco termino en nada: el centro del corner
+	# que se acaba de ejecutar todavia no lo cabeceo nadie. Sin esto la
+	# mitad se cortaba con la pelota viajando.
+	return bool(pelota.get("es_remate", false)) or bool(pelota.get("en_vuelo", false))
+
+
+## Anota que la mitad se termino con la jugada sin terminar. Solo mide:
+## no cambia nada del partido. Con el descuento andando tiene que quedar
+## en cero.
+static func _anotar_corte_sucio(estado: Dictionary) -> void:
+	if not _hay_algo_sin_terminar(estado):
+		return
+	var tipo := str(estado.get("balon_parado", {}).get("tipo", ""))
+	if tipo == "":
+		tipo = "remate" if bool(estado["pelota"].get("es_remate", false)) else "detenido"
+	var d: Dictionary = estado["cortadas"]
+	d[tipo] = int(d.get(tipo, 0)) + 1
 
 
 ## Dos segundos en los que NADIE se mueve, antes de acomodarse para el
@@ -661,6 +695,11 @@ static func crear_estado(home: Team, away: Team, rng: RandomNumberGenerator) -> 
 		"paredes": {},
 		"centros": {},
 		"reinicios": {},
+		"cortes": 0,
+		# Mitades que se cortaron con la jugada SIN TERMINAR, por tipo. Es
+		# el sintoma que se mide: si esto no es cero, un corner o un penal
+		# cobrado sobre la hora no se llego a patear.
+		"cortadas": {},
 		"cooldown": {},
 		"pase_detalle": {"intentos": 0, "interceptado_vuelo": 0, "rival_llego_antes": 0, "fuera": 0},
 		"linea_offside": {"local": LIMITE_X, "away": -LIMITE_X},
@@ -3814,6 +3853,10 @@ static func _detener_juego(estado: Dictionary, pos: Vector2, ataca_local: bool,
 	# El juego se cortó: el pase de hace diez segundos ya no asiste nada.
 	estado["ultimo_pase"] = {}
 	_marcar_posiciones(estado, pos, ataca_local, ejecutor, tipo)
+	# Cuantas veces se corto el juego en la mitad. El descuento lo mira
+	# para saber si el corte es NUEVO: pasado el tiempo, el primero que
+	# aparece cierra la mitad.
+	estado["cortes"] = int(estado.get("cortes", 0)) + 1
 	estado["balon_parado"] = {"tipo": tipo, "pos": pos, "ataca_local": ataca_local, "ejecutor": ejecutor}
 	estado["detenido"] = ticks + congelar
 	if congelar > 0:
@@ -4488,13 +4531,35 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 		# comia el 10% del partido y los goles bajaban de 2,36 a 1,84.
 		var jugados := 0
 		var reloj := 0
+		# Cuantos cortes de juego habia cuando se acabo el tiempo. Pasado
+		# ese punto no se cobra nada nuevo: el primer corte que aparezca
+		# cierra la mitad.
+		var cortes_al_expirar := -1
+		# La mitad cerro sola, con la jugada terminada. Si queda en false
+		# es que se agoto el tope de descuento, y eso se anota y se mide.
+		var limpio := false
 		while jugados < TICKS_POR_MITAD + TICKS_DE_DESCUENTO 				and reloj < TICKS_POR_MITAD + TICKS_DE_DESCUENTO + TICKS_REPUESTOS_TOPE:
 			# DESCUENTO. El tiempo no se termina con una pelota parada sin
-			# ejecutar: se cobro un penal y el partido se acabo antes de
-			# que lo patearan. Pasados los 45, se sigue solo mientras haya
-			# algo pendiente, y como mucho hasta el tope de descuento.
-			if jugados >= TICKS_POR_MITAD and not _hay_algo_sin_terminar(estado):
-				break
+			# ejecutar: si se cobro un corner o un penal sobre la hora, se
+			# patea. Pasados los 45 se juega SOLO lo que quedo pendiente.
+			if jugados >= TICKS_POR_MITAD:
+				if cortes_al_expirar < 0:
+					cortes_al_expirar = int(estado["cortes"])
+				# El penal es la excepcion: si se cobra en el descuento
+				# igual se patea, porque es la unica jugada que se define
+				# sola. Se le perdona el corte y despues la mitad cierra
+				# donde termine — gol, atajada o pelota afuera.
+				if str(estado.get("balon_parado", {}).get("tipo", "")) == "penal":
+					cortes_al_expirar = int(estado["cortes"])
+				# Un corte NUEVO cierra la mitad: la pelota salio, hubo
+				# gol, la ataja el arquero o se cobro una falta. Eso que
+				# se cobro ya no se ejecuta.
+				if int(estado["cortes"]) > cortes_al_expirar:
+					limpio = true
+					break
+				if not _hay_algo_sin_terminar(estado):
+					limpio = true
+					break
 			var en_transito: bool = not (estado["saliendo"].is_empty()
 				and estado["entrando"].is_empty())
 			# Esperar a que el pateador designado llegue al banderin
@@ -4513,11 +4578,14 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 			if MatchEngine.cancelar_si_falta_gente(
 					home, away, _minuto_int(estado), estado["log"], estado["eventos"]):
 				estado["cancelado"] = true
+				limpio = true
 				break
 			if not ventanas.is_empty() and estado["minuto"] >= ventanas[0]:
 				var minuto_ventana: int = ventanas.pop_front()
 				MatchEngine._procesar_cambios(home, away, minuto_ventana, true, estado["log"], estado["eventos"])
 				_sincronizar_cambios(estado)
+		if not limpio:
+			_anotar_corte_sucio(estado)
 
 	# Ver MatchEngine.simular: el 3-0 de la cancelacion no lo hizo nadie y
 	# pisa los goles que hubiera habido, asi que el log de goleadores se
@@ -4553,6 +4621,7 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 			"dist_pases": estado["dist_pases"],
 			"dist_pelotazos": estado["dist_pelotazos"],
 			"reinicios": estado["reinicios"],
+			"cortadas": estado["cortadas"],
 			"cooldown_activos": estado["cooldown"].size(),
 			"pase_detalle": estado["pase_detalle"],
 			"pases": estado["pases"],

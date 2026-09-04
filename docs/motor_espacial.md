@@ -2894,3 +2894,68 @@ su propio objetivo. Bajar el umbral corre el escalón de lugar, no lo
 saca. El arreglo de fondo es hacer la subida **gradual** — interpolar
 entre el casillero de formación y la línea de offside, como ya hace
 `SUBIDA_POR_ROL` para los de atrás — en vez de un `if` que salta.
+
+
+## 51. El descuento: cómo termina una mitad
+
+Bug encontrado jugando la 1.5. Minuto 97, córner para el jugador, y el
+partido cerró con la pelota puesta en el banderín. **El córner nunca se
+pateó.**
+
+### Por qué pasaba
+
+El descuento ya existía, pero medía mal. `TICKS_DE_DESCUENTO` valía 15
+ticks con un comentario que decía "casi 4 minutos": esa cuenta era de
+cuando `TICKS_POR_MITAD` valía otra cosa. Con 480 ticks por mitad, 15
+ticks son 1,4 minutos mostrados. Un córner está **24 ticks detenido**
+antes de patearse, así que el tope se agotaba siempre a mitad de la
+pausa.
+
+Y había un segundo agujero: `_hay_algo_sin_terminar` contaba el saque
+del medio como jugada pendiente. Un gol sobre la hora se comía el
+descuento entero esperando la reanudación.
+
+Medido con semilla 909, 60 partidos: **12 de 120 mitades (10%)**
+cerraban con algo a medias — 8 saques del medio y 4 reinicios cobrados y
+sin ejecutar (2 córners, 1 corto, 1 tiro libre colgado al área).
+
+### La regla que se fijó
+
+1. Lo que se cobró **antes** de que se acabara el tiempo **se ejecuta**.
+   El córner del minuto 90 se patea.
+2. La mitad cierra en el **primer corte nuevo**: gol, pelota afuera,
+   atajada del arquero o falta. Eso que se cobra ya no se patea — el
+   córner que sale del córner no existe.
+3. El **penal es la excepción**: cobrado en el descuento, igual se
+   patea, y la mitad cierra donde termine (gol, atajada o afuera).
+4. El saque del medio **no** es una jugada pendiente. Un gol sobre la
+   hora termina la mitad.
+5. La pelota en el aire **sí** cuenta: un centro que todavía no cabeceó
+   nadie no es el final de nada.
+
+### Cómo está hecho
+
+`estado["cortes"]` cuenta los cortes de juego de la mitad, y lo
+incrementa `_detener_juego`. El bucle de `simular` guarda el valor que
+había cuando se acabó el tiempo: si sube, la mitad cierra. Al penal se
+le perdona el corte poniendo el contador al día.
+
+`TICKS_DE_DESCUENTO` pasó a 90 ticks (8,4 minutos mostrados), pero ya
+**no es el final**: es un seguro contra un estado raro que deje el
+partido corriendo. El final lo decide la jugada.
+
+### Qué costó
+
+Nada de balance. Con la misma semilla, `_diag_goles_motores`:
+
+| div | espacial antes | espacial después | abstracto |
+|-----|----------------|------------------|-----------|
+| 10  | 2,38           | 2,42             | 3,08      |
+| 5   | 2,63           | 2,77             | 2,73      |
+| 1   | 3,42           | 3,40             | 2,88      |
+
+La paridad con el motor abstracto queda donde estaba. Y las mitades
+cortadas a medias pasaron de 12 a **0 de 120**.
+
+Lo mide `tests/_diag_fin_de_mitad.gd` y lo gatea
+`tests/test_fin_de_mitad.gd`.
