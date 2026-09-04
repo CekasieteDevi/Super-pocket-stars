@@ -13,6 +13,11 @@ extends SceneTree
 const SEED := 5150
 const PARTIDOS := 25
 
+## Lo que avanza un expulsado en un tick. Es la tolerancia con la que se
+## mide si llego a la linea: el ultimo fotograma en que se lo ve puede
+## estar hasta un paso antes de la cal.
+const PASO_CAMINANDO := 3.0
+
 
 func _init() -> void:
 	var fallas := 0
@@ -85,7 +90,16 @@ func _test_camina_y_sale() -> int:
 			# acomodo al punto de la falta, no que siga rodando.
 			if pelota_ini.distance_to(pelota_fin) < 20.0:
 				pelota_quieta += 1
-			if absf(ultima_y) >= MotorEspacial.MEDIO_ANCHO:
+			# Se lo borra de la cancha a medio paso del punto de salida,
+			# que esta 2,5 m PASADA la cal. Como camina ~2,7 m por tick,
+			# el ultimo fotograma en que todavia se lo ve cae en cualquier
+			# lado de ese ultimo tramo: medido, uno quedo en y=-33,9987
+			# con la linea en 34,0 y el test lo conto como que no salio,
+			# cuando venia caminando derecho hacia afuera. Lo que se
+			# comprueba es que llego a la cal, no que un fotograma
+			# puntual cayera del lado de afuera — eso es suerte de
+			# muestreo y no conducta del motor.
+			if absf(ultima_y) >= MotorEspacial.MEDIO_ANCHO - PASO_CAMINANDO:
 				salieron += 1
 			elif desde + ticks >= fotogramas.size():
 				# Se acabo el partido mientras caminaba: es correcto.

@@ -1,23 +1,27 @@
 {
   "_comentario": "Pesos de la utility AI del motor espacial (docs/motor_espacial.md §4). Tuneables sin recompilar. Las utilidades se normalizan 0..1 por termino y se suman pesadas; despues pasan por softmax con temperatura.",
+  "_conducir": "camino es que tan despejado esta el corredor hacia el arco rival (fisica.corredor_conduccion). Separa 'estoy libre' de 'tengo por donde ir': espacio mira quien te rodea, camino mira quien te tapa el paso.",
   "conducir": {
     "base": 0.3,
     "espacio": 0.5,
-    "progreso": 0.3
+    "progreso": 0.3,
+    "camino": 0.15
   },
   "pase": {
     "base": 0.25,
     "progreso": 1.0,
     "seguridad": 0.45,
     "distancia": 0.55,
-    "arquero_apurado": 1.6
+    "arquero_apurado": 1.6,
+    "retroceso_libre": 1.2
   },
-  "_gambeta": "Encarar a un rival puntual. base bajo porque no deberia ser la opcion por defecto; habilidad la hace atractiva para los buenos de control; presion la desalienta cuando hay varios encima.",
+  "_gambeta": "Encarar a un rival puntual. base bajo porque no deberia ser la opcion por defecto; habilidad la hace atractiva para los buenos de control; presion la desalienta cuando hay varios encima. banda es el extremo que encara para acomodarse frente al arco: se suma solo si estas abierto Y adelantado (los dos umbrales de puede_centrar). Barrido con tests/_diag_banda.gd sobre 30 partidos: sin el termino, el 3,5% de las decisiones desde la banda eran gambeta; 0,5 da 6,2%, 1,0 da 12,0%, 1,5 da 14,5% y 2,0 da 18,7%, y a partir de 1,5 empieza a comerse los centros (2,6 -> 2,2 por partido).",
   "gambeta": {
     "base": 0.12,
     "habilidad": 1.6,
     "progreso": 0.25,
-    "presion": 0.4
+    "presion": 0.4,
+    "banda": 1.5
   },
   "_despeje": "Reventarla arriba y lejos sin destinatario, cuando estas metido en tu campo y con gente encima. No pide ningun atributo tecnico: es sacarla de la zona de peligro.",
   "despeje": {
@@ -100,6 +104,8 @@
     "_centro_geo": "Hay que estar abierto (banda) y adelantado para centrar. z_inalcanzable es la altura por encima de la cual los de abajo no la alcanzan.",
     "centros_minimo": 40.0,
     "banda_para_centrar": 11.0,
+    "_apego_a_la_banda": "Cuanto se pega a la banda el que conduce abierto: 0 = va derecho al arco (no hay juego de banda), 1 = va al vertice del area de su lado. Barrido con tests/_diag_banda.gd (30 partidos) y tests/_diag_goles_motores.gd (120): 0 dejaba 81% de las conducciones terminando abiertas y 1,9 m de desvio hacia el medio; 0,5 sube a 90% y 1,1 m y es gratis en goles; 1,0 llega a 91% y 0,8 m pero cuesta 0,25 goles por partido en quinta y BAJA los centros de 2,7 a 2,1, porque el que corre pegado a la cal se aleja de sus companeros.",
+    "apego_a_la_banda": 0.5,
     "avance_para_centrar": 0.55,
     "altura_centro": 6.0,
     "z_inalcanzable": 2.5,
@@ -109,6 +115,10 @@
     "avance_para_jugar_en_el_hombro": 0.45,
     "apoyo_del_delantero": 0.35,
     "apoyo_del_nueve": 0.0,
+    "_avance_para_acompanar": "Avance de la pelota a partir del cual los de atras empiezan a subir con el ataque (0 = arco propio, 1 = arco rival). En la mitad de la cancha: antes de eso el equipo esta saliendo y subir la linea es regalar el contragolpe.",
+    "avance_para_acompanar": 0.5,
+    "_avance_acompanamiento_pleno": "Avance al que el acompañamiento ya esta al maximo. No es 1.0 (el arco): con la rampa estirada hasta el arco, en el tercio rival el volante iba a un tercio de lo que le tocaba y quedaba veinte metros detras de la pelota igual.",
+    "avance_acompanamiento_pleno": 0.75,
     "_desplazamiento_por_estilo": "Cuantos metros corre la linea el estilo cuando el equipo NO tiene la pelota. Presion alta la sube, Defensivo la baja. Es un desplazamiento y no un multiplicador de cuanto se sigue a la pelota: multiplicar hacia que Presion alta defendiera MAS ATRAS que el estilo por defecto, porque defendiendo la pelota esta en campo propio.",
     "desplazamiento_por_estilo": 16.0,
     "_faltas": "Las tarjetas cuelgan de las faltas, no de cada quite: antes se amonestaba sin que hubiera infraccion. prob_falta se calibra para que las amarillas por partido queden a la par del motor abstracto.",
@@ -169,6 +179,8 @@
     "rebote_controlado": 0.3,
     "rebote_largo_min": 5.0,
     "rebote_largo_max": 16.0,
+    "_corredor_conduccion": "Metros del corredor hacia el arco rival que se miran para saber si el camino esta libre. Es del orden de lo que se recorre conduciendo antes de volver a decidir, no de la distancia al arco: mirando hasta el arco el camino daba tapado siempre desde media cancha.",
+    "corredor_conduccion": 18.0,
     "_avance_conducir": "Fraccion de su velocidad a la que corre el que lleva la pelota. Menor a 1 porque conducir es mas lento que correr libre: si fuera 1 nadie lo alcanza nunca.",
     "avance_conducir": 0.6,
     "_ticks_control": "Ticks que el poseedor conduce/aguanta antes de poder pasar o tirar. Sin esto decide cada 0.25s y la pelota circula 3-4 veces mas rapido que en un partido real.",

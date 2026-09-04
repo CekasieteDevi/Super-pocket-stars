@@ -60,6 +60,29 @@ static func retroceso_sin_pelota(estilo: String) -> float:
 	return RETROCESO_SIN_PELOTA.get(estilo, RETROCESO_DEFAULT)
 
 
+## Cuanto sube el bloque de atras cuando el equipo SI tiene la pelota y
+## la mete en campo rival. Es la contraparte de RETROCESO_SIN_PELOTA: sin
+## esto el estilo solo cambiaba como se defiende, y atacando los seis
+## estilos paraban a sus volantes exactamente en el mismo lugar.
+##
+## Como el retroceso, se mide contra el DEFAULT y no contra cero: asi el
+## equilibrio del motor no se mueve y lo unico que cambia es la
+## diferencia ENTRE estilos.
+##
+## Presion alta y Tiki taka juegan con el equipo junto y arriba, asi que
+## sus volantes acompañan. Contragolpe y Defensivo dejan gente atras — es
+## justo de lo que viven.
+const ACOMPANAMIENTO := {
+	"Presión alta": 1.35, "Tiki taka": 1.25, "Juego directo": 1.0,
+	"Físico": 1.0, "Contragolpe": 0.7, "Defensivo": 0.55,
+}
+const ACOMPANAMIENTO_DEFAULT := 1.0
+
+
+static func acompanamiento(estilo: String) -> float:
+	return float(ACOMPANAMIENTO.get(estilo, ACOMPANAMIENTO_DEFAULT))
+
+
 ## Cuantos jugadores de campo suben AL AREA en un corner propio, sin
 ## contar al que lo tira. El resto no se queda en su casillero: sube a la
 ## mitad de la cancha a jugar el rebote.

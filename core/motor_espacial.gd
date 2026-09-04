@@ -116,9 +116,39 @@ const ARQUERO_X_MAX := 36.0
 ## de arriba quedan afuera a propósito: son la salida del equipo.
 const ROLES_QUE_REPLIEGAN := ["DFC", "LAT", "MC"]
 
-## Los de arriba: atacando se paran en el hombro del último defensor rival
-## (ver _objetivo_sin_pelota), que es de donde salen los goles.
+## Los de arriba, para la PELOTA PARADA: los que suman amenaza en el area
+## en un corner propio y los que NO bajan a defender un tiro libre. Un
+## enganche sube al corner y no se vuelve 28 metros porque le cobraron una
+## falta a su equipo, asi que sigue contando aca.
 const ROLES_QUE_ATACAN := ["MCO", "EXT", "DC"]
+
+## Quienes se paran EN EL HOMBRO del ultimo defensor cuando el equipo
+## ataca (ver _objetivo_sin_pelota), que es de donde salen los goles.
+##
+## El MCO quedo AFUERA a proposito. Esperar adelantado sobre la linea de
+## offside es de delantero, y con el adentro el enganche jugaba de segundo
+## punta: se paraba al lado del 9 en vez de llegar al area desde atras.
+## Ahora sube con SUBIDA_POR_ROL, que es llegar un momento despues — el
+## unico rol que arranca por detras de la linea y termina adentro.
+##
+## Es una lista aparte de ROLES_QUE_ATACAN y no la misma con el MCO
+## sacado: son dos preguntas distintas. Sacarlo de aquella le cambiaba
+## tambien el corner y el tiro libre, que no es lo que se quiso.
+const ROLES_EN_EL_HOMBRO := ["EXT", "DC"]
+
+## Cuanto acompaña el ataque cada rol de atras, como fraccion del camino
+## que le falta hasta la linea de la pelota. Los de arriba no estan porque
+## ya se paran en el hombro del ultimo defensor.
+##
+## El volante central es el que mas sube: es el que da el pase y despues
+## se quedaba clavado, que era el reporte. El central sube poco — alguien
+## tiene que quedar por si la pierden.
+## El MCO es el que mas sube de todos: no espera arriba como el 9, LLEGA
+## al area desde atras cuando la jugada ya esta metida. Es el puesto que
+## pediste y el motivo por el que salio de ROLES_EN_EL_HOMBRO.
+const SUBIDA_POR_ROL := {
+	"MCO": 0.95, "MC": 0.75, "LAT": 0.55, "DFC": 0.30,
+}
 
 ## Lo unico que se puede hacer con la pelota estando acorralado en la
 ## propia area: sacarla de ahi. El remate entra porque un rechazo que
@@ -192,6 +222,13 @@ const MARGEN_SALIDA := 3.0
 ## Medio ancho del arco (7,32 m reglamentarios). Lo usa el remate para
 ## saber dónde termina la portería y dónde empieza el afuera.
 const ARCO_MEDIO_ANCHO := 3.66
+
+## El area grande, en metros reglamentarios desde la linea de fondo y
+## desde el centro del arco. Estaban escritos a mano dentro de
+## _en_el_area; ahora los lee tambien el carril de banda, que gira hacia
+## el arco justo "a la altura del area". Un solo lugar donde cambiarlos.
+const AREA_LARGO := 16.5
+const AREA_MEDIO_ANCHO := 20.16
 
 ## Metros extra que cubre un arquero tirándose, por encima de lo que
 ## alcanza a correr mientras la pelota viaja.
@@ -653,6 +690,57 @@ static func riesgo_linea(estado: Dictionary, desde: Vector2, hasta: Vector2, equ
 	return peor
 
 
+## CARRIL DE BANDA. A donde va el que conduce: el arco rival, salvo que
+## venga ABIERTO y todavia no haya llegado a la altura del area — ahi va
+## al vertice del area de su lado, o sea corre la linea pero sin meterse
+## en el cornerin.
+##
+## Antes los once roles conducian derecho al arco y el que recibia en la
+## banda se metia al medio desde el primer toque: el juego de banda no
+## existia. Medido con tests/_diag_banda.gd sobre 30 partidos, la
+## conduccion abierta se desviaba 1,9 m hacia el medio y solo el 81%
+## terminaba todavia abierta; ahora son 1,1 m y el 90%.
+##
+## Se ata a estar ABIERTO y no al rol EXT a proposito. Dos de las cinco
+## formaciones —3-5-2 y 5-3-2— no tienen ningun extremo y sacan el ancho
+## de los laterales; con la regla puesta en el rol esas dos se quedaban
+## sin banda. El umbral es el mismo `banda_para_centrar` que ya decide si
+## estas lo bastante abierto como para colgarla.
+##
+## Apunta hacia el VERTICE del area y no hacia la linea de fondo:
+## corriendo paralelo a la cal el jugador no progresa, `valor_posicion` no
+## le mejora y termina en el cornerin. Medido con el paralelo puro, las
+## conducciones abiertas caian de 72 a 56 y los centros de 2,1 a 1,7.
+## Cuanto se pega lo gradua `apego_a_la_banda`.
+static func _destino_de_conduccion(pos: Vector2, es_local: bool) -> Vector2:
+	var arco := arco_rival(es_local)
+	var f: Dictionary = pesos()["fisica"]
+	if absf(pos.y) < float(f["banda_para_centrar"]):
+		return arco
+	if absf(arco.x - pos.x) <= AREA_LARGO:
+		return arco
+	# `apego_a_la_banda` mezcla entre el arco (0) y el vertice del area
+	# (1). Es la palanca del tradeoff: mas apego se ve mas a juego de
+	# banda, pero el que corre la linea se aleja de sus companeros y
+	# pierde opciones de pase. Medido en quinta, apego pleno costaba 0,25
+	# goles por partido (tests/_diag_goles_motores.gd, 120 partidos).
+	var lado: float = 1.0 if pos.y >= 0.0 else -1.0
+	var vertice := Vector2(arco.x - signf(arco.x) * AREA_LARGO, lado * AREA_MEDIO_ANCHO)
+	return arco.lerp(vertice, clampf(float(f["apego_a_la_banda"]), 0.0, 1.0))
+
+
+## Punto hasta donde se mira el corredor de conduccion. Sigue el MISMO
+## destino al que iria conduciendo: mirar hacia el arco mientras se corre
+## la banda hacia otro lado dejaba la utilidad evaluando un camino que el
+## jugador no pensaba recorrer.
+static func _frente_de(pos: Vector2, es_local: bool) -> Vector2:
+	var hacia: Vector2 = _destino_de_conduccion(pos, es_local) - pos
+	if hacia.length() < 0.001:
+		return pos
+	var largo: float = minf(float(pesos()["fisica"]["corredor_conduccion"]), hacia.length())
+	return pos + hacia.normalized() * largo
+
+
 static func _dist_a_segmento(punto: Vector2, a: Vector2, b: Vector2) -> float:
 	var ab := b - a
 	var largo_sq := ab.length_squared()
@@ -732,12 +820,23 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 			0.0, 1.0) * lucidez_arq
 
 	# --- Conducir -----------------------------------------------------
+	# `camino_libre` responde una pregunta que ningun otro termino hacia:
+	# QUIEN LE TAPA EL CAMINO. `presion` mira quien lo RODEA, que es otra
+	# cosa: un delantero solo, con veinte metros de cancha abierta por
+	# delante, media igual que uno encerrado entre lineas. Encima el
+	# termino `progreso` de conducir se apaga cuanto mas cerca del arco
+	# rival estas, asi que la conduccion se hundia justo en el tercio
+	# donde correr con la pelota vale mas. Medido, un poseedor libre y
+	# adelantado conducia el 40-55% de las veces (tests/_diag_pase_atras).
+	var camino_libre := 1.0 - riesgo_linea(estado, pos, _frente_de(pos, es_local), es_local)
 	if not es_arquero:
 		var wc: Dictionary = w["conducir"]
-		var u_conducir: float = wc["base"] + wc["espacio"] * (1.0 - presion) + wc["progreso"] * (1.0 - mi_valor)
+		var u_conducir: float = wc["base"] + wc["espacio"] * (1.0 - presion)
+		u_conducir += wc["progreso"] * (1.0 - mi_valor)
+		u_conducir += wc["camino"] * camino_libre
 		opciones.append({
 			"tipo": "conducir", "utilidad": u_conducir,
-			"detalle": {"presion": presion, "mi_valor": mi_valor},
+			"detalle": {"presion": presion, "mi_valor": mi_valor, "camino": camino_libre},
 		})
 
 	# --- Tirar --------------------------------------------------------
@@ -795,10 +894,24 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 		var quite_rival: float = float(rival_dict["atributos"]["quite"]) if not rival_dict.is_empty() else 50.0
 		var ventaja: float = clampf(
 			(float(jugador["atributos"]["control"]) - quite_rival) / 100.0 + 0.5, 0.0, 1.0)
-		var u_gambeta: float = wg["base"] \
-			+ wg["habilidad"] * ventaja * ventaja \
-			+ wg["progreso"] * (1.0 - mi_valor) \
-			- wg["presion"] * presion
+		var u_gambeta: float = wg["base"]
+		u_gambeta += wg["habilidad"] * ventaja * ventaja
+		u_gambeta += wg["progreso"] * (1.0 - mi_valor)
+		u_gambeta -= wg["presion"] * presion
+		# ENCARAR DESDE LA BANDA. Es el recurso del extremo que quiere
+		# acomodarse frente al arco, y era el que no existia: medido, 0,2
+		# gambetas por partido en esa situacion (tests/_diag_banda.gd).
+		#
+		# Va aparte de `progreso` porque no es lo mismo estar adelantado
+		# que estar adelantado Y ABIERTO. Por el medio, con la defensa
+		# junta por delante, encarar sigue siendo mala idea; por afuera
+		# tenes al lateral solo y la linea de fondo para irte.
+		#
+		# Reusa los dos umbrales de `puede_centrar`: si estas lo bastante
+		# abierto y adelantado como para colgarla, estas en la zona donde
+		# un extremo encara. Una sola definicion de "venir por la banda".
+		if absf(pos.y) >= float(f["banda_para_centrar"]) and mi_valor >= float(f["avance_para_centrar"]):
+			u_gambeta += wg["banda"]
 		opciones.append({
 			"tipo": "gambeta", "utilidad": u_gambeta, "objetivo_id": rival_a_encarar,
 			"detalle": {"rival": e_rival["rol"], "presion": presion},
@@ -878,6 +991,14 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 			+ wp["progreso"] * progreso \
 			+ wp["seguridad"] * (1.0 - riesgo) \
 			- wp["distancia"] * (dist / max_dist) 			- wp["arquero_apurado"] * arquero_apurado
+		# El pase atras es un recurso para salir de una presion, no la
+		# jugada de un jugador libre y con la cancha abierta por delante.
+		# Sin esto competia de igual a igual con seguir corriendo, y encima
+		# multiplicado por los N companeros que quedaban por detras: es el
+		# mismo problema estructural del despeje (ver `acorralado`), diez
+		# opciones contra una sola y el maximo de diez gana casi siempre.
+		if progreso < 0.0:
+			u_pase -= wp["retroceso_libre"] * (-progreso) * camino_libre * (1.0 - presion)
 		opciones.append({
 			"tipo": "pase", "utilidad": u_pase, "objetivo_id": id,
 			"detalle": {"progreso": progreso, "riesgo": riesgo, "dist": dist},
@@ -1131,7 +1252,7 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 ## ¿Está dentro del área grande rival? (16,5m de fondo, 40,32m de ancho).
 static func _en_el_area(punto: Vector2, es_local: bool) -> bool:
 	var arco := arco_rival(es_local)
-	return absf(arco.x - punto.x) <= 16.5 and absf(punto.y) <= 20.16
+	return absf(arco.x - punto.x) <= AREA_LARGO and absf(punto.y) <= AREA_MEDIO_ANCHO
 
 
 ## Cuando cae un centro: se lo disputan por arriba. Ataca `cabezazo` +
@@ -1373,7 +1494,46 @@ static func _objetivo_sin_pelota(estado: Dictionary, e: Dictionary, equipo: Team
 	# los veia parados en offside detrás de los centrales mientras el
 	# equipo salia jugando, y la unica manera de llegarles era el
 	# pelotazo. El equipo quedaba partido en dos.
-	if tiene_pelota_mi_equipo and ROLES_QUE_ATACAN.has(rol):
+
+	# Subir con el ataque. Los de atras no se quedan en su casillero
+	# cuando el equipo mete la pelota en campo rival: acompañan hacia la
+	# linea de la pelota, tanto mas cuanto mas metida esta.
+	#
+	# Medido antes del cambio: con la pelota en el tercio rival el MC se
+	# paraba a 54,9 m del arco rival —veinticinco metros DETRAS de la
+	# pelota— y no pisaba el area ni una vez. Daba el pase al delantero y
+	# se quedaba mirando, que es exactamente lo que se reporto.
+	#
+	# Se mueve hacia la pelota y no hacia el arco a proposito: asi el
+	# jugador nunca se adelanta a la jugada y la forma del equipo se
+	# mantiene. El clamp de offside de mas abajo igual lo alcanza.
+	if tiene_pelota_mi_equipo and SUBIDA_POR_ROL.has(rol):
+		var avance_pelota: float = valor_posicion(pelota_pos, e["equipo_local"])
+		var umbral: float = float(f["avance_para_acompanar"])
+		var pleno: float = float(f["avance_acompanamiento_pleno"])
+		var cuanto: float = clampf((avance_pelota - umbral) / maxf(pleno - umbral, 0.01), 0.0, 1.0)
+		var empuje: float = float(SUBIDA_POR_ROL[rol]) * cuanto
+		empuje *= Estilos.acompanamiento(equipo.estilo) / Estilos.ACOMPANAMIENTO_DEFAULT
+		# Los de atras acompañan hasta la LINEA DE LA PELOTA. El MCO no:
+		# el llega AL AREA, que es lo que hace un enganche cuando la
+		# jugada ya esta metida y lo que lo diferencia de un MC.
+		#
+		# Con el destino en la pelota se quedaba a 32 m del arco y entraba
+		# al area MENOS que cuando jugaba de segundo punta —0,06 contra
+		# 0,11 por situacion de ataque—, o sea justo lo contrario de
+		# acompañar: la pelota suele estar en el borde del area o abierta,
+		# asi que apuntarle a ella lo dejaba afuera siempre.
+		var destino_x: float = pelota_pos.x
+		if rol == "MCO":
+			var arco_at := arco_rival(e["equipo_local"])
+			var borde: float = arco_at.x - signf(arco_at.x) * AREA_LARGO
+			if e["equipo_local"]:
+				destino_x = maxf(pelota_pos.x, borde)
+			else:
+				destino_x = minf(pelota_pos.x, borde)
+		objetivo_x = lerpf(objetivo_x, destino_x, clampf(empuje, 0.0, 1.0))
+
+	if tiene_pelota_mi_equipo and ROLES_EN_EL_HOMBRO.has(rol):
 		var avance: float = valor_posicion(pelota_pos, e["equipo_local"])
 		# El 9 baja MUCHO MENOS que el resto: es la referencia y tiene que
 		# quedar alguien arriba. Los que vienen a buscarla son el enganche
@@ -2457,6 +2617,15 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 	for id in estado["jugadores"]:
 		if id == poseedor_id:
 			continue
+		# El que camina hacia el lateral —expulsado o cambiado— ya lo
+		# mueve _avanzar_entradas_y_salidas, y el que entra tambien. Si
+		# ademas lo acomoda la formacion, las dos fuerzas se pelean: la
+		# formacion lo tira hacia la pelota y la salida hacia la linea, y
+		# el que sale no llega nunca. Se agoto el tope TICKS_MAX_SALIENDO
+		# y se lo borro igual de la cancha con la pelota en los pies, que
+		# dejaba `poseedor_id` apuntando a un jugador que ya no existe.
+		if _en_transito(estado, id):
+			continue
 		var e: Dictionary = estado["jugadores"][id]
 		if id == corredor_pared:
 			_mover_hacia(e, pelota.get("pared_destino", pelota["pos"]))
@@ -2740,7 +2909,12 @@ static func _avanzar_entradas_y_salidas(estado: Dictionary) -> bool:
 		if e["pos"].distance_to(destino) > 0.5 and int(s["ticks"]) < TICKS_MAX_SALIENDO:
 			siguen.append(s)
 			continue
-		# Salio: recien ahora deja de estar en la cancha.
+		# Salio: recien ahora deja de estar en la cancha. Si se va con la
+		# pelota —pasa cuando se agota TICKS_MAX_SALIENDO y se lo saca
+		# donde este— hay que soltarla antes de borrarlo: `poseedor_id`
+		# apuntando a una clave que ya no existe rompe el tick siguiente.
+		if int(estado["pelota"]["poseedor_id"]) == clave:
+			_dar_pelota_al_arquero(estado, not bool(e["equipo_local"]))
 		estado["jugadores"].erase(clave)
 	estado["saliendo"] = siguen
 
@@ -3869,8 +4043,8 @@ static func _despejar(estado: Dictionary, poseedor: Dictionary, jugador: Diction
 ## (avance_conducir < 1): si no, nadie alcanza nunca al que la lleva.
 static func _conducir(estado: Dictionary, poseedor: Dictionary) -> void:
 	var f: Dictionary = pesos()["fisica"]
-	var arco := arco_rival(poseedor["equipo_local"])
-	var dir: Vector2 = (arco - poseedor["pos"]).normalized()
+	var destino := _destino_de_conduccion(poseedor["pos"], poseedor["equipo_local"])
+	var dir: Vector2 = (destino - poseedor["pos"]).normalized()
 	# Un punto bien por delante para que nunca "llegue" y frene: conducir
 	# es avanzar, no ir a un destino. Pasa por _mover_hacia para que el que
 	# lleva la pelota también arranque con rampa y no salga disparado.
