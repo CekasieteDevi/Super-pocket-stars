@@ -469,6 +469,22 @@ static func valor_posicion(pos: Vector2, equipo_local: bool) -> float:
 ## Se midio que son palancas independientes: el rango mueve la distancia
 ## de los remates y no los goles; los pesos de tiro_resolucion mueven los
 ## goles y no la distancia (tests/_diag_remates.gd).
+## Solo el ANGULO al arco: 1 de frente, 0 desde la linea de fondo. Es la
+## mitad de factor_geometria que NO depende de cuan lejos estas.
+##
+## Existe aparte porque el tiro libre necesita separar las dos preguntas.
+## Con el factor combinado, la distancia quedaba limitada dos veces —una
+## por `tiros_libres` del pateador y otra por el rango fijo de
+## factor_geometria, que corta en ~25,6 m— y el atributo no podia estirar
+## el alcance ni un metro por encima de eso. Medido: subir
+## rango_libre_bueno de 30 a 34 no movia nada.
+static func factor_angulo(pos: Vector2, equipo_local: bool) -> float:
+	var arco := arco_rival(equipo_local)
+	var dx: float = maxf(absf(arco.x - pos.x), 1.0)
+	var dy: float = absf(pos.y)
+	return clampf(1.0 - (dy / dx) / 1.5, 0.0, 1.0)
+
+
 static func factor_geometria(pos: Vector2, equipo_local: bool, jugador: Dictionary = {},
 		es_decision: bool = false) -> float:
 	var f: Dictionary = pesos()["fisica"]
@@ -481,8 +497,7 @@ static func factor_geometria(pos: Vector2, equipo_local: bool, jugador: Dictiona
 		rango = _por_atributo(jugador, "tiro", f["rango_tiro_malo"],
 			f["rango_tiro_bueno"], float(f["mezcla_fisica_rango_tiro"]) if es_decision else 0.0)
 	var f_dist: float = clampf(1.0 - (dist - 5.0) / rango, 0.0, 1.0)
-	var f_angulo: float = clampf(1.0 - (dy / dx) / 1.5, 0.0, 1.0)
-	return f_dist * f_angulo
+	return f_dist * factor_angulo(pos, equipo_local)
 
 
 # ---------------------------------------------------------------------------
@@ -2424,25 +2439,25 @@ static func _mas_cercano_del_equipo(estado: Dictionary, punto: Vector2, es_local
 ## la regla. Es la versión "caminando" de _despejar_area: en vez de
 ## teletransportarlos, se les cambia la marca y salen durante la pausa.
 static func _marcar_fuera_del_area(estado: Dictionary, arquero_local: bool) -> void:
-	var borde_x: float = -MEDIO_LARGO + 16.5 if arquero_local else MEDIO_LARGO - 16.5
+	var borde_x: float = -MEDIO_LARGO + AREA_LARGO if arquero_local else MEDIO_LARGO - AREA_LARGO
 	for id in estado["jugadores"]:
 		var e: Dictionary = estado["jugadores"][id]
 		if e["equipo_local"] == arquero_local:
 			continue
 		var m: Vector2 = e.get("marca", e["pos"])
 		var dentro: bool = (m.x < borde_x) if arquero_local else (m.x > borde_x)
-		if dentro and absf(m.y) < 20.16:
+		if dentro and absf(m.y) < AREA_MEDIO_ANCHO:
 			e["marca"] = Vector2(borde_x + (2.0 if arquero_local else -2.0), m.y)
 
 
 static func _despejar_area(estado: Dictionary, arquero_local: bool) -> void:
-	var borde_x: float = -MEDIO_LARGO + 16.5 if arquero_local else MEDIO_LARGO - 16.5
+	var borde_x: float = -MEDIO_LARGO + AREA_LARGO if arquero_local else MEDIO_LARGO - AREA_LARGO
 	for id in estado["jugadores"]:
 		var e: Dictionary = estado["jugadores"][id]
 		if e["equipo_local"] == arquero_local:
 			continue
 		var dentro: bool = (e["pos"].x < borde_x) if arquero_local else (e["pos"].x > borde_x)
-		if dentro and absf(e["pos"].y) < 20.16:
+		if dentro and absf(e["pos"].y) < AREA_MEDIO_ANCHO:
 			e["pos"] = Vector2(borde_x + (1.0 if arquero_local else -1.0), e["pos"].y)
 
 
@@ -3134,7 +3149,7 @@ static func _punto_de_presion(estado: Dictionary, e: Dictionary, pelota_pos: Vec
 	if poseedor["rol"] != "ARQ" or not _en_el_area(pelota_pos, not bool(poseedor["equipo_local"])):
 		return pelota_pos
 	# Borde del área grande del arquero, a la altura de la pelota.
-	var borde_x: float = -MEDIO_LARGO + 16.5 if poseedor["equipo_local"] else MEDIO_LARGO - 16.5
+	var borde_x: float = -MEDIO_LARGO + AREA_LARGO if poseedor["equipo_local"] else MEDIO_LARGO - AREA_LARGO
 	var fuera: float = borde_x + (2.0 if poseedor["equipo_local"] else -2.0)
 	return Vector2(fuera, clampf(pelota_pos.y, -MEDIO_ANCHO + 2.0, MEDIO_ANCHO - 2.0))
 
@@ -3402,9 +3417,12 @@ static func _cobrar_falta(estado: Dictionary, punto: Vector2, victima_local: boo
 		"clave": clave_de(int(infractor["id"]), not victima_local), "resultado": "falta",
 	})
 
-	# ¿Adentro del área que defiende el infractor? Penal.
-	var arco_infractor := arco_propio(not victima_local)
-	if absf(arco_infractor.x - punto.x) <= 16.5 and absf(punto.y) <= 20.16:
+	# ¿Adentro del área que defiende el infractor? Penal. El área es la
+	# misma que mira _en_el_area — el arco que ataca la victima ES el que
+	# defiende el infractor— y antes estaba escrita a mano con sus dos
+	# medidas repetidas, que es justo lo que AREA_LARGO y AREA_MEDIO_ANCHO
+	# existen para evitar.
+	if _en_el_area(punto, victima_local):
 		_cobrar_penal(estado, victima_local, minuto)
 		return
 	_tiro_libre(estado, punto, victima_local, minuto)
@@ -3445,7 +3463,7 @@ static func _cobrar_penal(estado: Dictionary, ataca_local: bool, minuto: int) ->
 
 	# Todos afuera del area salvo el pateador y el arquero. Es la regla y
 	# es lo que hace que la foto se lea como un penal.
-	var borde_x: float = arco.x + hacia * 16.5
+	var borde_x: float = arco.x + hacia * AREA_LARGO
 	for id in estado["jugadores"]:
 		var e: Dictionary = estado["jugadores"][id]
 		e["vel"] = Vector2.ZERO
@@ -3465,7 +3483,7 @@ static func _cobrar_penal(estado: Dictionary, ataca_local: bool, minuto: int) ->
 		# Si esta adentro del area, se va al borde por el camino mas corto,
 		# repartidos en abanico para que no queden todos en el mismo punto.
 		var p: Vector2 = e["pos"]
-		if absf(arco.x - p.x) <= 16.5 and absf(p.y) <= 20.16:
+		if absf(arco.x - p.x) <= AREA_LARGO and absf(p.y) <= AREA_MEDIO_ANCHO:
 			# `hacia` apunta del arco hacia el medio, asi que SUMARLO es
 			# alejarse del arco. Restarlo los metia mas adentro del area,
 			# que es lo contrario de sacarlos.
@@ -3548,30 +3566,94 @@ static func _ejecutar_penal(estado: Dictionary, bp: Dictionary) -> void:
 ## alejan la distancia reglamentaria, y si está a tiro de arco se remata
 ## con `tiros_libres` — otro atributo del GDD que no leía nadie. Si está
 ## lejos o muy escorado, se cuelga al área.
-static func _tiro_libre(estado: Dictionary, punto: Vector2, ataca_local: bool, _minuto: int) -> void:
+## En que se convierte una falta a favor: remate al arco (`directo`),
+## pelota colgada al area (`centro`) o juego corto (`corto`). De esto
+## cuelga todo lo demas — quien la patea, quien sube al area y quien arma
+## la barrera.
+##
+## Es publica y esta separada de _tiro_libre porque la mide
+## tests/_diag_tipos_libre.gd. Antes ese diagnostico repetia la
+## clasificacion a mano y quedaba desactualizado en cada cambio: es la
+## regla de una sola fuente de verdad.
+static func tipo_de_falta(estado: Dictionary, pos: Vector2, ataca_local: bool) -> String:
 	var f: Dictionary = pesos()["fisica"]
+	var d_arco: float = pos.distance_to(arco_rival(ataca_local))
+
+	# Le pega al arco si el ANGULO da y ademas le da la pierna desde ahi.
+	# Son dos preguntas distintas y por eso se miden por separado: el
+	# angulo con factor_angulo —de una falta escorada nadie patea, por
+	# cerca que este— y la distancia con `tiros_libres` del pateador (ver
+	# _alcance_de_tiro_libre). Mas lejos de su alcance no lo intenta: la
+	# cuelga, que es lo que hace el que sabe que no llega.
+	var alcance := _alcance_de_tiro_libre(estado, pos, ataca_local)
+	var angulo_da: bool = factor_angulo(pos, ataca_local) >= float(f["angulo_minimo_tiro_libre"])
+	if alcance >= 0.0 and d_arco <= alcance and angulo_da:
+		return "directo"
+
+	if d_arco <= float(f["dist_libre_al_area"]):
+		return "centro"
+
+	# LA FALTA LEJANA, SEGUN EL ESTILO. Un Juego directo o un Fisico la
+	# cuelgan al area desde cuarenta y cinco metros; un Tiki taka la juega
+	# corta. Antes TODAS se jugaban cortas y no subia nadie: medido con
+	# tests/_diag_falta_lejana.gd, de las 4,2 faltas por partido y por
+	# equipo, 1,4 caian en la banda de 38 a 50 m y el motor las ejecutaba
+	# tocandosela al companero mas cercano.
+	var cuelga_lejos: bool = d_arco <= float(f["dist_para_colgar_lejos"])
+	cuelga_lejos = cuelga_lejos and Estilos.cuelga_de_lejos(_equipo_de(estado, ataca_local).estilo)
+	if cuelga_lejos:
+		return "centro"
+
+	return "corto"
+
+
+## Hasta que distancia del arco se ANIMA a patear una falta el que la va
+## a patear. Devuelve -1 si no hay nadie que pueda ejecutarla.
+##
+## Lo decide `tiros_libres`, que hasta ahora no entraba en la decision:
+## el tipo de falta salia de factor_geometria con el rango medio fijo, o
+## sea que un pateador de 99 y uno de 1 le pegaban desde exactamente la
+## misma distancia. Medido antes del cambio (tests/_diag_rango_libre.gd):
+## todos los directos salian de 22,4 m de media con un maximo de 24,1 m,
+## sin importar quien pateaba.
+##
+## Los dos extremos salen de `rango_libre_malo` y `rango_libre_bueno`, y
+## son RADIOS desde el centro del arco, no profundidades desde la linea de
+## fondo. La diferencia importa: el piso vale 16,5 —el mismo numero que la
+## profundidad del area— pero NO significa "el borde del area". En el
+## vertice del area la distancia al centro del arco es 26,1 m, asi que una
+## falta pegada al borde lateral queda muy por fuera de ese radio. Lo que
+## define el piso es un semicirculo central justo afuera del area, que es
+## de donde patea de verdad un ejecutante limitado. Por eso el valor no se
+## deriva de AREA_LARGO aunque coincida: son dos medidas distintas que hoy
+## dan el mismo numero, y atarlas haria que mover una moviera la otra.
+##
+## Se leen ABSOLUTOS —mezcla 1.0— por el mismo
+## motivo que el alcance del pase y del pelotazo: hasta donde llega una
+## patada es fisico y no depende de contra quien juegues. Normalizado al
+## nivel del partido, un pateador de decima le pegaria desde tan lejos
+## como uno de primera.
+static func _alcance_de_tiro_libre(estado: Dictionary, pos: Vector2, ataca_local: bool) -> float:
+	var pateador := _elegir_ejecutor(estado, pos, ataca_local, "directo")
+	if pateador == -1 or not estado["jugadores"].has(pateador):
+		return -1.0
+	var equipo := _equipo_de(estado, ataca_local)
+	var j := _dict_jugador(estado, equipo, estado["jugadores"][pateador]["jugador_id"])
+	if j.is_empty():
+		return -1.0
+	var f: Dictionary = pesos()["fisica"]
+	return _por_atributo(j, "tiros_libres", float(f["rango_libre_malo"]),
+		float(f["rango_libre_bueno"]), 1.0)
+
+
+static func _tiro_libre(estado: Dictionary, punto: Vector2, ataca_local: bool, _minuto: int) -> void:
 	var pos := Vector2(
 		clampf(punto.x, -MEDIO_LARGO + 2.0, MEDIO_LARGO - 2.0),
 		clampf(punto.y, -MEDIO_ANCHO + 2.0, MEDIO_ANCHO - 2.0))
 
 	# Qué clase de tiro libre es lo decide DÓNDE fue la falta, y eso es lo
 	# que después decide quién sube al área y quién se queda.
-	var tipo := "corto"
-	var d_arco: float = pos.distance_to(arco_rival(ataca_local))
-	var cuelga_lejos: bool = d_arco <= float(f["dist_para_colgar_lejos"])
-	cuelga_lejos = cuelga_lejos and Estilos.cuelga_de_lejos(_equipo_de(estado, ataca_local).estilo)
-	if factor_geometria(pos, ataca_local) >= float(f["geometria_minima_tiro_libre"]):
-		tipo = "directo"
-	elif d_arco <= float(f["dist_libre_al_area"]):
-		tipo = "centro"
-	elif cuelga_lejos:
-		# LA FALTA LEJANA, SEGUN EL ESTILO. Un Juego directo o un Fisico la
-		# cuelgan al area desde cuarenta y cinco metros; un Tiki taka la
-		# juega corta. Antes TODAS se jugaban cortas y no subia nadie:
-		# medido con tests/_diag_falta_lejana.gd, de las 4,2 faltas por
-		# partido y por equipo, 1,4 caian en la banda de 38 a 50 m y las
-		# ejecutaba el motor tocandola al companero mas cercano.
-		tipo = "centro"
+	var tipo := tipo_de_falta(estado, pos, ataca_local)
 
 	var ejecutor := _elegir_ejecutor(estado, pos, ataca_local, tipo)
 	if ejecutor == -1:

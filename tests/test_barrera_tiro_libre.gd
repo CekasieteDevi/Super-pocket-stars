@@ -19,9 +19,25 @@ func _init() -> void:
 	quit()
 
 
+## Desde que la decision de patear al arco mira `tiros_libres` del
+## ejecutante (ver MotorEspacial.tipo_de_falta), que una falta sea DIRECTA
+## depende de QUIEN la patea y no solo de donde fue. Estos tests miden la
+## BARRERA, no la clasificacion: si el plantel sorteado no tiene un
+## pateador que llegue desde 24 m, la falta se clasifica como centro, no
+## hay barrera y el test falla por una razon que no es la que mide.
+##
+## Por eso se le fija el atributo al plantel: 24 m piden 56 y el sorteo no
+## lo garantiza. Que la clasificacion escale con el atributo lo cubre
+## tests/_diag_tipos_libre.gd.
+const TIROS_LIBRES_DEL_PATEADOR := 90
+
+
 func _armar_estado(rng: RandomNumberGenerator) -> Dictionary:
 	var casa := Team.generar("Casa", rng, 0)
 	var visita := Team.generar("Visita", rng, 400)
+	for equipo in [casa, visita]:
+		for j in equipo.jugadores:
+			j["atributos"]["tiros_libres"] = TIROS_LIBRES_DEL_PATEADOR
 	casa.reset_partido()
 	visita.reset_partido()
 	casa.local = true

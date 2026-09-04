@@ -2655,3 +2655,82 @@ reputación, que es lo único que ya distingue un club grande de uno chico.
 Lo miden `tests/test_clasificacion_copas.gd` (la clasificación sola) y
 `tests/test_copas_por_temporada.gd` (la partida usándola, de una
 temporada a la otra).
+
+## 50. PENDIENTE: el juego no llega al último cuarto de cancha
+
+**Esto no está resuelto. Es el hallazgo abierto más grande del motor y
+hay que investigarlo antes de seguir tocando pelota parada.**
+
+Salió persiguiendo otra cosa: por qué casi no hay tiros libres directos.
+La respuesta resultó ser que casi no se cometen faltas cerca del arco, y
+la respuesta a *eso* es que **la pelota casi nunca está ahí**.
+
+Medido con `tests/_diag_donde_se_falta.gd` sobre 25 partidos, contando
+los ticks en los que alguien tiene la pelota y agrupando por distancia al
+arco que ese jugador ataca:
+
+| distancia al arco rival | ticks con la pelota | faltas | faltas/1000 ticks |
+|---|---|---|---|
+| 0 - 17 m | 205 (1,8%) | 2 | 9,8 |
+| 17 - 22 m | 170 (1,5%) | 2 | 11,8 |
+| 22 - 30 m | 467 (4,2%) | 11 | 23,6 |
+| 30 - 40 m | 1043 (9,4%) | 30 | 28,8 |
+| 40 - 55 m | 4269 (38%) | 75 | 17,6 |
+| 55 m o más | 4975 (45%) | 91 | 18,3 |
+
+**El 83% del juego transcurre a más de 40 metros del arco rival.** Solo
+el 1,5% pasa entre 17 y 22 metros, que es la zona de la que salen los
+tiros libres peligrosos.
+
+La tasa de falta por tick tiene además un pico en los 30-40 m (28,8) y
+cae a la mitad cerca del arco (11,8): ahí el que tiene la pelota remata
+en vez de aguantarla, así que hay menos duelos por tick. Pero ese es un
+efecto de segundo orden — el que manda es la exposición.
+
+### Por qué importa más que cualquier ajuste de pelota parada
+
+Explica de una sola vez varios síntomas que veníamos tratando por
+separado:
+
+- **Pocos córners**: 1,53 por partido entre los dos equipos, contra ~10
+  de un partido real.
+- **Pocos tiros libres directos**: 0,30 por partido, contra 1-2 reales.
+- **Pocas faltas en general**: 8,4 por partido entre los dos equipos,
+  contra ~22 reales.
+- **Décima queda 1,3 goles por debajo del motor abstracto**, que es la
+  brecha de paridad más grande que hay.
+
+Y es el mismo síntoma que motivó los tres reportes de esta tanda —el
+delantero que la pasa para atrás, el volante que no acompaña, el extremo
+que no corre la banda—. Esos cambios mejoraron la DECISIÓN y se midieron
+uno por uno, pero no terminaron de traducirse en tiempo de juego cerca
+del arco.
+
+### Lo que hay que medir primero
+
+No hay que tocar nada hasta tener esto:
+
+1. **De dónde sale la pérdida.** Seguir una posesión desde que arranca
+   hasta que se corta y ver en qué banda de cancha muere: si se pierden
+   por intercepción, por quite, por salida lateral o por remate. Hoy
+   `pase_detalle` tiene el desglose del pase pero no está cruzado con la
+   zona.
+2. **Si el problema es llegar o es sostener.** Puede que el equipo llegue
+   al último cuarto y la pierda enseguida (pocos ticks por visita), o que
+   directamente no llegue (pocas visitas). Son dos problemas distintos
+   con arreglos distintos, y la tabla de arriba no los separa.
+3. **Contra qué comparar.** El motor abstracto no tiene coordenadas, así
+   que no sirve de ancla acá. Hay que fijar el número objetivo contra
+   fútbol real: qué fracción de la posesión pasa en el último cuarto.
+
+### Sospechas, sin confirmar
+
+- La línea de offside actúa como techo duro: `_objetivo_sin_pelota` clava
+  a los de arriba contra el último defensor rival, y si la defensa rival
+  no se parte, el ataque se acumula a 40 m.
+- El `apoyo_del_delantero` los baja a buscarla cuando la pelota está
+  lejos, lo que ayuda a construir pero puede estar dejando el ataque sin
+  profundidad.
+- Puede no ser un problema de posicionamiento sino de duración: si cada
+  posesión dura pocos toques, la pelota nunca recorre los 60 metros que
+  hacen falta para llegar.

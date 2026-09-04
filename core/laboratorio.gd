@@ -222,9 +222,10 @@ static func _montar_tiro_libre(estado: Dictionary) -> void:
 	var arco := MotorEspacial.arco_rival(true)
 	var hacia: float = -1.0 if arco.x > 0.0 else 1.0
 	# 20 metros y bastante centrado: la barrera solo se arma en un tiro
-	# libre DIRECTO, y eso lo decide factor_geometria contra el umbral de
-	# geometria_minima_tiro_libre (0,14). A 24 m y 7 de costado daba 0,134
-	# —se clasificaba como centro— y por seis milesimas no habia barrera.
+	# libre DIRECTO, y eso lo decide MotorEspacial.tipo_de_falta — el
+	# angulo contra angulo_minimo_tiro_libre y la distancia contra el
+	# alcance que le da `tiros_libres` al pateador. A 24 m y 7 de costado
+	# quedaba afuera y por poco no habia barrera.
 	var punto := Vector2(arco.x + hacia * 20.0, 5.0)
 	var eq_a: Team = MotorEspacial._equipo_de(estado, true)
 	var eq_d: Team = MotorEspacial._equipo_de(estado, false)
