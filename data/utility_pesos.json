@@ -200,6 +200,8 @@
     "_multiplicador_desgaste": "Cuanto pesa cada duelo en la resistencia. Team.desgastar esta calibrado sobre los ~180 duelos del motor abstracto; este motor resuelve otra cantidad, y con 1.0 los 22 jugadores terminaban en el piso de resistencia antes del entretiempo.",
     "multiplicador_desgaste": 12.0,
     "dist_libre_al_area": 38.0,
+    "_dist_para_colgar_lejos": "Hasta que distancia del arco rival un estilo que cree en la pelota al area (Estilos.cuelga_de_lejos) cuelga una falta en vez de jugarla corta. Arranca donde termina dist_libre_al_area. Medido con tests/_diag_falta_lejana.gd: entre 38 y 50 m caen 1,4 faltas por partido y por equipo; mas alla de 60 m ya es campo propio y colgarla no es una jugada, es regalarla.",
+    "dist_para_colgar_lejos": 52.0,
     "vel_remate": 26.0,
     "acel_min": 2.4,
     "acel_max": 5.2,

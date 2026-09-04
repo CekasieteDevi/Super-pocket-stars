@@ -125,10 +125,11 @@ const ROLES_QUE_ATACAN := ["MCO", "EXT", "DC"]
 ## Que pelotas paradas ubican a la gente de una vez, en vez de dejarla
 ## acomodarse trotando (ver _ubicar_para_el_balon_parado).
 ##
-## Son las dos que EXIGEN que el jugador viaje: el corner y la falta que
-## se cuelga al area mandan medio equipo treinta metros mas adelante, y
-## trotando no llegaban. En un lateral, un saque de arco o una falta
-## lejana nadie tiene que ir a ningun lado: el juego se reanuda donde
+## Son las que EXIGEN que el jugador viaje: el corner y la falta que se
+## cuelga al area mandan medio equipo treinta metros mas adelante, y el
+## directo manda a dos o cuatro a esperar el rechazo. Trotando no
+## llegaban. En un lateral, un saque de arco o una falta lejana que se
+## juega corta nadie tiene que ir a ningun lado: el juego se reanuda donde
 ## estaba y ubicarlos ahi no arregla nada.
 ##
 ## No es una distincion de gusto, se midio (120 partidos,
@@ -136,10 +137,13 @@ const ROLES_QUE_ATACAN := ["MCO", "EXT", "DC"]
 ## quedan perfectamente ordenados en cada lateral y cada saque de arco,
 ## que son decenas por partido, y ese orden gratis favorece al equipo
 ## bueno: primera se iba a 2,92 goles por partido contra 2,59 del motor
-## abstracto, y decima caia a 1,45. Limitado a estas dos queda en
+## abstracto, y decima caia a 1,45. Limitado a esta lista queda en
 ## 1,63/2,11/2,50 contra 1,61/1,93/2,43 de antes del cambio, o sea que
 ## decima no se mueve y quinta se acerca al ancla.
-const TIPOS_QUE_SE_UBICAN := ["corner", "centro"]
+##
+## El directo entro despues y casi no mueve la aguja: son 0,30 por partido
+## entre los dos equipos, contra 1,53 corners y 5,03 centros.
+const TIPOS_QUE_SE_UBICAN := ["corner", "centro", "directo"]
 
 
 ## Quienes se paran EN EL HOMBRO del ultimo defensor cuando el equipo
@@ -3553,9 +3557,20 @@ static func _tiro_libre(estado: Dictionary, punto: Vector2, ataca_local: bool, _
 	# Qué clase de tiro libre es lo decide DÓNDE fue la falta, y eso es lo
 	# que después decide quién sube al área y quién se queda.
 	var tipo := "corto"
+	var d_arco: float = pos.distance_to(arco_rival(ataca_local))
+	var cuelga_lejos: bool = d_arco <= float(f["dist_para_colgar_lejos"])
+	cuelga_lejos = cuelga_lejos and Estilos.cuelga_de_lejos(_equipo_de(estado, ataca_local).estilo)
 	if factor_geometria(pos, ataca_local) >= float(f["geometria_minima_tiro_libre"]):
 		tipo = "directo"
-	elif pos.distance_to(arco_rival(ataca_local)) <= float(f["dist_libre_al_area"]):
+	elif d_arco <= float(f["dist_libre_al_area"]):
+		tipo = "centro"
+	elif cuelga_lejos:
+		# LA FALTA LEJANA, SEGUN EL ESTILO. Un Juego directo o un Fisico la
+		# cuelgan al area desde cuarenta y cinco metros; un Tiki taka la
+		# juega corta. Antes TODAS se jugaban cortas y no subia nadie:
+		# medido con tests/_diag_falta_lejana.gd, de las 4,2 faltas por
+		# partido y por equipo, 1,4 caian en la banda de 38 a 50 m y las
+		# ejecutaba el motor tocandola al companero mas cercano.
 		tipo = "centro"
 
 	var ejecutor := _elegir_ejecutor(estado, pos, ataca_local, tipo)
@@ -3754,13 +3769,21 @@ static func _marcar_posiciones(estado: Dictionary, pos: Vector2, ataca_local: bo
 	# en la fila es lo que después los pone hombro con hombro.
 	for id in estado["jugadores"]:
 		estado["jugadores"][id]["puesto_barrera"] = -1
-	if tipo == "corner" or tipo == "centro":
+	if tipo == "corner" or tipo == "centro" or tipo == "directo":
 		# El centro de un tiro libre es mas medido que un corner: suben
 		# dos menos, porque la jugada arranca con el juego en marcha y
 		# hay que quedar parado por si sale mal.
+		#
+		# En el DIRECTO suben todavia menos: la jugada es el remate, y los
+		# que van al area van a ESPERAR EL RECHAZO, no a cabecear un
+		# centro. Antes no subia nadie —medido, 1,0 atacantes en el area
+		# con tests/_diag_area_parada.gd— porque _marca_en_tiro_libre deja
+		# a cada uno donde estaba parado.
 		var suben := Estilos.suben_al_corner(_equipo_de(estado, ataca_local).estilo)
 		if tipo == "centro":
 			suben = maxi(suben - 2, 2)
+		elif tipo == "directo":
+			suben = maxi(suben - 4, 2)
 		_repartir_para_el_corner(estado, ataca_local, ejecutor, suben)
 	if tipo == "directo":
 		# Se eligen por cercania AL PUESTO de la barrera y no a la pelota:
@@ -3820,6 +3843,18 @@ static func _marcar_posiciones(estado: Dictionary, pos: Vector2, ataca_local: bo
 			continue
 
 		if tipo == "directo":
+			# El que fue marcado para esperar el rechazo se para en el
+			# area; los demas —incluida toda la defensa, que arma la
+			# barrera y marca— siguen con la regla de siempre.
+			if e["equipo_local"] == ataca_local and int(e.get("sube_al_area", 0)) == 1:
+				var en_area := Vector2(dentro_x + rng.randf_range(-4.0, 4.0),
+					rng.randf_range(-12.0, 12.0))
+				# La distancia reglamentaria vale para todos, tambien para
+				# el que espera el rechazo.
+				if pos.distance_to(en_area) < 9.15:
+					en_area = pos + (en_area - pos).normalized() * 9.15
+				e["marca"] = en_area
+				continue
 			e["marca"] = _marca_en_tiro_libre(e, pos, ataca_local)
 			continue
 		e["marca"] = e["base"]

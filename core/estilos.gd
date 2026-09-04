@@ -99,3 +99,21 @@ const SUBEN_AL_CORNER_DEFAULT := 5
 
 static func suben_al_corner(estilo: String) -> int:
 	return int(SUBEN_AL_CORNER.get(estilo, SUBEN_AL_CORNER_DEFAULT))
+
+
+## A partir de cuantos jugadores al corner un estilo tambien CUELGA AL
+## AREA las faltas lejanas, en vez de jugarlas cortas. Da Fisico (8),
+## Juego directo (7) y Presion alta (7); Tiki taka (5), Defensivo (4) y
+## Contragolpe (4) las siguen jugando cortas, que es lo que uno espera de
+## cada uno.
+##
+## Se deriva de SUBEN_AL_CORNER en vez de tener tabla propia: las dos
+## preguntas son la misma —cuanto cree este estilo en la pelota al area—
+## y con dos tablas se podian contradecir. La contra es que quedan
+## acopladas: mover cuantos suben al corner puede cambiar quien cuelga
+## las faltas lejanas.
+const CUELGA_DE_LEJOS_MINIMO := 7
+
+
+static func cuelga_de_lejos(estilo: String) -> bool:
+	return suben_al_corner(estilo) >= CUELGA_DE_LEJOS_MINIMO
