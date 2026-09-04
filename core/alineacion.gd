@@ -3,11 +3,15 @@ extends RefCounted
 
 ## Que el once que sale a la cancha pueda jugar.
 ##
-## Hasta ahora no lo miraba nadie. reset_partido() manda a la cancha a los
-## once titulares sin preguntar, asi que un lesionado o un suspendido
+## Hasta ahora no lo miraba nadie. reset_partido() mandaba a la cancha a
+## los once titulares sin preguntar, asi que un lesionado o un suspendido
 ## salia igual y recien lo sacaban en la primera ventana de cambios. En el
 ## fútbol eso no pasa: al suspendido no lo deja el reglamento y al
 ## lesionado no lo deja el sentido comun.
+##
+## Hoy reset_partido() deja afuera al que no puede jugar, pero solo eso:
+## el equipo sale con diez y el puesto queda vacio. Alineacion es la que
+## BUSCA el reemplazo y tapa el hueco. Las dos hacen falta.
 ##
 ## Lo usan dos caminos distintos. Al club del jugador se le avisa antes de
 ## darle a Jugar, para que elija el reemplazo (ver el modal de alineacion

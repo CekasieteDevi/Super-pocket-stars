@@ -77,21 +77,22 @@ func _test_quiebra_no_es_masiva_en_la_primera_temporada(rng: RandomNumberGenerat
 
 func _test_fans_suma_ingresos_sin_bajar_lo_que_ya_habia(rng: RandomNumberGenerator) -> void:
 	print("\n=== Fans (§8.4 #22) suma ingresos por encima de lo que ya habia con reputacion sola, nunca los baja ===")
-	# Dos clubes IDENTICOS salvo la hinchada. Tienen que ser dos: desde la
-	# v1.5 procesar_temporada mueve la reputacion y la hinchada del club
-	# que procesa, asi que llamarla dos veces sobre el mismo equipo
-	# comparaba la segunda contra un club ya cambiado — que es justo lo
-	# que hacia fallar esta prueba por -$234.
+	# Dos clubes IDENTICOS salvo la hinchada, y los dos cierran por
+	# Economia.calcular_temporada, que no toca al club. Desde la v1.5
+	# procesar_temporada mueve la reputacion y la hinchada del club que
+	# procesa, asi que llamarla dos veces sobre el mismo equipo comparaba
+	# la segunda contra un club ya cambiado — que es justo lo que hacia
+	# fallar esta prueba por -$234.
 	const DIVISION := 5
 	var sin_hinchada := Team.generar("ClubSinHinchada", rng, 0)
 	sin_hinchada.fans = Fans.fans_para_apoyo(0.0, DIVISION)
-	var ingresos_sin_fans: float = Economia.procesar_temporada(
+	var ingresos_sin_fans: float = Economia.calcular_temporada(
 		sin_hinchada, 10, 20, DIVISION)["ingresos"]
 
 	var con_hinchada := Team.generar("ClubSinHinchada", rng, 0)
 	con_hinchada.reputacion = sin_hinchada.reputacion
 	con_hinchada.fans = Fans.fans_para_apoyo(1.0, DIVISION)
-	var ingresos_con_fans: float = Economia.procesar_temporada(
+	var ingresos_con_fans: float = Economia.calcular_temporada(
 		con_hinchada, 10, 20, DIVISION)["ingresos"]
 
 	if ingresos_con_fans > ingresos_sin_fans:

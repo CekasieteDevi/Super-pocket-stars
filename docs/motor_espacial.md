@@ -567,8 +567,22 @@ Deliberadamente fuera de alcance hasta después del MVP: las 5 opciones de
 utilidad que faltan (gambetear/pase al hueco/pase largo/pared/centro más
 allá del recorte del MVP), desmarque real, offside, JSON de balance
 completo, reinicio de jugadas (lateral/córner/saque de arco animados en
-vez de instantáneos), y la decisión de si Copa/internacional alguna vez
-usan este motor (hoy ni siquiera se animan, quedan fuera).
+vez de instantáneos), y si las copas internacionales alguna vez usan este
+motor (hoy no se animan, quedan fuera).
+
+**Actualizado 2026-09-03**: el cruce de copa DEL JUGADOR ya usa este motor
+y se ve, igual que su partido de liga (`Copa.jugar_siguiente_ronda` con
+`equipo_seguido`). Los otros 99 cruces de la ronda siguen con el
+abstracto, que es la misma asimetría deliberada de la liga. El alargue y
+los penales quedan en el abstracto: este motor no tiene alargue, así que
+esos 30' se cuentan pero no se ven.
+
+Medido con el cruce de primera ronda de la Copa Nacional de un equipo de
+División 10 (20 corridas, mundo nuevo en cada una,
+`tests/_diag_copa_cruce.gd`): **8,05 goles en contra con el espacial
+contra 6,20 con el abstracto**. La goleada es del CRUCE, no del motor —
+es exactamente lo que anticipa §10 más abajo sobre los cruces entre
+divisiones lejanas.
 
 ---
 
@@ -2563,3 +2577,81 @@ buscaba: apretar te hace mejores jugadores y te cuesta la temporada.
 parámetro desde siempre pero nadie se lo pasaba— pero la tasa base es tan
 baja que en tres temporadas Brutal produjo UNA. El contrapeso real hoy es
 la fatiga, no la enfermería.
+
+## 49. GDD 10 — Las copas se juegan por clasificación
+
+Las dos copas domésticas entraban con todos: los 200 clubes al Rey y los
+20 de cada división a la interna. Ninguno de los dos números es potencia
+de 2, así que `Copa.iniciar` armaba una **ronda previa** y el resto
+pasaba con bye (pase libre).
+
+Las cuentas de lo que pasaba:
+
+| Copa | Entraban | Jugaban la 1ª ronda | Pasaban sin jugar |
+|---|---|---|---|
+| Rey | 200 | 144 (72 cruces) | 56 |
+| Interna | 20 | 8 (4 cruces) | 12 |
+
+En la interna, **12 de 20 clubes se saltaban la primera ronda**: al
+jugador le tocaba pase libre tres de cada cinco temporadas y la pantalla
+de copa abría con un cuadro de cuatro cruces y un cartel explicando por
+qué faltaban dieciséis equipos.
+
+### Los cupos
+
+Ahora clasifica una cantidad que sí es potencia de 2 y el cuadro sale
+perfecto. Los cupos viven en `ClasificacionCopas.CUPOS_COPA_NACIONAL`:
+
+| División | Cupos al Rey |
+|---|---|
+| 1 y 2 | 20 (todos) |
+| 3 y 4 | 16 |
+| 5 y 6 | 12 |
+| 7 a 10 | 8 |
+
+Suman **128**: 7 rondas, de 64 cruces a la final. La copa de división son
+los **16** primeros: 4 rondas, arranca en octavos.
+
+Diez divisiones **no pueden** repartir cupos parejos. Ninguna potencia de
+2 es divisible por 10, porque 10 tiene el factor 5: 12 por división son
+120 y 13 son 130, y ni 120 ni 130 sirven. Por eso los cupos bajan por
+escalones, que además es como entran las copas nacionales de verdad.
+
+Se descartó un cuadro de 64. La escalera obliga a darle 2 cupos a la
+décima, y desde décima —donde empieza el jugador— clasificar sería una
+rareza. Con 8 cupos, entrar es terminar en el tercio de arriba.
+
+### El orden de mérito
+
+Sale de la **tabla de la temporada anterior**, no de la actual: la copa se
+sortea antes de que se juegue una sola fecha. La foto de las diez tablas
+se saca en `GameState._cerrar_temporada` **antes** de
+`Piramide.fin_de_temporada`, que es quien resetea las tablas y mueve
+clubes de división.
+
+Un club que ascendió o descendió clasifica por la división donde **jugó**,
+y entra igual aunque ahora esté en otra. La clave de mérito mezcla las dos
+cosas en un número —`(división - 1) * 100 + posición`— así el último de la
+9ª (820) sigue por encima del primero de la 10ª (901). Eso es lo que hace
+que el que bajó encabece la copa interna de su división nueva.
+
+En la temporada 1 no hay tabla anterior de nada y el orden lo da la
+reputación, que es lo único que ya distingue un club grande de uno chico.
+
+### Lo que arrastró el cambio
+
+- **El objetivo de directiva de copa** pedía ganar N rondas del Rey. Sin
+  cupo es imposible de cumplir y son dos incumplidos seguidos para que te
+  echen, así que `Objetivos.generar` recibe `en_copa_nacional` y manda ese
+  tramo del sorteo a "tabla". Sigue tirando el mismo `randf`: la categoría
+  cambia, la secuencia del rng no.
+- **El aviso**: clasificar es un resultado de la temporada que terminó y
+  no hay de dónde deducirlo, así que el cierre deja una noticia por copa
+  con el cupo y con la posición que te dejó adentro o afuera.
+- **El mecanismo de bye no se borró**. Sigue haciendo falta de red: una
+  división a la que le falten clubes, o un guardado viejo, tienen que
+  armar cuadro igual en vez de reventar.
+
+Lo miden `tests/test_clasificacion_copas.gd` (la clasificación sola) y
+`tests/test_copas_por_temporada.gd` (la partida usándola, de una
+temporada a la otra).

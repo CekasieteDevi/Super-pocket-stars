@@ -64,6 +64,11 @@ func _test_la_temporada_arranca_siempre_en_marzo() -> void:
 			pasos += 1
 			if gs.hay_partido_hoy():
 				gs.jugar_siguiente_fecha()
+			elif gs.hay_partido_de_copa_hoy():
+				# La ronda de copa frena el calendario para que el jugador
+				# la juegue. Sin pantalla se resuelve sola: si no, el dia
+				# no avanza mas.
+				gs.resolver_ronda_de_copa()
 			else:
 				gs.avanzar_un_dia()
 		# El receso: dias sin fecha hasta el arranque nuevo.
@@ -110,6 +115,9 @@ func _test_al_cerrar_se_cae_lo_que_estaba_abierto() -> void:
 		pasos += 1
 		if gs.hay_partido_hoy():
 			gs.jugar_siguiente_fecha()
+			continue
+		if gs.hay_partido_de_copa_hoy():
+			gs.resolver_ronda_de_copa()
 			continue
 		gs.avanzar_un_dia()
 		if gs.dias_de_mercado() == 0:
@@ -191,6 +199,8 @@ func _test_lo_rechazado_y_lo_vencido_desaparece() -> void:
 		pasos += 1
 		if gs.hay_partido_hoy():
 			gs.jugar_siguiente_fecha()
+		elif gs.hay_partido_de_copa_hoy():
+			gs.resolver_ronda_de_copa()
 		else:
 			gs.avanzar_un_dia()
 	for o in gs.equipo_jugador.ofertas:

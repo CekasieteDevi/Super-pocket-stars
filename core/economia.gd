@@ -52,10 +52,10 @@ const PREMIO_POR_POSICION := {1: 50000.0, 2: 30000.0, 3: 15000.0}
 ## —cinco partidos contra treinta y ocho— en las diez divisiones.
 const PREMIO_COPA_DIVISION := {1: 20000.0, 2: 8000.0}
 
-## La Copa del Rey NO escala: la juegan los 200 clubes de las diez
-## divisiones, es la MISMA competencia para todos. Si escalara, ganarla
-## desde decima —la hazaña mas grande que se puede hacer en el juego,
-## ganarle a los 199— pagaria $8.600 y ganarla desde primera pagaria
+## La Copa del Rey NO escala: la juegan los 128 clubes clasificados de las
+## diez divisiones, es la MISMA competencia para todos. Si escalara,
+## ganarla desde decima —la hazaña mas grande que se puede hacer en el
+## juego, ganarle a los otros 127— pagaria $8.600 y ganarla desde primera pagaria
 ## $1,76M, o sea al reves. Fijo, son casi cinco temporadas de ingresos
 ## para un club de decima y un extra lindo para uno de primera.
 const PREMIO_COPA_REY := {1: 250000.0, 2: 100000.0}
@@ -159,7 +159,13 @@ const BONUS_OCUPACION_FANS := 0.3
 const OCUPACION_BASE := 0.2
 
 
-## Procesa una temporada terminada para un club. posicion_tabla es 1-indexado.
+## Cierra una temporada terminada para un club. posicion_tabla es 1-indexado.
+##
+## NO es una consulta: ademas de devolver el informe le mueve al club la
+## caja, el presupuesto, la reputacion, la hinchada y el estado de
+## quiebra, y le vacia los acumuladores de premios de copa y sponsors.
+## Llamala una sola vez por temporada y por club. Para preguntar "cuanto
+## cerraria" sin mover nada, usa calcular_temporada().
 static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos: int, division: int = -1) -> Dictionary:
 	var ocupacion_base: float = OCUPACION_BASE + clamp(equipo.reputacion, 0.0, 100.0) / 100.0 * 0.7
 	# El APOYO y no la cantidad cruda: la hinchada es exponencial y lo que
@@ -230,6 +236,22 @@ static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos:
 		"sueldos": total_sueldos, "mantenimiento": MANTENIMIENTO_FIJO,
 		"caja_total": estado["caja_total"], "valor_plantel": estado["valor_plantel"], "quebrado": estado["quebrado"],
 	}
+
+
+## La misma cuenta que procesar_temporada, pero sin tocar al club.
+##
+## Corre el cierre sobre una COPIA y devuelve solo el informe. El equipo
+## que se le pasa queda exactamente como estaba: misma caja, misma
+## reputacion, misma hinchada, mismos acumuladores.
+##
+## Comparar dos cierres del mismo club con procesar_temporada medía dos
+## clubes distintos, porque la primera llamada ya le habia movido la
+## reputacion y la hinchada a la segunda. Eso rompio dos tests el
+## 2026-09-03: el premio de copa daba $50.892 en vez de $50.000 en decima
+## y -$439.671 en primera. Usa esta funcion para cualquier comparacion,
+## previsualizacion o medicion.
+static func calcular_temporada(equipo: Team, posicion_tabla: int, total_equipos: int, division: int = -1) -> Dictionary:
+	return procesar_temporada(Team.cargar(equipo.guardar()), posicion_tabla, total_equipos, division)
 
 
 ## Todo el plantel activo (titulares+banco, §14), no solo los 11 titulares

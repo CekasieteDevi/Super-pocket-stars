@@ -45,6 +45,10 @@ func _init() -> void:
 		dias += 1
 		if GameState.hay_partido_hoy():
 			GameState.jugar_siguiente_fecha()
+		elif GameState.hay_partido_de_copa_hoy():
+			# La ronda de copa frena el calendario para que el jugador la
+			# juegue. Sin pantalla se resuelve sola.
+			GameState.resolver_ronda_de_copa()
 		else:
 			GameState.avanzar_un_dia()
 

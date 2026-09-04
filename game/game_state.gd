@@ -97,6 +97,14 @@ var noticias: Array = []
 var ultimo_informe_economico: Dictionary = {}  # ingresos/egresos/neto del ultimo cierre de temporada
 var ultima_posicion_final: Dictionary = {}  # {"posicion","total","division"} del cierre de temporada mas reciente
 
+## La foto de las diez tablas finales de la temporada PASADA:
+## nombre_club -> {"division", "posicion"}. Es lo que decide quien
+## clasifica a las copas de esta temporada (ver ClasificacionCopas). Se
+## saca en _cerrar_temporada, antes de que Piramide.fin_de_temporada
+## resetee las tablas. Vacio en la temporada 1: ahi clasifica por
+## reputacion.
+var posiciones_temporada_anterior: Dictionary = {}
+
 ## §10.5/§15: fin de partida real. Una vez true, jugar_siguiente_fecha() no
 ## avanza mas — la unica salida es borrar la partida y empezar una nueva.
 var juego_terminado: bool = false
@@ -144,9 +152,13 @@ func partida_nueva(semilla: int = -1, nombre_club: String = "",
 	seleccion = Seleccion.new()
 	division_jugador = DIVISION_INICIAL
 	equipo_jugador = piramide.divisiones[DIVISION_INICIAL].equipos[0]
-	equipo_jugador.objetivo_temporada = Objetivos.generar(
-		equipo_jugador, _es_ultima_division(DIVISION_INICIAL), liga_jugador().equipos.size(), rng)
+	# Las copas se arman ANTES del objetivo: sin cupo en el Rey no se
+	# puede sortear un objetivo de copa (Objetivos.generar).
+	posiciones_temporada_anterior = {}
 	_armar_copas()
+	equipo_jugador.objetivo_temporada = Objetivos.generar(
+		equipo_jugador, _es_ultima_division(DIVISION_INICIAL), liga_jugador().equipos.size(),
+		rng, _clasificado_al_rey())
 
 	# Todo lo que no vive en la piramide y quedaria colgado de la partida
 	# anterior: el calendario, el ultimo partido, las noticias, el balance.
@@ -215,16 +227,35 @@ func _sembrar_presupuestos() -> void:
 
 ## Arma las copas de la temporada. Se llama al empezar cada una: los
 ## cuadros se sortean UNA vez y después se juegan ronda a ronda.
+##
+## No entran todos: clasifican 128 al Rey y 16 a cada copa de división,
+## por la tabla de la temporada pasada (ver ClasificacionCopas). Los dos
+## números son potencia de 2, así que ningún club pasa sin jugar.
 func _armar_copas() -> void:
-	var todos := []
-	for liga in piramide.divisiones:
-		for equipo in liga.equipos:
-			todos.append(equipo)
-	copa_nacional = Copa.iniciar("Copa del Rey", todos, rng)
+	copa_nacional = Copa.iniciar("Copa del Rey",
+		ClasificacionCopas.clasificados_nacional(piramide, posiciones_temporada_anterior), rng)
 	copas_division = []
 	for d in range(piramide.divisiones.size()):
-		copas_division.append(Copa.iniciar(
-			"Copa Division %d" % (d + 1), piramide.divisiones[d].equipos.duplicate(), rng))
+		copas_division.append(Copa.iniciar("Copa Division %d" % (d + 1),
+			ClasificacionCopas.clasificados_de_division(
+				piramide, d, posiciones_temporada_anterior), rng))
+
+
+## Un cuadro sorteado ANTES de las copas por clasificación: reparte pases
+## libres en la primera ronda, que es justo lo que el sistema nuevo no
+## hace. Solo cuenta si la copa no arrancó (sin rondas jugadas).
+func _hay_cuadro_viejo() -> bool:
+	for copa in ([copa_nacional] + copas_division):
+		if copa == null:
+			continue
+		if copa.historial.is_empty() and not copa.equipos_con_bye.is_empty():
+			return true
+	return false
+
+
+## Si el club del jugador tiene cupo en el Rey de esta temporada.
+func _clasificado_al_rey() -> bool:
+	return copa_nacional != null and copa_nacional.participa(equipo_jugador)
 
 
 func liga_jugador() -> Liga:
@@ -554,7 +585,7 @@ func dias_hasta_el_partido() -> int:
 ##
 ## Si hoy hay partido no avanza nada: primero se juega.
 func avanzar_un_dia() -> Array:
-	if juego_terminado or hay_partido_hoy():
+	if juego_terminado or hay_partido_hoy() or hay_partido_de_copa_hoy():
 		return []
 	var noticias_antes: int = noticias.size()
 	# Los que se recuperan se preguntan ANTES y DESPUES: Team.avanzar_dias
@@ -601,7 +632,11 @@ func avanzar_un_dia() -> Array:
 
 	# La ronda de copa cae el miercoles: es el segundo partido de una
 	# semana apretada, no un evento aparte del calendario.
-	if dia_proxima_copa >= 0 and dia_temporada >= dia_proxima_copa:
+	#
+	# Se resuelve sola solo si el jugador NO tiene cruce. Si lo tiene, la
+	# ronda queda esperando: hay_partido_de_copa_hoy() frena el calendario
+	# hasta que el jugador aprieta Jugar en la portada.
+	if dia_proxima_copa >= 0 and dia_temporada >= dia_proxima_copa and copa_de_hoy() == null:
 		dia_proxima_copa = -1
 		_jugar_ronda_de_copas()
 
@@ -609,7 +644,21 @@ func avanzar_un_dia() -> Array:
 	# la ultima: si cerrara en el pitazo final, el jugador no llegaria a
 	# ver el ultimo resultado ni a cobrar los ultimos dias.
 	if not hay_fecha_pendiente() and dia_temporada >= dia_proximo_partido:
-		_cerrar_temporada()
+		# Hacen falta trece rondas de copa y en el calendario entran nueve
+		# miercoles: las que sobran se juegan aca, antes de cerrar. Si en
+		# alguna juega el equipo del jugador, la temporada ESPERA a que la
+		# juegue el — la semifinal y la final de la Copa Nacional caen casi
+		# siempre en este tramo.
+		if _hay_copa_pendiente():
+			dia_proxima_copa = dia_temporada
+			while _hay_copa_pendiente() and copa_de_hoy() == null:
+				_jugar_ronda_de_copas()
+		# Sin `return`: las noticias de las rondas que si se jugaron recien
+		# se juntan al final de esta funcion, y salteando el tramo se
+		# perderian.
+		if copa_de_hoy() == null:
+			dia_proxima_copa = -1
+			_cerrar_temporada()
 
 	# La apertura y el cierre del mercado se avisan siempre: son los dos
 	# dias del ano en que cambia lo que se puede hacer.
@@ -636,7 +685,7 @@ func avanzar_un_dia() -> Array:
 ## decision. Saltar a ciegas seria volver al problema de antes.
 func avanzar_hasta_el_partido() -> Array:
 	var todo := []
-	while not hay_partido_hoy() and not juego_terminado:
+	while not hay_partido_hoy() and not hay_partido_de_copa_hoy() and not juego_terminado:
 		var dia := avanzar_un_dia()
 		todo.append_array(dia)
 		if not dia.is_empty():
@@ -647,7 +696,9 @@ func avanzar_hasta_el_partido() -> Array:
 ## Guarda el partido recien jugado como un resumen que se basta solo: la
 ## pantalla de historial no vuelve a mirar los eventos ni los planteles,
 ## que para entonces ya cambiaron de jugadores y hasta de division.
-func _registrar_en_historial() -> void:
+## `torneo` vacio = partido de liga. Con nombre = cruce de copa, y ahi el
+## numero de fecha no significa nada: lo que ubica al partido es la copa.
+func _registrar_en_historial(torneo: String = "") -> void:
 	if ultimo_resultado.is_empty():
 		return
 	var local := str(ultimo_resultado.get("local", ""))
@@ -676,6 +727,7 @@ func _registrar_en_historial() -> void:
 
 	historial_partidos.push_front({
 		"temporada": temporada_actual,
+		"torneo": torneo,
 		"fecha": fecha_actual + 1,
 		"dia": dia_absoluto,
 		"division": division_jugador + 1,
@@ -759,29 +811,128 @@ func _hay_copa_pendiente() -> bool:
 	return false
 
 
-## Una ronda por slot, alternando qué copa se juega: dos partidos entre
-## semana además de la liga sería un calendario que no existe.
-func _jugar_ronda_de_copas() -> void:
+## Las copas a las que les toca ronda en este slot. Una ronda por slot,
+## alternando: los slots impares son de la Copa Nacional y los pares de
+## las diez copas de division. Dos partidos entre semana ademas de la liga
+## seria un calendario que no existe.
+##
+## El ultimo caso —devolver la nacional aunque no sea su turno— es lo que
+## permite drenar las rondas que sobran al cerrar la temporada: entran
+## nueve slots y hacen falta trece rondas. Sin eso, un cierre con la
+## nacional pendiente y las de division terminadas no jugaba ninguna ronda
+## y el bucle de drenaje no cortaba nunca.
+func _copas_de_la_ronda() -> Array:
 	var slot: int = int(fecha_actual / FECHAS_ENTRE_RONDAS_COPA)
-	var toca_nacional: bool = slot % 2 == 1
-	if toca_nacional and copa_nacional != null and copa_nacional.campeon == null:
-		copa_nacional.jugar_siguiente_ronda(rng)
-		if copa_nacional.campeon != null:
-			var plata := _pagar_premio_de_copa(copa_nacional, Economia.PREMIO_COPA_REY, 1.0)
-			_agregar_noticia("COPA DEL REY: campeón %s (%s)." % [
-				copa_nacional.campeon.nombre, Economia.formato_dinero(plata)], "campeones")
-		return
-	for i in range(copas_division.size()):
-		var c: Copa = copas_division[i]
+	var nacional_pendiente: bool = copa_nacional != null and copa_nacional.campeon == null
+	var de_division := []
+	for c in copas_division:
 		if c.campeon == null:
-			c.jugar_siguiente_ronda(rng)
-			if c.campeon != null:
-				# La copa de division SI escala con la division: es una
-				# competencia de esa division y su plata vale lo que vale ahi.
-				var plata := _pagar_premio_de_copa(c, Economia.PREMIO_COPA_DIVISION,
-					Economia.factor_division(i))
-				_agregar_noticia("COPA DIVISIÓN %d: campeón %s (%s)." % [
-					i + 1, c.campeon.nombre, Economia.formato_dinero(plata)], "campeones")
+			de_division.append(c)
+	if slot % 2 == 1 and nacional_pendiente:
+		return [copa_nacional]
+	if not de_division.is_empty():
+		return de_division
+	return [copa_nacional] if nacional_pendiente else []
+
+
+## La copa en la que al jugador le toca jugar HOY, o null. Es un dato
+## DERIVADO del cuadro y del calendario: no agrega nada al guardado, asi
+## que un cruce pendiente sobrevive a guardar y cargar la partida.
+func copa_de_hoy() -> Copa:
+	if juego_terminado or dia_proxima_copa < 0 or dia_temporada < dia_proxima_copa:
+		return null
+	for c in _copas_de_la_ronda():
+		if not c.cruce_de(equipo_jugador).is_empty():
+			return c
+	return null
+
+
+func hay_partido_de_copa_hoy() -> bool:
+	return copa_de_hoy() != null
+
+
+## El rival del cruce de copa de hoy, o null. En la Copa Nacional puede
+## ser de cualquiera de las diez divisiones.
+func rival_de_copa() -> Team:
+	var c := copa_de_hoy()
+	if c == null:
+		return null
+	var cruce: Array = c.cruce_de(equipo_jugador)
+	return cruce[1] if cruce[0] == equipo_jugador else cruce[0]
+
+
+## Si el cruce de copa de hoy lo juega de local.
+func copa_de_local() -> bool:
+	var c := copa_de_hoy()
+	if c == null:
+		return false
+	return c.cruce_de(equipo_jugador)[0] == equipo_jugador
+
+
+## Juega la ronda de copa de hoy CON el partido del jugador adentro: el
+## suyo con el motor espacial y fotogramas, el resto simulado. La llama el
+## boton de la portada. Antes esta ronda se resolvia sola y el jugador se
+## enteraba del resultado por el feed.
+func jugar_partido_de_copa() -> void:
+	if copa_de_hoy() == null:
+		return
+	dia_proxima_copa = -1
+	_jugar_ronda_de_copas(equipo_jugador)
+
+
+## Resuelve la ronda de copa de hoy SIN mirar el cruce propio. Es lo que
+## usa el modo "saltar la temporada" y lo que necesita cualquiera que
+## maneje el calendario sin pantalla: el dia no avanza mientras haya un
+## cruce de copa sin jugar, igual que no avanza con un partido de liga sin
+## jugar. Jugarlo a mano y verlo es jugar_partido_de_copa().
+func resolver_ronda_de_copa() -> void:
+	if dia_proxima_copa < 0 or dia_temporada < dia_proxima_copa:
+		return
+	dia_proxima_copa = -1
+	_jugar_ronda_de_copas()
+
+
+func _jugar_ronda_de_copas(equipo_seguido: Team = null) -> void:
+	for c in _copas_de_la_ronda():
+		c.jugar_siguiente_ronda(rng, equipo_seguido)
+		if not c.seguido.is_empty():
+			_tomar_partido_de_copa(c)
+		if c.campeon == null:
+			continue
+		if c == copa_nacional:
+			var plata := _pagar_premio_de_copa(c, Economia.PREMIO_COPA_REY, 1.0)
+			_agregar_noticia("COPA DEL REY: campeón %s (%s)." % [
+				c.campeon.nombre, Economia.formato_dinero(plata)], "campeones")
+		else:
+			# La copa de division SI escala con la division: es una
+			# competencia de esa division y su plata vale lo que vale ahi.
+			var i: int = copas_division.find(c)
+			var plata := _pagar_premio_de_copa(c, Economia.PREMIO_COPA_DIVISION,
+				Economia.factor_division(i))
+			_agregar_noticia("COPA DIVISIÓN %d: campeón %s (%s)." % [
+				i + 1, c.campeon.nombre, Economia.formato_dinero(plata)], "campeones")
+
+
+## El cruce de copa que acaba de jugar el jugador pasa a ser "el ultimo
+## partido": es lo que mira la pantalla animada y lo que entra al
+## historial, igual que un partido de liga.
+func _tomar_partido_de_copa(c: Copa) -> void:
+	var s: Dictionary = c.seguido
+	ultimo_resultado = {
+		"local": s["local"], "visitante": s["visitante"],
+		"gl": s["gl"], "gv": s["gv"], "goles_log": s["goles_log"],
+	}
+	ultimo_log = s["log"]
+	ultimos_eventos = s["eventos"]
+	ultimos_fotogramas = s["fotogramas"]
+	_registrar_en_historial(c.nombre)
+	var paso: bool = str(s["ganador"]) == equipo_jugador.nombre
+	var cierre := ""
+	if str(s["definicion"]) != "90 minutos":
+		cierre = " en %s%s" % [s["definicion"], s["penales_texto"]]
+	_agregar_noticia("%s: %s %d-%d %s%s. %s" % [
+		c.nombre.to_upper(), s["local"], s["gl"], s["gv"], s["visitante"], cierre,
+		"Pasás de ronda." if paso else "Quedás eliminado."], "campeones")
 
 
 ## Copas + internacional con la temporada recién jugada, después ascensos/
@@ -806,6 +957,12 @@ func _cerrar_temporada() -> void:
 		if not orden.is_empty():
 			_agregar_noticia("LIGA: campeón de la División %d: %s." % [
 				d + 1, orden[0]], "campeones")
+
+	# ACA, con las diez tablas todavía enteras: mas abajo
+	# piramide.fin_de_temporada las resetea y mueve clubes de division, y
+	# las copas de la temporada que viene se sortean con esta foto (ver
+	# _armar_copas).
+	posiciones_temporada_anterior = ClasificacionCopas.posiciones_finales(piramide)
 
 	# Las copas vienen jugándose entre semana desde la primera fecha; si
 	# quedó alguna ronda sin jugar (temporada corta, pocas fechas), se
@@ -945,10 +1102,41 @@ func _cerrar_temporada() -> void:
 			s["nombre"], equipo_jugador.nombre, motivo])
 	# Cuadros nuevos con los equipos YA movidos de división.
 	_armar_copas()
+	_avisar_clasificacion_a_copas()
 
 	if not juego_terminado:
 		equipo_jugador.objetivo_temporada = Objetivos.generar(
-			equipo_jugador, _es_ultima_division(division_jugador), liga_jugador().equipos.size(), rng)
+			equipo_jugador, _es_ultima_division(division_jugador), liga_jugador().equipos.size(),
+			rng, _clasificado_al_rey())
+
+
+## Clasificar a las copas es un resultado de la temporada que termino, y
+## el jugador no tiene de donde deducirlo: los cupos salen de la tabla
+## final de CADA division y el cuadro nuevo ya esta sorteado. Va una
+## noticia por copa, con el cupo y con la posicion que lo dejo adentro o
+## afuera.
+func _avisar_clasificacion_a_copas() -> void:
+	var puesto := int(ultima_posicion_final.get("posicion", 0))
+	var division_jugada := int(ultima_posicion_final.get("division", division_jugador + 1))
+	var cupos_rey := ClasificacionCopas.cupos_de(division_jugada - 1)
+	if _clasificado_al_rey():
+		_agregar_noticia("COPA DEL REY: %s clasifica (salió %d° en la División %d, entran los primeros %d)." % [
+			equipo_jugador.nombre, puesto, division_jugada, cupos_rey], "campeones")
+	else:
+		_agregar_noticia("COPA DEL REY: %s se queda afuera (salió %d° en la División %d, entran los primeros %d)." % [
+			equipo_jugador.nombre, puesto, division_jugada, cupos_rey], "campeones")
+
+	var interna: Copa = copas_division[division_jugador] if division_jugador < copas_division.size() else null
+	if interna == null:
+		return
+	if interna.participa(equipo_jugador):
+		_agregar_noticia("COPA DE LA DIVISIÓN %d: %s clasifica (entran los %d mejores)." % [
+			division_jugador + 1, equipo_jugador.nombre,
+			ClasificacionCopas.CUPOS_COPA_DIVISION], "campeones")
+	else:
+		_agregar_noticia("COPA DE LA DIVISIÓN %d: %s se queda afuera (entran los %d mejores)." % [
+			division_jugador + 1, equipo_jugador.nombre,
+			ClasificacionCopas.CUPOS_COPA_DIVISION], "campeones")
 
 
 ## Amistoso de la selección (una vez por cierre de temporada): convoca a
@@ -1122,7 +1310,7 @@ func cerrar_fichaje(oferta_id: int, sueldo: float, anios: int, clausula: float) 
 	var detalle := Negociacion.interes_jugador(
 		jugador, vendedor.animo.get(jugador_id, 50.0),
 		float(vendedor.sueldos.get(jugador_id, 0.0)), sueldo,
-		_division_de(vendedor), division_jugador, clausula / normal)
+		division_de(vendedor), division_jugador, clausula / normal)
 	if not detalle["acepta"]:
 		return {"exito": false, "motivo": Negociacion.motivo_rechazo(detalle), "detalle": detalle}
 
@@ -1166,7 +1354,7 @@ func pedir_prestamo(dueno: Team, jugador_id: int, duracion: String,
 	# El jugador tambien decide. En un prestamo el salto de categoria pesa
 	# la MITAD: es temporal y lo que busca es jugar, no mudarse.
 	var sueldo_actual: float = float(dueno.sueldos.get(jugador_id, 0.0))
-	var div_origen := _division_de(dueno)
+	var div_origen := division_de(dueno)
 	var salto: int = division_jugador - div_origen
 	var detalle := Negociacion.interes_jugador(
 		jugador, dueno.animo.get(jugador_id, 50.0), sueldo_actual, sueldo_actual,
@@ -1216,7 +1404,7 @@ func ofertas_para_responder() -> int:
 
 
 ## En que division esta un club. -1 si no aparece (no deberia pasar).
-func _division_de(club: Team) -> int:
+func division_de(club: Team) -> int:
 	for d in range(piramide.divisiones.size()):
 		if piramide.divisiones[d].equipos.has(club):
 			return d
@@ -1297,6 +1485,12 @@ func simular_temporada_completa() -> void:
 		pasos += 1
 		if hay_partido_hoy():
 			jugar_siguiente_fecha()
+			continue
+		# Modo "saltar la temporada": la ronda de copa se resuelve sola,
+		# sin frenar a mirar el cruce propio. Si frenara, avanzar_un_dia()
+		# no avanzaria mas y esto giraria hasta el tope de pasos.
+		if hay_partido_de_copa_hoy():
+			resolver_ronda_de_copa()
 			continue
 		# Las novedades se descartan a proposito: esto es el modo
 		# "saltar la temporada", no se frena por nada.
@@ -1390,6 +1584,7 @@ func guardar_partida() -> void:
 		"noticias": noticias,
 		"ultimo_informe_economico": ultimo_informe_economico,
 		"ultima_posicion_final": ultima_posicion_final,
+		"posiciones_temporada_anterior": posiciones_temporada_anterior,
 		"juego_terminado": juego_terminado,
 		"motivo_fin_partida": motivo_fin_partida,
 		# El último partido jugado se guarda (resultado, log y eventos, no
@@ -1470,6 +1665,10 @@ func cargar_partida() -> bool:
 	resumen_temporada = datos.get("resumen_temporada", {})
 	ultimo_informe_economico = datos["ultimo_informe_economico"]
 	ultima_posicion_final = datos["ultima_posicion_final"]
+	# Un guardado anterior a las copas por clasificación no la trae: las
+	# copas de esa temporada quedan armadas como estaban y la foto se
+	# llena sola en el próximo cierre.
+	posiciones_temporada_anterior = datos.get("posiciones_temporada_anterior", {})
 	juego_terminado = datos.get("juego_terminado", false)
 
 	# Una partida guardada ANTES del libro de pases puede traer
@@ -1507,6 +1706,13 @@ func cargar_partida() -> bool:
 		copas_division = []
 		for d in datos_division:
 			copas_division.append(Copa.cargar(d, piramide))
+		# Migración a las copas por clasificación: un guardado anterior
+		# trae los cuadros viejos, con los 200 clubes y sus pases libres.
+		# Se resortean SOLO si todavía no se jugó una ronda — ahí no hay
+		# nada que perder. Con una ronda jugada el cuadro viejo se termina
+		# como está y el nuevo entra en la temporada que viene.
+		if _hay_cuadro_viejo():
+			_armar_copas()
 	ultimo_resultado = datos.get("ultimo_resultado", {})
 	ultimo_log = datos.get("ultimo_log", [])
 	ultimos_eventos = datos.get("ultimos_eventos", [])

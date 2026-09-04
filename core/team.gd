@@ -906,14 +906,33 @@ func incorporar(jugador: Dictionary, valor: float, contrato_anios: int = 3) -> D
 	return saliente
 
 
+## Deja al equipo listo para arrancar un partido: borra lo que dura solo
+## un partido y manda a la cancha a los titulares que PUEDEN jugar.
+##
+## Antes mandaba a los once sin mirar nada, asi que un lesionado o un
+## suspendido salia a la cancha si nadie habia corrido Alineacion.arreglar
+## antes — y los unicos que lo corren son Liga.jugar_fecha y el modal de
+## la UI. Quien entra por otro lado (Laboratorio, un test, una llamada
+## directa a un motor) jugaba con gente inhabilitada sin enterarse.
+##
+## El filtro no reemplaza a Alineacion: Alineacion busca al suplente y
+## tapa el hueco, esto solo garantiza que nadie inhabilitado pise la
+## cancha. Sin arreglar la alineacion, el equipo sale con diez — que es lo
+## que pasa de verdad cuando no tenes con quien cubrir el puesto. Los dos
+## motores ya juegan con menos de once (las rojas hacen lo mismo).
 func reset_partido() -> void:
 	racha = 0
 	avance = 0
 	goles = 0
 	resistencia.clear()
 	amarillas_partido.clear()
+	# Va ANTES del filtro: los expulsados son del partido anterior y este
+	# ya empezo, asi que no pueden dejar a nadie afuera de este.
 	expulsados_partido.clear()
-	en_cancha = jugadores.map(func(j): return j["id"])
+	en_cancha = []
+	for j in jugadores:
+		if puede_jugar(int(j["id"])):
+			en_cancha.append(j["id"])
 	cambios_realizados = 0
 	for j in todos_los_jugadores():
 		resistencia[j["id"]] = fatiga_acumulada.get(j["id"], 1.0)

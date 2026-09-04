@@ -30,12 +30,21 @@ const PROB_CATEGORIA_COPA := 0.25
 const PROB_CATEGORIA_CANTERA := 0.15  # el resto (60%) es "tabla"
 
 
-static func generar(equipo: Team, es_ultima_division: bool, total_equipos: int, rng: RandomNumberGenerator) -> Dictionary:
+## `en_copa_nacional` = el club tiene cupo en el Rey de esta temporada.
+## Sin cupo el objetivo de copa es imposible de cumplir y son dos
+## incumplidos seguidos para que te echen, así que ese tramo del sorteo
+## cae en "tabla". Se sigue tirando el mismo randf igual: la categoría
+## cambia, la secuencia del rng no, y las semillas de los tests siguen
+## valiendo.
+static func generar(equipo: Team, es_ultima_division: bool, total_equipos: int,
+		rng: RandomNumberGenerator, en_copa_nacional: bool = true) -> Dictionary:
 	if es_ultima_division:
 		return _generar_tabla(equipo, es_ultima_division, total_equipos)
 
 	var roll := rng.randf()
 	if roll < PROB_CATEGORIA_COPA:
+		if not en_copa_nacional:
+			return _generar_tabla(equipo, es_ultima_division, total_equipos)
 		return _generar_copa(equipo)
 	if roll < PROB_CATEGORIA_COPA + PROB_CATEGORIA_CANTERA:
 		return _generar_cantera()
@@ -70,8 +79,8 @@ static func _generar_tabla(equipo: Team, es_ultima_division: bool, total_equipos
 	}
 
 
-## §10.1 (Copa Nacional, 200 clubes, eliminación directa — ver core/copa.gd
-## Copa.rondas_ganadas). Un club de reputación alta debería llegar lejos;
+## §10.1 (Copa Nacional, 128 clubes clasificados, eliminación directa —
+## ver core/copa.gd Copa.rondas_ganadas y core/clasificacion_copas.gd). Un club de reputación alta debería llegar lejos;
 ## uno chico ya cumple ganando su primer cruce.
 static func _generar_copa(equipo: Team) -> Dictionary:
 	var rondas: int

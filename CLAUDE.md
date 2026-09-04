@@ -45,13 +45,20 @@ Editalo cuando quieras: lo que esté acá lo sigo.
 
 ## Trampas conocidas
 
-- `Economia.procesar_temporada` **no es una consulta**. Además de
-  devolver el informe, le mueve al club la reputación y la hinchada.
-  Cualquier test que compare dos llamadas tiene que partir de una copia
-  fresca: `Team.cargar(equipo.guardar())`. Resetear un campo no alcanza.
-  Esto rompió dos tests el 2026-09-03.
-- `Team.reset_partido()` manda a la cancha a los 11 de `jugadores` sin
-  mirar nada. Quien valida que puedan jugar es `Alineacion`.
+Las dos que estaban acá se arreglaron el 2026-09-03. Quedan anotadas
+porque el arreglo define un contrato que hay que respetar.
+
+- `Economia.procesar_temporada` **no es una consulta**: le mueve al club
+  la caja, el presupuesto, la reputación, la hinchada y la quiebra.
+  Llamala una sola vez por temporada y por club. Para comparar, medir o
+  previsualizar un cierre, usá `Economia.calcular_temporada`, que corre
+  el mismo cierre sobre una copia y no toca al club.
+- `Team.reset_partido()` ya no manda a la cancha al que no puede jugar:
+  filtra `jugadores` por `puede_jugar()`. Eso es todo lo que hace — el
+  puesto queda vacío y el equipo sale con diez. Quien BUSCA el reemplazo
+  y tapa el hueco sigue siendo `Alineacion.arreglar`, y la llaman
+  `Liga.jugar_fecha` (clubes de la IA) y el modal de alineación (club del
+  jugador).
 
 ## Cosas que no se tocan
 

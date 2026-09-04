@@ -568,6 +568,15 @@ func _fila_jugador(equipo: Team, j: Dictionary, par: bool, es_banco: bool) -> Co
 	dentro.add_child(Componentes.celda_numero("%.1f" % float(j["media"]), 62))
 	dentro.add_child(Componentes.celda("→%d" % int(j["potencial"]), 52, Tema.SUAVE))
 
+	# El valor, en la lista y no solo en la ficha: comparar lo que te
+	# ofrecen por uno contra lo que valen los demas es la decision que se
+	# toma en esta pantalla.
+	dentro.add_child(Componentes.celda_numero(
+		Economia.formato_dinero(ValorJugador.calcular(
+			j, equipo.animo.get(id, 50.0), equipo.contratos.get(id, 3))),
+		Componentes.COL_VALOR, Tema.VERDE, HORIZONTAL_ALIGNMENT_RIGHT,
+		Componentes.TAM_TABLA))
+
 	# Estado: lo unico que hace falta saber de un vistazo al armar el equipo.
 	var estado := "Listo"
 	var color := Tema.VERDE
@@ -647,6 +656,9 @@ func _refrescar_ficha_lateral() -> void:
 	fila_nums.add_child(_caja_numero("Techo", str(int(j["potencial"])), Tema.AMBAR))
 	var animo := int(equipo.animo.get(plantel_elegido, 50))
 	fila_nums.add_child(_caja_numero("Ánimo", str(animo), Componentes.color_de_valor(animo)))
+	fila_nums.add_child(_caja_numero("Vale", Economia.formato_dinero(
+		ValorJugador.calcular(j, float(animo),
+			equipo.contratos.get(plantel_elegido, 3))), Tema.VERDE))
 
 	if equipo.esta_lesionado(plantel_elegido):
 		var les: Dictionary = equipo.lesiones[plantel_elegido]
@@ -962,11 +974,14 @@ func _cabecera_de_ficha(equipo: Team, j: Dictionary, ajeno: bool) -> Control:
 	nums.add_child(_caja_numero("Techo", str(int(j["potencial"])), Tema.AMBAR))
 	var animo := int(equipo.animo.get(id, 50))
 	nums.add_child(_caja_numero("Ánimo", str(animo), Componentes.color_de_valor(animo)))
-	if ajeno:
-		nums.add_child(_caja_numero("Valor", Economia.formato_dinero(
-			ValorJugador.calcular(j, equipo.animo.get(id, 50.0),
-				equipo.contratos.get(id, 3))), Tema.VERDE))
-	else:
+	# El valor va SIEMPRE, tambien en TUS jugadores. Antes solo se veia el
+	# de los ajenos: cuando un club te ofertaba por uno tuyo, la unica
+	# cifra a la vista era el monto de la oferta y no habia contra que
+	# compararla.
+	nums.add_child(_caja_numero("Valor", Economia.formato_dinero(
+		ValorJugador.calcular(j, equipo.animo.get(id, 50.0),
+			equipo.contratos.get(id, 3))), Tema.VERDE))
+	if not ajeno:
 		# La energia con la que va a EMPEZAR el proximo partido, no la del
 		# ultimo (ver Team.energia_proximo_partido). De un jugador ajeno no
 		# se sabe, y ademas no significa nada fuera de su calendario.
@@ -1816,8 +1831,8 @@ func _barra_mitad(fraccion: float, color: Color, derecha: bool) -> Control:
 ## Quien hizo los goles, que es lo primero que se busca al terminar.
 func _texto_goleadores() -> String:
 	var r: Dictionary = GameState.ultimo_resultado
-	var local := _equipo_de_la_liga(str(r.get("local", "")))
-	var visitante := _equipo_de_la_liga(str(r.get("visitante", "")))
+	var local := _equipo_por_nombre(str(r.get("local", "")))
+	var visitante := _equipo_por_nombre(str(r.get("visitante", "")))
 	var partes := []
 	for gol in r.get("goles_log", []):
 		# El log guarda el ID, no el nombre: se resuelve contra los dos
@@ -2373,16 +2388,14 @@ func _encabezado_mercado() -> Control:
 	var dentro := Componentes.contenido(fila)
 	for col in BusquedaMercado.COLUMNAS:
 		var clave := str(col["clave"])
-		var ancho: int = _ancho_de_columna(clave)
-		var btn := Button.new()
-		btn.text = str(col["titulo"])
+		var titulo := str(col["titulo"])
 		if orden_mercado == clave:
-			btn.text += "  ↑" if orden_mercado_asc else "  ↓"
-		btn.custom_minimum_size = Vector2(ancho, 0)
-		btn.flat = true
-		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		btn.add_theme_font_size_override("font_size", Componentes.TAM_TABLA)
-		btn.add_theme_color_override("font_color",
+			titulo += " ↑" if orden_mercado_asc else " ↓"
+		# El titulo se alinea como la celda que encabeza, o la columna se
+		# lee torcida: los numeros van pegados a la derecha y el titulo
+		# quedaba pegado a la izquierda, a 60 px de sus propias cifras.
+		var btn := Componentes.boton_de_celda(titulo, _ancho_de_columna(clave),
+			_alineacion_de_columna(clave),
 			Tema.AMBAR if orden_mercado == clave else Tema.SUAVE)
 		btn.pressed.connect(func(): _on_ordenar_mercado(clave))
 		dentro.add_child(btn)
@@ -2404,6 +2417,16 @@ func _ancho_de_columna(clave: String) -> int:
 	return 90
 
 
+## Como se alinea el contenido de cada columna del mercado. El encabezado
+## la copia: una cifra a la derecha con su titulo a la izquierda no se lee
+## como la misma columna.
+func _alineacion_de_columna(clave: String) -> int:
+	match clave:
+		"nombre": return HORIZONTAL_ALIGNMENT_LEFT
+		"posicion": return HORIZONTAL_ALIGNMENT_CENTER
+	return HORIZONTAL_ALIGNMENT_RIGHT
+
+
 func _fila_mercado(f: Dictionary, par: bool) -> Control:
 	var equipo := GameState.equipo_jugador
 	var fila := Componentes.fila(par)
@@ -2413,18 +2436,11 @@ func _fila_mercado(f: Dictionary, par: bool) -> Control:
 	var conocido: bool = bool(f["conocido"])
 
 	# Nombre: entra a la ficha, pero solo si lo investigaste.
-	var btn_nombre := Button.new()
-	btn_nombre.text = str(f["nombre"])
-	btn_nombre.tooltip_text = str(f["nombre"])
-	btn_nombre.custom_minimum_size = Vector2(Componentes.COL_NOMBRE, 0)
-	btn_nombre.add_theme_font_size_override("font_size", Componentes.TAM_TABLA)
-	btn_nombre.flat = true
-	btn_nombre.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	btn_nombre.clip_text = true
-	btn_nombre.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	var btn_nombre := Componentes.boton_de_celda(str(f["nombre"]),
+		Componentes.COL_NOMBRE, HORIZONTAL_ALIGNMENT_LEFT,
+		Tema.CELESTE if conocido else Tema.SUAVE.darkened(0.25))
 	btn_nombre.disabled = not conocido
 	if conocido:
-		btn_nombre.add_theme_color_override("font_color", Tema.CELESTE)
 		btn_nombre.pressed.connect(func(): _mostrar_ficha(jugador_id, vendedor))
 	dentro.add_child(btn_nombre)
 
@@ -2470,9 +2486,7 @@ func _fila_mercado(f: Dictionary, par: bool) -> Control:
 	# pantalla: el ultimo boton quedaba fuera del viewport. Son las dos
 	# formas de quedarse con el MISMO jugador, asi que van juntas bajo
 	# "Fichar" y se elige adentro.
-	var btn_inv := Button.new()
-	btn_inv.custom_minimum_size = Vector2(Componentes.COL_ACCION, 0)
-	btn_inv.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	var btn_inv := Componentes.boton_de_accion("", Componentes.COL_ACCION)
 	if conocido:
 		var quedan := Investigadores.vigencia(equipo, jugador_id)
 		btn_inv.text = "Vence pronto" if quedan < 120 else "Conocido"
@@ -2506,6 +2520,7 @@ func _fila_mercado(f: Dictionary, par: bool) -> Control:
 		menu.text = "Fichar"
 		menu.custom_minimum_size = Vector2(Componentes.COL_FICHAR, 0)
 		menu.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		menu.clip_text = true
 		menu.flat = false
 		var pop := menu.get_popup()
 		pop.add_item("Comprar", 0)
@@ -2523,12 +2538,9 @@ func _fila_mercado(f: Dictionary, par: bool) -> Control:
 ## El lugar del boton Fichar cuando no se puede fichar. Ocupa el MISMO
 ## ancho: si desapareciera, la fila se desalinearia con las de al lado.
 func _boton_fichar_apagado(texto: String, ayuda: String) -> Button:
-	var b := Button.new()
-	b.text = texto
+	var b := Componentes.boton_de_accion(texto, Componentes.COL_FICHAR)
 	b.tooltip_text = ayuda
 	b.disabled = true
-	b.custom_minimum_size = Vector2(Componentes.COL_FICHAR, 0)
-	b.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
 	return b
 
 
@@ -2683,7 +2695,11 @@ func _refrescar_investigaciones() -> void:
 			dentro.add_child(Componentes.celda("", 250))
 		else:
 			var j: Dictionary = dato["jugador"]
-			dentro.add_child(Componentes.celda(_nombre_jugador(j), 260))
+			# El nombre entra a la ficha, igual que en la tabla del mercado:
+			# si ya terminaste el informe, la ficha esta desbloqueada y no
+			# hay motivo para obligarte a volver a buscarlo en el mercado.
+			dentro.add_child(_boton_nombre_conocido(
+				_nombre_jugador(j), id, dato["club"]))
 			dentro.add_child(Componentes.celda("%s  ·  D%d" % [
 				dato["club"].nombre, int(dato["division"])], 210, Tema.SUAVE))
 			dentro.add_child(Componentes.celda("%s  ·  media %.1f  ·  %d años" % [
@@ -2696,6 +2712,24 @@ func _refrescar_investigaciones() -> void:
 			("VENCE PRONTO · %d dias" % dias) if pronto else ("vence en %d dias" % dias),
 			220, Tema.ROJO if pronto else Tema.SUAVE))
 		contenedor_investigaciones.add_child(fila)
+
+
+## El nombre de un conocido, como boton a la ficha. Mismo aspecto que el
+## boton de la tabla del mercado: plano, celeste y recortado con puntos
+## suspensivos si no entra.
+func _boton_nombre_conocido(nombre: String, jugador_id: int, club: Team) -> Button:
+	var btn := Button.new()
+	btn.text = nombre
+	btn.tooltip_text = nombre
+	btn.custom_minimum_size = Vector2(260, 0)
+	btn.add_theme_font_size_override("font_size", Componentes.TAM_TABLA)
+	btn.add_theme_color_override("font_color", Tema.CELESTE)
+	btn.flat = true
+	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	btn.clip_text = true
+	btn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	btn.pressed.connect(func(): _mostrar_ficha(jugador_id, club))
+	return btn
 
 
 func _encabezado_conocidos() -> Control:
@@ -3343,7 +3377,14 @@ func _abrir_oferta(oferta_id: int) -> void:
 	for hijo in caja_negociacion_datos.get_children():
 		hijo.queue_free()
 
+	# Con que se decide. Antes esta caja quedaba VACIA en las ofertas ya
+	# abiertas: la unica cifra era el monto sobre la mesa y no habia forma
+	# de saber si te estaban ofreciendo bien o te lo estaban robando.
+	var veredicto := _datos_de_la_oferta(o)
+
 	var historia := ""
+	if veredicto != "":
+		historia += veredicto + "\n"
 	for linea in o["log"]:
 		historia += "[color=#93a79b]%s[/color]
 " % str(linea)
@@ -3368,6 +3409,55 @@ func _abrir_oferta(oferta_id: int) -> void:
 	dialogo_negociacion.popup_centered()
 
 
+## Llena la caja de datos del modal de una oferta ya abierta y devuelve el
+## veredicto: si lo que hay sobre la mesa alcanza o no.
+##
+## El dueño del jugador es el OTRO club cuando la oferta la mandaste vos, y
+## sos vos cuando la oferta es entrante — de ahi salen el valor, el sueldo
+## y el contrato.
+func _datos_de_la_oferta(o: Dictionary) -> String:
+	var entrante: bool = bool(o["entrante"])
+	var dueno: Team = GameState.equipo_jugador if entrante else negociacion_vendedor
+	var id := negociacion_jugador_id
+	if dueno == null:
+		return ""
+	# De un jugador ajeno que no investigaste no se sabe nada: taparlo acá
+	# es la misma regla que en el mercado.
+	if not entrante and not Investigadores.conoce(GameState.equipo_jugador, id):
+		caja_negociacion_datos.add_child(_caja_dato("Vale", "?", Tema.SUAVE))
+		caja_negociacion_datos.add_child(_caja_dato("Piden", "?", Tema.SUAVE))
+		return ""
+	var donde := Mercado.ubicar(dueno, id)
+	if donde.is_empty():
+		return ""
+	var jugador: Dictionary = donde["jugador"]
+	var vale := ValorJugador.calcular(
+		jugador, dueno.animo.get(id, 50.0), dueno.contratos.get(id, 3))
+	var pedido := Negociacion.precio_pedido(dueno, jugador)
+	var monto := float(o["monto"])
+
+	caja_negociacion_datos.add_child(_caja_dato(
+		"Vale", Economia.formato_dinero(vale)))
+	caja_negociacion_datos.add_child(_caja_dato(
+		"Sobre la mesa" if entrante else "Piden alrededor de",
+		Economia.formato_dinero(monto if entrante else pedido), Tema.AMBAR, true))
+	caja_negociacion_datos.add_child(_caja_dato(
+		"Hoy cobra", Economia.formato_dinero(dueno.sueldos.get(id, 0.0))))
+	caja_negociacion_datos.add_child(_caja_dato(
+		"Le quedan", "%d año(s)" % int(dueno.contratos.get(id, 0))))
+
+	if not entrante:
+		return ""
+	# El veredicto de una oferta entrante, en una linea. `pedido` es lo que
+	# pediria por el un club de la IA en tu misma situacion: es el precio
+	# de mercado, no un capricho.
+	if monto >= pedido:
+		return "[color=#27ae60]Te ofrecen más de lo que pedirías por él (%s). Es buen negocio.[/color]" % Economia.formato_dinero(pedido)
+	if monto >= vale:
+		return "[color=#d4a017]Cubre lo que vale, pero está por debajo de los %s que pedirías vos.[/color]" % Economia.formato_dinero(pedido)
+	return "[color=#c0392b]Es menos de lo que vale (%s). Regatealo o rechazalo.[/color]" % Economia.formato_dinero(vale)
+
+
 func _precargar_contrato(o: Dictionary) -> void:
 	var vendedor := GameState._club_por_nombre(str(o["club"]))
 	var id := int(o["jugador_id"])
@@ -3379,7 +3469,7 @@ func _precargar_contrato(o: Dictionary) -> void:
 	var jugador: Dictionary = donde["jugador"]
 	var pretende := Negociacion.sueldo_pretendido(
 		jugador, float(vendedor.sueldos.get(id, 0.0)),
-		GameState._division_de(vendedor), GameState.division_jugador)
+		GameState.division_de(vendedor), GameState.division_jugador)
 	spin_negociacion_sueldo.value = ceil(pretende / spin_negociacion_sueldo.step) * spin_negociacion_sueldo.step
 	var normal := ValorJugador.calcular(jugador, 50.0, 3) * Team.FACTOR_CLAUSULA
 	spin_negociacion_clausula.value = ceil(normal / spin_negociacion_clausula.step) * spin_negociacion_clausula.step
@@ -5317,30 +5407,40 @@ func _refrescar_copas() -> void:
 		"copa_interna":
 			_pintar_copa_viva(GameState.copas_division[GameState.division_jugador],
 				"interna", "Copa de la División %d" % (GameState.division_jugador + 1),
-				"Los 20 clubes de tu división, a partido único.")
+				"Los %d mejores de tu división por la tabla del año pasado, a partido único." % ClasificacionCopas.CUPOS_COPA_DIVISION)
 		"copa_rey":
 			_pintar_copa_viva(GameState.copa_nacional, "rey", "Copa del Rey",
-				"Los 200 clubes de las diez divisiones, a partido único.")
+				"Los %d clasificados de las diez divisiones, a partido único." % ClasificacionCopas.total_copa_nacional())
 		_:
 			_pintar_copa_internacional(copa_elegida.replace("copa_", ""))
 
 
 ## Una copa que se esta jugando ahora (la interna y el Rey): sale del
 ## objeto Copa vivo, con su ronda pendiente incluida.
+##
+## El cuadro se REINICIA con la temporada: en cuanto arranca la nueva se
+## pinta el cuadro nuevo, aunque todavia no se haya jugado una ronda (la
+## primera ronda ya esta sorteada, asi que hay cuadro que mirar). Antes
+## se mostraba el cuadro terminado del año pasado mientras el nuevo no
+## tuviera historial, y desde afuera parecia que la copa vieja seguia
+## viva. El campeon de la que se jugo queda en el resumen de temporada y
+## en la vitrina, que es donde se lo busca.
 func _pintar_copa_viva(copa: Copa, clave_pasada: String, titulo: String,
 		subtitulo: String) -> void:
-	# El cuadro de esta temporada todavia esta vacio en el receso: la copa
-	# TERMINA al cerrar la temporada y el cuadro nuevo la pisa en el acto.
-	# Mientras no se juegue una ronda del nuevo, se muestra el del año
-	# pasado, que es el que tiene campeon.
-	if (copa == null or copa.historial.is_empty()) 			and GameState.copas_pasadas.has(clave_pasada):
+	# El cuadro pasado solo sale si NO hay cuadro nuevo que mostrar: una
+	# division de un solo equipo no arma copa, y ahi es mejor ver la
+	# ultima que se jugo que una pantalla vacia.
+	if _copa_sin_cuadro(copa) and GameState.copas_pasadas.has(clave_pasada):
 		_pintar_copa_pasada(clave_pasada, titulo)
 		return
+	# El titulo dice la temporada, igual que el del cuadro pasado: es lo
+	# que deja ver de un vistazo cual de los dos cuadros se esta mirando.
+	var encabezado := "%s — temporada %d" % [titulo, GameState.temporada_actual]
 	if copa == null:
-		label_copa_titulo.text = titulo
+		label_copa_titulo.text = encabezado
 		contenedor_copa.add_child(_parrafo_de_copa("Esta copa todavía no arrancó."))
 		return
-	label_copa_titulo.text = titulo
+	label_copa_titulo.text = encabezado
 	var mio: String = GameState.equipo_jugador.nombre
 	var pendientes := []
 	for p in copa.partidos_pendientes:
@@ -5356,10 +5456,19 @@ func _pintar_copa_viva(copa: Copa, clave_pasada: String, titulo: String,
 	elif camino.begins_with("Eliminado"):
 		label_copa_camino.add_theme_color_override("font_color", Tema.ROJO)
 
-	if copa.historial.is_empty() and copa.partidos_pendientes.is_empty():
+	if _copa_sin_cuadro(copa):
 		contenedor_copa.add_child(_parrafo_de_copa("Esta copa todavía no arrancó."))
 		return
 	_pintar_cuadro(CuadroCopa.desde_copa(copa), mio)
+
+
+## Una copa sin cuadro: ni rondas jugadas ni cruces pendientes. Pasa
+## cuando la copa no se pudo armar (un solo equipo) o todavia no se
+## armo.
+func _copa_sin_cuadro(copa: Copa) -> bool:
+	if copa == null:
+		return true
+	return copa.historial.is_empty() and copa.partidos_pendientes.is_empty()
 
 
 ## El cuadro terminado de la temporada pasada, con su campeon.
@@ -5372,7 +5481,7 @@ func _pintar_copa_pasada(clave: String, titulo: String) -> void:
 		titulo = "Copa de la División %d" % int(guardadas.get("division", 0))
 	label_copa_titulo.text = "%s — temporada %d" % [
 		titulo, int(guardadas.get("temporada", 0))]
-	var partes := ["El cuadro nuevo de esta temporada arranca con la primera ronda."]
+	var partes := ["La copa de esta temporada todavía no tiene cuadro."]
 	if campeon != "":
 		partes.append("Campeón: %s" % campeon)
 	partes.append(CuadroCopa.camino_de(datos.get("rondas", []), [], [], campeon, mio))
@@ -6071,6 +6180,15 @@ func _refrescar_historial_partidos() -> void:
 	_detalle_de_partido(historial[historial_elegido])
 
 
+## De que torneo fue el partido, en corto para que entre en la fila. Un
+## cruce de copa no tiene numero de fecha: lo que lo ubica es la copa.
+func _etiqueta_de_torneo(reg: Dictionary) -> String:
+	var torneo := str(reg.get("torneo", ""))
+	if torneo == "":
+		return "F%d" % int(reg.get("fecha", 0))
+	return torneo.replace("Copa ", "C.")
+
+
 ## Una linea de la lista: fecha, rival y resultado, con el color de si
 ## ganaste. El elegido queda marcado.
 func _fila_de_historial(reg: Dictionary, indice: int) -> Control:
@@ -6081,8 +6199,8 @@ func _fila_de_historial(reg: Dictionary, indice: int) -> Control:
 	var color := Tema.VERDE if propios > ajenos else (Tema.ROJO if propios < ajenos else Tema.SUAVE)
 
 	var btn := Button.new()
-	btn.text = "T%d F%d   %s %d-%d   %s" % [
-		int(reg.get("temporada", 1)), int(reg.get("fecha", 0)),
+	btn.text = "T%d %s   %s %d-%d   %s" % [
+		int(reg.get("temporada", 1)), _etiqueta_de_torneo(reg),
 		"L" if str(reg["local"]) == mio else "V", propios, ajenos, rival]
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	btn.clip_text = true
@@ -6119,8 +6237,9 @@ func _tarjeta_marcador(r: Dictionary) -> Control:
 	tarjeta.add_child(caja)
 
 	var fecha := Label.new()
-	fecha.text = "Temporada %d  ·  fecha %d  ·  %s" % [
-		int(r.get("temporada", 1)), int(r.get("fecha", 0)),
+	fecha.text = "Temporada %d  ·  %s  ·  %s" % [
+		int(r.get("temporada", 1)),
+		str(r.get("torneo", "")) if str(r.get("torneo", "")) != "" else "fecha %d" % int(r.get("fecha", 0)),
 		Calendario.texto_medio(int(r.get("dia", 0)))]
 	fecha.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
 	fecha.add_theme_color_override("font_color", Tema.SUAVE)
@@ -6245,7 +6364,7 @@ func _fila_hito(h: Dictionary, par: bool) -> Control:
 ## De id de jugador a nombre, buscando en los dos planteles del partido.
 func _nombre_de_id(r: Dictionary, id: int) -> String:
 	for nombre in [str(r.get("local", "")), str(r.get("visitante", ""))]:
-		var equipo := _equipo_de_la_liga(nombre)
+		var equipo := _equipo_por_nombre(nombre)
 		if equipo == null:
 			continue
 		var j := _buscar_jugador_por_id(equipo, id)
@@ -6302,7 +6421,7 @@ func _on_jugar_fecha() -> void:
 	if GameState.juego_terminado:
 		_refrescar_objetivo()
 		return
-	if not GameState.hay_fecha_pendiente():
+	if not GameState.hay_fecha_pendiente() and not GameState.hay_partido_de_copa_hoy():
 		return
 	# Ningun lesionado ni suspendido sale a la cancha. Si hay alguno en el
 	# once, el partido espera a que se resuelva (ver el modal de
@@ -6310,7 +6429,31 @@ func _on_jugar_fecha() -> void:
 	# Formacion y vuelve a darle a Jugar.
 	if _avisar_alineacion():
 		return
-	_jugar_fecha_ya()
+	_jugar_el_partido_de_hoy()
+
+
+## Hoy toca liga o toca copa, nunca las dos: el calendario no avanza
+## mientras haya un cruce de copa esperando (GameState.avanzar_un_dia).
+## Existe para que el modal de alineacion no tenga que saber cual es.
+func _jugar_el_partido_de_hoy() -> void:
+	if GameState.hay_partido_de_copa_hoy():
+		_jugar_copa_ya()
+	else:
+		_jugar_fecha_ya()
+
+
+## El cruce de copa, ya con el once en orden. Mismo recorrido que el de
+## liga: se juega, se refresca todo y se abre la pantalla del partido.
+func _jugar_copa_ya() -> void:
+	if GameState.juego_terminado or not GameState.hay_partido_de_copa_hoy():
+		return
+	GameState.jugar_partido_de_copa()
+	_refrescar_historial_partidos()
+	_refrescar_plantel()
+	_refrescar_objetivo()
+	_refrescar_barra_contexto()
+	if not GameState.ultimos_fotogramas.is_empty():
+		_mostrar_partido_animado()
 
 
 ## El partido en si, ya con el once en orden.
@@ -6528,6 +6671,21 @@ func _texto_de_novedades(novedades: Array) -> String:
 ".join(lineas)
 
 
+## En que puesto va un club en la tabla de SU division. La division se
+## nombra solo cuando no es la del jugador: en la Copa Nacional el rival
+## puede ser de otra, y ahi el puesto solo enganaria — un 2° de la
+## Division 3 es muchisimo mas equipo que un 2° de la Division 10.
+func _texto_posicion(club: Team) -> String:
+	var division: int = GameState.division_de(club)
+	var tabla: Array = GameState.piramide.divisiones[division].tabla_ordenada()
+	var puesto: int = tabla.find(club.nombre) + 1
+	if puesto <= 0:
+		return club.nombre
+	if division == GameState.division_jugador:
+		return "%s %d° de %d" % [club.nombre, puesto, tabla.size()]
+	return "%s %d° de %d (Division %d)" % [club.nombre, puesto, tabla.size(), division + 1]
+
+
 func _proximo_rival() -> Team:
 	var liga := GameState.liga_jugador()
 	if not GameState.hay_fecha_pendiente():
@@ -6546,8 +6704,9 @@ func _proximo_rival() -> Team:
 ## Lo que se sabe del proximo rival. Devuelve el texto en vez de escribir
 ## en un label: lo pinta la portada, que es donde se decide con que estilo
 ## salir a jugarle.
-func _texto_informe_rival() -> String:
-	var rival := _proximo_rival()
+## `rival` llega de afuera y no se busca aca: el de copa no sale del
+## fixture de la liga (ver GameState.rival_de_copa).
+func _texto_informe_rival(rival: Team) -> String:
 	if rival == null:
 		return ""
 	var mio: String = GameState.equipo_jugador.estilo
@@ -6589,10 +6748,11 @@ func _mostrar_partido_animado() -> void:
 	# GameState guarda el resultado con los NOMBRES de los equipos, pero la
 	# vista necesita los Team: las claves de los fotogramas se resuelven a
 	# apellidos con el plantel, y la textura de la cancha sale de la
-	# calidad de cancha del local. Se buscan en la liga del jugador, que es
-	# donde se jugó el partido.
-	var local: Team = _equipo_de_la_liga(str(r["local"]))
-	var visitante: Team = _equipo_de_la_liga(str(r["visitante"]))
+	# calidad de cancha del local. Se buscan en toda la piramide y no solo
+	# en la liga del jugador: en la Copa Nacional el rival puede ser de
+	# cualquiera de las diez divisiones.
+	var local: Team = _equipo_por_nombre(str(r["local"]))
+	var visitante: Team = _equipo_por_nombre(str(r["visitante"]))
 	if local == null or visitante == null:
 		return
 	var colores := ColoresClub.par_equipos(local, visitante)
@@ -6604,10 +6764,14 @@ func _mostrar_partido_animado() -> void:
 		local.color_short, visitante.color_short)
 
 
-func _equipo_de_la_liga(nombre: String) -> Team:
+func _equipo_por_nombre(nombre: String) -> Team:
 	for e in GameState.liga_jugador().equipos:
 		if e.nombre == nombre:
 			return e
+	for liga in GameState.piramide.divisiones:
+		for e in liga.equipos:
+			if e.nombre == nombre:
+				return e
 	return null
 
 
@@ -6621,7 +6785,10 @@ func _mostrar_mercado() -> void:
 	_ocultar_todos()
 	paneles["mercado"].visible = true
 	label_mercado_estado.text = ""
-	_refrescar_mercado()
+	# La solapa que estaba abierta y no siempre "jugadores": se vuelve al
+	# mercado desde la ficha, y si saliste de Investigaciones aterrizabas
+	# en otra solapa con la lista sin refrescar detras.
+	_mostrar_solapa_mercado(solapa_mercado_actual)
 
 
 func _mostrar_libres() -> void:
@@ -6894,8 +7061,11 @@ func _refrescar_barra_contexto() -> void:
 	label_barra_club.text = equipo.nombre
 	var tabla := GameState.liga_jugador().tabla_ordenada()
 	var puesto: int = tabla.find(equipo.nombre) + 1
-	label_barra_posicion.text = "  Division %d  ·  %d° de %d" % [
-		GameState.division_jugador + 1, puesto, tabla.size()]
+	# Las fechas jugadas y las que son en total: sin eso, el puesto no
+	# dice si va bien o si todavia no arranco la temporada.
+	label_barra_posicion.text = "  Division %d  ·  %d° de %d  ·  %d de %d fechas" % [
+		GameState.division_jugador + 1, puesto, tabla.size(),
+		GameState.fecha_actual, GameState.liga_jugador().fixture.size()]
 	if label_barra_mercado != null:
 		var dias := GameState.dias_de_mercado()
 		label_barra_mercado.visible = dias >= 0
@@ -7030,27 +7200,46 @@ func _refrescar_portada() -> void:
 	# Antes esta tarjeta era solo "proximo partido" y el boton jugaba la
 	# fecha, pasando los 7 dias de un saque. Ahora es el calendario: dice
 	# que dia es, y el boton juega el partido o pasa el dia segun toque.
-	var hay_partido: bool = GameState.hay_partido_hoy()
+	# Hoy puede tocar liga o copa, nunca las dos: el calendario no avanza
+	# mientras haya un cruce de copa esperando. La copa se pregunta
+	# primero porque es la que frena el dia.
+	var copa: Copa = GameState.copa_de_hoy()
+	var hay_copa: bool = copa != null
+	var hay_partido: bool = GameState.hay_partido_hoy() or hay_copa
 	var caja_partido := _tarjeta(contenedor_portada, Tema.AMBAR if hay_partido else Tema.BORDE)
-	caja_partido.add_child(Tema.etiqueta_seccion(Calendario.texto_largo(GameState.dia_absoluto)))
-	var rival := _proximo_rival()
+	var encabezado := Calendario.texto_largo(GameState.dia_absoluto)
+	if hay_copa:
+		encabezado = "%s  ·  %s  ·  %s" % [encabezado, copa.nombre, copa.ronda_actual()]
+	caja_partido.add_child(Tema.etiqueta_seccion(encabezado))
+	var rival: Team = GameState.rival_de_copa() if hay_copa else _proximo_rival()
+	var de_local: bool = GameState.copa_de_local() if hay_copa else _juega_de_local()
 	var titulo := Label.new()
 	if rival == null:
 		titulo.text = "Temporada terminada."
 	elif hay_partido:
 		titulo.text = "%s  vs  %s   (%s)" % [
-			equipo.nombre, rival.nombre, "de local" if _juega_de_local() else "de visitante"]
+			equipo.nombre, rival.nombre, "de local" if de_local else "de visitante"]
 	else:
 		titulo.text = "Sin partido hoy"
 	Tema.numero(titulo, 24, Tema.TEXTO if hay_partido else Tema.SUAVE)
 	caja_partido.add_child(titulo)
+
+	# Como vienen los dos en la tabla. Es la lectura rapida de si el rival
+	# es facil o dificil: antes el informe decia el estilo y el DT, que no
+	# dicen nada de como le va.
+	if rival != null:
+		var puestos := Label.new()
+		puestos.text = "%s   ·   %s" % [_texto_posicion(equipo), _texto_posicion(rival)]
+		puestos.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		puestos.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		caja_partido.add_child(puestos)
 
 	# Lo que se sabe del rival: estilo, DT y si es clasico. Vivia en la
 	# pantalla "Partido", pero es con lo que se elige el estilo propio, y
 	# eso se decide antes de jugar.
 	if rival != null:
 		var informe := Label.new()
-		informe.text = _texto_informe_rival()
+		informe.text = _texto_informe_rival(rival)
 		informe.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		informe.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
 		informe.add_theme_color_override("font_color", Tema.SUAVE)
@@ -7070,7 +7259,7 @@ func _refrescar_portada() -> void:
 	caja_partido.add_child(fila_acciones)
 	if hay_partido:
 		var btn_jugar := Button.new()
-		btn_jugar.text = "Jugar el partido"
+		btn_jugar.text = "Jugar el partido de copa" if hay_copa else "Jugar el partido"
 		btn_jugar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		Tema.primario(btn_jugar)
 		btn_jugar.disabled = rival == null or GameState.juego_terminado
@@ -7757,5 +7946,5 @@ func _on_arreglar_alineacion() -> void:
 	# Si no habia a quien poner, se juega igual: el partido no se puede
 	# posponer y el motor se arregla con los que haya. Si faltan
 	# demasiados, lo resuelve Liga._resolver_forfeit.
-	_jugar_fecha_ya()
+	_jugar_el_partido_de_hoy()
 	_refrescar_portada()

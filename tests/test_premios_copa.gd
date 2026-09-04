@@ -46,12 +46,13 @@ func _init() -> void:
 	# --- El premio sobrevive al cierre de temporada ---------------------
 	# La caja se REINICIA en el cierre: si el premio se sumara a la caja en
 	# el momento de ganarlo, se perderia en el mismo cierre que lo pago.
-	# Cada llamada va sobre una COPIA fresca del club. procesar_temporada
-	# no es una consulta: ademas de devolver el informe le mueve al club
-	# la reputacion y la hinchada, asi que la segunda llamada sobre el
-	# mismo equipo mediria un club distinto del de la primera y la
-	# diferencia dejaria de ser el premio (daba $50.892 en vez de $50.000
-	# en decima, y -$439.671 en primera).
+	# Cada llamada va por Economia.calcular_temporada, que cierra sobre
+	# una copia fresca del club. procesar_temporada no es una consulta:
+	# ademas de devolver el informe le mueve al club la reputacion y la
+	# hinchada, asi que la segunda llamada sobre el mismo equipo mediria
+	# un club distinto del de la primera y la diferencia dejaria de ser el
+	# premio (daba $50.892 en vez de $50.000 en decima, y -$439.671 en
+	# primera).
 	var equipo: Team = gs.equipo_jugador
 	var sin_premio := _cerrar(equipo, 0.0, 9)
 	var con_premio := _cerrar(equipo, 50000.0, 9)
@@ -96,11 +97,12 @@ func _init() -> void:
 	quit()
 
 
-## Cierra la temporada de una COPIA del club, con estos premios de copa y
-## en esta division. La copia es lo importante: procesar_temporada
-## modifica al club que procesa, asi que comparar dos cierres exige que
-## los dos arranquen del mismo estado.
+## Cierra la temporada del club con estos premios de copa y en esta
+## division, sin tocarlo: Economia.calcular_temporada corre el cierre
+## sobre una copia. Comparar dos cierres exige que los dos arranquen del
+## mismo estado, y procesar_temporada le mueve la reputacion y la hinchada
+## al club que procesa.
 func _cerrar(equipo: Team, premios: float, division: int) -> Dictionary:
 	var copia := Team.cargar(equipo.guardar())
 	copia.premios_copa = premios
-	return Economia.procesar_temporada(copia, 10, 20, division)
+	return Economia.calcular_temporada(copia, 10, 20, division)

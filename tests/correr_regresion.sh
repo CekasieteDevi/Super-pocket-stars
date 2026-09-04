@@ -39,7 +39,7 @@ trap 'rm -rf "$SALIDA"' EXIT
 # se agrega uno pesado, va aca.
 LENTOS="test_gradiente_persiste test_libro_de_pases test_calendario"
 LENTOS="$LENTOS test_gamestate_flujo test_noticias test_phase2"
-LENTOS="$LENTOS test_phase7_internacional"
+LENTOS="$LENTOS test_phase7_internacional test_copas_por_temporada"
 ORDEN=""
 for n in $LENTOS; do
 	[ -f "tests/$n.gd" ] && ORDEN="$ORDEN tests/$n.gd"

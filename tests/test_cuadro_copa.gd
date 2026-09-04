@@ -137,7 +137,7 @@ func _test_camino() -> int:
 		"D": "Campeón",
 		"B": "Eliminado",
 		"A": "Eliminado",
-		"Z": "No jugaste",
+		"Z": "No clasificaste",
 	}
 	for club in casos:
 		var texto := CuadroCopa.camino_de([r1, r2], [], [], "D", club)

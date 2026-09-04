@@ -87,6 +87,59 @@ static func celda_numero(texto: String, ancho: int, color: Color = Tema.TEXTO,
 	return l
 
 
+## Un botón que ocupa EXACTAMENTE el ancho de su columna, para las celdas
+## que además se tocan: el encabezado que ordena y el nombre que abre la
+## ficha.
+##
+## Un Button del tema trae 16 px de relleno de cada lado y su ancho mínimo
+## incluye el del texto. Con eso el encabezado del mercado no respetaba
+## ninguna columna: "Edad" en 46 px medía 74 y "Contrato" en 58 medía 101,
+## y cada columna empujaba a la siguiente. Medido en 1152 lógicos, el
+## título "Ánimo" terminaba 60 px a la derecha de su celda.
+##
+## Se le sacan las dos causas: relleno horizontal 0 en los cinco estados y
+## `clip_text`, que deja el texto fuera del cálculo del mínimo.
+static func boton_de_celda(texto: String, ancho: int,
+		alineacion: int = HORIZONTAL_ALIGNMENT_LEFT, color: Color = Tema.TEXTO) -> Button:
+	var b := Button.new()
+	b.text = texto
+	b.tooltip_text = texto
+	b.flat = true
+	b.alignment = alineacion
+	b.clip_text = true
+	b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	b.custom_minimum_size = Vector2(ancho, 0)
+	b.add_theme_font_size_override("font_size", TAM_TABLA)
+	b.add_theme_color_override("font_color", color)
+	for estado in ["normal", "hover", "pressed", "disabled", "focus"]:
+		b.add_theme_stylebox_override(estado, _caja_vacia())
+	return b
+
+
+## Un estilo sin nada: ni fondo ni relleno lateral. El vertical se
+## conserva para que la fila no se achique respecto de las celdas.
+static func _caja_vacia() -> StyleBoxEmpty:
+	var e := StyleBoxEmpty.new()
+	e.content_margin_left = 0
+	e.content_margin_right = 0
+	e.content_margin_top = Tema.PADDING_BOTON
+	e.content_margin_bottom = Tema.PADDING_BOTON
+	return e
+
+
+## Un botón de acción de la tabla: ancho fijo y texto recortado.
+## Sin recortar, "Vence pronto" mide 128 px en una columna de 122 y
+## corre a la fila entera hacia la derecha.
+static func boton_de_accion(texto: String, ancho: int) -> Button:
+	var b := Button.new()
+	b.text = texto
+	b.custom_minimum_size = Vector2(ancho, 0)
+	b.clip_text = true
+	b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	b.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	return b
+
+
 ## Una etiqueta chica y sólida: puesto, rasgo, habilidad.
 static func chip(texto: String, fondo: Color, letra: Color = Tema.TEXTO) -> Label:
 	var l := Label.new()

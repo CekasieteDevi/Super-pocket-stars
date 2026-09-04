@@ -81,6 +81,8 @@ func _test_la_semana_de_copa_sigue_apretada() -> void:
 				return
 			copas += 1
 		for d in range(GUION.DIAS_ENTRE_FECHAS):
+			if gs.hay_partido_de_copa_hoy():
+				gs.resolver_ronda_de_copa()
 			gs.avanzar_un_dia()
 	if copas == 0:
 		print("FALLA: en %d fechas no se agendo ninguna ronda de copa." % GUION.FECHAS_ENTRE_RONDAS_COPA)
@@ -97,6 +99,11 @@ func _test_una_temporada_entera_cierra_bien() -> void:
 	while gs.temporada_actual == temporada and vueltas < 4000:
 		if gs.hay_partido_hoy():
 			gs.jugar_siguiente_fecha()
+		elif gs.hay_partido_de_copa_hoy():
+			# La ronda de copa frena el calendario para que el jugador la
+			# juegue. Sin pantalla se resuelve sola: si no, el dia no
+			# avanza mas y la temporada no cierra nunca.
+			gs.resolver_ronda_de_copa()
 		else:
 			gs.avanzar_un_dia()
 		vueltas += 1

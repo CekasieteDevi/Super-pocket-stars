@@ -7,6 +7,13 @@ extends RefCounted
 ## potencia de 2, la cantidad sobrante juega una ronda previa y el resto
 ## pasa con bye, para que de ahí en adelante el cuadro quede parejo.
 ##
+## Las dos copas domésticas ya NO llegan acá con una cantidad rara: entran
+## 128 al Rey y 16 a la interna, así que el cuadro sale perfecto y ningún
+## club pasa sin jugar (ver core/clasificacion_copas.gd). El mecanismo de
+## bye queda igual porque sigue haciendo falta de red: una división a la
+## que le falten clubes, o un guardado viejo, tienen que armar cuadro
+## igual en vez de reventar.
+##
 ## El CUADRO es fijo: se sortea una sola vez, al iniciar, y de ahí en
 ## adelante cada equipo se enfrenta al ganador del cruce de al lado hasta
 ## que quedan dos. Ver _intercalar.
@@ -20,6 +27,12 @@ var equipos_con_bye: Array = []  # Team, esperando a la ronda donde ya no hace f
 var partidos_pendientes: Array = []  # [[Team, Team], ...] listos para jugar_siguiente_ronda()
 var historial: Array = []  # por ronda jugada: Array de {local, visitante, gl, gv, ganador}
 var campeon: Team = null
+
+## El partido del equipo seguido en la ronda que se acaba de jugar, con
+## fotogramas para verlo. Es TRANSITORIO: no se guarda y se pisa en cada
+## ronda. Queda vacio si el equipo seguido no jugo esa ronda (le toco bye,
+## o ya lo eliminaron).
+var seguido: Dictionary = {}
 
 
 static func iniciar(nombre: String, equipos: Array, rng: RandomNumberGenerator) -> Copa:
@@ -46,7 +59,17 @@ static func iniciar(nombre: String, equipos: Array, rng: RandomNumberGenerator) 
 	return c
 
 
-func jugar_siguiente_ronda(rng: RandomNumberGenerator) -> Array:
+## `equipo_seguido` es el club del jugador humano: su cruce se juega con
+## el motor espacial y con fotogramas, para que lo pueda MIRAR, igual que
+## su partido de liga (ver Liga.jugar_fecha). Los otros 99 cruces siguen
+## con el motor abstracto, que es mucho mas rapido y alcanza. El partido
+## seguido queda en `seguido`; la ronda entera vuelve como resultado.
+##
+## El alargue y los penales del cruce seguido los resuelve MatchEngine
+## igual que en cualquier otro cruce: el motor espacial no tiene alargue,
+## asi que esos 30' no se ven, se cuentan en el resumen.
+func jugar_siguiente_ronda(rng: RandomNumberGenerator, equipo_seguido: Team = null) -> Array:
+	seguido = {}
 	if campeon != null or partidos_pendientes.is_empty():
 		return []
 
@@ -59,20 +82,36 @@ func jugar_siguiente_ronda(rng: RandomNumberGenerator) -> Array:
 		# y se apaga al final, porque el mismo objeto Team juega la liga.
 		home.en_copa = true
 		away.en_copa = true
-		var r := MatchEngine.simular(home, away, rng, false)
+		var es_el_del_jugador: bool = home == equipo_seguido or away == equipo_seguido
+		var r: Dictionary
+		if es_el_del_jugador:
+			# El motor espacial necesita el once COMPLETO: sin arreglar la
+			# alineacion, un lesionado en el once deja un puesto vacio y el
+			# motor revienta buscando al que no esta. Los cruces que no se
+			# miran siguen sin arreglar, como siempre: el motor abstracto
+			# se banca un equipo con huecos.
+			Alineacion.arreglar(home)
+			Alineacion.arreglar(away)
+			r = MotorEspacial.simular(home, away, rng, true)
+		else:
+			r = MatchEngine.simular(home, away, rng, false)
 		var gl: int = r["goles_local"]
 		var gv: int = r["goles_visitante"]
 		var definicion := "90 minutos"
 		var ganador: Team
 		var penales_texto := ""
+		var goles_log: Array = r.get("goles_log", []).duplicate()
+		var eventos: Array = r.get("eventos", []).duplicate()
 
 		if gl != gv:
 			ganador = home if gl > gv else away
 		else:
-			var r_alargue := MatchEngine.simular_alargue(home, away, rng, false)
+			var r_alargue := MatchEngine.simular_alargue(home, away, rng, es_el_del_jugador)
 			gl = r_alargue["goles_local"]
 			gv = r_alargue["goles_visitante"]
 			definicion = "alargue"
+			goles_log.append_array(r_alargue.get("goles_log", []))
+			eventos.append_array(r_alargue.get("eventos", []))
 			if gl != gv:
 				ganador = home if gl > gv else away
 			else:
@@ -86,6 +125,15 @@ func jugar_siguiente_ronda(rng: RandomNumberGenerator) -> Array:
 			"gl": gl, "gv": gv, "ganador": ganador.nombre,
 			"definicion": definicion, "penales_texto": penales_texto,
 		})
+		if es_el_del_jugador:
+			seguido = {
+				"local": home.nombre, "visitante": away.nombre,
+				"gl": gl, "gv": gv, "goles_log": goles_log,
+				"log": r.get("log", []), "eventos": eventos,
+				"fotogramas": r.get("fotogramas", []),
+				"ganador": ganador.nombre,
+				"definicion": definicion, "penales_texto": penales_texto,
+			}
 		ganadores.append(ganador)
 		home.en_copa = false
 		away.en_copa = false
@@ -101,6 +149,54 @@ func jugar_siguiente_ronda(rng: RandomNumberGenerator) -> Array:
 		partidos_pendientes = _armar_pares(siguiente_pool)
 
 	return resultados
+
+
+## Si el club está EN el cuadro: le queda un cruce, pasó sin jugar, ya
+## jugó alguna ronda (aunque lo hayan eliminado) o salió campeón. Desde
+## que la copa se juega por clasificación, "no aparece" ya no significa
+## "lo eliminaron": significa que no clasificó, y hay dos cosas que
+## dependen de saberlo — el objetivo de directiva de copa (imposible de
+## cumplir sin cupo, ver Objetivos.generar) y el aviso al jugador.
+func participa(equipo: Team) -> bool:
+	if equipo == null:
+		return false
+	if campeon == equipo:
+		return true
+	for p in partidos_pendientes:
+		if p[0] == equipo or p[1] == equipo:
+			return true
+	if equipos_con_bye.has(equipo):
+		return true
+	for ronda in historial:
+		for partido in ronda:
+			if partido["local"] == equipo.nombre or partido["visitante"] == equipo.nombre:
+				return true
+	return false
+
+
+## El cruce que le toca a un equipo en la ronda que viene: [local,
+## visitante]. Vacio si ya lo eliminaron, si le toco bye o si la copa
+## termino. Con esto la UI sabe si el jugador tiene partido de copa hoy.
+func cruce_de(equipo: Team) -> Array:
+	for p in partidos_pendientes:
+		if p[0] == equipo or p[1] == equipo:
+			return p
+	return []
+
+
+## Como se llama la ronda que viene, por cuantos equipos quedan vivos —
+## los que juegan mas los que pasan con bye. Con 200 equipos las primeras
+## rondas no tienen nombre propio, y ahi dice cuantos quedan.
+func ronda_actual() -> String:
+	if partidos_pendientes.is_empty():
+		return ""
+	var vivos: int = partidos_pendientes.size() * 2 + equipos_con_bye.size()
+	match vivos:
+		2: return "Final"
+		4: return "Semifinal"
+		8: return "Cuartos de final"
+		16: return "Octavos de final"
+	return "Ronda de %d" % vivos
 
 
 ## El que perdio la final, por nombre. "" si la copa todavia no termino.

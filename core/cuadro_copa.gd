@@ -14,8 +14,8 @@ extends RefCounted
 ## cierto —cada linea conecta a quien de verdad viene de ahi— y ademas no
 ## se cruza ninguna.
 ##
-## No se muestran todas las rondas: la Copa del Rey son 200 clubes y su
-## primera ronda tiene 72 cruces, que ni entran en pantalla ni le importan
+## No se muestran todas las rondas: la Copa del Rey son 128 clubes y su
+## primera ronda tiene 64 cruces, que ni entran en pantalla ni le importan
 ## a nadie. Se muestran las ultimas, desde donde el cuadro tiene un tamaño
 ## que se puede mirar — que es lo que hacen tambien los cuadros de verdad,
 ## que arrancan en octavos.
@@ -214,6 +214,7 @@ static func camino_de(historial: Array, pendientes: Array, bye: Array,
 	if bye.has(club):
 		return "Pasa sin jugar a la ronda %d." % (total + 2)
 	# No aparece en ninguna ronda: no es que lo eliminaron, es que no
-	# clasifico. Las internacionales se juegan entre los mejores de cada
-	# pais y desde division 10 no se entra ni de casualidad.
-	return "No jugaste esta copa."
+	# clasifico. Vale para las tres internacionales (se juegan entre los
+	# mejores de cada pais) y tambien para las dos domesticas, que desde
+	# que reparten cupos por tabla tampoco las juegan todos.
+	return "No clasificaste a esta copa."
