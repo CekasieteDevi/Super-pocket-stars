@@ -112,7 +112,7 @@
     "_offside": "Margen de error al medir el desmarque: un delantero inteligente se queda al filo de la linea, uno limitado se pasa. Sin margen nadie se iria nunca en offside y la infraccion no existiria.",
     "offside_margen_torpe": 5.5,
     "_apoyo_del_delantero": "Desde que avance de campo el delantero se para en el hombro del ultimo defensor, y cuanto BAJA a recibir cuando la pelota esta lejos. Sin esto los de arriba quedaban clavados contra la linea rival aunque la pelota estuviera a sesenta metros, el equipo quedaba partido en dos y la unica forma de llegarles era el pelotazo.",
-    "avance_para_jugar_en_el_hombro": 0.45,
+    "avance_para_jugar_en_el_hombro": 0.2,
     "apoyo_del_delantero": 0.35,
     "apoyo_del_nueve": 0.0,
     "_avance_para_acompanar": "Avance de la pelota a partir del cual los de atras empiezan a subir con el ataque (0 = arco propio, 1 = arco rival). En la mitad de la cancha: antes de eso el equipo esta saliendo y subir la linea es regalar el contragolpe.",

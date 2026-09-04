@@ -2708,14 +2708,14 @@ del arco.
 
 ### Lo que hay que medir primero
 
-No hay que tocar nada hasta tener esto:
+Los puntos 1 y 2 ya se midieron: ver la sección siguiente. Queda el 3.
 
-1. **De dónde sale la pérdida.** Seguir una posesión desde que arranca
+1. ~~**De dónde sale la pérdida.**~~ Seguir una posesión desde que arranca
    hasta que se corta y ver en qué banda de cancha muere: si se pierden
    por intercepción, por quite, por salida lateral o por remate. Hoy
    `pase_detalle` tiene el desglose del pase pero no está cruzado con la
    zona.
-2. **Si el problema es llegar o es sostener.** Puede que el equipo llegue
+2. ~~**Si el problema es llegar o es sostener.**~~ Puede que el equipo llegue
    al último cuarto y la pierda enseguida (pocos ticks por visita), o que
    directamente no llegue (pocas visitas). Son dos problemas distintos
    con arreglos distintos, y la tabla de arriba no los separa.
@@ -2734,3 +2734,163 @@ No hay que tocar nada hasta tener esto:
 - Puede no ser un problema de posicionamiento sino de duración: si cada
   posesión dura pocos toques, la pelota nunca recorre los 60 metros que
   hacen falta para llegar.
+
+### Medido el 2026-09-04: es LLEGAR, y la punta no despega de la pelota
+
+`tests/_diag_posesiones.gd` sigue cada posesión desde que nace hasta que
+se corta. Misma semilla y mismos 25 partidos que la tabla de arriba, así
+que los dos cuadros se cruzan.
+
+Posesión (los dos equipos juntos): 45,6 por partido, 3,41 s cada una, y
+avanza 17,5 m hacia el arco rival. El 82,5% de los cierres le entregan la
+pelota al rival.
+
+#### 1. De dónde sale la pérdida
+
+| causa | 0-17 | 17-22 | 22-30 | 30-40 | 40-55 | 55+ | total | pierde la pelota |
+|---|---|---|---|---|---|---|---|---|
+| intercepción | 35 | 19 | 11 | 26 | 66 | 90 | 247 (21,7%) | 100% |
+| quite | 5 | 3 | 17 | 33 | 96 | 89 | 243 (21,3%) | 100% |
+| falta | 2 | 3 | 12 | 27 | 73 | 88 | 205 (18,0%) | 2% |
+| remate | 108 | 2 | 3 | 0 | 0 | 0 | 113 (9,9%) | 100% |
+| suelta | 0 | 4 | 24 | 17 | 22 | 8 | 75 (6,6%) | 100% |
+| rival llegó antes | 3 | 1 | 2 | 17 | 22 | 22 | 67 (5,9%) | 100% |
+| segunda pelota | 0 | 4 | 8 | 4 | 19 | 12 | 47 (4,1%) | 100% |
+| lateral | 0 | 0 | 0 | 0 | 8 | 32 | 40 (3,5%) | 100% |
+| córner | 0 | 0 | 0 | 0 | 0 | 30 | 30 (2,6%) | 100% |
+| saque de arco | 29 | 0 | 0 | 0 | 0 | 0 | 29 (2,5%) | 93% |
+| offside | 3 | 5 | 2 | 7 | 0 | 0 | 17 (1,5%) | 100% |
+| **total** | **195** | **44** | **79** | **134** | **312** | **376** | **1140** | |
+| **% del total** | 17,1% | 3,9% | 6,9% | 11,8% | 27,4% | 33,0% | | |
+
+**El 60,4% de las posesiones muere a más de 40 m del arco rival.** Las
+tres causas que mandan ahí son el quite (185), la intercepción (156) y la
+falta (161).
+
+La falta **no es una pérdida**: el 98% de las veces la saca el mismo
+equipo. Descontarla deja ~527 pérdidas reales más allá de los 40 m. Ese
+es el número a bajar, no las 688 muertes brutas.
+
+#### 2. Llegar o sostener: es llegar
+
+- Solo el **24,7%** de las posesiones pisa el último cuarto (26,25 m).
+- Hay **11,76 visitas por partido** al último cuarto, y el motor da ~8,8
+  remates por partido. Casi una visita = un remate: **el último cuarto no
+  desperdicia lo que le llega**.
+- Cada visita dura 5,42 ticks (1,36 s). Alcanza para una acción, no para
+  dos.
+
+La tabla de dónde nace cada posesión es la que cierra el caso:
+
+| banda donde arranca | posesiones | llegan al último cuarto |
+|---|---|---|
+| 0 - 17 m | 24 | 100,0% |
+| 17 - 22 m | 17 | 100,0% |
+| 22 - 30 m | 62 | 98,4% |
+| 30 - 40 m | 73 | 69,9% |
+| 40 - 55 m | 346 | 23,7% |
+| 55 m o más | 618 | 7,6% |
+
+**Una posesión que arranca a 30 m llega casi siempre. Una que arranca a
+55 m no llega casi nunca. Y el 85% arranca a más de 40 m.** El motor no
+falla al terminar la jugada: falla al empezarla lejos y no poder cruzar
+la mitad de la cancha.
+
+#### La causa: la punta del ataque no despega de la pelota
+
+Distancia al arco rival del jugador de campo más adelantado del equipo
+que ataca, según dónde está la pelota:
+
+| pelota a | ticks | pelota | más adelantado | línea rival | está |
+|---|---|---|---|---|---|
+| 0 - 17 m | 695 | 10,3 m | 10,7 m | 7,1 m | 0,4 m **detrás** |
+| 17 - 22 m | 442 | 19,4 m | 13,2 m | 9,5 m | 6,2 m adelante |
+| 22 - 30 m | 915 | 26,2 m | 18,3 m | 10,5 m | 7,9 m adelante |
+| 30 - 40 m | 1690 | 35,5 m | 26,9 m | 14,4 m | 8,6 m adelante |
+| 40 - 55 m | 4517 | 48,7 m | 36,1 m | 17,4 m | 12,6 m adelante |
+| 55 m o más | 7692 | 73,1 m | 49,1 m | 25,4 m | 24,1 m adelante |
+
+Leer las dos primeras columnas juntas: cuando la pelota avanza de 73,1 m
+a 48,7 m recorre 24,4 m, pero la punta solo avanza 13 m. **El ataque se
+comprime contra la pelota en vez de estirarse delante de ella.** Con la
+pelota en campo rival la punta queda 8-13 m adelante. En fútbol real esa
+distancia ronda los 20-25 m (estimado, falta fijarlo contra datos).
+
+Eso explica la tabla anterior sin más hipótesis. Sin nadie lejos adelante
+no hay a quién pasarle para progresar, así que la única forma de avanzar
+es conducir, y conducir 30 m termina en quite o intercepción. De ahí las
+527 pérdidas reales más allá de los 40 m.
+
+#### Las tres sospechas de §50 son todas falsas
+
+La columna **línea rival** las descarta a las tres. Es dónde está el
+último defensor rival, medido contra su propio arco.
+
+1. **La línea de offside NO es el techo.** Con la pelota a 48,7 m la
+   defensa rival está a 17,4 m de su arco: se repliega bien. El más
+   adelantado está a 36,1 m, o sea **19 metros por detrás de donde el
+   código le dice que se pare**. El clamp de offside es un tope, y el
+   ataque nunca lo toca.
+2. **`apoyo_del_delantero` no baja al 9.** `apoyo_del_nueve` vale 0,0, así
+   que el 9 no se mueve hacia la pelota. Solo afecta a los extremos.
+3. **No es la duración de la posesión** — eso ya estaba descartado arriba.
+
+La causa real es un **escalón** en `_objetivo_sin_pelota`. Mientras
+`valor_posicion(pelota) < avance_para_jugar_en_el_hombro` (0,45), el 9 se
+para en su casillero de formación, atraído a la pelota por `ATRACCION_X`.
+En cuanto la pelota cruza ese umbral, su objetivo salta de golpe a la
+línea de offside. Con la pelota a 57,75 m del arco rival, ese salto son
+unos 35 metros de una sola vez.
+
+Una posesión dura 3,41 s. Corriendo desde parado, el 9 no cubre 35 metros
+en ese tiempo. **Arranca a correr cuando la jugada ya empezó, y llega
+cuando ya terminó.**
+
+#### Lo que queda (paso 3)
+
+Falta el ancla contra fútbol real. Lo medido acá, para comparar:
+
+- **17,9%** del juego con pelota transcurre en el último tercio (35 m).
+  El fútbol real anda en 25-30%, pero ese número está sin verificar.
+- **10,2%** en el último cuarto (26,25 m).
+
+El último tercio queda más cerca del fútbol real de lo que sugería la
+tabla de ticks de §50. **El agujero grande no es el tercio: es el cuarto,
+y sobre todo la profundidad del ataque.** El próximo paso es fijar contra
+datos reales cuánto tiene que separarse la punta de la pelota, y recién
+ahí tocar `_objetivo_sin_pelota` y `apoyo_del_delantero`.
+
+### Prueba del 2026-09-04: `avance_para_jugar_en_el_hombro` 0,45 → 0,20
+
+Adelantar el umbral hace que el 9 se pare en la línea rival desde mucho
+antes: con 0,20 el salto ocurre con la pelota a 84 m del arco rival, o
+sea en la propia área. Mismos 25 partidos, misma semilla.
+
+| medida | 0,45 | 0,20 |
+|---|---|---|
+| posesiones que pisan el último cuarto | 24,7% | **30,4%** |
+| visitas al último cuarto por partido | 11,76 | **14,44** |
+| juego en el último tercio | 17,9% | **21,5%** |
+| las que arrancan a 55+ m y llegan | 7,6% | **12,4%** |
+| el más adelantado, con pelota a 40-55 m | 12,6 m | **15,2 m** |
+| el más adelantado, con pelota a 55+ m | 24,1 m | **29,1 m** |
+| remates por partido | 5,68 | **7,28** |
+| goles por partido | 2,56 | 2,80 |
+| pases por partido | 30,44 | 27,44 |
+| faltas por partido | 8,20 | 7,28 |
+| offsides por partido | 0,68 | 1,08 |
+
+Todo se mueve en la dirección buscada. Los remates suben 28% y los goles
+solo 9%: la conversión baja, que es justo lo que pedía el pendiente de
+"pocos remates, mucha conversión". La regresión completa pasa (0 fallas
+en 91 archivos).
+
+El costo es el que anticipaba el comentario de `apoyo_del_delantero`: los
+pases caen 10%. El equipo se estira y construye menos.
+
+**El escalón sigue estando.** Con la pelota a 40-55 m, el más adelantado
+está a 33,4 m y la línea rival a 17,3 m: todavía queda 16 metros corto de
+su propio objetivo. Bajar el umbral corre el escalón de lugar, no lo
+saca. El arreglo de fondo es hacer la subida **gradual** — interpolar
+entre el casillero de formación y la línea de offside, como ya hace
+`SUBIDA_POR_ROL` para los de atrás — en vez de un `if` que salta.
