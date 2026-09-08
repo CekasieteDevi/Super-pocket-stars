@@ -217,6 +217,11 @@ static func comprar_al_contado(comprador: Team, vendedor: Team, jugador_id: int,
 	if comprador.caja["fichajes"] < precio:
 		return {"exito": false, "motivo": "No te alcanza el presupuesto de Fichajes.",
 			"precio": precio, "disponible": comprador.caja["fichajes"]}
+	# Fichar son DOS cajas: el pase sale de Fichajes y el sueldo de
+	# Contratos. Hay que poder pagar las dos.
+	var sueldo := Economia.sueldo_de_ficha(jugador, 3, comprador.division_actual)
+	if not Economia.puede_pagar_contrato(comprador, sueldo):
+		return Economia.motivo_contrato_corto(comprador, sueldo)
 
 	if not forzar and rng.randf() < resistencia_venta(vendedor, jugador):
 		return {"exito": false, "motivo": "El club no quiere desprenderse de esa pieza con una oferta común.",
@@ -401,6 +406,8 @@ static func ejecutar_pase(comprador: Team, vendedor: Team, jugador_id: int, prec
 		return {"exito": false, "motivo": "Ese jugador ya no está en ese club."}
 	if comprador.caja["fichajes"] < precio:
 		return {"exito": false, "motivo": "No te alcanza el presupuesto de Fichajes."}
+	if not Economia.puede_pagar_contrato(comprador, sueldo):
+		return Economia.motivo_contrato_corto(comprador, sueldo)
 	var jugador: Dictionary = donde["jugador"]
 
 	if donde["origen"] == "cantera":
@@ -415,8 +422,11 @@ static func ejecutar_pase(comprador: Team, vendedor: Team, jugador_id: int, prec
 	comprador.caja["fichajes"] -= precio
 	vendedor.caja["fichajes"] += precio
 	var saliente := comprador.incorporar(jugador, precio, anios)
-	# incorporar() registra el fichaje con el sueldo de tabla; acá se pisa
-	# con el que se acordó, que es el que el jugador acepto.
+	# incorporar() registra el fichaje con el sueldo de tabla y ya se lo
+	# descontó a Contratos; acá se pisa con el que se acordó, que es el que
+	# el jugador aceptó, y se corrige la caja por la diferencia. Sin la
+	# corrección, Contratos pagaba el sueldo de tabla y no el negociado.
+	comprador.caja["contratos"] += comprador.sueldos[jugador_id] - sueldo
 	comprador.sueldos[jugador_id] = sueldo
 	comprador.contratos[jugador_id] = anios
 

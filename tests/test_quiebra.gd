@@ -91,6 +91,7 @@ func _test_no_hace_nada_si_no_esta_quebrado(rng: RandomNumberGenerator) -> void:
 	print("\n=== Un club sano no pierde a nadie ===")
 	var equipo := Team.generar("ClubSano", rng, 2000)
 	equipo.caja["fichajes"] = 1000000.0
+	equipo.caja["contratos"] = 1000000.0
 	Economia._recalcular_quiebra(equipo)
 
 	var ids_antes := []
@@ -115,6 +116,11 @@ func _test_liga_no_toca_al_equipo_protegido(rng: RandomNumberGenerator) -> void:
 	liga.inicializar(["Protegido", "Rival"], rng, 0)
 	var protegido: Team = liga.equipos[0]
 	protegido.caja["fichajes"] = -100000000.0
+	# Lo que se mide es la VENTA por quiebra. Los contratos van largos para
+	# que un vencimiento —que al club del jugador humano tambien lo toca
+	# desde core/renovaciones.gd— no le cambie el plantel por otro motivo.
+	for id in protegido.contratos:
+		protegido.contratos[id] = 5
 
 	var ids_antes := []
 	for j in protegido.todos_los_jugadores():

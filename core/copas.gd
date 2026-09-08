@@ -9,6 +9,11 @@ extends RefCounted
 ## Quién entra lo decide ClasificacionCopas con la tabla de la temporada
 ## anterior. `posiciones` vacío (el caso de los tests, que juegan copas
 ## sobre una pirámide recién generada) ordena por reputación.
+##
+## La PARTIDA no pasa por acá: GameState arma sus propios cuadros y los
+## juega ronda a ronda, y su copa de división clasifica por la tabla en
+## curso a las 5 fechas (GameState._armar_copas_de_division). Este archivo
+## resuelve una copa entera de un saque y lo usan los tests.
 
 
 static func jugar_copa_nacional(piramide: Piramide, rng: RandomNumberGenerator,

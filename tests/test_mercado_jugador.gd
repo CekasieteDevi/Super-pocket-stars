@@ -40,6 +40,7 @@ func _test_comprar_de_otra_division(rng: RandomNumberGenerator) -> void:
 	var mio: Team = p.divisiones[8].equipos[0]
 	var lejano: Team = p.divisiones[3].equipos[0]
 	mio.caja["fichajes"] = 50000000.0
+	mio.caja["contratos"] = 1000000.0
 	var objetivo: Dictionary = lejano.jugadores[7]
 	var id: int = objetivo["id"]
 	var antes := lejano.jugadores.size() + lejano.banco.size()
@@ -60,6 +61,7 @@ func _test_comprar_una_joya_de_la_cantera(rng: RandomNumberGenerator) -> void:
 	var chico: Team = p.divisiones[9].equipos[0]
 	chico.generar_camada(rng, 5, 90)
 	mio.caja["fichajes"] = 50000000.0
+	mio.caja["contratos"] = 1000000.0
 	var joya: Dictionary = chico.cantera[0]
 	var id: int = joya["id"]
 	var cantera_antes := chico.cantera.size()
@@ -77,6 +79,7 @@ func _test_sin_plata_no_hay_compra(rng: RandomNumberGenerator) -> void:
 	var pobre: Team = p.divisiones[9].equipos[0]
 	var rico: Team = p.divisiones[0].equipos[0]
 	pobre.caja["fichajes"] = 1000.0
+	pobre.caja["contratos"] = 1000000.0
 	var id: int = rico.jugadores[10]["id"]
 	var r := Mercado.comprar_al_contado(pobre, rico, id, rng, true)
 	if not r["exito"] and str(r["motivo"]).contains("presupuesto"):
@@ -91,6 +94,7 @@ func _test_la_clausula_no_se_puede_rechazar(rng: RandomNumberGenerator) -> void:
 	var mio: Team = p.divisiones[4].equipos[0]
 	var rival: Team = p.divisiones[4].equipos[1]
 	mio.caja["fichajes"] = 50000000.0
+	mio.caja["contratos"] = 1000000.0
 	var fallos := 0
 	for _i in range(12):
 		if rival.jugadores.is_empty():

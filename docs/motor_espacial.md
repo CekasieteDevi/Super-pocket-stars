@@ -573,9 +573,35 @@ motor (hoy no se animan, quedan fuera).
 **Actualizado 2026-09-03**: el cruce de copa DEL JUGADOR ya usa este motor
 y se ve, igual que su partido de liga (`Copa.jugar_siguiente_ronda` con
 `equipo_seguido`). Los otros 99 cruces de la ronda siguen con el
-abstracto, que es la misma asimetría deliberada de la liga. El alargue y
-los penales quedan en el abstracto: este motor no tiene alargue, así que
-esos 30' se cuentan pero no se ven.
+abstracto, que es la misma asimetría deliberada de la liga.
+
+**Actualizado 2026-09-07**: el cruce del jugador se juega ENTERO acá. Si
+los 90' terminan empatados, el motor juega el alargue (2x15', misma escala
+que una mitad: `TICKS_POR_TIEMPO_ALARGUE`) y después patea la tanda de
+penales en la cancha, con fotogramas. Antes esos 30' y los penales los
+resolvían `MatchEngine.simular_alargue` y `Penales.definir` por atrás: el
+jugador miraba el partido, se le cortaba en el minuto 90 y el resto le
+llegaba escrito en el resumen.
+
+Tres cosas del diseño de la tanda:
+
+- **La tanda la decide `Penales`, no este motor.** El motor solo la patea.
+  Si resolviera cada remate con su propio duelo de penal, el jugador
+  definiría sus tandas al 96,8% de conversión contra el 84,2% de la IA
+  (medido en `tests/_diag_conversion_penales.gd`). `Penales.definir` recibe
+  una Callable que MIRA cada penal ya resuelto y lo pone en la cancha.
+- **Un penal de la tanda no es un gol del partido.** No toca el marcador,
+  no hay festejo ni saque del medio, y el reloj se planta en 120'.
+- **Cada equipo patea al arco al que venía atacando**, no los dos al mismo
+  arco como en una tanda real. El lado al que ataca un equipo sale de
+  `es_local` en todo el motor y cambiarlo solo para la tanda tocaría media
+  docena de funciones. Es la misma clase de ficción que el reloj de 90
+  minutos en 4.
+
+Medido con 60 cruces a eliminación directa (`tests/_diag_alargue_espacial.gd`,
+semilla 4242): **46 se definen en los 90', 5 en el alargue y 9 por penales**.
+Un cruce sin alargue deja ~1.045 fotogramas; uno con alargue y penales,
+~1.628 — de 4,3 a 6,8 minutos de reproducción a x1.
 
 Medido con el cruce de primera ronda de la Copa Nacional de un equipo de
 División 10 (20 corridas, mundo nuevo en cada una,
@@ -2621,22 +2647,47 @@ Se descartó un cuadro de 64. La escalera obliga a darle 2 cupos a la
 décima, y desde décima —donde empieza el jugador— clasificar sería una
 rareza. Con 8 cupos, entrar es terminar en el tercio de arriba.
 
-### El orden de mérito
+### El orden de mérito: cada copa mira una tabla distinta
 
-Sale de la **tabla de la temporada anterior**, no de la actual: la copa se
-sortea antes de que se juegue una sola fecha. La foto de las diez tablas
-se saca en `GameState._cerrar_temporada` **antes** de
-`Piramide.fin_de_temporada`, que es quien resetea las tablas y mueve
-clubes de división.
+**Copa del Rey: la tabla de la temporada anterior.** El cuadro se sortea
+antes de que se juegue una sola fecha. La foto de las diez tablas se saca
+en `GameState._cerrar_temporada` **antes** de `Piramide.fin_de_temporada`,
+que es quien resetea las tablas y mueve clubes de división.
 
-Un club que ascendió o descendió clasifica por la división donde **jugó**,
-y entra igual aunque ahora esté en otra. La clave de mérito mezcla las dos
-cosas en un número —`(división - 1) * 100 + posición`— así el último de la
-9ª (820) sigue por encima del primero de la 10ª (901). Eso es lo que hace
-que el que bajó encabece la copa interna de su división nueva.
+Un club que ascendió o descendió clasifica al Rey por la división donde
+**jugó**, y entra igual aunque ahora esté en otra. La clave de mérito
+mezcla las dos cosas en un número —`(división - 1) * 100 + posición`— así
+el último de la 9ª (820) sigue por encima del primero de la 10ª (901).
 
-En la temporada 1 no hay tabla anterior de nada y el orden lo da la
-reputación, que es lo único que ya distingue un club grande de uno chico.
+En la temporada 1 no hay tabla anterior de nada y el orden del Rey lo da
+la reputación, que es lo único que ya distingue un club grande de uno
+chico.
+
+**Copa de división: la tabla de la temporada en curso, a las 5 fechas.**
+`GameState.FECHAS_PARA_COPA_DIVISION` es 5. `jugar_siguiente_fecha` sortea
+las diez copas justo después de esa fecha, con
+`ClasificacionCopas.clasificados_por_tabla`. Hasta ahí `copas_division`
+está **vacío** y la pantalla de copa dice que todavía no arrancó.
+
+Cinco fechas alcanza porque la primera ronda de copa de división cae en la
+fecha 8: los slots impares son del Rey y los pares de las de división (ver
+`_copas_de_la_ronda`), así que el sorteo llega con tres fechas de margen.
+
+Antes la copa de división usaba la misma clave de mérito que el Rey, y eso
+**castigaba al ascenso**. El campeón de la 10ª llegaba a la 9ª con clave
+901, peor que el último de la 9ª (819): los 16 cupos se los llevaban los
+que ya estaban más los que habían descendido, y ascender significaba
+quedarse afuera de la copa de división, siempre, sin una sola excepción.
+Medido con `tests/test_copa_division_por_tabla_actual.gd` (semilla 4402),
+de 19 ascendidos ahora clasifican 18; con el sistema anterior clasificaban
+0.
+
+La tabla en curso empata a todos en cero al empezar, así que el que
+ascendió y el que descendió se pelean el cupo en la misma cancha que los
+demás. El desempate final es el **nombre**: a cinco fechas hay muchos
+clubes con los mismos puntos, la misma diferencia y los mismos goles, y
+sin ese desempate la línea de corte del 16° salía distinta en cada
+corrida.
 
 ### Lo que arrastró el cambio
 
@@ -2959,3 +3010,98 @@ cortadas a medias pasaron de 12 a **0 de 120**.
 
 Lo mide `tests/_diag_fin_de_mitad.gd` y lo gatea
 `tests/test_fin_de_mitad.gd`.
+
+
+## 52. La amarilla la saca el que hizo la falta
+
+### El síntoma
+
+Un jugador parado a media cancha de la falta recibía la amarilla. El
+arquero rival también. El partido se dibuja, así que la tarjeta no tenía
+nada que ver con lo que se veía en pantalla.
+
+### La causa
+
+Las tarjetas se tiraban con un **presupuesto acumulado por tiempo** que
+se repartía entre TODO el equipo del infractor. Era un parche para que
+las amarillas por partido dieran bien en el agregado. Funcionaba en la
+planilla y fallaba en pantalla.
+
+### El arreglo
+
+**Una falta, una tirada, sobre el que la hizo.** Se borraron
+`_chequeos_tarjeta`, `tiradas_tarjeta_por_partido` y
+`tiradas_tarjeta_tope`.
+
+`MatchEngine._chequear_tarjeta` recibe un parámetro `escala` que
+multiplica las dos chances base. El motor abstracto pasa 1,0 y queda
+igual; `MotorEspacial._chequear_tarjeta_de_falta` pasa
+`prob_amarilla_por_falta / CHANCE_AMARILLA`. La roja directa conserva la
+razón `CHANCE_ROJA_DIRECTA / CHANCE_AMARILLA`: una sola fuente de verdad
+para qué proporción de las tarjetas es roja directa.
+
+### El intento que no funcionó: subir las faltas
+
+Si la tarjeta cuelga de la falta, hacen falta más faltas. Se subieron
+los tres pesos (`prob_falta` 0,42→0,85, `prob_falta_en_quite_ganado`
+0,1→0,6, `prob_falta_en_gambeta` 0,22→0,4) hasta **14,9 faltas por
+partido**, contra las 22 del fútbol real.
+
+**Se probó jugando y es injugable.** Cada falta congela el juego 14
+ticks (3,5 s). Con 14,9 faltas el partido se pasa parado. El número de
+la planilla mejoraba y la experiencia empeoraba.
+
+### Lo que quedó: una tirada por duelo
+
+Los tres pesos se reemplazaron por **uno solo**:
+`prob_falta_por_duelo` = 0,10. Se tira en CADA duelo —quite o gambeta—
+gane quien gane. El quite fallado y el ganado tiran lo mismo: el que
+llega tarde puede bajarlo, y el que se la saca limpia puede haberlo
+tocado antes.
+
+Da **3,6 faltas por partido**. Menos que las 8,2 que había antes de todo
+esto, y el partido corre.
+
+### El costo real: no hay duelos suficientes
+
+Acá aparece el problema de fondo. **Este motor resuelve ~35 duelos por
+partido; el motor abstracto resuelve ~180.** Por eso 10% por duelo da
+3,6 faltas y no 18.
+
+Y con 3,6 faltas no alcanza para tener tarjetas. Con un
+`prob_amarilla_por_falta` realista (0,10) salían **0,45 amarillas y CERO
+rojas en 60 partidos**: ningún suspendido en toda la liga, nunca.
+
+Por eso `prob_amarilla_por_falta` quedó en **0,45**, que es alto a
+propósito. No representa "qué chance hay de que esta falta sea amarilla"
+sino que carga sobre las 3,6 faltas visibles las tarjetas de las ~18
+infracciones que este motor no simula.
+
+Medido con `tests/_diag_faltas.gd`, misma semilla:
+
+| versión                              | faltas | amarillas | rojas | con roja |
+|--------------------------------------|--------|-----------|-------|----------|
+| presupuesto repartido (antes)        | 8,0    | 3,87      | 0,40  | 38%      |
+| faltas subidas a 14,9 (descartado)   | 14,9   | 1,45      | 0,22  | 20%      |
+| una tirada por duelo (queda)         | 3,6    | 1,77      | 0,13  | 12%      |
+| real                                 | 22,0   | 3,70      | 0,25  | 25%      |
+
+Goles, `_diag_goles_motores`:
+
+| div | antes | después | abstracto |
+|-----|-------|---------|-----------|
+| 10  | 2,42  | 2,27    | 3,08      |
+| 5   | 2,77  | 2,15    | 2,73      |
+| 1   | 3,40  | 3,52    | 2,88      |
+
+`tests/test_expulsados.gd` subió de 25 a 90 partidos: con 0,13 rojas por
+partido, 25 partidos daban 3 rojas y el test necesita 5 para medir cómo
+sale el expulsado de la cancha. Con 90 salen 13 y corre en 17 s.
+
+### Lo que queda pendiente
+
+Las amarillas (1,77) y las rojas (0,13) siguen por debajo de lo real
+(3,7 y 0,25), y no se puede cerrar la brecha sin volver a mentir. **La
+causa raíz es que el motor resuelve 35 duelos por partido en vez de
+180.** Arreglar eso arregla faltas y tarjetas de raíz, pero mueve
+también goles, desgaste y XP — es un cambio de núcleo, no de pesos.

@@ -55,6 +55,7 @@ func _init() -> void:
 	fallas += _test_no_toca_al_equipo()
 	fallas += _test_siempre_da_lo_mismo()
 	fallas += _test_el_gol_es_gol()
+	fallas += _test_el_cabezazo_es_de_cabeza()
 	fallas += _test_el_corner_tiene_gente_en_el_area()
 	print("FALLOS=%d" % fallas)
 	quit()
@@ -142,6 +143,45 @@ func _test_el_gol_es_gol() -> int:
 			print("FALLA: el clip del gol tiene %d eventos de gol." % goles)
 			return 1
 	print("OK: el clip del gol termina 1-0 y canta el gol una sola vez, las 3 veces.")
+	return 0
+
+
+## El clip del cabezazo tiene que hacer LAS TRES cosas, no dos: que el
+## centro llegue a caer, que el remate sea DE CABEZA y que sea gol.
+##
+## Se mira la accion `cabecea` y no solo el marcador porque las tres se
+## rompen por separado y en silencio. La primera version terminaba 1-0 con
+## un gol de pie: el centro se cortaba en el camino, la jugada seguia y el
+## gol lo hacia otro por otro lado. El marcador decia que estaba bien.
+func _test_el_cabezazo_es_de_cabeza() -> int:
+	for intento in range(3):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = SEED + intento
+		var casa := Team.generar("Casa", rng, 0)
+		var visita := Team.generar("Visita", rng, 400)
+		var propio := RandomNumberGenerator.new()
+		propio.seed = Laboratorio.SEMILLA
+		var r := Laboratorio.generar("cabezazo", casa, visita, propio)
+		if int(r["goles_local"]) != 1 or int(r["goles_visitante"]) != 0:
+			print("FALLA: el clip del cabezazo termino %d-%d." % [
+				int(r["goles_local"]), int(r["goles_visitante"])])
+			return 1
+		var cabezazos := 0
+		for f in r["fotogramas"]:
+			for a in f.get("acciones", []):
+				if str(a["accion"]) == MotorEspacial.ACCION_CABECEA:
+					cabezazos += 1
+		if cabezazos != 1:
+			print("FALLA: el clip del cabezazo tiene %d cabezazos, se espera 1." % cabezazos)
+			return 1
+		var gano_el_centro := false
+		for e in r["eventos"]:
+			if str(e.get("tipo", "")) == "centro" and str(e.get("resultado", "")) == "gana":
+				gano_el_centro = true
+		if not gano_el_centro:
+			print("FALLA: el centro del clip no llego a disputarse por arriba.")
+			return 1
+	print("OK: el clip del cabezazo gana el centro de arriba, cabecea una vez y termina 1-0, las 3 veces.")
 	return 0
 
 

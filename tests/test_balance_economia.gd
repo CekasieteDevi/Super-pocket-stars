@@ -48,8 +48,13 @@ func _test_sueldo_sube_al_renovar_si_el_jugador_mejoro(rng: RandomNumberGenerato
 		print("FALLA: antes=%s despues=%s" % [sueldo_antes, sueldo_despues])
 
 
+## Al reves que antes: al club del jugador humano ya NO se le renueva
+## solo. El contrato que llega a cero se va libre, igual que en cualquier
+## club, y retenerlo es una decision que se toma en Club > Renovaciones
+## (ver core/renovaciones.gd). Con el auto-renovado, la masa salarial
+## subia sola todas las temporadas y el club no podia decir que no.
 func _test_sueldo_protegido_tambien_se_actualiza(rng: RandomNumberGenerator) -> void:
-	print("\n=== Tambien pasa para el equipo protegido (jugador humano) ===")
+	print("\n=== Al equipo protegido no se le renueva solo: se va libre ===")
 	var liga := Liga.new()
 	liga.inicializar(["Protegido", "Rival"], rng, 1000)
 	var equipo: Team = liga.equipos[0]
@@ -60,14 +65,19 @@ func _test_sueldo_protegido_tambien_se_actualiza(rng: RandomNumberGenerator) -> 
 	jugador["media"] = min(99.0, jugador["media"] + 30.0)
 	equipo.contratos[id] = 1
 
+	# Antes de que se venza tiene que aparecer en la pantalla.
+	var aparece := false
+	for j in Renovaciones.pendientes(equipo):
+		if int(j["id"]) == id:
+			aparece = true
+
 	liga._avanzar_contratos(equipo, rng, true)
 
-	var sueldo_despues: float = equipo.sueldos[id]
-
-	if sueldo_despues > sueldo_antes and equipo.contratos[id] >= 2:
-		print("OK: el sueldo del equipo protegido tambien se actualiza al renovar (%s -> %s)." % [Economia.formato_dinero(sueldo_antes), Economia.formato_dinero(sueldo_despues)])
+	if aparece and not equipo.sueldos.has(id) and not equipo.contratos.has(id):
+		print("OK: aparecio en Renovaciones y, sin renovar, se fue libre (cobraba %s)." % Economia.formato_dinero(sueldo_antes))
 	else:
-		print("FALLA: antes=%s despues=%s contrato=%s" % [sueldo_antes, sueldo_despues, equipo.contratos[id]])
+		print("FALLA: aparece=%s sigue_en_sueldos=%s sigue_en_contratos=%s" % [
+			aparece, equipo.sueldos.has(id), equipo.contratos.has(id)])
 
 
 func _test_reputacion_responde_mas_rapido(rng: RandomNumberGenerator) -> void:

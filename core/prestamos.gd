@@ -41,6 +41,17 @@ const CRECIMIENTO_ESTIMADO := 0.55
 const MARGEN_OPCION := 1.15
 
 
+## El sueldo que cobra hoy el jugador, segun su dueño. Un canterano NO
+## tiene entrada en `sueldos` (nunca firmo ficha), y leer ahi un 0.0 hacia
+## que el prestamo lo rechazara siempre: el jugador comparaba su sueldo
+## contra cero y la cuenta le daba que le bajaban el sueldo. La tabla es
+## la misma que usa `ceder` para repartir el pago.
+static func sueldo_de_referencia(dueno: Team, jugador: Dictionary) -> float:
+	var id := int(jugador["id"])
+	return float(dueno.sueldos.get(id, Economia.sueldo_sugerido(
+		ValorJugador.base_salarial(jugador, 50.0, 3, dueno.division_actual))))
+
+
 ## Lo que el dueño CREE que va a valer su jugador cuando termine el
 ## prestamo. Un pibe con mucho techo sin realizar se le va a encarecer, y
 ## por eso no te lo va a atar barato; un veterano se le va a abaratar, y
@@ -100,9 +111,14 @@ static func _indice_en(arr: Array, jugador_id: int) -> int:
 ## parte del sueldo que paga el que RECIBE; el resto lo sigue pagando el
 ## dueño, que por eso no borra su registro. `opcion_compra` 0.0 = sin
 ## opcion; si hay, queda anotada y se ofrece al vencer.
+## `plus_sueldo` es plata EXTRA que el que recibe le pone al jugador por
+## encima de lo que cobra hoy. Al dueño no le cuesta nada y no le importa;
+## es la unica palanca que tiene el que pide para convencer a un jugador
+## que no quiere bajar de categoria. Se evapora cuando el prestamo vence:
+## el dueño lo recupera con su sueldo de siempre.
 static func ceder(origen: Team, destino: Team, jugador_id: int, temporada_actual: float,
 		temporadas: float = float(DURACION_TEMPORADAS), porcentaje_sueldo: float = 1.0,
-		opcion_compra: float = 0.0) -> Dictionary:
+		opcion_compra: float = 0.0, plus_sueldo: float = 0.0) -> Dictionary:
 	if origen == destino:
 		return {"exito": false, "motivo": "No podés prestarte un jugador a vos mismo."}
 
@@ -123,8 +139,10 @@ static func ceder(origen: Team, destino: Team, jugador_id: int, temporada_actual
 	if destino.caja["fichajes"] < fee:
 		return {"exito": false, "motivo": "No alcanza el presupuesto de Fichajes para el fee del préstamo.", "fee": fee, "disponible": destino.caja["fichajes"]}
 
-	var sueldo_completo: float = float(origen.sueldos.get(jugador_id, Economia.sueldo_sugerido(
-		ValorJugador.base_salarial(jugador, 50.0, 3))))
+	var sueldo_completo: float = sueldo_de_referencia(origen, jugador)
+	var pago_destino: float = sueldo_completo * porcentaje_sueldo + maxf(0.0, plus_sueldo)
+	if not Economia.puede_pagar_contrato(destino, pago_destino):
+		return Economia.motivo_contrato_corto(destino, pago_destino)
 
 	if en_cantera:
 		origen.cantera.remove_at(_indice_en(origen.cantera, jugador_id))
@@ -139,7 +157,10 @@ static func ceder(origen: Team, destino: Team, jugador_id: int, temporada_actual
 	origen.caja["fichajes"] += fee
 	destino.banco.append(jugador)
 	destino._registrar_fichaje(jugador, valor, 1)
-	destino.sueldos[jugador_id] = sueldo_completo * porcentaje_sueldo
+	# _registrar_fichaje le cobró a Contratos el sueldo de tabla; el que
+	# paga de verdad es su PARTE del sueldo pactada en el préstamo.
+	destino.caja["contratos"] += destino.sueldos[jugador_id] - pago_destino
+	destino.sueldos[jugador_id] = pago_destino
 
 	var temporada_retorno: float = temporada_actual + temporadas
 	origen.prestados_afuera[jugador_id] = {"club": destino, "temporada_retorno": temporada_retorno,
@@ -148,7 +169,7 @@ static func ceder(origen: Team, destino: Team, jugador_id: int, temporada_actual
 		"opcion_compra": opcion_compra}
 
 	return {"exito": true, "jugador": jugador, "fee": fee, "temporada_retorno": temporada_retorno,
-		"opcion_compra": opcion_compra, "sueldo_propio": sueldo_completo * porcentaje_sueldo}
+		"opcion_compra": opcion_compra, "sueldo_propio": pago_destino}
 
 
 ## Se llama al cierre de cada temporada para "equipo": repatría a los
@@ -186,7 +207,8 @@ static func procesar_retornos(equipo: Team, momento: float) -> Array:
 			# durante el prestamo), asi que al volver solo se le repone el
 			# sueldo entero.
 			equipo.sueldos[id] = float(info.get("sueldo_completo",
-				ValorJugador.base_salarial(jugador, 50.0, 2) * 0.10))
+				ValorJugador.base_salarial(
+					jugador, 50.0, 2, equipo.division_actual) * 0.10))
 
 		equipo.prestados_afuera.erase(id)
 		vueltos.append(jugador)

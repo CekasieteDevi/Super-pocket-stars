@@ -51,6 +51,8 @@ const SITUACIONES := [
 		"que": "Se arma la barrera a 9,15 m y el ataque se acomoda antes del remate."},
 	{"clave": "lateral", "nombre": "Lateral",
 		"que": "La pelota sale por la banda y se reanuda con un saque de banda."},
+	{"clave": "cabezazo", "nombre": "Centro y gol de cabeza",
+		"que": "El centro sale desde la banda, cruza el área por arriba, el delantero le gana de arriba al defensor y la cabecea al gol."},
 	{"clave": "gol", "nombre": "Gol y festejo",
 		"que": "Remate al arco desde el borde del área y el saque del medio posterior."},
 	{"clave": "saque_arco", "nombre": "Saque de arco",
@@ -107,6 +109,8 @@ static func generar(clave: String, local: Team, visitante: Team,
 			_montar_tiro_libre(estado)
 		"lateral":
 			_montar_lateral(estado)
+		"cabezazo":
+			_montar_cabezazo(estado)
 		"gol":
 			_montar_gol(estado)
 		"saque_arco":
@@ -320,6 +324,115 @@ static func _montar_gol(estado: Dictionary) -> void:
 		"agarre": float(arquero.get("atributos", {}).get("agarre", 50)) / 100.0,
 		"dist": punto.distance_to(arco),
 	})
+
+
+## Un centro desde la banda que termina en gol de cabeza.
+##
+## El centro es de verdad: vuela por arriba, no se puede cortar en el
+## camino y al caer el motor resuelve el duelo aéreo. Lo único armado es
+## el escenario — quién centra, quién ataca el centro y dónde está parado
+## cada uno — más el desenlace del remate, que se fuerza a gol.
+##
+## Se fuerza porque la jugada se viene a MIRAR: el duelo contra el arquero
+## la termina en atajada la mitad de las veces, y un clip llamado "gol de
+## cabeza" que unas veces no es gol no sirve para comparar cómo quedó la
+## animación.
+static func _montar_cabezazo(estado: Dictionary) -> void:
+	var eq_a: Team = MotorEspacial._equipo_de(estado, true)
+	var arco := MotorEspacial.arco_rival(true)
+	var hacia: float = -1.0 if arco.x > 0.0 else 1.0
+
+	# Quién cabecea: el mejor de arriba del equipo que ataca. Es el mismo
+	# criterio con el que el motor elige a quién buscar en un córner.
+	var cabeceador := {}
+	for j in eq_a.jugadores_en_cancha():
+		var val: float = float(j["atributos"]["cabezazo"]) * 0.6 + float(j["atributos"]["salto"]) * 0.4
+		if cabeceador.is_empty() or val > float(cabeceador["val"]):
+			cabeceador = {"j": j, "val": val}
+	if cabeceador.is_empty():
+		return
+	# Quién centra: el que mejor centra, de los que quedan.
+	var centrador := {}
+	for j in eq_a.jugadores_en_cancha():
+		if j["id"] == cabeceador["j"]["id"]:
+			continue
+		if centrador.is_empty() or float(j["atributos"]["centros"]) > float(centrador["atributos"]["centros"]):
+			centrador = j
+	if centrador.is_empty():
+		return
+
+	var clave_cab: int = MotorEspacial.clave_de(int(cabeceador["j"]["id"]), true)
+	var clave_cen: int = MotorEspacial.clave_de(int(centrador["id"]), true)
+	if not estado["jugadores"].has(clave_cab) or not estado["jugadores"].has(clave_cen):
+		return
+
+	# El punto de caída: dentro del área chica y sobre un palo. Ahí el
+	# cabezazo termina en remate — fuera del área el motor deja que siga
+	# jugando y no cabecea nadie (ver _resolver_centro).
+	var caida := Vector2(arco.x + hacia * 5.5, -1.0)
+	var e_cab: Dictionary = estado["jugadores"][clave_cab]
+	e_cab["pos"] = caida
+	e_cab["vel"] = Vector2.ZERO
+	e_cab["rapidez"] = 0.0
+
+	# El que centra, abierto y a la altura del borde del área.
+	#
+	# El centro es CORTO a propósito, unos 19 metros. Un centro largo tarda
+	# 12 ticks en llegar, y en el último la parábola ya bajó de
+	# `z_inalcanzable` (2,5 m): ahí lo corta el primer defensor que llegó
+	# corriendo, porque los 22 se mueven mientras la pelota vuela. Con 19
+	# metros son 5 ticks y la pelota nunca pasa por abajo antes de caer.
+	var e_cen: Dictionary = estado["jugadores"][clave_cen]
+	e_cen["pos"] = Vector2(arco.x + hacia * 14.0, 16.0)
+	e_cen["vel"] = Vector2.ZERO
+	e_cen["rapidez"] = 0.0
+
+	# El resto, TODOS fuera del corredor del centro. El centro viene desde
+	# y=+30 hasta y=-3, y un centro se puede cortar en el camino como
+	# cualquier pase: al final del vuelo la pelota ya bajó y el primer
+	# rival que le quede en la línea se la lleva. Con los defensores
+	# repartidos a lo ancho el centro no llegaba nunca a caer.
+	#
+	# El primer rival sí queda pegado al que cabecea, pero DETRÁS suyo,
+	# entre él y el arco: es el marcador del duelo aéreo, y ahí no toca la
+	# trayectoria. Además deja al que cabecea habilitado, con él y el
+	# arquero por detrás.
+	var i := 0
+	var marcador_puesto := false
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		if id == clave_cab or id == clave_cen:
+			continue
+		if str(e["rol"]) == "ARQ":
+			if not e["equipo_local"]:
+				e["pos"] = Vector2(arco.x - hacia * 0.5, 0.0)
+			e["vel"] = Vector2.ZERO
+			e["rapidez"] = 0.0
+			continue
+		if e["equipo_local"]:
+			# Los compañeros entran al área por el otro palo.
+			e["pos"] = Vector2(arco.x + hacia * (7.0 + 3.0 * float(i % 4)), -12.0 - 3.0 * float(i % 3))
+		elif not marcador_puesto:
+			e["pos"] = Vector2(arco.x + hacia * 1.0, -6.0)
+			marcador_puesto = true
+		else:
+			e["pos"] = Vector2(arco.x + hacia * (4.0 + 3.0 * float(i % 4)), -8.0 - 3.0 * float(i % 4))
+		e["vel"] = Vector2.ZERO
+		e["rapidez"] = 0.0
+		i += 1
+
+	# El centro sale como pase alto, igual que en un partido: se le pone
+	# la altura y la marca de centro, que es lo que hace que no se corte
+	# en el camino y que al caer se dispute por arriba.
+	MotorEspacial._entregar_pelota(estado, clave_cen)
+	estado["pelota"]["pos"] = e_cen["pos"]
+	MotorEspacial._lanzar_pase(estado, e_cen, clave_cab, centrador, caida)
+	estado["pelota"]["altura_max"] = float(MotorEspacial.pesos()["fisica"]["altura_centro"])
+	estado["pelota"]["es_centro"] = true
+	estado["pelota"]["centro_de"] = true
+	# El remate que salga de este centro entra al arco. Ver el comentario
+	# de arriba y MotorEspacial._resolver_tiro.
+	estado["forzar_remate"] = "gol"
 
 
 static func _montar_saque_arco(estado: Dictionary) -> void:

@@ -19,6 +19,7 @@ func _init() -> void:
 	fallas += _test_sin_suplente_sano()
 	fallas += _test_no_toma_dos_veces_al_mismo()
 	fallas += _test_la_liga_arregla_sola()
+	fallas += _test_texto_corto_distingue_los_tres_motivos()
 	print("FALLOS=%d" % fallas)
 	quit()
 
@@ -246,3 +247,34 @@ func _test_la_liga_arregla_sola() -> int:
 		return 1
 	print("OK: los %d clubes con suplente sano sacaron al lesionado del once solos." % cubribles)
 	return 0
+
+
+## El texto corto es lo unico que se lee en el cubo de la pantalla de
+## Formacion: si el suspendido y el lesionado dijeran lo mismo, la
+## pantalla no serviria para elegir a quien cambiar.
+func _test_texto_corto_distingue_los_tres_motivos() -> int:
+	var fallas := 0
+	var equipo := _equipo()
+	var sano := int(equipo.jugadores[0]["id"])
+	var lesionado := int(equipo.jugadores[1]["id"])
+	var suspendido := int(equipo.jugadores[2]["id"])
+	var expulsado := int(equipo.jugadores[3]["id"])
+	equipo.lesionar(lesionado, "desgarro", 12)
+	equipo.suspendidos[suspendido] = 2
+	equipo.expulsados_partido[expulsado] = true
+
+	var textos := {
+		sano: "",
+		lesionado: "Lesión 12 d",
+		suspendido: "Susp. 2 f",
+		expulsado: "Expulsado",
+	}
+	for id in textos:
+		var visto := Alineacion.texto_motivo_corto(equipo, int(id))
+		if visto != str(textos[id]):
+			print("FALLA: texto corto de %d dice \"%s\" y esperaba \"%s\"." % [
+				id, visto, str(textos[id])])
+			fallas += 1
+	if fallas == 0:
+		print("OK: el texto corto distingue lesión, suspensión y expulsión.")
+	return fallas

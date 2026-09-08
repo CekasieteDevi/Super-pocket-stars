@@ -92,12 +92,15 @@ func _test_el_espacial_reparte_segun_lo_que_paso(_rng: RandomNumberGenerator) ->
 	#
 	# Con 10 partidos el margen del quite era del 12% y se daba vuelta con
 	# cualquier cambio del motor que corriera el RNG, aunque el reparto
-	# siguiera bien. Con 30 la diferencia entre DFC y DC es de verdad.
+	# siguiera bien. Con 30 tampoco alcanzaba: al bajar las faltas a una
+	# tirada por duelo (§52) dio DFC 4,88 contra DC 5,33 —dado vuelta—
+	# mientras que con 90 partidos y el mismo motor da DFC 16,87 contra DC
+	# 14,32. Era ruido, no reparto. Con 90 la diferencia es de verdad.
 	var tiro_dc := 0.0
 	var tiro_dfc := 0.0
 	var quite_dc := 0.0
 	var quite_dfc := 0.0
-	for i in range(30):
+	for i in range(90):
 		var r1 := RandomNumberGenerator.new()
 		r1.seed = 300 + i
 		var a := Team.generar("A", r1)
@@ -117,7 +120,7 @@ func _test_el_espacial_reparte_segun_lo_que_paso(_rng: RandomNumberGenerator) ->
 	# Hay 2 DFC por cada DC, asi que se compara per capita.
 	var ok: bool = tiro_dc > tiro_dfc / 2.0 and quite_dfc / 2.0 > quite_dc
 	if ok:
-		print("OK: en 30 partidos, tiro DC %.2f vs DFC %.2f (per capita) y quite DFC %.2f vs DC %.2f." % [
+		print("OK: en 90 partidos, tiro DC %.2f vs DFC %.2f (per capita) y quite DFC %.2f vs DC %.2f." % [
 			tiro_dc, tiro_dfc / 2.0, quite_dfc / 2.0, quite_dc])
 	else:
 		print("FALLA: tiro dc=%.2f dfc=%.2f | quite dc=%.2f dfc=%.2f" % [

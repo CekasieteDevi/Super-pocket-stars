@@ -92,8 +92,10 @@ static func evaluar_oferta(vendedor: Team, jugador: Dictionary, monto: float) ->
 static func sueldo_pretendido(jugador: Dictionary, sueldo_actual: float,
 		division_origen: int, division_destino: int) -> float:
 	var caida: int = maxi(0, division_destino - division_origen)
+	# La division que manda es la de DESTINO: el sueldo lo paga el club al
+	# que va (ver ValorJugador.media_salarial).
 	var base: float = maxf(sueldo_actual, Economia.sueldo_sugerido(
-		ValorJugador.base_salarial(jugador, 50.0, 3)))
+		ValorJugador.base_salarial(jugador, 50.0, 3, division_destino)))
 	return base * (1.10 + 0.18 * float(caida))
 
 
@@ -168,4 +170,11 @@ static func bloqueado(vendedor: Team, jugador_id: int, temporada_actual: int) ->
 
 
 static func bloquear(vendedor: Team, jugador_id: int, temporada_actual: int) -> void:
-	vendedor.bloqueos_mercado[jugador_id] = temporada_actual + TEMPORADAS_BLOQUEO - 1
+	vendedor.bloqueos_mercado[jugador_id] = veto_hasta(temporada_actual)
+
+
+## Ultima temporada en la que sigue vivo un veto que empieza hoy. La usa
+## `bloquear` y tambien quien tenga que MOSTRAR el veto (ver
+## Ofertas._responde_vendedor): el calculo vive en un solo lugar.
+static func veto_hasta(temporada_actual: int) -> int:
+	return temporada_actual + TEMPORADAS_BLOQUEO - 1

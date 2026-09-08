@@ -44,6 +44,7 @@ func _test_liberar_y_fichar_libre(rng: RandomNumberGenerator) -> void:
 	# Fichar del pool: otro club se lleva al liberado.
 	var otro := Team.generar("ClubB", rng, 1000)
 	otro.caja["fichajes"] = 1000000.0
+	otro.caja["contratos"] = 1000000.0
 	var saliente_id: int = otro.banco[0]["id"]
 
 	var resultado := AgentesLibres.fichar(otro, pool, id_liberado, 0, true)
@@ -81,10 +82,24 @@ func _test_avanzar_contratos_libera_no_protegido_pero_no_protegido(rng: RandomNu
 	for j in protegido.todos_los_jugadores():
 		ids_despues.append(j["id"])
 
-	if ids_antes == ids_despues:
-		print("OK: el plantel protegido no perdio a nadie por vencimiento de contrato.")
+	# Cinco vueltas de _avanzar_contratos vencen a todo el plantel activo,
+	# y sin renovar se van todos libres: al club del jugador humano ya no
+	# se le renueva solo (ver core/renovaciones.gd) ni se le inventa un
+	# reemplazo (ver AgentesLibres._dejar_hueco). Lo que se chequea es que
+	# el plantel se achique con lo que ya tenia —sin jugadores nuevos— y
+	# que igual quede en pie un equipo que pueda jugar.
+	var nadie_nuevo := true
+	for id in ids_despues:
+		if not ids_antes.has(id):
+			nadie_nuevo = false
+
+	var hay_equipo: bool = protegido.jugadores.size() >= MatchEngine.MINIMO_EN_CANCHA
+	if nadie_nuevo and ids_despues.size() < ids_antes.size() and hay_equipo:
+		print("OK: al protegido se le vencen los contratos, el plantel se achica sin inventar jugadores y nunca baja de %d titulares." % MatchEngine.MINIMO_EN_CANCHA)
 	else:
-		print("FALLA: el equipo protegido perdio jugadores por vencimiento.")
+		print("FALLA: antes=%d despues=%d nadie_nuevo=%s titulares=%d" % [
+			ids_antes.size(), ids_despues.size(), nadie_nuevo,
+			protegido.jugadores.size()])
 
 
 func _test_prestamo_desde_banco_y_retorno(rng: RandomNumberGenerator) -> void:
@@ -92,6 +107,7 @@ func _test_prestamo_desde_banco_y_retorno(rng: RandomNumberGenerator) -> void:
 	var origen := Team.generar("Dueno", rng, 2000)
 	var destino := Team.generar("Prestador", rng, 3000)
 	destino.caja["fichajes"] = 1000000.0
+	destino.caja["contratos"] = 1000000.0
 
 	var jugador_id: int = origen.banco[0]["id"]
 	var banco_origen_antes: int = origen.banco.size()
@@ -147,6 +163,7 @@ func _test_prestamo_desde_cantera_y_retorno(rng: RandomNumberGenerator) -> void:
 
 	var destino := Team.generar("PrestadorCantera", rng, 5000)
 	destino.caja["fichajes"] = 1000000.0
+	destino.caja["contratos"] = 1000000.0
 
 	var resultado := Prestamos.ceder(origen, destino, juvenil_id, 1)
 	if not resultado["exito"]:
@@ -186,6 +203,7 @@ func _test_prestamo_rechazo_no_es_banco_ni_cantera(rng: RandomNumberGenerator) -
 	var origen := Team.generar("DuenoTitular", rng, 8000)
 	var destino := Team.generar("PrestadorTitular", rng, 9000)
 	destino.caja["fichajes"] = 1000000.0
+	destino.caja["contratos"] = 1000000.0
 
 	var jugador_id: int = origen.jugadores[0]["id"]
 	var resultado := Prestamos.ceder(origen, destino, jugador_id, 1)

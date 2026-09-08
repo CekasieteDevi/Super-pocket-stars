@@ -18,9 +18,11 @@ extends RefCounted
 ## adelante cada equipo se enfrenta al ganador del cruce de al lado hasta
 ## que quedan dos. Ver _intercalar.
 ##
-## Empates: si 90' terminan igualados se juega el alargue (2x15',
-## MatchEngine.simular_alargue) y si sigue empatado se define por penales
-## (Penales.definir) — partido único a eliminación directa real (§8.7).
+## Empates: si 90' terminan igualados se juega el alargue (2x15') y si
+## sigue empatado se define por penales — partido único a eliminación
+## directa real (§8.7). El cruce del jugador lo resuelve entero
+## MotorEspacial, con fotogramas; los de la IA, MatchEngine.simular_alargue
+## y Penales.definir.
 
 var nombre: String
 var equipos_con_bye: Array = []  # Team, esperando a la ronda donde ya no hace falta bye
@@ -65,9 +67,12 @@ static func iniciar(nombre: String, equipos: Array, rng: RandomNumberGenerator) 
 ## con el motor abstracto, que es mucho mas rapido y alcanza. El partido
 ## seguido queda en `seguido`; la ronda entera vuelve como resultado.
 ##
-## El alargue y los penales del cruce seguido los resuelve MatchEngine
-## igual que en cualquier otro cruce: el motor espacial no tiene alargue,
-## asi que esos 30' no se ven, se cuentan en el resumen.
+## El cruce seguido se juega ENTERO con el motor espacial: si termina
+## empatado, el alargue y la tanda de penales tambien salen de ahi y
+## tambien tienen fotogramas. Antes esos 30' y los penales los resolvian
+## MatchEngine y Penales por atras, asi que el jugador miraba 90 minutos y
+## se enteraba del resto por el resumen. Los cruces de la IA siguen igual:
+## motor abstracto, alargue abstracto y tanda abstracta.
 func jugar_siguiente_ronda(rng: RandomNumberGenerator, equipo_seguido: Team = null) -> Array:
 	seguido = {}
 	if campeon != null or partidos_pendientes.is_empty():
@@ -92,20 +97,27 @@ func jugar_siguiente_ronda(rng: RandomNumberGenerator, equipo_seguido: Team = nu
 			# se banca un equipo con huecos.
 			Alineacion.arreglar(home)
 			Alineacion.arreglar(away)
-			r = MotorEspacial.simular(home, away, rng, true)
+			r = MotorEspacial.simular(home, away, rng, true, true)
 		else:
 			r = MatchEngine.simular(home, away, rng, false)
 		var gl: int = r["goles_local"]
 		var gv: int = r["goles_visitante"]
-		var definicion := "90 minutos"
+		var definicion := str(r.get("definicion", "90 minutos"))
 		var ganador: Team
 		var penales_texto := ""
 		var goles_log: Array = r.get("goles_log", []).duplicate()
 		var eventos: Array = r.get("eventos", []).duplicate()
 
-		if gl != gv:
+		var pen: Dictionary = r.get("penales", {})
+		if not pen.is_empty():
+			# El motor espacial ya jugo el alargue y pateo la tanda: el
+			# ganador sale de ahi y el jugador vio los penales.
+			ganador = pen["ganador"]
+			penales_texto = " (%d-%d penales)" % [pen["goles_local"], pen["goles_visitante"]]
+		elif gl != gv:
 			ganador = home if gl > gv else away
 		else:
+			# Motor abstracto: el alargue y la tanda se juegan aparte.
 			var r_alargue := MatchEngine.simular_alargue(home, away, rng, es_el_del_jugador)
 			gl = r_alargue["goles_local"]
 			gv = r_alargue["goles_visitante"]
@@ -115,10 +127,11 @@ func jugar_siguiente_ronda(rng: RandomNumberGenerator, equipo_seguido: Team = nu
 			if gl != gv:
 				ganador = home if gl > gv else away
 			else:
-				var pen := Penales.definir(home, away, rng)
+				var pen_abstracta := Penales.definir(home, away, rng)
 				definicion = "penales"
-				ganador = pen["ganador"]
-				penales_texto = " (%d-%d penales)" % [pen["goles_local"], pen["goles_visitante"]]
+				ganador = pen_abstracta["ganador"]
+				penales_texto = " (%d-%d penales)" % [
+					pen_abstracta["goles_local"], pen_abstracta["goles_visitante"]]
 
 		resultados.append({
 			"local": home.nombre, "visitante": away.nombre,

@@ -261,8 +261,13 @@ const CHANCE_ROJA_DIRECTA := 0.0004
 const CHANCE_AMARILLA := 0.02
 
 
+## `escala` multiplica las dos chances base. Existe porque MotorEspacial
+## tira UNA vez por falta cobrada y este motor tira una vez por duelo:
+## son frecuencias distintas y la chance por tirada tiene que serlo
+## tambien para que las amarillas POR PARTIDO coincidan. El motor
+## abstracto usa 1.0 y queda como estaba.
 static func _chequear_tarjeta(defensor: Dictionary, equipo_defensor: Team, equipo_atacante: Team, rng: RandomNumberGenerator,
-		eventos: Array, minuto: int, con_log: bool = false, log: Array = []) -> void:
+		eventos: Array, minuto: int, con_log: bool = false, log: Array = [], escala: float = 1.0) -> void:
 	var id: int = defensor["id"]
 	if equipo_defensor.expulsados_partido.has(id):
 		return
@@ -273,9 +278,9 @@ static func _chequear_tarjeta(defensor: Dictionary, equipo_defensor: Team, equip
 	var es_roja := false
 	var doble_amarilla := false
 
-	if roll < CHANCE_ROJA_DIRECTA * factor_arbitro * factor_clasico * Personalidad.factor_roja(defensor):
+	if roll < CHANCE_ROJA_DIRECTA * escala * factor_arbitro * factor_clasico * Personalidad.factor_roja(defensor):
 		es_roja = true
-	elif roll < CHANCE_AMARILLA * factor_arbitro * factor_clasico * Personalidad.factor_amarilla(defensor):
+	elif roll < CHANCE_AMARILLA * escala * factor_arbitro * factor_clasico * Personalidad.factor_amarilla(defensor):
 		var actuales: int = equipo_defensor.amarillas_partido.get(id, 0) + 1
 		equipo_defensor.amarillas_partido[id] = actuales
 		if actuales >= 2:
@@ -430,8 +435,9 @@ static func _jugar_periodo(equipo_inicial: Team, home: Team, away: Team, ticks: 
 ## §8.7: hasta 5 cambios entre los dos equipos, sacando primero a los
 ## lesionados y después al más cansado por debajo del umbral que cada club
 ## eligió (config_cambios). No reemplaza a los expulsados (roja) — eso no
-## existe en el fútbol real, el equipo sigue con uno menos. El reemplazo es
-## siempre de la MISMA posición desde el banco (7 suplentes, uno por
+## existe en el fútbol real, el equipo sigue con uno menos. Al arquero solo
+## lo saca una lesión, nunca el cansancio. El reemplazo es siempre de la
+## MISMA posición desde el banco (7 suplentes, uno por
 ## puesto): es una simplificación deliberada, no busca "el mejor disponible
 ## en cualquier puesto".
 const UMBRAL_CAMBIO := {"descanso": 0.85, "equilibrado": 0.75, "rendimiento": 0.65}
@@ -456,6 +462,12 @@ static func _procesar_cambios_equipo(equipo: Team, minuto: int, con_log: bool, l
 	for j in equipo.jugadores_en_cancha():
 		if equipo.expulsados_partido.has(j["id"]):
 			continue  # una roja no se reemplaza
+		# Al arquero solo se lo cambia lesionado. Corre poco, pero igual se
+		# desgasta en cada tiro que le llega, y arranca el partido con la
+		# fatiga de la semana (reset_partido): así cruzaba el umbral y salía
+		# por cansancio en 3 de 200 partidos con config "descanso".
+		if j["posicion"] == "ARQ" and not equipo.esta_lesionado(j["id"]):
+			continue
 		if equipo.esta_lesionado(j["id"]) or equipo.resistencia_pct(j["id"]) < umbral:
 			candidatos.append(j)
 	candidatos.sort_custom(func(a, b):

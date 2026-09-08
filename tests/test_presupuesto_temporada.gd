@@ -13,6 +13,7 @@ func _init() -> void:
 	_test_la_deuda_se_arrastra(rng)
 	_test_el_sueldo_no_lleva_el_escalon_de_elite(rng)
 	_test_se_le_puede_comprar_a_cualquier_division(rng)
+	_test_arranca_la_temporada_sin_nada_gastado(rng)
 	quit()
 
 
@@ -98,3 +99,44 @@ func _test_se_le_puede_comprar_a_cualquier_division(rng: RandomNumberGenerator) 
 	else:
 		print("FALLA: arriba %d, abajo %d, misma %d, compraron %d divisiones." % [
 			hacia_arriba, hacia_abajo, misma, divisiones_compradoras.size()])
+
+
+## Reportado en playtesting: el jugador abria Economia el primer dia de la
+## temporada, sin haber tocado nada, y Contratos ya le marcaba $2.241
+## gastados.
+##
+## La UI muestra "gastaste X de Y" como caja_al_cierre - caja. Esa foto se
+## sacaba dentro de Economia.procesar_temporada, apenas repartido el neto,
+## y despues el cierre seguia: vencian contratos, entraban reemplazos de
+## agentes libres y subian canteranos. Cada uno de esos movimientos toca
+## Contratos, y como la foto ya estaba sacada, la UI los reportaba como
+## gasto del jugador. La plata estaba bien; el cero contra el que se
+## comparaba, no.
+func _test_arranca_la_temporada_sin_nada_gastado(rng: RandomNumberGenerator) -> void:
+	print("
+=== La temporada arranca con todos los presupuestos sin gastar ===")
+	var liga := Liga.new()
+	liga.inicializar(["Mio", "Rival", "Otro", "Cuarto"], rng, 7)
+	var mio: Team = liga.equipos[0]
+	for e in liga.equipos:
+		Economia.procesar_temporada(e, 2, liga.equipos.size(), 9)
+
+	# Le vencen dos contratos: es lo que dispara la rotacion automatica
+	# (se van libres, entran reemplazos) que movia Contratos.
+	var i := 0
+	for id in mio.contratos.keys():
+		mio.contratos[id] = 1 if i < 2 else 4
+		i += 1
+
+	liga.procesar_economia_y_mercado_y_progresion(rng, mio, 1)
+
+	var sucias := []
+	for categoria in Economia.CATEGORIAS_CAJA:
+		var usado: float = float(mio.caja_al_cierre.get(categoria, 0.0)) - float(mio.caja[categoria])
+		if not is_zero_approx(usado):
+			sucias.append("%s=%s" % [categoria, Economia.formato_dinero(usado)])
+
+	if sucias.is_empty():
+		print("OK: las %d categorias arrancan en cero gastado, aunque el cierre haya movido el plantel solo." % Economia.CATEGORIAS_CAJA.size())
+	else:
+		print("FALLA: arranca con gasto en %s" % [sucias])

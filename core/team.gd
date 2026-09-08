@@ -32,10 +32,19 @@ const RANGO_IDS_RESERVADO := 300
 const RECUPERACION_FATIGA_POR_DIA := 0.055
 ## §3: velocidad de la deriva natural del ánimo hacia 50 (por semana).
 const DERIVA_ANIMO_POR_SEMANA := 1.0
+## Dorsal mas alto que se puede elegir. Son dos digitos porque el sprite
+## estampa el numero en 12 px de ancho: con tres no entra (ver
+## SpritesPartido._estampar_numero).
+const DORSAL_MAXIMO := 99
 
 var nombre: String
 var jugadores: Array = []  # 11 dicts (PlayerGenerator.generate), uno por puesto de FORMACION (titulares)
 var banco: Array = []  # 7 dicts, uno por puesto de BANCO_FORMACION (suplentes)
+## Dorsal (numero de camiseta) de cada jugador: jugador_id -> 1..99.
+## Arranca vacio y lo llena _asegurar_dorsales con el orden de la
+## alineacion. Se guarda porque el usuario lo puede cambiar: si el numero
+## saliera del orden, mandar un titular al banco le cambiaria la camiseta.
+var dorsales: Dictionary = {}
 var local: bool = false
 var estilo: String = ""  # Tiki taka/Contragolpe/Juego directo/Presión alta/Defensivo/Físico, ver core/estilos.gd
 var dt: Dictionary = {}  # {"nivel":1-10, "rasgo":Conservador/Loco/Cantera/Chequera}, ver core/dt.gd
@@ -160,7 +169,12 @@ var familiaridad: Dictionary = {}
 ## Ver core/quimica.gd.
 var quimica: Dictionary = {}
 
-var caja: Dictionary = {}  # "fichajes"/"contratos"/"mejoras"/"mantenimiento" -> moneda
+var caja: Dictionary = {}  # "fichajes"/"contratos"/"mejoras" -> moneda
+## Negociaciones de renovacion abiertas: id -> {fraccion, ronda, bloqueo}.
+## Vive en el Team y no en la UI porque el bloqueo por oferta insultante
+## corre con el calendario (ver Renovaciones.avanzar) y tiene que
+## sobrevivir a guardar y cargar la partida.
+var renovaciones: Dictionary = {}
 ## Lo que se sumo a cada categoria en el ultimo cierre de temporada, y como
 ## quedo la caja justo despues de esa inyeccion (antes de que el mercado
 ## gastara nada) — con las dos, la UI puede mostrar cuanto se gasto de cada
@@ -184,6 +198,15 @@ var sponsors_ofertas: Array = []
 var ingresos_sponsors: float = 0.0
 var sueldos: Dictionary = {}  # jugador_id -> sueldo anual
 var contratos: Dictionary = {}  # jugador_id -> años restantes
+## A quién se le venció el contrato en el último cierre y quién le tapó el
+## puesto. Solo lo llena el club del jugador humano (ver
+## Liga._avanzar_contratos): la UI lo muestra en un cartel al empezar la
+## temporada y lo vacía cuando el jugador lo acepta.
+##
+## Se guarda en la partida porque el cierre de temporada autoguarda: si
+## viviera solo en memoria, cerrar el juego antes de leer el cartel se
+## llevaría el aviso de un plantel que cambió sin que nadie lo decidiera.
+var vencimientos_del_cierre: Array = []
 ## §9.3 extendido: pagando exactamente esto por un jugador, la venta es
 ## obligatoria — sin la resistencia que tiene una oferta común (ver
 ## Mercado.resistencia_venta). Se fija al ficharlo (_registrar_fichaje) y
@@ -355,9 +378,12 @@ func guardar() -> Dictionary:
 		"sponsors": sponsors, "sponsors_ofertas": sponsors_ofertas,
 		"ingresos_sponsors": ingresos_sponsors,
 		"sueldos": _claves_a_texto(sueldos), "contratos": _claves_a_texto(contratos),
+		"vencimientos_del_cierre": vencimientos_del_cierre,
 		"clausulas": _claves_a_texto(clausulas),
+		"renovaciones": _claves_a_texto(renovaciones),
 		"reputacion": reputacion, "quebrado": quebrado, "scouts": scouts, "instalaciones": instalaciones,
 		"familiaridad": familiaridad, "quimica": quimica,
+		"dorsales": _claves_a_texto(dorsales),
 		# Como texto y no como Color: el guardado es JSON.
 		"color_camiseta": color_camiseta.to_html(), "color_short": color_short.to_html(),
 		"config_cambios": config_cambios,
@@ -461,6 +487,14 @@ static func cargar(datos: Dictionary) -> Team:
 	t.caja = datos["caja"]
 	t.presupuesto_temporada = datos["presupuesto_temporada"]
 	t.caja_al_cierre = datos["caja_al_cierre"]
+	# Las partidas viejas traen una cuarta categoria, "mantenimiento", que
+	# ya no existe (ver Economia.CATEGORIAS_CAJA). Sin esto su saldo seguia
+	# contando para el umbral de quiebra, que suma equipo.caja entera.
+	for _vieja in [t.caja, t.presupuesto_temporada, t.caja_al_cierre]:
+		_vieja.erase("mantenimiento")
+	# .get y no [], como todo lo que se agrego despues: las partidas
+	# guardadas antes de que esto existiera no lo traen.
+	t.vencimientos_del_cierre = datos.get("vencimientos_del_cierre", [])
 	t.premios_copa = float(datos.get("premios_copa", 0.0))
 	t.sponsors = datos.get("sponsors", [])
 	t.sponsors_ofertas = datos.get("sponsors_ofertas", [])
@@ -468,6 +502,7 @@ static func cargar(datos: Dictionary) -> Team:
 	t.sueldos = _claves_a_entero(datos["sueldos"])
 	t.contratos = _claves_a_entero(datos["contratos"])
 	t.clausulas = _claves_a_entero(datos.get("clausulas", {}))
+	t.renovaciones = _claves_a_entero(datos.get("renovaciones", {}))
 	t.reputacion = datos["reputacion"]
 	t.quebrado = datos["quebrado"]
 	t.scouts = datos["scouts"]
@@ -486,6 +521,12 @@ static func cargar(datos: Dictionary) -> Team:
 	var sho := str(datos.get("color_short", ""))
 	t.color_camiseta = Color.from_string(cam, Color.TRANSPARENT) if cam != "" else Color.TRANSPARENT
 	t.color_short = Color.from_string(sho, Color.TRANSPARENT) if sho != "" else Color.TRANSPARENT
+	# Una partida anterior a esto no trae dorsales: quedan en {} y
+	# _asegurar_dorsales los reparte por el orden de la alineacion, que es
+	# el numero que esa partida ya venia mostrando.
+	t.dorsales = _claves_a_entero(datos.get("dorsales", {}))
+	for k in t.dorsales:
+		t.dorsales[k] = int(t.dorsales[k])
 	t.quimica = datos.get("quimica", {})
 	for k in t.quimica:
 		t.quimica[k] = float(t.quimica[k])
@@ -643,6 +684,73 @@ func todos_los_jugadores() -> Array:
 	return jugadores + banco
 
 
+## Dorsal (numero de camiseta) de un jugador del plantel, 0 si no esta.
+## Es la unica fuente del dorsal: la usan el sprite del partido y la ficha.
+func dorsal_de(jugador_id: int) -> int:
+	_asegurar_dorsales()
+	return int(dorsales.get(jugador_id, 0))
+
+
+## Quien lleva ese dorsal hoy, 0 si esta libre.
+func jugador_con_dorsal(numero: int) -> int:
+	_asegurar_dorsales()
+	for j in todos_los_jugadores():
+		var id := int(j["id"])
+		if int(dorsales.get(id, 0)) == numero:
+			return id
+	return 0
+
+
+## Le pone el dorsal `numero` al jugador. Si ya lo lleva otro, los dos
+## INTERCAMBIAN: el otro se queda con el numero viejo. Nunca deja a nadie
+## sin numero ni a dos con el mismo.
+## Devuelve false si el numero esta fuera de 1..DORSAL_MAXIMO o el jugador
+## no esta en el plantel.
+func asignar_dorsal(jugador_id: int, numero: int) -> bool:
+	if numero < 1 or numero > DORSAL_MAXIMO:
+		return false
+	_asegurar_dorsales()
+	if not dorsales.has(jugador_id):
+		return false
+	var viejo := int(dorsales[jugador_id])
+	if viejo == numero:
+		return true
+	var otro := jugador_con_dorsal(numero)
+	dorsales[jugador_id] = numero
+	if otro != 0:
+		dorsales[otro] = viejo
+	return true
+
+
+## Le da numero al que no tiene y se lo saca al que ya no esta en el
+## plantel. Corre en cada consulta porque el plantel cambia solo: un
+## fichaje entra sin dorsal y una venta libera el suyo.
+##
+## El que entra toma el numero libre mas chico. Un plantel nuevo queda
+## entonces con 1-11 para los titulares y 12-18 para el banco, que es el
+## reparto que el usuario espera antes de tocar nada.
+func _asegurar_dorsales() -> void:
+	var plantel := todos_los_jugadores()
+	var presentes := {}
+	for j in plantel:
+		presentes[int(j["id"])] = true
+	for id in dorsales.keys():
+		if not presentes.has(id):
+			dorsales.erase(id)
+	var tomados := {}
+	for id in dorsales:
+		tomados[int(dorsales[id])] = true
+	for j in plantel:
+		var id := int(j["id"])
+		if dorsales.has(id):
+			continue
+		var libre := 1
+		while tomados.has(libre) and libre < DORSAL_MAXIMO:
+			libre += 1
+		dorsales[id] = libre
+		tomados[libre] = true
+
+
 func jugadores_sanos_count() -> int:
 	var count := 0
 	for j in todos_los_jugadores():
@@ -667,7 +775,8 @@ const FACTOR_CLAUSULA := 1.8
 ## cláusula de rescisión nueva.
 ## `valor` es el valor de PASE (fija la clausula). El sueldo sale aparte de
 ## base_salarial, que no lleva el escalon de elite: ver ValorJugador.
-func _registrar_fichaje(jugador: Dictionary, valor: float, contrato_anios: int = 3) -> void:
+func _registrar_fichaje(jugador: Dictionary, valor: float, contrato_anios: int = 3,
+		cobra_contratos: bool = true) -> void:
 	var id: int = jugador["id"]
 	# §8.4#26: de donde viene. Se sella al LLEGAR y no al irse: irse tiene
 	# ocho puntos de salida distintos (mercado, libres, prestamos,
@@ -680,9 +789,15 @@ func _registrar_fichaje(jugador: Dictionary, valor: float, contrato_anios: int =
 			ex.append(anterior)
 		jugador["ex_clubes"] = ex
 	jugador["club_actual"] = nombre
-	var base := ValorJugador.base_salarial(jugador, 50.0, contrato_anios)
-	sueldos[id] = Economia.sueldo_sugerido(base) * Personalidad.factor_sueldo(jugador)
+	sueldos[id] = Economia.sueldo_de_ficha(jugador, contrato_anios, division_actual)
 	contratos[id] = contrato_anios
+	# El sueldo del que llega sale del presupuesto de Contratos. El cierre
+	# de temporada reparte ese presupuesto restando SOLO los sueldos que el
+	# club ya tenia (Economia.procesar_temporada), asi que el sueldo nuevo
+	# se paga de ahi. Antes comprabas jugadores toda la temporada y
+	# Contratos no se movia nunca: era plata que no se gastaba jamas.
+	if cobra_contratos and caja.has("contratos"):
+		caja["contratos"] -= sueldos[id]
 	animo[id] = 50.0
 	fatiga_acumulada[id] = 1.0
 	clausulas[id] = valor * FACTOR_CLAUSULA
@@ -690,8 +805,14 @@ func _registrar_fichaje(jugador: Dictionary, valor: float, contrato_anios: int =
 
 ## Da de baja a un jugador que se va del club (vendido, liberado).
 func _limpiar_registro(id: int) -> void:
+	# El que se va deja de cobrar: su sueldo vuelve a Contratos. Es la
+	# contracara de _registrar_fichaje — sin esto, vender para hacer lugar
+	# en el presupuesto salarial no serviria de nada.
+	if caja.has("contratos") and sueldos.has(id):
+		caja["contratos"] += sueldos[id]
 	sueldos.erase(id)
 	contratos.erase(id)
+	renovaciones.erase(id)
 	animo.erase(id)
 	fatiga_acumulada.erase(id)
 	lesiones.erase(id)
@@ -1107,6 +1228,7 @@ func avanzar_dias(dias: int) -> Array:
 	# §9.4: los informes corren con el calendario, no con las fechas
 	# jugadas — una semana de dos partidos no acelera un scouteo.
 	informes_terminados = Investigadores.avanzar(self, dias)
+	Renovaciones.avanzar(self, dias)
 
 	var recuperados := []
 	for id in lesiones.keys():

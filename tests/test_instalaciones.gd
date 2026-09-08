@@ -91,9 +91,9 @@ func _test_efectos_escalan_con_el_nivel(rng: RandomNumberGenerator) -> void:
 	var aforo_nivel1 := Instalaciones.factor_aforo(equipo)
 	var camada_nivel1 := Instalaciones.cantidad_camada(equipo)
 
-	equipo.instalaciones["medica"] = 5
-	equipo.instalaciones["estadio"] = 5
-	equipo.instalaciones["juveniles"] = 5
+	equipo.instalaciones["medica"] = Instalaciones.NIVEL_MAXIMO
+	equipo.instalaciones["estadio"] = Instalaciones.NIVEL_MAXIMO
+	equipo.instalaciones["juveniles"] = Instalaciones.NIVEL_MAXIMO
 
 	var riesgo_nivel5 := Instalaciones.factor_riesgo_lesion(equipo)
 	var recuperacion_nivel5 := Instalaciones.factor_recuperacion_fatiga(equipo)
@@ -106,7 +106,7 @@ func _test_efectos_escalan_con_el_nivel(rng: RandomNumberGenerator) -> void:
 	ok = ok and camada_nivel5 > camada_nivel1
 
 	if ok:
-		print("OK: nivel 5 reduce el riesgo de lesion y sube recuperacion/aforo/camada respecto a nivel 1.")
+		print("OK: el nivel maximo reduce el riesgo de lesion y sube recuperacion/aforo/camada respecto a nivel 1.")
 	else:
 		print("FALLA: riesgo %.4f->%.4f recuperacion %.2f->%.2f aforo %.2f->%.2f camada %d->%d" % [
 			riesgo_nivel1, riesgo_nivel5, recuperacion_nivel1, recuperacion_nivel5,
@@ -115,26 +115,27 @@ func _test_efectos_escalan_con_el_nivel(rng: RandomNumberGenerator) -> void:
 
 
 func _test_entrenamiento_escala_cupos_y_crecimiento(rng: RandomNumberGenerator) -> void:
-	print("\n=== Entrenamiento: cupos de foco (=nivel) y +1%%/nivel de crecimiento, tope +4%% a nivel 5 ===")
+	print("\n=== Entrenamiento: cupos de foco y crecimiento, ambos al tope en el nivel maximo ===")
 	var equipo := Team.generar("ClubF", rng, 0)
 
 	var cupos_nivel1 := Instalaciones.limite_foco_individual(equipo)
 	var factor_nivel1 := Instalaciones.factor_entrenamiento(equipo)
-	equipo.instalaciones["entrenamiento"] = 3
+	equipo.instalaciones["entrenamiento"] = int(Instalaciones.NIVEL_MAXIMO / 2.0)
 	var cupos_nivel3 := Instalaciones.limite_foco_individual(equipo)
-	equipo.instalaciones["entrenamiento"] = 5
+	equipo.instalaciones["entrenamiento"] = Instalaciones.NIVEL_MAXIMO
 	var cupos_nivel5 := Instalaciones.limite_foco_individual(equipo)
 	var factor_nivel5 := Instalaciones.factor_entrenamiento(equipo)
 
-	# El cupo sube con el nivel hasta 3 y ahi se planta: del 4 en adelante
-	# las instalaciones siguen valiendo por el +% de crecimiento, no por
-	# mas jugadores en foco.
-	var ok: bool = cupos_nivel1 == 1 and cupos_nivel3 == 3 and cupos_nivel5 == 3
+	# El cupo se reparte sobre la escala entera: 1 abajo, el maximo arriba,
+	# y algo en el medio. El +% de crecimiento hace lo mismo.
+	var ok: bool = cupos_nivel1 == 1 and cupos_nivel3 > cupos_nivel1
+	ok = ok and cupos_nivel5 == Instalaciones.MAXIMO_FOCO_INDIVIDUAL
 	ok = ok and is_equal_approx(factor_nivel1, 1.0)
-	ok = ok and is_equal_approx(factor_nivel5, 1.04)
+	ok = ok and is_equal_approx(factor_nivel5, 1.0 + Instalaciones.BONUS_ENTRENAMIENTO_MAX)
 
 	if ok:
-		print("OK: cupos 1->3->3 (tope duro), factor de crecimiento 1.00x->1.04x.")
+		print("OK: cupos %d->%d->%d, factor de crecimiento %.2fx->%.2fx." % [
+			cupos_nivel1, cupos_nivel3, cupos_nivel5, factor_nivel1, factor_nivel5])
 	else:
 		print("FALLA: cupos %d/%d/%d factor %.3f->%.3f" % [
 			cupos_nivel1, cupos_nivel3, cupos_nivel5, factor_nivel1, factor_nivel5])

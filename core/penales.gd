@@ -8,6 +8,14 @@ extends RefCounted
 ## posesión/zona del partido (un penal es un tiro fijo, no una jugada
 ## armada): cada uno es un duelo simple entre el tiro del pateador y los
 ## reflejos+estirada del arquero rival.
+##
+## La tanda entera —la secuencia Y el resultado de cada remate— vive acá y
+## es una sola para los dos motores. El motor espacial no la recalcula: le
+## pasa a `definir` una Callable con la que PATEA en la cancha cada penal
+## ya decidido, para que el jugador lo vea. Si cada motor resolviera el
+## remate por su lado no habría paridad: medido, el duelo espacial convierte
+## el 96,8% de los penales y el de acá el 84,2%, o sea que el jugador
+## definiría sus tandas con chances muy distintas a las de la IA.
 
 const RONDA_REGULAR := 5
 
@@ -35,7 +43,10 @@ static func patear(pateador: Dictionary, arquero: Dictionary, rng: RandomNumberG
 ## Los mejores pateadores primero (mayor "tiro"). Nunca queda vacío: con
 ## el plantel de 25 siempre hay al menos un jugador disponible; si hiciera
 ## falta patear más veces que pateadores hay, se repite la lista (módulo).
-static func _orden_pateadores(equipo: Team) -> Array:
+##
+## Es pública porque el motor espacial patea la misma tanda en la cancha y
+## tiene que mandar al punto del penal al MISMO jugador que elegiría acá.
+static func orden_de_pateo(equipo: Team) -> Array:
 	var disponibles: Array = equipo.jugadores_disponibles_por_posiciones(["DFC", "LAT", "MC", "MCO", "EXT", "DC"])
 	if disponibles.is_empty():
 		disponibles = equipo.todos_los_jugadores()
@@ -44,16 +55,24 @@ static func _orden_pateadores(equipo: Team) -> Array:
 	return ordenados
 
 
-static func _decidido(goles_a: int, goles_b: int, restantes_a: int, restantes_b: int) -> bool:
+## El resultado ya no puede cambiar por más que pateen lo que les queda.
+static func decidido(goles_a: int, goles_b: int, restantes_a: int, restantes_b: int) -> bool:
 	return goles_a > goles_b + restantes_b or goles_b > goles_a + restantes_a
 
 
 ## Devuelve {"ganador":Team, "goles_local":int, "goles_visitante":int, "tandas":Array}.
 ## "tandas" es la secuencia de patadas, para poder animarla o loguearla:
-## [{"equipo":String, "jugador_posicion":String, "gol":bool}, ...]
-static func definir(home: Team, away: Team, rng: RandomNumberGenerator) -> Dictionary:
-	var pateadores_home := _orden_pateadores(home)
-	var pateadores_away := _orden_pateadores(away)
+## [{"equipo":String, "jugador_id":int, "jugador_posicion":String, "gol":bool}, ...]
+##
+## `al_patear` MIRA cada penal ya resuelto, no lo decide: recibe
+## (pateador: Dictionary, arquero: Dictionary, es_local: bool, gol: bool) y
+## no devuelve nada. El motor espacial la usa para patearlo en la cancha y
+## dejar fotogramas. Vacía (los cruces de la IA) = la tanda se resuelve y
+## nadie la mira.
+static func definir(home: Team, away: Team, rng: RandomNumberGenerator,
+		al_patear: Callable = Callable()) -> Dictionary:
+	var pateadores_home := orden_de_pateo(home)
+	var pateadores_away := orden_de_pateo(away)
 	var arquero_home := home.arquero()
 	var arquero_away := away.arquero()
 
@@ -66,41 +85,58 @@ static func definir(home: Team, away: Team, rng: RandomNumberGenerator) -> Dicti
 	while pateos_home < RONDA_REGULAR or pateos_away < RONDA_REGULAR:
 		if pateos_home < RONDA_REGULAR:
 			var pateador: Dictionary = pateadores_home[pateos_home % pateadores_home.size()]
-			var gol := patear(pateador, arquero_away, rng)
+			var gol := _resolver(al_patear, pateador, arquero_away, true, rng)
 			if gol:
 				goles_home += 1
 			pateos_home += 1
-			tandas.append({"equipo": home.nombre, "jugador_posicion": pateador["posicion"], "gol": gol})
-			if _decidido(goles_home, goles_away, RONDA_REGULAR - pateos_home, RONDA_REGULAR - pateos_away):
+			tandas.append(_anotar(home, pateador, gol))
+			if decidido(goles_home, goles_away, RONDA_REGULAR - pateos_home, RONDA_REGULAR - pateos_away):
 				break
 
 		if pateos_away < RONDA_REGULAR:
 			var pateador_v: Dictionary = pateadores_away[pateos_away % pateadores_away.size()]
-			var gol_v := patear(pateador_v, arquero_home, rng)
+			var gol_v := _resolver(al_patear, pateador_v, arquero_home, false, rng)
 			if gol_v:
 				goles_away += 1
 			pateos_away += 1
-			tandas.append({"equipo": away.nombre, "jugador_posicion": pateador_v["posicion"], "gol": gol_v})
-			if _decidido(goles_home, goles_away, RONDA_REGULAR - pateos_home, RONDA_REGULAR - pateos_away):
+			tandas.append(_anotar(away, pateador_v, gol_v))
+			if decidido(goles_home, goles_away, RONDA_REGULAR - pateos_home, RONDA_REGULAR - pateos_away):
 				break
 
 	var ronda_extra := 0
 	while goles_home == goles_away:
 		var idx_home := (pateos_home + ronda_extra) % pateadores_home.size()
 		var pateador_h: Dictionary = pateadores_home[idx_home]
-		var gol_h := patear(pateador_h, arquero_away, rng)
+		var gol_h := _resolver(al_patear, pateador_h, arquero_away, true, rng)
 		if gol_h:
 			goles_home += 1
-		tandas.append({"equipo": home.nombre, "jugador_posicion": pateador_h["posicion"], "gol": gol_h})
+		tandas.append(_anotar(home, pateador_h, gol_h))
 
 		var idx_away := (pateos_away + ronda_extra) % pateadores_away.size()
 		var pateador_a: Dictionary = pateadores_away[idx_away]
-		var gol_a := patear(pateador_a, arquero_home, rng)
+		var gol_a := _resolver(al_patear, pateador_a, arquero_home, false, rng)
 		if gol_a:
 			goles_away += 1
-		tandas.append({"equipo": away.nombre, "jugador_posicion": pateador_a["posicion"], "gol": gol_a})
+		tandas.append(_anotar(away, pateador_a, gol_a))
 
 		ronda_extra += 1
 
 	var ganador: Team = home if goles_home > goles_away else away
 	return {"ganador": ganador, "goles_local": goles_home, "goles_visitante": goles_away, "tandas": tandas}
+
+
+static func _resolver(al_patear: Callable, pateador: Dictionary, arquero: Dictionary,
+		es_local: bool, rng: RandomNumberGenerator) -> bool:
+	var gol := patear(pateador, arquero, rng)
+	if al_patear.is_valid():
+		al_patear.call(pateador, arquero, es_local, gol)
+	return gol
+
+
+static func _anotar(equipo: Team, pateador: Dictionary, gol: bool) -> Dictionary:
+	return {
+		"equipo": equipo.nombre,
+		"jugador_id": int(pateador["id"]),
+		"jugador_posicion": str(pateador["posicion"]),
+		"gol": gol,
+	}

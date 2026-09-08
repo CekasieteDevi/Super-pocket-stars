@@ -28,14 +28,17 @@ func _init() -> void:
 func _test_limite_sigue_el_nivel_hasta_el_tope(rng: RandomNumberGenerator) -> void:
 	print("=== limite() sigue el nivel de instalaciones, con tope duro de 3 ===")
 	var equipo := Team.generar("ClubA", rng, 0)
+	# Los cupos se reparten a lo largo de la escala entera: 1 abajo y
+	# MAXIMO_FOCO_INDIVIDUAL en el nivel maximo. Con cinco niveles se
+	# llegaba al tope en el 3; con diez, mas o menos a la mitad.
 	equipo.instalaciones["entrenamiento"] = 1
 	var limite1 := Entrenamiento.limite(equipo)
-	equipo.instalaciones["entrenamiento"] = 3
+	equipo.instalaciones["entrenamiento"] = int(Instalaciones.NIVEL_MAXIMO / 2.0)
 	var limite3 := Entrenamiento.limite(equipo)
-	equipo.instalaciones["entrenamiento"] = 5
+	equipo.instalaciones["entrenamiento"] = Instalaciones.NIVEL_MAXIMO
 	var limite5 := Entrenamiento.limite(equipo)
-	if limite1 == 1 and limite3 == 3 and limite5 == 3:
-		print("OK: nivel 1 -> 1 cupo, nivel 3 -> 3, nivel 5 -> 3 (tope).")
+	if limite1 == 1 and limite3 > limite1 and limite5 == Instalaciones.MAXIMO_FOCO_INDIVIDUAL:
+		print("OK: nivel 1 -> 1 cupo, mitad de escala -> %d, nivel maximo -> %d (tope)." % [limite3, limite5])
 	else:
 		print("FALLA: limite1=%d limite3=%d limite5=%d" % [limite1, limite3, limite5])
 
@@ -69,7 +72,9 @@ func _test_foco_escala_con_la_posicion(_rng: RandomNumberGenerator) -> void:
 func _test_asignar_respeta_el_cupo(rng: RandomNumberGenerator) -> void:
 	print("\n=== asignar() rechaza pasar el cupo, pero permite hasta el limite ===")
 	var equipo := Team.generar("ClubB", rng, 0)
-	equipo.instalaciones["entrenamiento"] = 2
+	# La mitad de la escala da 2 cupos: el test mide que el TERCERO se
+	# rechace, asi que no puede correr con el nivel al maximo.
+	equipo.instalaciones["entrenamiento"] = int(Instalaciones.NIVEL_MAXIMO / 2.0)
 	var ids := []
 	for j in equipo.banco:
 		ids.append(j["id"])

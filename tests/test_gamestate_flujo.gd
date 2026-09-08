@@ -43,6 +43,12 @@ func _init() -> void:
 
 	_test_todas_las_divisiones_jugaron(piramide)
 
+	# Contratos largos a proposito: lo que este test mide es el mercado
+	# automatico, y un vencimiento en el cierre (que ahora tambien le pasa
+	# al club del jugador humano) le cambiaria el plantel por otro motivo.
+	for id in equipo_jugador.contratos:
+		equipo_jugador.contratos[id] = 5
+
 	var ids_antes := []
 	for j in equipo_jugador.jugadores:
 		ids_antes.append(j["id"])
@@ -94,6 +100,11 @@ func _test_posicion_final(posicion_final: int, total: int) -> void:
 		print("FALLA: posicion_final=%d fuera de rango (total=%d)." % [posicion_final, total])
 
 
+## Lo que mide es el MERCADO automatico, no los contratos. Desde que al
+## club del jugador humano se le vencen los contratos como a cualquiera
+## (ver core/renovaciones.gd), un vencimiento en medio del cierre le
+## cambiaba el plantel y el test culpaba al mercado. Por eso el llamador
+## le deja los contratos largos antes de cerrar.
 func _test_equipo_jugador_protegido(equipo_jugador: Team, ids_antes: Array) -> void:
 	print("\n=== El equipo del jugador no participa del mercado automatico ===")
 	var ids_despues := []

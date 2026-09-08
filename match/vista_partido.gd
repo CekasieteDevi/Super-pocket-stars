@@ -324,21 +324,30 @@ func _mostrar(idx: int, t: float) -> void:
 					break
 		# Lo que el jugador HIZO manda sobre lo que se mueve: si está
 		# pateando o tirándose, esa pose gana a la de correr.
-		var pose: String = str(acciones.get(j["id"], ""))
+		var accion: Dictionary = acciones.get(j["id"], {})
+		var pose: String = str(accion.get("pose", ""))
 		if pose.is_empty():
 			pose = _pose(avance, idx)
+		# El peinado y el dorsal son lo único que distingue a dos
+		# jugadores del mismo equipo: con la camiseta sola, once sprites
+		# idénticos corriendo no dejan seguir a nadie en particular.
+		var jugador_id := int(j.get("jugador_id", j["id"]))
 		var ent := {
 			"tipo": "jugador", "z": 0.0, "pos": p,
 			"color": _color_de(j),
 			"color_short": color_short_local if j["equipo_local"] else color_short_visitante,
 			"direccion": _direccion(avance),
 			"pose": pose,
+			"pelo": SpritesPartido.pelo_de(jugador_id),
+			"color_pelo": SpritesPartido.tono_pelo_de(jugador_id),
+			"numero": int(j.get("numero", 0)),
 		}
 		if pose == SpritesPartido.VUELA:
-			# Se tira hacia donde está la pelota, medido EN PANTALLA: el
-			# sprite del arquero volando es horizontal, así que lo único
-			# que puede expresar es a qué costado se estiró.
-			ent["espejo"] = ProyeccionPartido.direccion_pantalla(pos_pelota - p).x < 0.0
+			# Se tira hacia donde estaba la pelota cuando arrancó el
+			# vuelo, medido EN PANTALLA: el sprite del arquero volando es
+			# horizontal, así que lo único que puede expresar es a qué
+			# costado se estiró.
+			ent["espejo"] = _lado_del_vuelo(int(j["id"]), int(accion["desde"]))
 		ents.append(ent)
 
 	ents.append({"tipo": "pelota", "color": Color.WHITE, "z": z, "pos": pos_pelota})
@@ -368,6 +377,9 @@ func _mostrar(idx: int, t: float) -> void:
 	hud.goles_local = int(g["home"])
 	hud.goles_visitante = int(g["away"])
 	hud.minuto = int(a["minuto"])
+	hud.periodo = int(a.get("periodo", 1))
+	var marcador_tanda = a.get("tanda", null)
+	hud.tanda = marcador_tanda if marcador_tanda is Dictionary else {}
 	var poseedor_id := int(pa.get("poseedor_id", -1))
 	hud.poseedor = str(nombres.get(poseedor_id, "")) if poseedor_id != -1 else ""
 	hud.queue_redraw()
@@ -388,20 +400,39 @@ const TICKS_POR_ZANCADA := 2
 ## dura más que pegarle a la pelota, y el arquero queda tendido.
 const DURACION_ACCION := {
 	MotorEspacial.ACCION_PATEA: 2,
+	MotorEspacial.ACCION_CABECEA: 2,
 	MotorEspacial.ACCION_BARRIDA: 3,
 	MotorEspacial.ACCION_VUELA: 4,
+	# El festejo dura lo que la pelota se queda en la red. Sale de la
+	# constante del motor y no de un número acá: si el gol se detiene más
+	# tiempo, el goleador tiene que seguir festejando, no plantarse.
+	MotorEspacial.ACCION_FESTEJA: MotorEspacial.TICKS_DETENIDO["gol"],
 }
 
 const POSE_DE_ACCION := {
 	MotorEspacial.ACCION_PATEA: SpritesPartido.PATEA,
+	MotorEspacial.ACCION_CABECEA: SpritesPartido.CABECEA,
 	MotorEspacial.ACCION_BARRIDA: SpritesPartido.BARRIDA,
 	MotorEspacial.ACCION_VUELA: SpritesPartido.VUELA,
+	MotorEspacial.ACCION_FESTEJA: SpritesPartido.FESTEJA,
+}
+
+## Poses que se ven distintas en su PRIMER fotograma. El remate es el
+## único: arma la pierna y recién después impacta. Con la pose de impacto
+## sostenida dos ticks el remate parecía un jugador trabado.
+const POSE_INICIAL_DE_ACCION := {
+	MotorEspacial.ACCION_PATEA: SpritesPartido.PATEA_ARMA,
 }
 
 
-## clave -> pose, para las acciones que siguen vigentes en el fotograma
-## `idx`. Se calcula mirando hacia atrás en vez de guardar estado, así
-## funciona igual reproduciendo, pausando o saltando a cualquier punto.
+## clave -> {"pose": String, "desde": int}, para las acciones que siguen
+## vigentes en el fotograma `idx`. Se calcula mirando hacia atrás en vez
+## de guardar estado, así funciona igual reproduciendo, pausando o
+## saltando a cualquier punto.
+##
+## `desde` es el fotograma en que arrancó la acción. Lo necesita el
+## arquero: el costado al que se tira se decide cuando se tira y no se
+## puede recalcular después (ver _mostrar).
 func _acciones_activas(idx: int) -> Dictionary:
 	var activas := {}
 	var maximo := 0
@@ -411,8 +442,25 @@ func _acciones_activas(idx: int) -> Dictionary:
 		for a in fotogramas[i].get("acciones", []):
 			var accion := str(a["accion"])
 			if idx - i < int(DURACION_ACCION.get(accion, 1)):
-				activas[a["clave"]] = POSE_DE_ACCION.get(accion, SpritesPartido.QUIETO)
+				var pose: String = POSE_DE_ACCION.get(accion, SpritesPartido.QUIETO)
+				if idx == i and POSE_INICIAL_DE_ACCION.has(accion):
+					pose = POSE_INICIAL_DE_ACCION[accion]
+				activas[a["clave"]] = {"pose": pose, "desde": i}
 	return activas
+
+
+## A qué costado se tiró el arquero, EN PANTALLA. Se mide en el fotograma
+## en que arrancó el vuelo y queda fijo mientras dura la pose. Antes se
+## recalculaba en cada fotograma contra la pelota: cuando la pelota le
+## quedaba en las manos el delta era cero, el signo se caía a false y el
+## arquero se daba vuelta en el aire, en la mitad de la atajada.
+func _lado_del_vuelo(clave: int, desde: int) -> bool:
+	var f: Dictionary = fotogramas[desde]
+	var pel := Vector2(f["pelota"]["x"], f["pelota"]["y"])
+	for j in f["jugadores"]:
+		if int(j["id"]) == clave:
+			return ProyeccionPartido.direccion_pantalla(pel - Vector2(j["x"], j["y"])).x < 0.0
+	return false
 
 
 func _color_de(j: Dictionary) -> Color:

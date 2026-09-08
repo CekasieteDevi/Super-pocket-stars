@@ -49,6 +49,21 @@ static func texto_motivo(equipo: Team, jugador_id: int) -> String:
 	return ""
 
 
+## Lo mismo, pero corto: para donde no entra la frase entera. El cubo de
+## la pantalla de Formacion mide 104 px de ancho y ahi no entra
+## "suspendido: 2 fechas".
+static func texto_motivo_corto(equipo: Team, jugador_id: int) -> String:
+	match motivo(equipo, jugador_id):
+		LESIONADO:
+			var les: Dictionary = equipo.lesiones.get(jugador_id, {})
+			return "Lesión %d d" % int(les.get("dias_restantes", 0))
+		SUSPENDIDO:
+			return "Susp. %d f" % int(equipo.suspendidos.get(jugador_id, 0))
+		EXPULSADO:
+			return "Expulsado"
+	return ""
+
+
 ## Los TITULARES que no pueden jugar. Solo los titulares: el suplente
 ## lesionado no molesta a nadie, no va a entrar.
 static func indisponibles(equipo: Team) -> Array:

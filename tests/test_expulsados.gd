@@ -11,7 +11,13 @@ extends SceneTree
 ## falta.
 
 const SEED := 5150
-const PARTIDOS := 25
+## 90 y no 25: las rojas bajaron de 0,40 a 0,13 por partido cuando la
+## tarjeta pasó a colgar de la falta y las faltas de una sola tirada por
+## duelo. 0,13 sigue por debajo del 0,25 real, pero lo que este test mide
+## es CÓMO sale el expulsado de la cancha, no cada cuánto lo echan:
+## necesita 5 rojas y con 25 partidos salían 3. Lo que quedó corto es la
+## muestra.
+const PARTIDOS := 90
 
 ## Lo que avanza un expulsado en un tick. Es la tolerancia con la que se
 ## mide si llego a la linea: el ultimo fotograma en que se lo ve puede
@@ -25,6 +31,7 @@ func _init() -> void:
 	fallas += _test_sin_gente_se_cancela()
 	fallas += _test_los_cambios_se_ven()
 	fallas += _test_el_tiempo_detenido_se_repone()
+	fallas += _test_no_vuelve_en_el_segundo_tiempo()
 	print("FALLOS=%d" % fallas)
 	quit()
 
@@ -298,3 +305,54 @@ func _test_el_tiempo_detenido_se_repone() -> int:
 		return 0
 	print("FALLA: %.2f goles por partido; animar los cambios le esta comiendo tiempo al juego." % media)
 	return 1
+
+
+## Una roja sobre el final de la mitad corta el periodo con el expulsado
+## todavia caminando hacia el lateral. El segundo tiempo tiene que
+## arrancar SIN el: antes el arranque del periodo lo volvia a parar en su
+## posicion base y el equipo salia con once.
+func _test_no_vuelve_en_el_segundo_tiempo() -> int:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = SEED
+	var casa := Team.generar("Casa", rng, 0)
+	var visita := Team.generar("Visita", rng, 0)
+	casa.reset_partido()
+	visita.reset_partido()
+	casa.local = true
+	visita.local = false
+	var estado := MotorEspacial.crear_estado(casa, visita, rng)
+	estado["con_fotogramas"] = true
+
+	var victima: Dictionary = casa.jugadores_en_cancha()[5]
+	casa.expulsados_partido[int(victima["id"])] = true
+	MotorEspacial._mandar_a_las_duchas(estado, int(victima["id"]), true)
+	var clave := MotorEspacial.clave_de(int(victima["id"]), true)
+
+	# La mitad corta aca, con el expulsado a mitad de camino, y arranca el
+	# segundo tiempo. 20 ticks alcanzan: el saque del medio y unos pocos
+	# ticks de juego es donde se lo veia reaparecer.
+	MotorEspacial._jugar_periodo(estado, casa, visita, false, 2, 45.0, 20, [], true)
+
+	var ticks_del_expulsado := 0
+	var locales_max := 0
+	for f in estado["fotogramas"]:
+		var locales := 0
+		for j in f["jugadores"]:
+			if int(j["id"]) == clave:
+				ticks_del_expulsado += 1
+			if bool(j["equipo_local"]):
+				locales += 1
+		locales_max = maxi(locales_max, locales)
+
+	var fallas := 0
+	if ticks_del_expulsado > 0:
+		print("FALLA: el expulsado vuelve al segundo tiempo (%d ticks)" % ticks_del_expulsado)
+		fallas += 1
+	else:
+		print("OK: el expulsado no vuelve al segundo tiempo")
+	if locales_max > 10:
+		print("FALLA: el equipo sale con %d al segundo tiempo" % locales_max)
+		fallas += 1
+	else:
+		print("OK: el equipo sale con %d al segundo tiempo" % locales_max)
+	return fallas

@@ -14,12 +14,14 @@ func _init() -> void:
 	_test_el_sueldo_se_reparte()
 	_test_la_opcion_barata_no_pasa()
 	_test_medio_ano_vuelve_a_mitad_de_temporada()
+	_test_un_canterano_se_puede_pedir()
+	_test_el_plus_compra_el_no()
 	if gs != null:
 		gs.free()
 	quit()
 
 
-func _partida() -> Dictionary:
+func _partida(div_dueno: int = 4) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = SEED
 	var piramide := Piramide.generar(rng)
@@ -37,7 +39,7 @@ func _partida() -> Dictionary:
 	# El libro de pases solo abre en enero, febrero y julio, y una
 	# partida arranca en marzo: sin esto toda operacion se rechaza.
 	gs.dia_absoluto = Calendario.primer_dia_de_mercado()
-	return {"piramide": piramide, "rng": rng, "dueno": piramide.divisiones[4].equipos[1]}
+	return {"piramide": piramide, "rng": rng, "dueno": piramide.divisiones[div_dueno].equipos[1]}
 
 
 func _test_no_prestan_titulares() -> void:
@@ -133,3 +135,51 @@ func _test_medio_ano_vuelve_a_mitad_de_temporada() -> void:
 		print("OK: vence en %.2f, a 3.25 sigue prestado y a 3.6 ya volvio." % retorno)
 	else:
 		print("FALLA: retorno=%.2f sigue=%s volvio=%s" % [retorno, sigue, volvio])
+
+
+func _test_un_canterano_se_puede_pedir() -> void:
+	print("
+=== A un canterano se lo puede pedir ===")
+	# Un canterano no firmo ficha, asi que no tiene entrada en `sueldos`.
+	# Leer ahi un 0.0 lo hacia comparar su sueldo contra cero: la cuenta le
+	# daba que le bajaban el sueldo y rechazaba SIEMPRE, pusieras lo que
+	# pusieras en el reparto.
+	var p := _partida()
+	var dueno: Team = p["dueno"]
+	if dueno.cantera.is_empty():
+		dueno.generar_camada(gs.rng, 3)
+	var juvenil: Dictionary = dueno.cantera[0]
+	var id := int(juvenil["id"])
+
+	var r: Dictionary = gs.pedir_prestamo(dueno, id, "una", 1.0, 0.0)
+	if r["exito"] and not Mercado.ubicar(gs.equipo_jugador, id).is_empty():
+		print("OK: llega a prestamo pagando %s." % Economia.formato_dinero(r["sueldo_propio"]))
+	else:
+		print("FALLA: %s" % [r])
+
+
+func _test_el_plus_compra_el_no() -> void:
+	print("
+=== El plus compra el no del que baja de categoria ===")
+	# El reparto del sueldo es plata entre CLUBES: al jugador no le cambia
+	# nada. Sin el plus, un jugador de division 1 rechazaba bajar a la 4 y
+	# no habia ninguna palanca para darlo vuelta.
+	var p := _partida(1)
+	var dueno: Team = p["dueno"]
+	var suplente: Dictionary = dueno.banco[0]
+	var id := int(suplente["id"])
+
+	var sin_plus: Dictionary = gs.pedir_prestamo(dueno, id, "una", 1.0, 0.0, 0.0)
+	if sin_plus["exito"]:
+		print("FALLA: acepto bajar cuatro divisiones sin plus.")
+		return
+	var sugerido: float = float(sin_plus.get("plus_sugerido", 0.0))
+	if sugerido <= 0.0:
+		print("FALLA: rechazo (%s) y no sugirio ningun plus." % sin_plus["motivo"])
+		return
+	var con_plus: Dictionary = gs.pedir_prestamo(dueno, id, "una", 1.0, 0.0, sugerido)
+	if con_plus["exito"] and not Mercado.ubicar(gs.equipo_jugador, id).is_empty():
+		print("OK: sin plus dijo \"%s\"; con %s aceptó." % [
+			sin_plus["motivo"], Economia.formato_dinero(sugerido)])
+	else:
+		print("FALLA: con el plus sugerido (%.0f) tampoco: %s" % [sugerido, con_plus])

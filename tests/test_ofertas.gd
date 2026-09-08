@@ -11,6 +11,7 @@ func _init() -> void:
 	_test_una_oferta_no_se_resuelve_en_el_acto()
 	_test_el_vendedor_contraoferta()
 	_test_la_miseria_corta_la_negociacion()
+	_test_el_veto_se_avisa_una_sola_vez()
 	_test_llegan_ofertas_por_los_mios()
 	_test_aceptar_no_garantiza_la_venta()
 	_test_lo_terminado_va_al_historial()
@@ -105,6 +106,55 @@ func _test_la_miseria_corta_la_negociacion() -> void:
 		print("OK: se levantaron de la mesa y quedaste vetado.")
 	else:
 		print("FALLA: estado=%s vetado=%s" % [estado, vetado])
+
+
+func _test_el_veto_se_avisa_una_sola_vez() -> void:
+	print("
+=== El veto se avisa en la portada y se apaga al aceptarlo ===")
+	var p := _partida()
+	var otro: Team = p["otro"]
+	var mio: Team = p["mio"]
+	var jugador: Dictionary = otro.jugadores[7]
+	var id := int(jugador["id"])
+
+	gs.enviar_oferta(otro, id, Negociacion.precio_pedido(otro, jugador) * 0.1)
+	gs._avanzar_dias_todos(Ofertas.DIAS_RESPUESTA_MAX + 1)
+
+	# El veto vive en el club VENDEDOR, asi que sin la marca en la oferta
+	# la portada no tiene de donde sacarlo. Ver Main._pendientes_de_portada.
+	var sin_ver: Array = Ofertas.vetos_sin_ver(mio)
+	if sin_ver.size() != 1:
+		print("FALLA: vetos sin ver = %d, se esperaba 1." % sin_ver.size())
+		return
+	var aviso: Dictionary = sin_ver[0]
+	if int(aviso["veto_hasta"]) != Negociacion.veto_hasta(gs.temporada_actual):
+		print("FALLA: veto_hasta=%d" % int(aviso["veto_hasta"]))
+		return
+	print("OK: el veto por %s aparece como pendiente." % str(aviso["jugador"]))
+
+	Ofertas.marcar_veto_visto(aviso)
+	if Ofertas.vetos_sin_ver(mio).is_empty():
+		print("OK: aceptarlo lo saca de la lista.")
+	else:
+		print("FALLA: el aviso sigue despues de aceptarlo.")
+
+	# El cartel se apaga, el veto NO: son dos cosas distintas.
+	if Negociacion.bloqueado(otro, id, gs.temporada_actual):
+		print("OK: el veto sigue en pie despues de aceptar el aviso.")
+	else:
+		print("FALLA: aceptar el aviso levanto el veto.")
+
+	# El aviso tiene que sobrevivir al guardado: si te vetan y guardas
+	# antes de leerlo, al volver tiene que seguir ahi.
+	var vuelto := Team.cargar(JSON.parse_string(JSON.stringify(mio.guardar())))
+	var marcados := 0
+	for h in vuelto.historial_mercado:
+		if bool(h.get("veto", false)):
+			marcados += 1
+	if marcados == 1:
+		print("OK: la marca de veto sobrevive al guardado.")
+	else:
+		print("FALLA: quedaron %d vetos marcados despues de guardar." % marcados)
 
 
 func _test_llegan_ofertas_por_los_mios() -> void:

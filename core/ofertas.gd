@@ -169,6 +169,13 @@ static func _responde_vendedor(equipo: Team, oferta: Dictionary, vendedor: Team,
 	if r["insulto"]:
 		Negociacion.bloquear(vendedor, id, temporada_actual)
 		oferta["estado"] = RETIRADA
+		# El veto vive en el club VENDEDOR, no en nuestra lista: sin esta
+		# marca la unica pista era una linea de noticias que se pierde
+		# entre las demas, y el jugador se enteraba recién al querer
+		# fichar y encontrar el boton "Vetado". Ver Main._pendientes_de_portada.
+		oferta["veto"] = true
+		oferta["veto_hasta"] = Negociacion.veto_hasta(temporada_actual)
+		oferta["veto_visto"] = false
 		_anotar(oferta, "%s se ofendió con los %s y cortó la negociación." % [
 			vendedor.nombre, Economia.formato_dinero(oferta["monto"])])
 		return
@@ -259,18 +266,22 @@ static func _negocia_el_contrato_ajeno(equipo: Team, oferta: Dictionary, piramid
 
 	if not detalle["acepta"]:
 		oferta["estado"] = SIN_ACUERDO
-		_anotar(oferta, "No se pusieron de acuerdo con el jugador: %s Se queda." % [
-			Negociacion.motivo_rechazo(detalle)])
+		_anotar(oferta, "%s no se puso de acuerdo con %s: %s Se queda." % [
+			oferta["jugador"], comprador.nombre, Negociacion.motivo_rechazo(detalle)])
 		return
 
 	var monto := float(oferta["monto"])
 	var r := Mercado.ejecutar_pase(comprador, equipo, id, monto, ofrecido, 3, rng)
 	if not r["exito"]:
 		oferta["estado"] = SIN_ACUERDO
-		_anotar(oferta, "La operación no se pudo cerrar: %s" % r["motivo"])
+		_anotar(oferta, "El pase de %s no se pudo cerrar: %s" % [oferta["jugador"], r["motivo"]])
 		return
 	oferta["estado"] = CERRADA
-	_anotar(oferta, "Vendido a %s por %s." % [comprador.nombre, Economia.formato_dinero(monto)])
+	# El nombre va SIEMPRE en el texto: esta linea es la que la UI muestra
+	# como cartel al pasar el dia y como noticia en Fichajes. Sin el nombre
+	# el jugador se enteraba de que vendio a alguien, pero no a quien.
+	_anotar(oferta, "%s vendido a %s por %s." % [
+		oferta["jugador"], comprador.nombre, Economia.formato_dinero(monto)])
 
 
 ## Aceptar una oferta ENTRANTE: los clubes ya arreglaron, ahora hablan
@@ -290,6 +301,22 @@ static func contraofertar(oferta: Dictionary, monto: float, rng: RandomNumberGen
 	oferta["ronda"] = int(oferta["ronda"]) + 1
 	oferta["dias"] = float(rng.randi_range(DIAS_RESPUESTA_MIN, DIAS_RESPUESTA_MAX))
 	_anotar(oferta, "Contraofertaste %s." % Economia.formato_dinero(monto))
+
+
+## Los vetos que el jugador todavia no acuso. Salen del historial: la
+## negociacion ya termino, pero el veto sigue vivo y hay que avisarlo.
+static func vetos_sin_ver(equipo: Team) -> Array:
+	var salida := []
+	for oferta in equipo.historial_mercado:
+		if bool(oferta.get("veto", false)) and not bool(oferta.get("veto_visto", false)):
+			salida.append(oferta)
+	return salida
+
+
+## El jugador toco "Aceptar": el aviso no vuelve a aparecer. El veto en si
+## sigue en pie hasta su temporada — esto solo apaga el cartel.
+static func marcar_veto_visto(oferta: Dictionary) -> void:
+	oferta["veto_visto"] = true
 
 
 static func rechazar(oferta: Dictionary) -> void:

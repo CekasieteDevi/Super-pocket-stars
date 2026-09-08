@@ -51,7 +51,13 @@ const DIAS_VIGENCIA := 798
 ## Mejoras). Crece con el cuadrado de las estrellas: un investigador de 10
 ## es una inversión de club grande, no algo que compres en división 10 con
 ## el vuelto.
-const COSTO_BASE := 5000.0
+##
+## Sale del mismo ancla que las instalaciones (Instalaciones.COSTO_NIVEL_2
+## = una temporada de Mejoras en décima) porque compite por la MISMA caja.
+## Antes eran $5.000 fijos por el investigador más barato, cuando un club
+## de décima cerraba la temporada con $1.385 de Mejoras: el más barato de
+## todos estaba fuera de alcance para media pirámide.
+const COSTO_BASE := Instalaciones.COSTO_NIVEL_2
 
 
 static func dias_de_informe(estrellas: int) -> float:

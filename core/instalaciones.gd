@@ -17,9 +17,24 @@ extends RefCounted
 ##     decrecientes contra el potencial, así que este bonus acelera sin
 ##     romper el techo real de cada jugador.
 
-const NIVEL_MAXIMO := 5
-const COSTO_BASE := 40000.0
+## Diez niveles, uno por división de la pirámide. Eran cinco, con el
+## primer salto a $40.000 fijos: un club de décima cerraba la temporada
+## con $1.385 de presupuesto de Mejoras y el presupuesto se reinicia cada
+## año (Economia.procesar_temporada), así que ese club no llegaba NUNCA
+## al nivel 2 de nada. La mejora existía solo para primera.
+const NIVEL_MAXIMO := 10
 const CATEGORIAS := ["estadio", "medica", "juveniles", "scouting", "entrenamiento"]
+
+## Lo que cuesta pasar del nivel 1 al 2: una temporada entera del
+## presupuesto de Mejoras de un club promedio de décima, medido con
+## tests/_diag_mejoras_por_division.gd: $2.968.
+##
+## Puesto en $2.500 y no en los $2.968 justos porque ese número es el
+## PROMEDIO de la división: con el promedio clavado, la mitad de los
+## clubes de décima no llegaba igual. Con $2.500, un club de décima paga
+## el nivel 2 de una instalación por temporada, y cinco temporadas quieto
+## ahí le dan el nivel 2 de las cinco.
+const COSTO_NIVEL_2 := 2500.0
 
 
 static func nivel_inicial() -> Dictionary:
@@ -29,10 +44,43 @@ static func nivel_inicial() -> Dictionary:
 	return d
 
 
-## Escala geométrico: cada nivel siguiente cuesta ~1.8x el anterior, como
-## cualquier progresión de mejoras estilo Kairosoft.
+## Cuánto da cada área en el nivel máximo. Los efectos son estos números
+## por `progreso`, así que la escala entera cuelga de acá y de
+## NIVEL_MAXIMO: cuando los niveles pasaron de cinco a diez, el nivel 10
+## quedó valiendo exactamente lo que valía el 5, sin tocar el balance.
+##
+## La UI muestra los mismos efectos (ver _efecto_instalacion en
+## ui/main.gd) y los calcula con estas constantes, no con una copia.
+const BONUS_AFORO_MAX := 0.80
+const REDUCCION_LESION_MAX := 0.40
+const BONUS_RECUPERACION_MAX := 0.60
+const BONUS_ENTRENAMIENTO_MAX := 0.04
+const CAMADA_MIN := 3
+const CAMADA_MAX := 7
+## De cuánto es el abanico de calidad de la cantera, de punta a punta. La
+## mitad de la escala es el punto neutro: por debajo la academia saca
+## chicos peores que el club, por encima mejores.
+const CALIDAD_JUVENILES_RANGO := 12.0
+
+
+## 0.0 en el nivel 1, 1.0 en el nivel máximo.
+static func progreso(nivel: int) -> float:
+	return float(clampi(nivel, 1, NIVEL_MAXIMO) - 1) / float(NIVEL_MAXIMO - 1)
+
+
+## Un nivel por división: subir al 2 cuesta lo que gana en Mejoras un club
+## de décima en una temporada, y subir al 10 lo que gana uno de primera.
+## Los escalones salen de MULTIPLICADOR_DIVISION y no de una constante
+## nueva — es la misma curva por la que crecen los ingresos, así que el
+## costo de mejorar sigue a lo que el club puede pagar.
+##
+## La consecuencia buscada: te alcanza para una mejora por temporada, y la
+## decisión es en cuál de las cinco la ponés. Cinco temporadas quieto en
+## décima = un nivel de cada una. Si ascendés todos los años, el costo
+## sube con vos y vas a llegar arriba con varias sin tocar.
 static func costo_siguiente_nivel(nivel_actual: int) -> float:
-	return COSTO_BASE * pow(1.8, nivel_actual - 1)
+	var indice: int = 9 - clampi(nivel_actual, 1, NIVEL_MAXIMO - 1)
+	return COSTO_NIVEL_2 * Economia.factor_division(indice) / Economia.factor_division(8)
 
 
 ## Sube un nivel de instalación si hay fondos en el presupuesto de Mejoras
@@ -53,37 +101,43 @@ static func mejorar(equipo: Team, categoria: String) -> Dictionary:
 	equipo.instalaciones[categoria] = nivel_actual + 1
 
 	if categoria == "scouting" and not equipo.scouts.is_empty():
-		equipo.scouts[0]["nivel"] = min(Scout.NIVEL_MAXIMO, equipo.instalaciones[categoria] * 2 - 1)
+		equipo.scouts[0]["nivel"] = nivel_scout_de_nivel(equipo.instalaciones[categoria])
 
 	return {"exito": true, "categoria": categoria, "nivel": equipo.instalaciones[categoria], "costo": costo}
 
 
-## §9.5 médica: nivel 1 = riesgo normal (factor 1.0), nivel 5 = 40% menos
-## riesgo de lesión. Se multiplica directo por evaluar_riesgo (más bajo =
-## mejor, a diferencia de las otras que multiplican "para arriba").
+## §9.5 médica: nivel 1 = riesgo normal (factor 1.0), nivel máximo = 40%
+## menos riesgo de lesión. Se multiplica directo por evaluar_riesgo (más
+## bajo = mejor, a diferencia de las otras que multiplican "para arriba").
 static func factor_riesgo_lesion(equipo: Team) -> float:
-	var nivel: int = equipo.instalaciones.get("medica", 1)
-	return 1.0 - (nivel - 1) * 0.10
+	return 1.0 - progreso(equipo.instalaciones.get("medica", 1)) * REDUCCION_LESION_MAX
 
 
-## §9.5 médica: nivel 1 = recuperación normal, nivel 5 = 60% más rápida.
+## §9.5 médica: nivel 1 = recuperación normal, nivel máximo = 60% más
+## rápida.
 static func factor_recuperacion_fatiga(equipo: Team) -> float:
-	var nivel: int = equipo.instalaciones.get("medica", 1)
-	return 1.0 + (nivel - 1) * 0.15
+	return 1.0 + progreso(equipo.instalaciones.get("medica", 1)) * BONUS_RECUPERACION_MAX
 
 
-## §9.5 estadio: nivel 1 = aforo base, nivel 5 = 80% más aforo (más
+## §9.5 estadio: nivel 1 = aforo base, nivel máximo = 80% más aforo (más
 ## ingreso por entradas).
+## El nivel del scout del club, que sube con la instalación de scouting.
+## Vive acá y no en el `mejorar` de más arriba porque la UI lo muestra
+## antes de comprar, y una segunda copia de la fórmula ya se había
+## desincronizado una vez.
+static func nivel_scout_de_nivel(nivel: int) -> int:
+	return 1 + int(round(progreso(nivel) * float(Scout.NIVEL_MAXIMO - 1)))
+
+
 static func factor_aforo(equipo: Team) -> float:
-	var nivel: int = equipo.instalaciones.get("estadio", 1)
-	return 1.0 + (nivel - 1) * 0.20
+	return 1.0 + progreso(equipo.instalaciones.get("estadio", 1)) * BONUS_AFORO_MAX
 
 
 ## §9.5 juveniles: nivel 1 = camada de 3 (como antes de que existiera esta
-## mejora), nivel 5 = camada de 7.
+## mejora), nivel máximo = camada de 7.
 static func cantidad_camada(equipo: Team) -> int:
-	var nivel: int = equipo.instalaciones.get("juveniles", 1)
-	return 2 + nivel
+	return CAMADA_MIN + int(round(progreso(equipo.instalaciones.get("juveniles", 1))
+		* float(CAMADA_MAX - CAMADA_MIN)))
 
 
 ## §9.5 juveniles, la otra mitad: además de cuántos, de qué calidad. Se
@@ -93,27 +147,31 @@ static func cantidad_camada(equipo: Team) -> int:
 ## Sin esto, invertir en juveniles solo daba cantidad y la decisión era
 ## floja.
 static func bonus_potencial_juveniles(equipo: Team) -> int:
-	var nivel: int = equipo.instalaciones.get("juveniles", 1)
-	return (nivel - 3) * 3
+	return int(round((progreso(equipo.instalaciones.get("juveniles", 1)) - 0.5)
+		* CALIDAD_JUVENILES_RANGO))
 
 
 ## §9.5/§7.4 entrenamiento: cuántos jugadores pueden estar en foco
 ## individual a la vez (ver core/entrenamiento.gd).
-## Tope duro de jugadores en foco individual a la vez. Las instalaciones
-## mandan hasta el nivel 3; del 4 en adelante no dan más cupos, y siguen
-## valiendo por el +% de crecimiento general que da factor_entrenamiento.
-## Con el nivel a secas se podían enfocar 5 jugadores y el foco dejaba de
-## ser una decisión: entraba medio plantel.
+## Tope duro de jugadores en foco individual a la vez. Los cupos se
+## reparten a lo largo de toda la escala: 1 al empezar, 3 en el nivel
+## máximo. Con el nivel a secas se podían enfocar 5 jugadores y el foco
+## dejaba de ser una decisión: entraba medio plantel.
 const MAXIMO_FOCO_INDIVIDUAL := 3
 
 
 static func limite_foco_individual(equipo: Team) -> int:
-	return mini(int(equipo.instalaciones.get("entrenamiento", 1)), MAXIMO_FOCO_INDIVIDUAL)
+	return cupos_foco_de_nivel(equipo.instalaciones.get("entrenamiento", 1))
 
 
-## §9.5/§7.1 entrenamiento: +1% de crecimiento por nivel arriba del 1
-## (nivel 1 = sin bonus, nivel 5 = +4%) sobre TODO el crecimiento de la
-## temporada, no solo el atributo en foco — ver Progresion.aplicar_temporada.
+static func cupos_foco_de_nivel(nivel: int) -> int:
+	# round y no int: con truncado, la mitad de la escala (nivel 5 de 10)
+	# seguia dando un solo cupo y el segundo aparecia recien en el 6.
+	return 1 + int(round(progreso(nivel) * float(MAXIMO_FOCO_INDIVIDUAL - 1)))
+
+
+## §9.5/§7.1 entrenamiento: nivel 1 = sin bonus, nivel máximo = +4% sobre
+## TODO el crecimiento de la temporada, no solo el atributo en foco — ver
+## Progresion.aplicar_temporada.
 static func factor_entrenamiento(equipo: Team) -> float:
-	var nivel: int = equipo.instalaciones.get("entrenamiento", 1)
-	return 1.0 + (nivel - 1) * 0.01
+	return 1.0 + progreso(equipo.instalaciones.get("entrenamiento", 1)) * BONUS_ENTRENAMIENTO_MAX

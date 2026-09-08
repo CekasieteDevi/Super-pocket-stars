@@ -7,19 +7,20 @@ extends RefCounted
 ## mantenimiento como egreso, repartido en los 4 presupuestos fijos.
 
 ## §15 decisión 2 / §9.1: Fichajes 60% / Contratos 20% / Mejoras 10% del
-## NETO LIBRE (ingresos - sueldos - mantenimiento fijo), reescalado a que
-## sumen 100% entre estos tres — Mantenimiento salió del reparto (ver
-## RESERVA_MANTENIMIENTO más abajo): comprar jugadores más caros no debería
-## hacer que el presupuesto de mantenimiento del club se vaya a números
-## rojos, es un costo administrativo fijo (cancha, luz), no una inversión
-## que dependa de la actividad del mercado.
+## NETO LIBRE (ingresos - sueldos - mantenimiento), reescalado a que sumen
+## 100% entre estos tres. El mantenimiento no se reparte porque no se
+## gasta: es un costo administrativo del club (cancha, luz) que ya se
+## restó de los ingresos antes de llegar acá.
 const PRESUPUESTO_PORCENTAJES := {
 	"fichajes": 60.0 / 90.0, "contratos": 20.0 / 90.0, "mejoras": 10.0 / 90.0,
 }
-## Las 4 categorías reales de la caja del club — a diferencia de
-## PRESUPUESTO_PORCENTAJES (solo 3, las que se reparten del neto),
-## Mantenimiento se repone con RESERVA_MANTENIMIENTO, no con un porcentaje.
-const CATEGORIAS_CAJA := ["fichajes", "contratos", "mejoras", "mantenimiento"]
+## Las categorías de la caja del club, y las mismas tres que se reparten.
+##
+## Antes había una cuarta, Mantenimiento, que se reponía con una reserva
+## fija de $12.500 por temporada y solo servía para pagar multas. Las
+## multas se eliminaron (ver Liga), así que la categoría quedó sin nada
+## que pagar: era un presupuesto que el jugador no podía gastar en nada.
+const CATEGORIAS_CAJA := ["fichajes", "contratos", "mejoras"]
 
 ## PRECIO_ENTRADA calibrado (feedback de playtesting: "gané $797,000 en
 ## división 10 cuando un jugador de media 75 cuesta $170,000") — con
@@ -36,12 +37,19 @@ const PARTIDOS_DE_LOCAL := 19
 const AFORO_BASE := 800
 const PRECIO_ENTRADA := 12.0
 const SPONSOR_BASE := 15000.0
-const MANTENIMIENTO_FIJO := 25000.0
-## Reserva de Mantenimiento que se repone CADA temporada, siempre igual —
-## a diferencia de los otros tres presupuestos, no depende del neto de la
-## temporada. La usan las multas de Liga por no presentarte con el mínimo
-## de jugadores disponibles (§14).
-const RESERVA_MANTENIMIENTO := 12500.0
+## Mantenimiento a factor 1.0. El costo real de cada club es este número
+## por su factor_division, igual que los ingresos.
+##
+## Antes eran $25.000 planos para todos, fuera del multiplicador. Eso
+## castigaba solo a las divisiones bajas: en décima, con ingresos de
+## $54.771, se comía el 46% de la temporada, mientras que en primera
+## ($16M de ingresos) era ruido. Un club de décima cerraba con $12.463 de
+## neto y $1.385 de presupuesto de Mejoras — con eso no llegaba nunca a
+## la primera mejora de instalaciones, que costaba $40.000.
+##
+## Escalado, décima paga $10.750 (20% de sus ingresos) y cierra con
+## $26.713 de neto: el doble que antes.
+const MANTENIMIENTO_BASE := 25000.0
 const PREMIO_POR_POSICION := {1: 50000.0, 2: 30000.0, 3: 15000.0}
 
 ## Premios de copa. 1 = campeon, 2 = finalista.
@@ -191,7 +199,8 @@ static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos:
 	var total_sueldos := 0.0
 	for id in equipo.sueldos:
 		total_sueldos += equipo.sueldos[id]
-	var egresos: float = total_sueldos + MANTENIMIENTO_FIJO
+	var mantenimiento: float = MANTENIMIENTO_BASE * factor_division(division)
+	var egresos: float = total_sueldos + mantenimiento
 
 	var neto: float = ingresos - egresos
 	# El presupuesto se REINICIA cada temporada, como en un modo carrera:
@@ -209,16 +218,9 @@ static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos:
 		var asignado: float = neto * PRESUPUESTO_PORCENTAJES[categoria]
 		equipo.caja[categoria] = asignado + minf(0.0, equipo.caja[categoria])
 		equipo.presupuesto_temporada[categoria] = asignado
-	# Mantenimiento no sale del neto (que ya lo restó una vez como costo fijo
-	# más arriba, en egresos) — se repone con una reserva fija, siempre
-	# igual, para que gastar de más en sueldos no lo mande a números rojos.
-	equipo.caja["mantenimiento"] = RESERVA_MANTENIMIENTO + minf(0.0, equipo.caja["mantenimiento"])
-	equipo.presupuesto_temporada["mantenimiento"] = RESERVA_MANTENIMIENTO
-	# Foto de la caja justo despues de repartir el ingreso y antes de que el
-	# mercado (que corre a continuacion en el mismo cierre) gaste nada —
-	# sirve para que la UI pueda mostrar cuanto se gasto de cada categoria
-	# esta temporada (caja_al_cierre - caja_actual).
-	equipo.caja_al_cierre = equipo.caja.duplicate()
+	# Foto provisoria. La definitiva la saca fotografiar_caja() cuando
+	# termina toda la intertemporada — ver ahi por que.
+	fotografiar_caja(equipo)
 
 	# Reputacion y hinchada: la posicion final mueve las dos. Los TITULOS y
 	# los ascensos tambien mueven la reputacion, pero eso lo aplica
@@ -233,9 +235,26 @@ static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos:
 	return {
 		"ingresos": ingresos, "egresos": egresos, "neto": neto,
 		"premios_copa": premios_copa, "sponsors": por_sponsors,
-		"sueldos": total_sueldos, "mantenimiento": MANTENIMIENTO_FIJO,
+		"sueldos": total_sueldos, "mantenimiento": mantenimiento,
 		"caja_total": estado["caja_total"], "valor_plantel": estado["valor_plantel"], "quebrado": estado["quebrado"],
 	}
+
+
+## Con que caja arranca la temporada el club. La UI muestra "gastaste X de
+## Y" como caja_al_cierre - caja, asi que esta foto es el cero contra el
+## que se mide todo lo que el jugador decide gastar.
+##
+## Tiene que sacarse cuando NO queda movimiento automatico pendiente.
+## Antes se sacaba dentro de procesar_temporada, apenas repartido el neto,
+## y despues el cierre seguia: vencian contratos, entraban reemplazos de
+## agentes libres y subian canteranos, y cada uno de esos movimientos toca
+## el presupuesto de Contratos. Resultado: el jugador abria Economia el
+## primer dia de la temporada, sin haber hecho nada, y le decia que ya
+## habia gastado $2.241 de Contratos.
+##
+## La plata estaba bien; lo que estaba mal era contra que se comparaba.
+static func fotografiar_caja(equipo: Team) -> void:
+	equipo.caja_al_cierre = equipo.caja.duplicate()
 
 
 ## La misma cuenta que procesar_temporada, pero sin tocar al club.
@@ -346,6 +365,37 @@ static func procesar_quiebra(equipo: Team, rng: RandomNumberGenerator) -> Array:
 ## mantiene sano varias temporadas seguidas en vez de derrumbarse.
 static func sueldo_sugerido(valor: float) -> float:
 	return valor * 0.10
+
+
+## Lo que va a cobrar un jugador si lo fichás hoy por esos años. Es la
+## misma cuenta que hace Team._registrar_fichaje: vive acá para que la UI
+## y los chequeos de presupuesto puedan preguntarla ANTES de fichar, sin
+## repetir la fórmula.
+## division es la del club que PAGA el sueldo, no la del que vende: lo que
+## se paga es destacar sobre la categoria donde vas a jugar (ver
+## ValorJugador.media_salarial).
+static func sueldo_de_ficha(jugador: Dictionary, contrato_anios: int,
+		division: int = -1) -> float:
+	return sueldo_sugerido(ValorJugador.base_salarial(
+		jugador, 50.0, contrato_anios, division)) * Personalidad.factor_sueldo(jugador)
+
+
+## El sueldo del que llega sale del presupuesto de Contratos, y ahora hay
+## que tenerlo ENTERO antes de firmar: si te quedan $1.000 y el jugador
+## cobra $1.100, no lo fichás.
+##
+## Antes no se chequeaba nada (Team._registrar_fichaje descontaba y
+## listo), así que Contratos era la única caja que se podía dejar en
+## negativo sin aviso — la deuda se arrastraba al año siguiente y sumaba
+## para la quiebra sin que nadie te lo hubiera dicho.
+static func puede_pagar_contrato(equipo: Team, sueldo: float) -> bool:
+	return equipo.caja.get("contratos", 0.0) >= sueldo
+
+
+static func motivo_contrato_corto(equipo: Team, sueldo: float) -> Dictionary:
+	return {"exito": false,
+		"motivo": "No te alcanza el presupuesto de Contratos para el sueldo.",
+		"sueldo": sueldo, "disponible": equipo.caja.get("contratos", 0.0)}
 
 
 ## "$1234567.8" -> "$1,234,568" (redondeado). Para que los montos se lean

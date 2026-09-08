@@ -71,12 +71,12 @@ func previsualizar(piramide: Piramide) -> Dictionary:
 		var elegido := _mejor_disponible(candidatos_por_posicion, pos, usados)
 		seleccion.jugadores.append(elegido)
 		usados[elegido["id"]] = true
-		seleccion._registrar_fichaje(elegido, ValorJugador.calcular(elegido, 50.0, 1), 1)
+		seleccion._registrar_fichaje(elegido, ValorJugador.calcular(elegido, 50.0, 1), 1, false)
 	for pos in Team.BANCO_FORMACION:
 		var elegido := _mejor_disponible(candidatos_por_posicion, pos, usados)
 		seleccion.banco.append(elegido)
 		usados[elegido["id"]] = true
-		seleccion._registrar_fichaje(elegido, ValorJugador.calcular(elegido, 50.0, 1), 1)
+		seleccion._registrar_fichaje(elegido, ValorJugador.calcular(elegido, 50.0, 1), 1, false)
 
 	seleccion.recalcular_capitan()
 	return {"equipo": seleccion, "clubes_por_jugador": clubes_por_jugador}

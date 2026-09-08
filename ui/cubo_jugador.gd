@@ -25,7 +25,13 @@ var _puesto_natural: String = ""
 var _media: float = 0.0
 var _energia: float = 1.0
 var _animo: float = 50.0
-var _lesionado: bool = false
+## Por que no puede jugar, "" si puede (ver Alineacion.motivo). Antes acá
+## habia un _lesionado y punto, asi que el suspendido se veia igual que
+## uno sano: la unica forma de enterarte era el aviso previo al partido, y
+## para entonces ya no estabas en la pantalla donde se cambia el once.
+var _motivo: String = ""
+var _motivo_corto: String = ""
+var _motivo_largo: String = ""
 var _es_banco: bool = false
 ## §8.4#4: lo que le cuesta el puesto que ocupa, 0 si esta en el suyo.
 var _castigo_puesto: float = 0.0
@@ -45,7 +51,9 @@ static func crear(jugador: Dictionary, rol: String, equipo: Team, es_banco: bool
 	# La del PROXIMO partido, no la del ultimo: ver Team.energia_proximo_partido.
 	c._energia = equipo.energia_proximo_partido(c.jugador_id)
 	c._animo = float(equipo.animo.get(c.jugador_id, 50.0))
-	c._lesionado = equipo.esta_lesionado(c.jugador_id)
+	c._motivo = Alineacion.motivo(equipo, c.jugador_id)
+	c._motivo_corto = Alineacion.texto_motivo_corto(equipo, c.jugador_id)
+	c._motivo_largo = Alineacion.texto_motivo(equipo, c.jugador_id)
 	c._es_banco = es_banco
 	c._castigo_puesto = 0.0 if es_banco else equipo.penalizacion_puesto(c.jugador_id)
 	c.escala = escala_inicial
@@ -70,7 +78,7 @@ func _armar() -> void:
 	caja.add_child(arriba)
 	# El chip del puesto se pone rojo si el jugador NO es de ahi: es el
 	# aviso de que ese cambio esta costando algo.
-	var color_chip := Color("#4a2a28") if _lesionado else Color("#2f4a3c")
+	var color_chip := Color("#4a2a28") if _motivo != "" else Color("#2f4a3c")
 	if _castigo_puesto < 0.0:
 		color_chip = Color("#4a3a28")
 	var chip := Componentes.chip(_rol, color_chip)
@@ -108,7 +116,18 @@ func _armar() -> void:
 	caja.add_child(_barrita(_energia, "Energía %d%%" % int(round(_energia * 100.0))))
 	caja.add_child(_barrita(_animo / 100.0, "Ánimo %d" % int(_animo)))
 
-	if _castigo_puesto < 0.0:
+	# El motivo TAPA al castigo de puesto: los dos son la misma linea y el
+	# cubo no tiene alto para dos. Al que no puede jugar no le importa
+	# cuanto pierde fuera de su puesto, porque no va a jugar.
+	if _motivo != "":
+		var baja := Label.new()
+		baja.text = _motivo_corto
+		baja.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		baja.clip_text = true
+		baja.add_theme_font_size_override("font_size", int(Tema.TAM_ETIQUETA * escala))
+		baja.add_theme_color_override("font_color", Tema.ROJO)
+		caja.add_child(baja)
+	elif _castigo_puesto < 0.0:
 		var aviso := Label.new()
 		aviso.text = "%s  %.0f" % [_puesto_natural, _castigo_puesto]
 		aviso.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -118,6 +137,10 @@ func _armar() -> void:
 		aviso.tooltip_text = "Es %s, no %s: pierde %.0f puntos en todos sus duelos." % [
 			_puesto_natural, _rol, absf(_castigo_puesto)]
 		caja.add_child(aviso)
+
+	# El tooltip repite el motivo entero: en el cubo entra "Susp. 2 f" y
+	# nada mas, y las fechas exactas hacen falta para decidir.
+	tooltip_text = _motivo_largo if _motivo != "" else ""
 
 
 func _barrita(valor: float, ayuda: String) -> Control:
@@ -149,7 +172,7 @@ func _estilo(resaltado: bool = false) -> StyleBoxFlat:
 	e.border_width_bottom = 2
 	e.border_width_left = 2
 	e.border_width_right = 2
-	e.border_color = Tema.AMBAR if resaltado else (Tema.ROJO if _lesionado else Tema.BORDE)
+	e.border_color = Tema.AMBAR if resaltado else (Tema.ROJO if _motivo != "" else Tema.BORDE)
 	e.content_margin_left = 7
 	e.content_margin_right = 7
 	e.content_margin_top = 5

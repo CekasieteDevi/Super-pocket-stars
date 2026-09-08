@@ -101,6 +101,7 @@ func _test_oferta_comun_puede_ser_rechazada_por_resistencia(rng: RandomNumberGen
 	var comprador := Team.generar("CompradorResistencia", rng, 3000)
 	var vendedor := Team.generar("VendedorResistencia", rng, 4000)
 	comprador.caja["fichajes"] = 100000000.0
+	comprador.caja["contratos"] = 1000000.0
 	vendedor.reputacion = 100.0  # maxima resistencia por reputacion
 
 	var idx_objetivo := -1
@@ -162,6 +163,7 @@ func _test_clausula_fuerza_la_venta_pase_lo_que_pase(rng: RandomNumberGenerator)
 		if j["posicion"] == "MC":
 			j["media"] = 99.0
 	comprador.caja["fichajes"] = clausula + 1000.0
+	comprador.caja["contratos"] = 1000000.0
 
 	var resultado := Mercado.comprar_al_contado(comprador, vendedor, jugador_objetivo_id, rng, true)
 

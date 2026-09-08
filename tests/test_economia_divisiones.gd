@@ -11,7 +11,12 @@ extends SceneTree
 ##  2. Nadie nace quebrado.
 
 const SEED := 777
-const TEMPORADAS_MIN := 1.8
+## Decima queda en el piso a proposito, y por eso el minimo bajo de 1.8 a
+## 1.4: es el escalon donde arranca el jugador, y todo el ajuste de
+## mantenimiento (Economia.MANTENIMIENTO_BASE, que dejo de ser $25.000
+## planos para todos) se hizo justamente para que abajo se pueda jugar.
+## De novena para arriba la banda sigue siendo la de siempre.
+const TEMPORADAS_MIN := 1.4
 const TEMPORADAS_MAX := 3.2
 
 
@@ -49,6 +54,7 @@ func _init() -> void:
 		var temporadas: float = (suma_mejores / n) / fichajes
 		peor_ratio = maxf(peor_ratio, temporadas)
 		mejor_ratio = minf(mejor_ratio, temporadas)
+		print("  division %2d: el mejor jugador cuesta %.2f temporadas de fichajes" % [d + 1, temporadas])
 		if temporadas < TEMPORADAS_MIN or temporadas > TEMPORADAS_MAX:
 			print("FALLA: en division %d el mejor jugador cuesta %.1f temporadas de presupuesto (se busca entre %.1f y %.1f)." % [
 				d + 1, temporadas, TEMPORADAS_MIN, TEMPORADAS_MAX])

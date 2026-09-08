@@ -97,6 +97,7 @@ func _test_piramide_roundtrip_completo(rng: RandomNumberGenerator) -> void:
 	var piramide := Piramide.generar(rng)
 	var equipo_jugador: Team = piramide.divisiones[9].equipos[0]
 	equipo_jugador.caja["fichajes"] = 12345.0
+	equipo_jugador.caja["contratos"] = 1000000.0
 
 	var datos := _roundtrip_json(piramide.guardar())
 	var cargada := Piramide.cargar(datos)
@@ -124,6 +125,7 @@ func _test_prestamo_resuelve_referencia_real(rng: RandomNumberGenerator) -> void
 	var origen: Team = piramide.divisiones[5].equipos[0]
 	var destino: Team = piramide.divisiones[5].equipos[1]
 	destino.caja["fichajes"] = 1000000.0
+	destino.caja["contratos"] = 1000000.0
 	var jugador_id: int = origen.banco[0]["id"]
 
 	var resultado := Prestamos.ceder(origen, destino, jugador_id, 3)

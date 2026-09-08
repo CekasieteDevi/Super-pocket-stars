@@ -71,6 +71,12 @@ static func archivo(peso: int = 700) -> FontVariation:
 	return v
 
 
+## Barlow SemiBold suelta, para resaltar una linea de texto corrida sin
+## cambiarle el tamano ni el color.
+static func negrita() -> FontFile:
+	return _fuente(RUTA_BARLOW_SEMI)
+
+
 static func _caja(fondo: Color, borde: Color = Color.TRANSPARENT, grosor: int = 0) -> StyleBoxFlat:
 	var caja := StyleBoxFlat.new()
 	caja.bg_color = fondo

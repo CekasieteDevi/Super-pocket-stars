@@ -45,6 +45,22 @@ func _test_temporada_uno(gs) -> void:
 	_ok(_en_el_cuadro(gs.copa_nacional) == 128,
 		"el Rey arranca con 128 clubes (fueron %d)." % _en_el_cuadro(gs.copa_nacional))
 	_ok(gs.copa_nacional.equipos_con_bye.is_empty(), "el Rey no reparte pases libres.")
+	_ok(gs.copas_division.is_empty(),
+		"las copas de division NO estan sorteadas al empezar la temporada.")
+	_ok(gs.posiciones_temporada_anterior.is_empty(),
+		"la temporada 1 no tiene tabla anterior (clasifica por reputacion).")
+
+	# El sorteo de las copas de division espera a que haya tabla: cae
+	# justo despues de la fecha FECHAS_PARA_COPA_DIVISION.
+	for i in range(gs.FECHAS_PARA_COPA_DIVISION - 1):
+		gs.jugar_siguiente_fecha()
+	_ok(gs.copas_division.is_empty(),
+		"a las %d fechas todavia no hay copas de division." % (gs.FECHAS_PARA_COPA_DIVISION - 1))
+	gs.jugar_siguiente_fecha()
+	_ok(gs.copas_division.size() == 10,
+		"a las %d fechas se sortean las 10 copas de division (hay %d)." % [
+			gs.FECHAS_PARA_COPA_DIVISION, gs.copas_division.size()])
+
 	var sin_bye := true
 	var todas_16 := true
 	for copa in gs.copas_division:
@@ -54,8 +70,6 @@ func _test_temporada_uno(gs) -> void:
 			todas_16 = false
 	_ok(todas_16, "las 10 copas de division arrancan con 16 clubes.")
 	_ok(sin_bye, "ninguna copa de division reparte pases libres.")
-	_ok(gs.posiciones_temporada_anterior.is_empty(),
-		"la temporada 1 no tiene tabla anterior (clasifica por reputacion).")
 
 
 func _test_cierre(gs) -> void:
@@ -63,7 +77,12 @@ func _test_cierre(gs) -> void:
 	# La temporada entera de las 10 divisiones, con el motor abstracto: lo
 	# que le importa a este test es que las tablas queden LLENAS antes del
 	# cierre, no como se jugo cada partido.
-	gs.piramide.jugar_temporada(gs.rng)
+	# Fecha por fecha por el camino de la partida (no piramide.jugar_temporada):
+	# _test_temporada_uno ya jugo las primeras cinco para que se sortearan
+	# las copas de division, y jugar_temporada las volveria a jugar desde
+	# la cero, dejando las tablas con 43 partidos por club.
+	while gs.hay_fecha_pendiente():
+		gs.jugar_siguiente_fecha()
 	var tabla_jugador: Array = gs.liga_jugador().tabla_ordenada()
 	var puesto := tabla_jugador.find(gs.equipo_jugador.nombre) + 1
 	var division_jugada: int = gs.division_jugador + 1
@@ -80,6 +99,8 @@ func _test_cierre(gs) -> void:
 	_ok(_en_el_cuadro(gs.copa_nacional) == 128,
 		"el Rey de la temporada 2 arranca con 128 (fueron %d)." % _en_el_cuadro(gs.copa_nacional))
 	_ok(gs.copa_nacional.equipos_con_bye.is_empty(), "el Rey de la temporada 2 no reparte pases libres.")
+	_ok(gs.copas_division.is_empty(),
+		"la temporada 2 arranca sin copas de division sorteadas.")
 
 	# Cada division tiene que aportar EXACTAMENTE sus cupos, contando por
 	# la division donde cada club jugo (no donde esta ahora: los ascensos

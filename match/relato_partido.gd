@@ -28,7 +28,7 @@ static func importancia(evento) -> int:
 	match tipo:
 		"tiro_puerta":
 			return MAXIMA if res == "gol" else NOTABLE
-		"penal":
+		"penal", "penal_tanda", "tanda_arranca":
 			return MAXIMA
 		"tarjeta":
 			return NOTABLE
@@ -59,6 +59,16 @@ static func linea(evento: Dictionary, nombres: Dictionary) -> String:
 			if res == "gol":
 				return "¡PENAL! %s la cambia por gol" % quien
 			return "¡PENAL atajado! Se lo tapan a %s" % quien
+		"tanda_arranca":
+			return "Se define por penales"
+		"penal_tanda":
+			# El marcador de la tanda va EN la linea: en una tanda lo que
+			# importa no es el remate sino como queda la serie.
+			var serie := "%d-%d" % [
+				int(evento.get("tanda_local", 0)), int(evento.get("tanda_visitante", 0))]
+			if res == "gol":
+				return "%s convierte: %s" % [quien, serie]
+			return "¡La ataja el arquero! %s la falla: %s" % [quien, serie]
 		"tarjeta":
 			if res == "amarilla":
 				return "Amarilla para %s (%s)" % [quien, equipo]
@@ -71,7 +81,11 @@ static func linea(evento: Dictionary, nombres: Dictionary) -> String:
 				"palo": return "¡Al palo el remate de %s!" % quien
 				_: return "Remata %s y se va afuera" % quien
 		"saque_inicial":
-			return "¡Arranca el partido!" if res == "1" else "Arranca el segundo tiempo"
+			match res:
+				"1": return "¡Arranca el partido!"
+				"2": return "Arranca el segundo tiempo"
+				"3": return "¡Se va al alargue!"
+				_: return "Arranca el segundo tiempo del alargue"
 		"offside":
 			return "Offside de %s" % quien
 		"corner":

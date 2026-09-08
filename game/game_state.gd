@@ -20,6 +20,14 @@ const DIAS_ENTRE_FECHAS := 7
 ## elegir la carga de entrenamiento no tenía consecuencia: sin semanas
 ## apretadas, "Intenso" gana siempre.
 const FECHAS_ENTRE_RONDAS_COPA := 4
+## Fechas de liga que se juegan antes de sortear las copas de división.
+## Cinco: la copa de división clasifica por la tabla EN CURSO, así que
+## hace falta tabla. Con menos fechas casi todos empatan y el corte del
+## 16° lo decide el desempate por nombre en vez de la cancha.
+##
+## Tiene que caer antes de la primera ronda de copa de división, que es el
+## slot par siguiente: fecha 8 (ver _copas_de_la_ronda).
+const FECHAS_PARA_COPA_DIVISION := 5
 ## Reparto de la semana con partido entre semana: domingo, miércoles, y el
 ## domingo siguiente.
 const DIAS_HASTA_COPA := 3
@@ -225,20 +233,58 @@ func _sembrar_presupuestos() -> void:
 			Economia.procesar_temporada(equipo, medio, liga.equipos.size(), liga.division)
 
 
-## Arma las copas de la temporada. Se llama al empezar cada una: los
-## cuadros se sortean UNA vez y después se juegan ronda a ronda.
+## Arma la Copa del Rey de la temporada. Se llama al empezar cada una: el
+## cuadro se sortea UNA vez y después se juega ronda a ronda.
 ##
-## No entran todos: clasifican 128 al Rey y 16 a cada copa de división,
-## por la tabla de la temporada pasada (ver ClasificacionCopas). Los dos
-## números son potencia de 2, así que ningún club pasa sin jugar.
+## No entran todos: clasifican 128 al Rey, por la tabla de la temporada
+## pasada (ver ClasificacionCopas). 128 es potencia de 2, así que ningún
+## club pasa sin jugar.
+##
+## Las copas de división NO se sortean acá: esperan a la fecha
+## FECHAS_PARA_COPA_DIVISION y clasifican por la tabla en curso (ver
+## _armar_copas_de_division). Hasta entonces `copas_division` queda vacío.
 func _armar_copas() -> void:
 	copa_nacional = Copa.iniciar("Copa del Rey",
 		ClasificacionCopas.clasificados_nacional(piramide, posiciones_temporada_anterior), rng)
 	copas_division = []
+
+
+## Sortea las diez copas de división con la tabla de la temporada EN
+## CURSO, a las FECHAS_PARA_COPA_DIVISION fechas.
+##
+## Antes se sorteaban al empezar la temporada, con la tabla del año
+## pasado, y el que ascendía quedaba afuera SIEMPRE: llegaba a la división
+## nueva con la peor clave de mérito de las veinte. Con la tabla en curso
+## el que ascendió y el que descendió clasifican por lo que hicieron en la
+## cancha, en la misma tabla que los demás.
+## `avisar` en false lo usa la carga de una partida vieja: ahi el sorteo
+## se rehace para tapar un guardado sin cuadros, y una noticia de algo que
+## ya paso hace fechas confunde.
+func _armar_copas_de_division(avisar: bool = true) -> void:
+	copas_division = []
 	for d in range(piramide.divisiones.size()):
 		copas_division.append(Copa.iniciar("Copa Division %d" % (d + 1),
-			ClasificacionCopas.clasificados_de_division(
-				piramide, d, posiciones_temporada_anterior), rng))
+			ClasificacionCopas.clasificados_por_tabla(piramide.divisiones[d]), rng))
+	if avisar:
+		_avisar_copa_de_division()
+
+
+## Si el club del jugador entró a la copa de su división, con la posición
+## que lo dejó adentro o afuera. Va en el momento del sorteo, no al cerrar
+## la temporada anterior: recién acá se sabe.
+func _avisar_copa_de_division() -> void:
+	var interna: Copa = copas_division[division_jugador] if division_jugador < copas_division.size() else null
+	if interna == null:
+		return
+	var puesto: int = liga_jugador().tabla_ordenada().find(equipo_jugador.nombre) + 1
+	if interna.participa(equipo_jugador):
+		_agregar_noticia("COPA DE LA DIVISIÓN %d: %s clasifica (va %d° a las %d fechas, entran los %d mejores)." % [
+			division_jugador + 1, equipo_jugador.nombre, puesto,
+			FECHAS_PARA_COPA_DIVISION, ClasificacionCopas.CUPOS_COPA_DIVISION], "campeones")
+	else:
+		_agregar_noticia("COPA DE LA DIVISIÓN %d: %s se queda afuera (va %d° a las %d fechas, entran los %d mejores)." % [
+			division_jugador + 1, equipo_jugador.nombre, puesto,
+			FECHAS_PARA_COPA_DIVISION, ClasificacionCopas.CUPOS_COPA_DIVISION], "campeones")
 
 
 ## Un cuadro sorteado ANTES de las copas por clasificación: reparte pases
@@ -310,6 +356,12 @@ func jugar_siguiente_fecha() -> void:
 	Sponsors.registrar_partido(equipo_jugador)
 
 	fecha_actual += 1
+
+	# El sorteo de las copas de division cae aca, con la tabla ya cerrada
+	# de esta fecha. Va antes de agendar la ronda de copa porque
+	# _toca_ronda_de_copa() mira si hay copa de division pendiente.
+	if fecha_actual == FECHAS_PARA_COPA_DIVISION:
+		_armar_copas_de_division()
 
 	# Los dias NO pasan aca: los pasa avanzar_un_dia(), de a uno, para que
 	# se pueda ver y frenar lo que vence en el medio. Lo unico que se hace
@@ -774,6 +826,16 @@ func _mencion_de_oferta(oferta: Dictionary) -> Array:
 	return []
 
 
+## Como se titula la noticia de una negociacion. Una VENTA cerrada lleva
+## el nombre del club propio adelante a proposito: el cartel de novedades
+## pone primero las lineas que nombran a tu club, y la venta de un jugador
+## tuyo es la que menos se puede perder.
+func _prefijo_de_oferta(oferta: Dictionary) -> String:
+	if bool(oferta.get("entrante", false)) and str(oferta.get("estado", "")) == Ofertas.CERRADA:
+		return "VENTA (%s): " % equipo_jugador.nombre
+	return "MERCADO: "
+
+
 func _avanzar_dias_todos(dias: int) -> void:
 	for liga in piramide.divisiones:
 		liga.avanzar_dias(dias)
@@ -785,7 +847,7 @@ func _avanzar_dias_todos(dias: int) -> void:
 	if hay_mercado_abierto():
 		for oferta in Ofertas.avanzar(equipo_jugador, dias, piramide, rng, temporada_actual, division_jugador):
 			if not oferta["log"].is_empty():
-				_agregar_noticia("MERCADO: %s" % oferta["log"][-1],
+				_agregar_noticia("%s%s" % [_prefijo_de_oferta(oferta), oferta["log"][-1]],
 					"fichajes", _mencion_de_oferta(oferta))
 		for nueva in Ofertas.generar_entrantes(equipo_jugador, piramide, rng, dias, division_jugador):
 			_agregar_noticia("MERCADO: %s" % nueva["log"][-1],
@@ -921,6 +983,12 @@ func _tomar_partido_de_copa(c: Copa) -> void:
 	ultimo_resultado = {
 		"local": s["local"], "visitante": s["visitante"],
 		"gl": s["gl"], "gv": s["gv"], "goles_log": s["goles_log"],
+		# Como se cerro el cruce. Un cruce definido por penales termina
+		# empatado en el marcador, asi que sin esto el resumen del partido
+		# decia "Empate" justo despues de que el jugador viera ganar (o
+		# perder) la tanda.
+		"definicion": s["definicion"], "penales_texto": s["penales_texto"],
+		"ganador": s["ganador"],
 	}
 	ultimo_log = s["log"]
 	ultimos_eventos = s["eventos"]
@@ -1110,11 +1178,12 @@ func _cerrar_temporada() -> void:
 			rng, _clasificado_al_rey())
 
 
-## Clasificar a las copas es un resultado de la temporada que termino, y
-## el jugador no tiene de donde deducirlo: los cupos salen de la tabla
-## final de CADA division y el cuadro nuevo ya esta sorteado. Va una
-## noticia por copa, con el cupo y con la posicion que lo dejo adentro o
-## afuera.
+## Clasificar a la Copa del Rey es un resultado de la temporada que
+## termino, y el jugador no tiene de donde deducirlo: los cupos salen de
+## la tabla final de CADA division y el cuadro nuevo ya esta sorteado.
+##
+## La copa de division no se avisa aca: se sortea a las cinco fechas de la
+## temporada nueva y la avisa _avisar_copa_de_division().
 func _avisar_clasificacion_a_copas() -> void:
 	var puesto := int(ultima_posicion_final.get("posicion", 0))
 	var division_jugada := int(ultima_posicion_final.get("division", division_jugador + 1))
@@ -1126,17 +1195,6 @@ func _avisar_clasificacion_a_copas() -> void:
 		_agregar_noticia("COPA DEL REY: %s se queda afuera (salió %d° en la División %d, entran los primeros %d)." % [
 			equipo_jugador.nombre, puesto, division_jugada, cupos_rey], "campeones")
 
-	var interna: Copa = copas_division[division_jugador] if division_jugador < copas_division.size() else null
-	if interna == null:
-		return
-	if interna.participa(equipo_jugador):
-		_agregar_noticia("COPA DE LA DIVISIÓN %d: %s clasifica (entran los %d mejores)." % [
-			division_jugador + 1, equipo_jugador.nombre,
-			ClasificacionCopas.CUPOS_COPA_DIVISION], "campeones")
-	else:
-		_agregar_noticia("COPA DE LA DIVISIÓN %d: %s se queda afuera (entran los %d mejores)." % [
-			division_jugador + 1, equipo_jugador.nombre,
-			ClasificacionCopas.CUPOS_COPA_DIVISION], "campeones")
 
 
 ## Amistoso de la selección (una vez por cierre de temporada): convoca a
@@ -1337,8 +1395,13 @@ func cerrar_fichaje(oferta_id: int, sueldo: float, anios: int, clausula: float) 
 ## falta que el jugador quiera venir.
 ##
 ## `duracion` es una clave de Prestamos.DURACIONES.
+## `plus_sueldo` es lo que le ponés al jugador POR ENCIMA de lo que cobra
+## hoy. Sin esto un jugador que no queria bajar de categoria no tenia
+## arreglo: el reparto del sueldo es plata entre clubes y a el no le
+## cambia nada, asi que el pedido se rechazaba pusieras lo que pusieras.
 func pedir_prestamo(dueno: Team, jugador_id: int, duracion: String,
-		porcentaje_sueldo: float, opcion_compra: float) -> Dictionary:
+		porcentaje_sueldo: float, opcion_compra: float,
+		plus_sueldo: float = 0.0) -> Dictionary:
 	if not hay_mercado_abierto():
 		return _mercado_cerrado()
 	var donde := Mercado.ubicar(dueno, jugador_id)
@@ -1353,18 +1416,23 @@ func pedir_prestamo(dueno: Team, jugador_id: int, duracion: String,
 
 	# El jugador tambien decide. En un prestamo el salto de categoria pesa
 	# la MITAD: es temporal y lo que busca es jugar, no mudarse.
-	var sueldo_actual: float = float(dueno.sueldos.get(jugador_id, 0.0))
+	# Un canterano no tiene ficha registrada. Leerle un sueldo 0 lo hacia
+	# comparar contra cero y rechazar siempre; la referencia es la misma
+	# tabla con la que Prestamos.ceder reparte el pago.
+	var sueldo_actual := Prestamos.sueldo_de_referencia(dueno, jugador)
+	var plus: float = maxf(0.0, plus_sueldo)
 	var div_origen := division_de(dueno)
 	var salto: int = division_jugador - div_origen
 	var detalle := Negociacion.interes_jugador(
-		jugador, dueno.animo.get(jugador_id, 50.0), sueldo_actual, sueldo_actual,
+		jugador, dueno.animo.get(jugador_id, 50.0), sueldo_actual, sueldo_actual + plus,
 		div_origen, div_origen + int(round(salto / 2.0)))
 	if not detalle["acepta"]:
-		return {"exito": false, "motivo": Negociacion.motivo_rechazo(detalle), "detalle": detalle}
+		return {"exito": false, "motivo": Negociacion.motivo_rechazo(detalle),
+			"detalle": detalle, "plus_sugerido": _plus_para_convencer(detalle, sueldo_actual)}
 
 	var cierre := Prestamos.ceder(dueno, equipo_jugador, jugador_id,
 		float(temporada_actual) + _fraccion_de_temporada(),
-		temporadas, porcentaje_sueldo, opcion_compra)
+		temporadas, porcentaje_sueldo, opcion_compra, plus)
 	if not cierre["exito"]:
 		return cierre
 	Investigadores.marcar_conocido(equipo_jugador, jugador_id)
@@ -1374,6 +1442,21 @@ func pedir_prestamo(dueno: Team, jugador_id: int, duracion: String,
 		Economia.formato_dinero(cierre["fee"])],
 		"fichajes", [Noticias.mencion(jugador, equipo_jugador.nombre)])
 	return cierre
+
+
+## Cuanto plus haria falta para dar vuelta un rechazo, en plata. Devuelve
+## 0.0 si ni con el tope de PESO_SUELDO alcanza — ahi el "no" es de verdad
+## y hay que decirselo al jugador en vez de hacerlo tirar plata al vacio.
+func _plus_para_convencer(detalle: Dictionary, sueldo_actual: float) -> float:
+	var falta: float = Negociacion.UMBRAL_ACEPTA - float(detalle["interes"])
+	var techo: float = Negociacion.TOPE_SUELDO_ARRIBA - float(detalle["por_sueldo"])
+	if falta <= 0.0 or falta > techo:
+		return 0.0
+	# por_sueldo = (ofrecido / actual - 1) * PESO_SUELDO, despejado.
+	# 2% de margen: el numero exacto queda justo en el umbral y cualquier
+	# redondeo del SpinBox lo deja un peso abajo.
+	var mejora_extra: float = falta / Negociacion.PESO_SUELDO * 1.02
+	return sueldo_actual * mejora_extra
 
 
 ## Cuanto de la temporada va corrido, de 0 a 1. Lo usa el prestamo para
@@ -1699,8 +1782,14 @@ func cargar_partida() -> bool:
 	# guardado es anterior a que existieran las copas intercaladas.
 	var datos_nacional: Dictionary = datos.get("copa_nacional", {})
 	var datos_division: Array = datos.get("copas_division", [])
-	if datos_nacional.is_empty() or datos_division.size() != piramide.divisiones.size():
+	# `copas_division` vacio es lo NORMAL antes de la fecha
+	# FECHAS_PARA_COPA_DIVISION: todavia no se sortearon. Solo es un
+	# guardado incompleto si ya deberian estar.
+	var faltan_de_division: bool = datos_division.size() != piramide.divisiones.size() 		and not (datos_division.is_empty() and fecha_actual < FECHAS_PARA_COPA_DIVISION)
+	if datos_nacional.is_empty() or faltan_de_division:
 		_armar_copas()
+		if fecha_actual >= FECHAS_PARA_COPA_DIVISION:
+			_armar_copas_de_division(false)
 	else:
 		copa_nacional = Copa.cargar(datos_nacional, piramide)
 		copas_division = []
@@ -1713,6 +1802,8 @@ func cargar_partida() -> bool:
 		# como está y el nuevo entra en la temporada que viene.
 		if _hay_cuadro_viejo():
 			_armar_copas()
+			if fecha_actual >= FECHAS_PARA_COPA_DIVISION:
+				_armar_copas_de_division(false)
 	ultimo_resultado = datos.get("ultimo_resultado", {})
 	ultimo_log = datos.get("ultimo_log", [])
 	ultimos_eventos = datos.get("ultimos_eventos", [])

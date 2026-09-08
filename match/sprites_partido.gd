@@ -9,24 +9,37 @@ extends RefCounted
 ## Los jugadores son billboards: se proyecta su posición al piso, pero el
 ## sprite se dibuja siempre vertical y sin deformar.
 ##
-## CUERPO Y PIERNAS VAN SEPARADOS. Dibujar 8 direcciones x 5 poses a mano
-## serían 40 sprites; así son 5 cuerpos (las otras 3 direcciones son el
-## espejo) y 5 juegos de piernas, que se componen al generar la textura.
+## EL JUGADOR SE ARMA POR CAPAS. Dibujar 8 direcciones x 8 poses x 6
+## peinados a mano serían cientos de sprites; así son cuatro piezas que se
+## componen al generar la textura:
+##
+##   1. cabeza pelada (5 direcciones; las otras 3 son el espejo)
+##   2. peinado, pintado encima de la cabeza (6 estilos x 5 direcciones)
+##   3. torso (5 direcciones), con el número estampado si mira de espaldas
+##   4. piernas (una lista por pose)
+##
+## La barrida, la estirada del arquero y el festejo no se arman así: son
+## sprites enteros, porque ahí el cuerpo no está parado.
 
 const ANCHO := 12
-const ALTO_CUERPO := 12
+const ALTO_CABEZA := 6
+const ALTO_TORSO := 6
+const ALTO_CUERPO := ALTO_CABEZA + ALTO_TORSO
 const ALTO_PIERNAS := 8
 const ALTO := ALTO_CUERPO + ALTO_PIERNAS
 
 const TRANSPARENTE := Color(0, 0, 0, 0)
 const PIEL := Color(0.95, 0.78, 0.62)
 const PIEL_OSCURA := Color(0.80, 0.63, 0.48)
-const PELO := Color(0.22, 0.14, 0.08)
 const OJO := Color(0.12, 0.10, 0.10)
+## Color de pelo por defecto, para el sprite que no elige ninguno.
+const PELO := Color(0.22, 0.14, 0.08)
 ## El pantalon por defecto, para los 199 clubes que no eligen nada.
 const SHORT := Color(0.13, 0.13, 0.16)
 const MEDIAS := Color(0.90, 0.90, 0.92)
 const BOTIN := Color(0.06, 0.06, 0.06)
+## Polvo de la barrida: el pasto que levanta el que se arrastra.
+const POLVO := Color(0.74, 0.80, 0.64, 0.60)
 
 ## Direcciones. Las tres que faltan (5, 6, 7) son el espejo de 3, 2 y 1.
 enum { ABAJO, ABAJO_DER, DERECHA, ARRIBA_DER, ARRIBA, ARRIBA_IZQ, IZQUIERDA, ABAJO_IZQ }
@@ -35,22 +48,156 @@ enum { ABAJO, ABAJO_DER, DERECHA, ARRIBA_DER, ARRIBA, ARRIBA_IZQ, IZQUIERDA, ABA
 const QUIETO := "quieto"
 const CORRE_A := "corre_a"
 const CORRE_B := "corre_b"
+## El remate son dos fotogramas: arma la pierna y después impacta. Con uno
+## solo el remate se leía como un tropiezo.
+const PATEA_ARMA := "patea_arma"
 const PATEA := "patea"
-const BARRIDA := "barrida"
+## Salto para cabecear. El sprite además SUBE: ver ELEVACION_CABEZAZO.
+const CABECEA := "cabecea"
 
-## No es una pose de piernas: el arquero volando es un sprite entero
-## aparte (horizontal). Se nombra acá para que la vista pueda tratarlo
-## como una pose más y decidir con un solo campo.
+## No son poses de piernas: son sprites enteros. Se nombran acá para que
+## la vista pueda tratarlos como una pose más y decidir con un solo campo.
+const BARRIDA := "barrida"
+const FESTEJA := "festeja"
 const VUELA := "vuela"
 
-## De frente: se le ven los ojos.
-const CUERPO_ABAJO := [
-	"....HHHH....",
-	"...HHHHHH...",
-	"..HSSSSSSH..",
-	"..HSoSSoSH..",
+## Peinados. El pelo es lo que permite distinguir a un jugador de otro
+## cuando los dos van con la misma camiseta: a 26 píxeles de alto, la
+## cabeza es lo único que queda para diferenciarlos.
+const PELO_CORTO := 0
+const PELO_LARGO := 1
+const PELO_AFRO := 2
+const PELO_CALVO := 3
+const PELO_MOHICANO := 4
+const PELO_VINCHA := 5
+const ESTILOS_PELO := 6
+
+## Tonos de pelo. Son cinco y no un color libre para que el cache no
+## explote: estilo x tono x dirección x pose ya son muchas texturas.
+const TONOS_PELO := [
+	Color(0.10, 0.08, 0.07),  # negro
+	Color(0.30, 0.18, 0.09),  # castaño
+	Color(0.55, 0.34, 0.14),  # claro
+	Color(0.85, 0.72, 0.35),  # rubio
+	Color(0.68, 0.30, 0.12),  # pelirrojo
+]
+
+## La vincha (cinta en la frente) va siempre blanca: es lo que la hace
+## visible contra cualquier tono de pelo.
+const COLOR_VINCHA := Color(0.94, 0.94, 0.96)
+
+# --- Cabezas: SIN pelo. El peinado se pinta encima. --------------------
+
+const CABEZA_ABAJO := [
+	"....SSSS....",
+	"...SSSSSS...",
+	"..SSSSSSSS..",
+	"..SSoSSoSS..",
 	"...SSSSSS...",
 	"....dSSd....",
+]
+
+const CABEZA_ABAJO_DER := [
+	"....SSSS....",
+	"...SSSSSSS..",
+	"..SSSSSSSSS.",
+	"..SSSoSSoSS.",
+	"...SSSSSSS..",
+	"....dSSSd...",
+]
+
+## De perfil, mirando a la derecha: se le ve un solo ojo.
+const CABEZA_DERECHA := [
+	"...SSSSS....",
+	"..SSSSSSS...",
+	"..SSSSSSSS..",
+	"..SSSSSoSS..",
+	"...SSSSSSS..",
+	"....dSSSd...",
+]
+
+const CABEZA_ARRIBA_DER := [
+	"....SSSS....",
+	"...SSSSSSS..",
+	"..SSSSSSSSS.",
+	"..SSSSSSSSS.",
+	"...SSSSSSS..",
+	"....dSSSd...",
+]
+
+## De espaldas: no se le ve la cara.
+const CABEZA_ARRIBA := [
+	"....SSSS....",
+	"...SSSSSS...",
+	"..SSSSSSSS..",
+	"..SSSSSSSS..",
+	"...SSSSSS...",
+	"....dSSd....",
+]
+
+const CABEZAS := [CABEZA_ABAJO, CABEZA_ABAJO_DER, CABEZA_DERECHA, CABEZA_ARRIBA_DER, CABEZA_ARRIBA]
+
+# --- Peinados: 5 filas que se pintan sobre la cabeza. ------------------
+#
+# El punto deja pasar la cabeza de abajo. La H es pelo y la V, la vincha.
+# Cada lista sigue el orden de CABEZAS.
+
+const PELOS := [
+	# CORTO. Reproduce el sprite original: es la línea de base contra la
+	# que se comparan los demás.
+	[
+		["....HHHH....", "...HHHHHH...", "..H......H..", "..H......H..", "............"],
+		["....HHHH....", "...HHHHHHH..", "..H.......H.", "..H.......H.", "............"],
+		["...HHHHH....", "..HHHHHHH...", "..H.........", "..H.........", "............"],
+		["....HHHH....", "...HHHHHHH..", "..HHHHHHHHH.", "..HH.....HH.", "............"],
+		["....HHHH....", "...HHHHHH...", "..HHHHHHHH..", "..HHHHHHHH..", "............"],
+	],
+	# LARGO: cae por los costados hasta el cuello.
+	[
+		["....HHHH....", "...HHHHHH...", "..HH....HH..", "..HH....HH..", "..HH....HH.."],
+		["....HHHH....", "...HHHHHHH..", "..HH.....HH.", "..HH.....HH.", "..HH.....HH."],
+		["...HHHHH....", "..HHHHHHH...", "..HH........", "..HH........", "..HH........"],
+		["....HHHH....", "...HHHHHHH..", "..HHHHHHHHH.", "..HHHHHHHHH.", "..HH.....HH."],
+		["....HHHH....", "...HHHHHH...", "..HHHHHHHH..", "..HHHHHHHH..", "..HHHHHHHH.."],
+	],
+	# AFRO: sobresale una columna a cada lado, que es lo que lo hace
+	# reconocible de lejos.
+	[
+		["..HHHHHHHH..", ".HHHHHHHHHH.", ".HH......HH.", ".HH......HH.", "............"],
+		["..HHHHHHHH..", ".HHHHHHHHHHH", ".HH.......HH", ".HH.......HH", "............"],
+		[".HHHHHHH....", ".HHHHHHHH...", ".HHH........", ".HH.........", "............"],
+		["..HHHHHHHH..", ".HHHHHHHHHHH", ".HHHHHHHHHHH", ".HHHHHHHHHH.", "............"],
+		["..HHHHHHHH..", ".HHHHHHHHHH.", ".HHHHHHHHHH.", "..HHHHHHHH..", "............"],
+	],
+	# CALVO: corona pelada, pelo solo en los costados y la nuca.
+	[
+		["............", "............", "..H......H..", "..H......H..", "............"],
+		["............", "............", "..H.......H.", "..H.......H.", "............"],
+		["............", "...H........", "..H.........", "..H.........", "............"],
+		["............", "............", "..HH.....HH.", "..HH.....HH.", "............"],
+		["............", "............", "..H......H..", "..HHHHHHHH..", "............"],
+	],
+	# MOHICANO: cresta al medio.
+	[
+		[".....HH.....", "....HHHH....", "..H......H..", "..H......H..", "............"],
+		[".....HH.....", "....HHHH....", "..H.......H.", "..H.......H.", "............"],
+		["..HHHHHHH...", "...HHHHH....", "..H.........", "..H.........", "............"],
+		[".....HH.....", "....HHHH....", "....HHHHH...", "..HH.....HH.", "............"],
+		[".....HH.....", "....HHHH....", "....HHHH....", "....HHHH....", "............"],
+	],
+	# VINCHA: pelo corto más la cinta cruzándole la frente.
+	[
+		["....HHHH....", "...HHHHHH...", "..VVVVVVVV..", "..H......H..", "............"],
+		["....HHHH....", "...HHHHHHH..", "..VVVVVVVVV.", "..H.......H.", "............"],
+		["...HHHHH....", "..HHHHHHH...", "..VVVVVVVV..", "..H.........", "............"],
+		["....HHHH....", "...HHHHHHH..", "..VVVVVVVVV.", "..HH.....HH.", "............"],
+		["....HHHH....", "...HHHHHH...", "..VVVVVVVV..", "..HHHHHHHH..", "............"],
+	],
+]
+
+# --- Torsos ------------------------------------------------------------
+
+const TORSO_ABAJO := [
 	"..bJJJJJJb..",
 	".bJJJJJJJJb.",
 	".bJJJJJJJJb.",
@@ -59,13 +206,7 @@ const CUERPO_ABAJO := [
 	"..JJJJJJJJ..",
 ]
 
-const CUERPO_ABAJO_DER := [
-	"....HHHH....",
-	"...HHHHHHH..",
-	"..HSSSSSSSH.",
-	"..HSSoSSoSH.",
-	"...SSSSSSS..",
-	"....dSSSd...",
+const TORSO_ABAJO_DER := [
 	"..bJJJJJJJb.",
 	"..bJJJJJJJJb",
 	"..bJJJJJJJJb",
@@ -74,14 +215,7 @@ const CUERPO_ABAJO_DER := [
 	"...JJJJJJJ..",
 ]
 
-## De perfil, mirando a la derecha.
-const CUERPO_DERECHA := [
-	"...HHHHH....",
-	"..HHHHHHH...",
-	"..HSSSSSSS..",
-	"..HSSSSoSS..",
-	"...SSSSSSS..",
-	"....dSSSd...",
+const TORSO_DERECHA := [
 	"...bJJJJJb..",
 	"...bJJJJJJb.",
 	"...bJJJJJJb.",
@@ -90,13 +224,7 @@ const CUERPO_DERECHA := [
 	"....JJJJJ...",
 ]
 
-const CUERPO_ARRIBA_DER := [
-	"....HHHH....",
-	"...HHHHHHH..",
-	"..HHHHHHHHH.",
-	"..HHSSSSSHH.",
-	"...SSSSSSS..",
-	"....dSSSd...",
+const TORSO_ARRIBA_DER := [
 	"..bJJJJJJJb.",
 	"..bJJJJJJJJb",
 	"..bJJJJJJJJb",
@@ -105,14 +233,7 @@ const CUERPO_ARRIBA_DER := [
 	"...JJJJJJJ..",
 ]
 
-## De espaldas: solo pelo, sin cara.
-const CUERPO_ARRIBA := [
-	"....HHHH....",
-	"...HHHHHH...",
-	"..HHHHHHHH..",
-	"..HHHHHHHH..",
-	"...SSSSSS...",
-	"....dSSd....",
+const TORSO_ARRIBA := [
 	"..bJJJJJJb..",
 	".bJJJJJJJJb.",
 	".bJJJJJJJJb.",
@@ -121,7 +242,42 @@ const CUERPO_ARRIBA := [
 	"..JJJJJJJJ..",
 ]
 
-const CUERPOS := [CUERPO_ABAJO, CUERPO_ABAJO_DER, CUERPO_DERECHA, CUERPO_ARRIBA_DER, CUERPO_ARRIBA]
+const TORSOS := [TORSO_ABAJO, TORSO_ABAJO_DER, TORSO_DERECHA, TORSO_ARRIBA_DER, TORSO_ARRIBA]
+
+## Los brazos en alto del festejo. Van como overlay sobre cabeza y torso
+## porque suben por AFUERA del cuerpo, por las columnas 0-1 y 10-11, que
+## el sprite parado deja libres.
+const BRAZOS_ARRIBA := [
+	".SS......SS.",
+	".SS......SS.",
+	".bb......bb.",
+	".bb......bb.",
+	".bb......bb.",
+	"..bb....bb..",
+	"............",
+	"............",
+	"............",
+	"............",
+	"............",
+	"............",
+]
+
+## Brazos abiertos, pegados al hombro. Cada entrada es {fila del torso ->
+## qué se pinta hacia afuera}, empezando por la columna que toca el
+## cuerpo. Van así y no como un dibujo fijo porque el torso de perfil es
+## más angosto que el de frente: con posiciones fijas el brazo quedaba
+## flotando a dos columnas del hombro.
+##
+## El que patea abre los brazos para no irse al piso cuando lanza la
+## pierna. Es lo que separa un remate de un jugador parado con una pierna
+## rara.
+const BRAZOS_PATEA := {1: "bSS"}
+
+## Los del cabezazo caen abiertos y más abajo: hacen de contrapeso del
+## cuerpo que se va adelante.
+const BRAZOS_CABEZAZO := {1: "b", 2: "SS"}
+
+# --- Piernas -----------------------------------------------------------
 
 const PIERNAS := {
 	QUIETO: [
@@ -156,53 +312,138 @@ const PIERNAS := {
 		".........BBB",
 		"............",
 	],
-	# Pierna extendida al frente: el remate.
+	# Arma el remate: la pierna que pega se va ATRÁS y el peso cae sobre la
+	# otra. Es el fotograma que le da impulso al que sigue.
+	#
+	# Las dos poses de remate miden 16 de ancho y no 12: la pierna
+	# estirada no entra en el ancho del cuerpo. _armar_parado centra las
+	# piezas angostas, así que el torso sigue cayendo donde va.
+	PATEA_ARMA: [
+		".....DDDDDD.....",
+		"....DDDDDDD.....",
+		"..DDDD...DD.....",
+		"..MMM....MM.....",
+		".MMM.....MM.....",
+		"BBB......MM.....",
+		"BB......BBB.....",
+		"................",
+	],
+	# Impacto: la pierna se estira al frente y el pie queda ALTO, a la
+	# altura a la que se le pega a la pelota.
 	PATEA: [
+		".....DDDDDD.....",
+		".....DDDDDDD....",
+		".....DD.DDDDMMMM",
+		".....MM.....MBBB",
+		".....MM......BBB",
+		"....BBB.........",
+		"....BBB.........",
+		"................",
+	],
+	# Salto: las dos piernas juntas y recogidas. Lo que dice que está en el
+	# aire no es esta pose sino ELEVACION_CABEZAZO.
+	CABECEA: [
 		"...DDDDDD...",
 		"...DDDDDD...",
-		"...DD..DDD..",
-		"...MM...MMM.",
-		"...MM....MMM",
-		"..BBB.....BB",
-		"..BBB.......",
+		"..DDD..DDD..",
+		"..MM....MM..",
+		"..MM....MM..",
+		".BBB...BBB..",
+		"............",
 		"............",
 	],
 }
+
+## Cuántas filas transparentes se agregan DEBAJO del que cabecea. El
+## sprite se apoya en el piso por su borde inferior (ver vista_cancha), así
+## que agregar filas vacías abajo es lo que lo levanta del suelo sin que la
+## vista tenga que saber nada del salto.
+const ELEVACION_CABEZAZO := 4
 
 ## La barrida y el arquero volando NO salen de componer cuerpo y piernas:
 ## son cuerpos tendidos, horizontales, y pegarles las piernas de un
 ## jugador parado daba un tipo de pie con las patas al costado. Van como
 ## sprite entero, y con dos orientaciones alcanza — tirado en el piso lo
 ## único que se lee es hacia qué lado se fue.
+##
+## Barre con la pierna de arriba ESTIRADA al frente, la otra doblada
+## debajo, y el polvo sale por detrás. Sin la pierna estirada y sin el
+## polvo el sprite se leía como un jugador desmayado, no como una entrada.
 const BARRIDA_TENDIDA := [
 	"....................",
 	"....................",
 	"....................",
-	"....................",
-	"..HHHH..............",
-	".HSSSSH.............",
-	".SSoSSJJJJJJb.......",
-	"..SSSJJJJJJJJb......",
-	"....JJJJJJJDDDD.....",
-	".......DDDDDDMMMM...",
-	"..........MMMMMMBBB.",
-	".............BBB....",
+	"...PP...............",
+	"..P.HHHH............",
+	"PP..HSSSSH..........",
+	".PP.HSSoSSJJJJb.....",
+	"PPP..SSJJJJJJJJDDDD.",
+	"..P..bJJJJJJDDDDMMMM",
+	"......bJJJDDDMMMMBBB",
+	".........DDDMMBBB...",
+	"..........MMBBB.....",
 ]
 
 ## El arquero volando es otro sprite, horizontal: no sale de componer
-## cuerpo y piernas.
+## cuerpo y piernas. Va con el brazo ESTIRADO por delante de la cabeza y
+## las piernas juntas atrás; las dos filas vacías de abajo son el aire que
+## lo separa del piso, que es lo que lo diferencia de estar tirado.
 const ARQUERO_VUELA := [
-	"..............HHHH..",
-	".............HSSSSH.",
-	"...bJJJJJJJJJSSoSS..",
-	"..bJJJJJJJJJJJSSS...",
-	"...bJJJJJJJJJJ......",
-	"..DDDDDD............",
-	".MM...MM............",
-	"BBB..BBB............",
+	"..................SS",
+	"................bbS.",
+	"..............bb....",
+	"........HHHHbb......",
+	".....bJJSSSSS.......",
+	"...bJJJJJSSoSS......",
+	"..DDDJJJJJJSSS......",
+	"MMMDDDDJJJb.........",
+	"BBMM................",
+	"BB..................",
+	"....................",
+	"....................",
 ]
 
+# --- Números de camiseta -----------------------------------------------
+
+## Dígitos de 3x5. Es el tamaño más chico en el que un número se sigue
+## leyendo, y la espalda mide 8 píxeles de ancho: entran dos.
+const DIGITOS := [
+	["###", "#.#", "#.#", "#.#", "###"],  # 0
+	[".#.", "##.", ".#.", ".#.", "###"],  # 1
+	["###", "..#", "###", "#..", "###"],  # 2
+	["###", "..#", "###", "..#", "###"],  # 3
+	["#.#", "#.#", "###", "..#", "..#"],  # 4
+	["###", "#..", "###", "..#", "###"],  # 5
+	["###", "#..", "###", "#.#", "###"],  # 6
+	["###", "..#", "..#", "..#", "..#"],  # 7
+	["###", "#.#", "###", "#.#", "###"],  # 8
+	["###", "#.#", "###", "..#", "###"],  # 9
+]
+
+## Fila del sprite donde arranca el número, ya dentro del torso.
+const FILA_NUMERO := ALTO_CABEZA + 1
+
+## De espaldas se le ve el número; de frente, no. Son las dos direcciones
+## base que muestran la espalda. Las de la izquierda son su espejo, y el
+## espejo se aplica al sprite entero: el número se estampa ANTES de
+## espejar, así que en esas direcciones sale invertido — es lo correcto,
+## un dorsal visto de reojo se lee así.
+const DIRECCIONES_CON_NUMERO := [ARRIBA, ARRIBA_DER]
+
 static var _cache: Dictionary = {}
+
+
+## Qué peinado le toca a un jugador. Sale de su id y no de un sorteo, así
+## el mismo jugador tiene el mismo pelo en todos los partidos y en la
+## repetición. Los multiplicadores son primos distintos para que estilo y
+## tono no queden correlacionados: con el mismo, todos los afros salían
+## del mismo color.
+static func pelo_de(jugador_id: int) -> int:
+	return absi(jugador_id * 7919) % ESTILOS_PELO
+
+
+static func tono_pelo_de(jugador_id: int) -> Color:
+	return TONOS_PELO[absi(jugador_id * 104729) % TONOS_PELO.size()]
 
 
 ## De qué lado mira, según hacia dónde se mueve EN PANTALLA (no en la
@@ -222,44 +463,147 @@ static func direccion_desde(delta_pantalla: Vector2) -> int:
 	return MAPA[sector]
 
 
-## Sprite compuesto. Se cachea por (dirección, pose, color): en cancha hay
-## dos equipos y unas pocas poses, así que son decenas de texturas, no una
-## por jugador y por frame.
+## Sprite compuesto. Se cachea por todo lo que lo define: en cancha hay 22
+## jugadores y unas pocas poses, así que son centenares de texturas de
+## 12x20, no una por jugador y por fotograma.
 ## `color_short` TRANSPARENT = el pantalon por defecto. Entra en la clave
 ## del cache: dos clubes con la misma camiseta y distinto pantalon son dos
 ## sprites distintos, y sin esto el segundo se dibujaba con el del primero.
 static func jugador(color_camiseta: Color, direccion: int = ABAJO, pose: String = QUIETO,
-		color_short: Color = Color.TRANSPARENT) -> ImageTexture:
-	var clave := "j_%s_%s_%d_%s" % [
-		color_camiseta.to_html(false), color_short.to_html(true), direccion, pose]
+		color_short: Color = Color.TRANSPARENT, estilo_pelo: int = PELO_CORTO,
+		color_pelo: Color = PELO, numero: int = 0) -> ImageTexture:
+	var clave := "j_%s_%s_%d_%s_%d_%s_%d" % [
+		color_camiseta.to_html(false), color_short.to_html(true), direccion, pose,
+		estilo_pelo, color_pelo.to_html(false), numero]
 	if _cache.has(clave):
 		return _cache[clave]
 
 	var espejo := direccion in [ABAJO_IZQ, IZQUIERDA, ARRIBA_IZQ]
-	if pose == BARRIDA:
-		var tendida := _construir(BARRIDA_TENDIDA, _paleta(color_camiseta, color_short), espejo)
-		_cache[clave] = tendida
-		return tendida
+	var paleta := _paleta(color_camiseta, color_short, color_pelo)
+	var tex: ImageTexture
+	match pose:
+		BARRIDA:
+			tex = _construir(BARRIDA_TENDIDA, paleta, espejo)
+		FESTEJA:
+			tex = _construir(_armar_festejo(estilo_pelo), paleta, false)
+		_:
+			tex = _construir(_armar_parado(direccion, pose, estilo_pelo, numero), paleta, espejo)
+	_cache[clave] = tex
+	return tex
+
+
+## Cabeza + peinado + torso (con el número) + brazos + piernas, en ese
+## orden. Las piezas no miden todas lo mismo de ancho: el remate estira la
+## pierna más allá del cuerpo. Se centra todo contra la más ancha.
+static func _armar_parado(direccion: int, pose: String, estilo_pelo: int, numero: int) -> Array:
 	var base := direccion
 	match direccion:
 		ABAJO_IZQ: base = ABAJO_DER
 		IZQUIERDA: base = DERECHA
 		ARRIBA_IZQ: base = ARRIBA_DER
-	var filas: Array = CUERPOS[base].duplicate()
-	filas.append_array(PIERNAS.get(pose, PIERNAS[QUIETO]))
 
-	var tex := _construir(filas, _paleta(color_camiseta, color_short), espejo)
-	_cache[clave] = tex
-	return tex
+	# El que cabecea agacha la cabeza: se le ve la coronilla, no la cara.
+	# La coronilla ya está dibujada — es la cabeza de espaldas — así que
+	# el cabezazo no necesita sprite propio y sigue tomando los 6
+	# peinados. Sin esto el jugador cabeceaba mirando al frente, que es la
+	# única cosa que no hace nadie al cabecear.
+	var cabeza := _cabeza_con_pelo(ARRIBA if pose == CABECEA else base, estilo_pelo)
+	# Además hunde la cabeza entre los hombros: se le come el cuello. Es lo
+	# que da el cuerpo compacto del salto. Con el cuello entero el sprite
+	# quedaba estirado, como mirando el piso de parado.
+	if pose == CABECEA:
+		cabeza.remove_at(cabeza.size() - 1)
+	var arriba: Array = cabeza + TORSOS[base]
+	if numero > 0 and base in DIRECCIONES_CON_NUMERO and pose != CABECEA:
+		_estampar_numero(arriba, numero)
+	match pose:
+		PATEA, PATEA_ARMA:
+			arriba = _abrir_brazos(arriba, cabeza.size(), BRAZOS_PATEA)
+		CABECEA:
+			arriba = _abrir_brazos(arriba, cabeza.size(), BRAZOS_CABEZAZO)
+
+	var piernas: Array = PIERNAS.get(pose, PIERNAS[QUIETO])
+	var ancho: int = maxi(arriba[0].length(), piernas[0].length())
+	var filas: Array = _centrar(arriba, ancho) + _centrar(piernas, ancho)
+	if pose == CABECEA:
+		for i in range(ELEVACION_CABEZAZO):
+			filas.append(".".repeat(ancho))
+	return filas
+
+
+## Le saca los brazos al cuerpo, hacia los dos lados. `alto_cabeza` dice
+## dónde empieza el torso y `tramos` qué pintar en cada fila suya, contando
+## desde la columna que toca el hombro hacia afuera. Ensancha las filas si
+## el brazo no entra.
+static func _abrir_brazos(filas: Array, alto_cabeza: int, tramos: Dictionary) -> Array:
+	var margen := 0
+	for t in tramos.values():
+		margen = maxi(margen, str(t).length())
+	var salida: Array = _centrar(filas, filas[0].length() + margen * 2)
+	for fila_torso in tramos:
+		var y: int = alto_cabeza + int(fila_torso)
+		if y >= salida.size():
+			continue
+		var linea: String = salida[y]
+		var izq := -1
+		var der := -1
+		for x in range(linea.length()):
+			if linea[x] == ".":
+				continue
+			if izq == -1:
+				izq = x
+			der = x
+		if izq == -1:
+			continue
+		var tramo: String = str(tramos[fila_torso])
+		for i in range(tramo.length()):
+			if izq - 1 - i >= 0:
+				linea = linea.substr(0, izq - 1 - i) + tramo[i] + linea.substr(izq - i)
+			if der + 1 + i < linea.length():
+				linea = linea.substr(0, der + 1 + i) + tramo[i] + linea.substr(der + 2 + i)
+		salida[y] = linea
+	return salida
+
+
+## Deja las filas de `ancho` columnas, con lo que había en el medio. Es lo
+## que permite mezclar piezas de 12 y de 16 en el mismo sprite.
+static func _centrar(filas: Array, ancho: int) -> Array:
+	var sobra: int = ancho - filas[0].length()
+	if sobra <= 0:
+		return filas.duplicate()
+	var izq := ".".repeat(int(sobra / 2.0))
+	var der := ".".repeat(sobra - izq.length())
+	var salida: Array = []
+	for f in filas:
+		salida.append(izq + f + der)
+	return salida
+
+
+static func _cabeza_con_pelo(base: int, estilo_pelo: int) -> Array:
+	var estilo: int = clampi(estilo_pelo, 0, ESTILOS_PELO - 1)
+	return _superponer(CABEZAS[base], PELOS[estilo][base])
+
+
+## El festejo no depende de la dirección: el que grita el gol se planta de
+## frente. Elegir el cuerpo por hacia dónde venía corriendo lo mostraba de
+## espaldas justo en el momento en que uno quiere verle la cara.
+static func _armar_festejo(estilo_pelo: int) -> Array:
+	var filas := _cabeza_con_pelo(ABAJO, estilo_pelo)
+	filas.append_array(TORSO_ABAJO)
+	filas = _superponer(filas, BRAZOS_ARRIBA)
+	filas.append_array(PIERNAS[QUIETO])
+	return filas
 
 
 static func arquero_volando(color_camiseta: Color, hacia_izquierda: bool,
-		color_short: Color = Color.TRANSPARENT) -> ImageTexture:
-	var clave := "arq_%s_%s_%s" % [
-		color_camiseta.to_html(false), color_short.to_html(true), str(hacia_izquierda)]
+		color_short: Color = Color.TRANSPARENT, color_pelo: Color = PELO) -> ImageTexture:
+	var clave := "arq_%s_%s_%s_%s" % [
+		color_camiseta.to_html(false), color_short.to_html(true), str(hacia_izquierda),
+		color_pelo.to_html(false)]
 	if _cache.has(clave):
 		return _cache[clave]
-	var tex := _construir(ARQUERO_VUELA, _paleta(color_camiseta, color_short), hacia_izquierda)
+	var tex := _construir(ARQUERO_VUELA, _paleta(color_camiseta, color_short, color_pelo),
+		hacia_izquierda)
 	_cache[clave] = tex
 	return tex
 
@@ -296,12 +640,61 @@ static func sombra() -> ImageTexture:
 	return tex
 
 
-static func _paleta(camiseta: Color, short: Color = Color.TRANSPARENT) -> Dictionary:
+## Pinta el número sobre el torso. Un dígito va centrado; dos ocupan el
+## ancho entero de la espalda. Escribe una N, que la paleta resuelve al
+## color que contrasta con la camiseta.
+static func _estampar_numero(filas: Array, numero: int) -> void:
+	var texto := str(clampi(numero, 0, 99))
+	var ancho_texto := texto.length() * 4 - 1
+	var x0 := int((ANCHO - ancho_texto) / 2.0)
+	for i in range(texto.length()):
+		var digito: Array = DIGITOS[int(texto[i])]
+		for y in range(digito.size()):
+			var fila: String = filas[FILA_NUMERO + y]
+			var patron: String = digito[y]
+			for x in range(3):
+				if patron[x] != "#":
+					continue
+				var col := x0 + i * 4 + x
+				if col < 0 or col >= ANCHO:
+					continue
+				fila = fila.substr(0, col) + "N" + fila.substr(col + 1)
+			filas[FILA_NUMERO + y] = fila
+
+
+## Pinta `encima` sobre `filas`: donde `encima` tiene un punto, pasa lo de
+## abajo. Es lo que permite tener un solo juego de cabezas y seis
+## peinados, en vez de treinta cabezas.
+static func _superponer(filas: Array, encima: Array) -> Array:
+	var salida: Array = []
+	for y in range(filas.size()):
+		if y >= encima.size():
+			salida.append(filas[y])
+			continue
+		var base: String = filas[y]
+		var arriba: String = encima[y]
+		var fila := ""
+		for x in range(base.length()):
+			fila += base[x] if (x >= arriba.length() or arriba[x] == ".") else arriba[x]
+		salida.append(fila)
+	return salida
+
+
+static func _paleta(camiseta: Color, short: Color, pelo: Color) -> Dictionary:
 	return {
-		".": TRANSPARENTE, "H": PELO, "S": PIEL, "d": PIEL_OSCURA, "o": OJO,
+		".": TRANSPARENTE, "H": pelo, "S": PIEL, "d": PIEL_OSCURA, "o": OJO,
+		"V": COLOR_VINCHA, "P": POLVO,
 		"J": camiseta, "b": camiseta.darkened(0.35),
+		"N": _color_numero(camiseta),
 		"D": short if short.a > 0.0 else SHORT, "M": MEDIAS, "B": BOTIN,
 	}
+
+
+## El número va blanco sobre camiseta oscura y negro sobre camiseta clara.
+## Con un color fijo desaparecía en la mitad de los clubes.
+static func _color_numero(camiseta: Color) -> Color:
+	var luz := camiseta.r * 0.299 + camiseta.g * 0.587 + camiseta.b * 0.114
+	return Color(0.08, 0.08, 0.10) if luz > 0.55 else Color(0.97, 0.97, 0.98)
 
 
 static func _construir(filas: Array, paleta: Dictionary, espejar: bool) -> ImageTexture:

@@ -160,17 +160,10 @@ func jugar_temporada(rng: RandomNumberGenerator, con_log: bool = false) -> Array
 ## simultáneos, que es lo esperable en un plantel real, sin volver el
 ## chequeo inútil.
 const MINIMO_DISPONIBLES := 15
-## Multa por no poder presentar el mínimo, descontada del presupuesto de
-## Mantenimiento (administrativo, no es un gasto de plantel). Bajada de
-## $30,000 a $5,000 junto con el ajuste de PRECIO_ENTRADA (Economia.gd,
-## feedback de playtesting): a $30,000 la multa, calibrada cuando un club
-## de división baja ganaba ~$800,000 por temporada, pasó a ser ~20% del
-## ingreso de un club real (~$150,000) en vez de una fracción chica —
-## unos pocos forfeits por mala suerte con lesiones alcanzaban para
-## mandar a un club sano a quiebra técnica. $5,000 sigue siendo un golpe
-## real (nadie quiere pagarla), pero no un evento que quiebra un club por
-## sí solo.
-const MULTA_NO_PRESENTARSE := 5000.0
+## No presentarte no lleva multa: el castigo es perder 0-3, y con eso
+## alcanza. La multa salía del presupuesto de Mantenimiento, que era la
+## única razón por la que esa categoría existía; al sacarla, la categoría
+## se fue con ella (ver Economia.CATEGORIAS_CAJA).
 
 
 ## Simula una sola fecha (todos sus partidos) y actualiza la tabla.
@@ -303,10 +296,10 @@ func _convocar_emergencia(equipo: Team) -> void:
 
 
 ## §14: "si no llegás a MINIMO_DISPONIBLES, perdés el partido por no
-## presentarte" — 0-3 en contra + multa. Devuelve el mismo formato que
+## presentarte" — 0-3 en contra. Devuelve el mismo formato que
 ## MatchEngine.simular() para que el resto de jugar_fecha() no note la
 ## diferencia. Si a los DOS equipos les falta gente a la vez (rarísimo),
-## se resuelve como empate administrativo 0-0 con multa para ambos, para
+## se resuelve como empate administrativo 0-0 para ambos, para
 ## no romper la simetría de goles a favor/en contra de la tabla.
 func _resolver_forfeit(home: Team, away: Team, home_corto: bool, away_corto: bool) -> Dictionary:
 	# expulsados_partido dura SOLO el partido en curso y lo limpia
@@ -322,16 +315,12 @@ func _resolver_forfeit(home: Team, away: Team, home_corto: bool, away_corto: boo
 	var gv := 0
 	if home_corto and not away_corto:
 		gv = 3
-		home.caja["mantenimiento"] -= MULTA_NO_PRESENTARSE
-		noticias.append("%s no pudo presentar %d jugadores disponibles: pierde 0-3 y paga una multa." % [home.nombre, MINIMO_DISPONIBLES])
+		noticias.append("%s no pudo presentar %d jugadores disponibles: pierde 0-3." % [home.nombre, MINIMO_DISPONIBLES])
 	elif away_corto and not home_corto:
 		gl = 3
-		away.caja["mantenimiento"] -= MULTA_NO_PRESENTARSE
-		noticias.append("%s no pudo presentar %d jugadores disponibles: pierde 0-3 y paga una multa." % [away.nombre, MINIMO_DISPONIBLES])
+		noticias.append("%s no pudo presentar %d jugadores disponibles: pierde 0-3." % [away.nombre, MINIMO_DISPONIBLES])
 	else:
-		home.caja["mantenimiento"] -= MULTA_NO_PRESENTARSE
-		away.caja["mantenimiento"] -= MULTA_NO_PRESENTARSE
-		noticias.append("%s y %s no pudieron presentar %d disponibles cada uno: empate administrativo, ambos multados." % [home.nombre, away.nombre, MINIMO_DISPONIBLES])
+		noticias.append("%s y %s no pudieron presentar %d disponibles cada uno: empate administrativo." % [home.nombre, away.nombre, MINIMO_DISPONIBLES])
 	# `forfeit` lo mira EstadisticasLiga: un 0-3 administrativo no le da
 	# la valla invicta a un arquero que no jugo.
 	return {"goles_local": gl, "goles_visitante": gv, "log": [], "goles_log": [],
@@ -496,11 +485,6 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 			var aprendida := Aprendizaje.procesar_jugador(jugador, equipo, temporada_actual, rng)
 			if not aprendida.is_empty():
 				noticias.append("APRENDIZAJE: un %s de %s aprende %s (bronce)." % [jugador["posicion"], equipo.nombre, aprendida["nombre"]])
-			if Personalidad.tirar_multa_impuntual(jugador, rng):
-				equipo.caja["mantenimiento"] -= Personalidad.MULTA_IMPUNTUAL
-				noticias.append("%s: multan a un %s por llegar tarde a los entrenamientos (%s)." % [
-					equipo.nombre, jugador["posicion"], Economia.formato_dinero(Personalidad.MULTA_IMPUNTUAL)
-				])
 		# §7.4.1: la carga acumulada ya se consumió en mult_entrenamiento.
 		equipo.reiniciar_carga()
 
@@ -515,6 +499,11 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 		for a in reporte["aprendizajes"]:
 			noticias.append("APRENDIZAJE: un juvenil (%s) de %s aprende %s (bronce)." % [a["jugador"]["posicion"], equipo.nombre, a["habilidad"]["nombre"]])
 		equipo.recalcular_capitan()
+		# Recien ahora: ya vencieron los contratos, ya entraron los
+		# reemplazos y ya subieron los canteranos. Esta es la caja con la
+		# que el club arranca de verdad, y el cero contra el que la UI
+		# mide lo que el jugador gasta (ver Economia.fotografiar_caja).
+		Economia.fotografiar_caja(equipo)
 
 	return [informes_economia, transferencias, reporte_cantera]
 
@@ -581,10 +570,44 @@ func nueva_temporada(rng: RandomNumberGenerator, equipo_protegido: Team = null, 
 ## §9.3: si el contrato llega a 0, el club de la IA decide si renueva o deja
 ## salir al jugador libre (más probable cuanto más veterano) — si lo deja
 ## salir, se va al pool de agentes libres (ver AgentesLibres.liberar) y su
-## puesto lo ocupa un refuerzo nuevo. Al jugador humano todavía no se le
-## vencen los contratos solos (sin una pantalla de "renovar", forzar la
-## salida de alguien de su plantel sin que él lo decida sería sacarle el
-## control) — simplificación documentada, no la regla final del GDD.
+## puesto lo ocupa un refuerzo nuevo.
+##
+## Al club del jugador humano le pasa lo MISMO. Antes se le renovaba todo
+## solo, porque no había pantalla para decidirlo: el sueldo se recalculaba
+## al valor de hoy y la masa salarial subía sola todas las temporadas
+## contra un ingreso que tiene techo. Ahora la pantalla existe (Club ›
+## Renovaciones, ver core/renovaciones.gd) y el que no arregló se va,
+## igual que en cualquier club.
+## Una linea del cartel de vencimientos. Se guardan nombres y numeros ya
+## resueltos y no los jugadores enteros: esto va a la partida guardada y
+## un plantel duplicado adentro del club no se puede volver a leer.
+func _anotar_vencimiento(equipo: Team, sale: Dictionary, salida: Dictionary,
+		sale_sueldo: float) -> Dictionary:
+	var entra: Dictionary = salida.get("jugador", {})
+	# Sin cantera no entra nadie: el puesto queda vacante y lo resuelve el
+	# jugador (ver AgentesLibres._dejar_hueco). El aviso lo dice asi.
+	var id_entra: int = int(entra["id"]) if not entra.is_empty() else -1
+	var sube: Dictionary = salida.get("sube", {})
+	return {
+		"hueco": bool(salida.get("hueco", false)),
+		"tapa_banco": ("%s %s" % [
+			sube.get("nombre", ""), sube.get("apellido", "")]).strip_edges(),
+		"tapa_banco_puesto": str(sube.get("posicion", "")),
+		"sale": ("%s %s" % [sale.get("nombre", ""), sale.get("apellido", "")]).strip_edges(),
+		"sale_puesto": str(sale["posicion"]),
+		"sale_edad": int(sale.get("edad", 0)),
+		"sale_media": int(sale.get("media", 0)),
+		"sale_sueldo": sale_sueldo,
+		"entra": ("%s %s" % [entra.get("nombre", ""), entra.get("apellido", "")]).strip_edges(),
+		"entra_puesto": str(entra.get("posicion", "")),
+		"entra_edad": int(entra.get("edad", 0)),
+		"entra_media": int(entra.get("media", 0)),
+		"entra_sueldo": float(equipo.sueldos.get(id_entra, 0.0)),
+		"entra_anios": int(equipo.contratos.get(id_entra, 0)),
+		"de_cantera": bool(salida.get("de_cantera", false)),
+	}
+
+
 func _avanzar_contratos(equipo: Team, rng: RandomNumberGenerator, es_protegido: bool = false) -> void:
 	for id in equipo.contratos.keys().duplicate():
 		equipo.contratos[id] -= 1
@@ -594,7 +617,42 @@ func _avanzar_contratos(equipo: Team, rng: RandomNumberGenerator, es_protegido: 
 		var jugador := _buscar_en_plantel(equipo, id)
 
 		if es_protegido:
-			_renovar_contrato(equipo, id, jugador, rng)
+			if jugador.is_empty():
+				_renovar_contrato(equipo, id, jugador, rng)
+				continue
+			# El piso: un equipo que no llega a MINIMO_EN_CANCHA no puede
+			# jugar (ver MatchEngine), y el plantel se achica de verdad
+			# cuando no hay ni cantera ni banco para tapar el puesto. Ahi
+			# el club renueva a la fuerza: quedarse sin equipo no es una
+			# decision que el juego pueda dejar tomar.
+			var sin_relevo: bool = equipo.cantera.is_empty() and equipo.banco.is_empty()
+			if sin_relevo and equipo.jugadores.size() <= MatchEngine.MINIMO_EN_CANCHA:
+				_renovar_contrato(equipo, id, jugador, rng)
+				noticias.append("CONTRATOS: %s no tiene con quien reemplazarlo y le renueva a la fuerza a un %s. Sin el, el equipo no llega a los %d para jugar." % [
+					equipo.nombre, jugador["posicion"], MatchEngine.MINIMO_EN_CANCHA])
+				continue
+
+			# El sueldo del que se va se lee ACA: liberar lo da de baja
+			# (Team._limpiar_registro) y despues ya no esta.
+			var sueldo_saliente: float = float(
+				equipo.sueldos.get(int(jugador["id"]), 0.0))
+			# El club del jugador tapa el hueco con su propia cantera y
+			# no con un fichaje que no pidio: ver
+			# AgentesLibres._reemplazo_para.
+			var salida := AgentesLibres.liberar(
+				equipo, jugador, agentes_libres, rng, true)
+			# String plano y no Noticias.crear: las noticias de contratos
+			# de esta funcion son todas strings y el array se lee mezclado.
+			noticias.append("CONTRATOS: se te fue libre un %s de %s. No le renovaste a tiempo (Club › Renovaciones)." % [jugador["posicion"], equipo.nombre])
+			if bool(salida.get("de_cantera", false)):
+				noticias.append("CANTERA: sube un juvenil (%s) a tapar ese puesto." % str(salida["jugador"]["posicion"]))
+			else:
+				noticias.append("PLANTEL: no quedaban juveniles en la cantera y el puesto de %s quedo sin cubrir. Resolvelo en Mercado o subiendo un juvenil." % jugador["posicion"])
+			# Para el cartel que el jugador lee al empezar la temporada:
+			# su plantel cambio sin que el decidiera nada, asi que tiene
+			# que enterarse de quien se fue y quien lo tapa.
+			equipo.vencimientos_del_cierre.append(
+				_anotar_vencimiento(equipo, jugador, salida, sueldo_saliente))
 			continue
 
 		if jugador.is_empty():
@@ -623,7 +681,8 @@ func _renovar_contrato(equipo: Team, id: int, jugador: Dictionary, rng: RandomNu
 		return
 	# base_salarial, no calcular: el sueldo no lleva el escalon de elite
 	# (ver ValorJugador.base_salarial).
-	var base := ValorJugador.base_salarial(jugador, equipo.animo.get(id, 50.0), anios)
+	var base := ValorJugador.base_salarial(
+		jugador, equipo.animo.get(id, 50.0), anios, equipo.division_actual)
 	equipo.sueldos[id] = Economia.sueldo_sugerido(base) * Personalidad.factor_sueldo(jugador)
 
 

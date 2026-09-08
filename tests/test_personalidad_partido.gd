@@ -2,7 +2,8 @@ extends SceneTree
 
 ## Rasgos de personalidad conectados al partido (§6/§8.4/§8.7) — bloque D
 ## atado al minuto/marcador/plantel rival, penales, tarjetas, ánimo
-## post-partido, crecimiento (Comodón) y multas (Impuntual).
+## post-partido y crecimiento (Comodón). La multa de Impuntual se
+## elimino: el rasgo ahora solo pesa en el partido (ver Personalidad).
 ## Correr con: godot --headless --script tests/test_personalidad_partido.gd
 
 const SEED := 6363
@@ -26,7 +27,6 @@ func _init() -> void:
 	_test_factor_roja(rng)
 	_test_ajustar_delta_animo_positivo_bajon_egolatra(rng)
 	_test_cruza_umbral_rencoroso(rng)
-	_test_tirar_multa_impuntual(rng)
 	_test_comodon_congela_el_crecimiento(rng)
 	_test_metodico_baja_la_temperatura(rng)
 	_test_pie_preferido_castiga_el_lado_malo(rng)
@@ -268,26 +268,6 @@ func _test_cruza_umbral_rencoroso(rng: RandomNumberGenerator) -> void:
 		print("OK: dispara solo exactamente en el partido %d." % Personalidad.UMBRAL_RENCOROSO)
 	else:
 		print("FALLA")
-
-
-func _test_tirar_multa_impuntual(rng: RandomNumberGenerator) -> void:
-	print("\n=== tirar_multa_impuntual: solo con el rasgo, y respeta la chance en el agregado ===")
-	var no_impuntual := _jugador_con(rng, "", "")
-	if Personalidad.tirar_multa_impuntual(no_impuntual, rng):
-		print("FALLA: nunca deberia tirar sin el rasgo.")
-		return
-
-	var impuntual := _jugador_con(rng, "", "Impuntual")
-	var multas := 0
-	var intentos := 2000
-	for i in range(intentos):
-		if Personalidad.tirar_multa_impuntual(impuntual, rng):
-			multas += 1
-	var proporcion: float = float(multas) / float(intentos)
-	if proporcion > Personalidad.CHANCE_MULTA_IMPUNTUAL * 0.5 and proporcion < Personalidad.CHANCE_MULTA_IMPUNTUAL * 1.5:
-		print("OK: %.1f%% de multas en %d intentos (esperado ~%.0f%%)." % [proporcion * 100.0, intentos, Personalidad.CHANCE_MULTA_IMPUNTUAL * 100.0])
-	else:
-		print("FALLA: proporcion=%.1f%%" % (proporcion * 100.0))
 
 
 func _test_comodon_congela_el_crecimiento(rng: RandomNumberGenerator) -> void:

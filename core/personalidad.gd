@@ -27,8 +27,8 @@ extends RefCounted
 ## ver Penales.gd), tarjetas (factor_amarilla/factor_roja, ver
 ## MatchEngine._chequear_tarjeta), ánimo post-partido (ajustar_delta_animo,
 ## ver Team.actualizar_post_partido, incluye Rencoroso), crecimiento
-## bloqueado por Comodón (ver Progresion.aplicar_temporada), multas de
-## Impuntual (ver Liga — fin de temporada), entrenamiento/lesión/sueldo/
+## bloqueado por Comodón (ver Progresion.aplicar_temporada),
+## entrenamiento/lesión/sueldo/
 ## armonía (funciones más abajo) y mentores (core/mentores.gd, vía
 ## Progresion.aplicar_temporada).
 
@@ -148,9 +148,9 @@ static func bonus_armonia(jugador: Dictionary) -> float:
 ## rinde mejor cuanto más jugadores de mayor media tenga el plantel RIVAL;
 ## Dependiente rinde peor si su capitán (la única "figura" que el motor
 ## distingue, ver ajustar_delta_animo) no está en cancha; Impuntual tiene
-## un malus chico y parejo todo el partido (aproxima "llega descentrado" —
-## la parte de "queda afuera de la convocatoria" queda para las multas de
-## fin de temporada, ver Liga).
+## un malus chico y parejo todo el partido: aproxima tanto "llega
+## descentrado" como "queda afuera de la convocatoria", porque no hay un
+## paso de convocatoria separado del plantel de partido.
 const UMBRAL_ARRANQUE := 15
 const UMBRAL_ULTIMOS_15 := 75
 const UMBRAL_ULTIMOS_10 := 80
@@ -304,14 +304,10 @@ static func cruza_umbral_rencoroso(jugador: Dictionary) -> bool:
 	return tiene(jugador, "Rencoroso") and int(jugador.get("partidos_seguidos_banco", 0)) == UMBRAL_RENCOROSO
 
 
-## §6 (Liga — cierre de temporada): Impuntual, "multas, chance de quedar
-## fuera de la convocatoria". La multa se tira una vez por temporada por
-## jugador; "quedar afuera" se aproxima en modificador_partido con un
-## malus chico y parejo en vez de una ausencia completa (no hay un paso
-## de "convocatoria" separado del plantel de partido).
-const CHANCE_MULTA_IMPUNTUAL := 0.15
-const MULTA_IMPUNTUAL := 3000.0
-
-
-static func tirar_multa_impuntual(jugador: Dictionary, rng: RandomNumberGenerator) -> bool:
-	return tiene(jugador, "Impuntual") and rng.randf() < CHANCE_MULTA_IMPUNTUAL
+## §6: Impuntual ya no cobra multa. Cobraba $3.000 con 15% de chance por
+## temporada, descontados del presupuesto de Mantenimiento; esa categoría
+## ya no existe (ver Economia.CATEGORIAS_CAJA) y la multa era plata que
+## desaparecía sin que el jugador pudiera hacer nada al respecto.
+##
+## El rasgo sigue existiendo y sigue pesando donde se nota: el malus
+## parejo de modificador_partido (ver más arriba).

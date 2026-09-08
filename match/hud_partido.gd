@@ -33,7 +33,14 @@ var color_visitante := Color.WHITE
 var goles_local := 0
 var goles_visitante := 0
 var minuto := 0
+## 1 y 2 son las mitades; 3 y 4, los tiempos del alargue.
+var periodo := 1
 var poseedor := ""
+
+## Marcador de la tanda de penales, o vacio si no se esta pateando
+## ninguna. Va aparte de goles_local/goles_visitante porque un penal de la
+## tanda no es un gol del partido: el 1-1 de los 120' se sigue mostrando.
+var tanda: Dictionary = {}
 
 ## Relato: una línea por momento importante. La pone VistaPartido y la
 ## sostiene unos segundos; `relato_alfa` la desvanece al final en vez de
@@ -128,6 +135,8 @@ func _draw() -> void:
 ## Banner: camiseta, nombre, resultado, nombre, camiseta.
 func _dibujar_marcador(fuente: Font) -> void:
 	var resultado := "%d - %d" % [goles_local, goles_visitante]
+	if not tanda.is_empty():
+		resultado += "  (%d-%d)" % [int(tanda.get("home", 0)), int(tanda.get("away", 0))]
 	var tam_nombre := 18
 	var tam_resultado := 26
 	var an_local := fuente.get_string_size(nombre_local, HORIZONTAL_ALIGNMENT_LEFT, -1, tam_nombre).x
@@ -155,7 +164,19 @@ func _dibujar_marcador(fuente: Font) -> void:
 
 
 func _dibujar_reloj(fuente: Font) -> void:
-	var tiempo := "1T" if minuto < 45 else "2T"
+	# El rotulo dice en que instancia esta el partido. Sin esto, el alargue
+	# se veia como "2T" con el reloj en 110' y la tanda como un partido
+	# congelado en 120'.
+	# El rotulo sale del PERIODO, no del minuto. Con el minuto, el
+	# descuento del segundo tiempo (91', 93') caia en el rango del alargue
+	# y un partido de liga terminaba mostrando "1T alargue".
+	var tiempo := "1T" if periodo <= 1 else "2T"
+	if not tanda.is_empty():
+		tiempo = "PENALES"
+	elif periodo == 4:
+		tiempo = "2T alargue"
+	elif periodo == 3:
+		tiempo = "1T alargue"
 	var texto := "%d'" % minuto
 	var r := Rect2(Vector2(MARGEN, MARGEN), Vector2(86, 44))
 	draw_rect(r, COLOR_PANEL)

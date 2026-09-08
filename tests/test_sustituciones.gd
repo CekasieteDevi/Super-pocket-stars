@@ -17,6 +17,8 @@ func _init() -> void:
 	_test_arquero_y_disponibles_respetan_en_cancha(rng)
 	_test_cambios_nunca_superan_el_maximo(rng)
 	_test_expulsado_no_se_reemplaza(rng)
+	_test_arquero_cansado_no_sale(rng)
+	_test_arquero_lesionado_si_sale(rng)
 	_test_lesionado_termina_reemplazado_en_alguna_ventana(rng)
 	_test_descanso_sustituye_mas_que_rendimiento(rng)
 	_test_config_cambios_persiste_en_guardado(rng)
@@ -99,6 +101,46 @@ func _test_expulsado_no_se_reemplaza(rng: RandomNumberGenerator) -> void:
 		print("OK: el expulsado sigue en_cancha (el equipo juega con uno menos), no se genero ningun cambio.")
 	else:
 		print("FALLA: en_cancha.has=%s cambios_realizados=%d" % [equipo.en_cancha.has(jugador["id"]), equipo.cambios_realizados])
+
+
+func _test_arquero_cansado_no_sale(rng: RandomNumberGenerator) -> void:
+	print("
+=== Un arquero cansado NO se cambia: al arco solo lo saca una lesion ===")
+	var equipo := Team.generar("ClubArqueroCansado", rng, 0)
+	equipo.reset_partido()
+	equipo.config_cambios = "descanso"  # el umbral mas alto, el que mas facil dispara
+	var arquero: Dictionary = equipo.arquero()
+	equipo.resistencia[arquero["id"]] = 0.55  # el piso: no hay como estar mas cansado
+
+	var log := []
+	var eventos := []
+	MatchEngine._procesar_cambios_equipo(equipo, 45, false, log, eventos)
+
+	if equipo.en_cancha.has(arquero["id"]) and equipo.cambios_realizados == 0:
+		print("OK: el arquero en el piso de resistencia sigue en cancha, no se genero ningun cambio.")
+	else:
+		print("FALLA: en_cancha.has=%s cambios_realizados=%d" % [
+			equipo.en_cancha.has(arquero["id"]), equipo.cambios_realizados])
+
+
+func _test_arquero_lesionado_si_sale(rng: RandomNumberGenerator) -> void:
+	print("
+=== Un arquero lesionado SI se cambia, y entra el arquero del banco ===")
+	var equipo := Team.generar("ClubArqueroLesionado", rng, 0)
+	equipo.reset_partido()
+	var arquero: Dictionary = equipo.arquero()
+	equipo.lesionar(arquero["id"], "Golpe en la mano", 10)
+
+	var log := []
+	var eventos := []
+	MatchEngine._procesar_cambios_equipo(equipo, 45, false, log, eventos)
+	var entro: Dictionary = equipo.arquero()
+
+	if not equipo.en_cancha.has(arquero["id"]) and equipo.cambios_realizados == 1 and entro["posicion"] == "ARQ":
+		print("OK: el arquero lesionado salio y lo reemplazo el arquero suplente.")
+	else:
+		print("FALLA: en_cancha.has=%s cambios_realizados=%d entro=%s" % [
+			equipo.en_cancha.has(arquero["id"]), equipo.cambios_realizados, entro.get("posicion", "?")])
 
 
 func _test_lesionado_termina_reemplazado_en_alguna_ventana(rng: RandomNumberGenerator) -> void:

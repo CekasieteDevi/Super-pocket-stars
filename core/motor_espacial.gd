@@ -42,6 +42,25 @@ const TICK_SEG := 0.25
 const TICKS_POR_MITAD := 480
 const MINUTOS_MOSTRADOS_POR_MITAD := 45.0
 
+## Alargue (§8.7): dos tiempos de 15' que se juegan con el MISMO motor y a
+## la misma escala que los 45'. Los ticks se derivan de los minutos en vez
+## de escribirse a mano, para que si algun dia cambia la duracion de una
+## mitad el alargue la siga solo.
+const MINUTOS_MOSTRADOS_POR_TIEMPO_ALARGUE := 15.0
+const TICKS_POR_TIEMPO_ALARGUE := int(TICKS_POR_MITAD * MINUTOS_MOSTRADOS_POR_TIEMPO_ALARGUE / MINUTOS_MOSTRADOS_POR_MITAD)
+
+## Cuantos ticks se le da a un penal de la tanda para resolverse solo: la
+## pausa de acomodarse, la carrera, el remate y el viaje de la pelota. Es
+## un SEGURO, igual que TICKS_DE_DESCUENTO: el penal cierra en cuanto la
+## pelota llega (ver _patear_de_la_tanda). Con la pausa del penal en 20
+## ticks y un remate de 11 m, 60 ticks son mas del triple de lo que tarda.
+const TICKS_MAX_PENAL_DE_TANDA := 60
+
+## Cuantos ticks queda la pelota en la red (o en las manos del arquero)
+## antes de armar el penal siguiente. Sin esta pausa la tanda pasa de un
+## remate al otro sin que se llegue a ver como termino cada uno.
+const TICKS_ENTRE_PENALES := 12
+
 ## Cancha reglamentaria, origen en el centro. El equipo LOCAL ataca hacia
 ## +X (arco rival en +52.5), el visitante hacia -X.
 const LARGO := 105.0
@@ -410,6 +429,11 @@ static func clave_de(jugador_id: int, es_local: bool) -> int:
 const ACCION_PATEA := "patea"
 const ACCION_BARRIDA := "barrida"
 const ACCION_VUELA := "vuela"
+## Un cabezazo no es una patada: sale de un salto y la anima otro sprite.
+const ACCION_CABECEA := "cabecea"
+## El gol. Es la unica accion que no dura un instante: el goleador festeja
+## todo lo que dura la pelota en la red (TICKS_DETENIDO["gol"]).
+const ACCION_FESTEJA := "festeja"
 
 
 ## §7.3: suma uso de un atributo. Se guarda por jugador_id porque es lo
@@ -639,6 +663,10 @@ static func _armar_jugadores(equipo: Team, es_local: bool, estado: Dictionary) -
 		estado["jugadores"][clave_de(j["id"], es_local)] = {
 			"clave": clave_de(j["id"], es_local),
 			"jugador_id": j["id"],
+			# Dorsal. Sale de Team.dorsal_de, que es la unica fuente: la
+			# ficha del plantel muestra el mismo numero. Es solo para el
+			# sprite; nada de la simulacion lo mira.
+			"numero": equipo.dorsal_de(int(j["id"])),
 			"equipo_local": es_local,
 			"rol": rol,
 			"base": base,
@@ -672,6 +700,11 @@ static func crear_estado(home: Team, away: Team, rng: RandomNumberGenerator) -> 
 		"jugadores": {},
 		"pelota": {"pos": Vector2.ZERO, "vel": Vector2.ZERO, "poseedor_id": -1, "en_vuelo": false},
 		"minuto": 0.0,
+		# En que periodo esta el partido: 1 y 2 son las mitades, 3 y 4 los
+		# tiempos del alargue. El rotulo del reloj sale de ACA y no del
+		# minuto: en el descuento del segundo tiempo el reloj marca 93' y
+		# leerlo por minuto mostraba "1T alargue" en un partido de liga.
+		"periodo": 1,
 		"tick": 0,
 		"rng": rng,
 		"log": [],
@@ -1291,12 +1324,13 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 		MatchEngine._bloques_equipo(eq_d, eq_a, defensor, "quite", minuto, estado["rng"]))
 	var pasa := Duel.gana_atacante(res, estado["rng"])
 
-	# Lo pasó: el que quedó mal parado puede haberlo bajado. La falta se
-	# COBRA —con su tarjeta, su parada de juego y su tiro libre— en vez de
-	# amonestar suelto. Antes acá se llamaba directo a
-	# _chequear_tarjeta_repetido, así que salía una amarilla sin falta: se
-	# veía la barrida, aparecía la tarjeta y el juego seguía como si nada.
-	if pasa and estado["rng"].randf() < float(f["prob_falta_en_gambeta"]):
+	# Encarar es un duelo, así que lleva la MISMA tirada de falta que el
+	# quite: `prob_falta_por_duelo`, una sola por duelo. Antes tenía su
+	# propio peso (prob_falta_en_gambeta) y solo se tiraba si el atacante
+	# pasaba; ahora el defensor puede bajarlo también cuando le gana, que
+	# es lo que hace el que no llega. La falta se COBRA —con su tarjeta,
+	# su parada de juego y su tiro libre— en vez de amonestar suelto.
+	if estado["rng"].randf() < float(f["prob_falta_por_duelo"]):
 		_cobrar_falta(estado, poseedor["pos"], es_local, defensor, eq_d, eq_a, minuto)
 		return
 
@@ -1512,7 +1546,14 @@ static func _objetivo_sin_pelota(estado: Dictionary, e: Dictionary, equipo: Team
 	var objetivo_x: float = base.x + pelota_pos.x * ax
 	var objetivo_y: float = base.y + (pelota_pos.y - base.y) * ay
 
-	if not tiene_pelota_mi_equipo:
+	# El arquero queda AFUERA del desplazamiento por estilo. El estilo
+	# corre la línea de los diez de campo; al arquero lo único que lo
+	# mueve es dónde está la pelota (ATRACCION_X). Con los 16 metros del
+	# estilo encima, Presión alta lo paraba en el borde del área: medido
+	# con tests/_diag_arquero_posicion.gd, 7,37 m de su línea de media,
+	# 32% del partido a más de 10 m, y 6,68 m afuera EN EL MOMENTO de
+	# atajar. De ahí salía que la pelota lo pasara de largo.
+	if not tiene_pelota_mi_equipo and rol != "ARQ":
 		# El estilo CORRE LA LÍNEA hacia el arco rival o hacia el propio.
 		#
 		# Antes multiplicaba `ax`, o sea cuánto sigue el jugador a la
@@ -1884,9 +1925,8 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	var minuto := _minuto_int(estado)
 	var geo := factor_geometria(poseedor["pos"], es_local, jugador)
 	var clave := "home" if es_local else "away"
-	# Un cabezazo no es una patada; por ahora no hay sprite propio, así que
-	# se anima igual que un remate de pie.
-	_accion(estado, int(poseedor["clave"]), ACCION_PATEA)
+	_accion(estado, int(poseedor["clave"]),
+		ACCION_CABECEA if attr_remate == "cabezazo" else ACCION_PATEA)
 	_xp_e(estado, poseedor, attr_remate)
 	estado["tiros"][clave] += 1
 	estado["dist_tiros"].append(poseedor["pos"].distance_to(arco_rival(es_local)))
@@ -1959,6 +1999,14 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	eq_a.desgastar(jugador["id"], jugador["atributos"]["energia"], mult_tiro)
 	eq_d.desgastar(arquero["id"], arq_attrs["energia"], mult_tiro)
 	var gol := Duel.gana_atacante(res, rng)
+	# El laboratorio monta jugadas para MIRAR la animación, y una jugada
+	# que unas veces termina en gol y otras en atajada no deja comparar
+	# nada entre una reproducción y la siguiente. Con esto la fuerza. Vale
+	# UNA vez y se consume: lo que pasa después del remate vuelve a ser un
+	# partido normal. En un partido de verdad la clave no existe.
+	if estado.has("forzar_remate"):
+		gol = str(estado["forzar_remate"]) == "gol"
+		estado.erase("forzar_remate")
 	_xp(estado, int(arquero["id"]), not es_local, "reflejos")
 	_lanzar_remate(estado, poseedor, {
 		"tipo": "gol" if gol else "atajada",
@@ -1996,7 +2044,10 @@ static func _lanzar_remate(estado: Dictionary, poseedor: Dictionary, datos: Dict
 		var e_arq: Dictionary = estado["jugadores"][arq_clave]
 		arq_pos = e_arq["pos"]
 		var vel_remate: float = float(pesos()["fisica"]["vel_remate"])
-		var segundos_vuelo: float = maxf(poseedor["pos"].distance_to(arco) / vel_remate, TICK_SEG)
+		# El vuelo termina EN EL ARQUERO, no en la línea: la distancia se
+		# mide contra él. Midiendo contra el arco se le regalaba el tiempo
+		# de los metros que él tiene adelantados.
+		var segundos_vuelo: float = maxf(poseedor["pos"].distance_to(arq_pos) / vel_remate, TICK_SEG)
 		alcance = _alcance_en(e_arq, segundos_vuelo) + ALCANCE_ESTIRADA
 
 	var y_destino := 0.0
@@ -2024,9 +2075,15 @@ static func _lanzar_remate(estado: Dictionary, poseedor: Dictionary, datos: Dict
 			y_destino = rng.randf_range(4.5, 9.0) * (1.0 if rng.randf() < 0.5 else -1.0)
 			altura = 3.4
 
-	# La atajada termina DELANTE de la línea, que es donde están las manos
-	# del arquero; todo lo demás termina adentro o pasando el arco.
-	var x_destino: float = arco.x - lado * 0.8 if tipo == "atajada" else arco.x + lado * 1.2
+	# La atajada termina DELANTE DEL ARQUERO, no delante de la línea. Con
+	# el destino en la línea, el arquero adelantado tenía que correr para
+	# atrás a buscarla mientras la pelota volaba a 26 m/s: no llegaba
+	# nunca, así que la pelota le pasaba de largo, frenaba en la línea y
+	# al fotograma siguiente aparecía en sus manos. Medido con Presión
+	# alta (tests/_diag_arquero_posicion.gd): el vuelo terminaba a 6,16 m
+	# de él y el 86% de las atajadas daban ese salto.
+	# Todo lo demás termina adentro o pasando el arco.
+	var x_destino: float = arq_pos.x - lado * 0.3 if tipo == "atajada" else arco.x + lado * 1.2
 	var destino := Vector2(x_destino,
 		clampf(y_destino, -MEDIO_ANCHO + 1.0, MEDIO_ANCHO - 1.0))
 	var pelota: Dictionary = estado["pelota"]
@@ -2047,18 +2104,23 @@ static func _lanzar_remate(estado: Dictionary, poseedor: Dictionary, datos: Dict
 	var dir: Vector2 = (destino - poseedor["pos"]).normalized()
 	pelota["vel"] = dir * float(pesos()["fisica"]["vel_remate"])
 
-	# El arquero se tira mientras la pelota viaja, no cuando ya entró, y
-	# se MUEVE hacia la trayectoria (ver el paso 3 de _tick). En la
-	# atajada llega justo; en el gol se estira y no alcanza.
+	# El arquero se mueve hacia la trayectoria mientras la pelota viaja,
+	# no cuando ya entró (ver el paso 3 de _tick). En la atajada llega
+	# justo; en el gol se estira y no alcanza. La POSE de tirarse la
+	# registra ese mismo paso cuando la pelota está por llegar, no acá:
+	# dura cuatro ticks y un remate de 35 metros viaja más que eso, así
+	# que el arquero se levantaba antes de que la pelota llegara.
 	if tipo in ["gol", "atajada", "palo"] and arq_clave != -1:
-		_accion(estado, arq_clave, ACCION_VUELA)
 		datos["arquero"] = arq_clave
-		# Se tira SOBRE la línea, no adentro del arco: toma el costado al
-		# que va la pelota pero su X se queda en la línea. Con el destino
-		# crudo, un remate que termina 1,2 m adentro de la red arrastraba
-		# al arquero adentro del arco, tratando de meterse él también.
+		# Se tira EN SU PROPIA PROFUNDIDAD: toma el costado al que va la
+		# pelota y su X se queda donde estaba. Antes se tiraba sobre la
+		# línea del arco, que es lo que lo mandaba a correr para atrás en
+		# vez de estirarse al costado. El clamp lo deja fuera de la red:
+		# con el destino crudo, un remate que termina 1,2 m adentro
+		# arrastraba al arquero adentro del arco, tratando de meterse él
+		# también.
 		datos["destino_arquero"] = Vector2(
-			-ARQUERO_X_MIN if arco.x < 0.0 else ARQUERO_X_MIN, destino.y)
+			clampf(arq_pos.x, -ARQUERO_X_MIN, ARQUERO_X_MIN), destino.y)
 
 
 ## Gol: la pelota se queda EN LA RED y los jugadores vuelven caminando al
@@ -2122,6 +2184,13 @@ static func _aplicar_remate(estado: Dictionary, datos: Dictionary) -> void:
 	# El penal llega por acá igual que cualquier remate, pero se cuenta
 	# como penal: no es un tiro más en las estadísticas.
 	var es_penal: bool = bool(datos.get("penal", false))
+	# El penal de la TANDA no toca el marcador del partido: los 120'
+	# terminaron empatados y ahi se quedan. Se anota aparte y no se reanuda
+	# nada — no hay saque del medio ni saque de arco, viene el penal
+	# siguiente y lo arma _patear_de_la_tanda.
+	if es_penal and bool(estado.get("en_tanda", false)):
+		_anotar_penal_de_tanda(estado, es_local, gol, datos)
+		return
 	estado["eventos"].append({
 		"minuto": minuto, "tipo": "penal" if es_penal else "tiro_puerta",
 		"equipo": eq_a.nombre, "rival": eq_d.nombre,
@@ -2141,6 +2210,7 @@ static func _aplicar_remate(estado: Dictionary, datos: Dictionary) -> void:
 		else:
 			estado["log"].append("min %d - GOL de %s %s (%s) desde %.0f m" % [
 				minuto, jugador.get("nombre", ""), jugador.get("apellido", ""), eq_a.nombre, dist])
+		_accion(estado, int(datos["clave"]), ACCION_FESTEJA)
 		_festejar_gol(estado, not es_local)
 		return
 
@@ -2716,9 +2786,15 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 		if id == esperando:
 			_mover_hacia(e, pelota.get("destino_pos", pelota["pos"]))
 			continue
-		# El arquero sale a cruzarse en la trayectoria del remate. Sin
-		# esto se quedaba parado y la pelota le aparecía en las manos.
+		# El arquero se estira hacia la trayectoria del remate. Sin esto
+		# se quedaba parado y la pelota le aparecía en las manos.
 		if id == arquero_al_remate:
+			# Se tira SOBRE EL FINAL. La pose dura cuatro ticks, así que
+			# registrarla al salir el remate dejaba al arquero levantado
+			# justo cuando llegaba la pelota en los remates largos.
+			var falta: float = pelota["pos"].distance_to(pelota["destino_pos"])
+			if falta <= float(pesos()["fisica"]["vel_remate"]) * TICK_SEG * 2.0:
+				_accion(estado, id, ACCION_VUELA)
 			_mover_hacia(e, pelota["remate"]["destino_arquero"])
 			continue
 		if perseguidores.has(id):
@@ -2770,11 +2846,22 @@ static func _cerrar_tick(estado: Dictionary, con_fotogramas: bool, eventos_antes
 	# del minuto (rasgos como Lento de arranque o Se apaga, el DT según el
 	# marcador, las ventanas de cambio) lee este reloj, así que conserva
 	# exactamente la semántica del GDD.
-	estado["minuto"] += MINUTOS_MOSTRADOS_POR_MITAD / float(TICKS_POR_MITAD)
-	# Cada 5 segundos de juego se saca de la cancha a los expulsados (una
-	# roja puede caer en cualquier tick, no solo en una ventana de cambio).
-	if estado["tick"] % 20 == 0:
+	# En la tanda el reloj NO corre: el partido ya termino a los 120' y el
+	# cartel tiene que quedarse ahi. Sin esto la tanda seguia sumando
+	# minutos y el reloj marcaba 130' con los 22 parados en el circulo.
+	if not bool(estado.get("en_tanda", false)):
+		estado["minuto"] += MINUTOS_MOSTRADOS_POR_MITAD / float(TICKS_POR_MITAD)
+	# Se pone la cancha al dia CON EL JUEGO DETENIDO: es la condicion que
+	# pide _sincronizar_cambios, y un corte es justo cuando se hace un
+	# cambio de verdad. Se prueba en cada tick detenido y no cada 20 para
+	# que el suplente entre en el corte que ya esta pasando en vez de
+	# esperar hasta cinco segundos y arrancar con el juego reanudado.
+	if int(estado.get("detenido", 0)) > 0:
 		_sincronizar_cambios(estado)
+	# Cuanto valia el reloj de la pausa al cerrar este tick. Lo lee la
+	# guarda de _sincronizar_cambios para saber si el juego ya venia
+	# detenido o se corto recien ahora.
+	estado["detenido_previo"] = int(estado.get("detenido", 0))
 	if con_fotogramas:
 		# TODOS los eventos del tick, no solo el último: una entrada fuerte
 		# emite la tarjeta y después la falta, y quedarse con el último
@@ -3030,7 +3117,45 @@ static func _avanzar_entradas_y_salidas(estado: Dictionary) -> bool:
 ## No teletransporta: al que sale lo manda a caminar hacia el lateral y al
 ## que entra lo pone en ese mismo punto para que trote a su lugar. El
 ## juego espera a que terminen (ver _avanzar_entradas_y_salidas).
-static func _sincronizar_cambios(estado: Dictionary) -> void:
+##
+## El cambio ESPERA a que el juego este cortado y la pelota quieta, igual
+## que en el futbol. Antes arrancaba en cualquier tick y clavaba la
+## pelota donde estuviera: el 17% de los cambios cortaba un pase o un
+## remate en el aire (medido en tests/_diag_gol_vs_cambio.gd, 60
+## partidos; ahora 9%, y ese resto es pelota ya muerta en la linea). El
+## caso feo era el remate: la pelota quedaba a diez metros del arco
+## durante los seis segundos de la caminata y el gol caia recien cuando
+## el suplente terminaba de entrar, o sea que se veia la sustitucion
+## ANTES que el gol.
+##
+## No hace falta reintentar desde afuera: _cerrar_tick vuelve a llamar en
+## cada tick detenido, asi que el cambio entra en el primer corte que
+## aparezca.
+##
+## `instantaneo` saltea la caminata: el que sale desaparece y el que entra
+## queda parado en su lugar. Es lo que corresponde en el corte entre dos
+## periodos —el cambio del entretiempo ya esta hecho cuando los equipos
+## vuelven a la cancha— y ademas es lo unico que evita que el suplente
+## entre trotando encima de un saque del medio ya ejecutado.
+static func _sincronizar_cambios(estado: Dictionary, instantaneo: bool = false) -> void:
+	# Tres condiciones, y las tres hacen falta.
+	#
+	# `detenido` solo no alcanza: el juego tambien esta detenido mientras
+	# la pelota viaja hacia la red o sale rebotada al corner, y ahi el
+	# cambio la clavaria en el aire igual. Por eso tambien se pide la
+	# pelota quieta.
+	#
+	# Y el juego tiene que venir cortado de ANTES, no haberse cortado
+	# recien en este tick, porque el fotograma trae `foco`: con alguien
+	# entrando, la camara lo sigue A EL y suelta la pelota. Arrancando en
+	# el tick del gol, la camara se iba al suplente justo en el fotograma
+	# que la vista congela para el festejo — otra vez el cambio tapando al
+	# gol. Un tick despues el gol ya quedo mostrado y el cambio entra
+	# igual, adentro del mismo festejo.
+	if not instantaneo and (int(estado.get("detenido", 0)) <= 0
+			or int(estado.get("detenido_previo", 0)) <= 0
+			or bool(estado["pelota"].get("en_vuelo", false))):
+		return
 	for es_local in [true, false]:
 		var equipo := _equipo_de(estado, es_local)
 		var deben_estar := {}
@@ -3056,7 +3181,10 @@ static func _sincronizar_cambios(estado: Dictionary) -> void:
 					# linea antes de entrar.
 					"deja": clave,
 				})
-				_empezar_salida(estado, clave)
+				if instantaneo:
+					estado["jugadores"].erase(clave)
+				else:
+					_empezar_salida(estado, clave)
 
 		for clave in deben_estar:
 			if estado["jugadores"].has(clave):
@@ -3073,22 +3201,25 @@ static func _sincronizar_cambios(estado: Dictionary) -> void:
 			# Adonde va: al lugar que dejo el que salio. Y de donde sale:
 			# del lateral, como en el futbol.
 			var destino: Vector2 = hueco["pos"] if hueco.has("pos") else base
-			var entra_por := _punto_de_salida(destino)
+			var entra_por: Vector2 = destino if instantaneo else _punto_de_salida(destino)
 			estado["jugadores"][clave] = {
 				"clave": clave, "jugador_id": j["id"], "equipo_local": es_local,
 				"rol": rol, "base": base, "pos": entra_por, "vel": Vector2.ZERO,
 				"objetivo": base, "vel_max": _vel_max(j),
 				"aceleracion": _aceleracion(j), "rapidez": 0.0,
 			}
+			if instantaneo:
+				estado["jugadores"][clave]["marca"] = destino
+				continue
 			estado["entrando"].append({
 				"clave": clave, "destino": destino, "ticks": 0,
 				"espera_a": int(hueco["deja"]) if hueco.has("deja") else -1,
 			})
 
-	# Si arranco alguna salida o entrada, el juego se DETIENE: en el
-	# futbol un cambio se hace con la pelota parada, y ademas es lo que
-	# hace que se vea. Sin esto los que estan en transito quedan quietos
-	# —el bucle normal no los mueve— mientras el partido sigue de largo.
+	# La pausa dura hasta que termine el cambio. El juego ya estaba
+	# cortado —lo pide la guarda de arriba—, pero el corte que lo detuvo
+	# puede ser mas corto que la caminata, y si se reanuda antes los que
+	# estan en transito quedan quietos: el bucle normal no los mueve.
 	if not (estado["saliendo"].is_empty() and estado["entrando"].is_empty()):
 		estado["detenido"] = maxi(int(estado.get("detenido", 0)), 1)
 
@@ -3316,74 +3447,38 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 			_resolver_tiro(estado, poseedor, jugador)
 
 
-## Cuántas veces se tira la tarjeta en ESTA infracción. NO es una
-## constante: el presupuesto de tiradas se acumula con el TIEMPO y cada
-## infracción se lleva lo acumulado desde la anterior.
+## Una falta, una tirada, sobre EL QUE LA HIZO.
 ##
-## El problema que resuelve: CHANCE_AMARILLA está calibrado sobre los
-## ~180 duelos por partido del motor abstracto, y este motor resuelve
-## muchos menos, así que cada infracción tiene que tirar varias veces para
-## llegar a la misma tasa POR PARTIDO — que es lo que importa, porque de
-## ahí salen las suspensiones. Con una constante, CADA cambio que movía
-## cuántas infracciones hay —el tiempo muerto del balón parado, la
-## aceleración, la presión al arquero— desajustaba las tarjetas y había
-## que recalibrarla a mano. Pasó tres veces seguidas.
+## Antes había un "presupuesto" de tiradas que se acumulaba por tiempo y
+## se repartía entre todo el equipo. Tapaba que este motor cobra menos
+## faltas que un partido real, pero el partido se dibuja y se veía el
+## resultado: amarilla a un jugador parado a media cancha de la falta, y
+## hasta al arquero. La tarjeta no tenía relación con lo que pasaba en
+## pantalla.
 ##
-## Acumular por tiempo lo vuelve invariante: el total esperado es
-## `tiradas_por_tick × ticks del partido` sin importar CUÁNTAS
-## infracciones haya. Si hay menos, cada una carga con más presupuesto.
-## En términos de fútbol también se sostiene: en un partido cortado, cada
-## falta pesa más.
+## El hueco se cerró donde correspondía: prob_falta subió hasta las ~20
+## faltas por partido del fútbol real (ver utility_pesos.json). Con eso
+## la tarjeta puede colgar de la falta y sola, que es lo que se entiende
+## mirando el partido.
 ##
-## Se acota por arriba para que una sequía larga no convierta a la
-## siguiente falta en una amarilla automática.
-static func _chequeos_tarjeta(estado: Dictionary) -> int:
-	var f: Dictionary = pesos()["fisica"]
-	var transcurridos: int = maxi(int(estado["tick"]) - int(estado.get("tick_ultima_tarjeta", 0)), 1)
-	estado["tick_ultima_tarjeta"] = int(estado["tick"])
-	var tiradas: float = float(f["tiradas_tarjeta_por_partido"]) 		/ float(TICKS_POR_MITAD * 2) * float(transcurridos)
-	return clampi(int(round(tiradas)), 1, int(f["tiradas_tarjeta_tope"]))
-
-
-## Hay que CORTAR en la primera tarjeta: si no, el mismo jugador puede
-## sacar dos amarillas en la misma entrada y quedar expulsado en el acto,
-## que no existe en el fútbol. Con las tiradas encadenadas sin corte
-## salían 1,10 rojas por partido contra las ~0,4 del motor abstracto.
-##
-## Y las tiradas se reparten por TODO el equipo, no todas sobre el que
-## acaba de hacer la falta. El presupuesto representa las infracciones
-## que este motor no simula —hay 10 faltas por partido contra las 22 de
-## un partido real— y esas las cometieron otros. Cargándolas todas al
-## mismo jugador, las amarillas se concentraban en poca gente y salían
-## 0,88 rojas por partido, con expulsado en 2 de cada 3 partidos, contra
-## 0,43 del motor abstracto y 0,25 reales. Casi todas por doble amarilla.
-## Medido con tests/_diag_faltas.gd.
-##
-## La primera tirada sí es para el infractor: esa falta la hizo él y se
-## vio. Las demás son para cualquiera de sus compañeros en cancha.
-static func _chequear_tarjeta_repetido(estado: Dictionary, defensor: Dictionary,
+## La chance por falta sale de `prob_amarilla_por_falta`. La roja directa
+## conserva la razón del motor abstracto (CHANCE_ROJA_DIRECTA sobre
+## CHANCE_AMARILLA) en vez de tener su propio peso: una sola fuente de
+## verdad para "qué proporción de las tarjetas son roja directa".
+static func _chequear_tarjeta_de_falta(estado: Dictionary, infractor: Dictionary,
 		eq_d: Team, eq_a: Team, minuto: int) -> void:
-	var veces := _chequeos_tarjeta(estado)
-	var en_cancha := eq_d.jugadores_en_cancha()
-	for i in range(veces):
-		var quien := defensor
-		if i > 0 and not en_cancha.is_empty():
-			var candidato: Dictionary = en_cancha[estado["rng"].randi() % en_cancha.size()]
-			if str(candidato.get("posicion", "")) != "ARQ":
-				quien = candidato
-		var antes: int = estado["eventos"].size()
-		MatchEngine._chequear_tarjeta(quien, eq_d, eq_a, estado["rng"], estado["eventos"], minuto, true, estado["log"])
-		if estado["eventos"].size() > antes:
-			# Si fue roja, se lo saca de la cancha AHORA. La limpieza
-			# periodica corre cada 20 ticks (5 segundos de juego) y la roja
-			# puede caer en cualquiera de ellos, asi que el expulsado
-			# seguia corriendo y disputando la pelota hasta la limpieza
-			# siguiente: medido, 11 de 14 expulsados seguian jugando 2,4
-			# segundos de promedio y hasta 3,5. Se ve, porque el partido se
-			# dibuja.
-			if eq_d.expulsados_partido.has(int(quien["id"])):
-				_mandar_a_las_duchas(estado, int(quien["id"]), eq_d == _equipo_de(estado, true))
-			return  # ya cobró: una entrada, una tarjeta
+	var f: Dictionary = pesos()["fisica"]
+	var escala: float = float(f["prob_amarilla_por_falta"]) / MatchEngine.CHANCE_AMARILLA
+	MatchEngine._chequear_tarjeta(infractor, eq_d, eq_a, estado["rng"], estado["eventos"],
+			minuto, true, estado["log"], escala)
+	# Si fue roja, se lo saca de la cancha AHORA. La limpieza periodica corre
+	# cada 20 ticks (5 segundos de juego) y la roja puede caer en cualquiera
+	# de ellos, asi que el expulsado seguia corriendo y disputando la pelota
+	# hasta la limpieza siguiente: medido, 11 de 14 expulsados seguian
+	# jugando 2,4 segundos de promedio y hasta 3,5. Se ve, porque el partido
+	# se dibuja.
+	if eq_d.expulsados_partido.has(int(infractor["id"])):
+		_mandar_a_las_duchas(estado, int(infractor["id"]), eq_d == _equipo_de(estado, true))
 
 
 ## Arranca la salida del expulsado: se queda en la cancha caminando hacia
@@ -3449,7 +3544,7 @@ static func _en_cooldown(estado: Dictionary, clave: int) -> bool:
 static func _cobrar_falta(estado: Dictionary, punto: Vector2, victima_local: bool,
 		infractor: Dictionary, eq_infractor: Team, eq_victima: Team, minuto: int) -> void:
 	estado["faltas"] = int(estado.get("faltas", 0)) + 1
-	_chequear_tarjeta_repetido(estado, infractor, eq_infractor, eq_victima, minuto)
+	_chequear_tarjeta_de_falta(estado, infractor, eq_infractor, eq_victima, minuto)
 	estado["eventos"].append({
 		"minuto": minuto, "tipo": "falta", "equipo": eq_infractor.nombre,
 		"rival": eq_victima.nombre, "jugador_posicion": infractor["posicion"],
@@ -3479,7 +3574,6 @@ static func _cobrar_falta(estado: Dictionary, punto: Vector2, victima_local: boo
 ## cuando se termina la pausa — el mismo camino que la falta y el corner.
 static func _cobrar_penal(estado: Dictionary, ataca_local: bool, minuto: int) -> void:
 	var eq_a := _equipo_de(estado, ataca_local)
-	var eq_d := _equipo_de(estado, not ataca_local)
 	estado["penales"] = int(estado.get("penales", 0)) + 1
 
 	# Lo patea el que eligio el club (Equipo > Roles). Si no eligio a
@@ -3487,8 +3581,22 @@ static func _cobrar_penal(estado: Dictionary, ataca_local: bool, minuto: int) ->
 	# `tiro` DE CAMPO: antes el automatico recorria los once y el arquero
 	# entraba en la comparacion, asi que si tenia el mejor `tiro` se iba
 	# caminando hasta el punto del penal.
-	var pateador := _dict_jugador(
-		estado, eq_a, Roles.ejecutor(eq_a, Roles.PENALES, eq_a.en_cancha))
+	_armar_penal(estado, ataca_local, minuto,
+		_dict_jugador(estado, eq_a, Roles.ejecutor(eq_a, Roles.PENALES, eq_a.en_cancha)))
+
+
+## Acomoda la cancha para un penal que ya patea `pateador`. Esta separado
+## de _cobrar_penal porque la tanda usa la MISMA foto pero elige al
+## pateador por otro lado: la lista de Penales.orden_de_pateo, no el rol
+## del club.
+##
+## `gol_forzado` distinto de null salta el duelo y patea un resultado ya
+## decidido. Lo usa la tanda: ahi el resultado lo decide Penales, que es el
+## unico modelo de penal de todo el juego (ver _tanda_de_penales), y este
+## motor solo lo pone en la cancha.
+static func _armar_penal(estado: Dictionary, ataca_local: bool, minuto: int,
+		pateador: Dictionary, gol_forzado = null) -> void:
+	var eq_d := _equipo_de(estado, not ataca_local)
 	var arquero := eq_d.arquero()
 	if pateador.is_empty() or arquero.is_empty():
 		_dar_pelota_al_arquero(estado, not ataca_local, true)
@@ -3519,6 +3627,15 @@ static func _cobrar_penal(estado: Dictionary, ataca_local: bool, minuto: int) ->
 			e["pos"] = Vector2(arco.x - hacia * 0.2, 0.0)
 			e["marca"] = e["pos"]
 			continue
+		# En la tanda los 18 que no patean miran desde el circulo central,
+		# como en cualquier definicion por penales. En un penal DENTRO del
+		# partido no: ahi cada uno espera el rebote donde estaba.
+		if bool(estado.get("en_tanda", false)):
+			var angulo: float = estado["rng"].randf_range(0.0, TAU)
+			var radio: float = RADIO_CIRCULO * sqrt(estado["rng"].randf())
+			e["pos"] = Vector2(cos(angulo), sin(angulo)) * radio
+			e["marca"] = e["pos"]
+			continue
 		# Si esta adentro del area, se va al borde por el camino mas corto,
 		# repartidos en abanico para que no queden todos en el mismo punto.
 		var p: Vector2 = e["pos"]
@@ -3545,6 +3662,7 @@ static func _cobrar_penal(estado: Dictionary, ataca_local: bool, minuto: int) ->
 	estado["balon_parado"] = {
 		"tipo": "penal", "ataca_local": ataca_local, "minuto": minuto,
 		"pateador_id": int(pateador["id"]), "pos": punto,
+		"gol_forzado": gol_forzado,
 	}
 	estado["detenido"] = int(TICKS_DETENIDO["penal"])
 	estado["quietos"] = int(TICKS_DETENIDO["penal"])
@@ -3570,12 +3688,19 @@ static func _ejecutar_penal(estado: Dictionary, bp: Dictionary) -> void:
 	# La ventaja del pateador incluye el bonus de personalidad de penales
 	# que ya existía en Penales.gd (Pícaro, Clutch, Frágil mental).
 	var ventaja: float = float(f["ventaja_penal"]) * (1.0 + Personalidad.bonus_penal(pateador))
-	var res := Duel.resolver(
-		Duel.atributo_efectivo(float(pateador["atributos"]["tiro"]) + ventaja, "tecnico", eq_a.resistencia_pct(pateador["id"])),
-		Duel.atributo_efectivo(valor_arq, "tecnico", eq_d.resistencia_pct(arquero["id"])),
-		MatchEngine._bloques_equipo(eq_a, eq_d, pateador, "tiro", minuto, estado["rng"]),
-		MatchEngine._bloques_equipo(eq_d, eq_a, arquero, "reflejos", minuto, estado["rng"]))
-	var gol := Duel.gana_atacante(res, estado["rng"])
+	var gol: bool
+	if bp.get("gol_forzado", null) != null:
+		# Penal de la tanda: el resultado ya lo decidio Penales y aca solo
+		# se patea. Ni se tira el duelo, para no gastar RNG en un numero
+		# que no se usa.
+		gol = bool(bp["gol_forzado"])
+	else:
+		var res := Duel.resolver(
+			Duel.atributo_efectivo(float(pateador["atributos"]["tiro"]) + ventaja, "tecnico", eq_a.resistencia_pct(pateador["id"])),
+			Duel.atributo_efectivo(valor_arq, "tecnico", eq_d.resistencia_pct(arquero["id"])),
+			MatchEngine._bloques_equipo(eq_a, eq_d, pateador, "tiro", minuto, estado["rng"]),
+			MatchEngine._bloques_equipo(eq_d, eq_a, arquero, "reflejos", minuto, estado["rng"]))
+		gol = Duel.gana_atacante(res, estado["rng"])
 
 	# El resultado ya esta decidido, pero el remate VIAJA como cualquier
 	# otro: la pelota sale del punto, tarda en llegar y el arquero se tira
@@ -4326,18 +4451,24 @@ static func _intentar_robo(estado: Dictionary) -> void:
 	# El poseedor defiende su pelota con `control` contra el `quite` del rival.
 	var aguanta := _duelo_simple(jug_a, "control", eq_a, jug_d, "quite", eq_d, minuto, estado["rng"])
 
-	# ¿Fue falta? Un quite fallado es la situación típica: llegó tarde. Las
-	# TARJETAS cuelgan de acá, no del quite en sí — antes se amonestaba sin
-	# que hubiera ninguna infracción, que era raro de ver.
-	if not aguanta or estado["rng"].randf() < float(f["prob_falta_en_quite_ganado"]):
-		if estado["rng"].randf() < float(f["prob_falta"]):
-			# Sin cooldown al que hizo la falta: la infracción YA frenó la
-			# jugada y devolvió la pelota. Dejarlo además fuera de juego
-			# unos segundos era premiar dos veces al que la recibió, y
-			# aplanaba la diferencia entre equipos buenos y malos (un
-			# plantel flojo pasaba de 1,57 a 2,87 goles por partido).
-			_cobrar_falta(estado, poseedor["pos"], es_local, jug_d, eq_d, eq_a, minuto)
-			return
+	# ¿Fue falta? UNA tirada por duelo, gane o pierda el quite: el que
+	# llega tarde puede bajarlo igual, y el que se la saca limpia puede
+	# haberlo tocado antes. Las TARJETAS cuelgan de acá, no del quite en
+	# sí — antes se amonestaba sin que hubiera ninguna infracción.
+	#
+	# Antes eran dos tiradas encadenadas y distintas según el resultado
+	# (prob_falta sobre el quite fallado, prob_falta_en_quite_ganado sobre
+	# el ganado). Calibradas para llegar a las 22 faltas reales cortaban
+	# el partido todo el tiempo: 14,9 faltas por partido, cada una con
+	# 3,5 s de juego parado, y jugando se siente insoportable.
+	if estado["rng"].randf() < float(f["prob_falta_por_duelo"]):
+		# Sin cooldown al que hizo la falta: la infracción YA frenó la
+		# jugada y devolvió la pelota. Dejarlo además fuera de juego
+		# unos segundos era premiar dos veces al que la recibió, y
+		# aplanaba la diferencia entre equipos buenos y malos (un
+		# plantel flojo pasaba de 1,57 a 2,87 goles por partido).
+		_cobrar_falta(estado, poseedor["pos"], es_local, jug_d, eq_d, eq_a, minuto)
+		return
 	# Mismas tarjetas que el motor abstracto: si el partido del jugador no
 	# generara amarillas ni rojas, su equipo nunca tendría suspendidos
 	# mientras el resto de la liga sí — un desbalance grave, no cosmético.
@@ -4385,6 +4516,10 @@ static func _push_fotograma(estado: Dictionary, eventos_del_tick: Array = []) ->
 		jugadores.append({
 			"id": id, "x": e["pos"].x, "y": e["pos"].y,
 			"equipo_local": e["equipo_local"], "rol": e["rol"],
+			# El peinado sale del jugador_id (ver SpritesPartido.pelo_de),
+			# asi que el fotograma tiene que traerlo: la clave espacial
+			# cambia de partido a partido y le daria otro pelo cada vez.
+			"jugador_id": e["jugador_id"], "numero": int(e.get("numero", 0)),
 		})
 	# Adonde tiene que mirar la camara. Normalmente null y la vista sigue
 	# la pelota; con alguien saliendo o entrando la accion es el jugador y
@@ -4399,6 +4534,10 @@ static func _push_fotograma(estado: Dictionary, eventos_del_tick: Array = []) ->
 	estado["fotogramas"].append({
 		"tick": estado["tick"],
 		"minuto": estado["minuto"],
+		# 1 y 2 = mitades, 3 y 4 = tiempos del alargue. El HUD rotula con
+		# esto: el minuto solo no alcanza porque el descuento se pasa de 45
+		# y de 90.
+		"periodo": int(estado.get("periodo", 1)),
 		"foco": foco,
 		"pelota": {
 			"x": estado["pelota"]["pos"].x, "y": estado["pelota"]["pos"].y,
@@ -4426,7 +4565,242 @@ static func _push_fotograma(estado: Dictionary, eventos_del_tick: Array = []) ->
 		# la vista lo usa para el parpadeo.
 		"corte": bool(estado.get("corte_este_tick", false)),
 		"goles": {"home": estado["home"].goles, "away": estado["away"].goles},
+		# El marcador de la tanda, o null si no se esta pateando ninguna.
+		# Va aparte de "goles" a proposito: los penales de la tanda no son
+		# goles del partido y el HUD tiene que mostrar las dos cosas.
+		"tanda": estado["tanda"].duplicate() if estado.has("tanda") else null,
 	})
+
+
+## Cierra de una las salidas y las entradas que quedaron a mitad de camino.
+## Corre entre dos periodos: el que se estaba yendo ya salio y el que
+## entraba ya esta adentro cuando los equipos vuelven a la cancha.
+##
+## Sin esto, una roja sobre el final de la mitad dejaba al expulsado
+## caminando cuando el periodo cortaba, y el arranque del siguiente lo
+## volvia a parar en su posicion base: medido en
+## tests/_diag_expulsado_corta_mitad.gd, el equipo salia con ONCE al
+## segundo tiempo y el expulsado jugaba 31 ticks mas. _sincronizar_cambios
+## no lo tapaba porque saltea a todo el que esta en transito.
+static func _cerrar_transitos(estado: Dictionary) -> void:
+	for s in estado.get("saliendo", []):
+		var clave: int = int(s["clave"])
+		if not estado["jugadores"].has(clave):
+			continue
+		# El que se va con la pelota la suelta antes de desaparecer: el
+		# saque del medio la reparte igual, pero un poseedor_id apuntando
+		# a una clave borrada rompe el tick siguiente si algo la mira.
+		if int(estado["pelota"]["poseedor_id"]) == clave:
+			estado["pelota"]["poseedor_id"] = -1
+		estado["jugadores"].erase(clave)
+	estado["saliendo"] = []
+	# El que entraba ya llego: se lo planta en el lugar que iba a ocupar.
+	# La posicion real se la da igual _reiniciar_desde_medio, que acomoda
+	# a los 22 para el saque.
+	for en in estado.get("entrando", []):
+		var clave_e: int = int(en["clave"])
+		if not estado["jugadores"].has(clave_e):
+			continue
+		var e: Dictionary = estado["jugadores"][clave_e]
+		e["pos"] = en["destino"]
+		e["marca"] = en["destino"]
+		e["vel"] = Vector2.ZERO
+		e["rapidez"] = 0.0
+	estado["entrando"] = []
+
+
+## Juega UN periodo completo: los 45' de una mitad o los 15' de un tiempo
+## del alargue. Estaba escrito adentro de `simular`, dentro del `for mitad`;
+## se saco afuera para que el alargue juegue exactamente lo mismo que una
+## mitad en vez de una copia con otros numeros.
+##
+## `ventanas` son los minutos en los que se procesan cambios y se consume
+## in situ: el periodo saca de la lista los que ya paso.
+static func _jugar_periodo(estado: Dictionary, home: Team, away: Team, saca_local: bool,
+		numero: int, minuto_inicio: float, ticks_periodo: int, ventanas: Array,
+		con_fotogramas: bool) -> void:
+	# Un periodo arranca con los 22 que corresponden. Si quedo un cambio
+	# sin aplicar —la ventana del entretiempo cae en el descuento y ahi
+	# puede no haber ningun corte donde meterlo— se aplica ACA y sin
+	# caminata: los equipos vuelven a la cancha ya cambiados. Sin esto el
+	# suplente entraba trotando desde el lateral encima del saque del
+	# medio, con el que salia llevandose la pelota del sacador.
+	# Primero se cierran los transitos: el expulsado o el cambiado que
+	# quedo caminando cuando corto la mitad TIENE que estar afuera antes
+	# de que se acomoden los 22 (ver _cerrar_transitos).
+	_cerrar_transitos(estado)
+	_sincronizar_cambios(estado, true)
+	_reiniciar_desde_medio(estado, saca_local, numero)
+	estado["minuto"] = minuto_inicio
+	estado["periodo"] = numero
+	# `jugados` cuenta el tiempo DE JUEGO: los ticks que se van en una
+	# entrada o una salida no cuentan, igual que el arbitro repone lo
+	# que se pierde en un cambio. Sin esto, animar los cambios le
+	# comia el 10% del partido y los goles bajaban de 2,36 a 1,84.
+	var jugados := 0
+	var reloj := 0
+	# Cuantos cortes de juego habia cuando se acabo el tiempo. Pasado
+	# ese punto no se cobra nada nuevo: el primer corte que aparezca
+	# cierra el periodo.
+	var cortes_al_expirar := -1
+	# La mitad cerro sola, con la jugada terminada. Si queda en false
+	# es que se agoto el tope de descuento, y eso se anota y se mide.
+	var limpio := false
+	while jugados < ticks_periodo + TICKS_DE_DESCUENTO 				and reloj < ticks_periodo + TICKS_DE_DESCUENTO + TICKS_REPUESTOS_TOPE:
+		# DESCUENTO. El tiempo no se termina con una pelota parada sin
+		# ejecutar: si se cobro un corner o un penal sobre la hora, se
+		# patea. Pasados los 45 se juega SOLO lo que quedo pendiente.
+		if jugados >= ticks_periodo:
+			if cortes_al_expirar < 0:
+				cortes_al_expirar = int(estado["cortes"])
+			# El penal es la excepcion: si se cobra en el descuento
+			# igual se patea, porque es la unica jugada que se define
+			# sola. Se le perdona el corte y despues la mitad cierra
+			# donde termine — gol, atajada o pelota afuera.
+			if str(estado.get("balon_parado", {}).get("tipo", "")) == "penal":
+				cortes_al_expirar = int(estado["cortes"])
+			# Un corte NUEVO cierra el periodo: la pelota salio, hubo
+			# gol, la ataja el arquero o se cobro una falta. Eso que
+			# se cobro ya no se ejecuta.
+			if int(estado["cortes"]) > cortes_al_expirar:
+				limpio = true
+				break
+			if not _hay_algo_sin_terminar(estado):
+				limpio = true
+				break
+		var en_transito: bool = not (estado["saliendo"].is_empty()
+			and estado["entrando"].is_empty())
+		# Esperar a que el pateador designado llegue al banderin
+		# tampoco es tiempo de juego. Sin esto, estirar la pausa le
+		# comeria minutos al partido y bajarian los goles — es la
+		# misma cuenta que se hizo con los cambios.
+		var esperando: int = int(estado.get("esperando_ejecutor", 0))
+		if esperando > 0:
+			estado["esperando_ejecutor"] = esperando - 1
+		_tick(estado, con_fotogramas)
+		reloj += 1
+		if not en_transito and esperando <= 0:
+			jugados += 1
+		# Tres expulsados dejan al equipo en 8 y el partido se termina
+		# ahi: gana el rival, no importa como iba el marcador.
+		if MatchEngine.cancelar_si_falta_gente(
+				home, away, _minuto_int(estado), estado["log"], estado["eventos"]):
+			estado["cancelado"] = true
+			limpio = true
+			break
+		if not ventanas.is_empty() and estado["minuto"] >= ventanas[0]:
+			var minuto_ventana: int = ventanas.pop_front()
+			MatchEngine._procesar_cambios(home, away, minuto_ventana, true, estado["log"], estado["eventos"])
+			_sincronizar_cambios(estado)
+	if not limpio:
+		_anotar_corte_sucio(estado)
+
+
+## LA TANDA DE PENALES, pateada en la cancha y con fotogramas (§8.7).
+##
+## La tanda entera la resuelve Penales.definir —cinco por lado, despues
+## muerte subita, cortando en cuanto el resultado ya no puede cambiar, y
+## cada remate con su duelo— y este motor la PATEA en la cancha. El motor
+## no decide nada: si resolviera el remate con su propio duelo, el jugador
+## definiria sus tandas al 96,8% de conversion contra el 84,2% de la IA
+## (medido en tests/_diag_conversion_penales.gd). Lo unico distinto entre
+## los dos motores es que aca la tanda se ve.
+##
+## Cada equipo patea al arco al que venia atacando, no los dos al mismo
+## arco como en una tanda real: el lado al que ataca un equipo sale de
+## `es_local` en todo el motor (arco_rival, _lanzar_remate, _aplicar_remate)
+## y cambiarlo solo para la tanda tocaria media docena de funciones. Es la
+## misma clase de ficcion que el reloj de 90 minutos en 4.
+static func _tanda_de_penales(estado: Dictionary, con_fotogramas: bool) -> Dictionary:
+	var home: Team = estado["home"]
+	var away: Team = estado["away"]
+	estado["en_tanda"] = true
+	estado["tanda"] = {"home": 0, "away": 0}
+	# El reloj se planta en el final del alargue y no se mueve mas. El
+	# descuento del segundo tiempo extra lo habia dejado en 122', y una
+	# tanda no es tiempo de juego: el partido termino a los 120.
+	estado["minuto"] = 90.0 + MINUTOS_MOSTRADOS_POR_TIEMPO_ALARGUE * 2.0
+	estado["log"].append("Termina el alargue %d-%d: se define por penales." % [home.goles, away.goles])
+	estado["eventos"].append({
+		"minuto": _minuto_int(estado), "tipo": "tanda_arranca",
+		"equipo": home.nombre, "rival": away.nombre,
+		"jugador_posicion": "", "resultado": "arranca",
+	})
+	var resultado := Penales.definir(home, away, estado["rng"],
+		func(pateador: Dictionary, _arquero: Dictionary, es_local: bool, gol: bool) -> void:
+			_patear_de_la_tanda(estado, pateador, es_local, gol, con_fotogramas))
+	estado["en_tanda"] = false
+	estado["log"].append("PENALES: %s %d-%d %s. Pasa %s." % [
+		home.nombre, int(resultado["goles_local"]), int(resultado["goles_visitante"]),
+		away.nombre, resultado["ganador"].nombre])
+	return resultado
+
+
+## Patea en la cancha un penal de la tanda YA resuelto: se acomoda todo el
+## mundo, el pateador toma carrera, la pelota viaja y el arquero se tira,
+## y termina como dice `gol`. Lo llama Penales.definir despues de decidir
+## cada remate.
+static func _patear_de_la_tanda(estado: Dictionary, pateador: Dictionary, es_local: bool,
+		gol: bool, con_fotogramas: bool) -> void:
+	estado.erase("tanda_resultado")
+	_armar_penal(estado, es_local, _minuto_int(estado), pateador, gol)
+	# No se pudo armar (equipo sin arquero, o el pateador no esta en la
+	# cancha): _armar_penal se va por la salida de emergencia y no deja
+	# penal. El resultado ya esta decidido igual, asi que la tanda sigue:
+	# ese penal no se ve y listo.
+	if str(estado.get("balon_parado", {}).get("tipo", "")) != "penal":
+		_anotar_penal_de_tanda(estado, es_local, gol, {"rol": str(pateador["posicion"]),
+			"clave": clave_de(int(pateador["id"]), es_local), "jugador": pateador})
+		return
+
+	var ticks := 0
+	while not estado.has("tanda_resultado") and ticks < TICKS_MAX_PENAL_DE_TANDA:
+		_tick(estado, con_fotogramas)
+		ticks += 1
+	# La pausa de despues: la pelota se queda en la red o en las manos del
+	# arquero unos ticks antes de que se arme el penal siguiente.
+	for _i in range(TICKS_ENTRE_PENALES):
+		_tick(estado, con_fotogramas)
+
+
+## Anota un penal de la tanda. Lo llama _aplicar_remate cuando la pelota
+## llega, en vez del camino normal del gol: no suma al marcador del
+## partido, no hay festejo ni saque del medio, y la jugada termina ahi.
+static func _anotar_penal_de_tanda(estado: Dictionary, es_local: bool, gol: bool,
+		datos: Dictionary) -> void:
+	var eq_a := _equipo_de(estado, es_local)
+	var eq_d := _equipo_de(estado, not es_local)
+	var tanda: Dictionary = estado["tanda"]
+	var lado: String = "home" if es_local else "away"
+	if gol:
+		tanda[lado] = int(tanda[lado]) + 1
+	estado["tanda_resultado"] = gol
+
+	var jugador: Dictionary = datos.get("jugador", {})
+	estado["eventos"].append({
+		"minuto": _minuto_int(estado), "tipo": "penal_tanda",
+		"equipo": eq_a.nombre, "rival": eq_d.nombre,
+		"jugador_posicion": datos["rol"], "clave": datos["clave"],
+		"resultado": "gol" if gol else "atajado",
+		"tanda_local": int(tanda["home"]), "tanda_visitante": int(tanda["away"]),
+	})
+	estado["log"].append("PENALES: %s %s (%s) %s — %d-%d" % [
+		jugador.get("nombre", ""), jugador.get("apellido", ""), eq_a.nombre,
+		"convierte" if gol else "la falla", int(tanda["home"]), int(tanda["away"])])
+
+	var pelota: Dictionary = estado["pelota"]
+	pelota["en_vuelo"] = false
+	pelota["es_remate"] = false
+	pelota["vel"] = Vector2.ZERO
+	pelota["altura_max"] = 0.0
+	pelota["z"] = 0.0
+	if gol:
+		# Se queda en la red, que es lo que hace que el gol se lea.
+		pelota["poseedor_id"] = -1
+	else:
+		_dar_pelota_al_arquero(estado, not es_local)
+	estado["detenido"] = TICKS_ENTRE_PENALES
+	estado["quietos"] = TICKS_ENTRE_PENALES
 
 
 # ---------------------------------------------------------------------------
@@ -4502,7 +4876,8 @@ static func xp_normalizada(estado: Dictionary) -> Dictionary:
 ## con_fotogramas=false ahorra ~22 Dictionary por tick sin cambiar NADA
 ## del resultado (mismas decisiones, mismo RNG): es lo que se usa cuando
 ## el partido no se va a animar.
-static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_fotogramas: bool = false) -> Dictionary:
+static func simular(home: Team, away: Team, rng: RandomNumberGenerator,
+		con_fotogramas: bool = false, definicion_directa: bool = false) -> Dictionary:
 	home.reset_partido()
 	away.reset_partido()
 	home.local = true
@@ -4523,69 +4898,31 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 	for mitad in range(2):
 		if bool(estado.get("cancelado", false)):
 			break
-		_reiniciar_desde_medio(estado, mitad == 0, mitad + 1)
-		estado["minuto"] = MINUTOS_MOSTRADOS_POR_MITAD * mitad
-		# `jugados` cuenta el tiempo DE JUEGO: los ticks que se van en una
-		# entrada o una salida no cuentan, igual que el arbitro repone lo
-		# que se pierde en un cambio. Sin esto, animar los cambios le
-		# comia el 10% del partido y los goles bajaban de 2,36 a 1,84.
-		var jugados := 0
-		var reloj := 0
-		# Cuantos cortes de juego habia cuando se acabo el tiempo. Pasado
-		# ese punto no se cobra nada nuevo: el primer corte que aparezca
-		# cierra la mitad.
-		var cortes_al_expirar := -1
-		# La mitad cerro sola, con la jugada terminada. Si queda en false
-		# es que se agoto el tope de descuento, y eso se anota y se mide.
-		var limpio := false
-		while jugados < TICKS_POR_MITAD + TICKS_DE_DESCUENTO 				and reloj < TICKS_POR_MITAD + TICKS_DE_DESCUENTO + TICKS_REPUESTOS_TOPE:
-			# DESCUENTO. El tiempo no se termina con una pelota parada sin
-			# ejecutar: si se cobro un corner o un penal sobre la hora, se
-			# patea. Pasados los 45 se juega SOLO lo que quedo pendiente.
-			if jugados >= TICKS_POR_MITAD:
-				if cortes_al_expirar < 0:
-					cortes_al_expirar = int(estado["cortes"])
-				# El penal es la excepcion: si se cobra en el descuento
-				# igual se patea, porque es la unica jugada que se define
-				# sola. Se le perdona el corte y despues la mitad cierra
-				# donde termine — gol, atajada o pelota afuera.
-				if str(estado.get("balon_parado", {}).get("tipo", "")) == "penal":
-					cortes_al_expirar = int(estado["cortes"])
-				# Un corte NUEVO cierra la mitad: la pelota salio, hubo
-				# gol, la ataja el arquero o se cobro una falta. Eso que
-				# se cobro ya no se ejecuta.
-				if int(estado["cortes"]) > cortes_al_expirar:
-					limpio = true
-					break
-				if not _hay_algo_sin_terminar(estado):
-					limpio = true
-					break
-			var en_transito: bool = not (estado["saliendo"].is_empty()
-				and estado["entrando"].is_empty())
-			# Esperar a que el pateador designado llegue al banderin
-			# tampoco es tiempo de juego. Sin esto, estirar la pausa le
-			# comeria minutos al partido y bajarian los goles — es la
-			# misma cuenta que se hizo con los cambios.
-			var esperando: int = int(estado.get("esperando_ejecutor", 0))
-			if esperando > 0:
-				estado["esperando_ejecutor"] = esperando - 1
-			_tick(estado, con_fotogramas)
-			reloj += 1
-			if not en_transito and esperando <= 0:
-				jugados += 1
-			# Tres expulsados dejan al equipo en 8 y el partido se termina
-			# ahi: gana el rival, no importa como iba el marcador.
-			if MatchEngine.cancelar_si_falta_gente(
-					home, away, _minuto_int(estado), estado["log"], estado["eventos"]):
-				estado["cancelado"] = true
-				limpio = true
+		_jugar_periodo(estado, home, away, mitad == 0, mitad + 1,
+			MINUTOS_MOSTRADOS_POR_MITAD * mitad, TICKS_POR_MITAD, ventanas, con_fotogramas)
+
+	# §8.7: en eliminacion directa el empate no vale. Se juega el alargue
+	# (2x15') y si sigue igualado se patea la tanda, TODO adentro de este
+	# motor y con fotogramas. Antes esos 30' y los penales los resolvia
+	# MatchEngine/Penales por atras: el jugador miraba 90 minutos y se
+	# enteraba del resto por el resumen.
+	var definicion := "90 minutos"
+	var tanda := {}
+	if definicion_directa and not bool(estado.get("cancelado", false)) and home.goles == away.goles:
+		definicion = "alargue"
+		# Ultima ventana de cambio, antes de que empiece el alargue: es la
+		# misma que usa MatchEngine.simular_alargue.
+		MatchEngine._procesar_cambios(home, away, 90, true, estado["log"], estado["eventos"])
+		_sincronizar_cambios(estado)
+		for tiempo in range(2):
+			if bool(estado.get("cancelado", false)):
 				break
-			if not ventanas.is_empty() and estado["minuto"] >= ventanas[0]:
-				var minuto_ventana: int = ventanas.pop_front()
-				MatchEngine._procesar_cambios(home, away, minuto_ventana, true, estado["log"], estado["eventos"])
-				_sincronizar_cambios(estado)
-		if not limpio:
-			_anotar_corte_sucio(estado)
+			_jugar_periodo(estado, home, away, tiempo == 0, 3 + tiempo,
+				90.0 + MINUTOS_MOSTRADOS_POR_TIEMPO_ALARGUE * tiempo,
+				TICKS_POR_TIEMPO_ALARGUE, [], con_fotogramas)
+		if not bool(estado.get("cancelado", false)) and home.goles == away.goles:
+			definicion = "penales"
+			tanda = _tanda_de_penales(estado, con_fotogramas)
 
 	# Ver MatchEngine.simular: el 3-0 de la cancelacion no lo hizo nadie y
 	# pisa los goles que hubiera habido, asi que el log de goleadores se
@@ -4600,6 +4937,13 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_foto
 		"log": estado["log"],
 		"goles_log": estado["goles_log"],
 		"cancelado": bool(estado.get("cancelado", false)),
+		# Como se cerro el cruce: "90 minutos", "alargue" o "penales". En
+		# un partido de liga (definicion_directa = false) es siempre
+		# "90 minutos", empate incluido.
+		"definicion": definicion,
+		# La tanda, con el shape de Penales.definir (ganador, goles_local,
+		# goles_visitante, tandas). Vacio si no se llego a patear.
+		"penales": tanda,
 		"eventos": estado["eventos"],
 		"fotogramas": estado["fotogramas"],
 		# §7.3: cuánto entrenó cada jugador cada atributo, normalizado.

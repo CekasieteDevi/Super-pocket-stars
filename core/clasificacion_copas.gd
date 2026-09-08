@@ -79,6 +79,11 @@ static func clasificados_nacional(piramide, posiciones: Dictionary = {}) -> Arra
 	return salida
 
 
+## LA PARTIDA YA NO LLAMA A ESTA FUNCIÓN: la copa de división clasifica
+## por la tabla en curso (ver clasificados_por_tabla). Queda para el
+## camino viejo de Copas.jugar_copas_de_division, que solo usan los tests
+## que resuelven una copa de punta a punta sobre una pirámide sin tabla.
+##
 ## Los 16 de la copa interna: los mejores de los clubes que juegan ESA
 ## división ahora. El que bajó de la división de arriba entra con mejor
 ## derecho que cualquiera de esta, porque su clave de mérito trae la
@@ -135,3 +140,38 @@ static func _clave_de_merito(equipo, posiciones: Dictionary) -> float:
 	# el orden lo da la reputación, que es lo único que ya distingue un
 	# club grande de uno chico (Team.reputacion, sembrada por Economia).
 	return CLAVE_SIN_DATOS + (100.0 - equipo.reputacion)
+
+
+## Los 16 de la copa de división por la tabla de la temporada EN CURSO,
+## después de FECHAS_PARA_COPA_DIVISION fechas (GameState).
+##
+## Antes clasificaba por la tabla del año pasado y eso castigaba al que
+## ascendía: el campeón de la 10ª llegaba a la 9ª con clave de mérito 901,
+## peor que el último de la 9ª (819), así que subir de división significaba
+## quedarse SIEMPRE afuera de la copa de división. Con la tabla en curso
+## todos arrancan de cero en la misma tabla y no hay drama con el que
+## ascendió ni con el que descendió.
+##
+## El desempate por nombre no es cosmético: a cinco fechas hay muchos
+## clubes con los mismos puntos, la misma diferencia y los mismos goles, y
+## sin él la línea de corte del 16° salía distinta en cada corrida.
+static func clasificados_por_tabla(liga) -> Array:
+	var copia: Array = liga.equipos.duplicate()
+	copia.sort_custom(func(a, b):
+		var fa: Dictionary = liga.tabla.get(a.nombre, {})
+		var fb: Dictionary = liga.tabla.get(b.nombre, {})
+		var pa := int(fa.get("pts", 0))
+		var pb := int(fb.get("pts", 0))
+		if pa != pb:
+			return pa > pb
+		var da := int(fa.get("dg", 0))
+		var db := int(fb.get("dg", 0))
+		if da != db:
+			return da > db
+		var ga := int(fa.get("gf", 0))
+		var gb := int(fb.get("gf", 0))
+		if ga != gb:
+			return ga > gb
+		return a.nombre < b.nombre
+	)
+	return copia.slice(0, mini(CUPOS_COPA_DIVISION, copia.size()))
