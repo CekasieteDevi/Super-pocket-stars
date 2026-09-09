@@ -1378,6 +1378,16 @@ static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bo
 	var eq_d := _equipo_de(estado, not ataca_local)
 	estado["centros"]["caidos"] = int(estado["centros"].get("caidos", 0)) + 1
 
+	# El laboratorio monta el centro para MIRAR el cabezazo. Sin esto la
+	# jugada terminaba en cualquier otra cosa: el arquero salia a
+	# descolgarla (radio_achique = 7 m, y el punto de caida esta a 5,5 m
+	# del arco) o el marcador ganaba el salto, y el clip mostraba al
+	# arquero sacando en vez del gol de cabeza. Vale UNA vez y se
+	# consume. En un partido de verdad la clave no existe.
+	var forzado := str(estado.get("forzar_centro", ""))
+	if forzado != "":
+		estado.erase("forzar_centro")
+
 	# El arquero primero: si cae en su zona, sale a descolgarla.
 	var arq_clave := -1
 	for id in estado["jugadores"]:
@@ -1385,7 +1395,7 @@ static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bo
 		if e["equipo_local"] != ataca_local and e["rol"] == "ARQ":
 			arq_clave = id
 			break
-	if arq_clave != -1:
+	if arq_clave != -1 and forzado == "":
 		var arq_e: Dictionary = estado["jugadores"][arq_clave]
 		if punto.distance_to(arq_e["pos"]) <= float(f["radio_achique"]):
 			var arq := eq_d.arquero()
@@ -1425,7 +1435,7 @@ static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bo
 
 	_xp_e(estado, estado["jugadores"][atacante], "cabezazo")
 	_xp_e(estado, estado["jugadores"][defensor], "salto")
-	if Duel.gana_atacante(res, rng):
+	if forzado == "gana" or Duel.gana_atacante(res, rng):
 		estado["centros"]["ganados"] = int(estado["centros"].get("ganados", 0)) + 1
 		_entregar_pelota(estado, atacante)
 		estado["eventos"].append({
@@ -1928,6 +1938,25 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	_accion(estado, int(poseedor["clave"]),
 		ACCION_CABECEA if attr_remate == "cabezazo" else ACCION_PATEA)
 	_xp_e(estado, poseedor, attr_remate)
+	# El laboratorio monta jugadas para MIRAR la animacion, y una jugada
+	# que unas veces termina en gol y otras no deja comparar nada entre
+	# una reproduccion y la siguiente. `forzar_remate` fija el desenlace.
+	# Se lee ACA, antes del bloqueo y de la punteria: cuando el forzado se
+	# aplicaba solo en el duelo contra el arquero, el remate del clip
+	# igual se iba afuera o pegaba en el palo 2 de cada 5 veces.
+	#
+	# `forzar_remate_attr` lo ata a UN tipo de remate. Sin eso, en el clip
+	# del cabezazo el forzado se lo comia el primer remate que apareciera:
+	# si el centro no terminaba en cabezazo, el gol se lo terminaba
+	# llevando un rival de pie diez ticks despues.
+	#
+	# Vale UNA vez y se consume. En un partido de verdad la clave no
+	# existe.
+	var forzado := ""
+	if estado.has("forzar_remate"):
+		var attr_pedido := str(estado.get("forzar_remate_attr", ""))
+		if attr_pedido == "" or attr_pedido == attr_remate:
+			forzado = str(estado["forzar_remate"])
 	estado["tiros"][clave] += 1
 	estado["dist_tiros"].append(poseedor["pos"].distance_to(arco_rival(es_local)))
 
@@ -1939,7 +1968,7 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	# defensor flojo no le tapa el remate a un delantero de élite.
 	# Un cabezazo no se bloquea con el cuerpo: viene por arriba y ya se
 	# disputo en el duelo aereo.
-	var bloqueador := -1 if attr_remate == "cabezazo" else _bloqueador_de_tiro(
+	var bloqueador := -1 if attr_remate == "cabezazo" or forzado != "" else _bloqueador_de_tiro(
 		estado, poseedor["pos"], es_local,
 		float(pesos()["fisica"]["dist_max_bloqueo_libre"]) if attr_remate == "tiros_libres" else -1.0)
 	if bloqueador != -1 and _gana_bloqueo(estado, bloqueador, jugador, eq_a, eq_d, poseedor["pos"], es_local, minuto):
@@ -1973,7 +2002,7 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	var chance_palo: float = float(r["palo"]) * calidad
 	var roll := rng.randf()
 
-	if roll > chance_porteria:
+	if forzado == "" and roll > chance_porteria:
 		_lanzar_remate(estado, poseedor, {
 			"tipo": "afuera" if roll > chance_porteria + chance_palo else "palo",
 			"es_local": es_local, "clave": poseedor["clave"], "rol": poseedor["rol"],
@@ -1999,14 +2028,12 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	eq_a.desgastar(jugador["id"], jugador["atributos"]["energia"], mult_tiro)
 	eq_d.desgastar(arquero["id"], arq_attrs["energia"], mult_tiro)
 	var gol := Duel.gana_atacante(res, rng)
-	# El laboratorio monta jugadas para MIRAR la animación, y una jugada
-	# que unas veces termina en gol y otras en atajada no deja comparar
-	# nada entre una reproducción y la siguiente. Con esto la fuerza. Vale
-	# UNA vez y se consume: lo que pasa después del remate vuelve a ser un
-	# partido normal. En un partido de verdad la clave no existe.
-	if estado.has("forzar_remate"):
-		gol = str(estado["forzar_remate"]) == "gol"
+	# El desenlace forzado por el laboratorio (ver arriba) manda sobre el
+	# duelo, y recien aca se consume.
+	if forzado != "":
+		gol = forzado == "gol"
 		estado.erase("forzar_remate")
+		estado.erase("forzar_remate_attr")
 	_xp(estado, int(arquero["id"]), not es_local, "reflejos")
 	_lanzar_remate(estado, poseedor, {
 		"tipo": "gol" if gol else "atajada",

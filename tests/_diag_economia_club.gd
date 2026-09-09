@@ -43,8 +43,12 @@ func _medir(division: int) -> void:
 	print("  SALE:")
 	print("    sueldos    %s   (%d jugadores)" % [
 		Economia.formato_dinero(sueldos), equipo.sueldos.size()])
-	print("    mantenim.  %s" % Economia.formato_dinero(Economia.MANTENIMIENTO_FIJO))
-	var neto: float = (entradas + sponsor) * factor - sueldos - Economia.MANTENIMIENTO_FIJO
+	# El mantenimiento ESCALA por division, igual que los ingresos: la
+	# constante se llama MANTENIMIENTO_BASE y hay que multiplicarla. Antes
+	# esto leia MANTENIMIENTO_FIJO, que ya no existe.
+	var mantenimiento: float = Economia.MANTENIMIENTO_BASE * factor
+	print("    mantenim.  %s" % Economia.formato_dinero(mantenimiento))
+	var neto: float = (entradas + sponsor) * factor - sueldos - mantenimiento
 	print("  NETO       %s" % Economia.formato_dinero(neto))
 	if neto > 0.0:
 		print("    -> fichajes %s · contratos %s · mejoras %s" % [

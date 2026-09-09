@@ -23,7 +23,16 @@ var option_formacion: OptionButton
 var barra_familiaridad: ProgressBar
 var label_familiaridad: Label
 var label_carga_efecto: Label
-var contenedor_formacion: VBoxContainer
+var contenedor_formacion: HBoxContainer
+var contenedor_reservas: HBoxContainer
+var etiqueta_suplentes: Label
+var etiqueta_reservas: Label
+## El jugador marcado esperando con quien cambiarse, -1 si ninguno (ver
+## CuboJugador: se marca manteniendolo apretado).
+var formacion_marcado: int = -1
+## Cuanto se achican los cubos de las dos filas de abajo. En 1.0 desde
+## que el cuerpo scrollea: ya no le sacan alto a la cancha.
+const ESCALA_LISTAS := 1.0
 var cancha_formacion: CanchaFormacion
 var label_formacion_estado: Label
 ## Quienes no pueden jugar la proxima fecha, arriba de la cancha. Va
@@ -95,7 +104,14 @@ var label_modal_jugador_estado: String = ""
 var label_mercado_estado: Label
 var contenedor_libres_botones: VBoxContainer
 var label_libres_estado: Label
-var contenedor_prestamos_ceder_botones: VBoxContainer
+var caja_filtros_libres: HBoxContainer
+## Puesto que se esta mirando en Mercado > Libres. "TODOS" = sin filtro.
+var filtro_libres: String = "TODOS"
+## Cuantos agentes libres se listan de una. El pool junta los vencimientos
+## de las diez divisiones: sin tope, la pantalla arma cientos de filas y
+## tarda en abrir. Se muestran los de mejor media, que son los que se
+## miran.
+const MAXIMO_LIBRES := 40
 var label_prestamos_estado: Label
 var contenedor_instalaciones_botones: VBoxContainer
 var label_instalaciones_estado: Label
@@ -171,10 +187,12 @@ func _ready() -> void:
 	_construir_panel_sponsors(contenedor)
 	_construir_panel_roles(contenedor)
 	_construir_panel_entrenamiento(contenedor)
+	_construir_panel_foco_individual(contenedor)
 	_construir_panel_partido_animado(contenedor)
 	_construir_panel_economia(contenedor)
 	_construir_panel_mercado(contenedor)
 	_construir_panel_libres(contenedor)
+	_construir_panel_traspaso(contenedor)
 	_construir_panel_prestamos(contenedor)
 	_construir_panel_instalaciones(contenedor)
 	_construir_panel_renovaciones(contenedor)
@@ -188,6 +206,7 @@ func _ready() -> void:
 	_construir_dialogo_vencimientos()
 	_construir_dialogo_negociacion()
 	_construir_dialogo_prestamo()
+	_construir_dialogo_cesion()
 	_construir_dialogo_investigador()
 
 	# Al final, cuando ya esta todo construido: deja las listas
@@ -545,9 +564,17 @@ func _refrescar_plantel() -> void:
 	for i in range(equipo.jugadores.size()):
 		contenedor_lista_plantel.add_child(_fila_jugador(equipo, equipo.jugadores[i], i % 2 == 0, false))
 
-	contenedor_lista_plantel.add_child(Tema.etiqueta_seccion("Banco (%d)" % equipo.banco.size()))
+	contenedor_lista_plantel.add_child(Tema.etiqueta_seccion(
+		"Banco (%d de %d)" % [equipo.banco.size(), Team.max_suplentes()]))
 	for i in range(equipo.banco.size()):
 		contenedor_lista_plantel.add_child(_fila_jugador(equipo, equipo.banco[i], i % 2 == 0, true))
+
+	if not equipo.reservas.is_empty():
+		contenedor_lista_plantel.add_child(Tema.etiqueta_seccion(
+			"Reservas (%d)  ·  no van al partido" % equipo.reservas.size()))
+		for i in range(equipo.reservas.size()):
+			contenedor_lista_plantel.add_child(
+				_fila_jugador(equipo, equipo.reservas[i], i % 2 == 0, true))
 
 	_refrescar_ficha_lateral()
 
@@ -1146,8 +1173,9 @@ func _bloque_de_atributos(j: Dictionary, grupo: String, atributos: Array) -> Con
 ## que mover a alguien de lugar es literalmente reordenar esa lista.
 ##
 ## El intercambio es en dos toques —uno elige, el otro confirma— en vez de
-## un desplegable por slot: con 18 jugadores un OptionButton por fila son
-## 18 listas de 18, y en un celular eso no se toca.
+## un desplegable por slot: con un plantel de 18 un OptionButton por fila
+## ya son 18 listas de 18, y con el tope de 40 es peor todavia. En un
+## celular eso no se toca.
 func _construir_panel_formacion(padre: Control) -> void:
 	var panel := VBoxContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1186,17 +1214,13 @@ func _construir_panel_formacion(padre: Control) -> void:
 	# §7.4.5: cuanto conoce el equipo la tactica puesta. Va PEGADO a los
 	# desplegables que la cambian: es el dato con el que se decide si el
 	# cambio conviene, y verlo despues de cambiar llega tarde.
-	var caja_fam := HBoxContainer.new()
-	caja_fam.add_theme_constant_override("separation", 10)
-	panel.add_child(caja_fam)
-	var titulo_fam := Tema.etiqueta_seccion("Familiaridad tactica")
-	titulo_fam.custom_minimum_size = Vector2(200, 0)
-	caja_fam.add_child(titulo_fam)
+	var caja_fam := fila
+	caja_fam.add_child(Tema.etiqueta_seccion("Familiaridad"))
 	barra_familiaridad = ProgressBar.new()
 	barra_familiaridad.min_value = 0.0
 	barra_familiaridad.max_value = 100.0
 	barra_familiaridad.show_percentage = false
-	barra_familiaridad.custom_minimum_size = Vector2(240, 8)
+	barra_familiaridad.custom_minimum_size = Vector2(160, 8)
 	barra_familiaridad.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var fondo_fam := StyleBoxFlat.new()
 	fondo_fam.bg_color = Color("#2a3a33")
@@ -1209,10 +1233,11 @@ func _construir_panel_formacion(padre: Control) -> void:
 	caja_fam.add_child(label_familiaridad)
 
 	var pie := HBoxContainer.new()
+	pie.add_theme_constant_override("separation", 10)
 	panel.add_child(pie)
 
 	label_formacion_estado = Label.new()
-	label_formacion_estado.text = "Arrastrá un jugador sobre otro para cambiarlos de lugar."
+	label_formacion_estado.text = "Mantené apretado a un jugador 2 segundos para marcarlo, y tocá a otro para cambiarlos."
 	label_formacion_estado.add_theme_color_override("font_color", Tema.SUAVE)
 	label_formacion_estado.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pie.add_child(label_formacion_estado)
@@ -1231,26 +1256,49 @@ func _construir_panel_formacion(padre: Control) -> void:
 	label_carga_efecto.custom_minimum_size = Vector2(280, 0)
 	pie.add_child(label_carga_efecto)
 
-	var cuerpo := HBoxContainer.new()
-	cuerpo.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# Todo el cuerpo scrollea: la cancha pide su propio alto (ver
+	# CanchaFormacion._ajustar_alto) y las dos listas van abajo de ella,
+	# fuera de la pantalla en un celular. Antes se repartian el alto y la
+	# cancha quedaba diminuta para que las listas entraran siempre.
+	var scroll_cuerpo := ScrollContainer.new()
+	scroll_cuerpo.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll_cuerpo.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll_cuerpo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll_cuerpo)
+
+	var cuerpo := VBoxContainer.new()
 	cuerpo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.add_child(cuerpo)
+	scroll_cuerpo.add_child(cuerpo)
 
 	cancha_formacion = CanchaFormacion.new()
-	cancha_formacion.intercambio_pedido.connect(_on_intercambio_arrastrado)
+	cancha_formacion.seleccion_pedida.connect(_on_cubo_tocado)
 	cuerpo.add_child(cancha_formacion)
 
-	# El banco al costado y no abajo: tiene que ser un destino de arrastre
-	# visible al mismo tiempo que la cancha, si no hay que soltar a ciegas.
-	var lado := VBoxContainer.new()
-	lado.custom_minimum_size = Vector2(CuboJugador.ANCHO + 34, 0)
-	cuerpo.add_child(lado)
-	lado.add_child(Tema.etiqueta_seccion("Banco"))
-	var scroll_banco := ScrollContainer.new()
-	scroll_banco.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	lado.add_child(scroll_banco)
-	contenedor_formacion = VBoxContainer.new()
-	scroll_banco.add_child(contenedor_formacion)
+	# Las dos listas ABAJO de la cancha y en fila, no al costado: la
+	# cancha ahora es vertical y el ancho que sobra a los lados no alcanza
+	# para una columna de cubos, pero el alto de abajo sí para dos filas.
+	etiqueta_suplentes = Tema.etiqueta_seccion("Suplentes")
+	cuerpo.add_child(etiqueta_suplentes)
+	contenedor_formacion = _fila_de_cubos(cuerpo)
+
+	etiqueta_reservas = Tema.etiqueta_seccion("Reservas")
+	cuerpo.add_child(etiqueta_reservas)
+	contenedor_reservas = _fila_de_cubos(cuerpo)
+
+
+## Una fila horizontal de cubos que scrollea sola. El alto es el del cubo
+## mas un poco: sin minimo, el ScrollContainer se queda en cero y la fila
+## no se ve.
+func _fila_de_cubos(padre: Control) -> HBoxContainer:
+	var scroll := ScrollContainer.new()
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.custom_minimum_size = Vector2(0, CuboJugador.ALTO * ESCALA_LISTAS + 12)
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	padre.add_child(scroll)
+	var fila := HBoxContainer.new()
+	fila.add_theme_constant_override("separation", 6)
+	scroll.add_child(fila)
+	return fila
 
 
 func _mostrar_formacion() -> void:
@@ -1369,75 +1417,126 @@ func _refrescar_formacion() -> void:
 	_refrescar_familiaridad(equipo)
 	_refrescar_bajas(equipo)
 
-	cancha_formacion.mostrar(equipo)
+	cancha_formacion.mostrar(equipo, formacion_marcado)
 
 	for hijo in contenedor_formacion.get_children():
 		hijo.queue_free()
+	for hijo in contenedor_reservas.get_children():
+		hijo.queue_free()
 
-	# El banco va partido en dos, y no es cosmetica: el suspendido del
-	# banco NO entra por un cambio (MatchEngine._mejor_suplente_para filtra
-	# puede_jugar) ni tapa el hueco de un titular (Alineacion.reemplazo_para
-	# hace lo mismo). Mezclado con los sanos parecia un suplente mas, asi
-	# que mover al suspendido al banco daba la sensacion de haberlo
-	# resuelto: el aviso previo al partido se apagaba —mira solo los once—
-	# y el club salia a la cancha con un cambio menos sin enterarse.
-	var suplentes := []
+	# Los que no pueden jugar van al final de la fila, no mezclados: el
+	# suspendido del banco NO entra por un cambio
+	# (MatchEngine._mejor_suplente_para filtra puede_jugar) ni tapa el
+	# hueco de un titular (Alineacion.reemplazo_para hace lo mismo).
+	# Mezclado con los sanos parecia un suplente mas, asi que mover al
+	# suspendido al banco daba la sensacion de haberlo resuelto.
+	var sanos := []
 	var no_disponibles := []
 	for j in equipo.banco:
 		if equipo.puede_jugar(int(j["id"])):
-			suplentes.append(j)
+			sanos.append(j)
 		else:
 			no_disponibles.append(j)
 
-	contenedor_formacion.add_child(
-		Tema.etiqueta_seccion("Suplentes (%d)" % suplentes.size()))
-	if suplentes.is_empty():
-		contenedor_formacion.add_child(_texto_suave("Ninguno: no podés hacer cambios."))
-	for j in suplentes:
-		var cubo := CuboJugador.crear(j, str(j["posicion"]), equipo, true)
-		cubo.intercambio_pedido.connect(_on_intercambio_arrastrado)
-		contenedor_formacion.add_child(cubo)
+	etiqueta_suplentes.text = "SUPLENTES (%d DE %d)  ·  VAN AL PARTIDO" % [
+		equipo.banco.size(), Team.max_suplentes()]
+	for j in sanos + no_disponibles:
+		contenedor_formacion.add_child(_cubo_de_lista(equipo, j, true))
+	# Un hueco por cada lugar libre del banco: es donde se suelta a una
+	# reserva cuando no hay a quien sacar. Sin el, con el banco a medio
+	# llenar no habia forma de subir a nadie.
+	for _i in range(Team.max_suplentes() - equipo.banco.size()):
+		contenedor_formacion.add_child(_hueco_de_banco())
 
-	if not no_disponibles.is_empty():
-		contenedor_formacion.add_child(
-			Tema.etiqueta_seccion("No disponibles (%d)" % no_disponibles.size()))
-		var aviso := Label.new()
-		aviso.text = "Ocupan lugar en el banco pero no entran: ni por cambio ni para cubrir a un titular."
-		aviso.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		aviso.add_theme_color_override("font_color", Tema.SUAVE)
-		aviso.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
-		contenedor_formacion.add_child(aviso)
-		for j in no_disponibles:
-			var cubo := CuboJugador.crear(j, str(j["posicion"]), equipo, true)
-			cubo.intercambio_pedido.connect(_on_intercambio_arrastrado)
-			contenedor_formacion.add_child(cubo)
+	etiqueta_reservas.text = "RESERVAS (%d)  ·  NO VAN AL PARTIDO" % equipo.reservas.size()
+	for j in equipo.reservas:
+		contenedor_reservas.add_child(_cubo_de_lista(equipo, j, false))
+	# El hueco de reservas no tiene tope: siempre hay uno al final para
+	# bajar a un suplente sin tener que cambiarlo por alguien.
+	contenedor_reservas.add_child(_hueco_de_reservas())
 
-	# La RESERVA no se arrastra a la cancha, y es a proposito: un canterano
-	# no es parte del plantel de 18. Para usarlo hay que promoverlo, y eso
-	# tiene un costo real —desplaza al peor del banco, que queda libre— asi
-	# que es una decision, no un arrastre.
-	if not equipo.cantera.is_empty():
-		contenedor_formacion.add_child(Tema.etiqueta_seccion("Reserva"))
-		var aclaracion := Label.new()
-		aclaracion.text = "No juegan hasta promoverlos: el promovido entra al banco y el peor suplente queda libre."
-		aclaracion.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		aclaracion.add_theme_color_override("font_color", Tema.SUAVE)
-		aclaracion.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
-		contenedor_formacion.add_child(aclaracion)
-		for j in equipo.cantera:
-			var caja := VBoxContainer.new()
-			caja.add_theme_constant_override("separation", 2)
-			contenedor_formacion.add_child(caja)
-			var cubo := CuboJugador.crear(j, str(j["posicion"]), equipo, true)
-			# Sin arrastre: no hay a donde soltarlo que signifique algo.
-			cubo.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			cubo.modulate = Color(1, 1, 1, 0.72)
-			caja.add_child(cubo)
-			var id_j := int(j["id"])
-			var btn := Button.new()
-			btn.text = "Promover"
-			btn.pressed.connect(func(): _on_promover_desde_formacion(id_j))
-			caja.add_child(btn)
+
+## Un cubo de una de las dos filas de abajo. La cancha arma los suyos
+## (ver CanchaFormacion.mostrar); estos son los mismos cubos con el
+## puesto natural como rol, porque fuera del once nadie ocupa un slot.
+func _cubo_de_lista(equipo: Team, j: Dictionary, es_suplente: bool) -> Control:
+	var cubo := CuboJugador.crear(j, str(j["posicion"]), equipo, true, ESCALA_LISTAS)
+	cubo.marcar_seleccionado(int(j["id"]) == formacion_marcado)
+	cubo.seleccion_pedida.connect(_on_cubo_tocado)
+	if not es_suplente:
+		# Apagado, como el que no juega: es la diferencia que hay que ver
+		# de un vistazo entre el banco y las reservas.
+		cubo.modulate = Color(1, 1, 1, 0.72)
+	return cubo
+
+
+## Un lugar vacio del banco. Se toca con alguien marcado para meterlo
+## ahi; solo, no hace nada.
+func _hueco_de_banco() -> Control:
+	return _hueco("Lugar libre", func(): _on_hueco_tocado(true))
+
+
+func _hueco_de_reservas() -> Control:
+	return _hueco("A reservas", func(): _on_hueco_tocado(false))
+
+
+func _hueco(texto: String, al_tocar: Callable) -> Control:
+	var btn := Button.new()
+	btn.text = texto
+	btn.custom_minimum_size = Vector2(
+		CuboJugador.ANCHO * ESCALA_LISTAS, CuboJugador.ALTO * ESCALA_LISTAS)
+	btn.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+	btn.add_theme_color_override("font_color", Tema.SUAVE)
+	btn.pressed.connect(al_tocar)
+	return btn
+
+
+## Tocaste un cubo. El primero se MARCA (manteniendolo apretado, ver
+## CuboJugador) y el segundo cierra el cambio de una.
+func _on_cubo_tocado(jugador_id: int) -> void:
+	if formacion_marcado == jugador_id:
+		formacion_marcado = -1
+		label_formacion_estado.text = "Listo, no cambiaste nada."
+		_refrescar_formacion()
+		return
+	if formacion_marcado == -1:
+		formacion_marcado = jugador_id
+		label_formacion_estado.text = "Marcado. Tocá a otro para cambiarlos de lugar."
+		_refrescar_formacion()
+		return
+
+	var equipo := GameState.equipo_jugador
+	if equipo.intercambiar(formacion_marcado, jugador_id):
+		label_formacion_estado.text = "Cambiados de lugar."
+	else:
+		label_formacion_estado.text = "No se pudieron cambiar."
+	formacion_marcado = -1
+	_refrescar_formacion()
+	_refrescar_plantel()
+
+
+## Tocaste un lugar vacio. Solo tiene sentido con alguien marcado: mueve
+## al marcado a esa lista, sin sacar a nadie.
+func _on_hueco_tocado(al_banco: bool) -> void:
+	if formacion_marcado == -1:
+		label_formacion_estado.text = "Primero mantené apretado 2 segundos al que querés mover."
+		return
+	var equipo := GameState.equipo_jugador
+	var donde := equipo.donde_esta(formacion_marcado)
+	# El hueco del banco solo acepta reservas y el de reservas solo
+	# suplentes: un titular tiene que salir del once por un cambio, o el
+	# equipo quedaria con diez.
+	if al_banco and donde != "reservas":
+		label_formacion_estado.text = "Ese lugar es para una reserva. A un titular cambialo por un suplente."
+		return
+	if not al_banco and donde != "banco":
+		label_formacion_estado.text = "A reservas solo baja un suplente. A un titular cambialo primero por uno del banco."
+		return
+	var r := equipo.mover_entre_banco_y_reservas(formacion_marcado)
+	label_formacion_estado.text = "Movido al banco." if bool(r.get("exito", false)) and str(r.get("a", "")) == "banco" 		else ("Movido a reservas." if bool(r.get("exito", false)) else str(r.get("motivo", "")))
+	formacion_marcado = -1
+	_refrescar_formacion()
+	_refrescar_plantel()
 
 
 ## Los que no pueden jugar, titulares y suplentes. Los suplentes tambien
@@ -1446,7 +1545,7 @@ func _refrescar_formacion() -> void:
 ## arrastrarlo a la cancha, no despues.
 func _refrescar_bajas(equipo: Team) -> void:
 	var partes := []
-	for j in equipo.jugadores + equipo.banco:
+	for j in equipo.convocados():
 		var id := int(j["id"])
 		var motivo := Alineacion.texto_motivo(equipo, id)
 		if motivo == "":
@@ -1458,25 +1557,6 @@ func _refrescar_bajas(equipo: Team) -> void:
 		return
 	label_bajas.text = "No pueden jugar: %s" % "   ·   ".join(partes)
 	label_bajas.tooltip_text = label_bajas.text
-
-
-func _on_promover_desde_formacion(jugador_id: int) -> void:
-	var r := GameState.equipo_jugador.promover_juvenil(jugador_id)
-	if r.is_empty():
-		label_formacion_estado.text = "No se pudo promover a ese juvenil."
-		return
-	label_formacion_estado.text = "%s sube al banco; queda libre %s." % [
-		_nombre_jugador(r["promovido"]), _nombre_jugador(r["saliente"])]
-	_refrescar_formacion()
-	_refrescar_plantel()
-
-
-## Arrastraste uno sobre otro: se intercambian, esten en la cancha o en el
-## banco. Team.intercambiar ya sabia hacer las dos cosas.
-func _on_intercambio_arrastrado(id_origen: int, id_destino: int) -> void:
-	if GameState.equipo_jugador.intercambiar(id_origen, id_destino):
-		_refrescar_formacion()
-		_refrescar_plantel()
 
 
 func _construir_panel_tabla(padre: Control) -> void:
@@ -3015,9 +3095,12 @@ func _refrescar_ofertas(contenedor: VBoxContainer, entrantes: bool) -> void:
 
 func _fila_oferta(o: Dictionary) -> Control:
 	var fila := HBoxContainer.new()
+	# Una cesion no se resume con un monto: lo que importa son los
+	# terminos (cuanto dura, cuanto del sueldo cubren, si hay opcion).
+	var plata: String = Cesiones.resumen(o) if str(o.get("tipo", "compra")) == "cesion" 		else Economia.formato_dinero(o["monto"])
 	var texto := "%s (%s) — %s — %s — %s" % [
 		str(o["jugador"]), str(o["posicion"]), str(o["club"]),
-		Economia.formato_dinero(o["monto"]), _estado_legible(o)]
+		plata, _estado_legible(o)]
 	var l := _etiqueta(texto)
 	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	fila.add_child(l)
@@ -3723,6 +3806,9 @@ func _abrir_oferta(oferta_id: int) -> void:
 	var o := GameState._oferta_por_id(oferta_id)
 	if o.is_empty():
 		return
+	if str(o.get("tipo", "compra")) == "cesion":
+		_abrir_cesion(o)
+		return
 	negociacion_oferta_id = oferta_id
 	negociacion_jugador_id = int(o["jugador_id"])
 	negociacion_vendedor = GameState._club_por_nombre(str(o["club"]))
@@ -3930,6 +4016,10 @@ func _on_pagar_clausula(vendedor: Team, jugador_id: int) -> void:
 ## Agentes libres: no se paga fee de transferencia, solo el sueldo. Es la
 ## unica forma de reforzarse sin plata en la caja de fichajes, asi que la
 ## pantalla lo dice arriba de todo.
+##
+## La lista es la de TODA la piramide (Piramide.agentes_libres): el que no
+## renovo en cualquiera de las diez divisiones aparece aca. Como son
+## muchos, se filtra por puesto y se muestran los MAXIMO_LIBRES mejores.
 func _construir_panel_libres(padre: Control) -> void:
 	var panel := VBoxContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -3938,11 +4028,25 @@ func _construir_panel_libres(padre: Control) -> void:
 	paneles["libres"] = panel
 
 	var aviso := Label.new()
-	aviso.text = "Sin fee de transferencia: solo pagas el sueldo. Fichar reemplaza a tu jugador MAS FLOJO de ese puesto, asi que nunca empeora el plantel."
+	aviso.text = "Jugadores sin club de todas las divisiones. No se paga pase: negociás años y sueldo, y si arregla entra a tu banco. Se puede fichar cualquier dia del año, con el libro de pases abierto o cerrado. Los otros clubes tambien miran esta lista todos los dias, asi que una ganga no espera. No sale nadie a cambio: necesitas un lugar libre en el plantel (40 como maximo, entre el once y el banco). Al que dejaste ir vos no lo podes volver a fichar: se lo lleva otro."
 	aviso.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	aviso.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
 	aviso.add_theme_color_override("font_color", Tema.SUAVE)
 	panel.add_child(aviso)
+
+	var filtros := HBoxContainer.new()
+	panel.add_child(filtros)
+	for puesto in ["TODOS"] + Mercado.POSICIONES:
+		var btn := Button.new()
+		btn.text = str(puesto)
+		btn.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.pressed.connect(func():
+			filtro_libres = str(puesto)
+			_refrescar_libres()
+		)
+		filtros.add_child(btn)
+	caja_filtros_libres = filtros
 
 	label_libres_estado = Label.new()
 	label_libres_estado.text = ""
@@ -3975,8 +4079,11 @@ func _tarjeta_vacia(texto: String) -> Control:
 
 
 ## Una fila "jugador + un boton": la comparten libres y prestamos.
+## `habilitado` false deja el boton a la vista pero apagado: la fila tiene
+## que seguir contando por que no se puede (ver los libres vetados).
 func _fila_jugador_accion(j: Dictionary, detalle: String, texto_boton: String,
-		ayuda_boton: String, al_apretar: Callable) -> Control:
+		ayuda_boton: String, al_apretar: Callable,
+		habilitado: bool = true) -> Control:
 	var fila := Componentes.tarjeta()
 	var dentro := HBoxContainer.new()
 	fila.add_child(dentro)
@@ -4015,6 +4122,7 @@ func _fila_jugador_accion(j: Dictionary, detalle: String, texto_boton: String,
 	btn.text = texto_boton
 	btn.tooltip_text = ayuda_boton
 	btn.custom_minimum_size = Vector2(130, Tema.ALTO_TACTIL)
+	btn.disabled = not habilitado
 	btn.pressed.connect(al_apretar)
 	dentro.add_child(btn)
 	return fila
@@ -4024,70 +4132,186 @@ func _refrescar_libres() -> void:
 	for hijo in contenedor_libres_botones.get_children():
 		hijo.queue_free()
 
-	var pool: Array = GameState.liga_jugador().agentes_libres
-	if pool.is_empty():
+	var equipo := GameState.equipo_jugador
+	if equipo == null:
+		return
+
+	for btn in caja_filtros_libres.get_children():
+		Tema.seleccionado(btn, str((btn as Button).text) == filtro_libres)
+
+	# Las dos restricciones del fichaje, arriba de todo: el lugar en el
+	# plantel y la plata de Contratos. Sin esto, "Negociar" arregla el
+	# contrato y recien ahi el juego avisa que no entra nadie.
+	var ocupados: int = equipo.todos_los_jugadores().size()
+	var lugares: int = Team.PLANTEL_MAXIMO - ocupados
+	var cabecera := Label.new()
+	# Con los ocupados a la vista: "0 de 18" solo no dice si el problema es
+	# que el plantel esta lleno o que el maximo es cero.
+	cabecera.text = "Plantel: %d de %d ocupados   ·   te queda%s %d lugar%s   ·   presupuesto de Contratos: %s" % [
+		ocupados, Team.PLANTEL_MAXIMO,
+		"" if lugares == 1 else "n", lugares, "" if lugares == 1 else "es",
+		Economia.formato_dinero(equipo.caja.get("contratos", 0.0))]
+	Tema.numero(cabecera, Tema.TAM_BASE)
+	cabecera.add_theme_color_override("font_color", Tema.VERDE if lugares > 0 else Tema.ROJO)
+	contenedor_libres_botones.add_child(cabecera)
+
+	if lugares <= 0:
 		contenedor_libres_botones.add_child(_tarjeta_vacia(
-			"No hay agentes libres en tu division por ahora. Aparecen cuando a un club de la IA se le vence el contrato de alguien y no se lo renueva."))
-		return
+			"Tenes el plantel completo. Un libre no desplaza a nadie: primero hace falta un lugar (una venta, un prestamo o un contrato que se venza)."))
 
+	var pool: Array = GameState.agentes_libres()
+	var visibles := []
 	for agente in pool:
-		var id: int = int(agente["id"])
-		contenedor_libres_botones.add_child(_fila_jugador_accion(
-			agente,
-			"%d años   ·   potencial %d" % [int(agente["edad"]), int(agente["potencial"])],
-			"Fichar",
-			"Reemplaza a tu jugador mas flojo de ese puesto, titular o suplente.",
-			func(): _on_fichar_libre(id)))
+		if filtro_libres != "TODOS" and str(agente["posicion"]) != filtro_libres:
+			continue
+		visibles.append(agente)
 
-
-## Reemplaza siempre a tu jugador mas debil en esa posicion (titular o
-## banco, lo que sea mas bajo) — asi el fichaje de un libre nunca empeora
-## el plantel.
-func _on_fichar_libre(agente_id: int) -> void:
-	var pool: Array = GameState.liga_jugador().agentes_libres
-	var agente: Dictionary = {}
-	for a in pool:
-		if a["id"] == agente_id:
-			agente = a
-			break
-	if agente.is_empty():
+	if visibles.is_empty():
+		contenedor_libres_botones.add_child(_tarjeta_vacia(
+			"No hay agentes libres de ese puesto. Aparecen cuando a un club de cualquier division se le vence un contrato y no lo renueva."))
 		return
+
+	visibles.sort_custom(func(a, b): return float(a["media"]) > float(b["media"]))
+
+	if visibles.size() > MAXIMO_LIBRES:
+		var recorte := Label.new()
+		recorte.text = "Hay %d libres de ese puesto. Se muestran los %d de mejor media." % [
+			visibles.size(), MAXIMO_LIBRES]
+		recorte.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		recorte.add_theme_color_override("font_color", Tema.SUAVE)
+		contenedor_libres_botones.add_child(recorte)
+		visibles.resize(MAXIMO_LIBRES)
+
+	for agente in visibles:
+		var id: int = int(agente["id"])
+		var bloqueo := Renovaciones.dias_bloqueado(equipo, id)
+		# Lo que pide de entrada, por el contrato de referencia. Es el
+		# numero que decide si te lo podes llevar, asi que va en la fila
+		# y no escondido adentro del modal.
+		var pide := Renovaciones.pide_ahora(
+			equipo, agente, Renovaciones.ANIOS_REFERENCIA)
+		var detalle := "%d años   ·   potencial %d   ·   pide %s por %d años" % [
+			int(agente["edad"]), int(agente["potencial"]),
+			Economia.formato_dinero(pide), Renovaciones.ANIOS_REFERENCIA]
+		var ultimo := str(agente.get("club_actual", ""))
+		if ultimo != "":
+			detalle += "   ·   venia de %s" % ultimo
+		if bloqueo > 0:
+			detalle += "   ·   no te atiende por %d dias" % bloqueo
+		# Al que dejaste ir vos lo seguis viendo, pero no lo podes fichar
+		# (AgentesLibres.veta_a). Se muestra igual, y con el motivo: es la
+		# consecuencia de no haberle renovado, y esconderlo la taparia.
+		var vetado := AgentesLibres.veta_a(equipo, agente)
+		if vetado:
+			detalle += "   ·   lo dejaste ir vos: no lo podes volver a fichar"
+		contenedor_libres_botones.add_child(_fila_jugador_accion(
+			agente, detalle,
+			"No podes" if vetado else "Negociar",
+			"Se fue de tu club al no renovarle. Lo puede fichar cualquier otro club, vos no."
+				if vetado
+				else "Le ofreces años y sueldo. Si arregla, entra a tu banco sin costo de pase.",
+			func(): _abrir_fichaje_libre(id),
+			not vetado))
+
+
+## Abre el modal de negociacion para un agente libre. Es el MISMO modal
+## que el de una renovacion (ver _construir_dialogo_renovacion): negociar
+## con alguien sin club es el mismo ida y vuelta, solo cambia que no cobra
+## nada hoy y que al firmar entra al plantel.
+func _abrir_fichaje_libre(agente_id: int) -> void:
+	renovacion_es_libre = true
+	renovacion_jugador_id = agente_id
+	renovacion_anios = Renovaciones.ANIOS_REFERENCIA
+	label_renovacion_respuesta.text = ""
+	if _jugador_de_renovacion().is_empty():
+		return
+	_refrescar_dialogo_renovacion(true)
+	dialogo_renovacion.popup_centered()
+
+
+## Lista de transferibles (ver core/traspasos.gd): por quien te pueden
+## ofertar y por quien no. Un boton por jugador que cicla entre los tres
+## estados; el default es Disponible, o sea que entrar aca y no tocar nada
+## deja el mercado como estaba.
+var contenedor_traspaso: VBoxContainer
+
+
+func _construir_panel_traspaso(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	padre.add_child(panel)
+	paneles["traspaso"] = panel
+
+	var aviso := Label.new()
+	aviso.text = "Decidi por quien te pueden ofertar. Disponible: llegan ofertas. No disponible: no llega ninguna. Venta rapida: llegan ofertas entre 40% y 50% mas baratas y el comprador casi no acepta que le pidas mas. Tocá el boton para cambiar el estado."
+	aviso.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	aviso.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	aviso.add_theme_color_override("font_color", Tema.SUAVE)
+	panel.add_child(aviso)
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+
+	contenedor_traspaso = VBoxContainer.new()
+	contenedor_traspaso.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(contenedor_traspaso)
+
+
+## Titulares y banco: son los unicos por los que llegan ofertas
+## (Ofertas.generar_entrantes), asi que marcar a un juvenil de la cantera
+## no haria nada.
+func _refrescar_traspaso() -> void:
+	for hijo in contenedor_traspaso.get_children():
+		hijo.queue_free()
 
 	var equipo := GameState.equipo_jugador
-	var posicion: String = agente["posicion"]
-	var mejor_indice := -1
-	var mejor_es_banco := false
-	var peor_media := 999.0
-	for i in range(equipo.jugadores.size()):
-		if equipo.jugadores[i]["posicion"] == posicion and equipo.jugadores[i]["media"] < peor_media:
-			peor_media = equipo.jugadores[i]["media"]
-			mejor_indice = i
-			mejor_es_banco = false
-	for i in range(equipo.banco.size()):
-		if equipo.banco[i]["posicion"] == posicion and equipo.banco[i]["media"] < peor_media:
-			peor_media = equipo.banco[i]["media"]
-			mejor_indice = i
-			mejor_es_banco = true
+	var lista := []
+	for j in equipo.jugadores:
+		lista.append({"jugador": j, "origen": "titular"})
+	for j in equipo.banco:
+		lista.append({"jugador": j, "origen": "banco"})
 
-	if mejor_indice < 0:
-		label_libres_estado.text = "No tenes ningun jugador en esa posicion para reemplazar."
+	if lista.is_empty():
+		contenedor_traspaso.add_child(_tarjeta_vacia("No tenes jugadores en el plantel."))
 		return
 
-	var resultado := GameState.fichar_agente_libre(agente_id, mejor_indice, mejor_es_banco)
-	if resultado["exito"]:
-		label_libres_estado.text = "Fichado: entra un %s, sale un %s al pool." % [resultado["entra"]["posicion"], resultado["sale"]["posicion"]]
-	else:
-		label_libres_estado.text = "No se pudo: %s" % resultado["motivo"]
+	for entrada in lista:
+		var j: Dictionary = entrada["jugador"]
+		var id: int = int(j["id"])
+		var estado := Traspasos.estado(equipo, id)
+		var valor := ValorJugador.calcular(
+			j, equipo.animo.get(id, 50.0), equipo.contratos.get(id, 3))
+		contenedor_traspaso.add_child(_fila_jugador_accion(
+			j,
+			"%s   ·   %d años   ·   vale %s" % [
+				entrada["origen"], int(j["edad"]), Economia.formato_dinero(valor)],
+			str(Traspasos.ETIQUETAS[estado]),
+			str(Traspasos.AYUDAS[estado]),
+			func(): _on_ciclar_traspaso(id)))
 
-	_refrescar_libres()
-	_refrescar_plantel()
+
+func _on_ciclar_traspaso(jugador_id: int) -> void:
+	var equipo := GameState.equipo_jugador
+	Traspasos.fijar(equipo, jugador_id,
+		Traspasos.siguiente(Traspasos.estado(equipo, jugador_id)))
+	_refrescar_traspaso()
 
 
-## Prestamos (§9.3 extendido): cedes banco/cantera propios por una
-## temporada, o pedis prestado a otro club de tu division — ver
-## core/prestamos.gd.
-## Ceder a prestamo. Pedir prestado NO vive aca: se hace desde Mercado,
-## con la misma negociacion que una compra.
+## Cesion (core/cesiones.gd): la lista de a quien te pueden pedir a
+## prestamo, y el estado de los que ya cediste.
+##
+## Antes esto era un boton "Ceder" que mandaba al jugador a un club al
+## azar de tu division, sin negociar nada. Ahora funciona como la solapa
+## Traspaso: vos abris la puerta, los pedidos llegan solos a Ofertas
+## recibidas y los terminos se discuten ahi.
+var contenedor_cesiones: VBoxContainer
+var contenedor_cedidos: VBoxContainer
+
+
 func _construir_panel_prestamos(padre: Control) -> void:
 	var panel := VBoxContainer.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -4096,7 +4320,7 @@ func _construir_panel_prestamos(padre: Control) -> void:
 	paneles["prestamos"] = panel
 
 	var aviso := Label.new()
-	aviso.text = "Ceder a prestamo: una temporada, cobras un fee del 10% del valor y el club que lo recibe le paga el sueldo. Solo banco y cantera — a un titular no se lo puede ceder. Para PEDIR prestado, anda a Mercado."
+	aviso.text = "Marca a quien estas dispuesto a ceder. Los pedidos llegan a Mercado > Ofertas recibidas, y ahi negociás duracion, fee, cuanto del sueldo te sacan de encima y la opcion de compra. El jugador tiene la ultima palabra. Para PEDIR prestado, anda a Mercado > Jugadores."
 	aviso.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	aviso.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
 	aviso.add_theme_color_override("font_color", Tema.SUAVE)
@@ -4108,70 +4332,109 @@ func _construir_panel_prestamos(padre: Control) -> void:
 	label_prestamos_estado.add_theme_color_override("font_color", Tema.AMBAR)
 	panel.add_child(label_prestamos_estado)
 
-	var scroll_ceder := ScrollContainer.new()
-	scroll_ceder.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll_ceder.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll_ceder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.add_child(scroll_ceder)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
 
-	contenedor_prestamos_ceder_botones = VBoxContainer.new()
-	contenedor_prestamos_ceder_botones.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll_ceder.add_child(contenedor_prestamos_ceder_botones)
+	var caja := VBoxContainer.new()
+	caja.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(caja)
+
+	contenedor_cedidos = VBoxContainer.new()
+	contenedor_cedidos.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	caja.add_child(contenedor_cedidos)
+
+	contenedor_cesiones = VBoxContainer.new()
+	contenedor_cesiones.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	caja.add_child(contenedor_cesiones)
 
 
 func _refrescar_prestamos() -> void:
-	for hijo in contenedor_prestamos_ceder_botones.get_children():
+	for hijo in contenedor_cedidos.get_children():
+		hijo.queue_free()
+	for hijo in contenedor_cesiones.get_children():
 		hijo.queue_free()
 
 	var equipo := GameState.equipo_jugador
-	var cedibles := []
-	for j in equipo.banco:
-		cedibles.append({"jugador": j, "desde_cantera": false})
-	for j in equipo.cantera:
-		cedibles.append({"jugador": j, "desde_cantera": true})
 
-	if cedibles.is_empty():
-		contenedor_prestamos_ceder_botones.add_child(_tarjeta_vacia(
-			"No tenes a nadie para ceder: solo se puede prestar gente del banco o de la cantera."))
+	# Primero los que YA estan afuera: es lo que se viene a mirar cuando
+	# ya cediste a alguien, y no aparecia en ningun lado.
+	if not equipo.prestados_afuera.is_empty():
+		contenedor_cedidos.add_child(Tema.etiqueta_seccion("Cedidos ahora"))
+		for id in equipo.prestados_afuera:
+			var info: Dictionary = equipo.prestados_afuera[id]
+			var club: String = info["club"].nombre if info["club"] is Team else str(info["club"])
+			var t := "%s   ·   vuelve en la temporada %.1f" % [club, float(info["temporada_retorno"])]
+			if float(info.get("opcion_compra", 0.0)) > 0.0:
+				t += "   ·   con opcion de compra por %s" % Economia.formato_dinero(
+					float(info["opcion_compra"]))
+			contenedor_cedidos.add_child(_tarjeta_vacia(t))
+
+	# Las opciones de compra que TENES abiertas. Van arriba de todo porque
+	# tienen fecha de vencimiento: al volver el prestamo, la chance se
+	# pierde (ver Prestamos.procesar_retornos).
+	var abiertas: Array = GameState.opciones_de_compra_abiertas()
+	if not abiertas.is_empty():
+		contenedor_cedidos.add_child(Tema.etiqueta_seccion("Opciones de compra abiertas"))
+		for entrada in abiertas:
+			var jo: Dictionary = entrada["jugador"]
+			var ido: int = int(jo["id"])
+			contenedor_cedidos.add_child(_fila_jugador_accion(
+				jo,
+				"a prestamo de %s   ·   la chance vence en la temporada %.1f" % [
+					str(entrada["dueno"]), float(entrada["temporada_retorno"])],
+				"Comprar %s" % Economia.formato_dinero(float(entrada["precio"])),
+				"Te lo quedas al precio pactado cuando te lo cedieron. Si dejas vencer el prestamo, vuelve a su club.",
+				func(): _on_ejercer_opcion(ido)))
+
+	contenedor_cesiones.add_child(Tema.etiqueta_seccion("Lista de cedibles"))
+	var lista := []
+	for j in equipo.jugadores:
+		lista.append({"jugador": j, "origen": "titular"})
+	for j in equipo.banco:
+		lista.append({"jugador": j, "origen": "banco"})
+	for j in equipo.reservas:
+		lista.append({"jugador": j, "origen": "reserva"})
+	for j in equipo.cantera:
+		lista.append({"jugador": j, "origen": "cantera"})
+
+	if lista.is_empty():
+		contenedor_cesiones.add_child(_tarjeta_vacia("No tenes jugadores en el plantel."))
 		return
 
-	for entrada in cedibles:
+	for entrada in lista:
 		var j: Dictionary = entrada["jugador"]
 		var id: int = int(j["id"])
-		var origen := "cantera" if entrada["desde_cantera"] else "banco"
-		contenedor_prestamos_ceder_botones.add_child(_fila_jugador_accion(
+		var estado := Cesiones.estado(equipo, id)
+		contenedor_cesiones.add_child(_fila_jugador_accion(
 			j,
 			"%s   ·   %d años   ·   potencial %d" % [
-				origen, int(j["edad"]), int(j["potencial"])],
-			"Ceder",
-			"Se va una temporada a un club de tu division. Cobras el fee ahora.",
-			func(): _on_ceder_prestamo(id)))
+				str(entrada["origen"]), int(j["edad"]), int(j["potencial"])],
+			str(Cesiones.ETIQUETAS[estado]),
+			str(Cesiones.AYUDAS[estado]),
+			func(): _on_ciclar_cesion(id)))
 
 
-## Elige un rival al azar de tu division como destino del prestamo — no
-## hay negociacion todavia (eso es contenido pendiente), cualquier club de
-## tu misma division puede recibirlo.
-func _on_ceder_prestamo(jugador_id: int) -> void:
-	var rivales := []
-	for rival in GameState.liga_jugador().equipos:
-		if rival != GameState.equipo_jugador:
-			rivales.append(rival)
-	if rivales.is_empty():
-		return
-	var destino: Team = rivales[GameState.rng.randi() % rivales.size()]
-
-	var resultado := GameState.ceder_a_prestamo(jugador_id, destino)
-	if resultado["exito"]:
-		label_prestamos_estado.text = "Prestamo concretado: %s se va a %s por esta temporada (fee cobrado %s)." % [
-			resultado["jugador"]["posicion"], destino.nombre, Economia.formato_dinero(resultado["fee"])
-		]
+func _on_ejercer_opcion(jugador_id: int) -> void:
+	var r := GameState.ejercer_opcion_de_compra(jugador_id)
+	if r["exito"]:
+		label_prestamos_estado.text = "Ejerciste la opcion: %s es tuyo por %s (sueldo %s, %d años)." % [
+			_nombre_jugador(r["jugador"]), Economia.formato_dinero(r["precio"]),
+			Economia.formato_dinero(r["sueldo"]), int(r["anios"])]
 	else:
-		label_prestamos_estado.text = "No se pudo: %s" % resultado["motivo"]
-
+		label_prestamos_estado.text = "No se pudo: %s" % r["motivo"]
 	_refrescar_prestamos()
 	_refrescar_plantel()
 	_refrescar_economia()
 
+
+func _on_ciclar_cesion(jugador_id: int) -> void:
+	var equipo := GameState.equipo_jugador
+	Cesiones.fijar(equipo, jugador_id,
+		Cesiones.siguiente(Cesiones.estado(equipo, jugador_id)))
+	_refrescar_prestamos()
 
 ## Instalaciones del club (§9.5): mejoras permanentes pagadas con el
 ## presupuesto de Mejoras, ver core/instalaciones.gd.
@@ -4364,6 +4627,11 @@ func _fila_renovacion(equipo: Team, jugador: Dictionary, par: bool) -> Control:
 ## para las tres respuestas posibles y cuanto cede en cada ronda.
 var dialogo_renovacion: AcceptDialog
 var renovacion_jugador_id: int = -1
+## El mismo modal atiende las dos negociaciones que hay: renovar a uno del
+## plantel y fichar a un agente libre (Mercado > Libres). Cambia de donde
+## se busca al jugador y que se hace cuando acepta; el ida y vuelta es el
+## mismo, y por eso es un solo modal y no dos.
+var renovacion_es_libre: bool = false
 var renovacion_anios: int = Renovaciones.ANIOS_REFERENCIA
 var label_renovacion_titulo: Label
 var label_renovacion_sub: Label
@@ -4439,6 +4707,11 @@ func _jugador_de_renovacion() -> Dictionary:
 	var equipo := GameState.equipo_jugador
 	if equipo == null:
 		return {}
+	if renovacion_es_libre:
+		for a in GameState.agentes_libres():
+			if int(a["id"]) == renovacion_jugador_id:
+				return a
+		return {}
 	for j in equipo.todos_los_jugadores():
 		if int(j["id"]) == renovacion_jugador_id:
 			return j
@@ -4446,6 +4719,7 @@ func _jugador_de_renovacion() -> Dictionary:
 
 
 func _abrir_renovacion(id: int) -> void:
+	renovacion_es_libre = false
 	renovacion_jugador_id = id
 	var equipo := GameState.equipo_jugador
 	renovacion_anios = maxi(
@@ -4472,11 +4746,21 @@ func _refrescar_dialogo_renovacion(reiniciar_oferta: bool) -> void:
 	var cobra: float = float(equipo.sueldos.get(id, 0.0))
 	var pide := Renovaciones.pide_ahora(equipo, jugador, renovacion_anios)
 	var restante: int = int(equipo.contratos.get(id, 0))
-	label_renovacion_sub.text = "Cobra %s y le queda%s %d año%s. Por %d año%s pide %s. Tenes %s en el presupuesto de Contratos." % [
-		Economia.formato_dinero(cobra), "n" if restante != 1 else "", restante,
-		"" if restante == 1 else "s", renovacion_anios,
-		"" if renovacion_anios == 1 else "s", Economia.formato_dinero(pide),
-		Economia.formato_dinero(equipo.caja.get("contratos", 0.0))]
+	if renovacion_es_libre:
+		dialogo_renovacion.title = "Fichaje libre"
+		var lugares: int = Team.PLANTEL_MAXIMO - equipo.todos_los_jugadores().size()
+		label_renovacion_sub.text = "Esta sin club: no se paga pase, solo el sueldo. Por %d año%s pide %s. Tenes %s en el presupuesto de Contratos y %d lugar%s en el plantel." % [
+			renovacion_anios, "" if renovacion_anios == 1 else "s",
+			Economia.formato_dinero(pide),
+			Economia.formato_dinero(equipo.caja.get("contratos", 0.0)),
+			lugares, "" if lugares == 1 else "es"]
+	else:
+		dialogo_renovacion.title = "Renovacion"
+		label_renovacion_sub.text = "Cobra %s y le queda%s %d año%s. Por %d año%s pide %s. Tenes %s en el presupuesto de Contratos." % [
+			Economia.formato_dinero(cobra), "n" if restante != 1 else "", restante,
+			"" if restante == 1 else "s", renovacion_anios,
+			"" if renovacion_anios == 1 else "s", Economia.formato_dinero(pide),
+			Economia.formato_dinero(equipo.caja.get("contratos", 0.0))]
 
 	for i in range(caja_renovacion_anios.get_child_count()):
 		var btn: Button = caja_renovacion_anios.get_child(i)
@@ -4511,6 +4795,20 @@ func _actualizar_costo_renovacion() -> void:
 	var disponible: float = equipo.caja.get("contratos", 0.0)
 	var descuento: float = ofrecido - cobra
 
+	# Un libre no cobra nada hoy: se descuenta el sueldo ENTERO, no una
+	# diferencia. La cuenta de abajo hablaria de "los $0 que ya cobra".
+	if renovacion_es_libre:
+		var resto: float = disponible - ofrecido
+		if resto >= 0.0:
+			label_renovacion_costo.text = "Si firma por %s se descuenta todo de Contratos: no cobra nada hoy. Te quedan %s." % [
+				Economia.formato_dinero(ofrecido), Economia.formato_dinero(resto)]
+			label_renovacion_costo.add_theme_color_override("font_color", Tema.VERDE)
+		else:
+			label_renovacion_costo.text = "Si firma por %s se descuenta todo de Contratos y te faltan %s." % [
+				Economia.formato_dinero(ofrecido), Economia.formato_dinero(-resto)]
+			label_renovacion_costo.add_theme_color_override("font_color", Tema.ROJO)
+		return
+
 	# Ofrecerle lo mismo o menos no cuesta nada: el club ya venia pagando
 	# ese sueldo, asi que el presupuesto no se mueve.
 	if descuento <= 0.0:
@@ -4543,8 +4841,26 @@ func _on_ofrecer_renovacion() -> void:
 	var r := Renovaciones.ofrecer(equipo, jugador, renovacion_anios, ofrecido)
 	match str(r["respuesta"]):
 		"acepta":
-			var firma := Renovaciones.firmar(
-				equipo, jugador, renovacion_anios, ofrecido)
+			var firma := (
+				GameState.fichar_agente_libre(
+					int(jugador["id"]), renovacion_anios, ofrecido)
+				if renovacion_es_libre
+				else Renovaciones.firmar(equipo, jugador, renovacion_anios, ofrecido))
+			if renovacion_es_libre:
+				if bool(firma.get("exito", false)):
+					label_libres_estado.text = "Ficha un %s de media %d por %d año%s a %s. Entra al banco." % [
+						str(jugador["posicion"]), int(jugador["media"]),
+						int(firma["anios"]), "" if int(firma["anios"]) == 1 else "s",
+						Economia.formato_dinero(float(firma["sueldo"]))]
+					label_libres_estado.add_theme_color_override("font_color", Tema.VERDE)
+					dialogo_renovacion.hide()
+				else:
+					label_renovacion_respuesta.text = "[color=#%s]Arreglaron, pero no pudiste ficharlo: %s[/color]" % [
+						Tema.ROJO.to_html(false), str(firma.get("motivo", ""))]
+				_refrescar_libres()
+				_refrescar_economia()
+				_refrescar_plantel()
+				return
 			if bool(firma.get("exito", false)):
 				label_renovaciones_estado.text = "%s renueva por %d año%s a %s." % [
 					_nombre_jugador(jugador), int(firma["anios"]),
@@ -4588,6 +4904,7 @@ func _on_ofrecer_renovacion() -> void:
 				Tema.ROJO.to_html(false), int(r.get("dias", 0))]
 
 	_refrescar_renovaciones()
+	_refrescar_libres()
 	_refrescar_economia()
 	_refrescar_plantel()
 
@@ -4602,8 +4919,7 @@ func _construir_panel_instalaciones(padre: Control) -> void:
 
 	contenedor_instalaciones_solapas = HBoxContainer.new()
 	panel.add_child(contenedor_instalaciones_solapas)
-	for par in [["mejoras", "Mejoras"], ["investigadores", "Investigadores"],
-			["foco", "Foco individual"]]:
+	for par in [["mejoras", "Mejoras"], ["investigadores", "Investigadores"]]:
 		var clave: String = par[0]
 		var btn := Button.new()
 		btn.text = str(par[1])
@@ -4640,40 +4956,35 @@ func _refrescar_instalaciones() -> void:
 		var clave := "mejoras"
 		if str((btn as Button).text) == "Investigadores":
 			clave = "investigadores"
-		elif str((btn as Button).text) == "Foco individual":
-			clave = "foco"
 		Tema.seleccionado(btn, clave == solapa_instalaciones)
 
-	# La caja de Mejoras es la restriccion de las dos primeras solapas, asi
-	# que va siempre a la vista: sin esto "Mejorar" aparece apagado y no se
+	# La caja de Mejoras es la restriccion de las dos solapas, asi que va
+	# siempre a la vista: sin esto "Mejorar" aparece apagado y no se
 	# entiende por que.
-	if solapa_instalaciones != "foco":
-		var caja := Componentes.tarjeta()
-		var dentro := HBoxContainer.new()
-		caja.add_child(dentro)
-		var izq := VBoxContainer.new()
-		izq.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		izq.add_theme_constant_override("separation", 0)
-		dentro.add_child(izq)
-		izq.add_child(Tema.etiqueta_seccion("Presupuesto de Mejoras disponible"))
-		var l := Label.new()
-		l.text = Economia.formato_dinero(equipo.caja.get("mejoras", 0.0))
-		Tema.numero(l, 26, Tema.VERDE if equipo.caja.get("mejoras", 0.0) > 0.0 else Tema.ROJO)
-		izq.add_child(l)
-		var nota := Label.new()
-		nota.text = "Las mejoras y los investigadores salen de esta misma caja: compiten entre si."
-		nota.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		nota.custom_minimum_size = Vector2(420, 0)
-		nota.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
-		nota.add_theme_color_override("font_color", Tema.SUAVE)
-		dentro.add_child(nota)
-		contenedor_instalaciones_botones.add_child(caja)
+	var caja := Componentes.tarjeta()
+	var dentro := HBoxContainer.new()
+	caja.add_child(dentro)
+	var izq := VBoxContainer.new()
+	izq.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	izq.add_theme_constant_override("separation", 0)
+	dentro.add_child(izq)
+	izq.add_child(Tema.etiqueta_seccion("Presupuesto de Mejoras disponible"))
+	var l := Label.new()
+	l.text = Economia.formato_dinero(equipo.caja.get("mejoras", 0.0))
+	Tema.numero(l, 26, Tema.VERDE if equipo.caja.get("mejoras", 0.0) > 0.0 else Tema.ROJO)
+	izq.add_child(l)
+	var nota := Label.new()
+	nota.text = "Las mejoras y los investigadores salen de esta misma caja: compiten entre si."
+	nota.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	nota.custom_minimum_size = Vector2(420, 0)
+	nota.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	nota.add_theme_color_override("font_color", Tema.SUAVE)
+	dentro.add_child(nota)
+	contenedor_instalaciones_botones.add_child(caja)
 
 	match solapa_instalaciones:
 		"investigadores":
 			_refrescar_investigadores_instalaciones(equipo)
-		"foco":
-			_refrescar_foco_individual(equipo)
 		_:
 			_refrescar_mejoras(equipo)
 
@@ -5000,6 +5311,52 @@ func _on_contratar_investigador(estrellas: int) -> void:
 	_refrescar_economia()
 
 
+## Foco individual vive en Equipo y no en Instalaciones. La instalacion
+## solo REGALA los cupos; la decision de a quien y en que atributo es de
+## plantel, y se toma mirando puestos, edades y atributos. Estaba a dos
+## clics de distancia de las pantallas con las que se decide.
+var contenedor_foco: VBoxContainer
+var label_foco_estado: Label
+
+
+func _construir_panel_foco_individual(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	padre.add_child(panel)
+	paneles["foco_individual"] = panel
+
+	label_foco_estado = Label.new()
+	label_foco_estado.text = ""
+	label_foco_estado.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label_foco_estado.add_theme_color_override("font_color", Tema.AMBAR)
+	panel.add_child(label_foco_estado)
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+
+	contenedor_foco = VBoxContainer.new()
+	contenedor_foco.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(contenedor_foco)
+
+
+func _mostrar_foco_individual() -> void:
+	_ocultar_todos()
+	paneles["foco_individual"].visible = true
+	_refrescar_panel_foco()
+
+
+func _refrescar_panel_foco() -> void:
+	if contenedor_foco == null:
+		return
+	for hijo in contenedor_foco.get_children():
+		hijo.queue_free()
+	_refrescar_foco_individual(GameState.equipo_jugador)
+
+
 ## §7.4 punto 3 / §5: hasta N jugadores (N = nivel de Entrenamiento con
 ## tope de 3) con foco en un atributo, que esta temporada crece más
 ## rápido — y la vía de entrada para aprender una habilidad de bronce (2
@@ -5017,13 +5374,13 @@ func _refrescar_foco_individual(equipo: Team) -> void:
 	explica.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	explica.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
 	explica.add_theme_color_override("font_color", Tema.SUAVE)
-	contenedor_instalaciones_botones.add_child(explica)
+	contenedor_foco.add_child(explica)
 
-	contenedor_instalaciones_botones.add_child(Tema.etiqueta_seccion(
+	contenedor_foco.add_child(Tema.etiqueta_seccion(
 		"Cupos usados: %d de %d" % [usados, limite]))
 
 	if equipo.foco_individual.is_empty():
-		contenedor_instalaciones_botones.add_child(_tarjeta_vacia(
+		contenedor_foco.add_child(_tarjeta_vacia(
 			"No tenes a nadie en foco. Es plata gratis que estas dejando pasar: los cupos no se acumulan de una temporada a la otra."))
 
 	for jugador_id in equipo.foco_individual.keys():
@@ -5036,7 +5393,7 @@ func _refrescar_foco_individual(equipo: Team) -> void:
 		var valor: int = int(jugador["atributos"].get(atributo, 0))
 
 		var tarjeta := Componentes.tarjeta(Tema.AMBAR)
-		contenedor_instalaciones_botones.add_child(tarjeta)
+		contenedor_foco.add_child(tarjeta)
 		var fila := HBoxContainer.new()
 		tarjeta.add_child(fila)
 
@@ -5085,8 +5442,8 @@ func _refrescar_foco_individual(equipo: Team) -> void:
 		btn.custom_minimum_size = Vector2(130, Tema.ALTO_TACTIL)
 		btn.pressed.connect(func():
 			Entrenamiento.quitar(equipo, id_j)
-			label_instalaciones_estado.text = "Foco liberado: quedo un cupo."
-			_refrescar_instalaciones()
+			label_foco_estado.text = "Foco liberado: quedo un cupo."
+			_refrescar_panel_foco()
 		)
 		fila.add_child(btn)
 
@@ -5096,7 +5453,7 @@ func _refrescar_foco_individual(equipo: Team) -> void:
 		tope.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		tope.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
 		tope.add_theme_color_override("font_color", Tema.SUAVE)
-		contenedor_instalaciones_botones.add_child(tope)
+		contenedor_foco.add_child(tope)
 		return
 
 	var elegibles: Array = equipo.jugadores + equipo.banco + equipo.cantera
@@ -5104,9 +5461,9 @@ func _refrescar_foco_individual(equipo: Team) -> void:
 	if elegibles.is_empty():
 		return
 
-	contenedor_instalaciones_botones.add_child(Tema.etiqueta_seccion("Asignar un foco nuevo"))
+	contenedor_foco.add_child(Tema.etiqueta_seccion("Asignar un foco nuevo"))
 	var tarjeta_nueva := Componentes.tarjeta()
-	contenedor_instalaciones_botones.add_child(tarjeta_nueva)
+	contenedor_foco.add_child(tarjeta_nueva)
 	var caja := VBoxContainer.new()
 	tarjeta_nueva.add_child(caja)
 	var fila_nueva := HBoxContainer.new()
@@ -5154,9 +5511,9 @@ func _refrescar_foco_individual(equipo: Team) -> void:
 		var atributo_elegido: String = str(
 			PlayerGenerator.get_all_attributes()[option_atributo.selected])
 		Entrenamiento.asignar(equipo, jugador_elegido["id"], atributo_elegido)
-		label_instalaciones_estado.text = "%s entrena %s esta temporada." % [
+		label_foco_estado.text = "%s entrena %s esta temporada." % [
 			_nombre_jugador(jugador_elegido), atributo_elegido.replace("_", " ")]
-		_refrescar_instalaciones()
+		_refrescar_panel_foco()
 	)
 	fila_nueva.add_child(btn_asignar)
 
@@ -5369,7 +5726,7 @@ func _tarjeta_juvenil(equipo: Team, juvenil: Dictionary, nivel_scout: int) -> Co
 	var btn := Button.new()
 	btn.text = "Promover"
 	btn.custom_minimum_size = Vector2(140, Tema.ALTO_TACTIL)
-	btn.tooltip_text = "Entra al banco y el peor suplente queda libre."
+	btn.tooltip_text = "Entra al banco si hay lugar, y si no a reservas. Con el plantel lleno, el peor suplente de ese puesto queda libre."
 	var id: int = int(juvenil["id"])
 	btn.pressed.connect(func(): _on_promover_juvenil(id))
 	fila.add_child(btn)
@@ -6223,32 +6580,49 @@ func _pintar_copa_pasada(clave: String, titulo: String) -> void:
 	_pintar_cuadro(CuadroCopa.desde_datos(datos), mio)
 
 
-## Las tres internacionales se juegan ENTERAS al cerrar la temporada, asi
-## que lo que hay para mostrar es el resumen de la ultima (ver
-## GameState._guardar_copas_internacionales).
+## Las tres internacionales se juegan repartidas en la temporada, una
+## ronda por semana, asi que el resumen se rehace despues de cada ronda y
+## esta pantalla muestra la copa EN CURSO (ver
+## TemporadaInternacional.resumen). Cuando la temporada cierra, el mismo
+## resumen queda como foto de la que se jugo.
 func _pintar_copa_internacional(clave: String) -> void:
 	var guardadas: Dictionary = GameState.copas_internacionales
 	if not guardadas.has(clave):
 		label_copa_titulo.text = "Copa de %s" % clave.capitalize()
 		contenedor_copa.add_child(_parrafo_de_copa(
-			"Las copas internacionales se juegan enteras al cerrar la temporada, "
-			+ "con los cupos que reparte el coeficiente de cada país. Todavía no "
-			+ "se jugó ninguna: vas a ver el cuadro cuando termine este año."))
+			"Las copas internacionales se juegan entre semana, con los cupos que "
+			+ "reparte el coeficiente de cada país. Esta todavía no arrancó: "
+			+ "primero se juega la previa."))
 		return
 
 	var datos: Dictionary = guardadas[clave]
-	label_copa_titulo.text = str(datos["nombre"])
+	label_copa_titulo.text = "%s — temporada %d" % [
+		str(datos["nombre"]), int(guardadas.get("temporada", 0))]
 	var mio: String = GameState.equipo_jugador.nombre
 	var campeon := str(datos.get("campeon", ""))
-	var partes := ["Temporada %d" % int(guardadas.get("temporada", 0))]
+	var partes := []
+	# En que anda la copa hoy: la fase de liga primero, el cuadro despues.
+	var fecha := int(datos.get("fecha", 0))
+	var fechas := int(datos.get("fechas", 0))
 	if campeon != "":
 		partes.append("campeón %s" % campeon)
+	elif fecha < fechas:
+		partes.append("fase de liga, fecha %d de %d" % [fecha, fechas])
+	else:
+		partes.append("eliminación directa")
 	partes.append(CuadroCopa.camino_de(datos.get("rondas", []), [], [], campeon, mio))
 	label_copa_camino.text = "   ·   ".join(partes)
 	if campeon == mio:
 		label_copa_camino.add_theme_color_override("font_color", Tema.VERDE)
 
-	_pintar_cuadro(CuadroCopa.desde_datos(datos), mio)
+	# El cuadro recien existe cuando termina la fase de liga: hasta
+	# entonces lo unico que hay para mirar es la tabla.
+	if datos.get("rondas", []).is_empty():
+		contenedor_copa.add_child(_parrafo_de_copa(
+			"La eliminación directa todavía no arrancó: primero se juegan las "
+			+ "fechas de la fase de liga y el playoff de octavos."))
+	else:
+		_pintar_cuadro(CuadroCopa.desde_datos(datos), mio)
 
 	# La fase de liga es la mitad de la competencia: sin ella no se
 	# entiende por que ocho entraron directo a octavos y otros dieciseis
@@ -7154,7 +7528,8 @@ func _on_jugar_fecha() -> void:
 	if GameState.juego_terminado:
 		_refrescar_objetivo()
 		return
-	if not GameState.hay_fecha_pendiente() and not GameState.hay_partido_de_copa_hoy():
+	if (not GameState.hay_fecha_pendiente() and not GameState.hay_partido_de_copa_hoy()
+			and not GameState.hay_partido_internacional_hoy()):
 		return
 	# Ningun lesionado ni suspendido sale a la cancha. Si hay alguno en el
 	# once, el partido espera a que se resuelva (ver el modal de
@@ -7183,6 +7558,8 @@ func _jugar_el_partido_de_hoy() -> void:
 	await get_tree().process_frame
 	if GameState.hay_partido_de_copa_hoy():
 		_jugar_copa_ya()
+	elif GameState.hay_partido_internacional_hoy():
+		_jugar_internacional_ya()
 	else:
 		_jugar_fecha_ya()
 	# El boton puede haber muerto durante el partido: _refrescar_portada
@@ -7198,6 +7575,20 @@ func _jugar_copa_ya() -> void:
 	if GameState.juego_terminado or not GameState.hay_partido_de_copa_hoy():
 		return
 	GameState.jugar_partido_de_copa()
+	_despues_del_partido_de_torneo()
+
+
+## El partido internacional de hoy: una fecha de la fase de liga, la
+## previa, el playoff o una ronda del knockout. Mismo recorrido que el
+## cruce de copa.
+func _jugar_internacional_ya() -> void:
+	if GameState.juego_terminado or not GameState.hay_partido_internacional_hoy():
+		return
+	GameState.jugar_partido_internacional()
+	_despues_del_partido_de_torneo()
+
+
+func _despues_del_partido_de_torneo() -> void:
 	_refrescar_historial_partidos()
 	_refrescar_plantel()
 	_refrescar_objetivo()
@@ -7548,6 +7939,12 @@ func _mostrar_libres() -> void:
 	_refrescar_libres()
 
 
+func _mostrar_traspaso() -> void:
+	_ocultar_todos()
+	paneles["traspaso"].visible = true
+	_refrescar_traspaso()
+
+
 func _mostrar_prestamos() -> void:
 	_ocultar_todos()
 	paneles["prestamos"].visible = true
@@ -7716,7 +8113,8 @@ const SECCIONES := [
 	{"clave": "jugar", "nombre": "Jugar", "paneles": []},
 	{"clave": "equipo", "nombre": "Equipo", "paneles": [
 		["plantel", "Plantel"], ["formacion", "Formacion"],
-		["roles", "Roles"], ["entrenamiento", "Entrenamiento"]]},
+		["roles", "Roles"], ["entrenamiento", "Entrenamiento"],
+		["foco_individual", "Foco individual"]]},
 	# Lo que es del CLUB y no del plantel: el edificio y los pibes. Antes
 	# vivian de colados en Equipo, que ya tenia cinco subsolapas y era la
 	# unica seccion que mezclaba las dos cosas.
@@ -7733,7 +8131,8 @@ const SECCIONES := [
 		["copa_campeones", "Campeones"], ["copa_guerreros", "Guerreros"],
 		["copa_emergentes", "Emergentes"]]},
 	{"clave": "mercado", "nombre": "Mercado", "paneles": [
-		["mercado", "Mercado"], ["libres", "Libres"], ["prestamos", "Prestamos"]]},
+		["mercado", "Mercado"], ["libres", "Libres"], ["traspaso", "Traspaso"],
+		["prestamos", "Cesion"]]},
 	{"clave": "mas", "nombre": "Mas", "paneles": [
 		["noticias", "Noticias"], ["vitrina", "Vitrina"],
 		["seleccion", "Seleccion"], ["laboratorio", "Laboratorio"],
@@ -7872,6 +8271,7 @@ func _mostrar_panel_de_seccion(clave: String) -> void:
 	var metodos := {
 		"plantel": "_mostrar_plantel", "formacion": "_mostrar_formacion",
 		"entrenamiento": "_mostrar_entrenamiento",
+		"foco_individual": "_mostrar_foco_individual",
 		"cantera": "_mostrar_cantera", "instalaciones": "_mostrar_instalaciones",
 		"renovaciones": "_mostrar_renovaciones",
 		"roles": "_mostrar_roles",
@@ -7882,6 +8282,7 @@ func _mostrar_panel_de_seccion(clave: String) -> void:
 		"copa_guerreros": "_mostrar_copa_guerreros",
 		"copa_emergentes": "_mostrar_copa_emergentes",
 		"mercado": "_mostrar_mercado", "libres": "_mostrar_libres",
+		"traspaso": "_mostrar_traspaso",
 		"prestamos": "_mostrar_prestamos", "economia": "_mostrar_economia",
 		"noticias": "_mostrar_noticias", "vitrina": "_mostrar_vitrina",
 		"laboratorio": "_mostrar_laboratorio",
@@ -7964,14 +8365,29 @@ func _refrescar_portada() -> void:
 	# primero porque es la que frena el dia.
 	var copa: Copa = GameState.copa_de_hoy()
 	var hay_copa: bool = copa != null
-	var hay_partido: bool = GameState.hay_partido_hoy() or hay_copa
+	# La internacional se pregunta despues de la copa domestica y por el
+	# mismo motivo: tambien frena el dia. Las dos nunca caen el mismo
+	# miercoles (ver GameState.FECHAS_ENTRE_RONDAS_INTERNACIONAL), pero al
+	# cerrar la temporada se drenan las rondas que sobraron y ahi si
+	# pueden quedar las dos esperando el mismo dia. Se juega primero la
+	# copa y despues la internacional.
+	var hay_internacional: bool = not hay_copa and GameState.hay_partido_internacional_hoy()
+	var hay_partido: bool = GameState.hay_partido_hoy() or hay_copa or hay_internacional
 	var caja_partido := _tarjeta(contenedor_portada, Tema.AMBAR if hay_partido else Tema.BORDE)
 	var encabezado := Calendario.texto_largo(GameState.dia_absoluto)
 	if hay_copa:
 		encabezado = "%s  ·  %s  ·  %s" % [encabezado, copa.nombre, copa.ronda_actual()]
+	elif hay_internacional:
+		encabezado = "%s  ·  %s" % [encabezado, GameState.torneo_internacional_de_hoy()]
 	caja_partido.add_child(Tema.etiqueta_seccion(encabezado))
-	var rival: Team = GameState.rival_de_copa() if hay_copa else _proximo_rival()
-	var de_local: bool = GameState.copa_de_local() if hay_copa else _juega_de_local()
+	var rival: Team = _proximo_rival()
+	var de_local: bool = _juega_de_local()
+	if hay_copa:
+		rival = GameState.rival_de_copa()
+		de_local = GameState.copa_de_local()
+	elif hay_internacional:
+		rival = GameState.rival_internacional()
+		de_local = GameState.internacional_de_local()
 	var titulo := Label.new()
 	if rival == null:
 		titulo.text = "Temporada terminada."
@@ -8018,7 +8434,11 @@ func _refrescar_portada() -> void:
 	caja_partido.add_child(fila_acciones)
 	if hay_partido:
 		var btn_jugar := Button.new()
-		btn_jugar.text = "Jugar el partido de copa" if hay_copa else "Jugar el partido"
+		btn_jugar.text = "Jugar el partido"
+		if hay_copa:
+			btn_jugar.text = "Jugar el partido de copa"
+		elif hay_internacional:
+			btn_jugar.text = "Jugar el partido internacional"
 		btn_jugar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		Tema.primario(btn_jugar)
 		btn_jugar.disabled = rival == null or GameState.juego_terminado
@@ -8827,3 +9247,232 @@ func _on_arreglar_alineacion() -> void:
 	# demasiados, lo resuelve Liga._resolver_forfeit.
 	await _jugar_el_partido_de_hoy()
 	_refrescar_portada()
+
+
+## El modal de una CESION entrante (core/cesiones.gd). A diferencia de una
+## compra, acá no hay un solo numero que mover: se discuten cinco cosas a
+## la vez, y por eso el modal muestra los topes del que pide al lado de
+## cada campo. Sin los topes, contraofertar era tirar numeros a ver cual
+## pegaba.
+var dialogo_cesion: AcceptDialog
+var cesion_oferta_id: int = -1
+var label_cesion_titulo: Label
+var label_cesion_sub: Label
+var option_cesion_duracion: OptionButton
+var spin_cesion_fee: SpinBox
+var label_cesion_fee: Label
+var slider_cesion_sueldo: HSlider
+var label_cesion_sueldo: Label
+var check_cesion_opcion: CheckBox
+var spin_cesion_opcion: SpinBox
+var label_cesion_opcion: Label
+var spin_cesion_plus: SpinBox
+var label_cesion_plus: Label
+var label_cesion_estado: RichTextLabel
+var boton_cesion_aceptar: Button
+var boton_cesion_contra: Button
+var boton_cesion_rechazar: Button
+var cesion_topes: Dictionary = {}
+
+
+func _construir_dialogo_cesion() -> void:
+	dialogo_cesion = AcceptDialog.new()
+	dialogo_cesion.title = "Cesion"
+	dialogo_cesion.ok_button_text = "Cerrar"
+	dialogo_cesion.min_size = Vector2(720, 560)
+	add_child(dialogo_cesion)
+
+	var caja := VBoxContainer.new()
+	caja.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dialogo_cesion.add_child(caja)
+
+	label_cesion_titulo = Label.new()
+	Tema.numero(label_cesion_titulo, 24)
+	caja.add_child(label_cesion_titulo)
+
+	label_cesion_sub = Label.new()
+	label_cesion_sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label_cesion_sub.add_theme_color_override("font_color", Tema.SUAVE)
+	caja.add_child(label_cesion_sub)
+
+	var fila_dur := HBoxContainer.new()
+	caja.add_child(fila_dur)
+	fila_dur.add_child(_etiqueta("Dura"))
+	option_cesion_duracion = OptionButton.new()
+	for clave in Prestamos.DURACIONES:
+		option_cesion_duracion.add_item(Prestamos.ETIQUETAS_DURACION[clave])
+		option_cesion_duracion.set_item_metadata(option_cesion_duracion.item_count - 1, clave)
+	fila_dur.add_child(option_cesion_duracion)
+
+	var fila_fee := HBoxContainer.new()
+	caja.add_child(fila_fee)
+	fila_fee.add_child(_etiqueta("Fee"))
+	spin_cesion_fee = SpinBox.new()
+	spin_cesion_fee.min_value = 0
+	spin_cesion_fee.max_value = 1000000000
+	spin_cesion_fee.step = 1000
+	spin_cesion_fee.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
+	fila_fee.add_child(spin_cesion_fee)
+	label_cesion_fee = Label.new()
+	label_cesion_fee.add_theme_color_override("font_color", Tema.SUAVE)
+	fila_fee.add_child(label_cesion_fee)
+
+	var fila_sueldo := HBoxContainer.new()
+	caja.add_child(fila_sueldo)
+	fila_sueldo.add_child(_etiqueta("Te cubren del sueldo"))
+	slider_cesion_sueldo = HSlider.new()
+	slider_cesion_sueldo.min_value = int(Prestamos.PORCENTAJE_SUELDO_MINIMO * 100.0)
+	slider_cesion_sueldo.max_value = 100
+	slider_cesion_sueldo.step = 5
+	slider_cesion_sueldo.custom_minimum_size = Vector2(240, Tema.ALTO_TACTIL)
+	fila_sueldo.add_child(slider_cesion_sueldo)
+	label_cesion_sueldo = Label.new()
+	fila_sueldo.add_child(label_cesion_sueldo)
+	slider_cesion_sueldo.value_changed.connect(func(_v): _refrescar_cesion_numeros())
+
+	var fila_opcion := HBoxContainer.new()
+	caja.add_child(fila_opcion)
+	check_cesion_opcion = CheckBox.new()
+	check_cesion_opcion.text = "Con opcion de compra"
+	fila_opcion.add_child(check_cesion_opcion)
+	spin_cesion_opcion = SpinBox.new()
+	spin_cesion_opcion.min_value = 0
+	spin_cesion_opcion.max_value = 1000000000
+	spin_cesion_opcion.step = 5000
+	spin_cesion_opcion.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
+	fila_opcion.add_child(spin_cesion_opcion)
+	label_cesion_opcion = Label.new()
+	label_cesion_opcion.add_theme_color_override("font_color", Tema.SUAVE)
+	fila_opcion.add_child(label_cesion_opcion)
+
+	var fila_plus := HBoxContainer.new()
+	caja.add_child(fila_plus)
+	fila_plus.add_child(_etiqueta("Plus al jugador"))
+	spin_cesion_plus = SpinBox.new()
+	spin_cesion_plus.min_value = 0
+	spin_cesion_plus.max_value = 100000000
+	spin_cesion_plus.step = 500
+	spin_cesion_plus.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
+	fila_plus.add_child(spin_cesion_plus)
+	label_cesion_plus = Label.new()
+	label_cesion_plus.add_theme_color_override("font_color", Tema.SUAVE)
+	fila_plus.add_child(label_cesion_plus)
+
+	var fila_botones := HBoxContainer.new()
+	caja.add_child(fila_botones)
+	boton_cesion_aceptar = Button.new()
+	boton_cesion_aceptar.text = "Aceptar"
+	boton_cesion_aceptar.custom_minimum_size = Vector2(180, 48)
+	boton_cesion_aceptar.pressed.connect(_on_cesion_aceptar)
+	fila_botones.add_child(boton_cesion_aceptar)
+	boton_cesion_contra = Button.new()
+	boton_cesion_contra.text = "Contraofertar"
+	boton_cesion_contra.custom_minimum_size = Vector2(180, 48)
+	boton_cesion_contra.pressed.connect(_on_cesion_contraofertar)
+	fila_botones.add_child(boton_cesion_contra)
+	boton_cesion_rechazar = Button.new()
+	boton_cesion_rechazar.text = "Rechazar"
+	boton_cesion_rechazar.custom_minimum_size = Vector2(180, 48)
+	boton_cesion_rechazar.pressed.connect(_on_cesion_rechazar)
+	fila_botones.add_child(boton_cesion_rechazar)
+
+	label_cesion_estado = RichTextLabel.new()
+	label_cesion_estado.bbcode_enabled = true
+	label_cesion_estado.fit_content = true
+	label_cesion_estado.custom_minimum_size = Vector2(0, 140)
+	caja.add_child(label_cesion_estado)
+
+
+## Los topes del que pide, al lado de cada campo. Es la unica forma de
+## saber hasta donde apretar sin quemar una ronda por prueba y error.
+func _refrescar_cesion_numeros() -> void:
+	var pct := int(slider_cesion_sueldo.value)
+	label_cesion_sueldo.text = "%d%%" % pct
+	if cesion_topes.is_empty():
+		return
+	var sueldo: float = float(cesion_topes["sueldo"])
+	label_cesion_sueldo.text = "%d%% — te queda pagando %s" % [
+		pct, Economia.formato_dinero(sueldo * (1.0 - pct / 100.0))]
+	label_cesion_fee.text = "llegan hasta %s" % Economia.formato_dinero(cesion_topes["fee"])
+	label_cesion_opcion.text = "llegan hasta %s" % Economia.formato_dinero(cesion_topes["opcion_compra"])
+	label_cesion_plus.text = "llegan hasta %s" % Economia.formato_dinero(cesion_topes["plus_sueldo"])
+
+
+func _abrir_cesion(o: Dictionary) -> void:
+	cesion_oferta_id = int(o["id"])
+	cesion_topes = GameState.topes_de_cesion(o)
+
+	label_cesion_titulo.text = "%s (%s)" % [str(o["jugador"]), str(o["posicion"])]
+	label_cesion_sub.text = "%s lo pide a prestamo  ·  ronda %d  ·  %s" % [
+		str(o["club"]), int(o["ronda"]), _estado_legible(o)]
+
+	for i in range(option_cesion_duracion.item_count):
+		if str(option_cesion_duracion.get_item_metadata(i)) == str(o["duracion"]):
+			option_cesion_duracion.selected = i
+	spin_cesion_fee.value = float(o["monto"])
+	slider_cesion_sueldo.value = clampf(round(float(o["porcentaje_sueldo"]) * 100.0 / 5.0) * 5.0,
+		slider_cesion_sueldo.min_value, 100.0)
+	check_cesion_opcion.button_pressed = float(o["opcion_compra"]) > 0.0
+	spin_cesion_opcion.value = float(o["opcion_compra"])
+	spin_cesion_plus.value = float(o.get("plus_sueldo", 0.0))
+	_refrescar_cesion_numeros()
+
+	var me_toca: bool = str(o["estado"]) == Ofertas.PENDIENTE_NOSOTROS
+	boton_cesion_aceptar.visible = me_toca
+	boton_cesion_contra.visible = me_toca
+	boton_cesion_rechazar.visible = me_toca
+	option_cesion_duracion.disabled = not me_toca
+	spin_cesion_fee.editable = me_toca
+	slider_cesion_sueldo.editable = me_toca
+	check_cesion_opcion.disabled = not me_toca
+	spin_cesion_opcion.editable = me_toca
+	spin_cesion_plus.editable = me_toca
+
+	var historia := ""
+	for linea in o["log"]:
+		historia += "[color=#93a79b]%s[/color]\n" % str(linea)
+	label_cesion_estado.text = historia
+	dialogo_cesion.popup_centered()
+
+
+func _terminos_de_cesion() -> Dictionary:
+	return {
+		"monto": float(spin_cesion_fee.value),
+		"porcentaje_sueldo": float(slider_cesion_sueldo.value) / 100.0,
+		"opcion_compra": float(spin_cesion_opcion.value) if check_cesion_opcion.button_pressed else 0.0,
+		"plus_sueldo": float(spin_cesion_plus.value),
+		"duracion": str(option_cesion_duracion.get_item_metadata(option_cesion_duracion.selected)),
+	}
+
+
+func _on_cesion_aceptar() -> void:
+	var r := GameState.responder_oferta(cesion_oferta_id, "aceptar")
+	if not r["exito"]:
+		label_cesion_estado.text = "[color=#d4a017]%s[/color]" % r["motivo"]
+		return
+	label_cesion_estado.text = "[color=#27ae60]Aceptaste. Ahora falta que el jugador quiera ir.[/color]"
+	boton_cesion_aceptar.visible = false
+	boton_cesion_contra.visible = false
+	boton_cesion_rechazar.visible = false
+	_mostrar_solapa_mercado(solapa_mercado_actual)
+
+
+func _on_cesion_contraofertar() -> void:
+	var r := GameState.contraofertar_cesion(cesion_oferta_id, _terminos_de_cesion())
+	if not r["exito"]:
+		label_cesion_estado.text = "[color=#d4a017]%s[/color]" % r["motivo"]
+		return
+	label_cesion_estado.text = "[color=#27ae60]Contraofertaste. Te contestan en unos dias.[/color]"
+	boton_cesion_aceptar.visible = false
+	boton_cesion_contra.visible = false
+	boton_cesion_rechazar.visible = false
+	_mostrar_solapa_mercado(solapa_mercado_actual)
+
+
+func _on_cesion_rechazar() -> void:
+	var r := GameState.responder_oferta(cesion_oferta_id, "rechazar")
+	if not r["exito"]:
+		label_cesion_estado.text = "[color=#d4a017]%s[/color]" % r["motivo"]
+		return
+	dialogo_cesion.hide()
+	_mostrar_solapa_mercado(solapa_mercado_actual)

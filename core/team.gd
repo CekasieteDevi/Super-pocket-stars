@@ -4,9 +4,10 @@ extends RefCounted
 ## Equipo para el motor de partido — Fase 2, extendido en Fase 5 con estado
 ## que persiste entre partidos (fatiga acumulada, ánimo, lesiones), y en
 ## esta fase con el plantel de 25 (§14): 11 titulares + 7 banco (suplentes
-## adultos) + hasta ~7 en cantera (reserva, §17, ya existía). Mínimo 15
-## disponibles (titulares+banco sanos, de 18 posibles) para jugar — si no
-## se llega, ver Liga._resolver_forfeit().
+## adultos) + hasta ~7 en cantera (reserva, §17, ya existía). El once y el
+## banco arrancan en 18 y el tope son 40 (PLANTEL_MAXIMO): sumar plantel
+## es decision del jugador. Mínimo 15 disponibles (titulares+banco sanos)
+## para jugar — si no se llega, ver Liga._resolver_forfeit().
 
 ## La forma del 4-2-3-1, que es la formacion por defecto. Ya NO es lo que
 ## se genera siempre: cada club nace con la formacion de su estilo (ver
@@ -16,6 +17,41 @@ extends RefCounted
 const FORMACION := ["ARQ", "DFC", "DFC", "LAT", "LAT", "MC", "MC", "MCO", "EXT", "EXT", "DC"]
 ## Un suplente por puesto — banco de 7, como pide §14.
 const BANCO_FORMACION := ["ARQ", "DFC", "LAT", "MC", "MCO", "EXT", "DC"]
+
+## Cuantos jugadores como maximo tiene un plantel: los 11 del once mas el
+## banco. El tope legal, para cualquier club.
+##
+## Antes eran 18 (11 + 7), o sea que un club nacia lleno y no podia
+## sumar a nadie sin soltar a otro. Ahora entran 40: el once, los siete
+## del banco y 22 lugares mas para acumular plantel — juveniles que
+## suben, refuerzos que se pelean el puesto, gente que vuelve de
+## prestamo.
+const PLANTEL_MAXIMO := 40
+
+## El plantel que MANTIENE un club de la IA: el once y un suplente por
+## puesto, o sea lo que genera Team.generar.
+##
+## No es el tope legal, es lo que el club sostiene solo. Los 200 clubes de
+## la piramide no tienen a nadie que les administre el plantel: si se
+## llenaran hasta PLANTEL_MAXIMO vaciarian la lista de libres en una
+## semana y se comerian su presupuesto de Contratos con suplentes que no
+## juegan nunca. Acumular plantel es una decision del jugador humano.
+##
+## Funcion y no constante: GDScript no acepta FORMACION.size() en una
+## const, y repetir el 18 seria una segunda fuente de verdad.
+static func plantel_de_la_ia() -> int:
+	return FORMACION.size() + BANCO_FORMACION.size()
+
+
+## Cuantos suplentes se sientan en el banco: los que pueden entrar por un
+## cambio. El resto del plantel son RESERVAS y no van al partido.
+##
+## Es el tamaño del banco de siempre (un suplente por puesto). Antes no
+## hacia falta el limite porque el plantel entero eran 18; con el tope en
+## 40, sin este corte un club llenaria el banco con veinte suplentes.
+static func max_suplentes() -> int:
+	return BANCO_FORMACION.size()
+
 
 ## Cuántos ids reserva cada equipo (Liga/Piramide/Confederacion espacian
 ## id_inicial por este número, no por FORMACION.size()): los 11 titulares
@@ -39,7 +75,12 @@ const DORSAL_MAXIMO := 99
 
 var nombre: String
 var jugadores: Array = []  # 11 dicts (PlayerGenerator.generate), uno por puesto de FORMACION (titulares)
-var banco: Array = []  # 7 dicts, uno por puesto de BANCO_FORMACION (suplentes)
+var banco: Array = []  # hasta max_suplentes() dicts: los suplentes que VAN al partido
+## El resto del plantel. Entrenan, cobran sueldo, progresan y se pueden
+## vender o ceder igual que cualquiera, pero NO entran a la convocatoria:
+## ni por un cambio (MatchEngine) ni para tapar a un titular
+## (Alineacion). Para que jueguen hay que subirlos al banco.
+var reservas: Array = []
 ## Dorsal (numero de camiseta) de cada jugador: jugador_id -> 1..99.
 ## Arranca vacio y lo llena _asegurar_dorsales con el orden de la
 ## alineacion. Se guarda porque el usuario lo puede cambiar: si el numero
@@ -241,6 +282,15 @@ var bloqueos_mercado: Dictionary = {}
 ## IA arreglan entre ellos de una.
 var ofertas: Array = []
 var siguiente_id_oferta: int = 0
+## Lista de transferibles: jugador_id -> estado (ver core/traspasos.gd).
+## Solo lleva a los que sacaste del default, asi que un dict vacio
+## significa "todos disponibles".
+var traspasos: Dictionary = {}
+## Lista de cedibles: jugador_id -> estado (ver core/cesiones.gd). Es la
+## contracara de `traspasos`: aquella filtra las ofertas de compra, esta
+## los pedidos de cesion. El default es NO cedible, asi que un dict vacio
+## significa "no te pueden pedir a nadie".
+var cesiones: Dictionary = {}
 ## Las que terminaron, para la pestaña Historial.
 var historial_mercado: Array = []
 
@@ -346,13 +396,22 @@ func guardar() -> Dictionary:
 	for id in prestados_afuera:
 		var info: Dictionary = prestados_afuera[id]
 		prestados_afuera_datos[str(id)] = {
-			"club_nombre": info["club"].nombre, "temporada_retorno": info["temporada_retorno"], "desde_cantera": info["desde_cantera"],
+			"club_nombre": info["club"].nombre, "temporada_retorno": info["temporada_retorno"],
+			"desde_cantera": info["desde_cantera"],
+			# Los terminos pactados viajan con el prestamo: sin ellos, al
+			# cargar la partida el dueño recuperaba al jugador con un
+			# sueldo inventado y la opcion de compra desaparecia.
+			"sueldo_completo": info.get("sueldo_completo", 0.0),
+			"opcion_compra": info.get("opcion_compra", 0.0),
+			"media_al_ceder": info.get("media_al_ceder", 0.0),
 		}
 	var prestados_propios_datos := {}
 	for id in prestados_propios:
 		var info: Dictionary = prestados_propios[id]
 		prestados_propios_datos[str(id)] = {
 			"club_dueno_nombre": info["club_dueno"].nombre, "temporada_retorno": info["temporada_retorno"],
+			"opcion_compra": info.get("opcion_compra", 0.0),
+			"aviso_opcion": info.get("aviso_opcion", false),
 		}
 
 	return {
@@ -361,13 +420,16 @@ func guardar() -> Dictionary:
 		"carga_entrenamiento": carga_entrenamiento,
 		"carga_suma": carga_suma, "carga_semanas": carga_semanas,
 		"foco_equipo": foco_equipo, "foco_semanas": foco_semanas,
-		"jugadores": jugadores, "banco": banco, "cantera": cantera,
+		"jugadores": jugadores, "banco": banco, "reservas": reservas,
+		"cantera": cantera,
 		"siguiente_id_cantera": siguiente_id_cantera, "capitan_id": capitan_id,
 		"roles": _claves_a_texto_roles(roles),
 		"investigadores": investigadores, "siguiente_id_investigador": siguiente_id_investigador,
 		"conocimiento": _claves_a_texto(conocimiento),
 		"bloqueos_mercado": _claves_a_texto(bloqueos_mercado),
 		"ofertas": ofertas, "siguiente_id_oferta": siguiente_id_oferta,
+		"traspasos": _claves_a_texto(traspasos),
+		"cesiones": _claves_a_texto(cesiones),
 		"historial_mercado": historial_mercado,
 		"fatiga_acumulada": _claves_a_texto(fatiga_acumulada),
 		"animo": _claves_a_texto(animo),
@@ -436,6 +498,14 @@ static func cargar(datos: Dictionary) -> Team:
 		t.calidad_cancha = EstadoCancha.generar(datos["reputacion"], rng_migracion_cancha)
 	t.jugadores = _normalizar_jugadores(datos["jugadores"])
 	t.banco = _normalizar_jugadores(datos["banco"])
+	# .get: las partidas anteriores al banco de 7 + reservas no traen la
+	# clave, y ahi el banco entero eran suplentes.
+	t.reservas = _normalizar_jugadores(datos.get("reservas", []))
+	# Un banco viejo mas largo que el tope se recorta y el resto pasa a
+	# reservas: sin esto un plantel cargado de una partida anterior podria
+	# sentar a veinte suplentes.
+	while t.banco.size() > max_suplentes():
+		t.reservas.append(t.banco.pop_back())
 	t.cantera = _normalizar_jugadores(datos["cantera"])
 	t.siguiente_id_cantera = datos["siguiente_id_cantera"]
 	t.investigadores = datos.get("investigadores", [])
@@ -473,6 +543,11 @@ static func cargar(datos: Dictionary) -> Team:
 		o["monto"] = float(o["monto"])
 		o["dias"] = float(o["dias"])
 	t.siguiente_id_oferta = int(datos.get("siguiente_id_oferta", 0))
+	# .get porque las partidas anteriores a la solapa Traspaso no lo
+	# traen: sin la clave, todos quedan disponibles, que es como venian
+	# comportandose.
+	t.traspasos = _claves_a_entero(datos.get("traspasos", {}))
+	t.cesiones = _claves_a_entero(datos.get("cesiones", {}))
 	t.historial_mercado = datos.get("historial_mercado", [])
 	t.capitan_id = int(datos["capitan_id"])
 	# Partidas anteriores a los roles no traen la clave: quedan todas en
@@ -559,13 +634,19 @@ static func cargar(datos: Dictionary) -> Team:
 	for id_str in datos.get("prestados_afuera", {}):
 		var info: Dictionary = datos["prestados_afuera"][id_str]
 		t.prestados_afuera[int(id_str)] = {
-			"club": info["club_nombre"], "temporada_retorno": info["temporada_retorno"], "desde_cantera": info["desde_cantera"],
+			"club": info["club_nombre"], "temporada_retorno": info["temporada_retorno"],
+			"desde_cantera": info["desde_cantera"],
+			"sueldo_completo": info.get("sueldo_completo", 0.0),
+			"opcion_compra": info.get("opcion_compra", 0.0),
+			"media_al_ceder": info.get("media_al_ceder", 0.0),
 		}
 	t.prestados_propios = {}
 	for id_str in datos.get("prestados_propios", {}):
 		var info: Dictionary = datos["prestados_propios"][id_str]
 		t.prestados_propios[int(id_str)] = {
 			"club_dueno": info["club_dueno_nombre"], "temporada_retorno": info["temporada_retorno"],
+			"opcion_compra": info.get("opcion_compra", 0.0),
+			"aviso_opcion": info.get("aviso_opcion", false),
 		}
 
 	return t
@@ -681,6 +762,13 @@ func _claves_a_texto_roles(origen: Dictionary) -> Dictionary:
 ## Titulares + banco (18), sin la cantera/reserva — esos no son parte del
 ## plantel de partido (§14) hasta que se los promueve.
 func todos_los_jugadores() -> Array:
+	return jugadores + banco + reservas
+
+
+## Los que VAN al partido: el once y el banco. Las reservas quedan afuera.
+## Es contra esto que se mide si el club puede presentarse a jugar (ver
+## Liga.MINIMO_DISPONIBLES).
+func convocados() -> Array:
 	return jugadores + banco
 
 
@@ -751,9 +839,13 @@ func _asegurar_dorsales() -> void:
 		tomados[libre] = true
 
 
+## Cuantos de los CONVOCADOS pueden jugar. Las reservas no cuentan: no van
+## al partido, asi que tener veinte no te salva de no poder presentarte
+## (ver Liga.MINIMO_DISPONIBLES). Para eso hay que subirlas al banco, y de
+## eso se encarga ajustar_convocatorias_de_emergencia.
 func jugadores_sanos_count() -> int:
 	var count := 0
-	for j in todos_los_jugadores():
+	for j in convocados():
 		if puede_jugar(j["id"]):
 			count += 1
 	return count
@@ -812,6 +904,8 @@ func _limpiar_registro(id: int) -> void:
 		caja["contratos"] += sueldos[id]
 	sueldos.erase(id)
 	contratos.erase(id)
+	traspasos.erase(id)
+	cesiones.erase(id)
 	renovaciones.erase(id)
 	animo.erase(id)
 	fatiga_acumulada.erase(id)
@@ -819,12 +913,23 @@ func _limpiar_registro(id: int) -> void:
 	clausulas.erase(id)
 
 
-## Mete a un jugador en el banco, en el puesto de BANCO_FORMACION que le
-## corresponde por posición (desplazando y liberando al que estaba ahí, si
-## había alguien). La usa el mercado cuando un fichaje externo desplaza a
-## un titular — antes del plantel de 25 ese titular se liberaba directo;
-## ahora pasa al banco en vez de desaparecer.
+## Mete a un jugador en el banco. La usa el mercado cuando un fichaje
+## externo desplaza a un titular — ese titular pasa al banco en vez de
+## desaparecer.
+##
+## Con lugar en el plantel (PLANTEL_MAXIMO) se AGREGA y no sale nadie:
+## devuelve {}. Va al banco si quedan lugares de suplente (max_suplentes)
+## y a reservas si no. Recien con el plantel lleno desplaza al del mismo
+## puesto y lo devuelve, que es lo unico que se podia hacer cuando el tope
+## era 18 y todos los clubes nacian llenos.
 func mover_a_banco(jugador: Dictionary) -> Dictionary:
+	if todos_los_jugadores().size() < PLANTEL_MAXIMO:
+		if banco.size() < max_suplentes():
+			banco.append(jugador)
+		else:
+			reservas.append(jugador)
+		return {}
+
 	var posicion: String = jugador["posicion"]
 	var idx := -1
 	for i in range(banco.size()):
@@ -845,10 +950,10 @@ func mover_a_banco(jugador: Dictionary) -> Dictionary:
 ## El jugador (o la IA) decide subir a un suplente a titular — swap directo
 ## de posición, el titular más débil de esa posición pasa al banco. Sin
 ## costo, es reordenar tu propio plantel, no un fichaje.
-## Intercambia dos jugadores del plantel, estén donde estén (dos
-## titulares entre sí, o un titular con uno del banco). Es lo que necesita
-## la pantalla de formación: mover a alguien de slot no es "promoverlo",
-## es cambiarlo de lugar.
+## Intercambia dos jugadores del plantel, estén donde estén: dos titulares
+## entre sí, un titular con un suplente, un suplente con una reserva. Es
+## lo que necesita la pantalla de formación: mover a alguien de slot no es
+## "promoverlo", es cambiarlo de lugar.
 ##
 ## Devuelve false si alguno no está o si son el mismo. NO valida puestos a
 ## propósito: poner a un defensor de 9 es una decisión del DT, mala pero
@@ -861,34 +966,100 @@ func intercambiar(id_a: int, id_b: int) -> bool:
 	var b := _ubicar(id_b)
 	if a.is_empty() or b.is_empty():
 		return false
-	var lista_a: Array = jugadores if a["titular"] else banco
-	var lista_b: Array = jugadores if b["titular"] else banco
+	var lista_a: Array = _lista_del_plantel(str(a["lista"]))
+	var lista_b: Array = _lista_del_plantel(str(b["lista"]))
 	var tmp: Dictionary = lista_a[a["idx"]]
 	lista_a[a["idx"]] = lista_b[b["idx"]]
 	lista_b[b["idx"]] = tmp
 	return true
 
 
+## Sube una reserva al banco, o baja un suplente a las reservas. Es el
+## movimiento de una sola punta: el otro es `intercambiar`, que se usa
+## cuando el banco ya esta lleno y hay que elegir a quien saca.
+##
+## Un titular no se puede mandar a reservas de una: primero hay que
+## sacarlo del once, que es una decision aparte.
+func mover_entre_banco_y_reservas(jugador_id: int) -> Dictionary:
+	var donde := _ubicar(jugador_id)
+	if donde.is_empty():
+		return {"exito": false, "motivo": "No está en el plantel."}
+	var lista := str(donde["lista"])
+	if lista == "jugadores":
+		return {"exito": false,
+			"motivo": "Es titular: sacalo del once antes de mandarlo a reservas."}
+
+	var idx: int = int(donde["idx"])
+	if lista == "banco":
+		reservas.append(banco[idx])
+		banco.remove_at(idx)
+		return {"exito": true, "a": "reservas"}
+
+	if banco.size() >= max_suplentes():
+		return {"exito": false,
+			"motivo": "El banco ya tiene %d suplentes: arrastralo sobre uno para cambiarlos." % max_suplentes()}
+	banco.append(reservas[idx])
+	reservas.remove_at(idx)
+	return {"exito": true, "a": "banco"}
+
+
+## Donde esta un jugador del plantel: en que lista y en que indice.
+## `titular` se conserva porque lo lee medio archivo; `lista` es el nombre
+## de la lista, que es lo que hace falta desde que hay tres.
 func _ubicar(jugador_id: int) -> Dictionary:
 	for i in range(jugadores.size()):
 		if jugadores[i]["id"] == jugador_id:
-			return {"titular": true, "idx": i}
+			return {"titular": true, "idx": i, "lista": "jugadores"}
 	for i in range(banco.size()):
 		if banco[i]["id"] == jugador_id:
-			return {"titular": false, "idx": i}
+			return {"titular": false, "idx": i, "lista": "banco"}
+	for i in range(reservas.size()):
+		if reservas[i]["id"] == jugador_id:
+			return {"titular": false, "idx": i, "lista": "reservas"}
 	return {}
 
 
+## En que lista esta: "jugadores", "banco", "reservas" o "" si no esta en
+## el plantel. Lo necesita la pantalla de formacion para saber que
+## movimientos tienen sentido.
+func donde_esta(jugador_id: int) -> String:
+	var donde := _ubicar(jugador_id)
+	return "" if donde.is_empty() else str(donde["lista"])
+
+
+## La lista del plantel que lleva ese nombre, para poder escribirle sin
+## repetir el if en cada llamador (los Array de GDScript son por
+## referencia, asi que esto devuelve la lista de verdad y no una copia).
+func _lista_del_plantel(nombre: String) -> Array:
+	match nombre:
+		"jugadores":
+			return jugadores
+		"banco":
+			return banco
+		_:
+			return reservas
+
+
 func promover_a_titular(jugador_banco_id: int) -> Dictionary:
+	# Del banco o de las reservas: las dos son "no titular", y pedirle al
+	# jugador que primero suba la reserva al banco y despues la haga
+	# titular serian dos pasos para una sola decision.
+	var origen: Array = banco
 	var idx_banco := -1
 	for i in range(banco.size()):
 		if banco[i]["id"] == jugador_banco_id:
 			idx_banco = i
 			break
 	if idx_banco < 0:
+		origen = reservas
+		for i in range(reservas.size()):
+			if reservas[i]["id"] == jugador_banco_id:
+				idx_banco = i
+				break
+	if idx_banco < 0:
 		return {}
 
-	var entrante: Dictionary = banco[idx_banco]
+	var entrante: Dictionary = origen[idx_banco]
 	var posicion: String = entrante["posicion"]
 
 	var idx_titular := -1
@@ -901,7 +1072,8 @@ func promover_a_titular(jugador_banco_id: int) -> Dictionary:
 
 	var saliente: Dictionary = jugadores[idx_titular]
 	jugadores[idx_titular] = entrante
-	banco[idx_banco] = saliente
+	# El que baja ocupa el lugar del que subio, sea el banco o reservas.
+	origen[idx_banco] = saliente
 	recalcular_capitan()
 	promociones_temporada += 1
 	return {"entra": entrante, "sale": saliente}
@@ -944,6 +1116,15 @@ func vender_titular(indice_titular: int, jugador_entrante: Dictionary) -> void:
 ##
 ## Devuelve false si el jugador no está en el plantel.
 func perder_jugador(jugador_id: int, rng: RandomNumberGenerator) -> bool:
+	# Una RESERVA se va y no se repone: no ocupaba lugar de partido, asi
+	# que no deja ningun hueco que tapar.
+	for i in range(reservas.size()):
+		if reservas[i]["id"] == jugador_id:
+			reservas.remove_at(i)
+			_limpiar_registro(jugador_id)
+			recalcular_capitan()
+			return true
+
 	var idx_titular := -1
 	for i in range(jugadores.size()):
 		if jugadores[i]["id"] == jugador_id:
@@ -978,10 +1159,35 @@ func perder_jugador(jugador_id: int, rng: RandomNumberGenerator) -> bool:
 		jugadores[idx_titular] = banco[mejor]
 		idx_banco = mejor
 
-	banco[idx_banco] = _relevo_para(posicion, rng)
+	# El hueco del banco lo tapa primero una RESERVA del puesto: ya es del
+	# club y cobra sueldo, asi que buscar afuera teniendo una adentro seria
+	# gastar por gusto. Sin reservas, el relevo de siempre.
+	var idx_reserva := _mejor_reserva_para(posicion)
+	if idx_reserva >= 0:
+		banco[idx_banco] = reservas[idx_reserva]
+		reservas.remove_at(idx_reserva)
+	else:
+		banco[idx_banco] = _relevo_para(posicion, rng)
 	_limpiar_registro(jugador_id)
 	recalcular_capitan()
 	return true
+
+
+## La mejor reserva de ese puesto, o la mejor de cualquiera si no hay
+## ninguna del puesto. -1 si no hay reservas.
+func _mejor_reserva_para(posicion: String) -> int:
+	var mejor := -1
+	for i in range(reservas.size()):
+		if str(reservas[i]["posicion"]) != posicion:
+			continue
+		if mejor == -1 or float(reservas[i]["media"]) > float(reservas[mejor]["media"]):
+			mejor = i
+	if mejor != -1:
+		return mejor
+	for i in range(reservas.size()):
+		if mejor == -1 or float(reservas[i]["media"]) > float(reservas[mejor]["media"]):
+			mejor = i
+	return mejor
 
 
 ## Con quién se tapa un hueco en el banco: primero la cantera, después
@@ -1005,8 +1211,8 @@ func _relevo_para(posicion: String, rng: RandomNumberGenerator) -> Dictionary:
 
 
 ## §9.3: el club INCORPORA a un jugador comprado. Entra de titular si
-## mejora al que está en su puesto y si no al banco; el plantel se
-## mantiene en 18 soltando al más flojo de ese puesto.
+## mejora al que está en su puesto y si no al banco. Solo con el plantel
+## lleno (PLANTEL_MAXIMO) suelta al más flojo de ese puesto.
 func incorporar(jugador: Dictionary, valor: float, contrato_anios: int = 3) -> Dictionary:
 	var posicion: String = jugador["posicion"]
 	var idx_titular := -1
@@ -1392,7 +1598,33 @@ func ajustar_convocatorias_de_emergencia(minimo: int) -> Dictionary:
 				bajados.append(j)
 		i -= 1
 
+	# Antes que la cantera, las RESERVAS: ya son del club, cobran sueldo y
+	# estan sanas. Subir a un juvenil teniendo un suplente de sobra en
+	# reservas seria hacerlo debutar por nada.
+	while jugadores_sanos_count() < minimo:
+		var idx_reserva := _mejor_reserva_disponible()
+		if idx_reserva < 0:
+			break
+		var reserva: Dictionary = reservas[idx_reserva]
+		reservas.remove_at(idx_reserva)
+		# Con el banco lleno baja primero un suplente que no puede jugar:
+		# ocupa lugar y no aporta. Si están todos sanos, el banco se pasa
+		# del tope — es una emergencia, y el club tiene que poder
+		# presentarse.
+		if banco.size() >= max_suplentes():
+			var idx_baja := _peor_suplente_inhabilitado()
+			if idx_baja >= 0:
+				reservas.append(banco[idx_baja])
+				banco.remove_at(idx_baja)
+		banco.append(reserva)
+		subidos.append(reserva)
+
 	# Después llamar a los que hagan falta, del mejor para abajo.
+	#
+	# Acá el banco SÍ puede pasarse de max_suplentes: el tope es lo que
+	# armás vos, pero un club que no llega al mínimo para presentarse no
+	# tiene esa opción. Se van cuando el plantel se recupera (el bloque de
+	# arriba los devuelve a la cantera).
 	while jugadores_sanos_count() < minimo:
 		var idx := _mejor_juvenil_disponible()
 		if idx < 0:
@@ -1410,6 +1642,29 @@ func ajustar_convocatorias_de_emergencia(minimo: int) -> Dictionary:
 		subidos.append(juvenil)
 
 	return {"subidos": subidos, "bajados": bajados}
+
+
+## La reserva sana de mayor media. -1 si no hay ninguna.
+func _mejor_reserva_disponible() -> int:
+	var mejor := -1
+	for i in range(reservas.size()):
+		if not puede_jugar(int(reservas[i]["id"])):
+			continue
+		if mejor == -1 or float(reservas[i]["media"]) > float(reservas[mejor]["media"]):
+			mejor = i
+	return mejor
+
+
+## El suplente que NO puede jugar y menos aporta, para hacerle lugar a uno
+## que si. -1 si estan todos sanos: ahi el banco no es el problema.
+func _peor_suplente_inhabilitado() -> int:
+	var peor := -1
+	for i in range(banco.size()):
+		if puede_jugar(int(banco[i]["id"])):
+			continue
+		if peor == -1 or float(banco[i]["media"]) < float(banco[peor]["media"]):
+			peor = i
+	return peor
 
 
 ## El juvenil sano de mayor media. -1 si no queda ninguno disponible.
@@ -1443,7 +1698,9 @@ func promover_juvenil(jugador_id: int) -> Dictionary:
 	cantera.remove_at(idx_cantera)
 
 	_registrar_fichaje(juvenil, ValorJugador.calcular(juvenil, 50.0, 3))
-	_limpiar_registro(liberado["id"])
+	# Con lugar en el plantel no sale nadie: mover_a_banco devuelve {}.
+	if not liberado.is_empty():
+		_limpiar_registro(liberado["id"])
 	promociones_temporada += 1
 
 	return {"promovido": juvenil, "saliente": liberado}

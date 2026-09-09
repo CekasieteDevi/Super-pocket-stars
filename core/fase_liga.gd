@@ -18,6 +18,11 @@ var equipos: Array = []  # Team
 var tabla: Dictionary = {}  # nombre_equipo -> fila de stats
 var fixture: Array = []  # fechas -> [[idx_local, idx_visitante], ...]
 
+## El partido del equipo seguido en la fecha que se acaba de jugar, con
+## fotogramas para verlo. Es TRANSITORIO: no se guarda y se pisa en cada
+## fecha. Mismo contrato que Copa.seguido.
+var seguido: Dictionary = {}
+
 
 static func iniciar(nombre: String, equipos: Array, n_fechas: int) -> FaseLiga:
 	var f := FaseLiga.new()
@@ -31,13 +36,57 @@ static func iniciar(nombre: String, equipos: Array, n_fechas: int) -> FaseLiga:
 	return f
 
 
+## La fase entera de un saque. La usan los tests y el drenaje de fin de
+## temporada; la partida la juega fecha a fecha (ver jugar_fecha).
 func jugar_temporada(rng: RandomNumberGenerator) -> void:
-	for fecha in fixture:
-		for partido in fecha:
-			var home: Team = equipos[partido[0]]
-			var away: Team = equipos[partido[1]]
-			var r := MatchEngine.simular(home, away, rng, false)
-			_actualizar_tabla(home.nombre, away.nombre, r["goles_local"], r["goles_visitante"])
+	for i in range(fixture.size()):
+		jugar_fecha(i, rng)
+
+
+## Una sola fecha. La fase de liga internacional se juega intercalada con
+## el campeonato, una fecha por semana, y el cruce del jugador lo tiene
+## que poder mirar (ver TemporadaInternacional).
+##
+## El empate es un resultado: acá no hay alargue ni penales, así que el
+## partido va con `es_eliminatoria` en false (ver Copa.jugar_partido).
+func jugar_fecha(indice: int, rng: RandomNumberGenerator, equipo_seguido: Team = null) -> void:
+	seguido = {}
+	if indice < 0 or indice >= fixture.size():
+		return
+	for partido in fixture[indice]:
+		var home: Team = equipos[partido[0]]
+		var away: Team = equipos[partido[1]]
+		var es_el_del_jugador: bool = home == equipo_seguido or away == equipo_seguido
+		var r := Copa.jugar_partido(home, away, rng, es_el_del_jugador, false)
+		var gl: int = r["goles_local"]
+		var gv: int = r["goles_visitante"]
+		_actualizar_tabla(home.nombre, away.nombre, gl, gv)
+		if es_el_del_jugador:
+			var ganador := ""
+			if gl > gv:
+				ganador = home.nombre
+			elif gv > gl:
+				ganador = away.nombre
+			seguido = {
+				"local": home.nombre, "visitante": away.nombre,
+				"gl": gl, "gv": gv, "ganador": ganador,
+				"definicion": "90 minutos", "penales_texto": "",
+				"goles_log": r.get("goles_log", []), "log": r.get("log", []),
+				"eventos": r.get("eventos", []), "fotogramas": r.get("fotogramas", []),
+			}
+
+
+## El cruce que le toca a un equipo en una fecha: [local, visitante], o
+## vacío si esa fecha descansa (fixture impar) o si no juega esta fase.
+func cruce_de(equipo: Team, indice: int) -> Array:
+	if equipo == null or indice < 0 or indice >= fixture.size():
+		return []
+	for partido in fixture[indice]:
+		var home: Team = equipos[partido[0]]
+		var away: Team = equipos[partido[1]]
+		if home == equipo or away == equipo:
+			return [home, away]
+	return []
 
 
 func _actualizar_tabla(local: String, visitante: String, gl: int, gv: int) -> void:
@@ -91,3 +140,35 @@ func equipos_ordenados() -> Array:
 	for nombre in tabla_ordenada():
 		out.append(mapa[nombre])
 	return out
+
+
+## Guardado. Los equipos viajan por NOMBRE y se relocalizan al cargar con
+## el índice que arma Confederacion, igual que Copa.
+func guardar() -> Dictionary:
+	var nombres := []
+	for e in equipos:
+		nombres.append(e.nombre)
+	return {"nombre": nombre, "equipos": nombres, "tabla": tabla, "fixture": fixture}
+
+
+static func cargar(datos: Dictionary, indice: Dictionary) -> FaseLiga:
+	var f := FaseLiga.new()
+	f.nombre = str(datos.get("nombre", ""))
+	for n in datos.get("equipos", []):
+		if indice.has(str(n)):
+			f.equipos.append(indice[str(n)])
+	for nombre_equipo in datos.get("tabla", {}):
+		var fila: Dictionary = datos["tabla"][nombre_equipo]
+		var limpia := {}
+		# El JSON devuelve todo como float. La tabla se compara y se
+		# imprime como entero, así que se vuelve a enteros acá y no en
+		# cada lugar que la lee.
+		for clave in fila:
+			limpia[clave] = int(fila[clave])
+		f.tabla[str(nombre_equipo)] = limpia
+	for fecha in datos.get("fixture", []):
+		var pares := []
+		for par in fecha:
+			pares.append([int(par[0]), int(par[1])])
+		f.fixture.append(pares)
+	return f

@@ -119,12 +119,23 @@ static func ronda(equipo: Team, id: int) -> int:
 ## Parte de lo que vale hoy (Economia.sueldo_de_ficha, que ya incluye el
 ## Mercenario y el Hincha del club) y nunca baja de lo que cobra hoy: a
 ## nadie se le renueva por menos de lo que ya gana.
+##
+## Sirve para las dos negociaciones que hay, y la diferencia entre ellas
+## sale sola de si el jugador esta o no en el plantel:
+##
+##   - Uno propio: cobra un sueldo hoy y su pretension se amortigua
+##     contra tu division (ValorJugador.media_salarial).
+##   - Un agente libre (AgentesLibres.fichar): no cobra nada hoy y NO se
+##     amortigua. Si se amortiguara, un crack sin club firmaria por dos
+##     pesos en decima division; sin amortiguar, pide lo que vale y lo
+##     unico que te frena es que el presupuesto de Contratos te alcance.
 static func sueldo_pretendido(equipo: Team, jugador: Dictionary, anios: int) -> float:
 	var id: int = jugador["id"]
 	var anios_reales: int = clampi(anios, ANIOS_MIN, ANIOS_MAX)
+	var division: int = equipo.division_actual if equipo.contratos.has(id) else -1
 	var base: float = maxf(
 		float(equipo.sueldos.get(id, 0.0)),
-		Economia.sueldo_de_ficha(jugador, anios_reales, equipo.division_actual))
+		Economia.sueldo_de_ficha(jugador, anios_reales, division))
 
 	var extra: int = anios_reales - ANIOS_REFERENCIA
 	var factor_anios := 1.0

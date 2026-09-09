@@ -93,10 +93,7 @@ static func _sumar(stats: Dictionary, equipo: Team, jugador_id: int, clave: Stri
 
 
 static func _buscar(equipo: Team, jugador_id: int) -> Dictionary:
-	for j in equipo.jugadores:
-		if int(j["id"]) == jugador_id:
-			return j
-	for j in equipo.banco:
+	for j in equipo.todos_los_jugadores():
 		if int(j["id"]) == jugador_id:
 			return j
 	return {}

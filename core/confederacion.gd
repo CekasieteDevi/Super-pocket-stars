@@ -7,10 +7,10 @@ extends RefCounted
 ## copas internacionales (Campeones/Guerreros/Emergentes) a fase de liga +
 ## eliminación directa.
 ##
-## Uruguay usa la tabla de División 1 (Piramide.divisiones[0]) como su
-## "ranking nacional" — llamar a jugar_temporada_internacional() DESPUÉS de
-## Piramide.jugar_temporada() pero ANTES de Piramide.fin_de_temporada()
-## (que resetea esa tabla para la temporada siguiente).
+## Uruguay usa la División 1 (Piramide.divisiones[0]) como su "ranking
+## nacional", ordenada por la tabla de la temporada PASADA: la temporada
+## internacional arranca junto con el campeonato (iniciar_temporada) y se
+## juega repartida en el calendario, no de un saque al cerrar el año.
 ##
 ## Nombres de países reales, nunca clubes/escudos reales (aclarado en el
 ## GDD). Nombres de club y de jugador con pool creíble por país (§10.1,
@@ -110,30 +110,73 @@ func tier_de(indice: int) -> String:
 	return "alto" if indice < LIMITE_TIER_ALTO else "bajo"
 
 
-## Corre la temporada internacional completa: arma los cupos (mini-tablas +
-## previa), juega las tres copas, y recalcula los coeficientes con el
-## resultado. Devuelve el detalle de cada copa.
-func jugar_temporada_internacional(rng: RandomNumberGenerator) -> Dictionary:
-	var cupos := _asignar_cupos(rng)
+## Arranca la temporada internacional: reparte los cupos y deja las tres
+## copas listas para jugarse ronda a ronda (ver TemporadaInternacional).
+##
+## Se llama al EMPEZAR la temporada, no al cerrarla: el club del jugador
+## tiene que saber desde el primer día si juega una internacional, y sus
+## cruces se juegan intercalados con el campeonato. Por eso el ranking
+## nacional de Uruguay sale de la tabla de la temporada PASADA
+## (`posiciones`, ver ClasificacionCopas.posiciones_finales) y no de la
+## que todavía no se jugó. Con `posiciones` vacío —la primera temporada
+## del mundo, o un test— ordena por reputación.
+func iniciar_temporada(rng: RandomNumberGenerator, posiciones: Dictionary = {}) -> TemporadaInternacional:
+	return TemporadaInternacional.iniciar(_asignar_cupos(rng, posiciones))
 
-	var fase_campeones := FaseLiga.iniciar("Copa de Campeones", cupos["campeones"], 8)
-	var fase_guerreros := FaseLiga.iniciar("Copa de Guerreros", cupos["guerreros"], 6)
-	var fase_emergentes := FaseLiga.iniciar("Copa de Emergentes", cupos["emergentes"], 6)
 
-	var resultado_campeones := _jugar_copa_con_fase_liga(fase_campeones, rng)
-	var resultado_guerreros := _jugar_copa_con_fase_liga(fase_guerreros, rng)
-	var resultado_emergentes := _jugar_copa_con_fase_liga(fase_emergentes, rng)
-
-	_recalcular_coeficientes([resultado_campeones, resultado_guerreros, resultado_emergentes])
+## Cierra la temporada internacional ya jugada: recalcula los coeficientes
+## con lo que hizo cada país y hace derivar la fuerza de los clubes del
+## exterior para el año que viene (§10.5).
+func cerrar_temporada(temporada: TemporadaInternacional, rng: RandomNumberGenerator) -> Dictionary:
+	var resultado := temporada.resultado()
+	var por_copa := []
+	for clave in TemporadaInternacional.CLAVES:
+		if resultado.has(clave):
+			por_copa.append(resultado[clave])
+	_recalcular_coeficientes(por_copa)
 
 	for pais in paises:
 		for club in pais["clubes"]:
 			club.derivar_fuerza(rng)
+	return resultado
 
-	return {
-		"campeones": resultado_campeones, "guerreros": resultado_guerreros, "emergentes": resultado_emergentes,
-		"previa": cupos["previa_resultados"],
-	}
+
+## La temporada internacional entera de un saque, sin nadie mirando. La
+## usan los tests y el cierre de temporada cuando quedan rondas sin jugar.
+func jugar_temporada_internacional(rng: RandomNumberGenerator,
+		posiciones: Dictionary = {}) -> Dictionary:
+	var temporada := iniciar_temporada(rng, posiciones)
+	while temporada.hay_pendiente():
+		temporada.jugar_siguiente_ronda(rng)
+	return cerrar_temporada(temporada, rng)
+
+
+## Nombre de club -> Team, con la pirámide y los clubes del exterior que
+## ya tienen plantel materializado. Es lo que necesita el guardado para
+## relocalizar los equipos de las copas internacionales, que están medio
+## adentro y medio afuera de la pirámide (ver TemporadaInternacional.cargar).
+func indice_de_equipos() -> Dictionary:
+	var indice := {}
+	for liga in piramide.divisiones:
+		for equipo in liga.equipos:
+			indice[equipo.nombre] = equipo
+	for pais in paises:
+		for club in pais["clubes"]:
+			if club._equipo != null:
+				indice[club.nombre] = club._equipo
+	return indice
+
+
+## Los clubes del exterior con plantel materializado. El calendario les
+## tiene que pasar los días igual que a los de la pirámide: ahora las
+## copas internacionales se juegan repartidas en la temporada, y sin
+## recuperación de fatiga ni de lesiones los rivales del exterior se irían
+## desgastando ronda a ronda hasta llegar rotos a la final.
+func avanzar_dias(dias: int) -> void:
+	for pais in paises:
+		for club in pais["clubes"]:
+			if club._equipo != null:
+				club._equipo.avanzar_dias(dias)
 
 
 ## §10.2: cupos por copa según el tier de coeficiente de cada país.
@@ -141,14 +184,19 @@ func jugar_temporada_internacional(rng: RandomNumberGenerator) -> Dictionary:
 ## directo, 8°-9° a Emergentes directo, 10° no participa.
 ## Tier bajo (7°-12°, Uruguay arranca acá): 1°-2° a la previa de Campeones,
 ## 3° a Guerreros directo, 4°-5° a Emergentes directo, 6°-10° no participan.
-func _asignar_cupos(rng: RandomNumberGenerator) -> Dictionary:
+##
+## La previa NO se juega acá: se sortean los seis cruces y se los lleva
+## TemporadaInternacional, que la juega como primera ronda de la
+## temporada. Antes se resolvía en esta misma función, y eso dejaba
+## afuera del calendario un cruce que el club del jugador puede jugar.
+func _asignar_cupos(rng: RandomNumberGenerator, posiciones: Dictionary = {}) -> Dictionary:
 	var directos_campeones := []
 	var directos_guerreros := []
 	var directos_emergentes := []
 	var candidatos_previa := []
 
 	for indice in range(paises.size()):
-		var equipos_ordenados := _ranking_nacional(indice, rng)
+		var equipos_ordenados := _ranking_nacional(indice, rng, posiciones)
 		if tier_de(indice) == "alto":
 			for k in range(0, 5):
 				directos_campeones.append(equipos_ordenados[k])
@@ -167,40 +215,27 @@ func _asignar_cupos(rng: RandomNumberGenerator) -> Dictionary:
 	# partido único (el GDD pide ida y vuelta; simplificación como el
 	# resto de las copas de esta fase — ver nota en Copa).
 	var mezclados := _mezclar(candidatos_previa, rng)
-	var ganadores_previa := []
-	var perdedores_previa := []
-	var resultados_previa := []
-	for i in range(0, mezclados.size(), 2):
-		var a: Team = mezclados[i]
-		var b: Team = mezclados[i + 1]
-		var r := MatchEngine.simular(a, b, rng, false)
-		var ganador: Team = a if r["goles_local"] >= r["goles_visitante"] else b
-		var perdedor: Team = b if ganador == a else a
-		ganadores_previa.append(ganador)
-		perdedores_previa.append(perdedor)
-		resultados_previa.append({"local": a.nombre, "visitante": b.nombre, "gl": r["goles_local"], "gv": r["goles_visitante"], "ganador": ganador.nombre})
+	var cruces_previa := []
+	for i in range(0, mezclados.size() - 1, 2):
+		cruces_previa.append([mezclados[i], mezclados[i + 1]])
 
 	return {
-		"campeones": directos_campeones + ganadores_previa,
-		"guerreros": directos_guerreros + perdedores_previa,
+		"campeones": directos_campeones,
+		"guerreros": directos_guerreros,
 		"emergentes": directos_emergentes,
-		"previa_resultados": resultados_previa,
+		"previa": cruces_previa,
 	}
 
 
-## Team ordenados por ranking nacional: la tabla de División 1 para
-## Uruguay, la mini-tabla abstracta del país para el resto.
-func _ranking_nacional(indice_pais: int, rng: RandomNumberGenerator) -> Array:
+## Team ordenados por ranking nacional: para Uruguay, la División 1 por
+## la tabla de la temporada PASADA (misma clave de mérito que las copas
+## domésticas, ver ClasificacionCopas.ordenar_por_merito); para el resto,
+## la mini-tabla abstracta del país.
+func _ranking_nacional(indice_pais: int, rng: RandomNumberGenerator,
+		posiciones: Dictionary = {}) -> Array:
 	var pais: Dictionary = paises[indice_pais]
 	if pais["es_uruguay"]:
-		var division1: Liga = piramide.divisiones[0]
-		var mapa := {}
-		for equipo in division1.equipos:
-			mapa[equipo.nombre] = equipo
-		var out := []
-		for nombre in division1.tabla_ordenada():
-			out.append(mapa[nombre])
-		return out
+		return ClasificacionCopas.ordenar_por_merito(piramide.divisiones[0].equipos, posiciones)
 
 	var clubes_ordenados := _mini_tabla(pais["clubes"], rng)
 	var out := []
@@ -246,45 +281,6 @@ static func _resultado_abstracto(fuerza_a: float, fuerza_b: float, rng: RandomNu
 	if roll < p_empate + p_gana_a * (1.0 - p_empate):
 		return 1
 	return -1
-
-
-## §10.3: fase de liga completa, top 8 directo a octavos, el resto (hasta
-## 16 más) juega un playoff a partido único por los últimos 8 lugares de
-## octavos, y de ahí en más eliminación directa hasta la final.
-## Simplificación documentada: el GDD marca ida y vuelta desde octavos y
-## bombos por coeficiente para armar la fase de liga — acá todo el
-## knockout es a partido único (reutiliza Copa) y el fixture de la fase de
-## liga no arma bombos, ver notas en Copa y FaseLiga.
-func _jugar_copa_con_fase_liga(fase: FaseLiga, rng: RandomNumberGenerator) -> Dictionary:
-	fase.jugar_temporada(rng)
-	var ordenados := fase.equipos_ordenados()
-	var n := ordenados.size()
-
-	var directos: Array = ordenados.slice(0, 8)
-	var resto: Array = ordenados.slice(8, n)
-	var tamano_pool: int = min(16, resto.size())
-	var pool_playoff: Array = resto.slice(0, tamano_pool)
-	var eliminados: Array = resto.slice(tamano_pool, resto.size())
-
-	var ganadores_playoff := []
-	var partidos_playoff := []
-	for i in range(tamano_pool / 2):
-		var a: Team = pool_playoff[i]
-		var b: Team = pool_playoff[tamano_pool - 1 - i]
-		var r := MatchEngine.simular(a, b, rng, false)
-		var ganador: Team = a if r["goles_local"] >= r["goles_visitante"] else b
-		ganadores_playoff.append(ganador)
-		partidos_playoff.append({"local": a.nombre, "visitante": b.nombre, "gl": r["goles_local"], "gv": r["goles_visitante"], "ganador": ganador.nombre})
-
-	var equipos_octavos: Array = directos + ganadores_playoff
-	var knockout := Copa.iniciar("%s - Eliminacion" % fase.nombre, equipos_octavos, rng)
-	while knockout.campeon == null:
-		knockout.jugar_siguiente_ronda(rng)
-
-	return {
-		"fase_liga": fase, "eliminados_pre_playoff": eliminados,
-		"partidos_playoff": partidos_playoff, "knockout": knockout, "campeon": knockout.campeon,
-	}
 
 
 ## Puntos de fase de liga + un bonus creciente por ronda alcanzada en el

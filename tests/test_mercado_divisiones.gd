@@ -48,10 +48,15 @@ func _test_incorporar_mantiene_el_plantel(rng: RandomNumberGenerator) -> void:
 	for j in e.jugadores:
 		if j["id"] == 9000:
 			es_titular = true
-	if es_titular and e.jugadores.size() == titulares and e.banco.size() == banco:
-		print("OK: entro de titular y el plantel sigue en %d+%d." % [titulares, banco])
+	# El desplazado NO se pierde: con lugar en el plantel (tope
+	# Team.PLANTEL_MAXIMO) sigue en el club. El banco ya estaba completo
+	# con sus 7 suplentes, asi que va a RESERVAS. Antes el tope eran 18 y
+	# el mas flojo del puesto se soltaba.
+	if es_titular and e.jugadores.size() == titulares and e.banco.size() == banco 			and e.reservas.size() == 1:
+		print("OK: entro de titular, el desplazado va a reservas y no se pierde.")
 	else:
-		print("FALLA: titular=%s plantel %d+%d." % [es_titular, e.jugadores.size(), e.banco.size()])
+		print("FALLA: titular=%s plantel %d+%d+%d." % [
+			es_titular, e.jugadores.size(), e.banco.size(), e.reservas.size()])
 
 
 func _test_la_joya_se_pelea(rng: RandomNumberGenerator) -> void:

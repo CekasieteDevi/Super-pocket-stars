@@ -91,7 +91,7 @@ static func clasificados_nacional(piramide, posiciones: Dictionary = {}) -> Arra
 static func clasificados_de_division(piramide, division_idx: int, posiciones: Dictionary = {}) -> Array:
 	if division_idx < 0 or division_idx >= piramide.divisiones.size():
 		return []
-	var orden := _ordenar_por_merito(piramide.divisiones[division_idx].equipos, posiciones)
+	var orden := ordenar_por_merito(piramide.divisiones[division_idx].equipos, posiciones)
 	return orden.slice(0, mini(CUPOS_COPA_DIVISION, orden.size()))
 
 
@@ -110,11 +110,14 @@ static func _tablas_de_referencia(piramide, posiciones: Dictionary) -> Array:
 					0, tablas.size() - 1)
 			tablas[idx].append(equipo)
 	for d in range(tablas.size()):
-		tablas[d] = _ordenar_por_merito(tablas[d], posiciones)
+		tablas[d] = ordenar_por_merito(tablas[d], posiciones)
 	return tablas
 
 
-static func _ordenar_por_merito(equipos: Array, posiciones: Dictionary) -> Array:
+## Los clubes ordenados por lo que hicieron la temporada pasada, del
+## mejor al peor. Lo usan las copas domésticas y también el cupo
+## internacional de Uruguay (Confederacion._ranking_nacional).
+static func ordenar_por_merito(equipos: Array, posiciones: Dictionary = {}) -> Array:
 	var copia := equipos.duplicate()
 	copia.sort_custom(func(a, b):
 		var ka := _clave_de_merito(a, posiciones)

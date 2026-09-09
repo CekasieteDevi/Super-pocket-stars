@@ -28,6 +28,16 @@ const FECHAS_ENTRE_RONDAS_COPA := 4
 ## Tiene que caer antes de la primera ronda de copa de división, que es el
 ## slot par siguiente: fecha 8 (ver _copas_de_la_ronda).
 const FECHAS_PARA_COPA_DIVISION := 5
+## Cada cuántas fechas de liga cae una ronda internacional, y en cuáles.
+## Cae en las fechas IMPARES: las copas domésticas caen en los múltiplos
+## de FECHAS_ENTRE_RONDAS_COPA (4), que son todos pares, así que las dos
+## competencias nunca se pisan el miércoles.
+##
+## Dos fechas por ronda no es un número al azar: la Copa de Campeones
+## necesita 13 rondas (8 de fase de liga + playoff + 4 de knockout) más la
+## previa, y una temporada de 38 fechas tiene 19 miércoles impares. Con
+## una ronda cada cuatro fechas no entraban ni la mitad.
+const FECHAS_ENTRE_RONDAS_INTERNACIONAL := 2
 ## Reparto de la semana con partido entre semana: domingo, miércoles, y el
 ## domingo siguiente.
 const DIAS_HASTA_COPA := 3
@@ -67,6 +77,7 @@ var dia_absoluto: int = 0
 ## proxima ronda de copa (-1 si no hay uno programado).
 var dia_proximo_partido: int = 0
 var dia_proxima_copa: int = -1
+var dia_proximo_internacional: int = -1
 
 var ultimo_resultado: Dictionary = {}
 var ultimo_log: Array = []
@@ -88,9 +99,15 @@ const MAX_HISTORIAL_PARTIDOS := 120
 ## entre fechas de liga (ver _jugar_ronda_de_copas).
 var copa_nacional: Copa = null
 var copas_division: Array = []
-## Resumen de las tres copas internacionales de la ULTIMA temporada
-## cerrada: {"temporada": int, "campeones": {...}, ...}. Ver
-## _guardar_copas_internacionales. Vacio hasta que se cierre la primera.
+## La temporada internacional EN CURSO. Las tres copas ya no se juegan
+## enteras al cerrar el año: se arman al empezarlo, con los cupos que sale
+## del coeficiente y de la tabla pasada, y se juegan una ronda por semana
+## entre fechas de liga (ver TemporadaInternacional).
+var internacional: TemporadaInternacional = null
+## Resumen plano de las tres copas internacionales para la pantalla de
+## Copas: {"temporada": int, "campeones": {...}, ...}. Se rehace despues
+## de cada ronda, asi que muestra la copa EN CURSO y no solo la del año
+## pasado (ver TemporadaInternacional.resumen).
 var copas_internacionales: Dictionary = {}
 ## Cuadro terminado del Rey y de la copa interna de la temporada pasada.
 ## Ver _guardar_copas_de_la_temporada.
@@ -176,6 +193,7 @@ func partida_nueva(semilla: int = -1, nombre_club: String = "",
 	dia_absoluto = 0
 	dia_proximo_partido = 0
 	dia_proxima_copa = -1
+	dia_proximo_internacional = -1
 	historial_partidos = []
 	copas_internacionales = {}
 	copas_pasadas = {}
@@ -209,11 +227,33 @@ func _procesar_retornos_de_medio_ano() -> void:
 	if fechas <= 0:
 		return
 	var momento: float = float(temporada_actual) + float(fecha_actual) / float(fechas)
+	_avisar_opciones_por_vencer(momento)
 	for liga in piramide.divisiones:
 		for equipo in liga.equipos:
-			for j in Prestamos.procesar_retornos(equipo, momento):
+			for r in Prestamos.procesar_retornos(equipo, momento, equipo_jugador):
 				if equipo == equipo_jugador:
-					_agregar_noticia("PRÉSTAMOS: vuelve %s del préstamo." % j["posicion"])
+					_agregar_noticia(Prestamos.texto_retorno(r), "fichajes",
+						[Noticias.mencion(r["jugador"], equipo_jugador.nombre)])
+
+
+## Avisa UNA vez por prestamo que la opcion de compra esta por vencer.
+## Sin el aviso, la unica forma de no perderla era acordarse solo: la
+## chance se muere en silencio el dia que el jugador se vuelve a su club.
+func _avisar_opciones_por_vencer(momento: float) -> void:
+	for id in equipo_jugador.prestados_propios:
+		var info: Dictionary = equipo_jugador.prestados_propios[id]
+		if float(info.get("opcion_compra", 0.0)) <= 0.0 or bool(info.get("aviso_opcion", false)):
+			continue
+		if momento < float(info["temporada_retorno"]) - Prestamos.AVISO_ANTES_DE_VENCER:
+			continue
+		var donde := Mercado.ubicar(equipo_jugador, int(id))
+		if donde.is_empty():
+			continue
+		info["aviso_opcion"] = true
+		_agregar_noticia("OPCIÓN DE COMPRA: se te vence la opción por %s (%s) por %s. Ejercela en Mercado > Cesión antes de que vuelva a su club." % [
+			_nombre_completo(donde["jugador"]), donde["jugador"]["posicion"],
+			Economia.formato_dinero(float(info["opcion_compra"]))],
+			"fichajes", [Noticias.mencion(donde["jugador"], equipo_jugador.nombre)])
 
 
 func _todas_las_cajas_vacias() -> bool:
@@ -243,10 +283,21 @@ func _sembrar_presupuestos() -> void:
 ## Las copas de división NO se sortean acá: esperan a la fecha
 ## FECHAS_PARA_COPA_DIVISION y clasifican por la tabla en curso (ver
 ## _armar_copas_de_division). Hasta entonces `copas_division` queda vacío.
+## La temporada internacional arranca ACA tambien, y por el mismo motivo
+## que el Rey: sus cupos salen de la tabla de la temporada pasada y sus
+## cruces se juegan repartidos en el calendario, no de un saque al cerrar
+## el año (ver TemporadaInternacional).
 func _armar_copas() -> void:
 	copa_nacional = Copa.iniciar("Copa del Rey",
 		ClasificacionCopas.clasificados_nacional(piramide, posiciones_temporada_anterior), rng)
 	copas_division = []
+	internacional = confederacion.iniciar_temporada(rng, posiciones_temporada_anterior)
+	dia_proximo_internacional = -1
+	# `copas_internacionales` NO se pisa aca: la temporada internacional
+	# nueva no tiene nada que mostrar hasta que se juega la previa, y
+	# vaciarla dejaba la pantalla de Copas sin el campeon del año pasado
+	# justo cuando se acaba de consagrar. Se rehace sola en la primera
+	# ronda (ver _jugar_ronda_internacional).
 
 
 ## Sortea las diez copas de división con la tabla de la temporada EN
@@ -372,38 +423,8 @@ func jugar_siguiente_fecha() -> void:
 	dia_proximo_partido = dia_temporada + DIAS_ENTRE_FECHAS
 	if _toca_ronda_de_copa():
 		dia_proxima_copa = dia_temporada + DIAS_HASTA_COPA
-
-
-## Las tres internacionales se juegan ENTERAS al cerrar la temporada y su
-## resultado se usaba solo para una noticia y se tiraba: no quedaba nada
-## que mirar despues. Se guarda un resumen plano —tabla de la fase de
-## liga, playoff y las rondas del knockout— con el que la pantalla de
-## Copas puede dibujar el cuadro sin tener que reproducir la simulacion.
-##
-## Se guarda solo la ULTIMA temporada. Un historico de todas las
-## internacionales de todas las temporadas engordaria el guardado sin que
-## nadie lo vaya a leer.
-func _guardar_copas_internacionales(resultado: Dictionary) -> void:
-	copas_internacionales = {"temporada": temporada_actual}
-	for clave in ["campeones", "guerreros", "emergentes"]:
-		if not resultado.has(clave):
-			continue
-		var r: Dictionary = resultado[clave]
-		var fase: FaseLiga = r["fase_liga"]
-		var tabla := []
-		for nombre in fase.tabla_ordenada():
-			var fila: Dictionary = fase.tabla[nombre].duplicate()
-			fila["equipo"] = nombre
-			tabla.append(fila)
-		var knockout: Copa = r["knockout"]
-		var campeon: Team = r["campeon"]
-		copas_internacionales[clave] = {
-			"nombre": fase.nombre,
-			"tabla": tabla,
-			"playoff": r.get("partidos_playoff", []),
-			"rondas": knockout.historial,
-			"campeon": campeon.nombre if campeon != null else "",
-		}
+	if _toca_ronda_internacional():
+		dia_proximo_internacional = dia_temporada + DIAS_HASTA_COPA
 
 
 ## El cuadro terminado del Rey y de la copa de TU division. La de las
@@ -599,6 +620,7 @@ func restaurar_calendario(datos: Dictionary, fechas_por_temporada: int) -> void:
 	dia_temporada = int(datos.get("dia_temporada", fecha_actual * DIAS_ENTRE_FECHAS))
 	dia_proximo_partido = int(datos.get("dia_proximo_partido", dia_temporada))
 	dia_proxima_copa = int(datos.get("dia_proxima_copa", -1))
+	dia_proximo_internacional = int(datos.get("dia_proximo_internacional", -1))
 	# El dia absoluto solo alimenta la fecha que se muestra, asi que para
 	# un guardado viejo alcanza con estimarlo.
 	dia_absoluto = int(datos.get("dia_absoluto",
@@ -637,7 +659,7 @@ func dias_hasta_el_partido() -> int:
 ##
 ## Si hoy hay partido no avanza nada: primero se juega.
 func avanzar_un_dia() -> Array:
-	if juego_terminado or hay_partido_hoy() or hay_partido_de_copa_hoy():
+	if juego_terminado or hay_partido_hoy() or hay_partido_de_copa_hoy() or hay_partido_internacional_hoy():
 		return []
 	var noticias_antes: int = noticias.size()
 	# Los que se recuperan se preguntan ANTES y DESPUES: Team.avanzar_dias
@@ -692,6 +714,15 @@ func avanzar_un_dia() -> Array:
 		dia_proxima_copa = -1
 		_jugar_ronda_de_copas()
 
+	# La ronda internacional cae el mismo miercoles, en las fechas
+	# impares: nunca la misma semana que la copa domestica (ver
+	# FECHAS_ENTRE_RONDAS_INTERNACIONAL). Misma regla que la copa: se
+	# resuelve sola solo si el jugador no tiene cruce.
+	if (dia_proximo_internacional >= 0 and dia_temporada >= dia_proximo_internacional
+			and not hay_partido_internacional_hoy()):
+		dia_proximo_internacional = -1
+		_jugar_ronda_internacional()
+
 	# La temporada cierra cuando no quedan fechas Y ya paso la semana de
 	# la ultima: si cerrara en el pitazo final, el jugador no llegaria a
 	# ver el ultimo resultado ni a cobrar los ultimos dias.
@@ -705,11 +736,20 @@ func avanzar_un_dia() -> Array:
 			dia_proxima_copa = dia_temporada
 			while _hay_copa_pendiente() and copa_de_hoy() == null:
 				_jugar_ronda_de_copas()
+		# Lo mismo con la internacional: la Copa de Campeones necesita 14
+		# rondas contando la previa y no siempre entran todas en el
+		# calendario. Las que falten se juegan aca, y si en alguna juega el
+		# club del jugador, la temporada lo espera.
+		if _hay_internacional_pendiente():
+			dia_proximo_internacional = dia_temporada
+			while _hay_internacional_pendiente() and not hay_partido_internacional_hoy():
+				_jugar_ronda_internacional()
 		# Sin `return`: las noticias de las rondas que si se jugaron recien
 		# se juntan al final de esta funcion, y salteando el tramo se
 		# perderian.
-		if copa_de_hoy() == null:
+		if copa_de_hoy() == null and not hay_partido_internacional_hoy():
 			dia_proxima_copa = -1
+			dia_proximo_internacional = -1
 			_cerrar_temporada()
 
 	# La apertura y el cierre del mercado se avisan siempre: son los dos
@@ -737,7 +777,7 @@ func avanzar_un_dia() -> Array:
 ## decision. Saltar a ciegas seria volver al problema de antes.
 func avanzar_hasta_el_partido() -> Array:
 	var todo := []
-	while not hay_partido_hoy() and not hay_partido_de_copa_hoy() and not juego_terminado:
+	while not hay_partido_hoy() and not hay_partido_de_copa_hoy() 			and not hay_partido_internacional_hoy() and not juego_terminado:
 		var dia := avanzar_un_dia()
 		todo.append_array(dia)
 		if not dia.is_empty():
@@ -839,21 +879,54 @@ func _prefijo_de_oferta(oferta: Dictionary) -> String:
 func _avanzar_dias_todos(dias: int) -> void:
 	for liga in piramide.divisiones:
 		liga.avanzar_dias(dias)
+	# Los rivales del exterior tambien: sus copas se juegan repartidas en
+	# la temporada, asi que sin recuperacion llegarian rotos a la final.
+	if confederacion != null:
+		confederacion.avanzar_dias(dias)
 	# §9.3: las negociaciones corren con el calendario. Acá se resuelven
 	# las que esperaban respuesta del otro club y aparecen las ofertas
 	# nuevas por jugadores nuestros.
 	# Las negociaciones solo corren con el mercado ABIERTO: fuera de la
 	# ventana nadie contesta ni viene a buscar a nadie.
 	if hay_mercado_abierto():
-		for oferta in Ofertas.avanzar(equipo_jugador, dias, piramide, rng, temporada_actual, division_jugador):
+		for oferta in Ofertas.avanzar(equipo_jugador, dias, piramide, rng, temporada_actual,
+				division_jugador, float(temporada_actual) + _fraccion_de_temporada()):
 			if not oferta["log"].is_empty():
 				_agregar_noticia("%s%s" % [_prefijo_de_oferta(oferta), oferta["log"][-1]],
 					"fichajes", _mencion_de_oferta(oferta))
 		for nueva in Ofertas.generar_entrantes(equipo_jugador, piramide, rng, dias, division_jugador):
 			_agregar_noticia("MERCADO: %s" % nueva["log"][-1],
 				"fichajes", _mencion_de_oferta(nueva))
+		# Los pedidos de CESION entran por la misma lista de ofertas, pero
+		# solo por los que abriste en la solapa Cesion (core/cesiones.gd).
+		var pedido := Cesiones.generar_pedido(equipo_jugador, piramide, rng, dias, division_jugador)
+		if not pedido.is_empty():
+			_agregar_noticia("CESION: %s" % pedido["log"][-1],
+				"fichajes", _mencion_de_oferta(pedido))
 	Ofertas.archivar(equipo_jugador)
+	# El mercado de libres corre todos los dias, con la ventana abierta o
+	# cerrada: no es una transferencia entre clubes.
+	_avanzar_agentes_libres(dias)
 	_procesar_retornos_de_medio_ano()
+
+
+## Los clubes de la IA salen a buscar al pool de libres. Solo se avisan
+## los de TU division: son 200 clubes fichando todos los dias y el feed no
+## puede ser una lista de fichajes ajenos. Los tuyos los decidis vos.
+func _avanzar_agentes_libres(dias: int) -> void:
+	for ficha in AgentesLibres.ronda_diaria(piramide, rng, dias, equipo_jugador):
+		var club: Team = ficha["club"]
+		if club.division_actual != division_jugador:
+			continue
+		var entra: Dictionary = ficha["entra"]
+		var texto := "AGENTES LIBRES: %s ficha libre a %s (%s, media %d)." % [
+			club.nombre, _nombre_completo(entra), str(entra["posicion"]),
+			int(entra["media"])]
+		var sale: Dictionary = ficha["sale"]
+		if not sale.is_empty():
+			texto += " Deja libre a un %s de media %d." % [
+				str(sale["posicion"]), int(sale["media"])]
+		_agregar_noticia(texto, "fichajes", [Noticias.mencion(entra, club.nombre)])
 
 
 func _toca_ronda_de_copa() -> bool:
@@ -862,6 +935,18 @@ func _toca_ronda_de_copa() -> bool:
 	if fecha_actual % FECHAS_ENTRE_RONDAS_COPA != 0:
 		return false
 	return _hay_copa_pendiente()
+
+
+## Le toca ronda internacional en las fechas IMPARES, para no chocar con
+## la copa domestica (ver FECHAS_ENTRE_RONDAS_INTERNACIONAL).
+func _toca_ronda_internacional() -> bool:
+	if not _hay_internacional_pendiente():
+		return false
+	return fecha_actual % FECHAS_ENTRE_RONDAS_INTERNACIONAL == 1
+
+
+func _hay_internacional_pendiente() -> bool:
+	return internacional != null and internacional.hay_pendiente()
 
 
 func _hay_copa_pendiente() -> bool:
@@ -954,6 +1039,75 @@ func resolver_ronda_de_copa() -> void:
 	_jugar_ronda_de_copas()
 
 
+## El cruce internacional que le toca al jugador HOY, o vacio. Mismo
+## contrato que copa_de_hoy(): es un dato DERIVADO del cuadro y del
+## calendario, asi que sobrevive a guardar y cargar la partida.
+func cruce_internacional_de_hoy() -> Dictionary:
+	if juego_terminado or internacional == null:
+		return {}
+	if dia_proximo_internacional < 0 or dia_temporada < dia_proximo_internacional:
+		return {}
+	return internacional.cruce_de(equipo_jugador)
+
+
+func hay_partido_internacional_hoy() -> bool:
+	return not cruce_internacional_de_hoy().is_empty()
+
+
+## Como se llama el torneo y la ronda del partido internacional de hoy,
+## para el encabezado de la portada. Ejemplo: "Copa de Guerreros ·
+## Fecha 3 de la fase de liga".
+func torneo_internacional_de_hoy() -> String:
+	var cruce := cruce_internacional_de_hoy()
+	if cruce.is_empty():
+		return ""
+	return "%s  ·  %s" % [str(cruce["torneo"]), str(cruce["ronda"])]
+
+
+func rival_internacional() -> Team:
+	var cruce := cruce_internacional_de_hoy()
+	if cruce.is_empty():
+		return null
+	return cruce["visitante"] if cruce["local"] == equipo_jugador else cruce["local"]
+
+
+func internacional_de_local() -> bool:
+	var cruce := cruce_internacional_de_hoy()
+	return not cruce.is_empty() and cruce["local"] == equipo_jugador
+
+
+## Juega la ronda internacional de hoy CON el partido del jugador adentro:
+## el suyo con el motor espacial y fotogramas, el resto simulado. La llama
+## el boton de la portada.
+func jugar_partido_internacional() -> void:
+	if not hay_partido_internacional_hoy():
+		return
+	dia_proximo_internacional = -1
+	_jugar_ronda_internacional(equipo_jugador)
+
+
+## Resuelve la ronda internacional de hoy SIN mirar el cruce propio. Es lo
+## que usa el modo "saltar la temporada", igual que resolver_ronda_de_copa.
+func resolver_ronda_internacional() -> void:
+	if dia_proximo_internacional < 0 or dia_temporada < dia_proximo_internacional:
+		return
+	dia_proximo_internacional = -1
+	_jugar_ronda_internacional()
+
+
+func _jugar_ronda_internacional(equipo_seguido: Team = null) -> void:
+	if internacional == null:
+		return
+	internacional.jugar_siguiente_ronda(rng, equipo_seguido)
+	if not internacional.seguido.is_empty():
+		_tomar_partido_de_torneo(internacional.torneo_seguido, internacional.seguido,
+			internacional.seguido_eliminatorio)
+	# El resumen se rehace despues de CADA ronda: es lo que mira la
+	# pantalla de Copas, y con la copa a medio jugar tambien hay tabla y
+	# cuadro para mirar.
+	copas_internacionales = internacional.resumen(temporada_actual)
+
+
 func _jugar_ronda_de_copas(equipo_seguido: Team = null) -> void:
 	for c in _copas_de_la_ronda():
 		c.jugar_siguiente_ronda(rng, equipo_seguido)
@@ -979,7 +1133,21 @@ func _jugar_ronda_de_copas(equipo_seguido: Team = null) -> void:
 ## partido": es lo que mira la pantalla animada y lo que entra al
 ## historial, igual que un partido de liga.
 func _tomar_partido_de_copa(c: Copa) -> void:
-	var s: Dictionary = c.seguido
+	_tomar_partido_de_torneo(c.nombre, c.seguido, true)
+
+
+## El partido de torneo que acaba de jugar el jugador —una ronda de copa o
+## un cruce internacional— pasa a ser "el ultimo partido": es lo que mira
+## la pantalla animada y lo que entra al historial, igual que un partido
+## de liga.
+##
+## `eliminatorio` en false son las fechas de la fase de liga
+## internacional: ahi el empate es un resultado y nadie queda eliminado,
+## asi que la noticia no puede decir "pasas de ronda".
+func _tomar_partido_de_torneo(nombre_torneo: String, s: Dictionary,
+		eliminatorio: bool) -> void:
+	if s.is_empty():
+		return
 	ultimo_resultado = {
 		"local": s["local"], "visitante": s["visitante"],
 		"gl": s["gl"], "gv": s["gv"], "goles_log": s["goles_log"],
@@ -993,14 +1161,17 @@ func _tomar_partido_de_copa(c: Copa) -> void:
 	ultimo_log = s["log"]
 	ultimos_eventos = s["eventos"]
 	ultimos_fotogramas = s["fotogramas"]
-	_registrar_en_historial(c.nombre)
+	_registrar_en_historial(nombre_torneo)
 	var paso: bool = str(s["ganador"]) == equipo_jugador.nombre
 	var cierre := ""
 	if str(s["definicion"]) != "90 minutos":
 		cierre = " en %s%s" % [s["definicion"], s["penales_texto"]]
-	_agregar_noticia("%s: %s %d-%d %s%s. %s" % [
-		c.nombre.to_upper(), s["local"], s["gl"], s["gv"], s["visitante"], cierre,
-		"Pasás de ronda." if paso else "Quedás eliminado."], "campeones")
+	var desenlace := ""
+	if eliminatorio:
+		desenlace = " Pasás de ronda." if paso else " Quedás eliminado."
+	_agregar_noticia("%s: %s %d-%d %s%s.%s" % [
+		nombre_torneo.to_upper(), s["local"], s["gl"], s["gv"], s["visitante"], cierre,
+		desenlace], "campeones")
 
 
 ## Copas + internacional con la temporada recién jugada, después ascensos/
@@ -1037,8 +1208,22 @@ func _cerrar_temporada() -> void:
 	# termina acá para que siempre haya campeón.
 	while _hay_copa_pendiente():
 		_jugar_ronda_de_copas()
-	var resultado_internacional := confederacion.jugar_temporada_internacional(rng)
-	_guardar_copas_internacionales(resultado_internacional)
+
+	# La internacional viene jugandose desde la primera fecha igual que
+	# las copas. Lo que quede sin jugar se termina aca —el drenaje de
+	# avanzar_un_dia ya espero al jugador— y recien despues se cierra:
+	# ahi se recalculan los coeficientes de los doce paises y deriva la
+	# fuerza de los clubes del exterior para el año que viene.
+	#
+	# `internacional` en null es una partida guardada de antes de que las
+	# copas internacionales se jugaran repartidas: se arma y se juega
+	# entera aca, como se hacia siempre.
+	if internacional == null:
+		internacional = confederacion.iniciar_temporada(rng, posiciones_temporada_anterior)
+	while internacional.hay_pendiente():
+		_jugar_ronda_internacional()
+	var resultado_internacional := confederacion.cerrar_temporada(internacional, rng)
+	copas_internacionales = internacional.resumen(temporada_actual)
 	# ACA y no mas abajo: fin_de_temporada() resetea la tabla y las
 	# estadisticas individuales para la temporada nueva, asi que despues
 	# de esa linea ya no hay tabla final ni goleador que mostrar.
@@ -1064,6 +1249,22 @@ func _cerrar_temporada() -> void:
 	Sponsors.cobrar_temporada(equipo_jugador)
 
 	var resultado_piramide := piramide.fin_de_temporada(rng, equipo_jugador, temporada_actual)
+	# Los que colgaron los botines sin club: es por donde se vacia el pool
+	# de libres (ver AgentesLibres.envejecer_pool). Se nombra al de mejor
+	# media, que es el unico que alguien podria estar esperando fichar.
+	var retirados: Array = resultado_piramide.get("retirados", [])
+	if not retirados.is_empty():
+		var mejor: Dictionary = retirados[0]
+		for r in retirados:
+			if float(r["media"]) > float(mejor["media"]):
+				mejor = r
+		if retirados.size() == 1:
+			_agregar_noticia("SE RETIRA: %s (%s, %d años) cuelga los botines sin conseguir club." % [
+				_nombre_completo(mejor), mejor["posicion"], int(mejor["edad"])], "fichajes")
+		else:
+			_agregar_noticia("SE RETIRAN: %d jugadores sin club cuelgan los botines. El mas conocido, %s (%s, %d años, media %d)." % [
+				retirados.size(), _nombre_completo(mejor), mejor["posicion"],
+				int(mejor["edad"]), int(mejor["media"])], "fichajes")
 	for m in resultado_piramide["movimientos"]:
 		if m["equipo"] == equipo_jugador.nombre:
 			_agregar_noticia("%s: %s (división %d → división %d)" % [equipo_jugador.nombre, m["tipo"], m["de_division"], m["a_division"]])
@@ -1145,6 +1346,7 @@ func _cerrar_temporada() -> void:
 	dia_temporada = -Calendario.dias_hasta_el_arranque(dia_absoluto)
 	dia_proximo_partido = 0
 	dia_proxima_copa = -1
+	dia_proximo_internacional = -1
 	# Antes de tirarlos: las copas TERMINAN al cerrar la temporada y los
 	# cuadros nuevos las pisan en el acto, asi que el cuadro terminado —el
 	# unico que tiene campeon— no se llegaba a ver nunca. Se guarda el de
@@ -1194,6 +1396,24 @@ func _avisar_clasificacion_a_copas() -> void:
 	else:
 		_agregar_noticia("COPA DEL REY: %s se queda afuera (salió %d° en la División %d, entran los primeros %d)." % [
 			equipo_jugador.nombre, puesto, division_jugada, cupos_rey], "campeones")
+	_avisar_cupo_internacional()
+
+
+## El cupo internacional sale de la División 1 y del coeficiente del país,
+## asi que solo lo puede tener un club de primera. Se avisa igual que el
+## del Rey: el cuadro ya esta sorteado y el jugador no tiene de donde
+## deducirlo.
+func _avisar_cupo_internacional() -> void:
+	if internacional == null:
+		return
+	var clave := internacional.copa_de(equipo_jugador)
+	if clave == "":
+		return
+	var donde := "la previa de la Copa de Campeones"
+	if clave != "previa":
+		donde = "la Copa de %s" % clave.capitalize()
+	_agregar_noticia("INTERNACIONAL: %s juega %s esta temporada." % [
+		equipo_jugador.nombre, donde], "campeones")
 
 
 
@@ -1333,6 +1553,14 @@ func responder_oferta(oferta_id: int, accion: String, monto: float = 0.0) -> Dic
 			return {"exito": true, "oferta": oferta}
 		"aceptar":
 			if bool(oferta["entrante"]):
+				# Aceptar una CESION tampoco cierra nada: el jugador tiene
+				# la ultima palabra igual que en una venta (Cesiones.cerrar).
+				if str(oferta.get("tipo", "compra")) == "cesion":
+					oferta["estado"] = Ofertas.ACUERDO_CLUB
+					oferta["dias"] = float(rng.randi_range(
+						Ofertas.DIAS_RESPUESTA_MIN, Ofertas.DIAS_RESPUESTA_MAX))
+					oferta["log"].append("Aceptaste los terminos. Ahora falta que el jugador quiera ir.")
+					return {"exito": true, "oferta": oferta}
 				Ofertas.aceptar_entrante(oferta, rng)
 				return {"exito": true, "oferta": oferta}
 			if equipo_jugador.caja["fichajes"] < float(oferta["monto"]):
@@ -1341,6 +1569,101 @@ func responder_oferta(oferta_id: int, accion: String, monto: float = 0.0) -> Dic
 			oferta["log"].append("Aceptaste pagar %s." % Economia.formato_dinero(oferta["monto"]))
 			return {"exito": true, "oferta": oferta}
 	return {"exito": false, "motivo": "Acción desconocida."}
+
+
+## Los prestados que TENES vos y todavia se pueden comprar: el jugador,
+## el club dueño, el precio pactado y cuando se vence la chance. La UI los
+## muestra en el panel Cesion — la opcion se ejerce ANTES de que venza el
+## prestamo, porque al vencer el jugador se vuelve a su club.
+func opciones_de_compra_abiertas() -> Array:
+	var salida := []
+	for id in equipo_jugador.prestados_propios:
+		var info: Dictionary = equipo_jugador.prestados_propios[id]
+		var precio: float = float(info.get("opcion_compra", 0.0))
+		if precio <= 0.0:
+			continue
+		var donde := Mercado.ubicar(equipo_jugador, int(id))
+		if donde.is_empty():
+			continue
+		var dueno = info["club_dueno"]
+		salida.append({
+			"jugador": donde["jugador"],
+			"dueno": dueno.nombre if dueno is Team else str(dueno),
+			"precio": precio,
+			"temporada_retorno": float(info["temporada_retorno"]),
+		})
+	return salida
+
+
+## Ejerces la opcion de compra de un prestado tuyo: te lo quedas al precio
+## que el dueño pactó cuando te lo cedio.
+func ejercer_opcion_de_compra(jugador_id: int) -> Dictionary:
+	# NO pide el libro de pases abierto, a diferencia de todo el resto del
+	# mercado. La opcion no es una operacion nueva: es un derecho que
+	# quedo firmado cuando se acordo la cesion, y el precio ya estaba
+	# pactado. Con el gate puesto, un prestamo que vencia fuera de la
+	# ventana te dejaba mirando como se iba el jugador sin poder ejercerla.
+	if not equipo_jugador.prestados_propios.has(jugador_id):
+		return {"exito": false, "motivo": "Ese jugador no está a préstamo en tu club."}
+	var info: Dictionary = equipo_jugador.prestados_propios[jugador_id]
+	var dueno = info["club_dueno"]
+	if not (dueno is Team):
+		dueno = _club_por_nombre(str(dueno))
+	if dueno == null:
+		return {"exito": false, "motivo": "Ese club ya no existe."}
+
+	var donde := Mercado.ubicar(equipo_jugador, jugador_id)
+	if donde.is_empty():
+		return {"exito": false, "motivo": "Ese jugador ya no está en tu plantel."}
+	var jugador: Dictionary = donde["jugador"]
+	# El jugador tiene la ultima palabra tambien acá: comprarlo es un pase,
+	# no una renovacion, y puede no querer quedarse.
+	var sueldo_actual := Prestamos.sueldo_de_referencia(dueno, jugador)
+	var pretende := Negociacion.sueldo_pretendido(jugador, sueldo_actual,
+		dueno.division_actual, equipo_jugador.division_actual)
+	var detalle := Negociacion.interes_jugador(jugador, equipo_jugador.animo.get(jugador_id, 50.0),
+		sueldo_actual, pretende, dueno.division_actual, equipo_jugador.division_actual)
+	if not detalle["acepta"]:
+		return {"exito": false, "motivo": "No quiere quedarse: %s" % Negociacion.motivo_rechazo(detalle)}
+
+	var r := Prestamos.ejercer_opcion(equipo_jugador, dueno, jugador_id, pretende)
+	if not r["exito"]:
+		return r
+	_agregar_noticia("OPCIÓN DE COMPRA: %s ejerce la opción por %s (%s) y le paga %s a %s." % [
+		equipo_jugador.nombre, _nombre_completo(jugador), jugador["posicion"],
+		Economia.formato_dinero(r["precio"]), dueno.nombre],
+		"fichajes", [Noticias.mencion(jugador, equipo_jugador.nombre)])
+	return r
+
+
+## Contraofertar los TERMINOS de un pedido de cesion. No hay un solo
+## numero que mover: se discuten el fee, cuanto del sueldo te sacan de
+## encima, cuanto dura, la opcion de compra y el plus que le ponen al
+## jugador para convencerlo (ver core/cesiones.gd).
+func contraofertar_cesion(oferta_id: int, terminos: Dictionary) -> Dictionary:
+	if not hay_mercado_abierto():
+		return _mercado_cerrado()
+	var oferta := _oferta_por_id(oferta_id)
+	if oferta.is_empty() or str(oferta.get("tipo", "compra")) != "cesion":
+		return {"exito": false, "motivo": "Esa cesión ya no existe."}
+	if str(oferta["estado"]) != Ofertas.PENDIENTE_NOSOTROS:
+		return {"exito": false, "motivo": "No es tu turno en esa negociación."}
+	if float(terminos.get("porcentaje_sueldo", 1.0)) < Prestamos.PORCENTAJE_SUELDO_MINIMO:
+		return {"exito": false, "motivo": "Pedís que te cubran menos del %d%% del sueldo: eso no es una cesión, es un depósito." % int(
+			Prestamos.PORCENTAJE_SUELDO_MINIMO * 100.0)}
+	Cesiones.contraofertar(oferta, terminos, rng)
+	return {"exito": true, "oferta": oferta}
+
+
+## Lo que el club que pide llega a pagar como maximo, para que la UI pueda
+## mostrar hasta donde apretar. Vacio si el club o el jugador ya no estan.
+func topes_de_cesion(oferta: Dictionary) -> Dictionary:
+	var pide := _club_por_nombre(str(oferta["club"]))
+	var donde := Mercado.ubicar(equipo_jugador, int(oferta["jugador_id"]))
+	if pide == null or donde.is_empty():
+		return {}
+	var temporadas: float = float(Prestamos.DURACIONES.get(str(oferta.get("duracion", "una")), 1.0))
+	return Cesiones.topes(pide, equipo_jugador, donde["jugador"], temporadas)
 
 
 ## Ultimo tramo de una oferta NUESTRA ya acordada con el club: el contrato
@@ -1448,15 +1771,7 @@ func pedir_prestamo(dueno: Team, jugador_id: int, duracion: String,
 ## 0.0 si ni con el tope de PESO_SUELDO alcanza — ahi el "no" es de verdad
 ## y hay que decirselo al jugador en vez de hacerlo tirar plata al vacio.
 func _plus_para_convencer(detalle: Dictionary, sueldo_actual: float) -> float:
-	var falta: float = Negociacion.UMBRAL_ACEPTA - float(detalle["interes"])
-	var techo: float = Negociacion.TOPE_SUELDO_ARRIBA - float(detalle["por_sueldo"])
-	if falta <= 0.0 or falta > techo:
-		return 0.0
-	# por_sueldo = (ofrecido / actual - 1) * PESO_SUELDO, despejado.
-	# 2% de margen: el numero exacto queda justo en el umbral y cualquier
-	# redondeo del SpinBox lo deja un peso abajo.
-	var mejora_extra: float = falta / Negociacion.PESO_SUELDO * 1.02
-	return sueldo_actual * mejora_extra
+	return Negociacion.plus_para_convencer(detalle, sueldo_actual)
 
 
 ## Cuanto de la temporada va corrido, de 0 a 1. Lo usa el prestamo para
@@ -1509,23 +1824,37 @@ func pagar_clausula(vendedor: Team, jugador_objetivo_id: int) -> Dictionary:
 	return resultado
 
 
-## Fichar del pool de agentes libres de tu división (AgentesLibres.fichar):
-## sin fee de transferencia, solo el sueldo. El jugador que reemplazás pasa
-## a integrar el pool en tu lugar.
-func fichar_agente_libre(jugador_id: int, indice_saliente: int, es_banco: bool) -> Dictionary:
-	if not hay_mercado_abierto():
-		return _mercado_cerrado()
-	var resultado := AgentesLibres.fichar(equipo_jugador, liga_jugador().agentes_libres, jugador_id, indice_saliente, es_banco)
+## El pool de agentes libres, uno solo para toda la piramide (ver
+## Piramide.agentes_libres). Las diez divisiones apuntan a esta misma
+## lista, asi que da igual por cual se pregunte.
+func agentes_libres() -> Array:
+	return piramide.agentes_libres
+
+
+## Fichar un agente libre (AgentesLibres.fichar): sin fee de
+## transferencia, solo el sueldo que se acordo negociando. No sale nadie
+## a cambio — entra al banco y ocupa un lugar vacante del plantel.
+func fichar_agente_libre(jugador_id: int, anios: int, sueldo: float) -> Dictionary:
+	# SIN chequeo de ventana de mercado, a proposito: un jugador sin club
+	# no es una transferencia. No hay club vendedor ni fee, asi que no hay
+	# nada que el libro de pases tenga que regular (ver
+	# AgentesLibres.ronda_diaria, que hace lo mismo con la IA).
+	var resultado := AgentesLibres.fichar(
+		equipo_jugador, agentes_libres(), jugador_id, anios, sueldo)
 	if resultado["exito"]:
-		_agregar_noticia("AGENTE LIBRE: %s ficha a %s (%s), libre (sale un %s al pool)." % [
+		_agregar_noticia("AGENTE LIBRE: %s ficha a %s (%s) por %d año%s a %s. Llega sin club y sin costo de pase." % [
 			equipo_jugador.nombre, _nombre_completo(resultado["entra"]),
-			resultado["entra"]["posicion"], resultado["sale"]["posicion"]],
+			resultado["entra"]["posicion"], int(resultado["anios"]),
+			"" if int(resultado["anios"]) == 1 else "s",
+			Economia.formato_dinero(float(resultado["sueldo"]))],
 			"fichajes", [Noticias.mencion(resultado["entra"], equipo_jugador.nombre)])
 	return resultado
 
 
-## Cedés a un jugador de TU banco o cantera a préstamo por una temporada
-## (Prestamos.ceder). Vuelve solo al cierre de la temporada de retorno.
+## Cedés a un jugador tuyo a un club concreto, con los terminos ya
+## arreglados. La via normal es la CESION negociada (core/cesiones.gd):
+## esto es el ultimo tramo, y lo usan los tests y el cierre de una
+## negociacion que ya paso por la mesa.
 func ceder_a_prestamo(jugador_id: int, club_destino: Team) -> Dictionary:
 	if not hay_mercado_abierto():
 		return _mercado_cerrado()
@@ -1574,6 +1903,9 @@ func simular_temporada_completa() -> void:
 		# no avanzaria mas y esto giraria hasta el tope de pasos.
 		if hay_partido_de_copa_hoy():
 			resolver_ronda_de_copa()
+			continue
+		if hay_partido_internacional_hoy():
+			resolver_ronda_internacional()
 			continue
 		# Las novedades se descartan a proposito: esto es el modo
 		# "saltar la temporada", no se frena por nada.
@@ -1660,6 +1992,7 @@ func guardar_partida() -> void:
 		"dia_absoluto": dia_absoluto,
 		"dia_proximo_partido": dia_proximo_partido,
 		"dia_proxima_copa": dia_proxima_copa,
+		"dia_proximo_internacional": dia_proximo_internacional,
 		"historial_partidos": historial_partidos,
 		"copas_internacionales": copas_internacionales,
 		"copas_pasadas": copas_pasadas,
@@ -1682,6 +2015,9 @@ func guardar_partida() -> void:
 		# que pesan nada (ver Copa.guardar).
 		"copa_nacional": copa_nacional.guardar() if copa_nacional != null else {},
 		"copas_division": _guardar_copas_division(),
+		# La internacional tambien queda a medio jugar: sin esto, cargar
+		# una partida en junio perdia la fase de liga entera.
+		"internacional": internacional.guardar() if internacional != null else {},
 	}
 
 
@@ -1804,6 +2140,23 @@ func cargar_partida() -> bool:
 			_armar_copas()
 			if fecha_actual >= FECHAS_PARA_COPA_DIVISION:
 				_armar_copas_de_division(false)
+	# La internacional vuelve igual que las copas, con su fase de liga y
+	# su cuadro a medio jugar. Los equipos se relocalizan con el indice de
+	# la confederacion, que junta la piramide y los clubes del exterior:
+	# la mitad de los participantes no esta en la piramide.
+	#
+	# Un guardado anterior a que la internacional se jugara repartida no
+	# la trae. Ahi queda en null a proposito: la temporada en curso la
+	# resuelve entera al cerrar, como se hacia siempre, y la que viene ya
+	# arranca con el calendario nuevo.
+	var datos_internacional: Dictionary = datos.get("internacional", {})
+	if datos_internacional.is_empty():
+		internacional = null
+	else:
+		internacional = TemporadaInternacional.cargar(
+			datos_internacional, confederacion.indice_de_equipos())
+		copas_internacionales = internacional.resumen(temporada_actual)
+
 	ultimo_resultado = datos.get("ultimo_resultado", {})
 	ultimo_log = datos.get("ultimo_log", [])
 	ultimos_eventos = datos.get("ultimos_eventos", [])

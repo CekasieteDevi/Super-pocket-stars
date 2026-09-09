@@ -21,8 +21,10 @@ func _init() -> void:
 		# Ni tan corto que no se vea nada ni tan largo que sea un partido:
 		# la primera version corria 200 ticks fijos —53 segundos— para una
 		# jugada de 1 a 5.
-		if fotogramas.size() < 20 or fotogramas.size() > 120:
-			print("FALLA: %s genero %d fotogramas (se esperan entre 20 y 120)." % [
+		# El piso bajo de 20 a 15: el clip ya no muestra los ticks previos
+		# al montaje, y el del gol dura 21 fotogramas.
+		if fotogramas.size() < 15 or fotogramas.size() > 120:
+			print("FALLA: %s genero %d fotogramas (se esperan entre 15 y 120)." % [
 				s["clave"], fotogramas.size()])
 			fallas += 1
 			continue
@@ -57,6 +59,7 @@ func _init() -> void:
 	fallas += _test_el_gol_es_gol()
 	fallas += _test_el_cabezazo_es_de_cabeza()
 	fallas += _test_el_corner_tiene_gente_en_el_area()
+	fallas += _test_el_clip_arranca_en_la_jugada()
 	print("FALLOS=%d" % fallas)
 	quit()
 
@@ -153,8 +156,11 @@ func _test_el_gol_es_gol() -> int:
 ## rompen por separado y en silencio. La primera version terminaba 1-0 con
 ## un gol de pie: el centro se cortaba en el camino, la jugada seguia y el
 ## gol lo hacia otro por otro lado. El marcador decia que estaba bien.
+## Se prueban OCHO planteles y no tres: con tres el clip pasaba igual
+## teniendo el bug del arquero que salia a descolgar el centro, porque
+## depende de que tan bueno sea ese arquero en `achique`.
 func _test_el_cabezazo_es_de_cabeza() -> int:
-	for intento in range(3):
+	for intento in range(8):
 		var rng := RandomNumberGenerator.new()
 		rng.seed = SEED + intento
 		var casa := Team.generar("Casa", rng, 0)
@@ -178,10 +184,16 @@ func _test_el_cabezazo_es_de_cabeza() -> int:
 		for e in r["eventos"]:
 			if str(e.get("tipo", "")) == "centro" and str(e.get("resultado", "")) == "gana":
 				gano_el_centro = true
+			# El arquero descolgando el centro es el bug que rompia el
+			# clip: se lo veia salir y sacar, y el gol lo hacia despues
+			# otro de pie con el remate forzado.
+			if str(e.get("tipo", "")) == "centro" and str(e.get("resultado", "")) == "descuelga":
+				print("FALLA: el arquero descolgo el centro del clip del cabezazo.")
+				return 1
 		if not gano_el_centro:
 			print("FALLA: el centro del clip no llego a disputarse por arriba.")
 			return 1
-	print("OK: el clip del cabezazo gana el centro de arriba, cabecea una vez y termina 1-0, las 3 veces.")
+	print("OK: el clip del cabezazo gana el centro de arriba, cabecea una vez y termina 1-0, los 8 planteles.")
 	return 0
 
 
@@ -212,3 +224,48 @@ func _test_el_corner_tiene_gente_en_el_area() -> int:
 		return 0
 	print("FALLA: en el corner nunca hay mas de %d atacantes en el area." % mejor)
 	return 1
+
+
+## El clip ARRANCA en la jugada montada, no antes.
+##
+## Montar una jugada es teletransportar a los 22 a sus lugares, y el saque
+## del medio con el que arranca el estado deja el juego detenido 12 ticks
+## con el saque PENDIENTE. Mostrando los ticks previos se veia esto: los
+## jugadores desaparecian de un lado y aparecian en otro —parecia que los
+## sustituian a todos, arquero incluido— y despues el motor ejecutaba el
+## saque inicial en el medio del clip, con el relato cantando "¡Arranca el
+## partido!" mientras volaba el centro.
+##
+## Se miran las dos cosas: que nadie salte metros en el primer tick y que
+## ningun clip narre el saque inicial.
+func _test_el_clip_arranca_en_la_jugada() -> int:
+	# Un jugador corre unos 2 m por tick. 5 m es holgado y un
+	# teletransporte de media cancha son 50.
+	var salto_maximo := 5.0
+	for s in Laboratorio.SITUACIONES:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = SEED
+		var casa := Team.generar("Casa", rng, 0)
+		var visita := Team.generar("Visita", rng, 400)
+		var propio := RandomNumberGenerator.new()
+		propio.seed = Laboratorio.SEMILLA
+		var r := Laboratorio.generar(str(s["clave"]), casa, visita, propio)
+		var fotogramas: Array = r["fotogramas"]
+		var ant := {}
+		for j in fotogramas[0]["jugadores"]:
+			ant[int(j["id"])] = Vector2(j["x"], j["y"])
+		for j in fotogramas[1]["jugadores"]:
+			var id := int(j["id"])
+			if not ant.has(id):
+				continue
+			var d: float = ant[id].distance_to(Vector2(j["x"], j["y"]))
+			if d > salto_maximo:
+				print("FALLA: en %s un jugador salta %.1f m en el primer tick del clip." % [
+					s["clave"], d])
+				return 1
+		for e in r["eventos"]:
+			if str(e.get("tipo", "")) == "saque_inicial":
+				print("FALLA: el clip de %s narra el saque inicial." % s["clave"])
+				return 1
+	print("OK: las 9 jugadas arrancan con la escena ya montada y ninguna narra el saque inicial.")
+	return 0

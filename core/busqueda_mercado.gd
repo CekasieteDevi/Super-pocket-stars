@@ -65,7 +65,8 @@ static func buscar(piramide, equipo_propio: Team, filtros: Dictionary) -> Array:
 				continue
 			if club_filtro != "" and club.nombre != club_filtro:
 				continue
-			for grupo in [[club.jugadores, "titular"], [club.banco, "banco"], [club.cantera, "cantera"]]:
+			for grupo in [[club.jugadores, "titular"], [club.banco, "banco"],
+				[club.reservas, "reserva"], [club.cantera, "cantera"]]:
 				for j in grupo[0]:
 					if posicion != "" and str(j["posicion"]) != posicion:
 						continue

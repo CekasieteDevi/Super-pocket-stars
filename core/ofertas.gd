@@ -108,20 +108,33 @@ static func _anotar(oferta: Dictionary, texto: String) -> void:
 ## `piramide` hace falta para encontrar al club que está del otro lado:
 ## las ofertas guardan el NOMBRE, no la referencia (igual que Copa y
 ## Confederacion), así se serializan sin arrastrar medio mundo.
+## `momento` es la temporada como decimal (3.5 = mitad de la 3). Solo lo
+## usan las CESIONES, que necesitan saber cuando vence el prestamo que
+## estan por firmar; en -1.0 se cae al arranque de la temporada.
 static func avanzar(equipo: Team, dias: int, piramide, rng: RandomNumberGenerator,
-		temporada_actual: int, division_propia: int) -> Array:
+		temporada_actual: int, division_propia: int, momento: float = -1.0) -> Array:
 	var movidas := []
 	for oferta in equipo.ofertas:
 		var estado := str(oferta["estado"])
 		# ACUERDO_CLUB de una oferta ENTRANTE = aceptaste vender y ahora
 		# ellos hablan de contrato con TU jugador. Eso no lo manejas vos.
-		var espera_al_otro: bool = estado == PENDIENTE_ELLOS 			or (estado == ACUERDO_CLUB and bool(oferta["entrante"]))
+		var espera_al_otro: bool = (estado == PENDIENTE_ELLOS
+			or (estado == ACUERDO_CLUB and bool(oferta["entrante"])))
 		if not espera_al_otro:
 			continue
 		oferta["dias"] = float(oferta["dias"]) - float(dias)
 		if float(oferta["dias"]) > 0.0:
 			continue
-		if estado == ACUERDO_CLUB:
+		# Una CESION se negocia por los mismos carriles (rondas, dias,
+		# archivo) pero lo que se discute no es un precio sino los
+		# terminos del prestamo: ver core/cesiones.gd.
+		if str(oferta.get("tipo", "compra")) == "cesion":
+			if estado == ACUERDO_CLUB:
+				Cesiones.cerrar(equipo, oferta, piramide, rng, division_propia,
+					float(temporada_actual) if momento < 0.0 else momento)
+			else:
+				Cesiones.responder(equipo, oferta, piramide, rng)
+		elif estado == ACUERDO_CLUB:
 			_negocia_el_contrato_ajeno(equipo, oferta, piramide, rng, division_propia)
 		else:
 			_responde_el_otro(equipo, oferta, piramide, rng, temporada_actual)
@@ -208,7 +221,12 @@ static func _responde_comprador(equipo: Team, oferta: Dictionary, comprador: Tea
 		jugador, equipo.animo.get(id, 50.0), equipo.contratos.get(id, 3))
 	var monto := float(oferta["monto"])
 
-	if monto <= tasacion * TOPE_SOBREPRECIO_COMPRADOR and comprador.caja["fichajes"] >= monto:
+	# En venta rapida el tope se desploma: el comprador sabe que lo
+	# queres sacar de encima y no te paga el sobreprecio (ver
+	# Traspasos.tope_sobreprecio).
+	var tope := Traspasos.tope_sobreprecio(equipo, id, TOPE_SOBREPRECIO_COMPRADOR)
+
+	if monto <= tasacion * tope and comprador.caja["fichajes"] >= monto:
 		oferta["estado"] = ACUERDO_CLUB
 		_anotar(oferta, "%s acepta tu contraoferta de %s." % [
 			comprador.nombre, Economia.formato_dinero(monto)])
@@ -219,7 +237,7 @@ static func _responde_comprador(equipo: Team, oferta: Dictionary, comprador: Tea
 		return
 
 	# Le pone lo que puede: su tope, o lo que le entra en la caja.
-	var mejorado: float = minf(tasacion * TOPE_SOBREPRECIO_COMPRADOR,
+	var mejorado: float = minf(tasacion * tope,
 		comprador.caja["fichajes"] * Mercado.FRACCION_MAXIMA_POR_FICHAJE)
 	if mejorado <= float(oferta["monto"]) * 0.5:
 		oferta["estado"] = RETIRADA
@@ -356,7 +374,12 @@ static func generar_entrantes(equipo: Team, piramide, rng: RandomNumberGenerator
 	if rng.randf() > float(dias) / DIAS_ENTRE_INTERESES:
 		return nuevas
 
-	var candidatos := equipo.jugadores + equipo.banco
+	# Los que marcaste "no disponible" no entran ni al sorteo: por ellos
+	# no llega ninguna oferta (ver core/traspasos.gd).
+	var candidatos := []
+	for j in equipo.todos_los_jugadores():
+		if Traspasos.acepta_ofertas(equipo, int(j["id"])):
+			candidatos.append(j)
 	if candidatos.is_empty():
 		return nuevas
 	var jugador: Dictionary = candidatos[rng.randi() % candidatos.size()]
@@ -379,6 +402,8 @@ static func generar_entrantes(equipo: Team, piramide, rng: RandomNumberGenerator
 		return nuevas
 
 	var monto: float = valor * rng.randf_range(OFERTA_INICIAL_MIN, OFERTA_INICIAL_MAX)
+	# En venta rapida ofrecen entre 40% y 50% menos que eso.
+	monto *= Traspasos.factor_oferta(equipo, id, rng)
 	if comprador.caja["fichajes"] < monto:
 		return nuevas
 

@@ -567,13 +567,21 @@ Deliberadamente fuera de alcance hasta después del MVP: las 5 opciones de
 utilidad que faltan (gambetear/pase al hueco/pase largo/pared/centro más
 allá del recorte del MVP), desmarque real, offside, JSON de balance
 completo, reinicio de jugadas (lateral/córner/saque de arco animados en
-vez de instantáneos), y si las copas internacionales alguna vez usan este
-motor (hoy no se animan, quedan fuera).
+vez de instantáneos).
 
 **Actualizado 2026-09-03**: el cruce de copa DEL JUGADOR ya usa este motor
 y se ve, igual que su partido de liga (`Copa.jugar_siguiente_ronda` con
 `equipo_seguido`). Los otros 99 cruces de la ronda siguen con el
 abstracto, que es la misma asimetría deliberada de la liga.
+
+**Actualizado 2026-09-09**: las copas internacionales también usan este
+motor. Las tres dejaron de resolverse enteras al cerrar la temporada: se
+sortean al empezarla y se juegan una ronda por semana, los miércoles de
+las fechas impares (`TemporadaInternacional`, `GameState.FECHAS_ENTRE_RONDAS_INTERNACIONAL`).
+Si el club del jugador tiene cupo, su cruce frena el calendario y lo juega
+él, con fotogramas: la previa, cada fecha de la fase de liga, el playoff y
+el knockout. El cupo sale de la tabla de la temporada PASADA, así que solo
+lo puede tener un club de División 1.
 
 **Actualizado 2026-09-07**: el cruce del jugador se juega ENTERO acá. Si
 los 90' terminan empatados, el motor juega el alargue (2x15', misma escala

@@ -316,23 +316,20 @@ static func procesar_quiebra(equipo: Team, rng: RandomNumberGenerator) -> Array:
 	while equipo.quebrado and intentos < maximo_intentos:
 		intentos += 1
 
+		# Las tres listas del plantel: una reserva cara se vende igual que
+		# un titular, y encima antes (vale mas de lo que aporta).
 		var mejor_idx := -1
 		var mejor_media := -1.0
-		var en_banco := false
-		for i in range(equipo.jugadores.size()):
-			if equipo.jugadores[i]["media"] > mejor_media:
-				mejor_media = equipo.jugadores[i]["media"]
-				mejor_idx = i
-				en_banco = false
-		for i in range(equipo.banco.size()):
-			if equipo.banco[i]["media"] > mejor_media:
-				mejor_media = equipo.banco[i]["media"]
-				mejor_idx = i
-				en_banco = true
+		var lista: Array = equipo.jugadores
+		for candidata in [equipo.jugadores, equipo.banco, equipo.reservas]:
+			for i in range(candidata.size()):
+				if candidata[i]["media"] > mejor_media:
+					mejor_media = candidata[i]["media"]
+					mejor_idx = i
+					lista = candidata
 		if mejor_idx < 0:
 			break
 
-		var lista: Array = equipo.banco if en_banco else equipo.jugadores
 		var saliente: Dictionary = lista[mejor_idx]
 		var valor := ValorJugador.calcular(saliente, equipo.animo.get(saliente["id"], 50.0), equipo.contratos.get(saliente["id"], 1))
 		var ingreso: float = valor * FRACCION_VENTA_DE_URGENCIA
@@ -341,11 +338,17 @@ static func procesar_quiebra(equipo: Team, rng: RandomNumberGenerator) -> Array:
 		var reemplazo := PlayerGenerator.generate(
 			equipo.siguiente_id_cantera, rng, saliente["posicion"], equipo.nivel_potencial())
 		equipo.siguiente_id_cantera += 1
-		lista[mejor_idx] = reemplazo
+		# Al que sale del once o del banco hay que reponerlo (el club no
+		# puede quedar con un agujero en la formacion). A una RESERVA no:
+		# nadie la extraña, se vende y listo.
+		if lista == equipo.reservas:
+			lista.remove_at(mejor_idx)
+		else:
+			lista[mejor_idx] = reemplazo
+			equipo._registrar_fichaje(reemplazo, ValorJugador.calcular(reemplazo, 50.0, 2), 2)
 		equipo.recalcular_capitan()
 
 		equipo.caja["fichajes"] += ingreso
-		equipo._registrar_fichaje(reemplazo, ValorJugador.calcular(reemplazo, 50.0, 2), 2)
 		equipo._limpiar_registro(saliente["id"])
 
 		ventas.append({"saliente": saliente, "posicion": saliente["posicion"], "ingreso": ingreso})

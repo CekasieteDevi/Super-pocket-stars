@@ -208,9 +208,11 @@ func _test_los_cambios_se_ven() -> int:
 	propio.seed = Laboratorio.SEMILLA
 	var r := Laboratorio.generar("cambio", casa, visita, propio)
 	var fg: Array = r["fotogramas"]
+	# clave -> y en el primer fotograma: sirve para saber quien arranca
+	# afuera de la cancha, que es como se ve al que va a entrar.
 	var primeros := {}
 	for j in fg[0]["jugadores"]:
-		primeros[int(j["id"])] = true
+		primeros[int(j["id"])] = float(j["y"])
 	var ultimos := {}
 	for j in fg[fg.size() - 1]["jugadores"]:
 		ultimos[int(j["id"])] = true
@@ -221,8 +223,14 @@ func _test_los_cambios_se_ven() -> int:
 	for k in primeros:
 		if not ultimos.has(k):
 			salieron.append(k)
+	# El que entra ya esta en el PRIMER fotograma, esperando en el
+	# lateral: el clip arranca con la jugada montada, no antes. Asi que no
+	# alcanza con mirar quien aparece — se mira quien empieza fuera de la
+	# cancha y termina adentro.
 	for k in ultimos:
 		if not primeros.has(k):
+			entraron.append(k)
+		elif absf(float(primeros[k])) > MotorEspacial.MEDIO_ANCHO:
 			entraron.append(k)
 	if salieron.size() != 2 or entraron.size() != 2:
 		print("FALLA: el clip del cambio tiene %d que salen y %d que entran (se esperan 2 y 2)." % [

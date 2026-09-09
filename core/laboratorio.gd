@@ -86,6 +86,15 @@ static func generar(clave: String, local: Team, visitante: Team,
 	var estado := MotorEspacial.crear_estado(local, visitante, rng)
 	estado["con_fotogramas"] = true
 	MotorEspacial._reiniciar_desde_medio(estado, true, 1)
+	# El saque del medio deja el juego DETENIDO 12 ticks y con el saque
+	# PENDIENTE, y los ticks previos son 6: la jugada se montaba encima de
+	# una pausa, nadie se movia, y seis ticks despues el motor ejecutaba el
+	# saque inicial en el medio del clip —"¡Arranca el partido!" mientras
+	# volaba el centro—. Se descarta la pausa: al que le toco sacar la
+	# tiene y se juega.
+	estado.erase("balon_parado")
+	estado["detenido"] = 0
+	estado["quietos"] = 0
 	# Unos ticks de juego normal antes de la situación: sin eso todos
 	# arrancan clavados en el círculo central y no se entiende nada.
 	for i in range(TICKS_PREVIOS):
@@ -118,6 +127,14 @@ static func generar(clave: String, local: Team, visitante: Team,
 		"cambio":
 			_montar_cambio(estado)
 
+	# El clip EMPIEZA en la jugada ya montada. Montarla es TELETRANSPORTAR
+	# a los 22 —el que cabecea al area chica, el que centra a la banda, el
+	# resto fuera del corredor del centro—, y con los fotogramas previos
+	# adentro eso se veia: los jugadores desaparecian de un lado y
+	# aparecian en otro, como si los sustituyeran a todos de golpe. Los
+	# ticks previos siguen corriendo —sirven para despegar a los 22 del
+	# circulo central— pero no se muestran.
+	estado["fotogramas"].clear()
 	MotorEspacial._push_fotograma(estado, estado["eventos"].slice(eventos_antes))
 
 	# Etapa 1: hasta que se resuelva lo que se monto.
@@ -405,7 +422,10 @@ static func _montar_cabezazo(estado: Dictionary) -> void:
 			continue
 		if str(e["rol"]) == "ARQ":
 			if not e["equipo_local"]:
-				e["pos"] = Vector2(arco.x - hacia * 0.5, 0.0)
+				# Sobre la linea, no DETRAS: antes quedaba medio metro
+				# afuera de la cancha y se veia al arquero atajando desde
+				# adentro del arco.
+				e["pos"] = Vector2(arco.x + hacia * 0.5, 0.0)
 			e["vel"] = Vector2.ZERO
 			e["rapidez"] = 0.0
 			continue
@@ -430,9 +450,15 @@ static func _montar_cabezazo(estado: Dictionary) -> void:
 	estado["pelota"]["altura_max"] = float(MotorEspacial.pesos()["fisica"]["altura_centro"])
 	estado["pelota"]["es_centro"] = true
 	estado["pelota"]["centro_de"] = true
-	# El remate que salga de este centro entra al arco. Ver el comentario
-	# de arriba y MotorEspacial._resolver_tiro.
+	# El centro lo gana el que cabecea, si o si: el arquero no sale a
+	# descolgarlo y el marcador no le gana el salto. Sin esto el clip
+	# mostraba al arquero descolgando y sacando, y el gol lo terminaba
+	# haciendo otro de pie.
+	estado["forzar_centro"] = "gana"
+	# El remate que salga de este centro entra al arco, y solo si es DE
+	# CABEZA. Ver el comentario de arriba y MotorEspacial._resolver_tiro.
 	estado["forzar_remate"] = "gol"
+	estado["forzar_remate_attr"] = "cabezazo"
 
 
 static func _montar_saque_arco(estado: Dictionary) -> void:
@@ -444,6 +470,19 @@ static func _montar_saque_arco(estado: Dictionary) -> void:
 ## pasa en un partido cuando los dos tecnicos mueven en la misma pausa, y
 ## asi se ve que la mecanica sirve para los dos equipos.
 static func _montar_cambio(estado: Dictionary) -> void:
+	# Un cambio solo entra con el juego CORTADO, con el corte venido de
+	# antes y con la pelota quieta: son las tres condiciones de
+	# MotorEspacial._sincronizar_cambios. Esa pausa la traia de arrastre
+	# el saque del medio, que ahora el clip descarta, asi que la monta la
+	# jugada. Dos ticks alcanzan: mientras quede alguien caminando, el
+	# motor estira la pausa solo.
+	var cerca := MotorEspacial._mas_cercano_del_equipo(estado, estado["pelota"]["pos"], true)
+	if cerca != -1:
+		MotorEspacial._entregar_pelota(estado, cerca)
+	estado["detenido"] = 2
+	estado["detenido_previo"] = 2
+	estado["quietos"] = 0
+
 	for es_local in [true, false]:
 		var equipo: Team = MotorEspacial._equipo_de(estado, es_local)
 		if equipo.banco.is_empty():

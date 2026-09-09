@@ -183,6 +183,9 @@ static func ubicar(vendedor: Team, jugador_id: int) -> Dictionary:
 	for j in vendedor.banco:
 		if int(j["id"]) == jugador_id:
 			return {"jugador": j, "origen": "banco"}
+	for j in vendedor.reservas:
+		if int(j["id"]) == jugador_id:
+			return {"jugador": j, "origen": "reserva"}
 	for j in vendedor.cantera:
 		if int(j["id"]) == jugador_id:
 			return {"jugador": j, "origen": "cantera"}

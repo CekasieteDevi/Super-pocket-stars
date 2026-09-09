@@ -87,13 +87,13 @@ static func asignar(equipo: Team, clave: String, jugador_id: int) -> void:
 		equipo.recalcular_capitan()
 
 
-## Los que se pueden elegir para este rol: el plantel de partido, sin la
-## cantera. Se listan aunque estén lesionados —el club decide para
-## adelante, no solo para la fecha que viene— y el motor se encarga de
-## usar al automático si el elegido no está en la cancha.
+## Los que se pueden elegir para este rol: los CONVOCADOS (once y banco),
+## sin reservas ni cantera. Se listan aunque estén lesionados —el club
+## decide para adelante, no solo para la fecha que viene— y el motor se
+## encarga de usar al automático si el elegido no está en la cancha.
 static func candidatos(equipo: Team, clave: String) -> Array:
 	var lista := []
-	for j in equipo.todos_los_jugadores():
+	for j in equipo.convocados():
 		if str(j["posicion"]) == "ARQ" and not bool(ADMITE_ARQUERO.get(clave, false)):
 			continue
 		lista.append(j)
@@ -188,7 +188,7 @@ static func _sirve(equipo: Team, clave: String, jugador_id: int) -> bool:
 
 
 static func _esta_en_el_plantel(equipo: Team, clave: String, jugador_id: int) -> bool:
-	for j in equipo.todos_los_jugadores():
+	for j in equipo.convocados():
 		if int(j["id"]) != jugador_id:
 			continue
 		if str(j["posicion"]) == "ARQ" and not bool(ADMITE_ARQUERO.get(clave, false)):

@@ -41,21 +41,28 @@ func _test_liberar_y_fichar_libre(rng: RandomNumberGenerator) -> void:
 		quit()
 		return
 
-	# Fichar del pool: otro club se lleva al liberado.
+	# Fichar del pool: otro club se lleva al liberado. No sale nadie a
+	# cambio — se SUMA al plantel, que tiene lugar hasta
+	# Team.PLANTEL_MAXIMO.
 	var otro := Team.generar("ClubB", rng, 1000)
 	otro.caja["fichajes"] = 1000000.0
 	otro.caja["contratos"] = 1000000.0
-	var saliente_id: int = otro.banco[0]["id"]
+	var plantel_antes: int = otro.todos_los_jugadores().size()
 
-	var resultado := AgentesLibres.fichar(otro, pool, id_liberado, 0, true)
+	var agente: Dictionary = pool[0]
+	var pide := Renovaciones.pide_ahora(otro, agente, 2)
+	var resultado := AgentesLibres.fichar(otro, pool, id_liberado, 2, pide)
 
-	ok = resultado["exito"]
-	ok = ok and otro.banco[0]["id"] == id_liberado
-	ok = ok and otro.sueldos.has(id_liberado) and not otro.sueldos.has(saliente_id)
-	ok = ok and pool.size() == 1 and pool[0]["id"] == saliente_id  # el desplazado entra al pool a su vez
+	ok = bool(resultado.get("exito", false))
+	ok = ok and otro.banco[otro.banco.size() - 1]["id"] == id_liberado
+	ok = ok and otro.sueldos.has(id_liberado)
+	# El sueldo es el negociado, no el de tabla.
+	ok = ok and abs(float(otro.sueldos[id_liberado]) - pide) < 0.01
+	ok = ok and otro.todos_los_jugadores().size() == plantel_antes + 1
+	ok = ok and pool.is_empty()  # no entra nadie al pool a cambio
 
 	if ok:
-		print("OK: liberar manda al pool y repone el puesto; fichar saca del pool y el desplazado entra a su vez.")
+		print("OK: liberar manda al pool y repone el puesto; fichar entra al banco sin desplazar a nadie.")
 	else:
 		print("FALLA: %s" % [resultado])
 
@@ -121,7 +128,10 @@ func _test_prestamo_desde_banco_y_retorno(rng: RandomNumberGenerator) -> void:
 	# reparto por defecto —el que recibe paga todo— esa parte es cero,
 	# que es distinto de no estar.
 	ok = ok and origen.sueldos.has(jugador_id) and is_zero_approx(float(origen.sueldos[jugador_id]))
-	ok = ok and destino.banco.size() == 8  # se agrega de mas, no pisa a nadie
+	# El banco del destino ya tenia sus 7 suplentes, asi que el prestado
+	# entra como RESERVA: se agrega de mas y no pisa a nadie.
+	ok = ok and destino.banco.size() == Team.max_suplentes()
+	ok = ok and destino.reservas.size() == 1
 	ok = ok and destino.sueldos.has(jugador_id)
 	ok = ok and origen.prestados_afuera.has(jugador_id)
 	ok = ok and destino.prestados_propios.has(jugador_id)
@@ -137,7 +147,9 @@ func _test_prestamo_desde_banco_y_retorno(rng: RandomNumberGenerator) -> void:
 
 	# Vuelve cuando llega la temporada de retorno.
 	vueltos = Prestamos.procesar_retornos(origen, 2)
-	ok = ok and vueltos.size() == 1 and vueltos[0]["id"] == jugador_id
+	# procesar_retornos devuelve REPORTES, no jugadores: ademas del que
+	# vuelve trae cuanto jugo, cuanto metio y cuanto crecio afuera.
+	ok = ok and vueltos.size() == 1 and vueltos[0]["jugador"]["id"] == jugador_id
 	ok = ok and not origen.prestados_afuera.has(jugador_id)
 	ok = ok and not destino.prestados_propios.has(jugador_id)
 	ok = ok and not destino.sueldos.has(jugador_id)
@@ -198,17 +210,38 @@ func _test_prestamo_rechazo_sin_fondos(rng: RandomNumberGenerator) -> void:
 		print("FALLA: se esperaba un rechazo por fondos insuficientes.")
 
 
+## El contrato cambio con la cesion negociada (core/cesiones.gd): a un
+## titular TUYO lo podes ceder —vos decidis sobre los tuyos, y el once lo
+## tapa el mejor suplente del puesto—, mientras que al titular AJENO lo
+## sigue frenando Prestamos.evaluar_pedido, que es quien contesta cuando
+## le pedis prestado a un club de la IA.
 func _test_prestamo_rechazo_no_es_banco_ni_cantera(rng: RandomNumberGenerator) -> void:
-	print("\n=== Prestamos: rechazo si el jugador es titular ===")
+	print("\n=== Prestamos: al titular propio se lo puede ceder, al ajeno no ===")
 	var origen := Team.generar("DuenoTitular", rng, 8000)
 	var destino := Team.generar("PrestadorTitular", rng, 9000)
 	destino.caja["fichajes"] = 1000000.0
 	destino.caja["contratos"] = 1000000.0
 
-	var jugador_id: int = origen.jugadores[0]["id"]
-	var resultado := Prestamos.ceder(origen, destino, jugador_id, 1)
+	var titular: Dictionary = origen.jugadores[0]
+	var jugador_id: int = titular["id"]
+	var puesto: String = titular["posicion"]
+	var titulares_antes: int = origen.jugadores.size()
 
+	# Al DUEÑO de la IA no se lo sacan: evaluar_pedido dice que no.
+	var pedido := Prestamos.evaluar_pedido(origen, titular, 1.0, 0.0, 1.0)
+	if pedido["acepta"]:
+		print("FALLA: un club de la IA acepto prestar a su titular.")
+		return
+
+	var resultado := Prestamos.ceder(origen, destino, jugador_id, 1)
 	if not resultado["exito"]:
-		print("OK: no se puede prestar a un titular.")
-	else:
-		print("FALLA: se esperaba que se rechazara el prestamo de un titular.")
+		print("FALLA: no dejo ceder a un titular propio: %s" % resultado["motivo"])
+		return
+	for j in origen.jugadores:
+		if int(j["id"]) == jugador_id:
+			print("FALLA: el cedido sigue en el once del dueño.")
+			return
+	if origen.jugadores.size() != titulares_antes:
+		print("FALLA: el once quedo en %d y no lo tapo nadie." % origen.jugadores.size())
+		return
+	print("OK: el titular propio (%s) se cede y el once lo tapa un suplente; al ajeno lo frena evaluar_pedido." % puesto)

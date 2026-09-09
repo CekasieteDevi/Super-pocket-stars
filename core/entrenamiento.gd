@@ -77,7 +77,7 @@ static func asignar_foco_automatico_ia(equipo: Team, rng: RandomNumberGenerator)
 		return
 
 	var elegibles := []
-	for j in equipo.banco + equipo.cantera:
+	for j in equipo.banco + equipo.reservas + equipo.cantera:
 		if j["edad"] <= EDAD_MAXIMA_FOCO_IA and not equipo.foco_individual.has(j["id"]):
 			elegibles.append(j)
 	elegibles.sort_custom(func(a, b): return a["potencial"] > b["potencial"])

@@ -88,19 +88,25 @@ func _test_cantera(rng: RandomNumberGenerator) -> void:
 	juvenil["media"] = 95.0
 	var resultado := equipo.promover_juvenil(juvenil["id"])
 	var banco_ids := []
-	for j in equipo.banco:
+	for j in equipo.banco + equipo.reservas:
 		banco_ids.append(j["id"])
 
 	if resultado.is_empty():
 		print("FALLA: promover_juvenil no encontro al juvenil.")
 	else:
-		print("Promovido al banco: %s (media 95), sale del banco %s (media %.1f)" % [
-			resultado["promovido"]["posicion"], resultado["saliente"]["posicion"], resultado["saliente"]["media"]
-		])
+		# Con lugar en el plantel (tope Team.PLANTEL_MAXIMO) no sale nadie.
+		# El banco ya tiene sus 7 suplentes, asi que el juvenil entra como
+		# RESERVA. Antes el plantel era fijo en 18 y subir a un juvenil
+		# obligaba a soltar a un suplente.
+		var saliente: Dictionary = resultado["saliente"]
+		print("Promovido al banco: %s (media 95), sale del banco %s" % [
+			resultado["promovido"]["posicion"],
+			"nadie" if saliente.is_empty() else str(saliente["posicion"])])
 	var ok_promocion := equipo.jugadores.size() == jugadores_antes and equipo.banco.size() == banco_antes
-	ok_promocion = ok_promocion and equipo.cantera.size() == cantera_antes - 1 and banco_ids.has(juvenil["id"])
+	ok_promocion = ok_promocion and equipo.reservas.size() == 1 and banco_ids.has(juvenil["id"])
+	ok_promocion = ok_promocion and equipo.cantera.size() == cantera_antes - 1
 	if ok_promocion:
-		print("OK: la promocion mantiene 11 titulares y 7 en banco, saca 1 de la cantera, y el juvenil queda en el banco.")
+		print("OK: la promocion mantiene los 11 titulares, suma 1 a reservas, saca 1 de la cantera.")
 	else:
 		print("FALLA: la promocion no dejo el plantel como se esperaba.")
 

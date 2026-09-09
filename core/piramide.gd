@@ -27,17 +27,36 @@ const EQUIPOS_POR_DIVISION := 20
 
 var divisiones: Array = []  # Liga, indice 0 = division 1 (mejor) .. 9 = division 10 (peor)
 
+## Agentes libres: UNO SOLO para toda la piramide (ver core/agentes_libres.gd).
+##
+## Antes habia un pool por division y cada club solo veia el suyo. Un
+## jugador que no renovo en primera no le servia a nadie mas que a los
+## otros diecinueve clubes de primera, y en las divisiones de abajo el
+## pool quedaba casi vacio. Ahora el que queda sin club entra a una sola
+## lista y la ve toda la piramide; lo que decide si te lo podes llevar es
+## el sueldo que pide, no en que categoria jugaba.
+##
+## Cada Liga guarda una REFERENCIA a esta misma lista (_compartir_pool):
+## asi Liga._avanzar_contratos sigue escribiendo en `agentes_libres` sin
+## saber que hay una piramide arriba.
+var agentes_libres: Array = []
+
 
 ## Guardado de partida — ver Team.guardar().
 func guardar() -> Dictionary:
 	var divisiones_datos := []
 	for l in divisiones:
-		divisiones_datos.append(l.guardar())
-	return {"divisiones": divisiones_datos}
+		var datos_liga: Dictionary = l.guardar()
+		# El pool es uno solo y se guarda aparte: sin esto las diez
+		# divisiones escribirian la misma lista entera en la partida.
+		datos_liga["agentes_libres"] = []
+		divisiones_datos.append(datos_liga)
+	return {"divisiones": divisiones_datos, "agentes_libres": agentes_libres}
 
 
 static func cargar(datos: Dictionary) -> Piramide:
 	var p := Piramide.new()
+	p.agentes_libres = datos.get("agentes_libres", [])
 	for ld in datos["divisiones"]:
 		var liga_cargada := Liga.cargar(ld)
 		# Liga no guarda su propia categoria, pero la piramide las guarda
@@ -56,6 +75,18 @@ static func cargar(datos: Dictionary) -> Piramide:
 	# El escalon no se guarda: es la posicion en el array (ver Liga.division).
 	for d in range(p.divisiones.size()):
 		p.divisiones[d].division = d
+	# Partidas de antes del pool unico: cada division traia el suyo. Se
+	# juntan en uno, sin repetir a nadie.
+	var vistos := {}
+	for a in p.agentes_libres:
+		vistos[int(a["id"])] = true
+	for liga_vieja in p.divisiones:
+		for a in liga_vieja.agentes_libres:
+			if vistos.has(int(a["id"])):
+				continue
+			vistos[int(a["id"])] = true
+			p.agentes_libres.append(a)
+	p._compartir_pool()
 	p.resolver_prestamos()
 
 	# Migración de guardados de antes de §8.4 #14 (clásicos): si nadie de
@@ -111,7 +142,16 @@ static func generar(rng: RandomNumberGenerator) -> Piramide:
 		Rivalidad.hornear_clasicos(liga.equipos)
 		siguiente_id += EQUIPOS_POR_DIVISION * Team.RANGO_IDS_RESERVADO
 		p.divisiones.append(liga)
+	p._compartir_pool()
 	return p
+
+
+## Le pasa a cada division la MISMA lista de agentes libres. Los Array de
+## GDScript son por referencia: a partir de aca, `liga.agentes_libres` y
+## `piramide.agentes_libres` son el mismo objeto.
+func _compartir_pool() -> void:
+	for liga in divisiones:
+		liga.agentes_libres = agentes_libres
 
 
 ## Corre todas las fechas de las 10 divisiones. Para jugar de a una fecha
@@ -136,6 +176,12 @@ func fin_de_temporada(rng: RandomNumberGenerator, equipo_protegido: Team = null,
 		for nombre in liga.tabla_ordenada():
 			orden.append(mapa[nombre])
 		ordenes.append(orden)
+
+	# El pool envejece ANTES de que lleguen los vencimientos nuevos: los
+	# que quedan libres en este cierre ya envejecieron con su club y no
+	# les toca dos veces (ver AgentesLibres.envejecer_pool). Los que se
+	# retiran son la unica salida del pool que no es un fichaje.
+	var retirados := AgentesLibres.envejecer_pool(agentes_libres, rng)
 
 	var informes := []
 	for liga in divisiones:
@@ -171,7 +217,8 @@ func fin_de_temporada(rng: RandomNumberGenerator, equipo_protegido: Team = null,
 		liga.iniciar_temporada()
 
 	return {"informes_por_division": informes, "movimientos": movimientos,
-		"transferencias_entre_divisiones": transferencias}
+		"transferencias_entre_divisiones": transferencias,
+		"retirados": retirados}
 
 
 ## ¿Ya hay un club con ese nombre? Importa porque el nombre es la CLAVE

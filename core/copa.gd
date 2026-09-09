@@ -61,18 +61,12 @@ static func iniciar(nombre: String, equipos: Array, rng: RandomNumberGenerator) 
 	return c
 
 
-## `equipo_seguido` es el club del jugador humano: su cruce se juega con
-## el motor espacial y con fotogramas, para que lo pueda MIRAR, igual que
-## su partido de liga (ver Liga.jugar_fecha). Los otros 99 cruces siguen
-## con el motor abstracto, que es mucho mas rapido y alcanza. El partido
-## seguido queda en `seguido`; la ronda entera vuelve como resultado.
+## Juega la ronda pendiente entera y arma la siguiente.
 ##
-## El cruce seguido se juega ENTERO con el motor espacial: si termina
-## empatado, el alargue y la tanda de penales tambien salen de ahi y
-## tambien tienen fotogramas. Antes esos 30' y los penales los resolvian
-## MatchEngine y Penales por atras, asi que el jugador miraba 90 minutos y
-## se enteraba del resto por el resumen. Los cruces de la IA siguen igual:
-## motor abstracto, alargue abstracto y tanda abstracta.
+## `equipo_seguido` es el club del jugador humano: su cruce sale con
+## fotogramas para que lo pueda MIRAR, igual que su partido de liga (ver
+## resolver_cruce). El partido seguido queda en `seguido`; la ronda entera
+## vuelve como resultado.
 func jugar_siguiente_ronda(rng: RandomNumberGenerator, equipo_seguido: Team = null) -> Array:
 	seguido = {}
 	if campeon != null or partidos_pendientes.is_empty():
@@ -83,73 +77,12 @@ func jugar_siguiente_ronda(rng: RandomNumberGenerator, equipo_seguido: Team = nu
 	for partido in partidos_pendientes:
 		var home: Team = partido[0]
 		var away: Team = partido[1]
-		# §8.4#28: el efecto copa vale en la copa. Se prende para el cruce
-		# y se apaga al final, porque el mismo objeto Team juega la liga.
-		home.en_copa = true
-		away.en_copa = true
 		var es_el_del_jugador: bool = home == equipo_seguido or away == equipo_seguido
-		var r: Dictionary
+		var cruce := resolver_cruce(home, away, rng, es_el_del_jugador)
+		resultados.append(fila_de_historial(cruce))
 		if es_el_del_jugador:
-			# El motor espacial necesita el once COMPLETO: sin arreglar la
-			# alineacion, un lesionado en el once deja un puesto vacio y el
-			# motor revienta buscando al que no esta. Los cruces que no se
-			# miran siguen sin arreglar, como siempre: el motor abstracto
-			# se banca un equipo con huecos.
-			Alineacion.arreglar(home)
-			Alineacion.arreglar(away)
-			r = MotorEspacial.simular(home, away, rng, true, true)
-		else:
-			r = MatchEngine.simular(home, away, rng, false)
-		var gl: int = r["goles_local"]
-		var gv: int = r["goles_visitante"]
-		var definicion := str(r.get("definicion", "90 minutos"))
-		var ganador: Team
-		var penales_texto := ""
-		var goles_log: Array = r.get("goles_log", []).duplicate()
-		var eventos: Array = r.get("eventos", []).duplicate()
-
-		var pen: Dictionary = r.get("penales", {})
-		if not pen.is_empty():
-			# El motor espacial ya jugo el alargue y pateo la tanda: el
-			# ganador sale de ahi y el jugador vio los penales.
-			ganador = pen["ganador"]
-			penales_texto = " (%d-%d penales)" % [pen["goles_local"], pen["goles_visitante"]]
-		elif gl != gv:
-			ganador = home if gl > gv else away
-		else:
-			# Motor abstracto: el alargue y la tanda se juegan aparte.
-			var r_alargue := MatchEngine.simular_alargue(home, away, rng, es_el_del_jugador)
-			gl = r_alargue["goles_local"]
-			gv = r_alargue["goles_visitante"]
-			definicion = "alargue"
-			goles_log.append_array(r_alargue.get("goles_log", []))
-			eventos.append_array(r_alargue.get("eventos", []))
-			if gl != gv:
-				ganador = home if gl > gv else away
-			else:
-				var pen_abstracta := Penales.definir(home, away, rng)
-				definicion = "penales"
-				ganador = pen_abstracta["ganador"]
-				penales_texto = " (%d-%d penales)" % [
-					pen_abstracta["goles_local"], pen_abstracta["goles_visitante"]]
-
-		resultados.append({
-			"local": home.nombre, "visitante": away.nombre,
-			"gl": gl, "gv": gv, "ganador": ganador.nombre,
-			"definicion": definicion, "penales_texto": penales_texto,
-		})
-		if es_el_del_jugador:
-			seguido = {
-				"local": home.nombre, "visitante": away.nombre,
-				"gl": gl, "gv": gv, "goles_log": goles_log,
-				"log": r.get("log", []), "eventos": eventos,
-				"fotogramas": r.get("fotogramas", []),
-				"ganador": ganador.nombre,
-				"definicion": definicion, "penales_texto": penales_texto,
-			}
-		ganadores.append(ganador)
-		home.en_copa = false
-		away.en_copa = false
+			seguido = detalle_seguido(cruce)
+		ganadores.append(cruce["ganador"])
 	historial.append(resultados)
 
 	var siguiente_pool: Array = _intercalar(ganadores, equipos_con_bye)
@@ -162,6 +95,120 @@ func jugar_siguiente_ronda(rng: RandomNumberGenerator, equipo_seguido: Team = nu
 		partidos_pendientes = _armar_pares(siguiente_pool)
 
 	return resultados
+
+
+## Un partido suelto de torneo. El del jugador lo juega el motor espacial
+## con fotogramas, para que lo pueda MIRAR; los demas van con el motor
+## abstracto, que es mucho mas rapido y alcanza.
+##
+## `es_eliminatoria` marca las dos cosas que separan un cruce a muerte
+## subita de una fecha de fase de liga: prende el efecto copa (§8.4#28,
+## ver Motivacion.es_david) y le pide al motor espacial que resuelva
+## tambien el alargue y los penales. En una fase de liga el empate es un
+## resultado y no hay David ni Goliat, asi que va en false.
+##
+## Lo usan los cruces de copa y las fechas de la fase de liga
+## internacional (ver FaseLiga.jugar_fecha).
+static func jugar_partido(home: Team, away: Team, rng: RandomNumberGenerator,
+		es_el_del_jugador: bool, es_eliminatoria: bool) -> Dictionary:
+	# El efecto copa se prende para el partido y se apaga al final, porque
+	# el mismo objeto Team juega la liga.
+	home.en_copa = es_eliminatoria
+	away.en_copa = es_eliminatoria
+	var r: Dictionary
+	if es_el_del_jugador:
+		# El motor espacial necesita el once COMPLETO: sin arreglar la
+		# alineacion, un lesionado en el once deja un puesto vacio y el
+		# motor revienta buscando al que no esta. Los partidos que no se
+		# miran siguen sin arreglar, como siempre: el motor abstracto
+		# se banca un equipo con huecos.
+		Alineacion.arreglar(home)
+		Alineacion.arreglar(away)
+		r = MotorEspacial.simular(home, away, rng, true, es_eliminatoria)
+	else:
+		r = MatchEngine.simular(home, away, rng, false)
+	home.en_copa = false
+	away.en_copa = false
+	return r
+
+
+## Un cruce a eliminacion directa de punta a punta: 90', alargue y penales
+## si hace falta (§8.7). Devuelve el partido entero —marcador, como se
+## definio, ganador y el detalle para mirarlo— y no toca ningun cuadro,
+## asi que sirve igual para una ronda de copa, para la previa
+## internacional y para el playoff de octavos (ver TemporadaInternacional).
+##
+## El cruce del jugador se juega ENTERO con el motor espacial: si termina
+## empatado, el alargue y la tanda tambien salen de ahi y tambien tienen
+## fotogramas. Antes esos 30' y los penales los resolvian MatchEngine y
+## Penales por atras, asi que el jugador miraba 90 minutos y se enteraba
+## del resto por el resumen. Los cruces de la IA siguen igual: motor
+## abstracto, alargue abstracto y tanda abstracta.
+static func resolver_cruce(home: Team, away: Team, rng: RandomNumberGenerator,
+		es_el_del_jugador: bool) -> Dictionary:
+	var r := jugar_partido(home, away, rng, es_el_del_jugador, true)
+	var gl: int = r["goles_local"]
+	var gv: int = r["goles_visitante"]
+	var definicion := str(r.get("definicion", "90 minutos"))
+	var ganador: Team
+	var penales_texto := ""
+	var goles_log: Array = r.get("goles_log", []).duplicate()
+	var eventos: Array = r.get("eventos", []).duplicate()
+
+	var pen: Dictionary = r.get("penales", {})
+	if not pen.is_empty():
+		# El motor espacial ya jugo el alargue y pateo la tanda: el
+		# ganador sale de ahi y el jugador vio los penales.
+		ganador = pen["ganador"]
+		penales_texto = " (%d-%d penales)" % [pen["goles_local"], pen["goles_visitante"]]
+	elif gl != gv:
+		ganador = home if gl > gv else away
+	else:
+		# Motor abstracto: el alargue y la tanda se juegan aparte.
+		var r_alargue := MatchEngine.simular_alargue(home, away, rng, es_el_del_jugador)
+		gl = r_alargue["goles_local"]
+		gv = r_alargue["goles_visitante"]
+		definicion = "alargue"
+		goles_log.append_array(r_alargue.get("goles_log", []))
+		eventos.append_array(r_alargue.get("eventos", []))
+		if gl != gv:
+			ganador = home if gl > gv else away
+		else:
+			var pen_abstracta := Penales.definir(home, away, rng)
+			definicion = "penales"
+			ganador = pen_abstracta["ganador"]
+			penales_texto = " (%d-%d penales)" % [
+				pen_abstracta["goles_local"], pen_abstracta["goles_visitante"]]
+
+	return {
+		"local": home.nombre, "visitante": away.nombre,
+		"gl": gl, "gv": gv, "ganador": ganador,
+		"definicion": definicion, "penales_texto": penales_texto,
+		"goles_log": goles_log, "log": r.get("log", []), "eventos": eventos,
+		"fotogramas": r.get("fotogramas", []),
+	}
+
+
+## La fila que va al historial de una copa: solo nombres y numeros, nada
+## de referencias a Team, que es lo que la deja guardar tal cual.
+static func fila_de_historial(cruce: Dictionary) -> Dictionary:
+	return {
+		"local": cruce["local"], "visitante": cruce["visitante"],
+		"gl": cruce["gl"], "gv": cruce["gv"],
+		"ganador": cruce["ganador"].nombre if cruce["ganador"] != null else "",
+		"definicion": cruce["definicion"], "penales_texto": cruce["penales_texto"],
+	}
+
+
+## El partido del jugador listo para que lo mire la pantalla animada:
+## la fila del historial mas el log, los eventos y los fotogramas.
+static func detalle_seguido(cruce: Dictionary) -> Dictionary:
+	var d := fila_de_historial(cruce)
+	d["goles_log"] = cruce["goles_log"]
+	d["log"] = cruce["log"]
+	d["eventos"] = cruce["eventos"]
+	d["fotogramas"] = cruce["fotogramas"]
+	return d
 
 
 ## Si el club está EN el cuadro: le queda un cruce, pasó sin jugar, ya
@@ -295,7 +342,7 @@ static func _mezclar(equipos: Array, rng: RandomNumberGenerator) -> Array:
 ## jugar_siguiente_ronda), así que lo único que hay que traducir son las
 ## tres cosas que sí guardan referencias a Team: el bye, los partidos
 ## pendientes y el campeón. Los equipos se relocalizan al cargar buscando
-## por nombre en la pirámide, igual que hace Confederacion.
+## por nombre en un índice, igual que hace Confederacion.
 func guardar() -> Dictionary:
 	var pares := []
 	for p in partidos_pendientes:
@@ -317,7 +364,13 @@ static func cargar(datos: Dictionary, piramide) -> Copa:
 	for liga in piramide.divisiones:
 		for e in liga.equipos:
 			indice[e.nombre] = e
+	return cargar_desde_indice(datos, indice)
 
+
+## El mismo cargar, pero con un índice ya armado de nombre -> Team. Lo
+## necesitan las copas internacionales: la mitad de sus equipos son clubes
+## del exterior y no están en la pirámide (ver Confederacion.indice_de_equipos).
+static func cargar_desde_indice(datos: Dictionary, indice: Dictionary) -> Copa:
 	var c := Copa.new()
 	c.nombre = str(datos.get("nombre", "Copa"))
 	c.historial = datos.get("historial", [])

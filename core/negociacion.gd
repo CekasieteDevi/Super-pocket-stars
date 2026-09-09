@@ -178,3 +178,22 @@ static func bloquear(vendedor: Team, jugador_id: int, temporada_actual: int) -> 
 ## Ofertas._responde_vendedor): el calculo vive en un solo lugar.
 static func veto_hasta(temporada_actual: int) -> int:
 	return temporada_actual + TEMPORADAS_BLOQUEO - 1
+
+
+## Cuanto habria que mejorarle el sueldo para dar vuelta un rechazo, en
+## plata. Devuelve 0.0 si ni con el tope de PESO_SUELDO alcanza — ahi el
+## "no" es de verdad y hay que decirselo al que pregunta en vez de hacerlo
+## tirar plata al vacio.
+##
+## Lo usan los dos lados de un prestamo: el que PIDE, para saber cuanto
+## ponerle encima (GameState.pedir_prestamo, Cesiones.generar_pedido), y
+## la UI, para sugerir la cifra.
+static func plus_para_convencer(detalle: Dictionary, sueldo_actual: float) -> float:
+	var falta: float = UMBRAL_ACEPTA - float(detalle["interes"])
+	var techo: float = TOPE_SUELDO_ARRIBA - float(detalle["por_sueldo"])
+	if falta <= 0.0 or falta > techo:
+		return 0.0
+	# por_sueldo = (ofrecido / actual - 1) * PESO_SUELDO, despejado.
+	# 2% de margen: el numero exacto queda justo en el umbral y cualquier
+	# redondeo del SpinBox lo deja un peso abajo.
+	return sueldo_actual * (falta / PESO_SUELDO * 1.02)

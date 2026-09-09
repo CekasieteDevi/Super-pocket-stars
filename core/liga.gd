@@ -20,8 +20,12 @@ var noticias: Array = []
 var division: int = -1
 
 ## Agentes libres (§9.3 extendido): jugadores sin club, fichables sin fee de
-## transferencia. Ver core/agentes_libres.gd. Pool por división, igual que
-## el resto del mercado.
+## transferencia. Ver core/agentes_libres.gd.
+##
+## Dentro de una pirámide esta lista NO es propia: las diez divisiones
+## apuntan a la misma (Piramide._compartir_pool), así que el que queda
+## libre en primera lo ve también un club de décima. Una Liga suelta (los
+## tests) usa la suya y no cambia nada.
 var agentes_libres: Array = []
 
 ## Estadisticas individuales de la temporada (goleadores, asistencias,
@@ -153,12 +157,12 @@ func jugar_temporada(rng: RandomNumberGenerator, con_log: bool = false) -> Array
 
 
 ## §14: mínimo de titulares+banco sanos para poder presentarte a jugar.
-## El plantel activo (titulares+banco) tiene 18 jugadores en total, así
-## que el mínimo tiene que ser MENOR a 18 — si fuera igual, una sola
-## lesión (algo que pasa todo el tiempo en una temporada de 38 fechas) te
-## dejaría corto automáticamente. 15 deja margen para hasta 3 lesionados
-## simultáneos, que es lo esperable en un plantel real, sin volver el
-## chequeo inútil.
+## Un plantel arranca con 18 (once + banco) y puede llegar a 40
+## (Team.PLANTEL_MAXIMO), así que el mínimo tiene que ser MENOR a 18 — si
+## fuera igual, una sola lesión (algo que pasa todo el tiempo en una
+## temporada de 38 fechas) te dejaría corto automáticamente. 15 deja
+## margen para hasta 3 lesionados simultáneos con el plantel más chico
+## posible, sin volver el chequeo inútil.
 const MINIMO_DISPONIBLES := 15
 ## No presentarte no lleva multa: el castigo es perder 0-3, y con eso
 ## alcanza. La multa salía del presupuesto de Mantenimiento, que era la
@@ -357,6 +361,30 @@ func _actualizar_estado_jugadores(home: Team, away: Team, r: Dictionary) -> void
 	var xp: Dictionary = r.get("xp", {})
 	_acumular_xp(home, xp.get("home", {}))
 	_acumular_xp(away, xp.get("away", {}))
+	# Lo que hace el cedido en el club que lo pidio, para poder contarselo
+	# al dueño cuando vuelve (ver Prestamos.procesar_retornos). Los goles
+	# ya los cuenta EstadisticasLiga, pero por LIGA: el prestado juega en
+	# otra division y su linea vive en otra tabla que el dueño no mira.
+	_contar_prestamo(home, r.get("goles_log", []))
+	_contar_prestamo(away, r.get("goles_log", []))
+
+
+static func _contar_prestamo(equipo: Team, goles_log: Array) -> void:
+	if equipo.prestados_propios.is_empty():
+		return
+	for j in equipo.jugadores:
+		if equipo.prestados_propios.has(int(j["id"])):
+			j["partidos_prestamo"] = int(j.get("partidos_prestamo", 0)) + 1
+	for gol in goles_log:
+		if str(gol.get("equipo", "")) != equipo.nombre:
+			continue
+		var id := int(gol.get("jugador_id", -1))
+		if not equipo.prestados_propios.has(id):
+			continue
+		for j in equipo.todos_los_jugadores():
+			if int(j["id"]) == id:
+				j["goles_prestamo"] = int(j.get("goles_prestamo", 0)) + 1
+				break
 
 
 static func _acumular_xp(equipo: Team, por_jugador: Dictionary) -> void:
@@ -381,7 +409,9 @@ func _actualizar_rachas_titular_banco(equipo: Team) -> void:
 	for j in equipo.jugadores:
 		j["partidos_seguidos_titular"] = int(j.get("partidos_seguidos_titular", 0)) + 1
 		j["partidos_seguidos_banco"] = 0
-	for j in equipo.banco:
+	# Las reservas cuentan igual que el banco: estan todavia mas lejos de
+	# jugar, asi que el que se amarga por no jugar se amarga tambien ahi.
+	for j in equipo.banco + equipo.reservas:
 		j["partidos_seguidos_titular"] = 0
 		j["partidos_seguidos_banco"] = int(j.get("partidos_seguidos_banco", 0)) + 1
 		if Personalidad.cruza_umbral_rencoroso(j):
@@ -458,9 +488,18 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 		# float: los prestamos de medio año vencen a mitad de temporada
 		# (ver Prestamos.procesar_retornos). Al cierre ya vencio todo lo
 		# que tenia que vencer este año.
-		var vueltos := Prestamos.procesar_retornos(equipo, float(temporada_actual))
-		for j in vueltos:
-			noticias.append("PRÉSTAMOS: %s vuelve a %s tras el préstamo." % [j["posicion"], equipo.nombre])
+		# El equipo protegido decide sus opciones de compra a mano
+		# (GameState.ejercer_opcion_de_compra): la IA no las ejerce por el.
+		var vueltos := Prestamos.procesar_retornos(equipo, float(temporada_actual), equipo_protegido)
+		for r in vueltos:
+			# El club del jugador humano se entera de COMO le fue al
+			# cedido; de los ajenos alcanza con que vuelva.
+			if equipo == equipo_protegido:
+				noticias.append(Noticias.crear(Prestamos.texto_retorno(r), "fichajes",
+					[Noticias.mencion(r["jugador"], equipo.nombre)]))
+			else:
+				noticias.append("PRÉSTAMOS: %s vuelve a %s tras el préstamo." % [
+					r["jugador"]["posicion"], equipo.nombre])
 
 		_avanzar_contratos(equipo, rng, equipo == equipo_protegido)
 		var bonus_mentor := Mentores.mejor_bonus_disponible(equipo)
@@ -665,8 +704,15 @@ func _avanzar_contratos(equipo: Team, rng: RandomNumberGenerator, es_protegido: 
 			_renovar_contrato(equipo, id, jugador, rng)
 			continue
 
-		AgentesLibres.liberar(equipo, jugador, agentes_libres, rng)
+		var salida_ia := AgentesLibres.liberar(equipo, jugador, agentes_libres, rng)
 		noticias.append("AGENTES LIBRES: un %s queda libre, se va de %s." % [jugador["posicion"], equipo.nombre])
+		# El club de la IA tapa el puesto con el pool si encuentra a
+		# alguien que pueda pagar (ver AgentesLibres.fichar_ia). Se avisa
+		# porque es la señal de que el mercado de libres se mueve solo.
+		if bool(salida_ia.get("del_pool", false)):
+			noticias.append("AGENTES LIBRES: %s ficha libre a un %s de media %d." % [
+				equipo.nombre, str(salida_ia["jugador"]["posicion"]),
+				int(salida_ia["jugador"]["media"])])
 
 
 ## Renueva por 2-4 años y RECALCULA el sueldo según el valor actual del
@@ -699,10 +745,7 @@ func _servir_suspensiones(equipo: Team, ids: Array) -> void:
 
 
 func _buscar_en_plantel(equipo: Team, jugador_id: int) -> Dictionary:
-	for j in equipo.jugadores:
-		if j["id"] == jugador_id:
-			return j
-	for j in equipo.banco:
+	for j in equipo.todos_los_jugadores():
 		if j["id"] == jugador_id:
 			return j
 	return {}
