@@ -23,6 +23,21 @@ const PESOS_PATH := "res://data/utility_pesos.json"
 
 ## Decisión 2 del doc: 0.25s por tick.
 const TICK_SEG := 0.25
+## Cuantos ticks como maximo rueda la pelota sin dueno antes de que se la
+## demos igual (ver _dirigir_pelota_a). Dos segundos: la pelota frena en
+## medio metro y el que se la quedo corre siete metros por segundo, asi
+## que en la practica la alcanza mucho antes.
+const TICKS_DIRIGIDA_MAX := 5
+## Cuanto de su velocidad conserva por tick la pelota que ya tiene dueno
+## decidido pero todavia rueda. Frena rapido a proposito: el pase muere
+## cerca de donde termino y el jugador va a buscarla ahi.
+const FRENADO_PELOTA_SUELTA := 0.35
+## Por debajo de esta velocidad la pelota queda quieta (m/s).
+const VEL_PELOTA_QUIETA := 1.0
+## Con que velocidad se le escapa la pelota al que pierde un duelo cuerpo
+## a cuerpo, hacia el que se la saco (m/s). Ahi la pelota estaba quieta
+## en sus pies, asi que la direccion la da el duelo y no un vuelo previo.
+const VEL_ESCAPE_DUELO := 6.0
 
 ## Un partido dura 2 minutos REALES por tiempo, jugados a velocidad real
 ## (la UI reproduce 4 fotogramas por segundo, o sea 1 seg de pantalla = 1
@@ -502,31 +517,6 @@ static func valor_posicion(pos: Vector2, equipo_local: bool) -> float:
 	return clampf(1.0 - pos.distance_to(arco) / LARGO, 0.0, 1.0)
 
 
-## §4.6 del doc: reemplaza a MatchEngine._resolver_destino, que solo
-## miraba el atributo `tiro`. Un remate de 30 metros con ángulo cerrado
-## ahora es peor que uno de frente al área chica aunque el atributo sea el
-## mismo — que es justamente lo que antes no existía.
-## `jugador` define el ALCANCE: hasta dónde le da para patear. Un jugador
-## de tiro flojo solo ve chance cerca del área — más lejos la utilidad de
-## rematar se le cae a cero y prefiere seguir metiéndose o pasarla, que es
-## lo que hace un jugador limitado en la vida real. Uno de tiro alto sí
-## valora el remate de media distancia. Sin esto, un media 20 evaluaba
-## pegarle desde 25 metros exactamente igual que un crack (medido: 23% de
-## sus remates salían desde más de 20m).
-## `absoluto` separa DOS preguntas que antes eran la misma:
-##
-##   desde donde SE ANIMA a patear -> absoluto. Que tan lejos del arco
-##   ves chance es tu pierna, no contra quien jugas. Normalizado, decima
-##   y quinta remataban desde exactamente la misma distancia.
-##
-##   que tan BUENO sale el remate -> normalizado. Aca si tiene que ser
-##   relativo: absoluto, un delantero de primera no erraba nunca y la
-##   liga terminaba con 4,10 goles por partido contra 2,20 en decima,
-##   mientras el motor abstracto daba lo mismo en todas.
-##
-## Se midio que son palancas independientes: el rango mueve la distancia
-## de los remates y no los goles; los pesos de tiro_resolucion mueven los
-## goles y no la distancia (tests/_diag_remates.gd).
 ## Solo el ANGULO al arco: 1 de frente, 0 desde la linea de fondo. Es la
 ## mitad de factor_geometria que NO depende de cuan lejos estas.
 ##
@@ -766,9 +756,16 @@ static func crear_estado(home: Team, away: Team, rng: RandomNumberGenerator) -> 
 		"tiros": {"home": 0, "away": 0},
 		"pases": {"home": 0, "away": 0},
 		"decisiones": {},  # tipo -> cuántas veces se eligió (debug/§7)
+		# Etapa 4: fase del equipo que ataca y su progreso. Ver
+		# _planificar_ritmo. `ritmo_stats` solo mide.
+		"ritmo": {},
+		"ritmo_stats": {},
 	}
 	_armar_jugadores(home, true, estado)
 	_armar_jugadores(away, false, estado)
+	# Etapa 8: el perfil de cada uno sale de sus atributos y su rol, y no
+	# cambia durante el partido salvo que le cambie el rol.
+	_construir_perfiles(estado)
 	return estado
 
 
@@ -956,7 +953,7 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 	# rival estas, asi que la conduccion se hundia justo en el tercio
 	# donde correr con la pelota vale mas. Medido, un poseedor libre y
 	# adelantado conducia el 40-55% de las veces (tests/_diag_pase_atras).
-	var camino_libre := 1.0 - riesgo_linea(estado, pos, _frente_de(pos, es_local), es_local)
+	var camino_libre := 1.0 - riesgo_linea(estado, pos, _corredor_elegido(estado, poseedor), es_local)
 	if not es_arquero:
 		var wc: Dictionary = w["conducir"]
 		var u_conducir: float = wc["base"] + wc["espacio"] * (1.0 - presion)
@@ -1103,7 +1100,11 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 		# solo del motor: una pelota que viaja mucho es más fácil de leer
 		# (ver lectura_pase_largo en _gana_intercepcion).
 		if dist > max_dist:
-			if dist > max_largo or progreso_hacia(comp, pos, es_local) <= 0.0:
+			var cambia_banda: bool = pos.y * comp["pos"].y < 0.0 and absf(pos.y - comp["pos"].y) >= AREA_MEDIO_ANCHO \
+				and progreso_hacia(comp, pos, es_local) >= -0.06 \
+				and (presion > 0.2 or camino_libre < 0.5) \
+				and presion_normalizada(estado, comp["pos"], es_local) < 0.25
+			if dist > max_largo or (progreso_hacia(comp, pos, es_local) <= 0.0 and not cambia_banda):
 				continue
 			var u_largo: float = wl["base"] \
 				+ wl["progreso"] * (valor_posicion(comp["pos"], es_local) - mi_valor) \
@@ -1111,7 +1112,7 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 				+ wl["salida"] * (1.0 - mi_valor) 				+ wl["arquero_apurado"] * arquero_apurado
 			opciones.append({
 				"tipo": "pase_largo", "utilidad": u_largo, "objetivo_id": id,
-				"detalle": {"dist": dist, "presion": presion},
+				"detalle": {"dist": dist, "presion": presion, "cambio_frente": cambia_banda},
 			})
 			continue
 		var progreso: float = valor_posicion(comp["pos"], es_local) - mi_valor
@@ -1128,9 +1129,17 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 		# opciones contra una sola y el maximo de diez gana casi siempre.
 		if progreso < 0.0:
 			u_pase -= wp["retroceso_libre"] * (-progreso) * camino_libre * (1.0 - presion)
+		# Desde el fondo, devolver al centro del area crea un remate de
+		# frente. No se confunde con retroceder cuando se puede avanzar.
+		var pase_atras_al_area: bool = absf(pos.y) >= float(f["banda_para_centrar"]) \
+			and mi_valor > 0.8 and absf(comp["pos"].y) < float(f["banda_para_centrar"]) \
+			and (comp["pos"].x - pos.x) * (1.0 if es_local else -1.0) < 0.0 \
+			and absf(comp["pos"].x - pos.x) < 14.0 and dist < 24.0
+		if pase_atras_al_area:
+			u_pase += 1.1 * (1.0 - riesgo)
 		opciones.append({
 			"tipo": "pase", "utilidad": u_pase, "objetivo_id": id,
-			"detalle": {"progreso": progreso, "riesgo": riesgo, "dist": dist},
+			"detalle": {"progreso": progreso, "riesgo": riesgo, "dist": dist, "pase_atras_al_area": pase_atras_al_area},
 		})
 
 		# --- Centro --------------------------------------------------
@@ -1189,6 +1198,7 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 			"detalle": {"progreso": progreso_hueco, "riesgo": riesgo_hueco, "dist": dist_hueco},
 		})
 
+	_ponderar_plan(estado, opciones, poseedor, jugador, presion, camino_libre)
 	_aplicar_pie_preferido(estado, opciones, poseedor, jugador, es_local,
 		float(sesgos["pie_preferido_penalizacion"]))
 	# Ver `acorralado` arriba: con la pelota en tu propia zona y gente
@@ -1371,7 +1381,7 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 			"jugador_posicion": poseedor["rol"], "resultado": "pasa",
 		})
 	else:
-		_entregar_pelota(estado, clave_rival)
+		_entregar_rodando(estado, clave_rival)
 		_penalizar(estado, poseedor["clave"], jugador)
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "gambeta", "equipo": eq_a.nombre, "rival": eq_d.nombre,
@@ -1389,6 +1399,18 @@ static func _en_el_area(punto: Vector2, es_local: bool) -> bool:
 ## `salto`; defiende `salto` + `fuerza`. Y el arquero puede salir a
 ## descolgarla si cae cerca suyo, con `achique` — otro atributo del GDD
 ## que no leía nadie.
+## Un centro ganado dentro del area lo resuelve de cabeza, salvo que el
+## que gano remate MUCHO mejor de pie que de cabeza: ahi va de volea o de
+## chilena. El margen de 12 puntos es el que evita que un cabeceador con
+## buen tiro deje de cabecear por dos puntos de diferencia.
+##
+## Es publica porque el laboratorio necesita la MISMA regla para elegir a
+## quien cabecea en el clip: con la regla duplicada, el clip del cabezazo
+## elegia al mejor de arriba y el motor le hacia tirar una chilena.
+static func remata_de_acrobacia(jugador: Dictionary) -> bool:
+	return int(jugador["atributos"]["tiro"]) > int(jugador["atributos"]["cabezazo"]) + 12
+
+
 static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bool, minuto: int) -> void:
 	var f: Dictionary = pesos()["fisica"]
 	var rng: RandomNumberGenerator = estado["rng"]
@@ -1420,7 +1442,7 @@ static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bo
 			var chance: float = float(arq["atributos"]["achique"]) / 100.0 * float(f["achique_eficacia"])
 			if rng.randf() < chance:
 				estado["centros"]["descolgado"] = int(estado["centros"].get("descolgado", 0)) + 1
-				_entregar_pelota(estado, arq_clave)
+				_entregar_rodando(estado, arq_clave)
 				estado["eventos"].append({
 					"minuto": minuto, "tipo": "centro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 					"jugador_posicion": "ARQ", "resultado": "descuelga",
@@ -1433,13 +1455,13 @@ static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bo
 		_pelota_fuera(estado, punto, ataca_local)
 		return
 	if defensor == -1:
-		_entregar_pelota(estado, atacante)
+		_entregar_rodando(estado, atacante)
 		return
 
 	var j_a := _dict_jugador(estado, eq_a, estado["jugadores"][atacante]["jugador_id"])
 	var j_d := _dict_jugador(estado, eq_d, estado["jugadores"][defensor]["jugador_id"])
 	if j_a.is_empty() or j_d.is_empty():
-		_entregar_pelota(estado, atacante)
+		_entregar_rodando(estado, atacante)
 		return
 
 	var ata: float = float(j_a["atributos"]["cabezazo"]) * 0.6 + float(j_a["atributos"]["salto"]) * 0.4
@@ -1455,7 +1477,7 @@ static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bo
 	_xp_e(estado, estado["jugadores"][defensor], "salto")
 	if forzado == "gana" or Duel.gana_atacante(res, rng):
 		estado["centros"]["ganados"] = int(estado["centros"].get("ganados", 0)) + 1
-		_entregar_pelota(estado, atacante)
+		_entregar_rodando(estado, atacante)
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "centro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 			"jugador_posicion": estado["jugadores"][atacante]["rol"], "resultado": "gana",
@@ -1464,10 +1486,14 @@ static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bo
 		# quedaba la pelota y seguía jugando, que es lo que hacía que un
 		# centro ganado no terminara casi nunca en gol.
 		if _en_el_area(punto, ataca_local):
-			estado["centros"]["cabezazos"] = int(estado["centros"].get("cabezazos", 0)) + 1
-			_resolver_tiro(estado, estado["jugadores"][atacante], j_a, "cabezazo")
+			var acrobacia := remata_de_acrobacia(j_a)
+			_resolver_tiro(estado, estado["jugadores"][atacante], j_a, "tiro" if acrobacia else "cabezazo")
+			if not acrobacia:
+				estado["centros"]["cabezazos"] = int(estado["centros"].get("cabezazos", 0)) + 1
+			if acrobacia:
+				_accion(estado, atacante, "chilena" if punto.distance_to(arco_rival(ataca_local)) < 9.0 else "volea")
 	else:
-		_entregar_pelota(estado, defensor)
+		_entregar_rodando(estado, defensor)
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "centro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 			"jugador_posicion": estado["jugadores"][defensor]["rol"], "resultado": "despeja",
@@ -1557,13 +1583,1292 @@ static func elegir_softmax(opciones: Array, temp: float, rng: RandomNumberGenera
 # Movimiento
 # ---------------------------------------------------------------------------
 
+## La recuperacion abre una ventana corta: los atacantes corren antes de
+## que el rival se ordene. Un pase entre companeros no vuelve a abrirla.
+const SEGUNDOS_TRANSICION := 6.0
+const TICKS_PLAN := 4
+
+static func _actualizar_transicion(estado: Dictionary) -> void:
+	var id: int = int(estado["pelota"]["poseedor_id"])
+	if int(estado.get("detenido", 0)) > 0:
+		estado["transicion_hasta"] = -1
+		if id != -1 and estado["jugadores"].has(id):
+			estado["ultimo_equipo_con_pelota"] = bool(estado["jugadores"][id]["equipo_local"])
+		return
+	if id == -1 or not estado["jugadores"].has(id):
+		return
+	var local: bool = estado["jugadores"][id]["equipo_local"]
+	if estado.has("ultimo_equipo_con_pelota") and bool(estado["ultimo_equipo_con_pelota"]) != local:
+		estado["transicion_local"] = local
+		estado["transicion_hasta"] = int(estado["tick"]) + int(SEGUNDOS_TRANSICION / TICK_SEG)
+		estado["inicio_transicion"] = estado["pelota"]["pos"]
+	estado["ultimo_equipo_con_pelota"] = local
+
+static func _transicion(estado: Dictionary, local: bool) -> float:
+	if bool(estado.get("transicion_local", not local)) != local:
+		return 0.0
+	return clampf(float(int(estado.get("transicion_hasta", -1)) - int(estado["tick"])) * TICK_SEG / SEGUNDOS_TRANSICION, 0.0, 1.0)
+
+## El conductor compara carriles, no solo una recta al arco. Mantiene la
+## eleccion un segundo para que la evasion no oscile en cada fotograma.
+static func _corredor_elegido(estado: Dictionary, e: Dictionary) -> Vector2:
+	var tick: int = estado["tick"]
+	if tick < int(e.get("corredor_hasta", -1)):
+		return e["corredor"]
+	var local: bool = e["equipo_local"]
+	var pos: Vector2 = e["pos"]
+	var frente := (_destino_de_conduccion(pos, local) - pos).normalized()
+	var f: Dictionary = pesos()["fisica"]
+	var largo: float = float(f["corredor_conduccion"])
+	if absf(pos.y) >= float(f["banda_para_centrar"]) and absf(arco_rival(local).x - pos.x) > AREA_LARGO:
+		frente = Vector2(1.0 if local else -1.0, 0.0)
+	var mejor := pos + frente * largo
+	var valor_mejor := -INF
+	for giro in [0.0, -0.55, 0.55]:
+		var dir := frente.rotated(giro)
+		var destino := pos + dir * largo
+		destino.x = clampf(destino.x, -MEDIO_LARGO + 2.0, MEDIO_LARGO - 2.0)
+		destino.y = clampf(destino.y, -MEDIO_ANCHO + 3.0, MEDIO_ANCHO - 3.0)
+		var libre := 1.0 - riesgo_linea(estado, pos, destino, local)
+		var valor: float = libre + 0.35 * dir.dot(frente)
+		if e["vel"].length_squared() > 0.01:
+			valor += 0.2 * dir.dot(e["vel"].normalized())
+		if valor > valor_mejor:
+			valor_mejor = valor
+			mejor = destino
+	e["corredor"] = mejor
+	e["corredor_hasta"] = tick + TICKS_PLAN
+	return mejor
+
+# ---------------------------------------------------------------------------
+# Ritmo variable (etapa 4)
+# ---------------------------------------------------------------------------
+
+## Cuantos ticks se sostiene una fase antes de volver a estimarla. Con
+## menos, la fase cambiaba de un fotograma al otro y el equipo alternaba
+## entre tocar y acelerar sin que se leyera ninguna de las dos cosas.
+const TICKS_RITMO := 6
+
+const FASE_CIRCULACION := "circulacion"
+const FASE_ACELERACION := "aceleracion"
+const FASE_TRANSICION := "transicion"
+
+## Pesos del ritmo. Como en pesos_defensa, el lector trae los valores por
+## defecto: un json sin la seccion `ritmo` sigue andando. Y por el mismo
+## motivo queda cacheado — se lee una vez por opcion y por tick.
+static var _pesos_ritmo_cache: Dictionary = {}
+
+static func pesos_ritmo() -> Dictionary:
+	if not _pesos_ritmo_cache.is_empty():
+		return _pesos_ritmo_cache
+	var d: Dictionary = pesos().get("ritmo", {})
+	_pesos_ritmo_cache = {
+		"umbral_transicion": float(d.get("umbral_transicion", 0.70)),
+		"frente": float(d.get("frente", 12.0)),
+		"espacio_para_acelerar": float(d.get("espacio_para_acelerar", 0.62)),
+		"apoyo_libre": float(d.get("apoyo_libre", 0.65)),
+		"apoyo_adelante": float(d.get("apoyo_adelante", 4.0)),
+		"apoyo_alcance": float(d.get("apoyo_alcance", 32.0)),
+		"carril_libre": float(d.get("carril_libre", 0.40)),
+		"circulacion_apoyo": float(d.get("circulacion_apoyo", 0.35)),
+		"circulacion_cambio": float(d.get("circulacion_cambio", 0.30)),
+		"circulacion_dist": float(d.get("circulacion_dist", 22.0)),
+		"aceleracion_progreso": float(d.get("aceleracion_progreso", 0.35)),
+		"aceleracion_conducir": float(d.get("aceleracion_conducir", 0.25)),
+		"pausa_conduccion": float(d.get("pausa_conduccion", 0.75)),
+		"tope": float(d.get("tope", 0.50)),
+		"estancada_ticks": int(d.get("estancada_ticks", 12)),
+		"estancada_avance": float(d.get("estancada_avance", 4.0)),
+		"estancada_presion": float(d.get("estancada_presion", 0.35)),
+		"devolucion_castigo": float(d.get("devolucion_castigo", 0.30)),
+		"devolucion_max": float(d.get("devolucion_max", 3.0)),
+	}
+	return _pesos_ritmo_cache
+
+
+## La fase del equipo que ataca, o "" si la pelota todavia no es de nadie.
+static func fase_de_ritmo(estado: Dictionary, es_local: bool) -> String:
+	var r: Dictionary = estado.get("ritmo", {})
+	if r.is_empty() or bool(r.get("local", not es_local)) != es_local:
+		return ""
+	return str(r.get("fase", ""))
+
+
+## Cuantos metros gano hacia el arco rival la posesion en curso, y hace
+## cuantos ticks que no gana ninguno. Lo usa el castigo a la devolucion
+## repetida: sin ganancia y sin presion, volver a la misma pareja de pases
+## deja de valer lo mismo.
+static func _actualizar_progreso(estado: Dictionary, r: Dictionary, ataca_local: bool) -> void:
+	var w := pesos_ritmo()
+	var tick: int = int(estado["tick"])
+	var x: float = float((estado["pelota"]["pos"] as Vector2).x) * (1.0 if ataca_local else -1.0)
+	if not r.has("x_inicio"):
+		r["x_inicio"] = x
+		r["mejor"] = 0.0
+		r["mejor_premiado"] = 0.0
+		r["tick_avance"] = tick
+		r["pares"] = {}
+	var avance: float = x - float(r["x_inicio"])
+	if avance > float(r["mejor"]) + 0.5:
+		r["mejor"] = avance
+		r["tick_avance"] = tick
+		# La jugada progreso de verdad: la pareja que se venia devolviendo
+		# la pelota dejo de ser un bucle y el conteo arranca de cero.
+		if avance >= float(r.get("mejor_premiado", 0.0)) + float(w["estancada_avance"]):
+			r["mejor_premiado"] = avance
+			(r["pares"] as Dictionary).clear()
+
+
+## Esta la posesion trabada: sin ganar metros y sin nadie encima. Es la
+## condicion que pide el plan para castigar la devolucion repetida — con
+## presion, devolverla es la jugada correcta y no se toca.
+static func _posesion_estancada(estado: Dictionary, presion: float) -> bool:
+	var w := pesos_ritmo()
+	var r: Dictionary = estado.get("ritmo", {})
+	if r.is_empty() or not r.has("tick_avance"):
+		return false
+	if presion > float(w["estancada_presion"]):
+		return false
+	return int(estado["tick"]) - int(r["tick_avance"]) >= int(w["estancada_ticks"])
+
+
+static func _clave_de_pareja(a: int, b: int) -> String:
+	return "%d-%d" % [mini(a, b), maxi(a, b)]
+
+
+## Cuantas veces esta pareja ya se intercambio la pelota en la posesion.
+static func _veces_de_la_pareja(estado: Dictionary, a: int, b: int) -> float:
+	var r: Dictionary = estado.get("ritmo", {})
+	var pares: Dictionary = r.get("pares", {})
+	return float(pares.get(_clave_de_pareja(a, b), 0))
+
+
+## Se anota al COMPLETARSE el pase, no al patearlo: un pase que interceptan
+## no es una devolucion entre dos companeros.
+static func _anotar_pase_de_ritmo(estado: Dictionary, clave_de: int, clave_a: int) -> void:
+	var r: Dictionary = estado.get("ritmo", {})
+	if r.is_empty():
+		return
+	var pares: Dictionary = r.get("pares", {})
+	r["pares"] = pares
+	var k := _clave_de_pareja(clave_de, clave_a)
+	pares[k] = int(pares.get(k, 0)) + 1
+
+
+## Fase del equipo que ataca: circulacion, aceleracion o transicion.
+##
+## Se estima con lo que se ve en la escena —espacio por delante del
+## poseedor, apoyos libres adelantados y la ventana de transicion que ya
+## existia— y se sostiene TICKS_RITMO ticks. La transicion es la unica que
+## puede interrumpir el plazo: es un evento del partido, no una estimacion.
+##
+## La fase NO bloquea ninguna opcion legal. Solo mueve utilidades, con un
+## tope (ver pesos_ritmo.tope).
+static func _planificar_ritmo(estado: Dictionary) -> void:
+	var w := pesos_ritmo()
+	var r: Dictionary = estado.get("ritmo", {})
+	estado["ritmo"] = r
+	if int(estado.get("detenido", 0)) > 0:
+		r.clear()
+		return
+	var pelota: Dictionary = estado["pelota"]
+	var id: int = int(pelota["poseedor_id"])
+	var ataca_local: bool
+	if id != -1 and estado["jugadores"].has(id):
+		ataca_local = bool(estado["jugadores"][id]["equipo_local"])
+	elif pelota.has("pasador_local"):
+		ataca_local = bool(pelota["pasador_local"])
+	else:
+		return
+	# Cambio de manos: el progreso, las parejas de pases y la fase de la
+	# posesion anterior no dicen nada de esta.
+	if r.is_empty() or bool(r.get("local", not ataca_local)) != ataca_local:
+		r.clear()
+		r["local"] = ataca_local
+		r["fase"] = FASE_TRANSICION
+		r["hasta"] = -1
+	_actualizar_progreso(estado, r, ataca_local)
+
+	var tick: int = int(estado["tick"])
+	if _transicion(estado, ataca_local) > float(w["umbral_transicion"]):
+		r["fase"] = FASE_TRANSICION
+		r["hasta"] = -1
+		_contar_fase(estado, FASE_TRANSICION)
+		return
+	if tick < int(r.get("hasta", -1)):
+		_contar_fase(estado, str(r["fase"]))
+		return
+	r["hasta"] = tick + TICKS_RITMO
+
+	# Sin poseedor no hay desde donde medir el espacio: se conserva la fase
+	# vigente hasta que alguien controle la pelota.
+	if id == -1 or not estado["jugadores"].has(id):
+		_contar_fase(estado, str(r["fase"]))
+		return
+	var poseedor: Dictionary = estado["jugadores"][id]
+	var pos: Vector2 = poseedor["pos"]
+	var frente: Vector2 = pos + (_destino_de_conduccion(pos, ataca_local) - pos).normalized() * float(w["frente"])
+	var espacio: float = 1.0 - riesgo_linea(estado, pos, frente, ataca_local)
+	var signo: float = 1.0 if ataca_local else -1.0
+	var apoyos := 0
+	for id_c in estado["jugadores"]:
+		if int(id_c) == id:
+			continue
+		var c: Dictionary = estado["jugadores"][id_c]
+		if bool(c["equipo_local"]) != ataca_local or c["rol"] == "ARQ":
+			continue
+		if _en_transito(estado, int(id_c)):
+			continue
+		var destino: Vector2 = c["pos"]
+		if (destino.x - pos.x) * signo < float(w["apoyo_adelante"]):
+			continue
+		if pos.distance_to(destino) > float(w["apoyo_alcance"]):
+			continue
+		if 1.0 - presion_normalizada(estado, destino, ataca_local) < float(w["apoyo_libre"]):
+			continue
+		# Y el carril tiene que existir: un companero libre al que no se
+		# le puede llegar no es una ventaja, es un espejismo. Sin esta
+		# comprobacion casi nunca habia circulacion (medido, 5% de los
+		# ticks) porque en campo abierto siempre hay alguien despejado.
+		if riesgo_linea(estado, pos, destino, ataca_local) > float(w["carril_libre"]):
+			continue
+		apoyos += 1
+	if espacio >= float(w["espacio_para_acelerar"]) or apoyos > 0:
+		r["fase"] = FASE_ACELERACION
+	else:
+		r["fase"] = FASE_CIRCULACION
+	r["espacio"] = espacio
+	r["apoyos"] = apoyos
+	_contar_fase(estado, str(r["fase"]))
+
+
+## Separa las dos cosas que el plan pide medir aparte: un pase atras sin
+## nadie encima, y la devolucion al que acaba de darsela. Solo mide.
+static func _medir_pase_atras(estado: Dictionary, elegida: Dictionary,
+		poseedor: Dictionary, presion: float) -> void:
+	var tipo: String = str(elegida["tipo"])
+	if tipo != "pase" and tipo != "pase_largo":
+		return
+	var objetivo: int = int(elegida.get("objetivo_id", -1))
+	if not estado["jugadores"].has(objetivo):
+		return
+	var local: bool = poseedor["equipo_local"]
+	var adelante: float = ((estado["jugadores"][objetivo]["pos"] as Vector2).x
+			- (poseedor["pos"] as Vector2).x) * (1.0 if local else -1.0)
+	if adelante >= -2.0:
+		return
+	var s: Dictionary = estado.get("ritmo_stats", {})
+	estado["ritmo_stats"] = s
+	var up: Dictionary = estado.get("ultimo_pase", {})
+	var devolucion: bool = not up.is_empty() and bool(up.get("local", not local)) == local 			and int(up.get("a", -1)) == int(poseedor["clave"]) 			and clave_de(int(up["de"]), local) == objetivo
+	var k: String = "devolucion" if devolucion else "atras_sin_presion"
+	if not devolucion and presion > float(pesos_ritmo()["estancada_presion"]):
+		k = "atras_con_presion"
+	s[k] = int(s.get(k, 0)) + 1
+
+
+## Solo mide. Los contadores no entran en ninguna decision ni tocan el RNG.
+static func _contar_fase(estado: Dictionary, fase: String) -> void:
+	var s: Dictionary = estado.get("ritmo_stats", {})
+	estado["ritmo_stats"] = s
+	s[fase] = int(s.get(fase, 0)) + 1
+
+
+## Ajuste de ritmo para UNA opcion. Devuelve un numero acotado por `tope`:
+## la fase inclina la eleccion, no la impone.
+##
+## En transicion devuelve cero a proposito. Esa fase ya la bonifica el
+## termino `transicion` de _ponderar_plan, que existe desde antes; sumarle
+## otro premio seria cobrar dos veces lo mismo.
+static func _ajuste_de_ritmo(fase: String, tipo: String, adelante: float, dist: float,
+		libertad: float, cambio_de_frente: bool, camino: float) -> float:
+	if fase != FASE_CIRCULACION and fase != FASE_ACELERACION:
+		return 0.0
+	var w := pesos_ritmo()
+	var a := 0.0
+	if fase == FASE_CIRCULACION:
+		# Circular vale CUANDO PROGRESAR ESTA CERRADO. Con el camino
+		# abierto el premio se apaga solo y la fase no frena nada.
+		var cerrado: float = 1.0 - camino
+		if tipo == "pase" and libertad >= float(w["apoyo_libre"]) and dist <= float(w["circulacion_dist"]):
+			a += float(w["circulacion_apoyo"]) * libertad * cerrado
+		if cambio_de_frente and (tipo == "pase" or tipo == "pase_largo"):
+			a += float(w["circulacion_cambio"]) * libertad * cerrado
+	else:
+		var gana: float = clampf(adelante / 15.0, 0.0, 1.0)
+		if tipo == "conducir":
+			a += float(w["aceleracion_conducir"]) * camino
+		elif tipo == "pase_hueco":
+			a += float(w["aceleracion_progreso"]) * gana
+		elif tipo == "pase" or tipo == "pase_largo":
+			a += float(w["aceleracion_progreso"]) * 0.6 * gana * libertad
+	return clampf(a, -float(w["tope"]), float(w["tope"]))
+
+
+# ---------------------------------------------------------------------------
+# Contexto del marcador (etapa 7)
+# ---------------------------------------------------------------------------
+
+## La URGENCIA de un equipo es un solo numero entre -1 y 1: cuanto
+## necesita que el partido cambie.
+##
+## - Positiva: va perdiendo, o el empate no le alcanza. Adelanta el
+##   bloque, manda mas gente a romper y acepta la opcion arriesgada.
+## - Negativa: va ganando y quiere que el partido termine. Baja el
+##   bloque, deja menos corridas y prefiere el apoyo seguro.
+##
+## Sale de tres cosas que ya existen: el minuto, la diferencia de goles y
+## el rasgo del DT. El minuto pesa con un exponente, asi que al principio
+## el efecto es chico y sobre el final crece: al 45' vale un octavo de lo
+## que vale al 90'.
+##
+## Lo que NO hace: tocar duelos. El DT ya tiene su modificador de
+## EJECUCION en el bloque C (DT.modificador_partido, que llama
+## MatchEngine._bloques_equipo y usan los dos motores), y ese sigue
+## siendo el unico. Aca el marcador cambia QUE se elige y DONDE se para
+## cada uno; la calidad de la accion elegida se resuelve igual que antes.
+## Por eso tampoco hay bonificacion a la punteria ni a la remontada.
+
+## Pesos del contexto del marcador. Como en pesos_ritmo, el lector trae
+## los valores por defecto —un json sin la seccion `marcador` sigue
+## andando— y el resultado queda cacheado: se lee una vez por opcion y
+## por tick.
+static var _pesos_marcador_cache: Dictionary = {}
+
+static func pesos_marcador() -> Dictionary:
+	if not _pesos_marcador_cache.is_empty():
+		return _pesos_marcador_cache
+	var d: Dictionary = pesos().get("marcador", {})
+	_pesos_marcador_cache = {
+		"exponente": float(d.get("exponente", 3.0)),
+		"empate": float(d.get("empate", 0.25)),
+		"dif_extra": float(d.get("dif_extra", 0.35)),
+		"dif_tope": float(d.get("dif_tope", 1.35)),
+		"dt_loco": float(d.get("dt_loco", 1.35)),
+		"dt_conservador": float(d.get("dt_conservador", 1.35)),
+		"altura_bloque": float(d.get("altura_bloque", 6.0)),
+		"tope": float(d.get("tope", 0.35)),
+		"riesgo": float(d.get("riesgo", 0.35)),
+		"seguridad": float(d.get("seguridad", 0.30)),
+		"seguridad_dist": float(d.get("seguridad_dist", 22.0)),
+		"urgencia_para_romper": float(d.get("urgencia_para_romper", 0.45)),
+		"urgencia_para_guardar": float(d.get("urgencia_para_guardar", 0.45)),
+		"cierre": float(d.get("cierre", 0.30)),
+		"cobertura_extra": float(d.get("cobertura_extra", 0.50)),
+	}
+	return _pesos_marcador_cache
+
+
+## Que tan avanzado esta el partido, de 0 a 1.
+##
+## El alargue entero vale como final: todo minuto jugado ahi es tan tarde
+## como el 90'. Medirlo como minuto/120 daria un salto HACIA ATRAS al
+## empezar el alargue —el 91' pesaria menos que el 90'— y el que gana se
+## adelantaria justo cuando tiene que cuidar el resultado.
+static func _avance_del_partido(estado: Dictionary) -> float:
+	if int(estado.get("periodo", 1)) >= 3:
+		return 1.0
+	return clampf(float(estado["minuto"]) / (MINUTOS_MOSTRADOS_POR_MITAD * 2.0), 0.0, 1.0)
+
+
+## La urgencia de un equipo, sin cache. La cuenta es barata; lo que se
+## cachea es el resultado por tick (ver _planificar_marcador).
+##
+## El empate da urgencia POSITIVA y chica: sobre la hora los dos equipos
+## quieren ganarlo. En el alargue vale igual — el empate lleva a los
+## penales y tampoco le sirve a nadie.
+static func _urgencia_de(estado: Dictionary, es_local: bool) -> float:
+	var w := pesos_marcador()
+	var equipo := _equipo_de(estado, es_local)
+	var dif: int = equipo.goles - _equipo_de(estado, not es_local).goles
+	var base: float
+	if dif == 0:
+		base = float(w["empate"])
+	else:
+		# El segundo gol de ventaja pesa, pero menos que el primero: al que
+		# gana 3-0 no le queda mas que cuidar, y al que pierde 0-3 no le
+		# alcanza con tirar al doble de gente.
+		var cuanto: float = minf(1.0 + float(absi(dif) - 1) * float(w["dif_extra"]), float(w["dif_tope"]))
+		base = -signf(float(dif)) * cuanto
+	# El rasgo del DT amplifica la reaccion que ya le corresponde, igual
+	# que en DT.modificador_partido: el Loco se tira encima cuando pierde,
+	# el Conservador se guarda cuando gana. Ninguno de los dos inventa una
+	# reaccion que el marcador no pide.
+	var rasgo: String = str(equipo.dt.get("rasgo", "")) if not equipo.dt.is_empty() else ""
+	if rasgo == "Loco" and base > 0.0:
+		base *= float(w["dt_loco"])
+	elif rasgo == "Conservador" and base < 0.0:
+		base *= float(w["dt_conservador"])
+	return clampf(base * pow(_avance_del_partido(estado), float(w["exponente"])), -1.0, 1.0)
+
+
+## Deja la urgencia de los dos equipos calculada para este tick. Corre
+## una vez por tick, antes de que nadie decida ni se mueva, para que la
+## decision y el movimiento sin pelota lean el mismo numero.
+static func _planificar_marcador(estado: Dictionary) -> void:
+	estado["marcador"] = {
+		"tick": int(estado["tick"]),
+		"local": _urgencia_de(estado, true),
+		"away": _urgencia_de(estado, false),
+	}
+
+
+## La urgencia de este equipo. Lo leen la altura del bloque, el cupo de
+## corridas, la utilidad de las opciones y el reparto defensivo.
+static func urgencia(estado: Dictionary, es_local: bool) -> float:
+	var m: Dictionary = estado.get("marcador", {})
+	if m.is_empty() or int(m.get("tick", -1)) != int(estado["tick"]):
+		_planificar_marcador(estado)
+		m = estado["marcador"]
+	return float(m["local"] if es_local else m["away"])
+
+
+## Cuantas corridas simultaneas se permiten segun el marcador. Es el
+## punto 3 de la etapa: ganando al final se conservan apoyos y
+## coberturas, perdiendo llega uno mas. Nunca baja de una: un equipo que
+## gana igual ataca.
+static func _cupo_de_rupturas(estado: Dictionary, ataca_local: bool) -> int:
+	var w := pesos_marcador()
+	var u := urgencia(estado, ataca_local)
+	if u >= float(w["urgencia_para_romper"]):
+		return MAX_RUPTURAS + 1
+	if u <= -float(w["urgencia_para_guardar"]):
+		return maxi(1, MAX_RUPTURAS - 1)
+	return MAX_RUPTURAS
+
+
+## Ajuste de marcador para UNA opcion, acotado por `tope`. El que
+## necesita el gol acepta la jugada que gana metros y desprecia la que
+## vuelve atras; el que lo cuida hace lo contrario.
+##
+## El remate queda AFUERA a proposito. Premiarlo con el partido cerrado
+## es exactamente el abuso del tiro de lejos que arreglo BUG-007, y la
+## calidad de la ocasion es de la etapa 9: el marcador decide desde donde
+## se ataca, no cuantos remates lejanos se intentan.
+static func _ajuste_de_marcador(urg: float, tipo: String, adelante: float, dist: float,
+		libertad: float) -> float:
+	var w := pesos_marcador()
+	if absf(urg) < 0.01:
+		return 0.0
+	var a := 0.0
+	var gana: float = clampf(adelante / 15.0, 0.0, 1.0)
+	var atras: bool = adelante < -2.0
+	if urg > 0.0:
+		match tipo:
+			"pase_hueco":
+				a += float(w["riesgo"]) * urg * gana
+			"centro":
+				a += float(w["riesgo"]) * urg * 0.5
+			"gambeta":
+				a += float(w["riesgo"]) * urg * 0.4
+			"pase", "pase_largo":
+				if atras:
+					a -= float(w["riesgo"]) * urg
+				else:
+					a += float(w["riesgo"]) * urg * 0.6 * gana
+	else:
+		var p: float = -urg
+		match tipo:
+			"pase":
+				if atras or dist <= float(w["seguridad_dist"]):
+					a += float(w["seguridad"]) * p * libertad
+			"pase_largo":
+				a -= float(w["seguridad"]) * p * 0.4
+			"pase_hueco":
+				a -= float(w["seguridad"]) * p * 0.6
+			"gambeta":
+				a -= float(w["seguridad"]) * p * 0.5
+	return clampf(a, -float(w["tope"]), float(w["tope"]))
+
+
+# ---------------------------------------------------------------------------
+# Identidad individual (etapa 8)
+# ---------------------------------------------------------------------------
+
+## El PERFIL de un jugador dice a que juega, no cuan bueno es. Son cinco
+## preferencias entre cero y uno que salen de sus atributos y de su rol, y
+## se calculan una sola vez al empezar el partido.
+##
+## - `asociacion`: la toca y se mueve. Pase corto, pared, hueco.
+## - `ruptura`: ataca el espacio por detras de la ultima linea.
+## - `regate`: se la lleva y encara al que tiene enfrente.
+## - `descarga`: recibe de espaldas y aguanta con el marcador encima.
+## - `llegada`: entra desde atras cuando la jugada ya paso.
+##
+## Preferencia NO es capacidad, que es el punto 4 de la etapa. Preferir el
+## regate no hace que la gambeta salga: sube la utilidad de encarar, y el
+## duelo contra el rival se resuelve exactamente igual que antes. Por eso
+## el perfil no toca ningun atributo efectivo ni ninguna probabilidad.
+##
+## Y el perfil es la FORMA del jugador, no su nivel: las cinco
+## preferencias se centran contra la media del propio jugador (ver
+## _construir_perfil). Sin ese centrado un crack tendria las cinco altas y
+## cobraria bonificacion en todas las opciones, que es regalarle utilidad
+## por ser bueno — y eso ya lo hacen sus atributos adentro de cada
+## utilidad.
+##
+## Tampoco lee personalidad ni habilidades. Esos dos sistemas ya empujan
+## donde les toca (Egoista el remate, Creador el hueco, Metodico la
+## temperatura, Pie preferido el lado malo) y sumarlos aca seria cobrar
+## dos veces el mismo efecto.
+const RASGOS_PERFIL := ["asociacion", "ruptura", "regate", "descarga", "llegada"]
+
+## Que mezcla de atributos arma cada preferencia. Son los mismos
+## atributos que el motor ya usa para EJECUTAR esas acciones; lo que
+## cambia es que aca deciden cuanto se las intenta, no como salen.
+const MEZCLA_PERFIL_RASGO := {
+	"asociacion": {"pases": 0.45, "vision": 0.35, "inteligencia": 0.20},
+	"ruptura": {"velocidad": 0.45, "aceleracion": 0.35, "energia": 0.20},
+	"regate": {"control": 0.45, "agilidad": 0.35, "aceleracion": 0.20},
+	"descarga": {"fuerza": 0.40, "control": 0.35, "cabezazo": 0.25},
+	"llegada": {"energia": 0.40, "inteligencia": 0.35, "tiro": 0.25},
+}
+
+## Lo que agrega el PUESTO, antes de centrar. No hay selector nuevo: el
+## rol es el que ya trae el slot de la formacion (ver _armar_jugadores),
+## asi que un central puesto de nueve lee el perfil del nueve.
+const SESGO_ROL_PERFIL := {
+	"DFC": {"asociacion": 0.05, "ruptura": -0.15, "regate": -0.20, "descarga": 0.05, "llegada": -0.15},
+	"LAT": {"asociacion": 0.0, "ruptura": 0.10, "regate": 0.0, "descarga": -0.10, "llegada": 0.10},
+	"MC": {"asociacion": 0.15, "ruptura": -0.05, "regate": -0.05, "descarga": -0.05, "llegada": 0.05},
+	"MCO": {"asociacion": 0.15, "ruptura": 0.0, "regate": 0.10, "descarga": 0.0, "llegada": 0.10},
+	"EXT": {"asociacion": -0.10, "ruptura": 0.15, "regate": 0.20, "descarga": -0.10, "llegada": 0.0},
+	"DC": {"asociacion": -0.10, "ruptura": 0.10, "regate": 0.0, "descarga": 0.20, "llegada": -0.05},
+}
+
+## El arquero no tiene perfil: sus decisiones ya van por su propia rama
+## (ver evaluar_opciones) y la etapa 6 es la duena de lo que hace.
+const PERFIL_NEUTRO := {"asociacion": 0.5, "ruptura": 0.5, "regate": 0.5, "descarga": 0.5, "llegada": 0.5}
+
+
+## Pesos de la identidad individual. Como en pesos_ritmo y
+## pesos_marcador, el lector trae los valores por defecto y el resultado
+## queda cacheado: se lee una vez por opcion y por tick.
+static var _pesos_perfil_cache: Dictionary = {}
+
+static func pesos_perfil() -> Dictionary:
+	if not _pesos_perfil_cache.is_empty():
+		return _pesos_perfil_cache
+	var d: Dictionary = pesos().get("perfil", {})
+	_pesos_perfil_cache = {
+		"reparto": float(d.get("reparto", 1.6)),
+		"tope": float(d.get("tope", 0.30)),
+		"asociacion": float(d.get("asociacion", 0.28)),
+		"regate": float(d.get("regate", 0.30)),
+		"descarga": float(d.get("descarga", 0.26)),
+		"corto_dist": float(d.get("corto_dist", 24.0)),
+		"desmarque": float(d.get("desmarque", 0.35)),
+	}
+	return _pesos_perfil_cache
+
+
+## Un atributo suelto, normalizado a cero–uno contra el NIVEL del
+## partido. Va relativo por el mismo motivo que _por_atributo: el perfil
+## es una preferencia comparada con los que estan en la cancha, y en
+## decima todos los atributos brutos son bajos. Sin esto, un plantel de
+## decima entero tendria las cinco preferencias planchadas contra cero y
+## no habria identidad ninguna.
+static func _atributo_normalizado(jugador: Dictionary, atributo: String) -> float:
+	var bruto: float = float(jugador["atributos"].get(atributo, 50.0))
+	return clampf(MatchEngine.relativo_al_nivel(bruto, _nivel_partido) / 100.0, 0.0, 1.0)
+
+
+## Arma el perfil de un jugador desde sus atributos y su rol. Es una
+## cuenta pura: no toca el RNG ni el estado, asi que dos corridas con la
+## misma semilla dan el mismo perfil.
+static func _construir_perfil(jugador: Dictionary, rol: String) -> Dictionary:
+	if rol == "ARQ":
+		return PERFIL_NEUTRO.duplicate()
+	var crudo := {}
+	var suma := 0.0
+	var sesgos: Dictionary = SESGO_ROL_PERFIL.get(rol, {})
+	for rasgo in RASGOS_PERFIL:
+		var v := 0.0
+		var mezcla: Dictionary = MEZCLA_PERFIL_RASGO[rasgo]
+		for atributo in mezcla:
+			v += float(mezcla[atributo]) * _atributo_normalizado(jugador, atributo)
+		v += float(sesgos.get(rasgo, 0.0))
+		crudo[rasgo] = v
+		suma += v
+	# Centrado contra la media del propio jugador: lo que queda es en que
+	# se DESTACA, no cuanto vale. `reparto` abre el abanico; con 1.6, una
+	# preferencia que saca diez puntos de mezcla a las otras cuatro se va
+	# ~0,13 por encima del medio punto.
+	var media: float = suma / float(RASGOS_PERFIL.size())
+	var perfil := {}
+	var reparto: float = float(pesos_perfil()["reparto"])
+	for rasgo in RASGOS_PERFIL:
+		perfil[rasgo] = clampf(0.5 + (float(crudo[rasgo]) - media) * reparto, 0.0, 1.0)
+	return perfil
+
+
+## Deja armado el perfil de los 22 al empezar el partido. El punto 5 de
+## la etapa —recalcular al cambiar de rol o al entrar un suplente— lo
+## resuelve _perfil_en, que rehace el perfil si el rol guardado ya no es
+## el que el jugador tiene en la cancha.
+static func _construir_perfiles(estado: Dictionary) -> void:
+	for clave in estado["jugadores"]:
+		_perfil_en(estado, int(clave))
+
+
+## Perfil del que ocupa esta clave, construyendolo si falta o si le
+## cambio el rol. Queda guardado en el dict del jugador: la mezcla se
+## calcula una vez por partido y no una vez por tick.
+static func _perfil_en(estado: Dictionary, clave: int) -> Dictionary:
+	var e: Dictionary = estado["jugadores"].get(clave, {})
+	if e.is_empty():
+		return PERFIL_NEUTRO
+	var rol: String = str(e["rol"])
+	if e.has("perfil") and str(e.get("perfil_rol", "")) == rol:
+		return e["perfil"]
+	var equipo := _equipo_de(estado, bool(e["equipo_local"]))
+	var jugador := _dict_jugador(estado, equipo, int(e["jugador_id"]))
+	var perfil: Dictionary = PERFIL_NEUTRO.duplicate() if jugador.is_empty() else _construir_perfil(jugador, rol)
+	e["perfil"] = perfil
+	e["perfil_rol"] = rol
+	return perfil
+
+
+## El perfil de un jugador en cancha. Lo leen la decision del poseedor,
+## el reparto de desmarques y los tests.
+static func perfil_de(estado: Dictionary, clave: int) -> Dictionary:
+	return _perfil_en(estado, clave)
+
+
+## Cuanto se aparta de la media esta preferencia, de -1 a 1. Es lo que
+## entra en las bonificaciones: un jugador del monton da cero y no mueve
+## nada.
+static func _gusto(perfil: Dictionary, rasgo: String) -> float:
+	return clampf((float(perfil.get(rasgo, 0.5)) - 0.5) * 2.0, -1.0, 1.0)
+
+
+## Ajuste de identidad para UNA opcion, acotado por `tope`.
+##
+## Cada bonificacion va multiplicada por el contexto que esa jugada
+## necesita, asi que un mal contexto la apaga: el extremo encarador cobra
+## el uno contra uno solo si tiene espacio, y el nueve de apoyo cobra la
+## descarga solo cuando esta adelantado y con el marcador encima. Es el
+## punto 3 de la etapa — el perfil inclina, no obliga.
+##
+## El remate queda AFUERA, igual que en _ajuste_de_marcador: darle mas
+## ganas de patear al que tiene tiro alto es exactamente el abuso que
+## arreglo BUG-007.
+static func _ajuste_de_perfil(perfil: Dictionary, receptor: Dictionary, tipo: String,
+		adelante: float, dist: float, libertad: float, presion: float, camino: float) -> float:
+	var w := pesos_perfil()
+	var a := 0.0
+	match tipo:
+		"conducir":
+			a += float(w["regate"]) * _gusto(perfil, "regate") * camino * (1.0 - presion)
+		"gambeta":
+			a += float(w["regate"]) * _gusto(perfil, "regate") * (1.0 - presion)
+		"pared":
+			a += float(w["asociacion"]) * _gusto(perfil, "asociacion") * 0.8
+		"pase":
+			var cerca: float = clampf(1.0 - dist / maxf(float(w["corto_dist"]), 1.0), 0.0, 1.0)
+			a += float(w["asociacion"]) * _gusto(perfil, "asociacion") * cerca * libertad
+			# La descarga la pide el RECEPTOR, no el pasador: el nueve de
+			# apoyo se ofrece de espaldas, y por eso vale darsela aunque lo
+			# esten marcando. Sin este termino la unica lectura del motor
+			# era "receptor tapado, mal pase".
+			if not receptor.is_empty() and adelante > 0.0:
+				a += float(w["descarga"]) * _gusto(receptor, "descarga") * clampf(1.0 - libertad, 0.0, 1.0) * clampf(adelante / 12.0, 0.0, 1.0)
+		"pase_hueco":
+			a += float(w["asociacion"]) * _gusto(perfil, "asociacion") * 0.5 * clampf(adelante / 15.0, 0.0, 1.0)
+	return clampf(a, -float(w["tope"]), float(w["tope"]))
+
+
+## Lo que el perfil le suma al valor de un desmarque. Es la otra mitad de
+## la etapa: el volante llegador arranca desde atras y el extremo veloz
+## ataca el espacio, sin que ninguno de los dos deje de poder hacer otra
+## cosa — el valor del candidato sigue mandando y esto solo lo inclina.
+static func _sesgo_perfil_desmarque(perfil: Dictionary, tipo: String) -> float:
+	var w := pesos_perfil()
+	var rasgo := ""
+	match tipo:
+		"apoyo":
+			rasgo = "asociacion"
+		"ruptura":
+			rasgo = "ruptura"
+		"llegada":
+			rasgo = "llegada"
+		"arrastre":
+			rasgo = "descarga"
+	if rasgo == "":
+		return 0.0
+	return float(w["desmarque"]) * _gusto(perfil, rasgo)
+
+
+## El plan modifica la decision y deja intacta la calidad del duelo.
+## La seguridad incluye al receptor: pasarle a alguien encerrado no es
+## conservar posesion aunque la trayectoria inicial este despejada.
+static func _ponderar_plan(estado: Dictionary, opciones: Array, poseedor: Dictionary,
+		jugador: Dictionary, presion: float, camino: float) -> void:
+	var local: bool = poseedor["equipo_local"]
+	var equipo := _equipo_de(estado, local)
+	var plan := Estilos.plan(equipo.estilo)
+	var pos: Vector2 = poseedor["pos"]
+	var transicion := _transicion(estado, local) * float(plan["transicion"])
+	var grupos := {}
+	for o in opciones:
+		grupos[o["tipo"]] = int(grupos.get(o["tipo"], 0)) + 1
+	var temp := temperatura(jugador, presion)
+	# Etapa 4: la fase del equipo y, si la posesion esta trabada, a quien
+	# seria devolversela. `devolver_a` queda en -1 mientras la jugada
+	# progrese o haya presion: devolver la pelota entonces esta bien.
+	var fase := fase_de_ritmo(estado, local)
+	var w_ritmo := pesos_ritmo()
+	# Etapa 7: cuanto necesita este equipo que el partido cambie.
+	var urg := urgencia(estado, local)
+	# Etapa 8: a que juega ESTE jugador. El perfil ya esta armado desde el
+	# principio del partido; aca solo se lee.
+	var perfil := perfil_de(estado, int(poseedor["clave"]))
+	var devolver_a := -1
+	var ultimo_p: Dictionary = estado.get("ultimo_pase", {})
+	if _posesion_estancada(estado, presion) and not ultimo_p.is_empty() 			and bool(ultimo_p.get("local", not local)) == local 			and int(ultimo_p.get("a", -1)) == int(poseedor["clave"]):
+		devolver_a = clave_de(int(ultimo_p["de"]), local)
+	for o in opciones:
+		var tipo: String = o["tipo"]
+		var ajuste := 0.0
+		# Diez receptores no deben multiplicar por diez las ganas de pasar.
+		ajuste -= 0.35 * temp * log(float(grupos[tipo]))
+		if tipo == "conducir":
+			ajuste += 0.45 * camino * (1.0 - presion) * (1.0 - float(plan["asociacion"]))
+			ajuste += transicion * camino * 0.6
+			ajuste -= float(plan["asociacion"]) * 0.2
+			ajuste += _ajuste_de_ritmo(fase, tipo, 0.0, 0.0, 0.0, false, camino)
+			ajuste += _ajuste_de_perfil(perfil, {}, tipo, 0.0, 0.0, 0.0, presion, camino)
+		elif tipo == "pared":
+			ajuste += float(plan["asociacion"]) * 0.55
+			ajuste += _ajuste_de_perfil(perfil, {}, tipo, 0.0, 0.0, 0.0, presion, camino)
+		elif tipo == "pase" or tipo == "pase_largo" or tipo == "pase_hueco":
+			var receptor: Dictionary = estado["jugadores"].get(int(o.get("objetivo_id", -1)), {})
+			if receptor.is_empty():
+				continue
+			var destino: Vector2 = o.get("punto", receptor["pos"]) if tipo == "pase_hueco" else receptor["pos"]
+			var adelante: float = (destino.x - pos.x) * (1.0 if local else -1.0)
+			var dist := pos.distance_to(destino)
+			var libertad := 1.0 - presion_normalizada(estado, destino, local)
+			var cambio_de_frente: bool = pos.y * destino.y < 0.0 					and absf(pos.y - destino.y) >= AREA_MEDIO_ANCHO
+			if tipo == "pase":
+				ajuste += float(plan["asociacion"]) * 1.15 * libertad * clampf(1.0 - dist / 35.0, 0.0, 1.0)
+				ajuste -= (1.0 - libertad) * 0.55
+				if adelante < -2.0 and not bool(o["detalle"].get("pase_atras_al_area", false)):
+					ajuste -= camino * (1.0 - presion) * (0.45 + transicion)
+			elif tipo == "pase_hueco":
+				ajuste += (float(plan["verticalidad"]) * 0.35 + transicion * 0.8) * libertad * clampf(adelante / 15.0, 0.0, 1.0)
+			else:
+				ajuste += float(plan["verticalidad"]) * 0.3 + transicion * 0.45
+				ajuste -= float(plan["asociacion"]) * 0.6
+				if adelante < -2.0:
+					ajuste -= 0.6 + camino * (1.0 - presion)
+				if cambio_de_frente:
+					# Cambiar de frente vale cuando libera al receptor, aunque
+					# no gane metros hacia el arco en el primer pase.
+					ajuste += libertad * (0.5 + presion * 0.6)
+			ajuste += _ajuste_de_ritmo(fase, tipo, adelante, dist, libertad, cambio_de_frente, camino)
+			ajuste += _ajuste_de_marcador(urg, tipo, adelante, dist, libertad)
+			ajuste += _ajuste_de_perfil(perfil, perfil_de(estado, int(o.get("objetivo_id", -1))),
+					tipo, adelante, dist, libertad, presion, camino)
+			# La misma pareja devolviendosela sin avanzar y sin presion vale
+			# cada vez menos. No se prohibe: el castigo tiene tope y el resto
+			# de los pases sigue disponible, asi que siempre queda salida.
+			if devolver_a != -1 and int(o.get("objetivo_id", -1)) == devolver_a:
+				ajuste -= float(w_ritmo["devolucion_castigo"]) * minf(
+						_veces_de_la_pareja(estado, int(poseedor["clave"]), devolver_a),
+						float(w_ritmo["devolucion_max"]))
+			o["detalle"]["libertad_receptor"] = libertad
+		elif tipo == "gambeta" or tipo == "centro":
+			# Encarar y colgarla al area son las dos jugadas de riesgo que
+			# no pasan por la rama del pase. El remate NO entra aca: ver
+			# _ajuste_de_marcador.
+			ajuste += _ajuste_de_marcador(urg, tipo, 0.0, 0.0, 0.0)
+			ajuste += _ajuste_de_perfil(perfil, {}, tipo, 0.0, 0.0, 0.0, presion, camino)
+		o["utilidad"] = float(o["utilidad"]) + ajuste
+		o["detalle"]["plan"] = ajuste
+
+## Apoyos escalonados, amplitud y rupturas. Se elige un espacio cercano
+## a la funcion del jugador; no se manda a los diez a buscar la pelota.
+static func _buscar_apoyo(estado: Dictionary, e: Dictionary, equipo: Team, base: Vector2) -> Vector2:
+	var tick: int = estado["tick"]
+	var local: bool = e["equipo_local"]
+	var id_poseedor: int = int(estado["pelota"]["poseedor_id"])
+	if tick < int(e.get("apoyo_hasta", -1)) and int(e.get("apoyo_poseedor", -2)) == id_poseedor:
+		return e["apoyo"]
+	var pelota: Vector2 = estado["pelota"]["pos"]
+	var plan := Estilos.plan(equipo.estilo)
+	var signo := 1.0 if local else -1.0
+	var lado := signf(float(e["base"].y))
+	if lado == 0.0:
+		lado = -1.0 if int(e["jugador_id"]) % 2 == 0 else 1.0
+	var transicion := _transicion(estado, local) * float(plan["transicion"])
+	var rol: String = e["rol"]
+	var objetivo := base
+	if rol in ["MC", "MCO"] and transicion < 0.5:
+		var distancia: float = 10.0 + (1.0 - float(plan["asociacion"])) * 8.0
+		var escalon := -distancia * 0.5 if rol == "MC" else distancia * 0.6
+		var apoyo := Vector2(pelota.x + signo * escalon, pelota.y + lado * distancia)
+		objetivo = base.lerp(apoyo, float(plan["asociacion"]) * 0.7)
+	if rol == "EXT" or rol == "LAT":
+		objetivo.y = lerpf(objetivo.y, lado * (MEDIO_ANCHO - 7.0), float(plan["amplitud"]))
+		# El lateral desdobla al extremo de su lado cuando este puede
+		# levantar la cabeza. El lateral opuesto conserva su cobertura.
+		if rol == "LAT" and id_poseedor != -1 and estado["jugadores"].has(id_poseedor):
+			var poseedor: Dictionary = estado["jugadores"][id_poseedor]
+			if poseedor["rol"] == "EXT" and pelota.y * lado > 0.0 and presion_normalizada(estado, pelota, local) < 0.55:
+				objetivo.x = pelota.x + signo * 10.0
+				objetivo.y = lado * (MEDIO_ANCHO - 4.0)
+	if transicion > 0.0 and rol in ["EXT", "DC"]:
+		objetivo.x += signo * 14.0 * transicion
+		if rol == "EXT":
+			objetivo.y = lado * (MEDIO_ANCHO - 7.0)
+	# Al llegar por una banda, el extremo opuesto ocupa el segundo palo.
+	# Mantener a ambos abiertos tambien aqui dejaba el area sin receptores.
+	if pelota.x * signo > MEDIO_LARGO - AREA_LARGO - 5.0 and absf(pelota.y) > 11.0:
+		if rol == "EXT" and pelota.y * lado < 0.0:
+			objetivo.x = maxf(objetivo.x * signo, pelota.x * signo + 4.0) * signo
+			objetivo.y = lado * 7.0
+		elif rol == "MCO":
+			objetivo.x = (MEDIO_LARGO - AREA_LARGO + 2.0) * signo
+			objetivo.y = -signf(pelota.y) * 4.0
+	# Tras pasar, el jugador ofrece una nueva linea. Conserva el movimiento
+	# al menos hasta el cambio de poseedor, sin exigir que le devuelvan.
+	var ultimo: Dictionary = estado.get("ultimo_pase", {})
+	if int(ultimo.get("de", -1)) == int(e["jugador_id"]) and bool(ultimo.get("local", not local)) == local and rol in ["MC", "MCO", "EXT"]:
+		objetivo.x += signo * 5.0 * float(plan["asociacion"])
+	var mejor := objetivo
+	var mejor_valor := -INF
+	for desplazamiento in [Vector2.ZERO, Vector2(0, -6), Vector2(0, 6), Vector2(-4 * signo, 3 * lado)]:
+		var candidato: Vector2 = objetivo + desplazamiento
+		candidato.x = clampf(candidato.x, -LIMITE_X, LIMITE_X)
+		candidato.y = clampf(candidato.y, -MEDIO_ANCHO + 3.0, MEDIO_ANCHO - 3.0)
+		var valor: float = 1.0 - presion_normalizada(estado, candidato, local)
+		valor += 0.5 * (1.0 - riesgo_linea(estado, pelota, candidato, local))
+		valor -= desplazamiento.length() * 0.035
+		for comp in estado["jugadores"].values():
+			if comp["equipo_local"] == local and comp["clave"] != e["clave"]:
+				valor -= maxf(0.0, 1.0 - candidato.distance_to(comp["pos"]) / 6.0)
+		if valor > mejor_valor:
+			mejor_valor = valor
+			mejor = candidato
+	e["apoyo"] = mejor
+	e["apoyo_hasta"] = tick + TICKS_PLAN
+	e["apoyo_poseedor"] = id_poseedor
+	return mejor
+
+# ---------------------------------------------------------------------------
+# Juego sin pelota: intenciones colectivas (etapa 1)
+# ---------------------------------------------------------------------------
+
+## Una intencion es lo que el jugador SE PROPUSO hacer sin la pelota, y
+## dura mas de un tick. Antes cada uno recalculaba su apoyo solo, con la
+## foto del tick, y no habia nada que impidiera que tres pidieran la
+## pelota en el mismo metro cuadrado ni que los cinco de arriba rompieran
+## juntos dejando al poseedor sin un pie al que pasarle.
+##
+## El plan es del EQUIPO: se reparte una vez cada TICKS_DESMARQUE_MIN
+## ticks desde la misma instantanea, en orden estable por clave, y cada
+## intencion sobrevive hasta que vence o deja de ser viable.
+##
+## Los cuatro tipos:
+## - `apoyo`: se ofrece al pie, a distancia util y con la linea limpia.
+## - `ruptura`: sale en diagonal por detras de la ultima linea.
+## - `arrastre`: se lleva a su marcador lejos del carril central.
+## - `llegada`: entra desde atras cuando otro ya fija la ultima linea.
+const TIPOS_DESMARQUE := ["apoyo", "ruptura", "arrastre", "llegada"]
+
+## Cada cuanto se vuelve a repartir, y cuanto puede durar una intencion.
+## El piso es el mismo TICKS_PLAN del resto de los planes cortos (un
+## segundo); el techo son tres segundos, que es lo que tarda un desmarque
+## en agotarse. La duracion sale del tiempo de viaje al destino, no del
+## azar: el que va lejos sostiene la corrida mas tiempo.
+const TICKS_DESMARQUE_MIN := TICKS_PLAN
+const TICKS_DESMARQUE_MAX := 12
+
+## Dos desmarques al mismo punto no son dos opciones de pase: son una
+## sola, tapada por el mismo defensor.
+const SEPARACION_DESMARQUE := 4.0
+
+## Cuantos pueden abandonar la linea de la pelota a la vez (ruptura o
+## llegada). Sin tope, el reparto manda a todos los de arriba a correr al
+## mismo tiempo y no queda nadie a quien tocarsela.
+const MAX_RUPTURAS := 2
+
+## Quien puede tomar cada tipo. El DFC queda afuera de todo: su
+## acompanamiento ya lo gobierna SUBIDA_POR_ROL y meterlo a romper
+## descubre el fondo.
+const ROLES_QUE_ROMPEN := ["MCO", "EXT", "DC"]
+const ROLES_QUE_LLEGAN := ["MC", "MCO", "LAT"]
+
+## Presion en el destino a partir de la cual la intencion deja de tener
+## sentido: el espacio que se iba a ocupar ya no existe.
+const PRESION_DESTINO_INVIABLE := 0.85
+
+
+## Pesos del reparto. Viven en utility_pesos.json para poder calibrarlos,
+## pero el lector trae los valores por defecto: un json sin la seccion
+## sigue funcionando.
+static func pesos_sin_pelota() -> Dictionary:
+	var sp: Dictionary = pesos().get("sin_pelota", {})
+	return {
+		"linea": float(sp.get("linea", 1.0)),
+		"espacio": float(sp.get("espacio", 0.9)),
+		"progreso": float(sp.get("progreso", 1.6)),
+		"distancia_util": float(sp.get("distancia_util", 0.7)),
+		"viaje": float(sp.get("viaje", 0.5)),
+		"dist_ideal": float(sp.get("dist_ideal", 15.0)),
+		"dist_tolerancia": float(sp.get("dist_tolerancia", 13.0)),
+		"conflicto": float(sp.get("conflicto", 2.0)),
+		"minimo": float(sp.get("minimo", 0.35)),
+		"sesgo_apoyo": float(sp.get("sesgo_apoyo", 0.30)),
+		"sesgo_ruptura": float(sp.get("sesgo_ruptura", 0.10)),
+		"sesgo_arrastre": float(sp.get("sesgo_arrastre", -0.10)),
+		"sesgo_llegada": float(sp.get("sesgo_llegada", 0.0)),
+		"pared_riesgo_max": float(sp.get("pared_riesgo_max", 0.55)),
+	}
+
+
+## Largo de una corrida al espacio segun lo rapido que sea el que la
+## hace. Es la misma escala que usa el pase al hueco: el punto al que se
+## tira la pelota y el punto al que corre el companero salen de aca, de
+## una sola cuenta.
+static func largo_de_ruptura(vel_max: float) -> float:
+	var f: Dictionary = pesos()["fisica"]
+	var t: float = clampf((vel_max - float(f["vel_min"])) / maxf(float(f["vel_max"]) - float(f["vel_min"]), 0.01), 0.0, 1.0)
+	return float(f["hueco_min"]) + (float(f["hueco_max"]) - float(f["hueco_min"])) * t
+
+
+## Recorta un destino a la cancha jugable y a la linea de offside. Asi la
+## legalidad se comprueba al construir el candidato y no despues: una
+## ruptura apunta al filo de la linea, nunca mas alla.
+static func _destino_legal(estado: Dictionary, punto: Vector2, es_local: bool) -> Vector2:
+	var linea: Dictionary = estado["linea_offside"]
+	var x: float = clampf(punto.x, -LIMITE_X, LIMITE_X)
+	if es_local:
+		x = minf(x, float(linea["local"]))
+	else:
+		x = maxf(x, float(linea["away"]))
+	return Vector2(x, clampf(punto.y, -MEDIO_ANCHO + 3.0, MEDIO_ANCHO - 3.0))
+
+
+## Cuanto vale para el equipo que ESTE jugador ocupe ESTE punto. Mide lo
+## que pide la etapa: linea de pase limpia, distancia util al poseedor,
+## progresion, espacio al llegar y lo que cuesta el viaje.
+static func _valor_de_desmarque(estado: Dictionary, e: Dictionary, poseedor: Dictionary,
+		destino: Vector2, tipo: String) -> float:
+	var w := pesos_sin_pelota()
+	var local: bool = e["equipo_local"]
+	var pos: Vector2 = e["pos"]
+	var desde: Vector2 = poseedor["pos"]
+	var dist_pase: float = desde.distance_to(destino)
+	var util: float = clampf(1.0 - absf(dist_pase - float(w["dist_ideal"])) / maxf(float(w["dist_tolerancia"]), 0.01), 0.0, 1.0)
+	var valor: float = float(w["linea"]) * (1.0 - riesgo_linea(estado, desde, destino, local))
+	valor += float(w["espacio"]) * (1.0 - presion_normalizada(estado, destino, local))
+	valor += float(w["progreso"]) * (valor_posicion(destino, local) - valor_posicion(pos, local))
+	valor += float(w["distancia_util"]) * util
+	valor -= float(w["viaje"]) * (pos.distance_to(destino) / 30.0)
+	valor += float(w["sesgo_" + tipo])
+	# Etapa 8: el sesgo del EQUIPO por tipo de desmarque es el de arriba;
+	# este es el del jugador. El llegador arranca desde atras y el extremo
+	# veloz ataca el espacio, pero la geometria sigue mandando.
+	valor += _sesgo_perfil_desmarque(_perfil_en(estado, int(e["clave"])), tipo)
+	return valor
+
+
+## Los desmarques que este jugador podria elegir, cada uno con su punto
+## ya legal y su valor. Sale de su rol y de la geometria de la jugada; no
+## se sortea nada.
+static func _candidatos_desmarque(estado: Dictionary, e: Dictionary, poseedor: Dictionary, ancla: Vector2) -> Array:
+	var local: bool = e["equipo_local"]
+	var pos: Vector2 = e["pos"]
+	var desde: Vector2 = poseedor["pos"]
+	var rol: String = e["rol"]
+	var arco := arco_rival(local)
+	var signo := 1.0 if local else -1.0
+	var w := pesos_sin_pelota()
+	var candidatos := []
+
+	# --- Apoyo: ofrecerse al pie a distancia util -----------------------
+	# El apoyo se busca ALREDEDOR DEL ANCLA DE SU ROL, no alrededor de la
+	# pelota. Construido como un anillo a quince metros del poseedor, el
+	# equipo entero se derrumbaba sobre el balon: medido sobre la linea de
+	# base, la posesion controlada subia (51,9% a 57,0% en primera) pero los
+	# remates de decima caian de 7,2 a 5,2 por partido, porque nadie
+	# quedaba en posicion de rematar. El ancla conserva la profundidad que
+	# ya daban el hombro del ultimo defensor y el acompanamiento.
+	var lado_apoyo := signf(ancla.y)
+	if lado_apoyo == 0.0:
+		lado_apoyo = 1.0
+	for desplazamiento in [Vector2.ZERO, Vector2(0.0, -6.0), Vector2(0.0, 6.0),
+			Vector2(-4.0 * signo, 3.0 * lado_apoyo), Vector2(4.0 * signo, 0.0)]:
+		var destino := _destino_legal(estado, ancla + desplazamiento, local)
+		candidatos.append({"tipo": "apoyo", "destino": destino, "companero": int(poseedor["clave"]),
+			"valor": _valor_de_desmarque(estado, e, poseedor, destino, "apoyo")})
+
+	# --- Ruptura diagonal: por detras de la ultima linea ----------------
+	# Diagonal y no recta a proposito: corriendo derecho al arco el
+	# delantero se queda en el bolsillo del central que ya lo mira. El
+	# largo es el mismo del pase al hueco, asi que la corrida y la pelota
+	# se encuentran donde el motor ya sabe tirarla.
+	if ROLES_QUE_ROMPEN.has(rol):
+		var dir_gol: Vector2 = arco - pos
+		if dir_gol.length() < 0.5:
+			dir_gol = Vector2(signo, 0.0)
+		dir_gol = dir_gol.normalized()
+		var largo: float = largo_de_ruptura(float(e["vel_max"]))
+		for giro_r in [-0.5, 0.5]:
+			var destino_r := _destino_legal(estado, pos + dir_gol.rotated(giro_r) * largo, local)
+			candidatos.append({"tipo": "ruptura", "destino": destino_r, "companero": int(poseedor["clave"]),
+				"valor": _valor_de_desmarque(estado, e, poseedor, destino_r, "ruptura")})
+
+	# --- Arrastre: llevarse al marcador lejos del carril ----------------
+	# Solo tiene sentido si hay un marcador al que llevarse. Mueve al
+	# ATACANTE; si el defensor lo acompana o no lo decide su propia marca,
+	# aca no se lo toca. El valor crece con cuanto despeja el carril que
+	# va del poseedor al arco.
+	if ROLES_QUE_ROMPEN.has(rol):
+		var marcador := -1
+		var d_marcador := 6.0
+		for id_r in estado["jugadores"]:
+			var r: Dictionary = estado["jugadores"][id_r]
+			if r["equipo_local"] == local:
+				continue
+			var d: float = pos.distance_to(r["pos"])
+			if d < d_marcador:
+				d_marcador = d
+				marcador = int(id_r)
+		if marcador != -1:
+			var lado := signf(pos.y)
+			if lado == 0.0:
+				lado = 1.0
+			var destino_a := _destino_legal(estado, pos + Vector2(signo * 3.0, lado * 10.0), local)
+			var despeja: float = _dist_a_segmento(destino_a, desde, arco) - _dist_a_segmento(pos, desde, arco)
+			var valor_a: float = _valor_de_desmarque(estado, e, poseedor, destino_a, "arrastre")
+			valor_a += clampf(despeja / 10.0, 0.0, 1.0) * 0.8
+			candidatos.append({"tipo": "arrastre", "destino": destino_a, "companero": marcador,
+				"valor": valor_a})
+
+	# --- Llegada desde atras: solo si otro ya fija la ultima linea ------
+	# Es la segunda linea. Pide dos cosas: que un companero este pegado a
+	# la linea de offside, o sea sosteniendo a los centrales, y que el
+	# carril por el que entra este libre. Sin la primera condicion el
+	# volante entra a un area que todavia esta poblada.
+	if ROLES_QUE_LLEGAN.has(rol) and (pos.x - desde.x) * signo < 2.0:
+		var fijador := -1
+		var linea: Dictionary = estado["linea_offside"]
+		var borde_linea: float = float(linea["local"]) if local else float(linea["away"])
+		for id_c in estado["jugadores"]:
+			var c: Dictionary = estado["jugadores"][id_c]
+			if c["equipo_local"] != local or int(id_c) == int(e["clave"]) or c["rol"] == "ARQ":
+				continue
+			if absf(c["pos"].x - borde_linea) <= 4.0:
+				fijador = int(id_c)
+				break
+		if fijador != -1:
+			var borde_area: float = (MEDIO_LARGO - AREA_LARGO) * signo
+			for carril in [-10.0, 0.0, 10.0]:
+				var punto_l := Vector2(borde_area, carril)
+				if pos.distance_to(punto_l) > 30.0:
+					continue
+				var destino_l := _destino_legal(estado, punto_l, local)
+				candidatos.append({"tipo": "llegada", "destino": destino_l, "companero": fijador,
+					"valor": _valor_de_desmarque(estado, e, poseedor, destino_l, "llegada")})
+
+	return candidatos
+
+
+## Una intencion vive mientras el jugador siga en cancha, no se le haya
+## vencido el plazo y el destino siga valiendo la pena. La legalidad se
+## recorta de nuevo cada tick porque la linea de offside se mueve.
+static func _desmarque_sigue_vivo(estado: Dictionary, clave: int, plan: Dictionary) -> bool:
+	if int(estado["tick"]) >= int(plan["hasta"]):
+		return false
+	if not estado["jugadores"].has(clave) or _en_transito(estado, clave):
+		return false
+	var e: Dictionary = estado["jugadores"][clave]
+	var local: bool = e["equipo_local"]
+	# Si su rol le cerro el objetivo mientras corria el plazo (el delantero
+	# bajo a recibir porque la pelota retrocedio), la intencion ya no la lee
+	# nadie: se cancela para liberar el cupo.
+	if bool(_ancla_de_rol(estado, e, _equipo_de(estado, local), true)["listo"]):
+		return false
+	var destino: Vector2 = _destino_legal(estado, plan["destino"], local)
+	if presion_normalizada(estado, destino, local) > PRESION_DESTINO_INVIABLE:
+		return false
+	plan["destino"] = destino
+	return true
+
+
+## Reparte las intenciones del equipo que ataca. Se llama una vez por
+## tick; solo recalcula cada TICKS_DESMARQUE_MIN, y siempre desde la
+## misma instantanea de posiciones.
+static func _planificar_desmarques(estado: Dictionary, ataca_local: bool) -> void:
+	var planes: Dictionary = estado.get("desmarques", {})
+	estado["desmarques"] = planes
+	# El juego detenido no tiene desmarques: los 22 caminan a su marca.
+	if int(estado.get("detenido", 0)) > 0:
+		planes.clear()
+		return
+	# La perdida cancela TODO: las rupturas eran para esa posesion.
+	if bool(estado.get("desmarques_local", ataca_local)) != ataca_local:
+		planes.clear()
+		estado["desmarques_hasta"] = -1
+	estado["desmarques_local"] = ataca_local
+
+	for clave in planes.keys():
+		if not _desmarque_sigue_vivo(estado, int(clave), planes[clave]):
+			planes.erase(clave)
+
+	var tick: int = int(estado["tick"])
+	if tick < int(estado.get("desmarques_hasta", -1)):
+		return
+	estado["desmarques_hasta"] = tick + TICKS_DESMARQUE_MIN
+
+	var id_poseedor: int = int(estado["pelota"]["poseedor_id"])
+	if id_poseedor == -1 or not estado["jugadores"].has(id_poseedor):
+		return
+	var poseedor: Dictionary = estado["jugadores"][id_poseedor]
+	if bool(poseedor["equipo_local"]) != ataca_local:
+		return
+
+	# Orden estable por clave: dos corridas con la misma semilla reparten
+	# igual, sin depender del orden en que el diccionario devuelve llaves.
+	var claves := []
+	for id in estado["jugadores"]:
+		claves.append(int(id))
+	claves.sort()
+
+	var rupturas_vivas := 0
+	var hay_apoyo := false
+	var ocupados := []
+	for clave_v in planes:
+		var p: Dictionary = planes[clave_v]
+		ocupados.append(p["destino"])
+		if str(p["tipo"]) == "ruptura" or str(p["tipo"]) == "llegada":
+			rupturas_vivas += 1
+		elif str(p["tipo"]) == "apoyo":
+			hay_apoyo = true
+
+	var pendientes := []
+	for clave in claves:
+		if planes.has(clave):
+			continue
+		var e: Dictionary = estado["jugadores"][clave]
+		if bool(e["equipo_local"]) != ataca_local or clave == id_poseedor:
+			continue
+		if e["rol"] == "ARQ" or e["rol"] == "DFC" or _en_transito(estado, clave):
+			continue
+		# El que ya tiene objetivo cerrado —el nueve que baja a recibir— no
+		# entra al reparto: su movimiento lo decide el ancla y una intencion
+		# para el se anotaria sin que nadie la lea, ocupando ademas el cupo
+		# del apoyo de seguridad.
+		var ancla := _ancla_de_rol(estado, e, _equipo_de(estado, ataca_local), true)
+		if bool(ancla["listo"]):
+			continue
+		var candidatos := _candidatos_desmarque(estado, e, poseedor, ancla["punto"])
+		if candidatos.is_empty():
+			continue
+		pendientes.append({"clave": clave, "candidatos": candidatos})
+
+	# Primero el apoyo de seguridad: si nadie esta ofreciendose al pie, se
+	# reserva al mejor ANTES de repartir corridas. Sin esta reserva el
+	# reparto premia siempre a los que progresan y el poseedor se queda
+	# sin ninguna opcion corta.
+	if not hay_apoyo:
+		var mejor_seguro := {}
+		for p_i in pendientes:
+			for c in p_i["candidatos"]:
+				if str(c["tipo"]) != "apoyo":
+					continue
+				if mejor_seguro.is_empty() or float(c["valor"]) > float(mejor_seguro["candidato"]["valor"]):
+					mejor_seguro = {"clave": int(p_i["clave"]), "candidato": c}
+		if not mejor_seguro.is_empty():
+			_anotar_desmarque(estado, planes, int(mejor_seguro["clave"]), mejor_seguro["candidato"])
+			ocupados.append(mejor_seguro["candidato"]["destino"])
+			for i in range(pendientes.size()):
+				if int(pendientes[i]["clave"]) == int(mejor_seguro["clave"]):
+					pendientes.remove_at(i)
+					break
+
+	# Asignacion voraz estable: el que mas gana elige primero. No se busca
+	# la combinacion optima —con 22 jugadores eso no se paga— y el empate
+	# lo rompe el orden de la lista, que ya viene ordenada por clave.
+	var w := pesos_sin_pelota()
+	# Etapa 7: cuantos pueden estar corriendo a la vez lo decide el
+	# marcador. Ganando sobre la hora queda uno solo y el resto sostiene
+	# apoyos; perdiendo sale uno mas, que es aceptar el espacio de atras.
+	var cupo_rupturas := _cupo_de_rupturas(estado, ataca_local)
+	while not pendientes.is_empty():
+		var elegido := -1
+		var mejor_c := {}
+		var mejor_valor := -INF
+		for i in range(pendientes.size()):
+			var p_i: Dictionary = pendientes[i]
+			for c in p_i["candidatos"]:
+				var es_corrida: bool = str(c["tipo"]) == "ruptura" or str(c["tipo"]) == "llegada"
+				if es_corrida and rupturas_vivas >= cupo_rupturas:
+					continue
+				# Dos destinos pegados no son dos opciones: se penaliza el
+				# segundo en vez de prohibirlo, asi el jugador puede igual
+				# elegirlo si no tiene nada mejor.
+				var valor: float = float(c["valor"])
+				for o in ocupados:
+					var d: float = (o as Vector2).distance_to(c["destino"])
+					if d < SEPARACION_DESMARQUE:
+						valor -= float(w["conflicto"]) * (1.0 - d / SEPARACION_DESMARQUE)
+				if valor > mejor_valor:
+					mejor_valor = valor
+					mejor_c = c
+					elegido = i
+		if elegido == -1 or mejor_valor < float(w["minimo"]):
+			break
+		_anotar_desmarque(estado, planes, int(pendientes[elegido]["clave"]), mejor_c)
+		ocupados.append(mejor_c["destino"])
+		if str(mejor_c["tipo"]) == "ruptura" or str(mejor_c["tipo"]) == "llegada":
+			rupturas_vivas += 1
+		pendientes.remove_at(elegido)
+
+
+## Anota una intencion y calcula cuanto dura: el tiempo que tarda en
+## llegar, acotado entre el piso y el techo. El que va lejos sostiene la
+## corrida; el que se acomoda dos metros vuelve a evaluar enseguida.
+static func _anotar_desmarque(estado: Dictionary, planes: Dictionary, clave: int, candidato: Dictionary) -> void:
+	var e: Dictionary = estado["jugadores"][clave]
+	var viaje: float = e["pos"].distance_to(candidato["destino"]) / maxf(float(e["vel_max"]), 0.01)
+	var ticks: int = clampi(int(round(viaje / TICK_SEG)), TICKS_DESMARQUE_MIN, TICKS_DESMARQUE_MAX)
+	planes[clave] = {
+		"tipo": str(candidato["tipo"]),
+		"destino": candidato["destino"],
+		"companero": int(candidato["companero"]),
+		"hasta": int(estado["tick"]) + ticks,
+	}
+
+
+## El destino de la intencion vigente de este jugador, o null si no tiene.
+## Lo leen el movimiento sin pelota y los tests.
+static func desmarque_de(estado: Dictionary, clave: int):
+	var plan: Dictionary = estado.get("desmarques", {}).get(clave, {})
+	if plan.is_empty():
+		return null
+	return plan["destino"]
+
+
 ## §4.4: los 21 sin pelota se mueven con matemática de vectores barata —
 ## nada de utilidad ni softmax, tal como exige la restricción de
 ## rendimiento. La posición objetivo es su base de formación desplazada
 ## hacia donde está la pelota, con el peso de su rol; el estilo del equipo
 ## decide cuánto persigue la pelota cuando NO la tiene (Presión alta la va
 ## a buscar de verdad, Defensivo se repliega).
-static func _objetivo_sin_pelota(estado: Dictionary, e: Dictionary, equipo: Team, tiene_pelota_mi_equipo: bool) -> Vector2:
+## El ANCLA es donde lo pone su rol: casillero de formacion corrido por
+## la pelota, el estilo, el repliegue, el acompanamiento y el hombro del
+## ultimo defensor. Todavia no incluye el desmarque.
+##
+## Esta separado de _objetivo_sin_pelota porque el reparto de desmarques
+## (etapa 1) necesita el ancla de cada jugador ANTES de elegirle destino,
+## y llamar al objetivo completo seria circular. Devuelve tambien `listo`:
+## el arquero y el delantero que baja a recibir ya tienen su objetivo
+## final y no pasan ni por el desmarque ni por el recorte de offside.
+static func _ancla_de_rol(estado: Dictionary, e: Dictionary, equipo: Team, tiene_pelota_mi_equipo: bool) -> Dictionary:
 	var f: Dictionary = pesos()["fisica"]
 	var pelota_pos: Vector2 = estado["pelota"]["pos"]
 	var rol: String = e["rol"]
@@ -1603,13 +2908,20 @@ static func _objetivo_sin_pelota(estado: Dictionary, e: Dictionary, equipo: Team
 		var retroceso: float = Estilos.retroceso_sin_pelota(equipo.estilo) 			- Estilos.RETROCESO_DEFAULT
 		var hacia_rival: float = 1.0 if e["equipo_local"] else -1.0
 		objetivo_x += -retroceso * float(f["desplazamiento_por_estilo"]) * hacia_rival
+		# Etapa 7: el marcador corre la linea igual que el estilo, sobre el
+		# mismo eje y en metros. Perdiendo la sube, ganando la baja. El
+		# tope (altura_bloque) es la mitad de lo que separa a Presion alta
+		# de Defensivo: el resultado inclina la identidad del equipo, no la
+		# reemplaza.
+		var urg_bloque: float = urgencia(estado, bool(e["equipo_local"]))
+		objetivo_x += urg_bloque * float(pesos_marcador()["altura_bloque"]) * hacia_rival
 	if rol == "ARQ":
 		# Su propio corral: entre la línea y el borde del área.
 		if e["equipo_local"]:
 			objetivo_x = clampf(objetivo_x, -ARQUERO_X_MIN, -ARQUERO_X_MAX)
 		else:
 			objetivo_x = clampf(objetivo_x, ARQUERO_X_MAX, ARQUERO_X_MIN)
-		return Vector2(objetivo_x, clampf(objetivo_y, -ARCO_MEDIO_ANCHO * 2.2, ARCO_MEDIO_ANCHO * 2.2))
+		return {"punto": Vector2(objetivo_x, clampf(objetivo_y, -ARCO_MEDIO_ANCHO * 2.2, ARCO_MEDIO_ANCHO * 2.2)), "listo": true}
 	objetivo_x = clampf(objetivo_x, -LIMITE_X, LIMITE_X)
 
 	# Marca del lado del arco: defendiendo, la línea de atrás y los
@@ -1694,8 +3006,8 @@ static func _objetivo_sin_pelota(estado: Dictionary, e: Dictionary, equipo: Team
 				apoyo *= float(f["apoyo_del_nueve"])
 			objetivo_x = lerpf(objetivo_x, pelota_pos.x, apoyo)
 			objetivo_y = lerpf(objetivo_y, pelota_pos.y, apoyo * 0.5)
-			return Vector2(clampf(objetivo_x, -LIMITE_X, LIMITE_X),
-				clampf(objetivo_y, -MEDIO_ANCHO + 1.0, MEDIO_ANCHO - 1.0))
+			return {"punto": Vector2(clampf(objetivo_x, -LIMITE_X, LIMITE_X),
+				clampf(objetivo_y, -MEDIO_ANCHO + 1.0, MEDIO_ANCHO - 1.0)), "listo": true}
 		var linea_ataque: Dictionary = estado["linea_offside"]
 		# Dónde se para respecto de la línea: el que mide bien el
 		# desmarque se queda un metro detrás, el que no la calcula se pasa
@@ -1704,10 +3016,50 @@ static func _objetivo_sin_pelota(estado: Dictionary, e: Dictionary, equipo: Team
 		# nunca y la infracción no ocurría jamás.
 		var intel: float = clampf(float(e.get("inteligencia", 50.0)) / 100.0, 0.0, 1.0)
 		var offset: float = lerpf(float(f["offside_margen_torpe"]), -1.5, intel) * float(e.get("margen_offside", 1.0))
+		var subida: float = smoothstep(float(f["avance_para_jugar_en_el_hombro"]), float(f["avance_para_centrar"]), avance)
 		if e["equipo_local"]:
-			objetivo_x = maxf(objetivo_x, float(linea_ataque["local"]) + offset)
+			objetivo_x = lerpf(objetivo_x, maxf(objetivo_x, float(linea_ataque["local"]) + offset), subida)
 		else:
-			objetivo_x = minf(objetivo_x, float(linea_ataque["away"]) - offset)
+			objetivo_x = lerpf(objetivo_x, minf(objetivo_x, float(linea_ataque["away"]) - offset), subida)
+
+	# La correa del bloque: el que defiende y no tiene papel asignado no se
+	# va detras de la pelota hasta la otra punta. Bascula y se adelanta
+	# hasta el radio de su rol; para atras no tiene limite.
+	if not tiene_pelota_mi_equipo:
+		return {"punto": _recortar_a_la_zona(e, Vector2(objetivo_x, objetivo_y)), "listo": false}
+
+	return {"punto": Vector2(objetivo_x, objetivo_y), "listo": false}
+
+
+## §4.4: los 21 sin pelota se mueven con matematica de vectores barata —
+## nada de utilidad ni softmax, tal como exige la restriccion de
+## rendimiento. Sobre el ancla de su rol (ver _ancla_de_rol) se le suma el
+## desmarque: el que le repartió el equipo si tiene uno, y si no el apoyo
+## que se busca solo.
+static func _objetivo_sin_pelota(estado: Dictionary, e: Dictionary, equipo: Team, tiene_pelota_mi_equipo: bool) -> Vector2:
+	var f: Dictionary = pesos()["fisica"]
+	var rol: String = e["rol"]
+	var ancla := _ancla_de_rol(estado, e, equipo, tiene_pelota_mi_equipo)
+	if bool(ancla["listo"]):
+		return ancla["punto"]
+	var objetivo_x: float = (ancla["punto"] as Vector2).x
+	var objetivo_y: float = (ancla["punto"] as Vector2).y
+
+	if tiene_pelota_mi_equipo and rol != "DFC":
+		# La intencion del reparto colectivo manda sobre el apoyo que
+		# calcularia el jugador por su cuenta: es el mismo movimiento
+		# —ofrecerse, romper, llegar— pero acordado con los otros diez, y
+		# sostenido varios ticks en vez de recalculado en cada foto. El
+		# apoyo individual queda como fallback para el que no recibio
+		# ninguna (ver _planificar_desmarques).
+		var destino_plan = desmarque_de(estado, int(e["clave"]))
+		if destino_plan != null:
+			objetivo_x = (destino_plan as Vector2).x
+			objetivo_y = (destino_plan as Vector2).y
+		else:
+			var apoyo := _buscar_apoyo(estado, e, equipo, Vector2(objetivo_x, objetivo_y))
+			objetivo_x = apoyo.x
+			objetivo_y = apoyo.y
 
 	# Mantenerse habilitado: nadie se adelanta al último defensor rival.
 	# El offside como infracción queda fuera del MVP, pero la CONDUCTA de
@@ -1776,6 +3128,7 @@ static func _mover_hacia(e: Dictionary, objetivo: Vector2, factor: float = 1.0) 
 	var tope: float = float(e["vel_max"]) * factor
 	rapidez = minf(rapidez + float(e.get("aceleracion", 3.0)) * TICK_SEG, tope)
 	var paso: float = rapidez * TICK_SEG
+	e["recorrido"] = float(e.get("recorrido", 0.0)) + minf(paso, dist)
 	if paso >= dist:
 		e["pos"] = objetivo
 		e["vel"] = Vector2.ZERO
@@ -1866,6 +3219,11 @@ static func _quien_saca_del_medio(estado: Dictionary, saca_local: bool) -> int:
 
 static func _reiniciar_desde_medio(estado: Dictionary, saca_local: bool, mitad: int = 0) -> void:
 	var sacador := _quien_saca_del_medio(estado, saca_local)
+	estado["transicion_hasta"] = -1
+	estado["ultimo_equipo_con_pelota"] = saca_local
+	for jugador in estado["jugadores"].values():
+		jugador.erase("corredor_hasta")
+		jugador.erase("apoyo_hasta")
 
 	# En un saque del medio TODOS tienen que estar en su propia mitad. Las
 	# posiciones base de los de arriba (EXT en x=8, DC en x=14) están en
@@ -1945,6 +3303,44 @@ static func _reiniciar_desde_medio(estado: Dictionary, saca_local: bool, mitad: 
 
 ## `attr_remate` permite rematar con otro atributo que no sea `tiro`: un
 ## cabezazo tras un centro se resuelve con `cabezazo`, no con el pie.
+## Instantánea previa al remate, sin habilidad, desenlace ni consumo de azar.
+## Son medidas del contexto; no constituyen una probabilidad ni un xG calibrado.
+static func describir_ocasion(estado: Dictionary, desde: Vector2, es_local: bool,
+		tipo: String = "tiro") -> Dictionary:
+	var arco := arco_rival(es_local)
+	var poste_a := arco + Vector2(0.0, ARCO_MEDIO_ANCHO) - desde
+	var poste_b := arco - Vector2(0.0, ARCO_MEDIO_ANCHO) - desde
+	var angulo := absf(poste_a.angle_to(poste_b))
+	var arquero := _clave_arquero(estado, not es_local)
+	var posicion_arquero: Variant = null
+	if arquero != -1:
+		var posicion: Vector2 = estado["jugadores"][arquero]["pos"]
+		# Valores escalares para conservar la instantánea al serializar el diagnóstico.
+		posicion_arquero = {"x": posicion.x, "y": posicion.y}
+	var bloqueador := -1
+	if tipo != "cabezazo" and tipo != "penal":
+		bloqueador = _bloqueador_de_tiro(estado, desde, es_local,
+			float(pesos()["fisica"]["dist_max_bloqueo_libre"]) if tipo == "tiros_libres" else -1.0)
+	return {"distancia": desde.distance_to(arco), "angulo_radianes": angulo,
+		"presion": presion_normalizada(estado, desde, es_local),
+		"bloqueador": bloqueador, "obstruida": bloqueador != -1,
+		"posicion_arquero": posicion_arquero, "tipo": tipo,
+		"geometria_comun": factor_geometria(desde, es_local)}
+
+
+## Distribución de destino CONDICIONADA a superar el bloqueo. Incluye habilidad.
+## La mezcla heredada se conserva para palos, cabezazos y libres; no es xG.
+static func modelo_destino_remate(geometria_comun: float, geometria_rematador: float,
+		tecnica_normalizada: float, tipo: String = "tiro") -> Dictionary:
+	var r: Dictionary = pesos()["tiro_resolucion"]
+	var mezcla: float = tecnica_normalizada / 100.0 * float(r["peso_atributo"]) + geometria_rematador * float(r["peso_geometria"])
+	var porteria: float = clampf(float(r["porteria_base"]) + mezcla * float(r["porteria_calidad"]), 0.05, 0.85)
+	if tipo == "tiro":
+		porteria = probabilidad_porteria(geometria_comun, tecnica_normalizada)
+	return {"probabilidad_modelo_porteria_sin_bloqueo": porteria,
+		"intervalo_palo": float(r["palo"]) * mezcla}
+
+
 static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Dictionary, attr_remate: String = "tiro") -> void:
 	var es_local: bool = poseedor["equipo_local"]
 	var eq_a := _equipo_de(estado, es_local)
@@ -1978,36 +3374,8 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	estado["tiros"][clave] += 1
 	estado["dist_tiros"].append(poseedor["pos"].distance_to(arco_rival(es_local)))
 	# El diagnóstico conserva una fila por intento, sin consumir azar ni fotogramas.
-	var registro := {}
-	if estado.has("registro_remates"):
-		registro = {"distancia": poseedor["pos"].distance_to(arco_rival(es_local)),
-			"atributo": attr_remate, "tiro": float(jugador["atributos"][attr_remate]),
-			"clave": poseedor["clave"], "local": es_local, "resultado": "bloqueado"}
-		estado["registro_remates"].append(registro)
-	# ¿Se cruza un defensor en el camino? Un remate bloqueado no llega
-	# nunca al arquero, y muchas veces sale desviado al córner: es una de
-	# las fuentes reales de córners.
-	# Meterse en la línea del remate da la OPORTUNIDAD; que el bloqueo
-	# salga o no lo decide un duelo (ver _gana_bloqueo), así que un
-	# defensor flojo no le tapa el remate a un delantero de élite.
-	# Un cabezazo no se bloquea con el cuerpo: viene por arriba y ya se
-	# disputo en el duelo aereo.
-	var bloqueador := -1 if attr_remate == "cabezazo" or forzado != "" else _bloqueador_de_tiro(
-		estado, poseedor["pos"], es_local,
-		float(pesos()["fisica"]["dist_max_bloqueo_libre"]) if attr_remate == "tiros_libres" else -1.0)
-	if bloqueador != -1 and _gana_bloqueo(estado, bloqueador, jugador, eq_a, eq_d, poseedor["pos"], es_local, minuto):
-		_accion(estado, bloqueador, ACCION_BARRIDA)
-		_xp_e(estado, estado["jugadores"][bloqueador], "barrida")
-		estado["eventos"].append({
-			"minuto": minuto, "tipo": "tiro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
-			"jugador_posicion": poseedor["rol"], "clave": poseedor["clave"], "resultado": "bloqueado",
-		})
-		_resolver_rebote(estado, estado["jugadores"][bloqueador]["pos"], not es_local)
-		return
-
-	# §4.6: el destino ya no depende solo del atributo, también de dónde
-	# está parado el que remata. Calibrado contra un partido real: ~35% de
-	# los remates van al arco, y de esos entra ~1 de cada 3.
+	# El destino depende de la técnica y de la ocasión. Los pesos son del
+	# modelo de juego; no representan probabilidades empíricas de fútbol real.
 	var r: Dictionary = pesos()["tiro_resolucion"]
 	# Pie preferido: rematar cruzando hacia su lado malo le sale peor. Un
 	# diestro abierto por la izquierda tiene el arco hacia su derecha, o
@@ -2021,14 +3389,44 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	# para esto: el duelo contra el arquero, mas abajo, ya es relativo por
 	# construccion y usa remate_efectivo sin tocar.
 	var remate_normalizado: float = MatchEngine.relativo_al_nivel(remate_efectivo, _nivel_partido)
-	var calidad: float = remate_normalizado / 100.0 * float(r["peso_atributo"]) + geo * float(r["peso_geometria"])
-	var chance_porteria: float = clampf(float(r["porteria_base"]) + calidad * float(r["porteria_calidad"]), 0.05, 0.85)
-	# Los cabezazos y libres conservan sus rutas. En juego de pie la geometría
-	# de precisión es común; la técnica cambia cuánto cuesta esa dificultad.
-	if attr_remate == "tiro":
-		chance_porteria = probabilidad_porteria(
-			factor_geometria(poseedor["pos"], es_local), remate_normalizado)
-	var chance_palo: float = float(r["palo"]) * calidad
+	var modelo := modelo_destino_remate(factor_geometria(poseedor["pos"], es_local), geo,
+		remate_normalizado, attr_remate)
+	var chance_porteria: float = modelo["probabilidad_modelo_porteria_sin_bloqueo"]
+	var chance_palo: float = modelo["intervalo_palo"]
+
+	var registro := {}
+	if estado.has("registro_remates"):
+		registro = {"distancia": poseedor["pos"].distance_to(arco_rival(es_local)),
+			"atributo": attr_remate, "tiro": float(jugador["atributos"][attr_remate]),
+			"clave": poseedor["clave"], "local": es_local, "resultado": "bloqueado"}
+		registro["ocasion"] = describir_ocasion(estado, poseedor["pos"], es_local, attr_remate)
+		registro["ejecucion"] = {"tecnica_normalizada": remate_normalizado,
+			"geometria_rematador": geo,
+			"probabilidad_modelo_porteria_sin_bloqueo": chance_porteria,
+			"forzado_laboratorio": forzado != ""}
+		estado["registro_remates"].append(registro)
+
+	# ¿Se cruza un defensor en el camino? Un remate bloqueado no llega
+	# nunca al arquero, y muchas veces sale desviado al córner: es una de
+	# las fuentes reales de córners.
+	# Meterse en la línea del remate da la OPORTUNIDAD; que el bloqueo
+	# salga o no lo decide un duelo (ver _gana_bloqueo), así que un
+	# defensor flojo no le tapa el remate a un delantero de élite.
+	# Un cabezazo no se bloquea con el cuerpo: viene por arriba y ya se
+	# disputo en el duelo aereo.
+	var bloqueador := -1 if attr_remate == "cabezazo" or forzado != "" else _bloqueador_de_tiro(
+		estado, poseedor["pos"], es_local,
+		float(pesos()["fisica"]["dist_max_bloqueo_libre"]) if attr_remate == "tiros_libres" else -1.0)
+	if bloqueador != -1 and _gana_bloqueo(estado, bloqueador, jugador, eq_a, eq_d, poseedor["pos"], es_local, minuto):
+		_accion(estado, bloqueador, "bloquea")
+		_xp_e(estado, estado["jugadores"][bloqueador], "barrida")
+		estado["eventos"].append({
+			"minuto": minuto, "tipo": "tiro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
+			"jugador_posicion": poseedor["rol"], "clave": poseedor["clave"], "resultado": "bloqueado",
+		})
+		_resolver_rebote(estado, estado["jugadores"][bloqueador]["pos"], not es_local)
+		return
+
 	var roll := rng.randf()
 
 	if forzado == "" and roll > chance_porteria:
@@ -2160,6 +3558,10 @@ static func _lanzar_remate(estado: Dictionary, poseedor: Dictionary, datos: Dict
 	pelota["pasador_local"] = es_local
 	pelota["altura_max"] = altura
 	pelota["ticks_con_pelota"] = 0
+	pelota.erase("altura_salida")
+	# Una recepción termina el vuelo anterior; su altura no pasa al próximo pase.
+	pelota["altura_max"] = 0.0
+	pelota["z"] = 0.0
 	pelota.erase("pared_a")
 	var dir: Vector2 = (destino - poseedor["pos"]).normalized()
 	pelota["vel"] = dir * float(pesos()["fisica"]["vel_remate"])
@@ -2364,6 +3766,7 @@ static func _pelota_fuera(estado: Dictionary, punto: Vector2, toco_local: bool) 
 	pelota["pasador_local"] = toco_local
 	pelota["altura_max"] = 0.8
 	pelota["ticks_con_pelota"] = 0
+	pelota.erase("altura_salida")
 	pelota.erase("pared_a")
 	pelota["vel"] = (salida - desde).normalized() 		* maxf(pelota["vel"].length(), float(pesos()["fisica"]["vel_salida_min"]))
 
@@ -2393,6 +3796,7 @@ static func _lateral(estado: Dictionary, punto: Vector2, saca_local: bool) -> vo
 		return
 	estado["reinicios"]["lateral"] = int(estado["reinicios"].get("lateral", 0)) + 1
 	_detener_juego(estado, pos, saca_local, ejecutor, "corto", int(TICKS_DETENIDO["lateral"]))
+	estado["balon_parado"]["con_manos"] = true
 	estado["eventos"].append({
 		"minuto": _minuto_int(estado), "tipo": "lateral",
 		"equipo": _equipo_de(estado, saca_local).nombre,
@@ -2487,7 +3891,7 @@ static func _resolver_rebote(estado: Dictionary, desde: Vector2, toco_local: boo
 	if roll < float(f["rebote_afuera"]) + float(f["rebote_controlado"]):
 		var suyo := _mas_cercano_del_equipo(estado, desde, toco_local)
 		if suyo != -1:
-			_entregar_pelota(estado, suyo)
+			_entregar_rodando(estado, suyo)
 			return
 	# Rebote suelto: sale despedida y la agarra el que llegue.
 	var dir := Vector2(rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0)).normalized()
@@ -2506,6 +3910,7 @@ static func _resolver_rebote(estado: Dictionary, desde: Vector2, toco_local: boo
 	pelota["es_pase"] = false
 	pelota["origen_pos"] = desde
 	pelota["ticks_con_pelota"] = 0
+	pelota.erase("altura_salida")
 
 
 ## ¿Hay un defensor metido en la línea del remate? Devuelve su clave, o -1.
@@ -2707,6 +4112,14 @@ static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: i
 
 static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 	var pelota: Dictionary = estado["pelota"]
+	_actualizar_transicion(estado)
+	# La fase del que ataca se estima ANTES de decidir, para que la
+	# decision (paso 2) y el movimiento sin pelota (paso 3) lean la misma.
+	_planificar_ritmo(estado)
+	# Y la urgencia de los DOS equipos, por el mismo motivo: el que decide
+	# (paso 2), el que se para sin pelota (paso 3) y el que reparte la
+	# defensa leen todos el mismo numero dentro del tick.
+	_planificar_marcador(estado)
 	var eventos_antes: int = estado["eventos"].size()
 	if con_fotogramas:
 		estado["acciones_tick"] = []
@@ -2810,6 +4223,12 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 	var equipo_con_pelota: bool = pos_local
 	if poseedor_id == -1:
 		equipo_con_pelota = bool(pelota.get("pasador_local", true))
+	# Los desmarques se reparten ANTES de mover a nadie, para que los once
+	# lean la misma instantanea de posiciones. Repartirlos dentro del
+	# bucle de movimiento le daria al de clave baja una foto distinta a la
+	# del de clave alta.
+	_planificar_desmarques(estado, equipo_con_pelota)
+
 	var perseguidores := _perseguidores(estado, equipo_con_pelota)
 
 	# El destinatario de un pase va a BUSCAR la pelota. Sin esto el pase
@@ -2820,6 +4239,10 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 	var esperando := -1
 	if pelota["en_vuelo"]:
 		esperando = int(pelota.get("destino_id", -1))
+		# Con la pelota ya adjudicada, el que sale a buscarla es el dueno
+		# y no el destinatario original del pase.
+		if pelota.has("dirigida_a"):
+			esperando = int(pelota["dirigida_a"])
 	# El que jugó la pared sale corriendo a recibirla del otro lado, sin
 	# esperar a que el muro se la devuelva.
 	var corredor_pared: int = int(pelota.get("pared_a", -1))
@@ -2858,7 +4281,7 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 			_mover_hacia(e, pelota["remate"]["destino_arquero"])
 			continue
 		if perseguidores.has(id):
-			_mover_hacia(e, _punto_de_presion(estado, e, pelota["pos"]))
+			_mover_hacia(e, _objetivo_de_presion(estado, e))
 			continue
 		var equipo := _equipo_de(estado, e["equipo_local"])
 		# Con la pelota EN EL AIRE no hay poseedor, pero el equipo que la
@@ -2935,6 +4358,17 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 	var pelota: Dictionary = estado["pelota"]
 	var pasador_local: bool = pelota.get("pasador_local", true)
 	var minuto := _minuto_int(estado)
+	# La pelota que ya tiene dueno decidido NO dobla hacia el: sigue
+	# derecho y va frenando, y el tipo va a buscarla. Apuntarsela —como
+	# hacia la primera version de esto— se ve como un iman: la pelota
+	# venia en diagonal y de golpe se arrastraba de costado hasta sus
+	# pies. Reportado mirando a x1.
+	if pelota.has("dirigida_a"):
+		pelota["vel"] *= FRENADO_PELOTA_SUELTA
+		if pelota["vel"].length() < VEL_PELOTA_QUIETA:
+			pelota["vel"] = Vector2.ZERO
+		pelota["destino_pos"] = pelota["pos"] + pelota["vel"] * TICK_SEG
+		pelota["ticks_dirigida"] = int(pelota["ticks_dirigida"]) + 1
 	var desde: Vector2 = pelota["pos"]
 	var destino: Vector2 = pelota.get("destino_pos", desde)
 	var paso: float = pelota["vel"].length() * TICK_SEG
@@ -2959,7 +4393,19 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 	var origen_z: Vector2 = pelota.get("origen_pos", desde)
 	var total: float = origen_z.distance_to(destino)
 	var avanzado: float = clampf(origen_z.distance_to(hasta) / maxf(total, 0.01), 0.0, 1.0)
-	pelota["z"] = altura_max * 4.0 * avanzado * (1.0 - avanzado)
+	pelota["z"] = altura_max * 4.0 * avanzado * (1.0 - avanzado) + float(pelota.get("altura_salida", 0.0)) * (1.0 - avanzado)
+
+	# La pelota ya tiene dueno y nadie se la disputa en el camino: la
+	# posesion esta decidida, lo que falta es que la ALCANCE. El tope de
+	# ticks la cierra si el tipo no llega —la pelota ya freno y el queda
+	# a un paso, asi que ahi el salto es chico (ver _dirigir_pelota_a).
+	if pelota.has("dirigida_a"):
+		var dueno: int = int(pelota["dirigida_a"])
+		var alcanzada: bool = not estado["jugadores"].has(dueno) \
+			or estado["jugadores"][dueno]["pos"].distance_to(hasta) <= float(f["radio_control"])
+		if alcanzada or int(pelota["ticks_dirigida"]) >= TICKS_DIRIGIDA_MAX:
+			_completar_dirigida(estado, minuto, alcanzada)
+		return
 
 	# Un remate en vuelo no se intercepta ni se va afuera por el camino:
 	# ya está resuelto (ver _lanzar_remate), lo único que falta es que
@@ -3021,12 +4467,12 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 	if mejor_id != -1:
 		if bool(pelota.get("es_pase", false)):
 			estado["pase_detalle"]["interceptado_vuelo"] += 1
-		_entregar_pelota(estado, mejor_id)
-		estado["eventos"].append({
-			"minuto": minuto, "tipo": "pase", "equipo": _equipo_de(estado, pasador_local).nombre,
-			"rival": _equipo_de(estado, not pasador_local).nombre,
-			"jugador_posicion": estado["jugadores"][mejor_id]["rol"], "resultado": "pierde",
-		})
+		# El que corta esta hasta radio_intercepcion (3,2 m) de la linea
+		# de pase: darsela ahi mismo le teletransportaba la pelota a los
+		# pies. Se la desvia hacia el y la toma cuando le llega.
+		if _dirigir_pelota_a(estado, mejor_id, pelota["vel"].length(), "intercepcion", hasta):
+			return
+		_resolver_intercepcion(estado, mejor_id, minuto)
 		return
 
 	if not llego:
@@ -3040,13 +4486,151 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 		pelota["es_centro"] = false
 		pelota["altura_max"] = 0.0
 		pelota["z"] = 0.0
+		estado["recibiendo_centro"] = true
 		_resolver_centro(estado, hasta, bool(pelota.get("centro_de", pasador_local)), minuto)
+		estado.erase("recibiendo_centro")
 		return
 
 	var receptor := _mas_cercano_a(estado, hasta)
 	if receptor == -1:
 		_dar_pelota_al_arquero(estado, not pasador_local, true)
 		return
+	# El pase cae donde cae: el que se la queda puede estar a varios
+	# metros del punto de llegada, porque se movio mientras la pelota
+	# viajaba. La pelota rueda hasta el y la posesion cambia al llegar.
+	if _dirigir_pelota_a(estado, receptor, pelota["vel"].length(), "recepcion", hasta):
+		return
+	_resolver_recepcion(estado, receptor, hasta, minuto)
+
+
+## Le manda la pelota a quien el motor YA decidio que se la queda, en vez
+## de aparecersela en los pies. Devuelve true si la puso a rodar y false
+## si el tipo ya la tiene encima (dentro del radio de control), caso en
+## que la jugada se resuelve en el acto como siempre.
+##
+## Medido con tests/_diag_salto_pelota.gd antes del cambio: el 17% de las
+## recepciones y el 48% de las intercepciones movian la pelota mas de 3 m
+## de un fotograma al siguiente, hasta 18,8 m. Eso es lo que se veia como
+## "el pase se va afuera y de la nada aparece en los pies".
+static func _dirigir_pelota_a(estado: Dictionary, clave: int, velocidad: float,
+		pendiente: String, punto_llegada: Vector2) -> bool:
+	var pelota: Dictionary = estado["pelota"]
+	var meta: Vector2 = estado["jugadores"][clave]["pos"]
+	if pelota["pos"].distance_to(meta) <= float(pesos()["fisica"]["radio_control"]):
+		return false
+	pelota["dirigida_a"] = clave
+	pelota["pendiente"] = pendiente
+	pelota["punto_llegada"] = punto_llegada
+	pelota["ticks_dirigida"] = 0
+	# Sin velocidad propia —un quite, una gambeta perdida— la pelota
+	# estaba quieta en los pies del que la perdio: se le escapa hacia el
+	# que gano el duelo, que es lo que hace el que se la saca.
+	if velocidad < 0.01:
+		pelota["vel"] = (meta - pelota["pos"]).normalized() * VEL_ESCAPE_DUELO
+	pelota["destino_pos"] = pelota["pos"] + pelota["vel"] * TICK_SEG
+	pelota["origen_pos"] = pelota["pos"]
+	# Rueda por el piso: lo que venia por arriba ya bajo cuando alguien la
+	# gano, y si conservara altura la parabola la levantaria de nuevo.
+	pelota["altura_max"] = 0.0
+	pelota["z"] = 0.0
+	pelota.erase("altura_salida")
+	return true
+
+
+## Entrega la pelota sin teletransportarla: si el que se la queda esta
+## lejos, la pelota rueda hasta el y la toma al llegar. Es el mismo
+## mecanismo del pase (ver _dirigir_pelota_a) aplicado a las jugadas que
+## adjudican la pelota desde un PUNTO y no desde unos pies —un centro
+## cabeceado, un rebote de bloqueo, una gambeta perdida, un quite—, donde
+## el que gana puede estar a varios metros de la pelota. Encarar, sin ir
+## mas lejos, se hace hasta a 8 m (radio_gambeta): perderla le aparecia
+## la pelota en los pies al defensor desde esa distancia.
+static func _entregar_rodando(estado: Dictionary, clave: int) -> void:
+	var pelota: Dictionary = estado["pelota"]
+	var ganador: Dictionary = estado["jugadores"][clave]
+	# Sin velocidad: en un duelo la pelota estaba quieta en los pies del
+	# que la perdio, y _dirigir_pelota_a la empuja hacia el que gano.
+	if not _dirigir_pelota_a(estado, clave, 0.0, "entrega", pelota["pos"]):
+		_entregar_pelota(estado, clave)
+		return
+	pelota["poseedor_id"] = -1
+	pelota["en_vuelo"] = true
+	pelota["es_pase"] = false
+	pelota["es_centro"] = false
+	pelota["es_remate"] = false
+	pelota["offside"] = false
+	pelota.erase("pared_a")
+	pelota.erase("saliendo")
+	# Los que van a buscarla leen de que equipo es la pelota mientras
+	# esta en el aire: ya es del que gano la jugada, no del que la perdio.
+	pelota["pasador_local"] = ganador["equipo_local"]
+	# La pose de bajarla con el pecho se decide al TOMARLA, y el centro
+	# que la genera ya termino: hay que acordarse hasta que llegue.
+	pelota["pecho_al_llegar"] = bool(estado.get("recibiendo_centro", false))
+
+
+## La pelota llego a los pies del que ya la tenia adjudicada: se resuelve
+## lo que quedo pendiente. El tope de ticks existe porque el dueno puede
+## estar corriendo en la misma direccion que la pelota.
+static func _completar_dirigida(estado: Dictionary, minuto: int, alcanzada: bool = true) -> void:
+	var pelota: Dictionary = estado["pelota"]
+	var clave: int = int(pelota["dirigida_a"])
+	var pendiente: String = str(pelota["pendiente"])
+	var punto: Vector2 = pelota["punto_llegada"]
+	var pecho: bool = bool(pelota.get("pecho_al_llegar", false))
+	_limpiar_dirigida(pelota)
+	# Se fue de la cancha mientras la pelota rodaba (expulsion, cambio):
+	# la agarra el mas cercano, que es lo que pasa en la cancha.
+	if not estado["jugadores"].has(clave):
+		clave = _mas_cercano_a(estado, pelota["pos"])
+		if clave == -1:
+			_dar_pelota_al_arquero(estado, not bool(pelota.get("pasador_local", true)), true)
+			return
+	# Se agoto el tope y el dueno no llego a la pelota: la levanta el que
+	# la tiene al lado, que es lo que pasa en la cancha. Darsela igual
+	# desde diez metros es el teletransporte que esto vino a sacar. El
+	# duelo cuerpo a cuerpo se respeta: ahi la pelota se le escapa al que
+	# la perdio hacia el que gano y la distancia es corta.
+	if not alcanzada and pendiente != "entrega":
+		var cerca := _mas_cercano_a(estado, pelota["pos"])
+		if cerca != -1 and estado["jugadores"].has(clave) 				and estado["jugadores"][cerca]["pos"].distance_to(pelota["pos"]) 					< estado["jugadores"][clave]["pos"].distance_to(pelota["pos"]):
+			clave = cerca
+			pendiente = "recepcion"
+	if pendiente == "entrega":
+		if pecho:
+			estado["recibiendo_centro"] = true
+		_entregar_pelota(estado, clave)
+		estado.erase("recibiendo_centro")
+	elif pendiente == "intercepcion":
+		_resolver_intercepcion(estado, clave, minuto)
+	else:
+		_resolver_recepcion(estado, clave, punto, minuto)
+
+
+static func _limpiar_dirigida(pelota: Dictionary) -> void:
+	pelota.erase("dirigida_a")
+	pelota.erase("pendiente")
+	pelota.erase("punto_llegada")
+	pelota.erase("ticks_dirigida")
+	pelota.erase("pecho_al_llegar")
+
+
+## El rival se quedo con el pase.
+static func _resolver_intercepcion(estado: Dictionary, mejor_id: int, minuto: int) -> void:
+	var pelota: Dictionary = estado["pelota"]
+	var pasador_local: bool = pelota.get("pasador_local", true)
+	_entregar_pelota(estado, mejor_id)
+	estado["eventos"].append({
+		"minuto": minuto, "tipo": "pase", "equipo": _equipo_de(estado, pasador_local).nombre,
+		"rival": _equipo_de(estado, not pasador_local).nombre,
+		"jugador_posicion": estado["jugadores"][mejor_id]["rol"], "resultado": "pierde",
+	})
+
+
+## El pase termino: quien la toma, la pared, el offside y el evento.
+static func _resolver_recepcion(estado: Dictionary, receptor: int, hasta: Vector2, minuto: int) -> void:
+	var pelota: Dictionary = estado["pelota"]
+	var pasador_local: bool = pelota.get("pasador_local", true)
 	var e_receptor: Dictionary = estado["jugadores"][receptor]
 
 	# Si esto era el primer pase de una pared y llegó a un compañero, el
@@ -3057,11 +4641,22 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 	if pared_a != -1 and e_receptor["equipo_local"] == pasador_local and estado["jugadores"].has(pared_a):
 		var muro := _dict_jugador(estado, _equipo_de(estado, pasador_local), e_receptor["jugador_id"])
 		pelota.erase("pared_a")
-		if not muro.is_empty():
+		# La devolucion NO es automatica. Mientras viajaba el primer pase
+		# un rival pudo cerrar el carril de retorno, y devolverla igual es
+		# regalarla. Si el carril esta tapado, el muro se queda la pelota y
+		# decide como cualquier poseedor: la pared se aborta y la jugada
+		# sigue. Antes la devolucion salia siempre, pasara lo que pasara.
+		var punto_retorno = pelota.get("pared_destino", null)
+		var destino_retorno: Vector2 = estado["jugadores"][pared_a]["pos"]
+		if punto_retorno != null:
+			destino_retorno = punto_retorno
+		var carril: float = riesgo_linea(estado, e_receptor["pos"], destino_retorno, pasador_local)
+		if not muro.is_empty() and carril <= float(pesos_sin_pelota()["pared_riesgo_max"]):
 			estado["paredes"]["muro_ok"] = int(estado["paredes"].get("muro_ok", 0)) + 1
 			_entregar_pelota(estado, receptor)
-			_lanzar_pase(estado, e_receptor, pared_a, muro, pelota.get("pared_destino", null))
+			_lanzar_pase(estado, e_receptor, pared_a, muro, punto_retorno)
 			return
+		estado["paredes"]["abortadas"] = int(estado["paredes"].get("abortadas", 0)) + 1
 
 	_entregar_pelota(estado, receptor)
 	# Estaba adelantado cuando le pegaron y la recibió: offside. Tiro libre
@@ -3347,6 +4942,8 @@ static func _entregar_pelota(estado: Dictionary, clave: int) -> void:
 	# patearla, porque un pase que interceptan no le asiste a nadie. Vale
 	# igual para el centro cabeceado: el centro también entra por acá.
 	var receptor: Dictionary = estado["jugadores"][clave]
+	if receptor["rol"] != "ARQ" and bool(pelota.get("en_vuelo", false)) and not bool(pelota.get("es_remate", false)) and (float(pelota.get("altura_max", 0.0)) >= 1.4 or bool(estado.get("recibiendo_centro", false))):
+		_accion(estado, clave, "pecho")
 	if bool(pelota.get("es_pase", false)) \
 			and bool(pelota.get("pasador_local", false)) == bool(receptor["equipo_local"]) \
 			and int(pelota.get("pasador_id", -1)) != int(receptor["jugador_id"]):
@@ -3354,18 +4951,149 @@ static func _entregar_pelota(estado: Dictionary, clave: int) -> void:
 			"de": int(pelota["pasador_id"]), "a": clave,
 			"local": bool(receptor["equipo_local"]),
 		}
+		# Etapa 4: quien se la dio a quien, para detectar la pareja que se
+		# devuelve la pelota sin que la jugada avance.
+		_anotar_pase_de_ritmo(estado,
+				clave_de(int(pelota["pasador_id"]), bool(receptor["equipo_local"])), clave)
 	else:
 		estado["ultimo_pase"] = {}
 	pelota["poseedor_id"] = clave
 	pelota["en_vuelo"] = false
 	pelota["vel"] = Vector2.ZERO
 	pelota["pos"] = estado["jugadores"][clave]["pos"]
+	_limpiar_dirigida(pelota)
 	pelota["ticks_con_pelota"] = 0
+	pelota.erase("altura_salida")
+	# Una recepci?n termina el vuelo anterior; su altura no pasa al pr?ximo pase.
+	pelota["altura_max"] = 0.0
+	pelota["z"] = 0.0
 
 
-## Quiénes del equipo que NO tiene la pelota salen a presionarla: los dos
-## más cercanos, salvo el arquero (que no abandona el arco a perseguir).
-## Con uno solo, el que conduce se lo saca de encima y sigue de largo.
+
+# ---------------------------------------------------------------------------
+# Defensa coordinada (etapa 2)
+# ---------------------------------------------------------------------------
+
+## El equipo que no tiene la pelota reparte RESPONSABILIDADES una sola
+## vez, igual que el reparto de desmarques de la etapa 1: presionante,
+## cobertura y cierre de linea. Antes cada uno decidia solo —los dos mas
+## cercanos a la pelota salian— y eso daba dos problemas: el segundo
+## corria a la misma pelota que el primero en vez de taparle la salida, y
+## el par cambiaba de tick en tick porque la distancia cruda oscila.
+##
+## - `presionante`: va a la pelota. Sale por TIEMPO DE LLEGADA, no por
+##   distancia: el que esta mas cerca pero cansado y fuera de su zona
+##   llega despues que el que esta dos metros mas lejos.
+## - `cobertura`: se para detras del presionante, hacia el arco propio.
+##   Es la que sostiene el repliegue si al presionante lo pasan.
+## - `cierre`: tapa una linea de pase DISTINTA. Solo si el estilo lo
+##   permite o si los disparadores de presion estan activos.
+##
+## El resto queda en el bloque y lo gobierna `_ancla_de_rol`, con la
+## correa de zona que aplica `_recortar_a_la_zona`.
+const TICKS_DEFENSA_MIN := TICKS_PLAN
+
+## Hasta donde puede alejarse cada linea de su casillero cuando defiende.
+## Es la correa del bloque: limita la basculacion lateral y el
+## adelantamiento, nunca el retroceso —un central siempre puede bajar a
+## su area.
+const ZONA_POR_ROL := {
+	"DFC": "radio_defensa", "LAT": "radio_defensa",
+	"MC": "radio_medio", "MCO": "radio_medio",
+	"EXT": "radio_ataque", "DC": "radio_ataque",
+}
+
+
+## Pesos de la defensa coordinada. Como en pesos_sin_pelota, el lector
+## trae los valores por defecto: un json sin la seccion sigue andando.
+##
+## El resultado queda cacheado. Sin la cache, armar este diccionario una
+## vez por candidato y por tick costaba el 48% del tiempo de partido
+## (medido con corridas pareadas y alternadas: 613 ms contra 416 ms).
+static var _pesos_defensa_cache: Dictionary = {}
+
+static func pesos_defensa() -> Dictionary:
+	if not _pesos_defensa_cache.is_empty():
+		return _pesos_defensa_cache
+	var d: Dictionary = pesos().get("defensa", {})
+	_pesos_defensa_cache = {
+		"zona": float(d.get("zona", 0.06)),
+		"cansancio": float(d.get("cansancio", 0.5)),
+		"mejora_presionante": float(d.get("mejora_presionante", 0.20)),
+		"cobertura_atras": float(d.get("cobertura_atras", 8.0)),
+		"cobertura_cerca": float(d.get("cobertura_cerca", 0.6)),
+		"cobertura_bloque": float(d.get("cobertura_bloque", 1.6)),
+		"enganche": float(d.get("enganche", 3.5)),
+		"cierre_cerca": float(d.get("cierre_cerca", 4.0)),
+		"cierre_lejos": float(d.get("cierre_lejos", 24.0)),
+		"cierre_carril": float(d.get("cierre_carril", 0.55)),
+		"banda_disparador": float(d.get("banda_disparador", 8.0)),
+		"intensidad_para_cierre": float(d.get("intensidad_para_cierre", 0.6)),
+		"radio_defensa": float(d.get("radio_defensa", 12.0)),
+		"radio_medio": float(d.get("radio_medio", 16.0)),
+		"radio_ataque": float(d.get("radio_ataque", 20.0)),
+	}
+	return _pesos_defensa_cache
+
+
+## Cuanto tarda este jugador en llegar a un punto. No es distancia sobre
+## velocidad a secas: se le suma lo que cuesta abandonar la zona y lo que
+## pesa el cansancio. Las dos penalizaciones estan en SEGUNDOS, asi que el
+## resultado se sigue leyendo como tiempo y se compara entre candidatos.
+static func _tiempo_de_llegada(estado: Dictionary, e: Dictionary, destino: Vector2) -> float:
+	var w := pesos_defensa()
+	var equipo := _equipo_de(estado, bool(e["equipo_local"]))
+	var resistencia: float = equipo.resistencia_pct(int(e["jugador_id"]))
+	var vel: float = maxf(float(e["vel_max"]) * clampf(resistencia, 0.3, 1.0), 0.5)
+	var t: float = (e["pos"] as Vector2).distance_to(destino) / vel
+	# Abandonar la zona: lo que el destino se pasa del radio de su rol.
+	var radio: float = float(w[str(ZONA_POR_ROL.get(str(e["rol"]), "radio_medio"))])
+	var fuera: float = maxf(0.0, (e["base"] as Vector2).distance_to(destino) - radio)
+	t += fuera * float(w["zona"])
+	t += (1.0 - clampf(resistencia, 0.0, 1.0)) * float(w["cansancio"])
+	return t
+
+
+## Recorta un destino defensivo a la zona del rol. Solo limita hacia
+## adelante y de costado: el que retrocede a su propia area no tiene
+## correa. Sin esto el bloque entero se desliza hacia la pelota y el
+## centro queda abierto.
+static func _recortar_a_la_zona(e: Dictionary, punto: Vector2) -> Vector2:
+	var w := pesos_defensa()
+	var radio: float = float(w[str(ZONA_POR_ROL.get(str(e["rol"]), "radio_medio"))])
+	var base: Vector2 = e["base"]
+	var hacia_rival: float = 1.0 if e["equipo_local"] else -1.0
+	var adelante: float = (punto.x - base.x) * hacia_rival
+	var x: float = punto.x
+	if adelante > radio:
+		x = base.x + radio * hacia_rival
+	return Vector2(x, clampf(punto.y, base.y - radio, base.y + radio))
+
+
+## Disparadores de presion (0 a 1). Miran la SITUACION visible, no la
+## decision que el rival todavia no tomo: pelota suelta o recien
+## controlada, poseedor mirando a su propio arco, pelota pegada a la
+## banda y la ventana corta que se abre despues de una perdida.
+static func _intensidad_de_presion(estado: Dictionary, defiende_local: bool) -> float:
+	var w := pesos_defensa()
+	var pelota: Dictionary = estado["pelota"]
+	var senales := 0.0
+	var id: int = int(pelota["poseedor_id"])
+	if id == -1 or int(pelota.get("ticks_con_pelota", 99)) <= 1:
+		senales += 1.0  # control largo: la pelota todavia no esta dominada
+	if id != -1 and estado["jugadores"].has(id):
+		var p: Dictionary = estado["jugadores"][id]
+		var hacia_su_arco: Vector2 = (arco_rival(bool(p["equipo_local"])) - (p["pos"] as Vector2)).normalized()
+		var v: Vector2 = p["vel"]
+		if v.length_squared() > 0.25 and v.normalized().dot(hacia_su_arco) < 0.0:
+			senales += 1.0  # recibio de espaldas y va hacia atras
+	if absf((pelota["pos"] as Vector2).y) > MEDIO_ANCHO - float(w["banda_disparador"]):
+		senales += 1.0  # contra la banda, con media cancha menos para salir
+	# Tras la perdida hay una ventana para apretar antes de que se ordenen.
+	senales += _transicion(estado, not defiende_local)
+	return clampf(senales / 3.0, 0.0, 1.0)
+
+
 ## Adónde va el que sale a presionar. Normalmente a la pelota, pero si la
 ## tiene el ARQUERO adentro de su área, se planta en el borde del área en
 ## vez de meterse a buscarla: nadie va a apretar a un arquero que tiene la
@@ -3384,28 +5112,219 @@ static func _punto_de_presion(estado: Dictionary, e: Dictionary, pelota_pos: Vec
 	return Vector2(fuera, clampf(pelota_pos.y, -MEDIO_ANCHO + 2.0, MEDIO_ANCHO - 2.0))
 
 
-static func _perseguidores(estado: Dictionary, equipo_con_pelota_local: bool) -> Array:
-	var pelota_pos: Vector2 = estado["pelota"]["pos"]
-	var p1 := -1
-	var p2 := -1
-	var d1: float = INF
-	var d2: float = INF
+## Donde se para la cobertura: detras del presionante, sobre la recta que
+## va de el al arco propio. Con los disparadores activos se acerca, para
+## que el equipo apriete junto; sin ellos se queda mas atras y sostiene el
+## repliegue.
+static func _punto_de_cobertura(estado: Dictionary, presionante: Dictionary, intensidad: float) -> Vector2:
+	var w := pesos_defensa()
+	var arco: Vector2 = arco_propio(bool(presionante["equipo_local"]))
+	var dir: Vector2 = arco - (presionante["pos"] as Vector2)
+	if dir.length() < 0.5:
+		dir = Vector2(-1.0 if presionante["equipo_local"] else 1.0, 0.0)
+	var atras: float = float(w["cobertura_atras"]) * lerpf(1.0, float(w["cobertura_cerca"]), intensidad)
+	# Los estilos de bloque cubren mas atras: el segundo no acompaña la
+	# presion, sostiene la linea. Es lo que reemplaza a la regla vieja de
+	# _perseguidores, que directamente no le daba un segundo al bloque —y
+	# asi el que superaba al primero no se cruzaba con nadie.
+	var estilo: String = _equipo_de(estado, bool(presionante["equipo_local"])).estilo
+	if estilo == "Contragolpe" or estilo == "Defensivo":
+		atras *= float(w["cobertura_bloque"])
+	# Etapa 7: el que gana cubre mas atras. Es la contracara de la altura
+	# del bloque — protege el espacio que deja el que se adelanta.
+	var guarda: float = maxf(0.0, -urgencia(estado, bool(presionante["equipo_local"])))
+	atras *= 1.0 + guarda * float(pesos_marcador()["cobertura_extra"])
+	return (presionante["pos"] as Vector2) + dir.normalized() * atras
+
+
+## Que linea de pase tapa el cierre: la del receptor mas cercano al
+## poseedor que no este ya cubierto por la cobertura. Responde a donde
+## estan parados los rivales, no al pase que el poseedor va a elegir.
+static func _punto_de_cierre(estado: Dictionary, defiende_local: bool, evitar: Vector2) -> Vector2:
+	var w := pesos_defensa()
+	var pelota: Vector2 = estado["pelota"]["pos"]
+	var salidas := []
+	for id in estado["jugadores"]:
+		var comp: Dictionary = estado["jugadores"][id]
+		if comp["equipo_local"] == defiende_local or comp["rol"] == "ARQ":
+			continue
+		var dist: float = pelota.distance_to(comp["pos"])
+		if dist > float(w["cierre_cerca"]) and dist < float(w["cierre_lejos"]):
+			salidas.append({"clave": int(id), "pos": comp["pos"] as Vector2})
+	# Orden estable: la distancia manda y la clave rompe el empate, asi dos
+	# corridas con la misma semilla eligen el mismo carril.
+	salidas.sort_custom(func(a, b):
+		var da: float = pelota.distance_squared_to(a["pos"])
+		var db: float = pelota.distance_squared_to(b["pos"])
+		if is_equal_approx(da, db):
+			return int(a["clave"]) < int(b["clave"])
+		return da < db)
+	for s in salidas:
+		var punto: Vector2 = pelota.lerp(s["pos"], float(w["cierre_carril"]))
+		if punto.distance_to(evitar) > 4.0:
+			return punto
+	return Vector2.INF
+
+
+## Reparte las tres responsabilidades del equipo que defiende y las deja
+## en el estado. Las sostiene TICKS_DEFENSA_MIN ticks: el presionante solo
+## cambia si otro le mejora el tiempo de llegada en `mejora_presionante`,
+## y asi el par no se intercambia cada fotograma por un metro de
+## diferencia. El cierre se recalcula siempre, porque depende del estilo y
+## de los disparadores, que cambian solos.
+static func _planificar_defensa(estado: Dictionary, equipo_con_pelota_local: bool) -> Dictionary:
+	var w := pesos_defensa()
+	var w_m := pesos_marcador()
+	var defiende_local: bool = not equipo_con_pelota_local
+	var plan: Dictionary = estado.get("defensa", {})
+	# Cambio de manos: el reparto anterior era del otro equipo.
+	if plan.is_empty() or bool(plan.get("local", not defiende_local)) != defiende_local:
+		plan = {"local": defiende_local, "presionante": -1, "cobertura": -1, "hasta": -1}
+	estado["defensa"] = plan
+
+	var pelota: Vector2 = estado["pelota"]["pos"]
+	var intensidad := _intensidad_de_presion(estado, defiende_local)
+
+	var disponibles := []
 	for id in estado["jugadores"]:
 		var e: Dictionary = estado["jugadores"][id]
-		if e["equipo_local"] == equipo_con_pelota_local or e["rol"] == "ARQ":
+		if e["equipo_local"] != defiende_local or e["rol"] == "ARQ":
 			continue
-		if _en_cooldown(estado, id):
-			continue  # quedó mal parado, no sale a perseguir todavía
-		var d: float = pelota_pos.distance_to(e["pos"])
-		if d < d1:
-			d2 = d1
-			p2 = p1
-			d1 = d
-			p1 = id
-		elif d < d2:
-			d2 = d
-			p2 = id
-	return [p1, p2]
+		if _en_cooldown(estado, id) or _en_transito(estado, id):
+			continue  # quedo mal parado o se esta yendo: no sale a presionar
+		disponibles.append(int(id))
+	disponibles.sort()
+
+	# --- Presionante: el de menor tiempo de llegada a la pelota --------
+	var mejor := -1
+	var mejor_t: float = INF
+	for id in disponibles:
+		var e: Dictionary = estado["jugadores"][id]
+		var t := _tiempo_de_llegada(estado, e, _punto_de_presion(estado, e, pelota))
+		if t < mejor_t:
+			mejor_t = t
+			mejor = id
+	var presionante: int = int(plan["presionante"])
+	var sostiene: bool = presionante != -1 and disponibles.has(presionante) \
+		and int(estado["tick"]) < int(plan["hasta"])
+	if sostiene and mejor != -1 and mejor != presionante:
+		var actual: Dictionary = estado["jugadores"][presionante]
+		var t_actual := _tiempo_de_llegada(estado, actual, _punto_de_presion(estado, actual, pelota))
+		if mejor_t < t_actual * (1.0 - float(w["mejora_presionante"])):
+			sostiene = false
+	if not sostiene:
+		presionante = mejor
+		plan["hasta"] = int(estado["tick"]) + TICKS_DEFENSA_MIN
+		plan["enganchado"] = false
+	plan["presionante"] = presionante
+	# Se engancho: llego a la distancia de disputa. A partir de ahi tiene
+	# sentido preguntarse si lo pasaron (ver _presion_superada).
+	if presionante != -1 and estado["jugadores"][presionante]["pos"].distance_to(pelota) <= float(w["enganche"]):
+		plan["enganchado"] = true
+
+	# --- Cobertura: entre los que quedan, la que llega antes al punto --
+	var cobertura: int = int(plan.get("cobertura", -1))
+	if presionante == -1:
+		cobertura = -1
+	else:
+		var punto_cob := _punto_de_cobertura(estado, estado["jugadores"][presionante], intensidad)
+		if cobertura == presionante or not disponibles.has(cobertura) or int(estado["tick"]) >= int(plan["hasta"]):
+			cobertura = -1
+			var t_cob: float = INF
+			for id in disponibles:
+				if id == presionante:
+					continue
+				var t := _tiempo_de_llegada(estado, estado["jugadores"][id], punto_cob)
+				if t < t_cob:
+					t_cob = t
+					cobertura = id
+	plan["cobertura"] = cobertura
+
+	# --- Cierre de linea: un tercero tapa una salida distinta ----------
+	# Pide cobertura: sin nadie atras, el tercero que sale deja el bloque
+	# partido. Y si al presionante YA lo pasaron, no se cierra nada — lo
+	# que corresponde es replegar.
+	var cierre := -1
+	var punto_cierre := Vector2.INF
+	if presionante != -1 and cobertura != -1:
+		var estilo: String = _equipo_de(estado, defiende_local).estilo
+		# Etapa 7: el que necesita la pelota sale a cerrar con menos
+		# excusa; el que cuida el resultado no manda un tercero ni con los
+		# disparadores activos. El estilo Presion alta sigue cerrando
+		# siempre salvo que este guardando el partido.
+		var urg_def := urgencia(estado, defiende_local)
+		var umbral: float = float(w["intensidad_para_cierre"]) - urg_def * float(w_m["cierre"])
+		var guardando: bool = urg_def <= -float(w_m["urgencia_para_guardar"])
+		var permite: bool = not guardando and (estilo == "Presión alta" or intensidad >= umbral)
+		if permite and not _presion_superada(estado, defiende_local, plan):
+			punto_cierre = _punto_de_cierre(estado, defiende_local,
+				_punto_de_cobertura(estado, estado["jugadores"][presionante], intensidad))
+			if punto_cierre != Vector2.INF:
+				var t_cierre: float = INF
+				for id in disponibles:
+					if id == presionante or id == cobertura:
+						continue
+					var t := _tiempo_de_llegada(estado, estado["jugadores"][id], punto_cierre)
+					if t < t_cierre:
+						t_cierre = t
+						cierre = id
+	plan["cierre"] = cierre
+	plan["punto_cierre"] = punto_cierre
+	plan["intensidad"] = intensidad
+	return plan
+
+
+## ¿Al presionante ya lo pasaron? Pide las dos cosas: que haya llegado a
+## engancharse con la pelota alguna vez —el plan lo recuerda— y que ahora
+## la pelota este del lado de su arco. Sin la primera condicion cualquier
+## delantero que presiona desde adelante daba "superado" en el primer
+## tick, porque la pelota siempre esta mas cerca del arco que el.
+static func _presion_superada(estado: Dictionary, defiende_local: bool, plan: Dictionary) -> bool:
+	if not bool(plan.get("enganchado", false)):
+		return false
+	var presionante: int = int(plan.get("presionante", -1))
+	var id: int = int(estado["pelota"]["poseedor_id"])
+	if id == -1 or not estado["jugadores"].has(id) or not estado["jugadores"].has(presionante):
+		return false
+	var arco: Vector2 = arco_propio(defiende_local)
+	var d_pelota: float = arco.distance_to(estado["jugadores"][id]["pos"])
+	var d_presionante: float = arco.distance_to(estado["jugadores"][presionante]["pos"])
+	return d_pelota < d_presionante - 2.0
+
+
+## Quienes del equipo que NO tiene la pelota salen del bloque. Es la
+## lectura del reparto: presionante, cobertura y cierre, en ese orden.
+## Con uno solo, el que conduce se lo saca de encima y sigue de largo.
+static func _perseguidores(estado: Dictionary, equipo_con_pelota_local: bool) -> Array:
+	var plan := _planificar_defensa(estado, equipo_con_pelota_local)
+	var salida := []
+	for papel in ["presionante", "cobertura", "cierre"]:
+		var id: int = int(plan.get(papel, -1))
+		if id != -1:
+			salida.append(id)
+	return salida
+
+
+## Adonde va cada uno de los tres. El papel lo decidio el reparto; aca
+## solo se traduce a un punto.
+static func _objetivo_de_presion(estado: Dictionary, e: Dictionary) -> Vector2:
+	var pelota: Vector2 = estado["pelota"]["pos"]
+	var objetivo := _punto_de_presion(estado, e, pelota)
+	var plan: Dictionary = estado.get("defensa", {})
+	var clave: int = int(e["clave"])
+	# El arquero con la pelota en la mano: todos se plantan en el borde.
+	if objetivo != pelota or int(plan.get("presionante", -1)) == clave:
+		return objetivo
+	if int(plan.get("cobertura", -1)) == clave:
+		var id_p: int = int(plan.get("presionante", -1))
+		if estado["jugadores"].has(id_p):
+			return _punto_de_cobertura(estado, estado["jugadores"][id_p], float(plan.get("intensidad", 0.0)))
+		return objetivo
+	if int(plan.get("cierre", -1)) == clave:
+		var punto = plan.get("punto_cierre", Vector2.INF)
+		if punto != Vector2.INF:
+			return punto
+	return objetivo
 
 
 static func _mas_cercano_a(estado: Dictionary, punto: Vector2) -> int:
@@ -3438,6 +5357,8 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 	# que hace que una división 10 se vea trabada y un partido de élite
 	# fluya.
 	var ticks_control: int = int(round(_por_atributo(jugador, "control", f["ticks_control_malo"], f["ticks_control_bueno"])))
+	var asociacion: float = float(Estilos.plan(equipo.estilo)["asociacion"])
+	ticks_control = int(round(float(ticks_control) * lerpf(1.0, 0.75, asociacion)))
 	ticks_control = maxi(ticks_control, 1)
 	var ticks: int = int(pelota.get("ticks_con_pelota", 0))
 	if ticks == 0 or ticks % ticks_control != 0:
@@ -3462,6 +5383,7 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 	var elegida := elegir_softmax(opciones, temp, estado["rng"])
 
 	estado["decisiones"][elegida["tipo"]] = estado["decisiones"].get(elegida["tipo"], 0) + 1
+	_medir_pase_atras(estado, elegida, poseedor, presion)
 	estado["ultima_decision"] = {
 		"tipo": elegida["tipo"], "temperatura": temp, "presion": presion,
 		"opciones": opciones, "jugador_rol": poseedor["rol"],
@@ -3476,6 +5398,9 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador, elegida["punto"])
 		"pase_largo":
 			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador, null, true)
+			# El cambio de frente supera la primera linea por arriba. La
+			# altura conserva sus controles e intercepciones reales al caer.
+			estado["pelota"]["altura_max"] = float(f["z_inalcanzable"]) * 1.4
 		"centro":
 			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador)
 			# El centro se lanza como pase, así que el XP de `pases` ya se
@@ -3603,6 +5528,17 @@ static func _en_cooldown(estado: Dictionary, clave: int) -> bool:
 ## reanuda con tiro libre — o penal si fue adentro del área.
 static func _cobrar_falta(estado: Dictionary, punto: Vector2, victima_local: bool,
 		infractor: Dictionary, eq_infractor: Team, eq_victima: Team, minuto: int) -> void:
+	var victima := -1
+	var distancia_victima := INF
+	for clave in estado["jugadores"]:
+		var candidato: Dictionary = estado["jugadores"][clave]
+		if bool(candidato["equipo_local"]) == victima_local:
+			var distancia: float = candidato["pos"].distance_squared_to(punto)
+			if distancia < distancia_victima:
+				distancia_victima = distancia
+				victima = int(clave)
+	if victima != -1:
+		_accion(estado, victima, "cae")
 	estado["faltas"] = int(estado.get("faltas", 0)) + 1
 	_chequear_tarjeta_de_falta(estado, infractor, eq_infractor, eq_victima, minuto)
 	estado["eventos"].append({
@@ -3718,6 +5654,7 @@ static func _armar_penal(estado: Dictionary, ataca_local: bool, minuto: int,
 	pelota["z"] = 0.0
 	pelota["poseedor_id"] = -1
 	pelota["ticks_con_pelota"] = 0
+	pelota.erase("altura_salida")
 
 	estado["balon_parado"] = {
 		"tipo": "penal", "ataca_local": ataca_local, "minuto": minuto,
@@ -4412,6 +6349,11 @@ static func _ejecutar_balon_parado(estado: Dictionary) -> void:
 			# no, el ejecutor arrancaba corriendo con la pelota desde la
 			# línea de banda, que no es poner la pelota en juego.
 			_tocar_corto(estado, ataca_local)
+			if bool(bp.get("con_manos", false)):
+				_accion(estado, ejecutor, "lateral_manos")
+				estado["pelota"]["altura_salida"] = 2.0
+				estado["pelota"]["altura_max"] = 1.1
+				estado["pelota"]["z"] = 2.0
 
 
 ## Reventarla arriba y lejos, sin destinatario: la agarra el que llegue.
@@ -4442,6 +6384,7 @@ static func _despejar(estado: Dictionary, poseedor: Dictionary, jugador: Diction
 	pelota["origen_pos"] = poseedor["pos"]
 	pelota["altura_max"] = float(f["altura_despeje"])
 	pelota["ticks_con_pelota"] = 0
+	pelota.erase("altura_salida")
 	estado["despejes"] = int(estado.get("despejes", 0)) + 1
 
 
@@ -4449,12 +6392,21 @@ static func _despejar(estado: Dictionary, poseedor: Dictionary, jugador: Diction
 ## (avance_conducir < 1): si no, nadie alcanza nunca al que la lleva.
 static func _conducir(estado: Dictionary, poseedor: Dictionary) -> void:
 	var f: Dictionary = pesos()["fisica"]
-	var destino := _destino_de_conduccion(poseedor["pos"], poseedor["equipo_local"])
+	var destino := _corredor_elegido(estado, poseedor)
 	var dir: Vector2 = (destino - poseedor["pos"]).normalized()
 	# Un punto bien por delante para que nunca "llegue" y frene: conducir
 	# es avanzar, no ir a un destino. Pasa por _mover_hacia para que el que
 	# lleva la pelota también arranque con rampa y no salga disparado.
-	_mover_hacia(poseedor, poseedor["pos"] + dir * 20.0, float(f["avance_conducir"]))
+	var libre := 1.0 - riesgo_linea(estado, poseedor["pos"], destino, poseedor["equipo_local"])
+	var plan := Estilos.plan(_equipo_de(estado, poseedor["equipo_local"]).estilo)
+	var carrera: float = _transicion(estado, poseedor["equipo_local"]) * float(plan["transicion"])
+	var factor := lerpf(float(f["avance_conducir"]), 0.88, libre * carrera)
+	# Pausar es conducir DESPACIO protegiendo la pelota, no congelarse: el
+	# poseedor sigue moviendose, y la presion y el robo del rival siguen
+	# corriendo igual (pasos 3 y 4 del tick).
+	if fase_de_ritmo(estado, bool(poseedor["equipo_local"])) == FASE_CIRCULACION:
+		factor *= float(pesos_ritmo()["pausa_conduccion"])
+	_mover_hacia(poseedor, poseedor["pos"] + dir * 20.0, factor)
 	# El que lleva la pelota sí puede meterse en el área (a diferencia de
 	# los que se posicionan sin ella, ver LIMITE_X), pero no atravesar la
 	# línea de fondo.
@@ -4559,7 +6511,7 @@ static func _intentar_robo(estado: Dictionary) -> void:
 
 	if not aguanta:
 		estado["robos"]["ganados"] += 1
-		_entregar_pelota(estado, mejor_id)
+		_entregar_rodando(estado, mejor_id)
 		_penalizar(estado, poseedor["clave"], jug_a)
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "gambeta", "equipo": eq_a.nombre, "rival": eq_d.nombre,
@@ -4580,6 +6532,7 @@ static func _push_fotograma(estado: Dictionary, eventos_del_tick: Array = []) ->
 			# asi que el fotograma tiene que traerlo: la clave espacial
 			# cambia de partido a partido y le daria otro pelo cada vez.
 			"jugador_id": e["jugador_id"], "numero": int(e.get("numero", 0)),
+			"recorrido": float(e.get("recorrido", 0.0)),
 		})
 	# Adonde tiene que mirar la camara. Normalmente null y la vista sigue
 	# la pelota; con alguien saliendo o entrando la accion es el jugador y
@@ -4598,6 +6551,11 @@ static func _push_fotograma(estado: Dictionary, eventos_del_tick: Array = []) ->
 		# esto: el minuto solo no alcanza porque el descuento se pasa de 45
 		# y de 90.
 		"periodo": int(estado.get("periodo", 1)),
+		# Ticks que le faltan a la pausa en curso, 0 si el juego corre. Es la
+		# unica forma de separar juego abierto de pelota parada midiendo
+		# sobre fotogramas; la vista lo ignora y los fotogramas viejos no lo
+		# traen, asi que se lee con get().
+		"detenido": int(estado.get("detenido", 0)),
 		"foco": foco,
 		"pelota": {
 			"x": estado["pelota"]["pos"].x, "y": estado["pelota"]["pos"].y,
@@ -4621,6 +6579,10 @@ static func _push_fotograma(estado: Dictionary, eventos_del_tick: Array = []) ->
 		# A diferencia de "evento", vienen con la clave del jugador, que es
 		# lo que la vista necesita para animar al que corresponde.
 		"acciones": estado["acciones_tick"],
+		"lateral_preparacion": {
+			"clave": int(estado.get("balon_parado", {}).get("ejecutor", -1)),
+			"restante": int(estado.get("detenido", 0)),
+		} if bool(estado.get("balon_parado", {}).get("con_manos", false)) and int(estado.get("quietos", 0)) <= 0 else {},
 		# El juego se cortó en seco en este tick (falta, saque del medio):
 		# la vista lo usa para el parpadeo.
 		"corte": bool(estado.get("corte_este_tick", false)),
@@ -5034,5 +6996,8 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator,
 			"pase_detalle": estado["pase_detalle"],
 			"pases": estado["pases"],
 			"decisiones": estado["decisiones"],
+			# Etapa 4: ticks por fase de ritmo y pases atras separados por
+			# tipo. Solo mide; ningun consumidor lo necesita.
+			"ritmo": estado.get("ritmo_stats", {}),
 		},
 	}

@@ -15,15 +15,15 @@ extends Control
 ## variación tiene el pasto — el potrero es irregular, el híbrido parejo.
 const PALETAS := {
 	"potrero": {
-		"claro": Color(0.55, 0.44, 0.28), "oscuro": Color(0.49, 0.39, 0.24),
+		"claro": Color("a38a58"), "oscuro": Color("93794c"),
 		"linea": Color(0.88, 0.86, 0.80, 0.85), "aspereza": 0.055,
 	},
 	"regular": {
-		"claro": Color(0.28, 0.50, 0.22), "oscuro": Color(0.24, 0.45, 0.19),
+		"claro": Color("4f914b"), "oscuro": Color("428344"),
 		"linea": Color(0.92, 0.94, 0.90, 0.9), "aspereza": 0.035,
 	},
 	"hibrido": {
-		"claro": Color(0.19, 0.56, 0.24), "oscuro": Color(0.15, 0.50, 0.20),
+		"claro": Color("4d9e58"), "oscuro": Color("408c4d"),
 		"linea": Color.WHITE, "aspereza": 0.018,
 	},
 }
@@ -99,6 +99,7 @@ var _tex_sombra: ImageTexture
 var _tex_pelota: ImageTexture
 var _tex_publico: ImageTexture
 var _tex_red: ImageTexture
+static var _mallas_desgaste := {}
 
 
 func _ready() -> void:
@@ -133,6 +134,7 @@ func _draw() -> void:
 	_dibujar_estadio()
 	_dibujar_cesped(pal)
 	_dibujar_lineas(pal)
+	_dibujar_banderines()
 	_dibujar_entidades()
 	_dibujar_tarjetas()
 
@@ -185,6 +187,10 @@ func _dibujar_estadio() -> void:
 	# Pista: la banda entre la línea de cal y el muro.
 	_plano(Vector3(-L - PISTA, -A - PISTA, 0), Vector3(L + PISTA, -A - PISTA, 0),
 		Vector3(L + PISTA, A + PISTA, 0), Vector3(-L - PISTA, A + PISTA, 0), COLOR_PISTA)
+	var pal: Dictionary = PALETAS.get(estado_cancha, PALETAS["regular"])
+	var borde: Color = pal["oscuro"]
+	_plano(Vector3(-L - 2.0, -A - 2.0, 0), Vector3(L + 2.0, -A - 2.0, 0),
+		Vector3(L + 2.0, A + 2.0, 0), Vector3(-L - 2.0, A + 2.0, 0), borde.darkened(0.12))
 
 	var xa := -L - PISTA - PROF_TRIBUNA
 	var xb := L + PISTA + PROF_TRIBUNA
@@ -212,6 +218,14 @@ func _dibujar_estadio() -> void:
 	# Va después de las tribunas porque está por delante de ellas.
 	_plano(Vector3(xa, -A - PISTA, 0), Vector3(xb, -A - PISTA, 0),
 		Vector3(xb, -A - PISTA, ALTO_MURO), Vector3(xa, -A - PISTA, ALTO_MURO), COLOR_MURO)
+	# Carteles bajos con paleta limitada, como el resto del pixel art.
+	var carteles := [Color("d9bd77"), Color("567d91"), Color("ba6455"), Color("e1ddba")]
+	for i in range(14):
+		var cx := -L + i * (2.0 * L / 14.0)
+		_plano(Vector3(cx + 0.25, -A - PISTA + 0.02, 0.2),
+			Vector3(cx + 6.9, -A - PISTA + 0.02, 0.2),
+			Vector3(cx + 6.9, -A - PISTA + 0.02, 1.45),
+			Vector3(cx + 0.25, -A - PISTA + 0.02, 1.45), carteles[i % carteles.size()])
 	for lado in [-1.0, 1.0]:
 		var x0: float = lado * (L + PISTA)
 		_plano(Vector3(x0, ya, 0), Vector3(x0, yb, 0),
@@ -245,6 +259,39 @@ func _dibujar_cesped(pal: Dictionary) -> void:
 		_panel(Vector3(xa, y0, 0), Vector3(xb, y0, 0), Vector3(xb, y1, 0), Vector3(xa, y1, 0),
 			tex, METROS_TILE_CESPED,
 			Color.WHITE if i % 2 == 0 else tinte_oscuro)
+
+	# Geometria fija, una sola orden de dibujo y sin azar por fotograma.
+	var origen := _p(0, 0)
+	var transformacion := Transform2D(_p(1, 0) - origen, _p(0, 1) - origen, origen)
+	draw_mesh(_malla_desgaste(estado_cancha), null, transformacion,
+		Color(0.48, 0.39, 0.23, 0.32 if estado_cancha != "hibrido" else 0.12))
+
+
+static func _malla_desgaste(estado: String) -> ArrayMesh:
+	if _mallas_desgaste.has(estado):
+		return _mallas_desgaste[estado]
+	var vertices := PackedVector2Array()
+	var indices := PackedInt32Array()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1978
+	var cantidad := 180 if estado == "potrero" else (70 if estado == "regular" else 24)
+	for i in range(cantidad):
+		var centro := Vector2.ZERO
+		if i % 3 != 0:
+			centro.x = (ProyeccionPartido.MEDIO_LARGO - 4.0) * (-1.0 if i % 2 == 0 else 1.0)
+		var pos := centro + Vector2(rng.randf_range(-3.5, 3.5), rng.randf_range(-8.0, 8.0))
+		var ancho := rng.randf_range(0.15, 0.65)
+		var base := vertices.size()
+		vertices.append_array(PackedVector2Array([pos, pos + Vector2(ancho, 0), pos + Vector2(ancho, 0.15), pos + Vector2(0, 0.15)]))
+		indices.append_array(PackedInt32Array([base, base + 1, base + 2, base, base + 2, base + 3]))
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var malla := ArrayMesh.new()
+	malla.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	_mallas_desgaste[estado] = malla
+	return malla
 
 
 func _dibujar_lineas(pal: Dictionary) -> void:
@@ -333,8 +380,10 @@ func _arco_frente(lado: float) -> void:
 
 
 func _barra(a: Vector3, b: Vector3) -> void:
+	draw_line(_p(a.x, a.y, a.z), _p(b.x, b.y, b.z), Color("23383e"),
+		maxf(4.5, camara.px_por_metro * 0.24))
 	draw_line(_p(a.x, a.y, a.z), _p(b.x, b.y, b.z), COLOR_ARCO,
-		maxf(2.5, camara.px_por_metro * 0.16))
+		maxf(2.0, camara.px_por_metro * 0.12))
 
 
 # ---------------------------------------------------------------------------
@@ -383,29 +432,26 @@ func _dibujar_cuerpo(ent: Dictionary) -> void:
 	var escala: float = camara.px_por_metro / CamaraPartido.PX_POR_METRO_BASE
 	var punto := _p(ent["pos"].x, ent["pos"].y, float(ent.get("z", 0.0)))
 	if ent["tipo"] == "pelota":
-		var d := 11.0 * escala
-		draw_texture_rect(_tex_pelota, Rect2(punto - Vector2(d, d) * 0.5, Vector2(d, d)), false)
+		if bool(ent.get("anclada", false)):
+			punto = _p(ent["pos"].x, ent["pos"].y) + Vector2(ent["anclaje_px"]) * escala
+		var d := 13.0 * escala
+		var pelota := SpritesPartido.pelota(int(ent.get("giro", 0)))
+		draw_texture_rect(pelota, Rect2(punto - Vector2(d, d) * 0.5, Vector2(d, d)), false)
 		return
 
 	var pose := str(ent.get("pose", SpritesPartido.QUIETO))
-	var tex: ImageTexture
-	if pose == SpritesPartido.VUELA:
-		tex = SpritesPartido.arquero_volando(ent["color"], bool(ent.get("espejo", false)),
-			ent.get("color_short", Color.TRANSPARENT),
-			ent.get("color_pelo", SpritesPartido.PELO))
-	else:
-		tex = SpritesPartido.jugador(ent["color"], int(ent.get("direccion", SpritesPartido.ABAJO)),
-			pose, ent.get("color_short", Color.TRANSPARENT),
-			int(ent.get("pelo", SpritesPartido.PELO_CORTO)),
-			ent.get("color_pelo", SpritesPartido.PELO),
-			int(ent.get("numero", 0)))
-	# El ancho se deriva del ancho del sprite y no es fijo: así el arquero
-	# volando (que es más ancho que alto) se dibuja con píxeles del mismo
-	# tamaño que los demás en vez de aplastado al ancho de un jugador.
-	var ancho := ANCHO_SPRITE_PX * escala * (float(tex.get_width()) / float(SpritesPartido.ANCHO))
-	var alto := ancho * (float(tex.get_height()) / float(tex.get_width()))
-	# El sprite se apoya en el punto: los pies quedan en el piso.
-	draw_texture_rect(tex, Rect2(punto - Vector2(ancho * 0.5, alto), Vector2(ancho, alto)), false)
+	var dir := int(ent.get("direccion", SpritesPartido.ABAJO))
+	var accion := str(ent.get("accion", ""))
+	var indice := AtlasJugadores.cuadro(accion, float(ent.get("fase_animacion", 0.0)), dir,
+		pose in [SpritesPartido.CORRE_A, SpritesPartido.CORRE_B], bool(ent.get("arquero", false)))
+	var espejo := bool(ent.get("espejo", false)) if accion == "vuela" else dir in [5, 6, 7]
+	var tex := AtlasJugadores.textura(indice, ent["color"], ent.get("color_short", Color.WHITE),
+		ent.get("color_pelo", SpritesPartido.PELO), espejo, int(ent.get("numero", 0)), int(ent.get("pelo", 0)))
+	var lado := 64.0 * escala
+	# Pivote com?n en los pies: no cambia con el ancho de una patada.
+	draw_texture_rect(tex, Rect2((punto - Vector2(lado * 0.5, lado * 0.90625)).round(),
+		Vector2(lado, lado)), false)
+
 
 
 const COLOR_AMARILLA := Color(0.98, 0.83, 0.16)
@@ -427,3 +473,14 @@ func _dibujar_tarjetas() -> void:
 		draw_rect(Rect2(r.position + Vector2(1.5, 1.5), r.size), Color(0, 0, 0, 0.45 * alfa))
 		var c: Color = COLOR_ROJA if bool(t["roja"]) else COLOR_AMARILLA
 		draw_rect(r, Color(c.r, c.g, c.b, alfa))
+
+
+func _dibujar_banderines() -> void:
+	for x in [-ProyeccionPartido.MEDIO_LARGO, ProyeccionPartido.MEDIO_LARGO]:
+		for y in [-ProyeccionPartido.MEDIO_ANCHO, ProyeccionPartido.MEDIO_ANCHO]:
+			var pie := _p(x, y)
+			var punta := _p(x, y, 1.45)
+			draw_line(pie, punta, Color("23383e"), 3.0)
+			draw_line(pie, punta, Color("f5e8b9"), 1.0)
+			var vuelo := camara.px_por_metro * 0.48
+			draw_colored_polygon(PackedVector2Array([punta, punta + Vector2(vuelo, 3), punta + Vector2(0, vuelo * 0.65)]), Color("eac35e"))

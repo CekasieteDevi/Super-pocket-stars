@@ -126,7 +126,14 @@ func tabla_ordenada() -> Array:
 			return fa["pts"] > fb["pts"]
 		if fa["dg"] != fb["dg"]:
 			return fa["dg"] > fb["dg"]
-		return fa["gf"] > fb["gf"]
+		if fa["gf"] != fb["gf"]:
+			return fa["gf"] > fb["gf"]
+		# Ultimo desempate: el nombre. Sin el, dos equipos con los mismos
+		# puntos, la misma diferencia y los mismos goles quedaban en el
+		# orden en que el diccionario devuelve sus claves, y ese orden lo
+		# fija el ORDEN DE CARGA: la misma tabla guardada y recargada
+		# salia distinta. Lo cazo test_internacional_jugable.
+		return str(a) < str(b)
 	)
 	return nombres
 

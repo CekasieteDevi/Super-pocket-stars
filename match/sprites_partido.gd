@@ -60,6 +60,20 @@ const CABECEA := "cabecea"
 const BARRIDA := "barrida"
 const FESTEJA := "festeja"
 const VUELA := "vuela"
+const BLOQUEA := "bloquea"
+const CAE := "cae"
+const CHILENA := "chilena"
+const VOLEA := "volea"
+const RECUPERA := "recupera"
+
+# Siluetas completas: contacto, equilibrio y recuperaci?n diferenciados.
+const POSES_ESPECIALES := {
+	BLOQUEA: ["......HHHH......", ".....HSSSSH.....", ".....SSoSSS.....", "......dSS.......", "...SSJJJJJJSS...", "..SSbJJJJJJbSS..", "....bJJJJJJb....", ".....DDDDDD.....", "....DDD..DDD....", "...SS......SS...", "..MM........MM..", ".BBB........BBB."],
+	CAE: ["....................", "....................", "..HHHH..............", ".HSSSSS...SS........", "..SSoSSJJJJSS.......", "...dSSJJJJJJDD......", "....SSbJJJDDDDSSMMB.", "...SS..bbbDD........", "..SS.......SSMMBB...", "...................."],
+	CHILENA: [".............BB.....", "............MM......", "...........SS.......", ".....BB...SS........", "......MM.DDD........", ".......DDDDD........", ".......JJJJb........", "....SSJJJJJJSS......", "...SS.JJJJJ..SS.....", "......dSS.....SS....", ".....SSoSS..........", ".....HSSSH..........", "......HHH...........", "....................", "....................", "...................."],
+	VOLEA: ["......HHHH..........", ".....HSSSSH.........", ".....SSoSSS.........", "......dSS...........", "...SSJJJJJJ.........", "..SSbJJJJJJSS.......", "....bJJJJJJ.SS......", ".....DDDDDD.........", ".....DDD.DDSSMMBBBB.", ".....SS.............", ".....MM.............", "....BBB.............", "...................."],
+	RECUPERA: ["................", ".....HHHH.......", "....HSSSSH......", "....SSoSSS......", ".....dSS........", "....JJJJJJ......", "...SbJJJJJS.....", "...S.DDDDD.S....", "..SS.DD.SS.SS...", ".....MM..MM.....", "....BBB..BBB...."],
+}
 
 ## Peinados. El pelo es lo que permite distinguir a un jugador de otro
 ## cuando los dos van con la misma camiseta: a 26 píxeles de alto, la
@@ -482,6 +496,8 @@ static func jugador(color_camiseta: Color, direccion: int = ABAJO, pose: String 
 	var paleta := _paleta(color_camiseta, color_short, color_pelo)
 	var tex: ImageTexture
 	match pose:
+		BLOQUEA, CAE, CHILENA, VOLEA, RECUPERA:
+			tex = _construir(POSES_ESPECIALES[pose], paleta, espejo)
 		BARRIDA:
 			tex = _construir(BARRIDA_TENDIDA, paleta, espejo)
 		FESTEJA:
@@ -608,14 +624,45 @@ static func arquero_volando(color_camiseta: Color, hacia_izquierda: bool,
 	return tex
 
 
-static func pelota() -> ImageTexture:
-	if _cache.has("pelota"):
-		return _cache["pelota"]
-	var tex := _construir([
-		"..WWWW..", ".WWWWWW.", "WWWKKWWW", "WWKKKKWW",
-		"WWKKKKWW", "WWWKKWWW", ".WWWWWW.", "..WWWW..",
-	], {".": TRANSPARENTE, "W": Color(0.97, 0.97, 0.97), "K": Color(0.10, 0.10, 0.10)}, false)
-	_cache["pelota"] = tex
+static func pelota(fase: int = 0) -> ImageTexture:
+	var cuadro := posmod(fase, 12)
+	var clave := "pelota_artistica_%d" % cuadro
+	if _cache.has(clave):
+		return _cache[clave]
+	var img := Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	img.fill(Color.TRANSPARENT)
+	var phi := (1.0 + sqrt(5.0)) / 2.0
+	var paneles: Array[Vector3] = []
+	for a in [-1.0, 1.0]:
+		for b in [-1.0, 1.0]:
+			paneles.append(Vector3(0, a, b * phi).normalized())
+			paneles.append(Vector3(a, b * phi, 0).normalized())
+			paneles.append(Vector3(b * phi, 0, a).normalized())
+	var angulo := cuadro * TAU / 12.0
+	for y in range(16):
+		for x in range(16):
+			var uv := (Vector2(x, y) - Vector2(7.5, 7.5)) / 7.5
+			var r := uv.length_squared()
+			if r > 1.0:
+				continue
+			var normal := Vector3(uv.x, uv.y, sqrt(1.0 - r))
+			var rotada := normal.rotated(Vector3(0.3, 1, 0).normalized(), angulo)
+			var negro := false
+			for panel in paneles:
+				if rotada.dot(panel) > 0.94:
+					negro = true
+			var c := Color("fff6df")
+			if normal.dot(Vector3(-0.4, -0.6, 0.7).normalized()) < 0.25:
+				c = Color("8aabb5")
+			elif y > 7:
+				c = Color("cfdfdb")
+			if negro:
+				c = Color("263444")
+			if r > 0.83:
+				c = Color("14202c")
+			img.set_pixel(x, y, c)
+	var tex := ImageTexture.create_from_image(img)
+	_cache[clave] = tex
 	return tex
 
 
@@ -705,5 +752,14 @@ static func _construir(filas: Array, paleta: Dictionary, espejar: bool) -> Image
 		var fila: String = filas[y]
 		for x in range(ancho):
 			var destino: int = (ancho - 1 - x) if espejar else x
-			img.set_pixel(destino, y, paleta[fila[x]])
+			var c: Color = paleta[fila[x]]
+			# Luz superior izquierda y costuras, sin suavizar los p?xeles.
+			if fila[x] in ["J", "D", "H", "S", "M"]:
+				if x == 0 or fila[x - 1] != fila[x]:
+					c = c.lightened(0.16)
+				elif x == ancho - 1 or fila[x + 1] != fila[x]:
+					c = c.darkened(0.22)
+				elif fila[x] == "J" and y % 3 == 0:
+					c = c.darkened(0.07)
+			img.set_pixel(destino, y, c)
 	return ImageTexture.create_from_image(img)

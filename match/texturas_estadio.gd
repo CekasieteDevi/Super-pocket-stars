@@ -26,25 +26,22 @@ static func cesped(base: Color, aspereza: float) -> ImageTexture:
 	var clave := "c_%s_%.2f" % [base.to_html(false), aspereza]
 	if _cache.has(clave):
 		return _cache[clave]
-	var lado := 16
+	var lado := 32
 	var img := Image.create(lado, lado, false, Image.FORMAT_RGBA8)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = SEMILLA
-	# Las briznas son CORTAS, de tres píxeles. Un tono compartido por la
-	# columna entera parece razonable en el tile, pero al repetirlo cada
-	# tres metros las columnas se empalman entre tiles y la cancha termina
-	# rayada de punta a punta.
-	var largo_brizna := 3
-	for x in range(lado):
-		var brizna: float = 0.0
-		for y in range(lado):
-			if y % largo_brizna == 0:
-				brizna = rng.randf_range(-1.0, 1.0) * aspereza
-			var d: float = brizna + rng.randf_range(-0.4, 0.4) * aspereza
-			img.set_pixel(x, y, Color(
-				clampf(base.r + d, 0.0, 1.0),
-				clampf(base.g + d * 1.2, 0.0, 1.0),
-				clampf(base.b + d * 0.6, 0.0, 1.0)))
+	# Paleta de cuatro tonos y grupos de briznas: p?xel ilustrado, sin ruido.
+	img.fill(base)
+	var sombra := base.darkened(aspereza * 2.8)
+	var luz := base.lightened(aspereza * 1.8)
+	for i in range(72):
+		var x := rng.randi_range(0, lado - 1)
+		var y := rng.randi_range(0, lado - 1)
+		var c := sombra if i % 3 == 0 else luz
+		img.set_pixel(x, y, c)
+		img.set_pixel((x + 1) % lado, y, c)
+		if i % 2 == 0:
+			img.set_pixel((x + 1) % lado, (y + lado - 1) % lado, c)
 	var tex := ImageTexture.create_from_image(img)
 	_cache[clave] = tex
 	return tex

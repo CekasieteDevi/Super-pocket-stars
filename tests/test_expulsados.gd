@@ -11,13 +11,10 @@ extends SceneTree
 ## falta.
 
 const SEED := 5150
-## 90 y no 25: las rojas bajaron de 0,40 a 0,13 por partido cuando la
-## tarjeta pasó a colgar de la falta y las faltas de una sola tirada por
-## duelo. 0,13 sigue por debajo del 0,25 real, pero lo que este test mide
-## es CÓMO sale el expulsado de la cancha, no cada cuánto lo echan:
-## necesita 5 rojas y con 25 partidos salían 3. Lo que quedó corto es la
-## muestra.
-const PARTIDOS := 90
+## El laboratorio provoca la roja en cada caso. Con partidos completos,
+## los cambios tacticos dejaron solo cuatro rojas en noventa partidos.
+## Esta prueba verifica la salida; la frecuencia requiere otra medicion.
+const PARTIDOS := 12
 
 ## Lo que avanza un expulsado en un tick. Es la tolerancia con la que se
 ## mide si llego a la linea: el ultimo fotograma en que se lo ve puede
@@ -49,7 +46,7 @@ func _test_camina_y_sale() -> int:
 		rng.seed = SEED + i
 		var casa := Team.generar("Casa", rng, 0)
 		var visita := Team.generar("Visita", rng, 400)
-		var r := MotorEspacial.simular(casa, visita, rng, true)
+		var r := Laboratorio.generar("expulsion", casa, visita, rng)
 		var fotogramas: Array = r["fotogramas"]
 
 		for ev in r["eventos"]:
@@ -113,8 +110,8 @@ func _test_camina_y_sale() -> int:
 				termino_el_partido += 1
 
 	var fallas := 0
-	if rojas < 5:
-		print("FALLA: solo %d rojas en %d partidos, la muestra no alcanza." % [rojas, PARTIDOS])
+	if rojas != PARTIDOS:
+		print("FALLA: el laboratorio produjo %d rojas en %d casos." % [rojas, PARTIDOS])
 		return 1
 
 	if caminaron == rojas:

@@ -361,11 +361,27 @@ static func _montar_cabezazo(estado: Dictionary) -> void:
 
 	# Quién cabecea: el mejor de arriba del equipo que ataca. Es el mismo
 	# criterio con el que el motor elige a quién buscar en un córner.
+	#
+	# Se saltea a los que el motor haría rematar de volea o de chilena en
+	# vez de cabecear (MotorEspacial.remata_de_acrobacia). Sin eso el clip
+	# elegía al mejor de arriba y, si ese además pateaba muy bien, el gol
+	# salía de chilena: 1 de cada 8 planteles mostraba un clip "de cabeza"
+	# sin un solo cabezazo. El reparto es el mismo; solo cambia a quién se
+	# le monta la jugada.
 	var cabeceador := {}
+	var respaldo := {}
 	for j in eq_a.jugadores_en_cancha():
 		var val: float = float(j["atributos"]["cabezazo"]) * 0.6 + float(j["atributos"]["salto"]) * 0.4
+		if respaldo.is_empty() or val > float(respaldo["val"]):
+			respaldo = {"j": j, "val": val}
+		if MotorEspacial.remata_de_acrobacia(j):
+			continue
 		if cabeceador.is_empty() or val > float(cabeceador["val"]):
 			cabeceador = {"j": j, "val": val}
+	# Si los once rematan mejor de pie, el clip se monta igual con el mejor
+	# de arriba: es preferible un clip con una chilena a un clip vacío.
+	if cabeceador.is_empty():
+		cabeceador = respaldo
 	if cabeceador.is_empty():
 		return
 	# Quién centra: el que mejor centra, de los que quedan.

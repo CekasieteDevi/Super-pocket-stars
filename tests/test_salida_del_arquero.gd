@@ -9,10 +9,14 @@ extends SceneTree
 
 const SEED := 8800
 
+var fallos := 0
+
 
 func _init() -> void:
 	_test_el_arquero_lucido_la_revienta()
 	_test_sin_rivales_cerca_reparte_tranquilo()
+	print("
+FALLOS=%d" % fallos)
 	quit()
 
 
@@ -101,6 +105,7 @@ func _test_el_arquero_lucido_la_revienta() -> void:
 	var lucido := _promedio_brecha(95, 3)
 	var limitado := _promedio_brecha(10, 3)
 	if lucido <= limitado:
+		fallos += 1
 		print("FALLA: lucido %.2f, limitado %.2f; el lucido tendria que preferirlo mas." % [
 			lucido, limitado])
 		return
@@ -114,6 +119,7 @@ func _test_sin_rivales_cerca_reparte_tranquilo() -> void:
 	var presionado := _promedio_brecha(95, 3)
 	var tranquilo := _promedio_brecha(95, 0)
 	if presionado <= tranquilo:
+		fallos += 1
 		print("FALLA: presionado %.2f, tranquilo %.2f; la presion tendria que empujarlo a sacarla." % [
 			presionado, tranquilo])
 		return

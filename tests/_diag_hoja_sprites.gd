@@ -21,7 +21,9 @@ func _init() -> void:
 
 	# 1. Poses de a pie, en las 8 direcciones.
 	for pose in [SpritesPartido.QUIETO, SpritesPartido.CORRE_A, SpritesPartido.CORRE_B,
-			SpritesPartido.PATEA_ARMA, SpritesPartido.PATEA, SpritesPartido.CABECEA]:
+			SpritesPartido.PATEA_ARMA, SpritesPartido.PATEA, SpritesPartido.CABECEA,
+			SpritesPartido.BLOQUEA, SpritesPartido.CAE, SpritesPartido.CHILENA,
+			SpritesPartido.VOLEA, SpritesPartido.RECUPERA]:
 		var fila: Array = []
 		for dir in range(8):
 			fila.append(SpritesPartido.jugador(CAMISETA, dir, pose, SHORT))

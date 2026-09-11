@@ -21,12 +21,16 @@ func _armar_estado(rng: RandomNumberGenerator, estilo_local := "") -> Dictionary
 	visita.arbitro_partido = casa.arbitro_partido
 	return MotorEspacial.crear_estado(casa, visita, rng)
 
+var fallos := 0
+
 
 func _init() -> void:
 	_test_en_el_saque_del_medio_nadie_esta_en_campo_ajeno()
 	_test_al_corner_sube_lo_que_dice_el_estilo()
 	_test_los_de_arriba_bajan_a_recibir()
 	_test_el_estilo_corre_la_linea()
+	print("
+FALLOS=%d" % fallos)
 	quit()
 
 
@@ -53,6 +57,7 @@ func _test_en_el_saque_del_medio_nadie_esta_en_campo_ajeno() -> void:
 			if not en_campo_propio:
 				intrusos += 1
 	if intrusos > 0:
+		fallos += 1
 		print("FALLA: %d de %d quedaron en campo ajeno al sacar del medio." % [intrusos, mirados])
 		return
 	print("OK: los %d jugadores quedaron en su propia mitad." % mirados)
@@ -95,15 +100,18 @@ func _test_al_corner_sube_lo_que_dice_el_estilo() -> void:
 	var fisico := _reparto_de_corner("Físico")
 	var defensivo := _reparto_de_corner("Contragolpe")
 	if float(fisico["area"]) - float(defensivo["area"]) < 2.0:
+		fallos += 1
 		print("FALLA: Fisico sube %.1f al area y Contragolpe %.1f." % [
 			fisico["area"], defensivo["area"]])
 		return
 	# Y el que no sube al area no se queda en su casillero: juega el
 	# rebote desde la mitad de la cancha.
 	if float(defensivo["medio"]) < 1.0:
+		fallos += 1
 		print("FALLA: con Contragolpe solo %.1f se paran en la mitad." % defensivo["medio"])
 		return
 	if float(fisico["atras"]) > 1.5:
+		fallos += 1
 		print("FALLA: con Fisico quedan %.1f atras; deberia quedar el resguardo minimo." % fisico["atras"])
 		return
 	print("OK: Fisico sube %.1f al area y %.1f al medio; Contragolpe %.1f y %.1f." % [
@@ -137,9 +145,11 @@ func _test_los_de_arriba_bajan_a_recibir() -> void:
 		if objetivo.x < float(e["base"].x):
 			bajaron += 1
 	if mirados == 0:
+		fallos += 1
 		print("FALLA: esta formacion no tiene extremos ni enganche; el test no mide nada.")
 		return
 	if bajaron != mirados:
+		fallos += 1
 		print("FALLA: solo %d de %d bajaron a recibir." % [bajaron, mirados])
 		return
 	print("OK: los %d de arriba (sin contar al 9) bajan a ofrecerse." % mirados)
@@ -153,6 +163,7 @@ func _test_el_estilo_corre_la_linea() -> void:
 	var alta := _linea_defensiva("Presión alta")
 	var baja := _linea_defensiva("Defensivo")
 	if alta - baja < 6.0:
+		fallos += 1
 		print("FALLA: Presion alta a %.1f m y Defensivo a %.1f m del arco propio." % [alta, baja])
 		return
 	print("OK: Presion alta a %.1f m del arco propio y Defensivo a %.1f." % [alta, baja])

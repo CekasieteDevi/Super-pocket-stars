@@ -11,6 +11,21 @@ const LISTA := ["Tiki taka", "Contragolpe", "Juego directo", "Presión alta", "D
 
 const BONUS := 3.0
 
+## Intencion espacial, separada del bonus de calidad del duelo. Cambiar
+## de estilo cambia las opciones que busca el equipo, no sus atributos.
+## Las magnitudes se contrastan con _diag_identidad_tactica y goles_motores.
+const PLANES := {
+	"Tiki taka": {"asociacion": 1.0, "verticalidad": 0.15, "amplitud": 0.65, "transicion": 0.25},
+	"Contragolpe": {"asociacion": 0.15, "verticalidad": 1.0, "amplitud": 1.0, "transicion": 1.0},
+	"Presión alta": {"asociacion": 0.55, "verticalidad": 0.65, "amplitud": 0.65, "transicion": 0.7},
+	"Juego directo": {"asociacion": 0.2, "verticalidad": 0.85, "amplitud": 0.8, "transicion": 0.6},
+	"Defensivo": {"asociacion": 0.3, "verticalidad": 0.45, "amplitud": 0.55, "transicion": 0.45},
+	"Físico": {"asociacion": 0.25, "verticalidad": 0.7, "amplitud": 0.8, "transicion": 0.5},
+}
+
+static func plan(estilo: String) -> Dictionary:
+	return PLANES.get(estilo, PLANES["Juego directo"])
+
 ## GDD §8.6.3, tabla de matchups. No es una matriz simétrica (ganarle a X no
 ## implica que X te pierda a vos): es un grafo dirigido tal cual está en el
 ## documento, cada estilo declara a quién le gana y contra quién pierde.

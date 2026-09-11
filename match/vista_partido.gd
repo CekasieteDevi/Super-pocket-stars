@@ -140,9 +140,52 @@ func iniciar(lista: Array, c_local: Color, c_visitante: Color,
 	hud.relato = ""
 	hud.festejo = 0.0
 	if not fotogramas.is_empty():
+		_preparar_sprites()
 		_mostrar(0, 0.0)
 		var f: Dictionary = fotogramas[0]
 		vista.camara.saltar_a(Vector2(f["pelota"]["x"], f["pelota"]["y"]), size)
+
+
+## Sólo las poses y apariencias presentes en esta grabación, incluidos cambios.
+## El primer uso de una animación no debe crear texturas desde _draw().
+func _preparar_sprites() -> void:
+	var jugadores := {}
+	var cuadros := {}
+	for f in fotogramas:
+		for j in f["jugadores"]:
+			var id := int(j["id"])
+			var apariencia := "%d_%s_%d" % [id, str(j.get("rol", "")), int(j.get("numero", 0))]
+			jugadores[apariencia] = j
+			if not cuadros.has(id):
+				cuadros[id] = {}
+				for indice in range(8):
+					cuadros[id][indice] = true
+					cuadros[id][indice + 16] = true
+				for indice in [24, 25, 40]:
+					cuadros[id][indice] = true
+		for a in f.get("acciones", []):
+			var id := int(a["clave"])
+			if not cuadros.has(id):
+				continue
+			for indice in AtlasJugadores.CLIPS.get(str(a["accion"]), []):
+				cuadros[id][indice] = true
+		var lateral: Dictionary = f.get("lateral_preparacion", {})
+		var ejecutor := int(lateral.get("clave", -1))
+		if cuadros.has(ejecutor):
+			for indice in AtlasJugadores.CLIPS["lateral_prepara"]:
+				cuadros[ejecutor][indice] = true
+	for apariencia in jugadores:
+		var j: Dictionary = jugadores[apariencia]
+		var id := int(j["id"])
+		var jugador_id := int(j.get("jugador_id", id))
+		var pantalon := color_short_local if j["equipo_local"] else color_short_visitante
+		for indice in cuadros[id]:
+			for espejo in [false, true]:
+				AtlasJugadores.textura(indice, _color_de(j), pantalon,
+					SpritesPartido.tono_pelo_de(jugador_id), espejo, int(j.get("numero", 0)),
+					AtlasJugadores.estilo_de(jugador_id))
+	for i in range(12):
+		SpritesPartido.pelota(i)
 
 
 ## Salta al final SIN renderizar los fotogramas del medio: es un salto de
@@ -310,6 +353,8 @@ func _mostrar(idx: int, t: float) -> void:
 		z = lerpf(z, float(pb.get("z", 0.0)), t)
 
 	var ents: Array = []
+	var pelota_anclada := false
+	var anclaje_pelota := Vector2.ZERO
 	for j in a["jugadores"]:
 		var p := Vector2(j["x"], j["y"])
 		var avance := Vector2.ZERO
@@ -327,7 +372,10 @@ func _mostrar(idx: int, t: float) -> void:
 		var accion: Dictionary = acciones.get(j["id"], {})
 		var pose: String = str(accion.get("pose", ""))
 		if pose.is_empty():
-			pose = _pose(avance, idx)
+			var recorrido: float = float(j.get("recorrido", -1.0))
+			if recorrido >= 0.0 and destino.has(j["id"]):
+				recorrido = lerpf(recorrido, float(destino[j["id"]].get("recorrido", recorrido)), t)
+			pose = _pose(avance, idx, recorrido, int(j["id"]))
 		# El peinado y el dorsal son lo único que distingue a dos
 		# jugadores del mismo equipo: con la camiseta sola, once sprites
 		# idénticos corriendo no dejan seguir a nadie en particular.
@@ -338,19 +386,61 @@ func _mostrar(idx: int, t: float) -> void:
 			"color_short": color_short_local if j["equipo_local"] else color_short_visitante,
 			"direccion": _direccion(avance),
 			"pose": pose,
-			"pelo": SpritesPartido.pelo_de(jugador_id),
+			"pelo": AtlasJugadores.estilo_de(jugador_id),
 			"color_pelo": SpritesPartido.tono_pelo_de(jugador_id),
 			"numero": int(j.get("numero", 0)),
 		}
+		ent["arquero"] = str(j.get("rol", "")) == "ARQ"
+		ent["accion"] = str(accion.get("accion", ""))
+		var metros: float = float(j.get("recorrido", -1.0))
+		if metros >= 0.0 and destino.has(j["id"]):
+			metros = lerpf(metros, float(destino[j["id"]].get("recorrido", metros)), t)
+		ent["fase_animacion"] = metros * 2.5 + posmod(jugador_id, 8) if metros >= 0.0 else (idx + t) * 2.0
+		if not accion.is_empty():
+			ent["fase_animacion"] = (float(idx - int(accion["desde"])) + t) / float(DURACION_ACCION.get(ent["accion"], 1))
+			# La orientaci?n del contacto sigue la pelota, aunque el jugador est? quieto.
+			var origen: Dictionary = fotogramas[int(accion["desde"])]
+			var balon := Vector2(origen["pelota"]["x"], origen["pelota"]["y"])
+			ent["direccion"] = _direccion(balon - p)
+			var fase := float(idx - int(accion["desde"])) + t
+			if pose in [SpritesPartido.CABECEA, SpritesPartido.CHILENA, SpritesPartido.VOLEA]:
+				ent["z"] = sin(clampf(fase / 3.0, 0.0, 1.0) * PI) * 0.65
+			elif pose == SpritesPartido.FESTEJA:
+				ent["z"] = absf(sin(fase * PI)) * 0.45
+			elif pose == SpritesPartido.VUELA:
+				ent["z"] = sin(clampf(fase / 4.0, 0.0, 1.0) * PI) * 0.55
 		if pose == SpritesPartido.VUELA:
 			# Se tira hacia donde estaba la pelota cuando arrancó el
 			# vuelo, medido EN PANTALLA: el sprite del arquero volando es
 			# horizontal, así que lo único que puede expresar es a qué
 			# costado se estiró.
 			ent["espejo"] = _lado_del_vuelo(int(j["id"]), int(accion["desde"]))
+		var lateral: Dictionary = a.get("lateral_preparacion", {})
+		if int(lateral.get("clave", -1)) == int(j["id"]) and int(lateral.get("restante", 99)) <= 3:
+			ent["accion"] = "lateral_prepara"
+			ent["pose"] = "lateral_prepara"
+			ent["fase_animacion"] = clampf((3.0 - float(lateral["restante"]) + t) / 3.0, 0.0, 0.999)
+			ent["direccion"] = _direccion(Vector2(0, -signf(p.y)))
+			pos_pelota = p
+			z = lerpf(1.1, 2.1, minf(1.0, float(ent["fase_animacion"]) * 2.0))
+			var manos := [Vector2(33, 35), Vector2(40, 29), Vector2(32, 10), Vector2(32, 16)]
+			var cuadro_manos := mini(3, int(float(ent["fase_animacion"]) * 4.0))
+			anclaje_pelota = manos[cuadro_manos] - Vector2(32, 58)
+			if int(ent["direccion"]) in [5, 6, 7]:
+				anclaje_pelota.x *= -1.0
+			pelota_anclada = true
+		if str(ent["accion"]) == "pecho" and int(pa.get("poseedor_id", -1)) == int(j["id"]):
+			pos_pelota = p
+			z = lerpf(1.25, 0.0, clampf(float(ent["fase_animacion"]), 0.0, 1.0))
+			anclaje_pelota = Vector2(4, lerpf(-26.0, 0.0, clampf(float(ent["fase_animacion"]), 0.0, 1.0)))
+			if int(ent["direccion"]) in [5, 6, 7]:
+				anclaje_pelota.x *= -1.0
+			pelota_anclada = true
 		ents.append(ent)
 
-	ents.append({"tipo": "pelota", "color": Color.WHITE, "z": z, "pos": pos_pelota})
+	ents.append({"tipo": "pelota", "color": Color.WHITE, "z": z, "pos": pos_pelota,
+		"giro": int((pos_pelota.x + pos_pelota.y * 0.73 + z) * 3.0),
+		"anclada": pelota_anclada, "anclaje_px": anclaje_pelota})
 
 	# Las tarjetas siguen al infractor: se guardan por clave, no por
 	# posición, así el cartelito acompaña al que la vio mientras camina.
@@ -399,6 +489,8 @@ const TICKS_POR_ZANCADA := 2
 ## la pose un solo fotograma la deja como un parpadeo. Tirarse al piso
 ## dura más que pegarle a la pelota, y el arquero queda tendido.
 const DURACION_ACCION := {
+	"pecho": 3, "lateral_manos": 2,
+	"bloquea": 3, "cae": 5, "chilena": 4, "volea": 3,
 	MotorEspacial.ACCION_PATEA: 2,
 	MotorEspacial.ACCION_CABECEA: 2,
 	MotorEspacial.ACCION_BARRIDA: 3,
@@ -410,6 +502,9 @@ const DURACION_ACCION := {
 }
 
 const POSE_DE_ACCION := {
+	"pecho": "pecho", "lateral_manos": "lateral_manos",
+	"bloquea": SpritesPartido.BLOQUEA, "cae": SpritesPartido.CAE,
+	"chilena": SpritesPartido.CHILENA, "volea": SpritesPartido.VOLEA,
 	MotorEspacial.ACCION_PATEA: SpritesPartido.PATEA,
 	MotorEspacial.ACCION_CABECEA: SpritesPartido.CABECEA,
 	MotorEspacial.ACCION_BARRIDA: SpritesPartido.BARRIDA,
@@ -445,7 +540,12 @@ func _acciones_activas(idx: int) -> Dictionary:
 				var pose: String = POSE_DE_ACCION.get(accion, SpritesPartido.QUIETO)
 				if idx == i and POSE_INICIAL_DE_ACCION.has(accion):
 					pose = POSE_INICIAL_DE_ACCION[accion]
-				activas[a["clave"]] = {"pose": pose, "desde": i}
+				var edad := idx - i
+				if accion in ["cae", "barrida", "chilena", "bloquea"] and edad == int(DURACION_ACCION[accion]) - 1:
+					pose = SpritesPartido.RECUPERA
+				if accion == "festeja" and edad % 3 == 1:
+					pose = SpritesPartido.CABECEA
+				activas[a["clave"]] = {"pose": pose, "desde": i, "accion": accion}
 	return activas
 
 
@@ -475,9 +575,14 @@ static func _direccion(avance: Vector2) -> int:
 	return SpritesPartido.direccion_desde(ProyeccionPartido.direccion_pantalla(avance))
 
 
-static func _pose(avance: Vector2, idx: int) -> String:
+static func _pose(avance: Vector2, idx: int, recorrido: float = -1.0, id: int = 0) -> String:
 	if avance.length() / MotorEspacial.TICK_SEG < VELOCIDAD_CORRIENDO:
 		return SpritesPartido.QUIETO
+	# Las piernas siguen los metros recorridos: el que acelera aumenta la
+	# cadencia, y los veintidos ya no cambian de pie al mismo tiempo.
+	if recorrido >= 0.0:
+		var paso := int(floor(recorrido / 1.6 + float(posmod(id, 7)) / 7.0))
+		return SpritesPartido.CORRE_A if paso % 2 == 0 else SpritesPartido.CORRE_B
 	return SpritesPartido.CORRE_A if (idx / TICKS_POR_ZANCADA) % 2 == 0 else SpritesPartido.CORRE_B
 
 
