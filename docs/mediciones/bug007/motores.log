@@ -1,0 +1,8 @@
+Godot Engine v4.7.1.stable.official.a13da4feb - https://godotengine.org
+
+div | espacial | abstracto
+ 10 |     1.73 |      3.08
+  5 |     1.95 |      2.73
+  1 |     1.90 |      2.88
+ERROR: Failed to read the root certificate store.
+   at: get_system_ca_certificates (platform/windows/os_windows.cpp:2582)

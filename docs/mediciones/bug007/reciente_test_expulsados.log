@@ -1,0 +1,15 @@
+Godot Engine v4.7.1.stable.official.a13da4feb - https://godotengine.org
+
+OK: los 12 expulsados caminan hacia afuera (5.3 s de promedio).
+OK: 12 salieron pasando la linea y 0 se quedaron caminando porque termino el partido.
+OK: el juego estuvo detenido en las 12 salidas.
+OK: con 4 expulsados (7 en cancha, el minimo es 7) el partido sigue.
+OK: iba ganando 5-0 y termina perdiendo 0-3.
+OK: queda el evento y la linea de relato.
+OK: en el cambio salen 2 cruzando la linea y entran 2 desde afuera, sin pasar de 22 (baja a 20).
+OK: 12 partidos conservan el tiempo de juego, ademas de 550 ticks de entradas y salidas.
+OK: el expulsado no vuelve al segundo tiempo
+OK: el equipo sale con 10 al segundo tiempo
+FALLOS=0
+ERROR: Failed to read the root certificate store.
+   at: get_system_ca_certificates (platform/windows/os_windows.cpp:2582)

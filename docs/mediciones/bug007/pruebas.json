@@ -1,0 +1,1384 @@
+{
+  "corrida_inicial": {
+    "segundos": 510.4,
+    "pruebas": 113,
+    "fallos": 2,
+    "resultados": [
+      {
+        "prueba": "test_arbitro.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_animaciones_pixel.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_agentes_libres_prestamos.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_aprendizaje.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_alineacion.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_balance_economia.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_atlas_jugadores.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_barrera_tiro_libre.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_busqueda_mercado.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_carga_calendario.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_cesiones.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_clasificacion_copas.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_clima.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_club_del_jugador.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_cobertura_plantel.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_alargue_y_penales.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_copa_guardado.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_alcance_pase.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_balance_ingresos.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_cambio_no_tapa_el_gol.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_cuadro_copa.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_desgaste_cache.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_dorsales.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_dt.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_economia_divisiones.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_economia_mantenimiento.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_defensa_coordinada.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_entrenamiento.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_energia_mostrada.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_estadisticas_partido.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_estado_cancha.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_estadisticas_liga.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_expulsados.gd",
+        "codigo": 0,
+        "errores": [
+          "FALLA: 1.73 goles por partido; animar los cambios le esta comiendo tiempo al juego."
+        ],
+        "ok": false
+      },
+      {
+        "prueba": "test_familiaridad.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_aprendizaje_uso.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_fans.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_desmarques.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_estilos.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_foco_equipo.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_formaciones.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_copas_por_temporada.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_generador_nombres.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_generador_nombres_internacional.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_gradiente_division.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_habilidades.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_instalaciones.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_identidad_tactica.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_copa_division_por_tabla_actual.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_investigadores.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_laboratorio.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_lesiones_profundidad.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_libres_piramide.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_mentores.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_mercado_divisiones.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_mercado_jugador.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_mercado_profundo.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_motivacion.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_movimiento_sin_pelota.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_negociacion.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_negociacion_flujo.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_calendario.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_objetivos.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_fin_de_mitad.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_pausa_falta.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_pecho_lateral.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_ofertas.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_penal_espacial.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_phase1.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_personalidad_partido.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_phase3.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_phase5.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_gamestate_flujo.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_phase6.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_copa_jugable.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_phase7_copas.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_internacional_jugable.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_phase9.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_potencial_por_atributo.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_premios_copa.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_prestamos_mercado.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_posicion_del_arquero.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_phase7.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_presupuesto_contratos.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_presupuesto_temporada.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_publico.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_quiebra.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_puestos_y_rotacion.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_quimica.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_reanudacion.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_reemplazo_desde_cantera.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_renovaciones.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_reputacion_inicial.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_reputacion_y_fans.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_reproduccion_atlas.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_reservas.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_roles.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_noticias.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_salida_del_arquero.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_phase2.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": false
+      },
+      {
+        "prueba": "test_seleccion.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_sponsors.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_phase7_internacional.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_sustituciones.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_tarjetas_penales.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_rivalidad.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_tiro_lejano.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_vigencia_informe.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_traspasos.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_vitrina.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_saque_del_medio.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_roles_en_partido.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_libro_de_pases.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_gradiente_persiste.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      }
+    ]
+  },
+  "verificacion_final": {
+    "pruebas": 114,
+    "fallos": 0,
+    "resultados": [
+      {
+        "prueba": "test_arbitro.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_animaciones_pixel.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_agentes_libres_prestamos.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_aprendizaje.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_alineacion.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_balance_economia.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_atlas_jugadores.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_barrera_tiro_libre.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_busqueda_mercado.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_carga_calendario.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_cesiones.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_clasificacion_copas.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_clima.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_club_del_jugador.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_cobertura_plantel.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_alargue_y_penales.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_copa_guardado.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_alcance_pase.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_balance_ingresos.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_cambio_no_tapa_el_gol.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_cuadro_copa.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_desgaste_cache.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_dorsales.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_dt.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_economia_divisiones.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_economia_mantenimiento.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_defensa_coordinada.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_entrenamiento.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_energia_mostrada.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_estadisticas_partido.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_estado_cancha.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_estadisticas_liga.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_expulsados.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true,
+        "revision": "Prueba de reposicion corregida: mide ticks y no goles. Reverificada en el proyecto final; ver reposicion_corregida.log."
+      },
+      {
+        "prueba": "test_familiaridad.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_aprendizaje_uso.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_fans.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_desmarques.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_estilos.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_foco_equipo.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_formaciones.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_copas_por_temporada.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_generador_nombres.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_generador_nombres_internacional.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_gradiente_division.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_habilidades.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_instalaciones.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_identidad_tactica.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_copa_division_por_tabla_actual.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_investigadores.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_laboratorio.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_lesiones_profundidad.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_libres_piramide.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_mentores.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_mercado_divisiones.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_mercado_jugador.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_mercado_profundo.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_motivacion.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_movimiento_sin_pelota.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_negociacion.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_negociacion_flujo.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_calendario.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_objetivos.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_fin_de_mitad.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_pausa_falta.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_pecho_lateral.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_ofertas.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_penal_espacial.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_phase1.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_personalidad_partido.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_phase3.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_phase5.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_gamestate_flujo.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_phase6.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_copa_jugable.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_phase7_copas.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_internacional_jugable.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_phase9.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_potencial_por_atributo.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_premios_copa.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_prestamos_mercado.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_posicion_del_arquero.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_phase7.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_presupuesto_contratos.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_presupuesto_temporada.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_publico.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_quiebra.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_puestos_y_rotacion.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_quimica.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_reanudacion.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_reemplazo_desde_cantera.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_renovaciones.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_reputacion_inicial.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_reputacion_y_fans.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_reproduccion_atlas.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_reservas.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_roles.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_noticias.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_salida_del_arquero.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_phase2.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true,
+        "revision": "Caso historico: imprime tablas y Resultado final, no OK. Termino con codigo cero y sin errores. El clasificador inicial exigia OK a todos."
+      },
+      {
+        "prueba": "test_seleccion.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_sponsors.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_phase7_internacional.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_sustituciones.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_tarjetas_penales.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_rivalidad.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_tiro_lejano.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_vigencia_informe.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_traspasos.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_vitrina.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_saque_del_medio.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_roles_en_partido.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_libro_de_pases.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_gradiente_persiste.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true
+      },
+      {
+        "prueba": "test_guardado.gd",
+        "codigo": 0,
+        "errores": [],
+        "ok": true,
+        "revision": "Archivo temporal permitido fuera del sandbox. Motor de remates no participa en esta prueba. Ver guardado.log."
+      }
+    ]
+  },
+  "limite_proceso_segundos": 900,
+  "procesos_en_paralelo": 8
+}

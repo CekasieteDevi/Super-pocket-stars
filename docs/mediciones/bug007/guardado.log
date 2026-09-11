@@ -1,0 +1,19 @@
+Godot Engine v4.7.1.stable.official.a13da4feb - https://godotengine.org
+
+=== Team.guardar()/cargar(): ida y vuelta por JSON preserva el estado ===
+OK: reputacion, quebrado, instalaciones, cantera, suspendidos (con clave int) y sueldos/clausulas sobreviven la vuelta.
+
+=== jugador['id'] sigue siendo un INT usable como clave de Dictionary tras el roundtrip ===
+OK: jugador['id'] es int y encuentra su entrada en sueldos/contratos/animo tras cargar.
+
+=== Piramide.guardar()/cargar(): las 10 divisiones completas sobreviven ===
+OK: 10 divisiones x 20 equipos, y el equipo del jugador se relocaliza por nombre con su estado intacto.
+
+=== Un prestamo activo guarda el nombre del club y vuelve a ser una referencia real tras cargar ===
+OK: prestados_afuera['club'] es una referencia Team real tras cargar, y apunta al Team correcto de la piramide.
+
+=== Guardar el rng.state permite continuar la MISMA secuencia tras cargar ===
+OK: la secuencia despues de 'cargar' es identica a si nunca se hubiera guardado.
+
+=== Guardar/borrar un archivo real en user:// ===
+OK: el archivo se crea y despues se borra correctamente.

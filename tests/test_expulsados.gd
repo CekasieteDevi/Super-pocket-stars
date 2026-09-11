@@ -294,25 +294,38 @@ func _test_los_cambios_se_ven() -> int:
 	return fallas
 
 
-## Animar los cambios detiene el juego, y ese tiempo se REPONE: si no, se
-## come el 10% del partido y los goles bajan de 2,36 a 1,84.
+## El tiempo de entrada y salida se repone. Se mide en fotogramas:
+## los goles dependen de la punteria y no prueban la duracion del partido.
 func _test_el_tiempo_detenido_se_repone() -> int:
-	var goles := 0
-	var muestras := 15
-	for i in range(muestras):
+	var casos := 0
+	var transitos := 0
+	var minimo := 2 * MotorEspacial.TICKS_POR_MITAD
+	for i in range(PARTIDOS):
 		var rng := RandomNumberGenerator.new()
 		rng.seed = SEED + i
 		var casa := Team.generar("Casa", rng, 0)
 		var visita := Team.generar("Visita", rng, 400)
-		var r := MotorEspacial.simular(casa, visita, rng, false)
-		goles += int(r["goles_local"]) + int(r["goles_visitante"])
-	var media: float = float(goles) / muestras
-	# La referencia son los 2,3-2,4 que daba antes de animar los cambios.
-	if media >= 1.9:
-		print("OK: %.2f goles por partido, el tiempo de los cambios se repone." % media)
-		return 0
-	print("FALLA: %.2f goles por partido; animar los cambios le esta comiendo tiempo al juego." % media)
-	return 1
+		var resultado := MotorEspacial.simular(casa, visita, rng, true)
+		if bool(resultado.get("cancelado", false)):
+			continue
+		var sin_transito := 0
+		for fotograma in resultado["fotogramas"]:
+			if fotograma["foco"] == null:
+				sin_transito += 1
+			else:
+				transitos += 1
+		casos += 1
+		# El foco se captura despues de mover. Se permite un fotograma de
+		# borde por mitad si la salida queda cortada al terminar el periodo.
+		if sin_transito < minimo - 2:
+			print("FALLA: semilla %d conserva %d ticks sin transito; se esperan al menos %d." % [
+				SEED + i, sin_transito, minimo - 2])
+			return 1
+	if casos == 0 or transitos == 0:
+		print("FALLA: la prueba no observo partidos completos con entradas o salidas.")
+		return 1
+	print("OK: %d partidos conservan el tiempo de juego, ademas de %d ticks de entradas y salidas." % [casos, transitos])
+	return 0
 
 
 ## Una roja sobre el final de la mitad corta el periodo con el expulsado

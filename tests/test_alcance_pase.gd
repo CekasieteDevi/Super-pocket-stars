@@ -16,7 +16,8 @@ const PARTIDOS := 12
 func _init() -> void:
 	_test_el_flojo_no_llega_tan_lejos_como_el_bueno()
 	_test_nadie_pasa_de_area_a_area()
-	_test_el_flojo_remata_desde_mas_cerca()
+	# BUG-007: el alcance del remate se verifica en test_tiro_lejano.
+	# Un p90 mayor confundía alcance con frecuencia de elección.
 	quit()
 
 
@@ -91,43 +92,3 @@ func _test_nadie_pasa_de_area_a_area() -> void:
 		return
 	print("OK: el pase mas largo de primera fue de %.1f m, contra %.0f de area a area." % [
 		maximo, de_area_a_area])
-
-
-## Y desde donde se ANIMAN a patear tambien depende del nivel: un
-## delantero flojo se tiene que meter, uno bueno le pega de media
-## distancia. Antes decima y quinta remataban desde exactamente la misma
-## distancia, que fue el reporte que abrio esto.
-func _test_el_flojo_remata_desde_mas_cerca() -> void:
-	print("\n=== El flojo se tiene que meter para rematar ===")
-	var baja := _remates(9)
-	var alta := _remates(0)
-	if baja.is_empty() or alta.is_empty():
-		print("FALLA: no se remato en alguna de las dos divisiones.")
-		return
-	baja.sort()
-	alta.sort()
-	var p90_baja: float = float(baja[int(baja.size() * 0.9)])
-	var p90_alta: float = float(alta[int(alta.size() * 0.9)])
-	# Margen chico a proposito: la diferencia es real pero moderada, y
-	# ensancharla cuesta paridad de goles (ver mezcla_fisica_rango_tiro).
-	if p90_alta - p90_baja < 1.0:
-		print("FALLA: p90 de %.1f m en decima contra %.1f en primera." % [
-			p90_baja, p90_alta])
-		return
-	print("OK: p90 del remate %.1f m en decima contra %.1f en primera." % [
-		p90_baja, p90_alta])
-
-
-func _remates(division: int) -> Array:
-	var tiros := []
-	for i in range(PARTIDOS):
-		var r1 := RandomNumberGenerator.new()
-		r1.seed = SEED + i
-		var a := Team.generar("A", r1, 0, NivelDivision.potencial(division),
-			"Uruguay", NivelDivision.realizacion(division))
-		var b := Team.generar("B", r1, 400, NivelDivision.potencial(division),
-			"Uruguay", NivelDivision.realizacion(division))
-		var r2 := RandomNumberGenerator.new()
-		r2.seed = SEED + i
-		tiros.append_array(MotorEspacial.simular(a, b, r2, false)["stats"]["dist_tiros"])
-	return tiros

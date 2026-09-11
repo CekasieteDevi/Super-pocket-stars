@@ -56,15 +56,17 @@
     "seguridad": 0.3,
     "distancia": 0.2
   },
+  "_tiro": "Geometria comun: 8.5 conserva ocasiones cercanas al quitar la ventaja de alcance en la utilidad. Con 7.0 y castigo 0.1 quedaban 1.76 goles por partido en la muestra aislada; con 8.5 quedan 1.81. Ver bug007_resultados.md.",
   "tiro": {
     "base": 0.0,
-    "geometria": 7.0
+    "geometria": 8.5
   },
-  "_tiro_resolucion": "Calibrado contra un partido real: ~35% de los remates van al arco y de esos entra alrededor de 1 de cada 3. calidad = tiro*peso_atributo + geometria*peso_geometria.",
+  "_tiro_resolucion": "Probabilidades del modelo, no xG validado. Los remates de pie usan geometria comun y una perdida de precision que crece con la dificultad y con la falta de tecnica.",
   "tiro_resolucion": {
-    "_calibracion": "Las tres palancas del remate hacen cosas DISTINTAS y se midieron por separado (tests/_diag_remates.gd, tests/_diag_goles_motores.gd). fisica.rango_tiro y su mezcla mueven DESDE DONDE se remata y casi no mueven los goles. fuerza_base mueve los goles castigando mas al que remata de lejos, o sea a las divisiones de arriba. porteria_base sube los goles parejo pero infla los remates al arco (a 0.64 se van al 80%, contra 33% del futbol real). porteria_calidad NO favorece al que patea de cerca como parecia: favorece al que tiene mejor remate, que tambien es primera.",
+    "_calibracion": "BUG-007: castigo_distancia=0.1 y tiro.geometria=8.5. Con 0.2 y geometria=7, la comparacion aislada de 300 partidos bajaba los goles de 2.12 a 1.66; con estos valores quedan en 1.81 y los intentos de 25+ m con tiro 70-99 bajan de 367 a 86. Ver docs/mediciones/bug007_resultados.md. No se modifican porteria_base ni el duelo contra el arquero.",
     "peso_atributo": 0.6,
     "peso_geometria": 0.4,
+    "castigo_distancia": 0.1,
     "porteria_base": 0.49,
     "porteria_calidad": 0.5,
     "palo": 0.05,
@@ -193,7 +195,7 @@
     "ticks_control_malo": 9,
     "ticks_control_bueno": 2,
     "geometria_minima_tiro": 0.03,
-    "_rango_tiro": "Hasta donde le da para patear segun el atributo tiro. Define el ALCANCE: un jugador flojo solo ve chance cerca del area y prefiere seguir metiendose; uno bueno valora el remate de media distancia. Es la UNICA palanca que cambia desde donde se remata: bajar cuanto vale un remate (tiro_resolucion) baja los goles y no mueve la distancia ni un punto, porque la decision de patear se toma con factor_geometria y no con el resultado. Medido con tests/_diag_remates.gd.",
+    "_rango_tiro": "Alcance del intento segun tiro: solo habilita la opcion. Su utilidad usa rango_tiro_medio comun a todos. Conservar mas alcance permite el recurso lejano, sin valorarlo como un remate cercano. BUG-007, tests/test_tiro_lejano.gd.",
     "rango_tiro_malo": 16.0,
     "rango_tiro_bueno": 36.0,
     "rango_tiro_medio": 24.0,
@@ -215,7 +217,7 @@
     "vel_salida_min": 11.0,
     "tercio_propio_arquero": 30.0,
     "invasores_para_reventarla": 3.0,
-    "_mezcla_fisica_rango_tiro": "Cuanto del rango de tiro es fisico y cuanto relativo al nivel del partido. 0 = decima y quinta rematan desde la misma distancia; 1 = primera remata desde tan lejos que suma 3 remates por partido y se va a 3,25 goles contra 2,50 del motor abstracto. Se barre con tests/_diag_goles_motores.gd y tests/_diag_remates.gd.",
+    "_mezcla_fisica_rango_tiro": "Mezcla del alcance: 0 relativo al nivel del partido, 1 atributo absoluto. Afecta la habilitacion fisica del intento; no aumenta su utilidad.",
     "mezcla_fisica_rango_tiro": 0.8,
     "_apoyo_del_nueve": "Cuanto del apoyo le toca al 9. En cero: no baja, se queda de referencia. Medido, que baje aunque sea un poco cuesta 0,4 goles por partido en las tres divisiones — el equipo se queda sin nadie en el area. Los que bajan a recibir son el enganche y los extremos.",
     "_presion_despeje": "Presion a partir de la cual, en zona propia, aparece el despeje Y se DESCARTAN las opciones de seguir jugando la pelota: quedan solo el despeje y el pelotazo. Es una regla y no un peso — subirle el peso al despeje no alcanzaba porque el pase largo se evalua una vez por cada companero, asi que competian diez opciones contra una sola y el maximo de diez ganaba casi siempre. Medido: despejes en el area propia 4% -> 20%, y la pelota sale del area el 58% de las veces."

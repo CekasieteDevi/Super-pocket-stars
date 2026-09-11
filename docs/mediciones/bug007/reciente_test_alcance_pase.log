@@ -1,0 +1,9 @@
+Godot Engine v4.7.1.stable.official.a13da4feb - https://godotengine.org
+
+=== Un plantel flojo no pone la pelota tan lejos ===
+OK: pelotazo medio 26.5 m en decima contra 37.0 en primera (maximos 41 y 54).
+
+=== Nadie la pone de un area a la otra ===
+OK: el pase mas largo de primera fue de 54.3 m, contra 72 de area a area.
+ERROR: Failed to read the root certificate store.
+   at: get_system_ca_certificates (platform/windows/os_windows.cpp:2582)

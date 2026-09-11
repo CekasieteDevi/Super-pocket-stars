@@ -1,0 +1,25 @@
+Godot Engine v4.7.1.stable.official.a13da4feb - https://godotengine.org
+
+FALLA: el alcance no aumenta la utilidad desde el mismo punto; local=true
+OK: el buen tiro conserva el recurso lejano; poco alcance no lo habilita
+OK: acercarse al arco vale más que rematar de lejos
+PUNTERIA local=true bajo={ "puerta": 0.667, "goles": 0.048 }/{ "puerta": 0.522, "goles": 0.035 } alto={ "puerta": 0.855, "goles": 0.831 }/{ "puerta": 0.805, "goles": 0.773 } (cerca/lejos)
+OK: alejarse reduce precisión con ambos niveles de tiro
+FALLA: la distancia tiene un coste material incluso para el buen rematador
+OK: poco tiro pierde más precisión con los metros
+OK: la técnica distingue la precisión desde lejos en mil semillas
+OK: el buen rematador conserva goles lejanos, con menor conversión que cerca
+FALLA: el alcance no aumenta la utilidad desde el mismo punto; local=false
+OK: el buen tiro conserva el recurso lejano; poco alcance no lo habilita
+OK: acercarse al arco vale más que rematar de lejos
+PUNTERIA local=false bajo={ "puerta": 0.667, "goles": 0.031 }/{ "puerta": 0.522, "goles": 0.021 } alto={ "puerta": 0.855, "goles": 0.818 }/{ "puerta": 0.805, "goles": 0.751 } (cerca/lejos)
+OK: alejarse reduce precisión con ambos niveles de tiro
+FALLA: la distancia tiene un coste material incluso para el buen rematador
+OK: poco tiro pierde más precisión con los metros
+OK: la técnica distingue la precisión desde lejos en mil semillas
+OK: el buen rematador conserva goles lejanos, con menor conversión que cerca
+OK: cada intento y gol no penal tiene una sola fila de diagnóstico
+OK: diagnóstico y fotogramas conservan eventos, estadísticas, XP y RNG
+FALLOS=4
+ERROR: Failed to read the root certificate store.
+   at: get_system_ca_certificates (platform/windows/os_windows.cpp:2582)

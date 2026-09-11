@@ -1,0 +1,18 @@
+Godot Engine v4.7.1.stable.official.a13da4feb - https://godotengine.org
+
+=== Cobrar un penal PARA el juego, no lo resuelve ===
+OK: queda armado y el juego detenido 20 ticks, sin resolver nada todavia.
+
+=== En el area solo quedan el pateador y el arquero ===
+OK: area despejada y la pelota esperando a 11 m.
+
+=== Al terminar la pausa se patea ===
+OK: los 30 penales cobrados se patearon al terminar la pausa.
+
+=== El pateador queda detras de la pelota ===
+OK: en los dos arcos el pateador toma carrera desde atras.
+
+=== La pelota del penal viaja hasta el arco ===
+OK: los 20 remates viajan y el arquero se tira en 20.
+ERROR: Failed to read the root certificate store.
+   at: get_system_ca_certificates (platform/windows/os_windows.cpp:2582)

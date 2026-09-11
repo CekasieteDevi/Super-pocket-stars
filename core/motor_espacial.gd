@@ -543,19 +543,36 @@ static func factor_angulo(pos: Vector2, equipo_local: bool) -> float:
 	return clampf(1.0 - (dy / dx) / 1.5, 0.0, 1.0)
 
 
+## Sin jugador, describe una geometria comun para comparar ocasiones.
+## Con jugador, mantiene el alcance fisico y las rutas anteriores de resolucion.
+## BUG-007: la decision usa ese alcance solo para habilitar el intento.
 static func factor_geometria(pos: Vector2, equipo_local: bool, jugador: Dictionary = {},
 		es_decision: bool = false) -> float:
 	var f: Dictionary = pesos()["fisica"]
 	var arco := arco_rival(equipo_local)
 	var dist := pos.distance_to(arco)
-	var dx: float = maxf(absf(arco.x - pos.x), 1.0)
-	var dy: float = absf(pos.y)
 	var rango: float = float(f["rango_tiro_medio"])
 	if not jugador.is_empty():
 		rango = _por_atributo(jugador, "tiro", f["rango_tiro_malo"],
 			f["rango_tiro_bueno"], float(f["mezcla_fisica_rango_tiro"]) if es_decision else 0.0)
 	var f_dist: float = clampf(1.0 - (dist - 5.0) / rango, 0.0, 1.0)
 	return f_dist * factor_angulo(pos, equipo_local)
+
+
+## La misma ocasión pierde más precisión con poca técnica. El alcance del
+## jugador habilita el intento, pero no agranda el arco ni acorta la distancia.
+static func probabilidad_porteria(geometria: float, atributo_normalizado: float) -> float:
+	var r: Dictionary = pesos()["tiro_resolucion"]
+	var tecnica := clampf(atributo_normalizado / 100.0, 0.0, 1.0)
+	var calidad_cercana := tecnica * float(r["peso_atributo"]) + float(r["peso_geometria"])
+	var dificultad := 1.0 - clampf(geometria, 0.0, 1.0)
+	# La curva concentra el castigo adicional en ocasiones difíciles. Una
+	# caída lineal también quitaba demasiados goles dentro del área.
+	var perdida := dificultad * (
+		float(r["peso_geometria"]) * float(r["porteria_calidad"])
+		+ dificultad * float(r.get("castigo_distancia", 0.1)) * (2.0 - tecnica))
+	return clampf(float(r["porteria_base"]) + calidad_cercana * float(r["porteria_calidad"])
+		- perdida, 0.05, 0.85)
 
 
 # ---------------------------------------------------------------------------
@@ -951,10 +968,11 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 		})
 
 	# --- Tirar --------------------------------------------------------
-	# ABSOLUTO: la DECISION de patear de lejos es fisica. La resolucion
-	# del remate, mas abajo en _resolver_tiro, sigue normalizada.
-	var geo := factor_geometria(pos, es_local, jugador, true)
-	if geo > float(f["geometria_minima_tiro"]):
+	# El alcance solo habilita. La utilidad compara la misma geometría para
+	# todos: tener más pierna no convierte un tiro lejano en la mejor jugada.
+	var alcance := factor_geometria(pos, es_local, jugador, true)
+	var geo := factor_geometria(pos, es_local)
+	if alcance > float(f["geometria_minima_tiro"]):
 		var wt: Dictionary = w["tiro"]
 		var u_tiro: float = wt["base"] + wt["geometria"] * geo
 		if Personalidad.tiene(jugador, "Egoista"):
@@ -1959,7 +1977,13 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 			forzado = str(estado["forzar_remate"])
 	estado["tiros"][clave] += 1
 	estado["dist_tiros"].append(poseedor["pos"].distance_to(arco_rival(es_local)))
-
+	# El diagnóstico conserva una fila por intento, sin consumir azar ni fotogramas.
+	var registro := {}
+	if estado.has("registro_remates"):
+		registro = {"distancia": poseedor["pos"].distance_to(arco_rival(es_local)),
+			"atributo": attr_remate, "tiro": float(jugador["atributos"][attr_remate]),
+			"clave": poseedor["clave"], "local": es_local, "resultado": "bloqueado"}
+		estado["registro_remates"].append(registro)
 	# ¿Se cruza un defensor en el camino? Un remate bloqueado no llega
 	# nunca al arquero, y muchas veces sale desviado al córner: es una de
 	# las fuentes reales de córners.
@@ -1999,10 +2023,17 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	var remate_normalizado: float = MatchEngine.relativo_al_nivel(remate_efectivo, _nivel_partido)
 	var calidad: float = remate_normalizado / 100.0 * float(r["peso_atributo"]) + geo * float(r["peso_geometria"])
 	var chance_porteria: float = clampf(float(r["porteria_base"]) + calidad * float(r["porteria_calidad"]), 0.05, 0.85)
+	# Los cabezazos y libres conservan sus rutas. En juego de pie la geometría
+	# de precisión es común; la técnica cambia cuánto cuesta esa dificultad.
+	if attr_remate == "tiro":
+		chance_porteria = probabilidad_porteria(
+			factor_geometria(poseedor["pos"], es_local), remate_normalizado)
 	var chance_palo: float = float(r["palo"]) * calidad
 	var roll := rng.randf()
 
 	if forzado == "" and roll > chance_porteria:
+		if not registro.is_empty():
+			registro["resultado"] = "afuera" if roll > chance_porteria + chance_palo else "palo"
 		_lanzar_remate(estado, poseedor, {
 			"tipo": "afuera" if roll > chance_porteria + chance_palo else "palo",
 			"es_local": es_local, "clave": poseedor["clave"], "rol": poseedor["rol"],
@@ -2035,6 +2066,8 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 		estado.erase("forzar_remate")
 		estado.erase("forzar_remate_attr")
 	_xp(estado, int(arquero["id"]), not es_local, "reflejos")
+	if not registro.is_empty():
+		registro["resultado"] = "gol" if gol else "atajada"
 	_lanzar_remate(estado, poseedor, {
 		"tipo": "gol" if gol else "atajada",
 		"es_local": es_local, "clave": poseedor["clave"], "rol": poseedor["rol"],
@@ -4904,7 +4937,8 @@ static func xp_normalizada(estado: Dictionary) -> Dictionary:
 ## del resultado (mismas decisiones, mismo RNG): es lo que se usa cuando
 ## el partido no se va a animar.
 static func simular(home: Team, away: Team, rng: RandomNumberGenerator,
-		con_fotogramas: bool = false, definicion_directa: bool = false) -> Dictionary:
+		con_fotogramas: bool = false, definicion_directa: bool = false,
+		con_diagnostico: bool = false) -> Dictionary:
 	home.reset_partido()
 	away.reset_partido()
 	home.local = true
@@ -4918,6 +4952,8 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator,
 
 	var estado := crear_estado(home, away, rng)
 	estado["con_fotogramas"] = con_fotogramas
+	if con_diagnostico:
+		estado["registro_remates"] = []
 
 	# Mismas ventanas de cambio que MatchEngine (§8.7): entretiempo, 60' y
 	# 75'. Se reusa _procesar_cambios sin tocarlo.
@@ -4980,6 +5016,7 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator,
 			"posesion": estado["posesion_ticks"],
 			"tiros": estado["tiros"],
 			"dist_tiros": estado["dist_tiros"],
+			"registro_remates": estado.get("registro_remates", []),
 			"robos": estado["robos"],
 			"gambetas": estado["gambetas"],
 			"paredes": estado["paredes"],
