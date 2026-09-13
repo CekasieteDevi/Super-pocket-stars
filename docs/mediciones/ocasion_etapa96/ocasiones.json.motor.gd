@@ -2147,9 +2147,8 @@ const SESGO_ROL_PERFIL := {
 	"DC": {"asociacion": -0.10, "ruptura": 0.10, "regate": 0.0, "descarga": 0.20, "llegada": -0.05},
 }
 
-## El arquero no tiene perfil: con la pelota decide por su propia rama
-## (ver evaluar_opciones) y sin ella por su intencion (etapa 6, ver
-## _planificar_arqueros).
+## El arquero no tiene perfil: sus decisiones ya van por su propia rama
+## (ver evaluar_opciones) y la etapa 6 es la duena de lo que hace.
 const PERFIL_NEUTRO := {"asociacion": 0.5, "ruptura": 0.5, "regate": 0.5, "descarga": 0.5, "llegada": 0.5}
 
 

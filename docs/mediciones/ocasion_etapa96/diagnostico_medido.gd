@@ -127,3 +127,4 @@ func _medir(division: int) -> void:
 		100.0 * al_arco / n, 100.0 * goles_remates / n,
 		float(orden[int(n * 0.5)]) if not orden.is_empty() else 0.0,
 		float(orden[int(n * 0.9)]) if not orden.is_empty() else 0.0])
+

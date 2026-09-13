@@ -1352,6 +1352,192 @@ paralelo`.
   cambio ajeno sin commitear que ya anotaban las etapas 0, 1, 2, 4 y 7.
   No lo toque.
 
+## Etapa 6: resultados (2026-09-13)
+
+Estado: terminada. Archivos tocados:
+
+- `core/motor_espacial.gd`: seccion nueva "Arqueros con decisiones (etapa
+  6)"; la llamada a `_planificar_arqueros` en el paso 3 de `_tick`; el
+  arquero en `_objetivo_sin_pelota`; el alcance real en `_resolver_centro`;
+  la cobertura en `describir_ocasion` y en el duelo de `_resolver_tiro`;
+  el rechazo en `_aplicar_remate`; la lectura con manos en
+  `_gana_intercepcion`; `_soltar_pelota` sale de `_resolver_rebote`; el
+  contador `stats.arqueros` en `simular`.
+- `data/utility_pesos.json`: seccion nueva `arquero`. Sale `radio_achique`.
+- `tests/test_salida_del_arquero.gd` y `tests/test_posicion_del_arquero.gd`:
+  extendidos.
+- `tests/_diag_arquero_decisiones.gd` (nuevo): la medicion de la etapa.
+- `docs/mediciones/realismo_etapa6.csv` y `realismo_etapa6_antes.csv`.
+
+### Que hace ahora el motor
+
+El arquero sin la pelota tiene una INTENCION por tick. Se reparte desde
+la misma foto que los desmarques y la defensa, en orden estable por clave,
+y no consume RNG.
+
+1. `interceptar` (puntos 1 y 2). Mira la trayectoria visible de una pelota
+   rival o suelta que cae en su area. Compara su tiempo al punto, con
+   rampa de aceleracion y reaccion por `achique`, contra la pelota, el
+   atacante mas rapido y su companero mas rapido. Sale solo si le gana al
+   atacante por `ventaja_base` mas `ventaja_por_metro` por metro fuera de
+   la linea. Corre al punto con la fisica de todos. La pelota la toma el
+   contacto de siempre; adentro del area el corte usa `achique` y
+   `agarre`, no `quite`.
+2. `achicar` (punto 4). Rival con pelota a menos de 24 m, sin companero
+   en su camino al arco. Sale sobre la bisectriz entre pelota y postes,
+   de 2,5 a 6,5 m segun `achique`, nunca a menos de 4 m de la pelota.
+3. `volver`. Terminada la salida, vuelve a su ancla corriendo.
+4. `sostener`. El ancla de antes, sin cambios.
+
+**Centros** (punto 3). Antes descolgaba si estaba a 7 m al caer. Ahora
+tiene que estar a su alcance (`ALCANCE_ESTIRADA` + 1 m) y adentro del
+area. Sale al centro mientras vuela si llega plantado con margen.
+
+**Posicion efectiva** (punto 4). `cobertura_arquero` mide que parte del
+angulo entre postes tapa el arquero, visto desde la pelota. Entra al
+duelo como factor `1 + 0,3 * (cobertura - 0,648)`, con tope ±30%. El
+0,648 es la cobertura media de los duelos ANTES de la etapa, medida con
+el planificador apagado: el promedio de la liga no se mueve por
+construccion. Tambien queda en la instantanea de la ocasion (etapa 9).
+
+**Rechazos** (punto 5). La atajada no retenida iba siempre al corner.
+Ahora elige entre los dos corners —si la linea le queda a tiro— y cuatro
+direcciones laterales, por menor amenaza: atacantes cerca y remate de
+frente desde ahi. La amenaza del costado desempata el corner. Despues la
+ejecucion se desvia hasta 1,6 rad, menos con buena `estirada` y menos si
+el remate vino de lejos. Para atras sale por el fondo; nunca adentro del
+arco propio. El penal manoteado sigue yendo al corner.
+
+**Distribucion** (punto 6). No hizo falta codigo nuevo: la salida ya
+pasaba por `evaluar_opciones`, `arquero_apurado` y `_ponderar_plan`. Se
+agrego la prueba del estilo.
+
+### Calibracion
+
+- `rechazo_amenaza_corner`: barrido con 84 partidos. Con el corner como
+  opcion fija 0,3, 0,6 y 1,0 daban 0 corners por rechazo: el costado
+  siempre ganaba. Con el modelo final, 0,40 manda todo al corner y 0,60
+  todo al costado. Quedo 0,45 con `rechazo_amenaza_suelta` 0,5: apunta al
+  corner y la dispersion decide cuanto queda en juego.
+- `rechazo_dispersion`: 1,2 y 1,6 dan corners casi iguales (1,065 y 1,054
+  por partido). Quedo 1,6 porque separa mas al buen arquero del malo.
+- `valor_posicion` como centralidad del rechazo daba ~0,90 a todos los
+  puntos candidatos: 0 rechazos en juego en 168 partidos. Se cambio por
+  `factor_angulo`.
+- `cobertura_peso` 0,3: comparado contra 0 con una version intermedia
+  del rechazo (168 partidos), goles 2,75 → 2,69 y conversion 52,0% →
+  51,0%.
+
+### Medicion, contra la copia "antes"
+
+La copia del proyecto se hizo antes de tocar nada, con los cambios ajenos
+de la etapa 9 incluidos. Misma configuracion que las etapas anteriores:
+semilla 77100, 12 partidos por celda, 14 celdas, 168 partidos.
+
+`tests/_diag_realismo.gd`, medias de los 168 partidos:
+
+| metrica | antes | etapa 6 | cambio |
+| --- | --- | --- | --- |
+| goles | 2.685 | 2.613 | -2.7% |
+| tiros | 7.63 | 7.86 | +3.0% |
+| posesion_pct | 53.5 | 54.2 | +0.7 pts |
+| controlada_pct | 57.2 | 57.0 | -0.2 pts |
+| pelota_parada_pct | 22.5 | 22.0 | -0.5 pts |
+| pases | 39.21 | 40.05 | +2.1% |
+| perdidas | 19.79 | 19.02 | -3.9% |
+| duracion_posesion_seg | 3.50 | 3.57 | +2.1% |
+| recuperaciones_altas | 7.47 | 7.45 | -0.2% |
+| separacion_lineas_m | 39.3 | 39.4 | +0.1 m |
+| faltas | 2.80 | 2.77 | -1.3% |
+| resistencia_final_pct | 88.7 | 88.6 | -0.1 pts |
+
+`tests/_diag_arquero_decisiones.gd`, por partido:
+
+| metrica | antes | etapa 6 |
+| --- | --- | --- |
+| tiros al arco | 4.70 | 4.92 (+4.7%) |
+| atajadas | 2.14 | 2.46 (+15.0%) |
+| goles de juego | 2.56 | 2.46 (-4.0%) |
+| conversion al arco | 54.5% | 50.0% |
+| corners | 1.25 | 1.05 (-15.7%) |
+| rechazos afuera / en juego | todos afuera | 0.55 / 0.30 |
+| remates tras rechazo | - | 0.024 |
+| goles tras rechazo | - | 0.006 |
+| achiques iniciados | - | 5.9 |
+| salidas a cortar | - | 0.13 |
+| cobertura media en el duelo | 0.648 | 0.704 |
+| distancia a su linea | 2.79 m | 2.85 m |
+| centros descolgados | 0 | 0 |
+
+Goles y tiros no cruzan el 15%. Lo que se mueve cuenta una historia: el
+arquero achica en el uno contra uno, tapa mas arco (0,648 → 0,704) y ataja
+mas (+15%). Los corners bajan porque un tercio de los rechazos queda en
+juego. Invariante 2 se mantiene: los 168 partidos dan el mismo resultado
+con y sin fotogramas.
+
+### Costo
+
+Tres pares alternados, 6 partidos por celda, en la misma sesion:
+
+| par | antes | etapa 6 |
+| --- | --- | --- |
+| 1 | 343,1 ms | 358,8 ms |
+| 2 | 341,4 ms | 355,7 ms |
+| 3 | 345,6 ms | 356,5 ms |
+
+**+4,0% sin fotogramas y +3,4% con fotogramas** (377,1 contra 389,8 ms).
+El gasto es el ancla del arquero y la busqueda del punto de corte, que
+solo recorre a los 21 cuando algun punto de la trayectoria cae en el area.
+
+### Verificaciones
+
+`tests/test_salida_del_arquero.gd`, `FALLOS=0`, los casos nuevos en los
+dos sentidos de la cancha:
+
+- Pase al hueco con el atacante a 24 m: sale a `interceptar`, llega
+  corriendo (paso maximo 0,94 m por tick) y se queda con la pelota.
+- Mismo pase con el atacante a 3 m: nunca `interceptar` y no la toma.
+- 200 remates desde 14 m: 24 y 44 goles con el arquero en su lugar
+  (tapa 0,75); 138 con el arquero salido a cortar al otro lado (tapa 0).
+- Desde 13,2 m vuelve a 0,8 m en 6 s, con pasos de 1,47 m como maximo;
+  13 ticks `volver` y despues `sostener`.
+- La misma foto da la misma intencion y el RNG no se mueve.
+- Sin presion, sacarla larga le rinde 0,40 a Juego directo y -0,62 a
+  Tiki taka.
+
+`tests/test_posicion_del_arquero.gd`, `FALLOS=0`:
+
+- Las dos pruebas anteriores siguen: 2,72 y 2,84 m de su linea.
+- Rival solo a 18 m: achica a 5,74 m con `achique` 90 y a 2,74 m con 10,
+  igual angulo a cada palo; tapa 0,87 contra 0,63 en la linea; el primer
+  tick lo acerca con un paso fisico.
+- Con un central en el camino del rival se queda en `sostener`.
+- 120 centros: 0 descuelgues parado a 6 m (adentro del radio viejo) y 57
+  debajo de la pelota. Sale al centro que cae a 6 m, no al que cae a 14 m.
+- 300 rechazos con dos atacantes de un lado: ninguno al lado ocupado ni
+  adentro del arco; estirada 95 deja 31 y 27 en juego, estirada 10 deja
+  116 y 100.
+
+Regresion completa: `ARCHIVOS_CON_FALLAS=0 de 121 en 394s con 8 en
+paralelo`. No se hizo commit: el arbol tiene sin commitear los cambios de
+la etapa 9 (puntos 9.3 a 9.5).
+
+### Pendiente de esta etapa
+
+- **Revision visual: no hecha.** La salida al hueco, el achique y el
+  rechazo en juego son justamente lo que hay que mirar animado.
+- **Centros descolgados siguen en 0 en partido.** El centro cae en
+  promedio a 16 m del arquero (medido antes: 5 de 123 a menos de 7 m). La
+  regla ya es fisica; si se quieren descuelgues, lo que falta es que los
+  centros caigan mas cerca del arco, no agrandar el alcance.
+- **Los corners bajan 15,7%** y ya eran pocos (1,25 por partido). Si
+  molesta, la palanca es `rechazo_dispersion` o `rechazo_amenaza_corner`.
+- **La paridad con `MatchEngine` no se midio.** Goles -2,7% contra la
+  copia; el abstracto tiene su propio rebote por `agarre`.
+- `rechazo_amenaza_suelta` y `rechazo_amenaza_corner` casi empatan: con
+  estos valores el arquero apunta siempre al corner cuando la linea le
+  queda a tiro, y el costado solo gana lejos del arco.
+
 ## Etapa 9: inicio por Codex (2026-09-11)
 
 Punto 9.1 implementado: `MotorEspacial.describir_ocasion` devuelve una
@@ -1367,8 +1553,8 @@ excluye el bloqueo corporal en la descripción, como sus rutas actuales.
 El registro actual sigue excluyendo los penales.
 
 La descripción no asigna una probabilidad ni modifica la resolución.
-Los puntos 9.2–9.6 siguen pendientes: valoración del contexto, integración
-única en la resolución, identificadores y diagnóstico por calidad.
+El punto 9.6 agrega el diagnóstico por calidad geométrica. La calibración final debe valorar los factores
+observados que todavía no intervienen en la probabilidad de conversión.
 La etapa completa permanece abierta.
 
 Archivos: `core/motor_espacial.gd`, `tests/test_contexto_ocasion.gd` y este plan.
@@ -1384,6 +1570,139 @@ Resultado: 30 pares (divisiones 1, 5 y 10; semillas 9001–9010), 180
 ocasiones registradas, eventos/estadísticas/XP/RNG idénticos. Las 21
 comprobaciones de `test_contexto_ocasion.gd` terminan con `FALLOS=0`.
 No se realizó revisión visual ni medición de rendimiento para este punto.
+
+### Punto 9.2: contexto y ejecución separados (2026-09-11)
+
+Implementado. `ocasion.geometria_comun` usa la geometría sin jugador.
+`ejecucion` conserva aparte técnica normalizada, geometría del rematador
+y `probabilidad_modelo_porteria_sin_bloqueo`. Este último valor incluye
+habilidad y expresa la probabilidad de ir al arco **si supera el bloqueo**.
+No expresa probabilidad de gol ni xG. El registro identifica además los
+desenlaces forzados del laboratorio para no confundirlos con muestras naturales.
+
+`modelo_destino_remate` concentra las fórmulas vigentes de destino.
+La resolución usa esos mismos valores; el diagnóstico no recalcula otra
+probabilidad. Se calculan antes de la tirada de bloqueo, por lo que también
+los intentos bloqueados conservan su evaluación previa. Cabecear y patear
+libres mantiene la mezcla anterior; los penales siguen su ruta independiente.
+No se ajustaron pesos ni se agregaron penalizaciones por presión u obstrucción.
+
+Verificación: `test_contexto_ocasion.gd`, 25 comprobaciones sin fallas.
+Incluye 30 pares en divisiones 1, 5 y 10 (semillas 9001–9010), 180 remates:
+diagnóstico apagado/encendido conserva eventos, estadísticas, XP y RNG final.
+`test_tiro_lejano.gd` y `test_laboratorio.gd` terminan con `FALLOS=0`.
+`test_penal_espacial.gd` completa sus cinco comprobaciones con `OK`.
+La prueba de BUG-007 conserva las frecuencias controladas medidas antes
+de esta extracción, con 1000 semillas por escenario y ambos sentidos.
+No se ejecutó regresión completa ni se hizo commit para este punto.
+La integración posterior se documenta en el punto 9.3.
+
+### Punto 9.3: integración y auditoría (2026-09-11)
+
+Implementado sobre las fórmulas vigentes. La resolución y el diagnóstico
+comparten una sola instantánea de ocasión. El candidato al bloqueo sale
+de esa instantánea; la geometría alimenta el modelo de destino y el
+factor de fuerza se calcula allí y se aplica una vez en el duelo.
+
+No se encontró castigo triple al defensor: el bloqueo se resuelve primero,
+la presión no vuelve a penalizar puntería y el defensor no interviene
+en el duelo con el arquero. Se conserva distancia en puntería y potencia
+porque representan fallos distintos; no se añaden multiplicadores.
+
+Ver [auditoría y mediciones](mediciones/ocasion_etapa93.md).
+60 pares contra una copia previa: resultado completo y RNG idénticos,
+incluidos fotogramas. Divisiones 1/5/10, semillas 9300–9309, con y sin
+fotogramas. Cada modalidad suma 51 goles y 204 remates en 30 partidos.
+Regresión completa: `ARCHIVOS_CON_FALLAS=0 de 118 en 337s con 8 en paralelo`.
+
+Al cerrar 9.3, la posición del arquero todavía no modificaba la probabilidad
+de atajada. El punto 9.5 agrega la comprobación de alcance imposible.
+Sigue pendiente un valor global de calidad calibrado.
+La trazabilidad posterior se documenta en el punto 9.4.
+
+### Punto 9.4: identificador y aplicación única (2026-09-11)
+
+Cada intento recibe `remate_id`, secuencial dentro del partido, sin RNG.
+El identificador enlaza registro opcional, remate en vuelo, evento final
+y `goles_log`. Los bloqueados también reciben identificador. Los penales
+y las tandas comparten la secuencia, conservando sus estadísticas separadas.
+
+La ocasión y la evaluación del modelo permanecen en el registro previo
+a las tiradas. Aplicar el desenlace no las recalcula. Repetir el lanzamiento
+o aplicar una copia del mismo remate no duplica goles, eventos ni consumo
+de RNG. Las llamadas antiguas sin identificador lo adquieren automáticamente.
+Los identificadores son locales al partido; no identifican partidos distintos.
+
+La comprobación detectó una pérdida previa de remates tras centros:
+`_entregar_rodando` dejaba `dirigida_a`, que prevalecía sobre `es_remate`
+en el avance de pelota. El vuelo podía terminar como entrega y perder
+su evento. `_lanzar_remate` limpia ahora esa entrega anterior.
+
+`tests/test_identificador_remate.gd`: 45 comprobaciones sin fallas.
+Incluye goles, atajadas, afuera, palos, penales y tandas en ambos sentidos;
+relanzamiento; aplicación duplicada de una copia; conservación del valor
+previo y 12 partidos completos. Los 79 intentos de esa muestra, incluidos
+8 bloqueos, enlazan registro y evento sin duplicados.
+
+[Medición pareada](mediciones/ocasion_etapa94.md): 90 pares, divisiones
+1/5/10, semillas 9400–9429. Eventos faltantes: 4→0; goles: 153→154;
+remates: 603→593. La variante anterior solo omite limpiar la entrega.
+Regresión: 119 archivos, cero fallas (437 s, 8 procesos). Tras añadir la
+guarda final de relanzamiento, identificador, tiro lejano, laboratorio y
+alargue/penales se verificaron nuevamente sin fallas.
+
+La etapa completa sigue abierta. Las rutas especiales se revisan en 9.5.
+No se hizo commit ni revisión visual en 9.4.
+
+### Punto 9.5: rutas especiales y arcos desprotegidos (2026-09-13)
+
+Implementado. La ocasión registra si el arquero puede alcanzar alguna
+trayectoria al arco con su velocidad, aceleración y estirada. La comprobación
+usa una cota favorable al arquero; solo descarta intervenciones imposibles.
+Un arquero ausente o en tránsito tampoco puede atajar.
+
+Con arco desprotegido se mantienen bloqueo, puntería y palos. Si el remate
+los supera, entra sin inventar un duelo, desgaste ni XP del arquero.
+Con arquero alcanzable se conserva la resolución anterior. Penales y tandas
+mantienen su ruta; cabezazos y libres conservan atributos y bloqueo específicos.
+No se ajustan pesos ni probabilidades generales de la liga.
+
+[Informe y evidencia](mediciones/ocasion_etapa95.md): 34 comprobaciones,
+6600 resoluciones controladas. Antes había 12 fallas por atajadas imposibles;
+ahora ninguna. 90 pares de partidos conservan resultado completo y RNG:
+162 goles y 581 remates en cada versión. Esa muestra no contiene arcos
+desprotegidos; el efecto excepcional se comprueba en las escenas controladas.
+Regresión completa: 120 archivos, cero fallas, 325 s con 8 procesos.
+Resultado confirmado y guardado el 2026-09-13.
+
+La cobertura parcial no se calibra aquí. El diagnóstico por intervalos se
+documenta en 9.6. Sin commit ni revisión visual en este punto.
+
+### Punto 9.6: intervalos y conversión observada (2026-09-13)
+
+Implementado en `tests/_diag_remates.gd` y `tests/resumen_ocasiones.gd`.
+El indicador es geometría común sin habilidad: cinco intervalos entre 0 y 1.
+Separa tiros, cabezazos y libres, con intentos, goles, bloqueos y conversión.
+Cada intervalo conserva subgrupos por presión y posibilidad de intervención
+del arquero. No se presenta el indicador geométrico como xG ni probabilidad.
+
+Solo cuentan resultados confirmados mediante el evento del mismo `remate_id`.
+Se informan exclusiones por resultado sin confirmar, dato inválido, falta de
+contexto, laboratorio forzado y duplicados. Los penales siguen separados.
+La agregación no modifica los registros ni interviene en la simulación.
+
+`test_resumen_ocasiones.gd`: diez comprobaciones sin fallas. Ver
+[informe y mediciones](mediciones/ocasion_etapa96.md).
+La medición usa 100 partidos por división (1/5/10), semillas 4400–4499.
+Los cambios simultáneos del arquero pertenecen a otra tarea; el diagnóstico
+guarda una copia de la fuente del motor cargada y su hash.
+Corrida final: 300 partidos, 2019 intentos, 464 goles confirmados; cero
+exclusiones. Intervalos y subgrupos cuadran con los registros. El motor
+permaneció estable y la copia guardada coincide con el hash del informe.
+
+Los seis puntos tienen implementación. La etapa completa sigue abierta
+hasta calibración final, comparación con el abstracto y revisión visual.
+Esta medición descriptiva no sustituye la matriz con equipos desparejos e ida/vuelta.
 
 ## Orden de integración por tick
 
@@ -1426,10 +1745,10 @@ Revisar cómo reportan fallos las pruebas: no asumir que exit code cero implica 
 - [ ] 3. Control y orientación corporal. Salteada: la etapa 4 se hizo antes.
 - [x] 4. Ritmo variable. Ver "Etapa 4: resultados".
 - [ ] 5. Cansancio por esfuerzo.
-- [ ] 6. Decisiones del arquero.
+- [x] 6. Decisiones del arquero. Ver "Etapa 6: resultados".
 - [x] 7. Contexto del marcador. Ver "Etapa 7: resultados".
 - [x] 8. Identidad individual. Ver "Etapa 8: resultados".
-- [ ] 9. Calidad de ocasiones. Punto 9.1 implementado y verificado; 9.2–9.6 pendientes.
+- [ ] 9. Calidad de ocasiones. Puntos 9.1–9.6 implementados; aceptación final pendiente. Ver límites e informe de 9.6.
 - [ ] Regresión, calibración, revisión visual y documentación final.
 
 ## Texto para iniciar la implementación

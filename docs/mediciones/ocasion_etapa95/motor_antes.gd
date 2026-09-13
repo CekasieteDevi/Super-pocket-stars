@@ -1428,27 +1428,16 @@ static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bo
 	if forzado != "":
 		estado.erase("forzar_centro")
 
-	# El arquero primero: si LLEGO al punto de caida, la descuelga.
-	#
-	# Antes alcanzaba con estar a 7 m (radio_achique) en el momento de caer,
-	# que es darle la pelota desde lejos en un tick. Y encima casi no
-	# pasaba: el arquero no se movia hacia el centro. Medido antes de la
-	# etapa, el centro caia en promedio a 16 m de el y solo 5 de 123 caian
-	# a menos de 7 m (40 partidos); en la grilla de
-	# tests/_diag_arquero_decisiones.gd, 0 descolgados en 168 partidos.
-	# Ahora sale a buscarlo mientras vuela (etapa 6, ver
-	# _punto_para_interceptar) y tiene que estar a su alcance con los brazos
-	# arriba. Afuera del area no hay manos.
+	# El arquero primero: si cae en su zona, sale a descolgarla.
 	var arq_clave := -1
 	for id in estado["jugadores"]:
 		var e: Dictionary = estado["jugadores"][id]
-		if e["equipo_local"] != ataca_local and e["rol"] == "ARQ" and not _en_transito(estado, id):
+		if e["equipo_local"] != ataca_local and e["rol"] == "ARQ":
 			arq_clave = id
 			break
 	if arq_clave != -1 and forzado == "":
 		var arq_e: Dictionary = estado["jugadores"][arq_clave]
-		var alcance: float = ALCANCE_ESTIRADA + float(pesos_arquero()["alcance_descuelgue"])
-		if _en_el_area(punto, ataca_local) and punto.distance_to(arq_e["pos"]) <= alcance:
+		if punto.distance_to(arq_e["pos"]) <= float(f["radio_achique"]):
 			var arq := eq_d.arquero()
 			var chance: float = float(arq["atributos"]["achique"]) / 100.0 * float(f["achique_eficacia"])
 			if rng.randf() < chance:
@@ -2147,9 +2136,8 @@ const SESGO_ROL_PERFIL := {
 	"DC": {"asociacion": -0.10, "ruptura": 0.10, "regate": 0.0, "descarga": 0.20, "llegada": -0.05},
 }
 
-## El arquero no tiene perfil: con la pelota decide por su propia rama
-## (ver evaluar_opciones) y sin ella por su intencion (etapa 6, ver
-## _planificar_arqueros).
+## El arquero no tiene perfil: sus decisiones ya van por su propia rama
+## (ver evaluar_opciones) y la etapa 6 es la duena de lo que hace.
 const PERFIL_NEUTRO := {"asociacion": 0.5, "ruptura": 0.5, "regate": 0.5, "descarga": 0.5, "llegada": 0.5}
 
 
@@ -3053,10 +3041,6 @@ static func _objetivo_sin_pelota(estado: Dictionary, e: Dictionary, equipo: Team
 	var rol: String = e["rol"]
 	var ancla := _ancla_de_rol(estado, e, equipo, tiene_pelota_mi_equipo)
 	if bool(ancla["listo"]):
-		# Etapa 6: el arquero sigue su intencion (achicar, salir a cortar);
-		# sin una, su ancla.
-		if rol == "ARQ":
-			return _objetivo_del_arquero(estado, e, ancla["punto"])
 		return ancla["punto"]
 	var objetivo_x: float = (ancla["punto"] as Vector2).x
 	var objetivo_y: float = (ancla["punto"] as Vector2).y
@@ -3319,27 +3303,6 @@ static func _reiniciar_desde_medio(estado: Dictionary, saca_local: bool, mitad: 
 
 ## Instantánea previa al remate, sin habilidad, desenlace ni consumo de azar.
 ## Son medidas del contexto; no constituyen una probabilidad ni un xG calibrado.
-static func _arquero_puede_intervenir(estado: Dictionary, desde: Vector2, es_local: bool) -> bool:
-	var clave := _clave_arquero(estado, not es_local)
-	if clave == -1 or _en_transito(estado, clave):
-		return false
-	var arquero: Dictionary = estado["jugadores"][clave]
-	var arco := arco_rival(es_local)
-	var poste_a := arco + Vector2(0.0, ARCO_MEDIO_ANCHO)
-	var poste_b := arco - Vector2(0.0, ARCO_MEDIO_ANCHO)
-	var posicion: Vector2 = arquero["pos"]
-	if Geometry2D.is_point_in_polygon(posicion, PackedVector2Array([desde, poste_a, poste_b])):
-		return true
-	var distancia := minf(_dist_a_segmento(posicion, desde, poste_a),
-		minf(_dist_a_segmento(posicion, desde, poste_b), _dist_a_segmento(posicion, poste_a, poste_b)))
-	if distancia <= ALCANCE_ESTIRADA:
-		return true
-	# Cota favorable al arquero: tiempo hasta el poste más lejano y todo su
-	# alcance, sin castigar el giro. Solo descarta atajadas físicamente imposibles.
-	var segundos := maxf(desde.distance_to(poste_a), desde.distance_to(poste_b)) / float(pesos()["fisica"]["vel_remate"])
-	return distancia <= _alcance_en(arquero, segundos) + ALCANCE_ESTIRADA
-
-
 static func describir_ocasion(estado: Dictionary, desde: Vector2, es_local: bool,
 		tipo: String = "tiro") -> Dictionary:
 	var arco := arco_rival(es_local)
@@ -3360,8 +3323,6 @@ static func describir_ocasion(estado: Dictionary, desde: Vector2, es_local: bool
 		"presion": presion_normalizada(estado, desde, es_local),
 		"bloqueador": bloqueador, "obstruida": bloqueador != -1,
 		"posicion_arquero": posicion_arquero, "tipo": tipo,
-		"arco_desprotegido": not _arquero_puede_intervenir(estado, desde, es_local),
-		"cobertura_arquero": cobertura_arquero(estado, desde, es_local),
 		"geometria_comun": factor_geometria(desde, es_local)}
 
 
@@ -3423,10 +3384,6 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 			forzado = str(estado["forzar_remate"])
 	estado["tiros"][clave] += 1
 	estado["dist_tiros"].append(poseedor["pos"].distance_to(arco_rival(es_local)))
-	var tras_rechazo: bool = estado.has("ultimo_rechazo_tick") \
-		and int(estado["tick"]) - int(estado["ultimo_rechazo_tick"]) <= TICKS_REMATE_TRAS_RECHAZO
-	if tras_rechazo:
-		_stats_arqueros(estado)["remates_tras_rechazo"] += 1
 	# El destino depende de la técnica y de la ocasión. Los pesos son del
 	# modelo de juego; no representan probabilidades empíricas de fútbol real.
 	# Pie preferido: rematar cruzando hacia su lado malo le sale peor. Un
@@ -3492,18 +3449,6 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 		})
 		return
 
-	# Superó bloqueo y puntería. Sin arquero capaz de llegar, no hay duelo
-	# de atajada ni desgaste/XP para un arquero ausente o fuera de la jugada.
-	if bool(ocasion["arco_desprotegido"]) and forzado == "":
-		eq_a.desgastar(jugador["id"], jugador["atributos"]["energia"], float(pesos()["fisica"]["multiplicador_desgaste"]))
-		if not registro.is_empty():
-			registro["resultado"] = "gol"
-		_lanzar_remate(estado, poseedor, {"remate_id": remate_id,
-			"tipo": "gol", "es_local": es_local, "clave": poseedor["clave"],
-			"rol": poseedor["rol"], "jugador": jugador,
-			"dist": ocasion["distancia"], "arco_desprotegido": true, "tras_rechazo": tras_rechazo})
-		return
-
 	# El remate se debilita según desde dónde salió: un tiro de 30 metros
 	# con ángulo cerrado llega mucho más flojo al arquero que el mismo
 	# jugador de frente al área chica. Y el arquero vale por el compuesto
@@ -3513,14 +3458,6 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	var arquero := eq_d.arquero()
 	var arq_attrs: Dictionary = arquero["atributos"]
 	var arquero_valor: float = arq_attrs["reflejos"] * 0.5 + arq_attrs["estirada"] * 0.3 + arq_attrs["agarre"] * 0.2
-	# Etapa 6: el arquero ataja desde donde ESTA. El que achico bien le tapa
-	# mas arco al que remata; el que quedo corrido o salio y no llego, menos.
-	# Es la misma instantanea de la ocasion, tomada antes de las tiradas.
-	var cobertura: float = float(ocasion["cobertura_arquero"])
-	arquero_valor *= factor_cobertura(cobertura)
-	var stats_arq := _stats_arqueros(estado)
-	stats_arq["duelos"] += 1
-	stats_arq["cobertura_suma"] += cobertura
 	# Puntería y fuerza representan fallos distintos: errar el arco y perder
 	# potencia al llegar. Ninguna vuelve a penalizar al defensor ya superado.
 	var tiro_efectivo: float = remate_efectivo * float(modelo["factor_fuerza"])
@@ -3548,7 +3485,6 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 		"es_local": es_local, "clave": poseedor["clave"], "rol": poseedor["rol"],
 		"jugador": jugador, "agarre": float(arquero["atributos"]["agarre"]) / 100.0,
 		"dist": poseedor["pos"].distance_to(arco_rival(es_local)),
-		"tras_rechazo": tras_rechazo,
 	})
 
 
@@ -3583,7 +3519,7 @@ static func _lanzar_remate(estado: Dictionary, poseedor: Dictionary, datos: Dict
 	# el arquero alcance, y un gol a uno que no. Antes el destino salía de
 	# un randf() suelto y el arquero se quedaba clavado, así que la pelota
 	# llegaba a la línea y después se teletransportaba a sus manos.
-	var arq_clave := -1 if bool(datos.get("arco_desprotegido", false)) else _clave_arquero(estado, not es_local)
+	var arq_clave := _clave_arquero(estado, not es_local)
 	var arq_pos := Vector2(arco.x, 0.0)
 	var alcance := 3.66
 	if arq_clave != -1:
@@ -3763,8 +3699,6 @@ static func _aplicar_remate(estado: Dictionary, datos: Dictionary) -> void:
 	var dist: float = float(datos.get("dist", 0.0))
 	if gol:
 		eq_a.goles += 1
-		if bool(datos.get("tras_rechazo", false)):
-			_stats_arqueros(estado)["goles_tras_rechazo"] += 1
 		estado["goles_log"].append({"minuto": minuto, "equipo": eq_a.nombre,
 			"remate_id": remate_id,
 			"jugador_id": jugador.get("id", -1),
@@ -3784,14 +3718,10 @@ static func _aplicar_remate(estado: Dictionary, datos: Dictionary) -> void:
 	else:
 		estado["log"].append("min %d - %s (%s) remata desde %.0f m, ataja el arquero" % [
 			minuto, datos["rol"], eq_a.nombre, dist])
-	# El arquero no siempre la retiene. Cuanto mejor su agarre, más veces
-	# la queda. Si no, la rechaza: al córner o a un costado (etapa 6).
-	# El penal manoteado sigue yendo al córner: su rebote es otra jugada.
+	# El arquero no siempre la retiene: si la manotea, sale al córner.
+	# Cuanto mejor su agarre, más veces la queda.
 	if rng.randf() > float(datos.get("agarre", 0.5)):
-		if es_penal:
-			_manotear_al_corner(estado, es_local)
-		else:
-			_rechazar_remate(estado, datos)
+		_manotear_al_corner(estado, es_local)
 	else:
 		_dar_pelota_al_arquero(estado, not es_local)
 
@@ -4006,13 +3936,6 @@ static func _resolver_rebote(estado: Dictionary, desde: Vector2, toco_local: boo
 	var destino := Vector2(
 		clampf(desde.x + dir.x * largo, -LIMITE_X, LIMITE_X),
 		clampf(desde.y + dir.y * largo, -MEDIO_ANCHO + 1.0, MEDIO_ANCHO - 1.0))
-	_soltar_pelota(estado, desde, destino, toco_local)
-
-
-## La pelota sale despedida sin dueno hacia `destino` y la agarra el que
-## llegue. La usan el rebote de un bloqueo y el rechazo del arquero.
-static func _soltar_pelota(estado: Dictionary, desde: Vector2, destino: Vector2, toco_local: bool) -> void:
-	var f: Dictionary = pesos()["fisica"]
 	var pelota: Dictionary = estado["pelota"]
 	pelota["poseedor_id"] = -1
 	pelota["en_vuelo"] = true
@@ -4342,8 +4265,6 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 	# bucle de movimiento le daria al de clave baja una foto distinta a la
 	# del de clave alta.
 	_planificar_desmarques(estado, equipo_con_pelota)
-	# Etapa 6: los arqueros tambien deciden desde la misma foto.
-	_planificar_arqueros(estado, equipo_con_pelota)
 
 	var perseguidores := _perseguidores(estado, equipo_con_pelota)
 
@@ -5013,13 +4934,6 @@ static func _gana_intercepcion(estado: Dictionary, clave_def: int, dist: float, 
 	var f: Dictionary = pesos()["fisica"]
 	var attrs: Dictionary = defensor["atributos"]
 	var lectura: float = float(attrs["quite"]) * 0.6 + float(attrs["inteligencia"]) * 0.4
-	# Etapa 6: el arquero adentro de su area la corta con las manos, no con
-	# el quite. Con el compuesto de campo cortaba con su `quite`, un atributo
-	# que en un arquero no pondera nadie (position_weights.json). `achique`
-	# es leer la salida; `agarre`, quedarsela.
-	var e_def: Dictionary = estado["jugadores"][clave_def]
-	if e_def["rol"] == "ARQ" and _en_el_area(estado["pelota"]["pos"], not bool(e_def["equipo_local"])):
-		lectura = float(attrs["achique"]) * 0.6 + float(attrs["agarre"]) * 0.4
 	# Centrado en la trayectoria = corte limpio; al borde del radio, apenas
 	# la roza.
 	var centralidad: float = 1.0 - clampf(dist / maxf(radio, 0.01), 0.0, 1.0)
@@ -5091,490 +5005,6 @@ static func _entregar_pelota(estado: Dictionary, clave: int) -> void:
 	pelota["altura_max"] = 0.0
 	pelota["z"] = 0.0
 
-
-
-# ---------------------------------------------------------------------------
-# Arqueros con decisiones (etapa 6)
-# ---------------------------------------------------------------------------
-
-## El arquero sin la pelota sigue una INTENCION breve, repartida una vez
-## por tick desde la misma foto, igual que los desmarques (etapa 1) y la
-## defensa (etapa 2):
-##
-## - `sostener`: se para en su ancla (_ancla_de_rol), que es lo de siempre.
-## - `achicar`: un rival se le viene solo. Sale sobre la bisectriz del
-##   angulo entre la pelota y los postes, con profundidad acotada.
-## - `interceptar`: una pelota rival cae en su area y el llega antes que
-##   cualquier atacante. Va al punto corriendo. La pelota la toma el
-##   contacto de siempre (_avanzar_pelota, _resolver_centro): decidir salir
-##   no le da la pelota.
-## - `volver`: termino una salida y quedo lejos del ancla. Vuelve con la
-##   misma fisica de todos, sin saltos.
-##
-## Es una cuenta pura sobre posiciones: no consume RNG.
-const INTENCIONES_ARQUERO := ["sostener", "achicar", "interceptar", "volver"]
-
-## Puntos de la trayectoria que se miran para cortar un pase. Seis tramos
-## sobre un pase de 30 m son cinco metros cada uno, del orden de lo que la
-## pelota recorre en un tick: mas fino no cambia el punto elegido.
-const MUESTRAS_SALIDA := 6
-
-## Hacia donde intenta manotear una pelota que no retiene, en grados desde
-## "derecho al campo". Pasando los 90 va para atras, por al lado del palo:
-## es el corner. Derecho al medio (0) no es candidato: es el rebote que un
-## arquero evita. El orden fija el desempate.
-const ANGULOS_RECHAZO := [-105.0, 105.0, -70.0, 70.0, -45.0, 45.0]
-
-## Cuantos ticks despues de un rechazo en juego un remate cuenta como
-## "remate tras rechazo". Cuatro segundos: lo que tarda la jugada del
-## rebote. Solo mide.
-const TICKS_REMATE_TRAS_RECHAZO := 16
-
-
-## Pesos de la etapa. Como en pesos_perfil, el lector trae los valores por
-## defecto y queda cacheado: se lee varias veces por tick.
-static var _pesos_arquero_cache: Dictionary = {}
-
-static func pesos_arquero() -> Dictionary:
-	if not _pesos_arquero_cache.is_empty():
-		return _pesos_arquero_cache
-	var d: Dictionary = pesos().get("arquero", {})
-	_pesos_arquero_cache = {
-		"reaccion_lenta": float(d.get("reaccion_lenta", 0.6)),
-		"reaccion_rapida": float(d.get("reaccion_rapida", 0.15)),
-		"ventaja_base": float(d.get("ventaja_base", 0.25)),
-		"ventaja_por_metro": float(d.get("ventaja_por_metro", 0.02)),
-		"achique_min": float(d.get("achique_min", 2.5)),
-		"achique_max": float(d.get("achique_max", 6.5)),
-		"achique_dist_rival": float(d.get("achique_dist_rival", 24.0)),
-		"achique_margen_pelota": float(d.get("achique_margen_pelota", 4.0)),
-		"achique_carril": float(d.get("achique_carril", 2.5)),
-		"volver_umbral": float(d.get("volver_umbral", 2.0)),
-		"alcance_descuelgue": float(d.get("alcance_descuelgue", 1.0)),
-		"cobertura_peso": float(d.get("cobertura_peso", 0.3)),
-		"cobertura_referencia": float(d.get("cobertura_referencia", 0.648)),
-		"rechazo_amenaza_corner": float(d.get("rechazo_amenaza_corner", 0.45)),
-		"rechazo_amenaza_suelta": float(d.get("rechazo_amenaza_suelta", 0.5)),
-		"rechazo_radio_amenaza": float(d.get("rechazo_radio_amenaza", 10.0)),
-		"rechazo_centralidad": float(d.get("rechazo_centralidad", 1.0)),
-		"rechazo_dispersion": float(d.get("rechazo_dispersion", 1.6)),
-		"rechazo_dist_comoda": float(d.get("rechazo_dist_comoda", 25.0)),
-	}
-	return _pesos_arquero_cache
-
-
-## Contadores de la etapa. Solo miden: ningun consumidor los necesita y no
-## tocan el RNG.
-static func _stats_arqueros(estado: Dictionary) -> Dictionary:
-	if not estado.has("arqueros_stats"):
-		estado["arqueros_stats"] = {
-			"salidas": 0, "achiques": 0, "rechazos_afuera": 0, "rechazos_en_juego": 0,
-			"remates_tras_rechazo": 0, "goles_tras_rechazo": 0,
-			"duelos": 0, "cobertura_suma": 0.0,
-		}
-	return estado["arqueros_stats"]
-
-
-## Reaccion y profundidad de achique de un arquero. Salen de `achique`,
-## relativo al nivel del partido como todo lo que es lectura de juego. Se
-## guardan en su dict: son derivados, no se persisten, y el suplente que
-## entra sin ellos los arma solo.
-static func _datos_de_arquero(estado: Dictionary, e: Dictionary) -> Dictionary:
-	if e.has("datos_arquero"):
-		return e["datos_arquero"]
-	var w := pesos_arquero()
-	var jugador := _dict_jugador(estado, _equipo_de(estado, bool(e["equipo_local"])), int(e["jugador_id"]))
-	var datos := {"reaccion": lerpf(w["reaccion_lenta"], w["reaccion_rapida"], 0.5),
-		"achique": lerpf(w["achique_min"], w["achique_max"], 0.5)}
-	if not jugador.is_empty():
-		datos["reaccion"] = _por_atributo(jugador, "achique", w["reaccion_lenta"], w["reaccion_rapida"])
-		datos["achique"] = _por_atributo(jugador, "achique", w["achique_min"], w["achique_max"])
-	e["datos_arquero"] = datos
-	return datos
-
-
-## Segundos que tarda en quedar a `contacto` metros de un punto, con la
-## rampa de aceleracion. Es la inversa de _alcance_en: las dos preguntas
-## tienen que usar la misma fisica o el arquero sale a pelotas que despues
-## no alcanza.
-static func _tiempo_hasta(e: Dictionary, punto: Vector2, contacto: float) -> float:
-	var d: float = maxf((e["pos"] as Vector2).distance_to(punto) - contacto, 0.0)
-	var v0: float = float(e.get("rapidez", 0.0))
-	var a: float = maxf(float(e.get("aceleracion", 3.0)), 0.01)
-	var vmax: float = maxf(float(e["vel_max"]), 0.1)
-	var t_rampa: float = maxf(vmax - v0, 0.0) / a
-	var d_rampa: float = v0 * t_rampa + 0.5 * a * t_rampa * t_rampa
-	if d <= d_rampa:
-		return (-v0 + sqrt(v0 * v0 + 2.0 * a * d)) / a
-	return t_rampa + (d - d_rampa) / vmax
-
-
-## El arquero no se mete adentro del arco. Mismo corral en X que su ancla;
-## en Y la salida si puede abrirse hasta donde vaya la pelota.
-static func _en_el_corral(punto: Vector2, local: bool) -> Vector2:
-	if local:
-		return Vector2(clampf(punto.x, -ARQUERO_X_MIN, LIMITE_X), punto.y)
-	return Vector2(clampf(punto.x, -LIMITE_X, ARQUERO_X_MIN), punto.y)
-
-
-## Donde conviene salir a cortar la pelota que viaja, o Vector2.INF si no
-## conviene. Mira la trayectoria VISIBLE (donde esta y a donde va), no a
-## quien se la tiraron.
-##
-## Condiciones, en este orden:
-## 1. El punto esta en su area: afuera no puede usar las manos.
-## 2. Llega a tiempo. A un punto del camino tiene que llegar antes que la
-##    pelota; al punto final le alcanza con ser el primero, porque ahi la
-##    toma el mas cercano. El centro se disputa al caer, asi que al punto
-##    de caida tambien tiene que llegar antes.
-## 3. Le gana al atacante mas rapido por `ventaja_base`, mas
-##    `ventaja_por_metro` por cada metro que se aleja de la linea. Es el
-##    precio de dejar el arco: cuanto mas lejos, mas seguro tiene que estar.
-##    En el centro ese margen se mide contra la PELOTA: tiene que estar
-##    plantado antes de que caiga.
-## 4. Ningun companero la resuelve antes. Un central que llega primero la
-##    corta sin dejar el arco vacio. En el centro no aplica: de arriba el
-##    arquero tiene las manos y el central no.
-static func _punto_para_interceptar(estado: Dictionary, e: Dictionary, datos: Dictionary) -> Vector2:
-	var pelota: Dictionary = estado["pelota"]
-	if not bool(pelota.get("en_vuelo", false)) or bool(pelota.get("es_remate", false)) \
-			or pelota.has("saliendo") or pelota.has("dirigida_a"):
-		return Vector2.INF
-	var local: bool = e["equipo_local"]
-	var es_centro: bool = bool(pelota.get("es_centro", false))
-	# El pase de un companero no se corta. La pelota suelta (rebote) si.
-	if bool(pelota.get("es_pase", false)) and bool(pelota.get("pasador_local", local)) == local:
-		return Vector2.INF
-	# El laboratorio monta el centro para mirar el cabezazo (ver
-	# _resolver_centro): el arquero no sale a buscarlo.
-	if es_centro and estado.has("forzar_centro"):
-		return Vector2.INF
-	var vel: float = (pelota["vel"] as Vector2).length()
-	if vel < VEL_PELOTA_QUIETA:
-		return Vector2.INF
-	var desde: Vector2 = pelota["pos"]
-	var hasta: Vector2 = pelota.get("destino_pos", desde)
-	# Primero lo barato: si ningun punto cae en su area no hay nada que medir.
-	var candidatos := []
-	var muestras: int = 1 if es_centro else MUESTRAS_SALIDA
-	for k in range(1, muestras + 1):
-		var p: Vector2 = desde.lerp(hasta, float(k) / float(muestras))
-		if _en_el_area(p, not local):
-			candidatos.append({"punto": p, "final": k == muestras})
-	if candidatos.is_empty():
-		return Vector2.INF
-
-	var w := pesos_arquero()
-	var f: Dictionary = pesos()["fisica"]
-	var contacto: float = float(f["radio_control"])
-	var contacto_arq: float = ALCANCE_ESTIRADA + float(w["alcance_descuelgue"]) if es_centro else contacto
-	var linea_x: float = arco_propio(local).x
-	for c in candidatos:
-		var p: Vector2 = c["punto"]
-		var t_pelota: float = desde.distance_to(p) / vel
-		var t_arq: float = _tiempo_hasta(e, p, contacto_arq) + float(datos["reaccion"])
-		var espera: bool = bool(c["final"]) and not es_centro
-		if not espera and t_arq > t_pelota:
-			continue
-		var requerida: float = float(w["ventaja_base"]) + float(w["ventaja_por_metro"]) * absf(p.x - linea_x)
-		# El centro no es una carrera contra el atacante: el centro va A UN
-		# atacante, que ya esta parado ahi, y el arquero lo gana con las
-		# manos por arriba. Lo que tiene que sobrarle es tiempo para estar
-		# plantado cuando cae.
-		if es_centro:
-			if t_pelota - t_arq >= requerida:
-				return _en_el_corral(p, local)
-			continue
-		var t_rival: float = INF
-		var t_companero: float = INF
-		for id in estado["jugadores"]:
-			if int(id) == int(e["clave"]) or _en_transito(estado, id):
-				continue
-			var otro: Dictionary = estado["jugadores"][id]
-			var t := _tiempo_hasta(otro, p, contacto)
-			if bool(otro["equipo_local"]) == local:
-				t_companero = minf(t_companero, t)
-			else:
-				t_rival = minf(t_rival, t)
-		var llega_arq: float = maxf(t_arq, t_pelota)
-		var ventaja: float = maxf(t_rival, t_pelota) - llega_arq
-		if ventaja < requerida:
-			continue
-		if maxf(t_companero, t_pelota) <= llega_arq:
-			continue
-		return _en_el_corral(p, local)
-	return Vector2.INF
-
-
-## El rival que se le viene solo, o -1. Tiene la pelota, esta de frente al
-## arco y cerca, y ningun companero del arquero le tapa el camino al arco.
-static func _rival_mano_a_mano(estado: Dictionary, e: Dictionary) -> int:
-	var id: int = int(estado["pelota"]["poseedor_id"])
-	if id == -1 or not estado["jugadores"].has(id):
-		return -1
-	var local: bool = e["equipo_local"]
-	var rival: Dictionary = estado["jugadores"][id]
-	if bool(rival["equipo_local"]) == local:
-		return -1
-	var w := pesos_arquero()
-	var arco := arco_propio(local)
-	var pos: Vector2 = rival["pos"]
-	var dist: float = pos.distance_to(arco)
-	if dist > float(w["achique_dist_rival"]) or absf(pos.y) > AREA_MEDIO_ANCHO:
-		return -1
-	for id_c in estado["jugadores"]:
-		var c: Dictionary = estado["jugadores"][id_c]
-		if bool(c["equipo_local"]) != local or c["rol"] == "ARQ" or _en_transito(estado, id_c):
-			continue
-		if (c["pos"] as Vector2).distance_to(arco) < dist \
-				and _dist_a_segmento(c["pos"], pos, arco) <= float(w["achique_carril"]):
-			return -1
-	return id
-
-
-## Donde se para para achicar: sobre la bisectriz del angulo que forman la
-## pelota y los dos postes, a `profundidad` metros de la linea. Es el punto
-## que tapa lo mismo de cada palo. Nunca a menos de `margen` metros de la
-## pelota: mas cerca ya no achica, va al quite, y eso es otra jugada.
-static func punto_de_achique(arco: Vector2, pelota: Vector2, profundidad: float, margen: float) -> Vector2:
-	var poste_a := arco + Vector2(0.0, ARCO_MEDIO_ANCHO)
-	var poste_b := arco - Vector2(0.0, ARCO_MEDIO_ANCHO)
-	var bisectriz: Vector2 = (poste_a - pelota).normalized() + (poste_b - pelota).normalized()
-	if bisectriz.length_squared() < 0.0001 or absf(bisectriz.x) < 0.0001:
-		return Vector2(arco.x, clampf(pelota.y, -ARCO_MEDIO_ANCHO, ARCO_MEDIO_ANCHO))
-	bisectriz = bisectriz.normalized()
-	# Metros sobre la bisectriz desde la pelota hasta la linea del arco.
-	var hasta_linea: float = (arco.x - pelota.x) / bisectriz.x
-	if hasta_linea <= 0.0:
-		return arco
-	var en_linea: Vector2 = pelota + bisectriz * hasta_linea
-	var prof: float = clampf(profundidad, 0.0, maxf(hasta_linea - margen, 0.0))
-	return en_linea - bisectriz * prof
-
-
-## Que parte del arco le tapa el arquero al que remata, de 0 a 1. Es el
-## angulo entre los postes que cubre su cuerpo estirado (ALCANCE_ESTIRADA),
-## visto desde la pelota. Achicar lo sube; quedar corrido de la bisectriz
-## lo baja. Es geometria pura: no lee atributos ni consume RNG.
-static func cobertura_arquero(estado: Dictionary, desde: Vector2, es_local: bool) -> float:
-	var clave := _clave_arquero(estado, not es_local)
-	if clave == -1 or _en_transito(estado, clave):
-		return 0.0
-	var arco := arco_rival(es_local)
-	var g: Vector2 = estado["jugadores"][clave]["pos"]
-	if (g - desde).dot(arco - desde) <= 0.0:
-		return 0.0
-	var base: float = (arco - desde).angle()
-	var a1: float = wrapf((arco + Vector2(0.0, ARCO_MEDIO_ANCHO) - desde).angle() - base, -PI, PI)
-	var a2: float = wrapf((arco - Vector2(0.0, ARCO_MEDIO_ANCHO) - desde).angle() - base, -PI, PI)
-	var lo: float = minf(a1, a2)
-	var hi: float = maxf(a1, a2)
-	var dist: float = desde.distance_to(g)
-	var media: float = PI * 0.5 if dist <= ALCANCE_ESTIRADA else asin(ALCANCE_ESTIRADA / dist)
-	var centro: float = wrapf((g - desde).angle() - base, -PI, PI)
-	var cubierto: float = maxf(0.0, minf(hi, centro + media) - maxf(lo, centro - media))
-	return clampf(cubierto / maxf(hi - lo, 0.001), 0.0, 1.0)
-
-
-## Cuanto vale el arquero en el duelo del remate segun donde esta parado.
-## Centrado en la cobertura media que tenia ANTES de la etapa, medida con
-## tests/_diag_arquero_decisiones.gd: asi el promedio de la liga no se
-## mueve y lo que cambia es la diferencia entre achicar bien y quedar mal
-## parado.
-static func factor_cobertura(cobertura: float) -> float:
-	var w := pesos_arquero()
-	var peso: float = float(w["cobertura_peso"])
-	return clampf(1.0 + peso * (cobertura - float(w["cobertura_referencia"])), 1.0 - peso, 1.0 + peso)
-
-
-## La intencion de este tick para un arquero. `previo` es la del tick
-## anterior: una salida a cortar se sostiene mientras sea el mismo vuelo,
-## para que no se arrepienta a mitad de camino por una decima de ventaja.
-static func _intencion_del_arquero(estado: Dictionary, e: Dictionary, ancla: Vector2, previo: Dictionary) -> Dictionary:
-	var w := pesos_arquero()
-	var tick: int = int(estado["tick"])
-	var pelota: Dictionary = estado["pelota"]
-	var local: bool = e["equipo_local"]
-	var datos := _datos_de_arquero(estado, e)
-	var tipo_previo: String = str(previo.get("tipo", "sostener"))
-
-	if tipo_previo == "interceptar" and bool(pelota.get("en_vuelo", false)) \
-			and not bool(pelota.get("es_remate", false)) and not pelota.has("dirigida_a") \
-			and pelota.get("origen_pos", Vector2.INF) == previo.get("origen", Vector2.ZERO) \
-			and pelota.get("destino_pos", Vector2.INF) == previo.get("fin", Vector2.ZERO):
-		var sigue := previo.duplicate()
-		sigue["tick"] = tick
-		return sigue
-	var punto := _punto_para_interceptar(estado, e, datos)
-	if punto != Vector2.INF:
-		return {"tipo": "interceptar", "destino": punto, "tick": tick, "desde": tick,
-			"origen": pelota.get("origen_pos", pelota["pos"]), "fin": pelota.get("destino_pos", pelota["pos"])}
-
-	var rival := _rival_mano_a_mano(estado, e)
-	if rival != -1:
-		var destino := punto_de_achique(arco_propio(local), estado["jugadores"][rival]["pos"],
-			float(datos["achique"]), float(w["achique_margen_pelota"]))
-		return {"tipo": "achicar", "destino": _en_el_corral(destino, local), "tick": tick,
-			"desde": int(previo.get("desde", tick)) if tipo_previo == "achicar" else tick}
-
-	if tipo_previo != "sostener" and (e["pos"] as Vector2).distance_to(ancla) > float(w["volver_umbral"]):
-		return {"tipo": "volver", "destino": ancla, "tick": tick, "desde": tick}
-	return {"tipo": "sostener", "destino": ancla, "tick": tick, "desde": tick}
-
-
-## Reparte la intencion de los dos arqueros desde la misma foto, antes de
-## mover a nadie. Orden estable por clave.
-static func _planificar_arqueros(estado: Dictionary, equipo_con_pelota: bool) -> void:
-	var planes: Dictionary = estado.get("arqueros", {})
-	estado["arqueros"] = planes
-	var claves := []
-	for id in estado["jugadores"]:
-		if estado["jugadores"][id]["rol"] == "ARQ" and not _en_transito(estado, id):
-			claves.append(int(id))
-	claves.sort()
-	for clave in planes.keys():
-		if not claves.has(int(clave)):
-			planes.erase(clave)
-	for clave in claves:
-		var e: Dictionary = estado["jugadores"][clave]
-		var local: bool = e["equipo_local"]
-		var ancla: Vector2 = _ancla_de_rol(estado, e, _equipo_de(estado, local), local == equipo_con_pelota)["punto"]
-		var previo: Dictionary = planes.get(clave, {})
-		var plan := _intencion_del_arquero(estado, e, ancla, previo)
-		var tipo: String = plan["tipo"]
-		if tipo != str(previo.get("tipo", "")):
-			if tipo == "interceptar":
-				_stats_arqueros(estado)["salidas"] += 1
-			elif tipo == "achicar":
-				_stats_arqueros(estado)["achiques"] += 1
-		planes[clave] = plan
-
-
-## La intencion vigente de un arquero, o {} si no tiene una de este tick.
-static func intencion_arquero(estado: Dictionary, clave: int) -> Dictionary:
-	var plan: Dictionary = estado.get("arqueros", {}).get(clave, {})
-	if plan.is_empty() or int(plan.get("tick", -1)) != int(estado["tick"]):
-		return {}
-	return plan
-
-
-## A donde va el arquero sin la pelota. Sin intencion de este tick —una
-## escena armada a mano, el primer tick despues de un corte— va al ancla,
-## que es lo que hacia antes de la etapa.
-static func _objetivo_del_arquero(estado: Dictionary, e: Dictionary, ancla: Vector2) -> Vector2:
-	var plan := intencion_arquero(estado, int(e["clave"]))
-	if plan.is_empty() or str(plan["tipo"]) == "sostener" or str(plan["tipo"]) == "volver":
-		return ancla
-	return plan["destino"]
-
-
-## Que tan peligroso es dejar la pelota en `punto`: atacantes cerca, y un
-## remate de frente y cerca desde ahi. Sin RNG: la eleccion es del
-## arquero, el azar entra despues como error de ejecucion.
-##
-## El frente se mide con factor_angulo y no con valor_posicion: todos los
-## puntos a diez metros del arquero estan a unos diez metros del arco, y
-## valor_posicion les da a todos casi lo mismo (1 - 10/105, unos 0,90).
-## Con ese termino ningun costado le ganaba nunca al corner: medido, 0
-## rechazos en juego en 168 partidos. Lo que separa el
-## rebote servido del rebote inofensivo es el ANGULO, no la distancia.
-static func _amenaza_de_rebote(estado: Dictionary, punto: Vector2, ataca_local: bool) -> float:
-	var w := pesos_arquero()
-	var radio: float = float(w["rechazo_radio_amenaza"])
-	var amenaza := 0.0
-	for id in estado["jugadores"]:
-		var c: Dictionary = estado["jugadores"][id]
-		if bool(c["equipo_local"]) != ataca_local or _en_transito(estado, id):
-			continue
-		amenaza += maxf(0.0, 1.0 - punto.distance_to(c["pos"]) / radio)
-	var cerca: float = clampf(1.0 - punto.distance_to(arco_rival(ataca_local)) / float(w["rechazo_dist_comoda"]), 0.0, 1.0)
-	return amenaza + float(w["rechazo_centralidad"]) * factor_angulo(punto, ataca_local) * cerca
-
-
-## Donde cruza la linea de la cancha una pelota que sale de `desde` en
-## direccion `dir`.
-static func _cruce_con_la_linea(desde: Vector2, dir: Vector2) -> Vector2:
-	var t := INF
-	if absf(dir.x) > 0.0001:
-		t = minf(t, (MEDIO_LARGO * signf(dir.x) - desde.x) / dir.x)
-	if absf(dir.y) > 0.0001:
-		t = minf(t, (MEDIO_ANCHO * signf(dir.y) - desde.y) / dir.y)
-	return desde + dir * maxf(t, 0.0)
-
-
-## La ataja pero no la retiene. Antes iba SIEMPRE al corner. Ahora el
-## arquero elige a donde la manda entre los dos corners —si la linea le
-## queda a tiro— y cuatro direcciones hacia los costados, por la menor
-## amenaza (_amenaza_de_rebote). Despues la ejecucion se desvia: mas cuanto
-## peor es su `estirada` y mas cerca vino el remate. Asi un buen arquero la
-## saca por al lado del palo y a veces, igual, el rebote le queda en juego.
-static func _rechazar_remate(estado: Dictionary, datos: Dictionary) -> void:
-	var ataca_local: bool = bool(datos["es_local"])
-	var clave := _clave_arquero(estado, not ataca_local)
-	if clave == -1:
-		_manotear_al_corner(estado, ataca_local)
-		return
-	var w := pesos_arquero()
-	var f: Dictionary = pesos()["fisica"]
-	var rng: RandomNumberGenerator = estado["rng"]
-	var stats := _stats_arqueros(estado)
-	var e_arq: Dictionary = estado["jugadores"][clave]
-	var desde: Vector2 = e_arq["pos"]
-	var hacia_campo := Vector2(-signf(arco_rival(ataca_local).x), 0.0)
-	var largo_medio: float = 0.5 * (float(f["rebote_largo_min"]) + float(f["rebote_largo_max"]))
-
-	var linea_x: float = arco_rival(ataca_local).x
-	var angulo: float = deg_to_rad(float(ANGULOS_RECHAZO[0]))
-	var menor := INF
-	var menor_lado := INF
-	for grados in ANGULOS_RECHAZO:
-		# La amenaza de ESE costado desempata: si el manotazo al corner le sale
-		# corto, queda en juego de ese lado, asi que tambien se tira al corner
-		# del lado donde no hay nadie.
-		var lateral: Vector2 = desde + hacia_campo.rotated(deg_to_rad(minf(absf(grados), 70.0) * signf(grados))) * largo_medio
-		var lado := _amenaza_de_rebote(estado, lateral, ataca_local)
-		var dir_candidata: Vector2 = hacia_campo.rotated(deg_to_rad(grados))
-		var punto: Vector2 = desde + dir_candidata * largo_medio
-		var amenaza: float = float(w["rechazo_amenaza_suelta"]) + _amenaza_de_rebote(estado, punto, ataca_local)
-		# Al corner solo si la linea le queda a tiro (rebote_largo_max). El
-		# que ataja achicando, lejos de su arco, no la manda por al lado del
-		# palo: le queda en juego igual que un costado.
-		if absf(float(grados)) > 90.0 and absf((linea_x - desde.x) / dir_candidata.x) <= float(f["rebote_largo_max"]):
-			amenaza = float(w["rechazo_amenaza_corner"])
-		if amenaza < menor or (is_equal_approx(amenaza, menor) and lado < menor_lado):
-			menor = amenaza
-			menor_lado = lado
-			angulo = deg_to_rad(float(grados))
-
-	var jugador := _dict_jugador(estado, _equipo_de(estado, not ataca_local), int(e_arq["jugador_id"]))
-	var habilidad: float = _por_atributo(jugador, "estirada", 0.0, 1.0) if not jugador.is_empty() else 0.5
-	var dificultad: float = clampf(1.0 - float(datos.get("dist", 16.0)) / float(w["rechazo_dist_comoda"]), 0.0, 1.0)
-	var dispersion: float = float(w["rechazo_dispersion"]) * (1.0 - 0.7 * habilidad) * (0.3 + 0.7 * dificultad)
-	var dir: Vector2 = hacia_campo.rotated(angulo + rng.randf_range(-1.0, 1.0) * dispersion)
-	var largo: float = rng.randf_range(float(f["rebote_largo_min"]), float(f["rebote_largo_max"]))
-	var destino: Vector2 = desde + dir * largo
-	# Para atras sale por el fondo si la linea esta dentro del rebote mas
-	# largo: la desvio con la fuerza del remate, no con la del rebote suelto.
-	# Si no llega —casi paralela a la linea, o manoteada lejos del arco—
-	# queda en juego. Con el cruce geometrico a secas, la pelota casi
-	# paralela a la linea salia por el lateral a 34 m.
-	var cruce := Vector2.INF
-	if dir.dot(hacia_campo) < 0.0:
-		var hasta_fondo: float = absf((linea_x - desde.x) / dir.x) if absf(dir.x) > 0.0001 else INF
-		if hasta_fondo <= float(f["rebote_largo_max"]):
-			cruce = Vector2(linea_x, desde.y + dir.y * hasta_fondo)
-	elif absf(destino.x) >= MEDIO_LARGO or absf(destino.y) >= MEDIO_ANCHO:
-		cruce = _cruce_con_la_linea(desde, dir)
-	if cruce != Vector2.INF:
-		# Por el fondo, nunca adentro del arco propio: la saca por al lado.
-		if absf(cruce.x) >= MEDIO_LARGO - 0.01 and absf(cruce.y) <= ARCO_MEDIO_ANCHO + 0.5:
-			cruce.y = (ARCO_MEDIO_ANCHO + 0.5) * (1.0 if cruce.y >= 0.0 else -1.0)
-		stats["rechazos_afuera"] += 1
-		_pelota_fuera(estado, cruce, not ataca_local)
-		return
-	stats["rechazos_en_juego"] += 1
-	estado["ultimo_rechazo_tick"] = int(estado["tick"])
-	_soltar_pelota(estado, desde, destino, not ataca_local)
 
 
 # ---------------------------------------------------------------------------
@@ -7607,8 +7037,5 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator,
 			# Etapa 4: ticks por fase de ritmo y pases atras separados por
 			# tipo. Solo mide; ningun consumidor lo necesita.
 			"ritmo": estado.get("ritmo_stats", {}),
-			# Etapa 6: salidas, achiques, rechazos y cobertura en el duelo.
-			# Solo mide.
-			"arqueros": estado.get("arqueros_stats", {}),
 		},
 	}
