@@ -135,7 +135,6 @@ var color_short: Color = Color.TRANSPARENT
 ## de simular el cruce y lo apaga despues, porque el mismo club juega la
 ## liga con los mismos objetos.
 var en_copa: bool = false
-var foco_individual: Dictionary = {}  # jugador_id -> atributo (String), foco de ESTA temporada — ver core/entrenamiento.gd
 ## Fans (§8.4 #22, ver core/fans.gd) — la CANTIDAD de hinchas, un numero
 ## absoluto y exponencial: un club de decima tiene miles y uno de primera
 ## decenas de millones. Lo pone Liga.inicializar segun la division
@@ -456,7 +455,6 @@ func guardar() -> Dictionary:
 		"color_camiseta": color_camiseta.to_html(), "color_short": color_short.to_html(),
 		"config_cambios": config_cambios,
 		"objetivo_temporada": objetivo_temporada, "objetivos_incumplidos_seguidos": objetivos_incumplidos_seguidos,
-		"foco_individual": _claves_a_texto(foco_individual),
 		"fans": fans, "racha_sin_ganar": racha_sin_ganar, "rival_directo": rival_directo,
 		"promociones_temporada": promociones_temporada,
 		"prestados_afuera": prestados_afuera_datos, "prestados_propios": prestados_propios_datos,
@@ -620,7 +618,6 @@ static func cargar(datos: Dictionary) -> Team:
 	if t.objetivo_temporada.has("posicion_maxima"):
 		t.objetivo_temporada["posicion_maxima"] = int(t.objetivo_temporada["posicion_maxima"])
 	t.objetivos_incumplidos_seguidos = int(datos.get("objetivos_incumplidos_seguidos", 0))
-	t.foco_individual = _claves_a_entero(datos.get("foco_individual", {}))
 	# Ojo: hasta la v1.5 esto era un puntaje de 0 a 100 y ahora es la
 	# cantidad real de hinchas. La migracion NO va aca: necesita saber en
 	# que division juega el club y eso no se guarda —lo reconstruye la
@@ -684,8 +681,12 @@ static func _normalizar_jugadores(lista: Array) -> Array:
 		j["edad"] = int(j["edad"])
 		j["potencial"] = int(j["potencial"])
 		j["propension_lesion"] = int(j["propension_lesion"])
-		if j.has("foco_temporadas_consecutivas"):
-			j["foco_temporadas_consecutivas"] = int(j["foco_temporadas_consecutivas"])
+		if j.has("uso_temporadas_consecutivas"):
+			j["uso_temporadas_consecutivas"] = int(j["uso_temporadas_consecutivas"])
+		# El foco individual se sacó: la racha vieja no significa nada
+		# para la racha por uso y no se migra.
+		j.erase("foco_atributo")
+		j.erase("foco_temporadas_consecutivas")
 		if j.has("partidos_seguidos_titular"):
 			j["partidos_seguidos_titular"] = int(j["partidos_seguidos_titular"])
 		if j.has("partidos_seguidos_banco"):

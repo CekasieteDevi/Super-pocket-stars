@@ -1,7 +1,7 @@
 extends SceneTree
 
 ## Aprender una habilidad (§5, core/aprendizaje.gd) — segunda via ademas de
-## nacer con una: requisitos (2 temporadas de foco + atributo 65+ + a
+## nacer con una: requisitos (2 temporadas con el mismo atributo mas usado + atributo 65+ + a
 ## partir de temporada 3), siempre bronce, maximo 1 en la carrera, y los
 ## bonus de chance (mentor/genetica/personalidad/edad/instalaciones).
 ## Correr con: godot --headless --script tests/test_aprendizaje.gd
@@ -15,23 +15,66 @@ func _init() -> void:
 
 	_test_no_aprende_si_ya_tiene_una_habilidad(rng)
 	_test_no_aprende_antes_de_temporada_3(rng)
-	_test_no_aprende_sin_2_temporadas_de_foco_seguidas(rng)
+	_test_no_aprende_sin_2_temporadas_de_racha(rng)
 	_test_no_aprende_con_el_atributo_bajo_65(rng)
 	_test_no_aprende_si_el_atributo_no_tiene_pool_de_habilidades(rng)
 	_test_chance_suma_los_bonus_y_topea_en_15(rng)
 	_test_mentor_con_esa_habilidad_suma_bonus(rng)
 	_test_habilidad_aprendida_siempre_es_bronce_y_del_atributo_correcto(rng)
 	_test_integracion_con_chance_forzada_al_maximo(rng)
+	_test_racha_sigue_al_atributo_mas_usado(rng)
+	_test_racha_sobrevive_guardado(rng)
 
 	quit()
+
+
+func _test_racha_sigue_al_atributo_mas_usado(rng: RandomNumberGenerator) -> void:
+	print("\n=== La racha cuenta temporadas seguidas con el mismo atributo mas usado ===")
+	var j := PlayerGenerator.generate(0, rng, "DC")
+	var plena := Progresion.USO_TEMPORADA_PLENA
+	j["xp_uso"] = {"tiro": plena * 0.6, "pases": plena * 0.4}
+	Aprendizaje.actualizar_racha(j)
+	var ok: bool = j["uso_atributo"] == "tiro" and j["uso_temporadas_consecutivas"] == 1
+	Aprendizaje.actualizar_racha(j)
+	ok = ok and j["uso_temporadas_consecutivas"] == 2
+	j["xp_uso"] = {"tiro": plena * 0.3, "pases": plena * 0.7}
+	Aprendizaje.actualizar_racha(j)
+	ok = ok and j["uso_atributo"] == "pases" and j["uso_temporadas_consecutivas"] == 1
+	# Menos de media temporada de titular: no se especializa en nada.
+	j["xp_uso"] = {"pases": plena * 0.2}
+	Aprendizaje.actualizar_racha(j)
+	ok = ok and j["uso_atributo"] == "" and j["uso_temporadas_consecutivas"] == 0
+	if ok:
+		print("OK: sube con el mismo atributo, se reinicia al cambiar y se corta si casi no jugo.")
+	else:
+		print("FALLA: %s / %s" % [j.get("uso_atributo"), j.get("uso_temporadas_consecutivas")])
+
+
+func _test_racha_sobrevive_guardado(rng: RandomNumberGenerator) -> void:
+	print("\n=== La racha sobrevive un guardar/cargar como int ===")
+	var equipo := Team.generar("ClubGuardado", rng, 0)
+	var id: int = equipo.banco[0]["id"]
+	equipo.banco[0]["uso_atributo"] = "tiro"
+	equipo.banco[0]["uso_temporadas_consecutivas"] = 2
+	var cargado := Team.cargar(JSON.parse_string(JSON.stringify(equipo.guardar())))
+	var jc := {}
+	for j in cargado.banco:
+		if j["id"] == id:
+			jc = j
+	var ok: bool = jc.get("uso_atributo", "") == "tiro"
+	ok = ok and typeof(jc.get("uso_temporadas_consecutivas")) == TYPE_INT and jc["uso_temporadas_consecutivas"] == 2
+	if ok:
+		print("OK: round-trip conserva la racha.")
+	else:
+		print("FALLA: %s" % [jc])
 
 
 func _jugador_listo_para_aprender(rng: RandomNumberGenerator, atributo: String = "tiro") -> Dictionary:
 	var j := PlayerGenerator.generate(0, rng, "DC")
 	j["habilidad"] = {}
 	j["atributos"][atributo] = 70
-	j["foco_atributo"] = atributo
-	j["foco_temporadas_consecutivas"] = 2
+	j["uso_atributo"] = atributo
+	j["uso_temporadas_consecutivas"] = 2
 	j["edad"] = 30
 	j["genetica_tier"] = "Del monton"
 	j["personalidades"] = {}
@@ -61,26 +104,26 @@ func _test_no_aprende_antes_de_temporada_3(rng: RandomNumberGenerator) -> void:
 		print("FALLA: %s" % [resultado])
 
 
-func _test_no_aprende_sin_2_temporadas_de_foco_seguidas(rng: RandomNumberGenerator) -> void:
-	print("\n=== No aprende con solo 1 temporada de foco (o sin foco) ===")
+func _test_no_aprende_sin_2_temporadas_de_racha(rng: RandomNumberGenerator) -> void:
+	print("\n=== No aprende con solo 1 temporada de racha (o sin racha) ===")
 	var equipo := Team.generar("ClubC", rng, 0)
 	var j1 := _jugador_listo_para_aprender(rng)
-	j1["foco_temporadas_consecutivas"] = 1
+	j1["uso_temporadas_consecutivas"] = 1
 	var j2 := _jugador_listo_para_aprender(rng)
-	j2["foco_atributo"] = ""
-	j2["foco_temporadas_consecutivas"] = 0
+	j2["uso_atributo"] = ""
+	j2["uso_temporadas_consecutivas"] = 0
 
 	var ok := true
 	ok = ok and Aprendizaje.procesar_jugador(j1, equipo, 5, rng).is_empty()
 	ok = ok and Aprendizaje.procesar_jugador(j2, equipo, 5, rng).is_empty()
 	if ok:
-		print("OK: ni con 1 temporada ni sin foco.")
+		print("OK: ni con 1 temporada ni sin racha.")
 	else:
 		print("FALLA")
 
 
 func _test_no_aprende_con_el_atributo_bajo_65(rng: RandomNumberGenerator) -> void:
-	print("\n=== No aprende si el atributo de foco esta por debajo de 65 ===")
+	print("\n=== No aprende si el atributo de la racha esta por debajo de 65 ===")
 	var equipo := Team.generar("ClubD", rng, 0)
 	var j := _jugador_listo_para_aprender(rng)
 	j["atributos"]["tiro"] = 50

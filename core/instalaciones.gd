@@ -151,27 +151,8 @@ static func bonus_potencial_juveniles(equipo: Team) -> int:
 		* CALIDAD_JUVENILES_RANGO))
 
 
-## §9.5/§7.4 entrenamiento: cuántos jugadores pueden estar en foco
-## individual a la vez (ver core/entrenamiento.gd).
-## Tope duro de jugadores en foco individual a la vez. Los cupos se
-## reparten a lo largo de toda la escala: 1 al empezar, 3 en el nivel
-## máximo. Con el nivel a secas se podían enfocar 5 jugadores y el foco
-## dejaba de ser una decisión: entraba medio plantel.
-const MAXIMO_FOCO_INDIVIDUAL := 3
-
-
-static func limite_foco_individual(equipo: Team) -> int:
-	return cupos_foco_de_nivel(equipo.instalaciones.get("entrenamiento", 1))
-
-
-static func cupos_foco_de_nivel(nivel: int) -> int:
-	# round y no int: con truncado, la mitad de la escala (nivel 5 de 10)
-	# seguia dando un solo cupo y el segundo aparecia recien en el 6.
-	return 1 + int(round(progreso(nivel) * float(MAXIMO_FOCO_INDIVIDUAL - 1)))
-
-
 ## §9.5/§7.1 entrenamiento: nivel 1 = sin bonus, nivel máximo = +4% sobre
-## TODO el crecimiento de la temporada, no solo el atributo en foco — ver
+## TODO el crecimiento de la temporada — ver
 ## Progresion.aplicar_temporada.
 static func factor_entrenamiento(equipo: Team) -> float:
 	return 1.0 + progreso(equipo.instalaciones.get("entrenamiento", 1)) * BONUS_ENTRENAMIENTO_MAX

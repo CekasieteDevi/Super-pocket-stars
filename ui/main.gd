@@ -187,7 +187,6 @@ func _ready() -> void:
 	_construir_panel_sponsors(contenedor)
 	_construir_panel_roles(contenedor)
 	_construir_panel_entrenamiento(contenedor)
-	_construir_panel_foco_individual(contenedor)
 	_construir_panel_partido_animado(contenedor)
 	_construir_panel_economia(contenedor)
 	_construir_panel_mercado(contenedor)
@@ -4478,13 +4477,13 @@ const QUE_HACE_INSTALACION := {
 	"medica": "Menos lesiones y recuperacion de fatiga mas rapida entre fechas.",
 	"juveniles": "Camada de cantera mas grande y con mejor techo.",
 	"scouting": "Reportes de potencial mas precisos: el rango de los juveniles se achica.",
-	"entrenamiento": "Mas cupos de foco individual (hasta 3) y todo el plantel crece un poco mas rapido.",
+	"entrenamiento": "Todo el plantel crece un poco mas rapido.",
 }
 
-## Que pestaña de Instalaciones esta abierta. Las tres cosas que vivian
-## aca —mejoras, investigadores y foco individual— no tienen nada que ver
-## entre si salvo que se pagan con la misma caja, y apiladas en un solo
-## scroll no se entendia donde empezaba una y terminaba la otra.
+## Que pestaña de Instalaciones esta abierta. Mejoras e investigadores no
+## tienen nada que ver entre si salvo que se pagan con la misma caja, y
+## apiladas en un solo scroll no se entendia donde empezaba una y
+## terminaba la otra.
 var solapa_instalaciones: String = "mejoras"
 var contenedor_instalaciones_solapas: HBoxContainer
 var dialogo_investigador: AcceptDialog
@@ -4519,10 +4518,7 @@ func _efecto_instalacion(categoria: String, nivel: int) -> String:
 			return "potencial de juveniles ±%d" % Scout.margen(
 				Instalaciones.nivel_scout_de_nivel(nivel))
 		"entrenamiento":
-			var cupos := Instalaciones.cupos_foco_de_nivel(nivel)
-			return "%d cupo%s de foco, crecimiento +%d%%" % [
-				cupos, "" if cupos == 1 else "s",
-				round(t * Instalaciones.BONUS_ENTRENAMIENTO_MAX * 100.0)]
+			return "crecimiento +%d%%" % round(t * Instalaciones.BONUS_ENTRENAMIENTO_MAX * 100.0)
 	return ""
 
 
@@ -5334,226 +5330,6 @@ func _on_contratar_investigador(estrellas: int) -> void:
 		label_instalaciones_estado.text = "No se pudo: %s" % r["motivo"]
 	_refrescar_instalaciones()
 	_refrescar_economia()
-
-
-## Foco individual vive en Equipo y no en Instalaciones. La instalacion
-## solo REGALA los cupos; la decision de a quien y en que atributo es de
-## plantel, y se toma mirando puestos, edades y atributos. Estaba a dos
-## clics de distancia de las pantallas con las que se decide.
-var contenedor_foco: VBoxContainer
-var label_foco_estado: Label
-
-
-func _construir_panel_foco_individual(padre: Control) -> void:
-	var panel := VBoxContainer.new()
-	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	panel.visible = false
-	padre.add_child(panel)
-	paneles["foco_individual"] = panel
-
-	label_foco_estado = Label.new()
-	label_foco_estado.text = ""
-	label_foco_estado.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label_foco_estado.add_theme_color_override("font_color", Tema.AMBAR)
-	panel.add_child(label_foco_estado)
-
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.add_child(scroll)
-
-	contenedor_foco = VBoxContainer.new()
-	contenedor_foco.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(contenedor_foco)
-
-
-func _mostrar_foco_individual() -> void:
-	_ocultar_todos()
-	paneles["foco_individual"].visible = true
-	_refrescar_panel_foco()
-
-
-func _refrescar_panel_foco() -> void:
-	if contenedor_foco == null:
-		return
-	for hijo in contenedor_foco.get_children():
-		hijo.queue_free()
-	_refrescar_foco_individual(GameState.equipo_jugador)
-
-
-## §7.4 punto 3 / §5: hasta N jugadores (N = nivel de Entrenamiento con
-## tope de 3) con foco en un atributo, que esta temporada crece más
-## rápido — y la vía de entrada para aprender una habilidad de bronce (2
-## temporadas seguidas en el mismo atributo, con ese atributo en 65+).
-##
-## Cuánto más rápido depende de si el atributo es propio del puesto (ver
-## Progresion.multiplicador_foco), así que el multiplicador se muestra
-## ANTES de asignar y no después: es la información con la que se decide.
-func _refrescar_foco_individual(equipo: Team) -> void:
-	var limite := Entrenamiento.limite(equipo)
-	var usados := equipo.foco_individual.size()
-
-	var explica := Label.new()
-	explica.text = "El atributo elegido crece mucho mas rapido esta temporada. Cuanto mas depende del PUESTO: enfocar el remate de un 9 rinde mas que el mismo remate en un central. Dos temporadas seguidas en el mismo atributo, con ese atributo en 65 o mas, puede hacerle aprender una habilidad de bronce. Los cupos los da la instalacion de Entrenamiento, con tope de %d." % Instalaciones.MAXIMO_FOCO_INDIVIDUAL
-	explica.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	explica.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
-	explica.add_theme_color_override("font_color", Tema.SUAVE)
-	contenedor_foco.add_child(explica)
-
-	contenedor_foco.add_child(Tema.etiqueta_seccion(
-		"Cupos usados: %d de %d" % [usados, limite]))
-
-	if equipo.foco_individual.is_empty():
-		contenedor_foco.add_child(_tarjeta_vacia(
-			"No tenes a nadie en foco. Es plata gratis que estas dejando pasar: los cupos no se acumulan de una temporada a la otra."))
-
-	for jugador_id in equipo.foco_individual.keys():
-		var jugador := _buscar_jugador_por_id(equipo, jugador_id)
-		if jugador.is_empty():
-			continue
-		var atributo: String = equipo.foco_individual[jugador_id]
-		var racha: int = jugador.get("foco_temporadas_consecutivas", 0)
-		var mult := Progresion.multiplicador_foco(str(jugador["posicion"]), atributo)
-		var valor: int = int(jugador["atributos"].get(atributo, 0))
-
-		var tarjeta := Componentes.tarjeta(Tema.AMBAR)
-		contenedor_foco.add_child(tarjeta)
-		var fila := HBoxContainer.new()
-		tarjeta.add_child(fila)
-
-		var caja_pos := CenterContainer.new()
-		caja_pos.custom_minimum_size = Vector2(56, 0)
-		caja_pos.add_child(Componentes.chip(str(jugador["posicion"]), Color("#2f4a3c")))
-		fila.add_child(caja_pos)
-
-		var izq := VBoxContainer.new()
-		izq.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		izq.add_theme_constant_override("separation", 2)
-		fila.add_child(izq)
-		var nombre := Label.new()
-		nombre.text = _nombre_jugador(jugador)
-		nombre.clip_text = true
-		nombre.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-		izq.add_child(nombre)
-		var sub := Label.new()
-		# La racha y el valor del atributo juntos: son las dos condiciones
-		# de la habilidad de bronce y por separado no dicen nada.
-		var falta := ""
-		if valor < 65:
-			falta = "   ·   le faltan %d puntos para poder aprender la habilidad" % (65 - valor)
-		elif racha >= 1:
-			falta = "   ·   otra temporada mas y puede aprender la habilidad"
-		sub.text = "%s %d   ·   racha de %d temporada%s%s" % [
-			atributo.replace("_", " "), valor, racha, "" if racha == 1 else "s", falta]
-		sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		sub.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
-		sub.add_theme_color_override("font_color", Tema.SUAVE)
-		izq.add_child(sub)
-
-		var caja_mult := VBoxContainer.new()
-		caja_mult.custom_minimum_size = Vector2(120, 0)
-		caja_mult.add_theme_constant_override("separation", 0)
-		fila.add_child(caja_mult)
-		caja_mult.add_child(Tema.etiqueta_seccion("Crece"))
-		var l_mult := Label.new()
-		l_mult.text = "x%.2f" % mult
-		Tema.numero(l_mult, 22, _color_de_multiplicador(mult))
-		caja_mult.add_child(l_mult)
-
-		var id_j := int(jugador_id)
-		var btn := Button.new()
-		btn.text = "Quitar"
-		btn.custom_minimum_size = Vector2(130, Tema.ALTO_TACTIL)
-		btn.pressed.connect(func():
-			Entrenamiento.quitar(equipo, id_j)
-			label_foco_estado.text = "Foco liberado: quedo un cupo."
-			_refrescar_panel_foco()
-		)
-		fila.add_child(btn)
-
-	if usados >= limite:
-		var tope := Label.new()
-		tope.text = "No te quedan cupos. Quitale el foco a alguien, o subi la instalacion de Entrenamiento (hasta %d cupos)." % Instalaciones.MAXIMO_FOCO_INDIVIDUAL
-		tope.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		tope.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
-		tope.add_theme_color_override("font_color", Tema.SUAVE)
-		contenedor_foco.add_child(tope)
-		return
-
-	var elegibles: Array = equipo.jugadores + equipo.banco + equipo.cantera
-	elegibles = elegibles.filter(func(j): return not equipo.foco_individual.has(j["id"]))
-	if elegibles.is_empty():
-		return
-
-	contenedor_foco.add_child(Tema.etiqueta_seccion("Asignar un foco nuevo"))
-	var tarjeta_nueva := Componentes.tarjeta()
-	contenedor_foco.add_child(tarjeta_nueva)
-	var caja := VBoxContainer.new()
-	tarjeta_nueva.add_child(caja)
-	var fila_nueva := HBoxContainer.new()
-	caja.add_child(fila_nueva)
-
-	var option_jugador := OptionButton.new()
-	option_jugador.custom_minimum_size = Vector2(340, Tema.ALTO_TACTIL)
-	for j in elegibles:
-		option_jugador.add_item("%s  (%s, %d años)" % [
-			_nombre_jugador(j), j["posicion"], int(j["edad"])])
-	fila_nueva.add_child(option_jugador)
-
-	var option_atributo := OptionButton.new()
-	option_atributo.custom_minimum_size = Vector2(240, Tema.ALTO_TACTIL)
-	for attr in PlayerGenerator.get_all_attributes():
-		option_atributo.add_item(str(attr).replace("_", " "))
-	fila_nueva.add_child(option_atributo)
-
-	# La vista previa es el punto de la pantalla: el multiplicador depende
-	# del puesto, asi que hay que poder verlo ANTES de gastar el cupo.
-	var previa := Label.new()
-	previa.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	previa.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	previa.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
-	caja.add_child(previa)
-
-	var actualizar_previa := func():
-		var j: Dictionary = elegibles[option_jugador.selected]
-		var attr: String = str(PlayerGenerator.get_all_attributes()[option_atributo.selected])
-		var m := Progresion.multiplicador_foco(str(j["posicion"]), attr)
-		var v: int = int(j["atributos"].get(attr, 0))
-		previa.text = "%s tiene %s en %d y de %s crece x%.2f con el foco puesto ahi." % [
-			_nombre_jugador(j), attr.replace("_", " "), v, j["posicion"], m]
-		previa.add_theme_color_override("font_color", _color_de_multiplicador(m))
-	option_jugador.item_selected.connect(func(_i): actualizar_previa.call())
-	option_atributo.item_selected.connect(func(_i): actualizar_previa.call())
-	actualizar_previa.call()
-
-	var btn_asignar := Button.new()
-	btn_asignar.text = "Asignar foco"
-	btn_asignar.custom_minimum_size = Vector2(180, Tema.ALTO_TACTIL)
-	Tema.primario(btn_asignar)
-	btn_asignar.pressed.connect(func():
-		var jugador_elegido: Dictionary = elegibles[option_jugador.selected]
-		var atributo_elegido: String = str(
-			PlayerGenerator.get_all_attributes()[option_atributo.selected])
-		Entrenamiento.asignar(equipo, jugador_elegido["id"], atributo_elegido)
-		label_foco_estado.text = "%s entrena %s esta temporada." % [
-			_nombre_jugador(jugador_elegido), atributo_elegido.replace("_", " ")]
-		_refrescar_panel_foco()
-	)
-	fila_nueva.add_child(btn_asignar)
-
-
-## Verde si el atributo es de los que rinden en ese puesto, rojo si el
-## foco casi no sirve ahi. Es el unico dato que separa una buena decision
-## de una mala en esta pantalla.
-func _color_de_multiplicador(mult: float) -> Color:
-	if mult >= 2.4:
-		return Tema.VERDE
-	if mult >= 1.8:
-		return Tema.VERDE_TIBIO
-	if mult >= 1.4:
-		return Tema.AMBAR
-	return Tema.ROJO
 
 
 func _buscar_jugador_por_id(equipo: Team, jugador_id: int) -> Dictionary:
@@ -8150,8 +7926,7 @@ const SECCIONES := [
 	{"clave": "jugar", "nombre": "Jugar", "paneles": []},
 	{"clave": "equipo", "nombre": "Equipo", "paneles": [
 		["plantel", "Plantel"], ["formacion", "Formacion"],
-		["roles", "Roles"], ["entrenamiento", "Entrenamiento"],
-		["foco_individual", "Foco individual"]]},
+		["roles", "Roles"], ["entrenamiento", "Entrenamiento"]]},
 	# Lo que es del CLUB y no del plantel: el edificio y los pibes. Antes
 	# vivian de colados en Equipo, que ya tenia cinco subsolapas y era la
 	# unica seccion que mezclaba las dos cosas.
@@ -8308,7 +8083,6 @@ func _mostrar_panel_de_seccion(clave: String) -> void:
 	var metodos := {
 		"plantel": "_mostrar_plantel", "formacion": "_mostrar_formacion",
 		"entrenamiento": "_mostrar_entrenamiento",
-		"foco_individual": "_mostrar_foco_individual",
 		"cantera": "_mostrar_cantera", "instalaciones": "_mostrar_instalaciones",
 		"renovaciones": "_mostrar_renovaciones",
 		"roles": "_mostrar_roles",

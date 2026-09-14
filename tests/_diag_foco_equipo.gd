@@ -55,7 +55,7 @@ func _correr(area: String) -> Dictionary:
 			var mult := FocoEquipo.multiplicadores(e.reparto_foco(), PlayerGenerator.get_all_attributes())
 			for j in e.todos_los_jugadores():
 				Progresion.aplicar_temporada(j, rng, 1.0,
-					Instalaciones.factor_entrenamiento(e) * e.factor_carga_temporada(), "", mult)
+					Instalaciones.factor_entrenamiento(e) * e.factor_carga_temporada(), mult)
 			e.reiniciar_carga()
 
 	var r := {}

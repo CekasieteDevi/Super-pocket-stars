@@ -57,23 +57,6 @@ static func _multiplicador_crecimiento(edad: int) -> float:
 	return -1.0  # 38+: declive
 
 
-## Envejece un año al jugador y mueve sus atributos. Modifica el dict in
-## place. mult_mentor (§6 extendido, Mentores.multiplicador_para): bonus de
-## crecimiento si hay un veterano líder en su plantel y este jugador es
-## joven — 1.0 si no aplica ninguna de las dos cosas. mult_entrenamiento
-## (§9.5, Instalaciones.factor_entrenamiento): +1%/nivel de instalaciones
-## de entrenamiento, sobre TODO el crecimiento. foco_atributo (§7.4 punto
-## 3, core/entrenamiento.gd): si no es "", ESE atributo puntual crece más
-## rápido esta temporada — "" si el jugador no tiene foco individual.
-const MULTIPLICADOR_FOCO := 2.0
-
-## Piso del multiplicador de foco. Entrenarle algo que no tiene nada que
-## ver con su puesto igual sirve un poco: es lo que permite RECONVERTIR a
-## un jugador de posición a lo largo de varias temporadas. Sin piso, un
-## defensa entrenando volea no crecía nada y la reconversión era
-## imposible.
-const MULTIPLICADOR_FOCO_MINIMO := 1.3
-
 ## §7.3 aprendizaje por uso. El atributo que MÁS usó en la temporada
 ## crece hasta un `MULTIPLICADOR_USO` más rápido; el resto, en proporción
 ## a cuánto lo usó. Todo escalado por cuánto jugó: un suplente que sumó
@@ -89,30 +72,6 @@ const MULTIPLICADOR_USO := 0.40
 ## temporada son ~38 fechas, así que con media temporada de titular ya se
 ## nota.
 const USO_TEMPORADA_PLENA := 19.0
-
-
-## Cuánto rinde el foco individual según qué tan propio del puesto sea el
-## atributo. Un delantero entrenando `tiro` (su atributo de mayor peso)
-## saca el multiplicador completo; el mismo delantero entrenando `pases`
-## saca bastante menos, y un defensa entrenando `volea` —que ni figura en
-## los pesos de DFC— saca el piso.
-##
-## Se escala contra el peso MÁXIMO de su propia posición y no contra un
-## número fijo, porque los pesos no suman igual en todos los puestos: si
-## se comparara contra una constante, unas posiciones rendirían siempre
-## más que otras por cómo está armada la tabla, no por decisión de nadie.
-static func multiplicador_foco(posicion: String, atributo: String) -> float:
-	var tabla: Dictionary = PlayerGenerator.get_weights()
-	if not tabla.has(posicion):
-		return MULTIPLICADOR_FOCO
-	var pesos: Dictionary = tabla[posicion]
-	var maximo := 0.0
-	for p in pesos.values():
-		maximo = maxf(maximo, float(p))
-	if maximo <= 0.0:
-		return MULTIPLICADOR_FOCO
-	var relevancia: float = clampf(float(pesos.get(atributo, 0)) / maximo, 0.0, 1.0)
-	return lerpf(MULTIPLICADOR_FOCO_MINIMO, MULTIPLICADOR_FOCO, relevancia)
 
 
 ## Techo de un atributo concreto. Cae al potencial global si el jugador
@@ -141,10 +100,21 @@ static func multiplicador_uso(jugador: Dictionary, atributo: String) -> float:
 	return 1.0 + MULTIPLICADOR_USO * relativo * carga
 
 
-## `mult_area` es el multiplicador por atributo que deja el foco de equipo
-## (§7.4.2, ver FocoEquipo.multiplicadores). Vacio = sin enfasis.
+## Envejece un año al jugador y mueve sus atributos. Modifica el dict in
+## place. mult_mentor (§6 extendido, Mentores.multiplicador_para): bonus de
+## crecimiento si hay un veterano líder en su plantel y este jugador es
+## joven — 1.0 si no aplica ninguna de las dos cosas. mult_entrenamiento
+## (§9.5, Instalaciones.factor_entrenamiento): bonus de instalaciones y
+## carga, sobre TODO el crecimiento. `mult_area` es el multiplicador por
+## atributo que deja el foco de equipo (§7.4.2, ver
+## FocoEquipo.multiplicadores). Vacio = sin enfasis.
+##
+## El foco individual (×2 sobre un atributo elegido) se sacó el
+## 2026-09-14. Medido con semilla fija: un DC de 17 con foco en
+## tiro, uso y foco de equipo técnico cerraba el 100% de la distancia a su
+## techo en UNA temporada, porque todos los bonus se multiplican.
 static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator, mult_mentor: float = 1.0,
-		mult_entrenamiento: float = 1.0, foco_atributo: String = "", mult_area: Dictionary = {}) -> void:
+		mult_entrenamiento: float = 1.0, mult_area: Dictionary = {}) -> void:
 	jugador["edad"] += 1
 	var mult_edad := _multiplicador_crecimiento(jugador["edad"])
 	var mult_tier: float = VELOCIDAD_POR_TIER.get(jugador["genetica_tier"], 1.0)
@@ -168,10 +138,9 @@ static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator, m
 				# en pases, y crece hacia cada uno por separado.
 				var distancia: float = float(techo_de(jugador, attr)) - valor_actual
 				if distancia > 0.0:
-					var mult_foco: float = multiplicador_foco(jugador["posicion"], attr) if attr == foco_atributo else 1.0
 					var mult_uso: float = multiplicador_uso(jugador, attr)
 					var mult_equipo: float = float(mult_area.get(attr, 1.0))
-					cambio = distancia * 0.12 * mult_edad * mult_tier * mult_personalidad * mult_mentor * mult_entrenamiento * mult_foco * mult_uso * mult_equipo
+					cambio = distancia * 0.12 * mult_edad * mult_tier * mult_personalidad * mult_mentor * mult_entrenamiento * mult_uso * mult_equipo
 				cambio += rng.randfn(0.0, 0.6)
 				# El techo es techo: el ruido aleatorio no puede empujar
 				# por encima. Antes se sumaba igual estando ya en el tope,

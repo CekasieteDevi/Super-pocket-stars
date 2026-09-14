@@ -504,12 +504,6 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 		_avanzar_contratos(equipo, rng, equipo == equipo_protegido)
 		var bonus_mentor := Mentores.mejor_bonus_disponible(equipo)
 
-		# §7.4 punto 3: la IA mantiene el foco de quien ya lo tenía (para
-		# que llegue a las 2 temporadas seguidas) y llena los cupos que
-		# sobren. Al equipo del jugador humano no se le toca — el foco
-		# individual lo elige él desde la UI.
-		if equipo != equipo_protegido:
-			Entrenamiento.asignar_foco_automatico_ia(equipo, rng)
 		# §7.4.1: la carga de entrenamiento de la temporada, promediada
 		# semana a semana, entra acá junto con las instalaciones.
 		var mult_entrenamiento: float = Instalaciones.factor_entrenamiento(equipo) * equipo.factor_carga_temporada()
@@ -518,9 +512,8 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 			equipo.reparto_foco(), PlayerGenerator.get_all_attributes())
 
 		for jugador in equipo.todos_los_jugadores():
-			var foco: String = equipo.foco_individual.get(jugador["id"], "")
-			Progresion.aplicar_temporada(jugador, rng, Mentores.multiplicador_para(jugador, bonus_mentor), mult_entrenamiento, foco, mult_area)
-			Entrenamiento.actualizar_racha(jugador, foco)
+			Aprendizaje.actualizar_racha(jugador)
+			Progresion.aplicar_temporada(jugador, rng, Mentores.multiplicador_para(jugador, bonus_mentor), mult_entrenamiento, mult_area)
 			var aprendida := Aprendizaje.procesar_jugador(jugador, equipo, temporada_actual, rng)
 			if not aprendida.is_empty():
 				noticias.append("APRENDIZAJE: un %s de %s aprende %s (bronce)." % [jugador["posicion"], equipo.nombre, aprendida["nombre"]])
@@ -558,10 +551,9 @@ func _procesar_cantera(equipo: Team, rng: RandomNumberGenerator, es_protegido: b
 	var mult_entrenamiento := Instalaciones.factor_entrenamiento(equipo)
 	var aprendizajes := []
 	for juvenil in equipo.cantera:
-		var foco: String = equipo.foco_individual.get(juvenil["id"], "")
-		Progresion.aplicar_temporada(juvenil, rng, Mentores.multiplicador_para(juvenil, bonus_mentor), mult_entrenamiento, foco,
+		Aprendizaje.actualizar_racha(juvenil)
+		Progresion.aplicar_temporada(juvenil, rng, Mentores.multiplicador_para(juvenil, bonus_mentor), mult_entrenamiento,
 			FocoEquipo.multiplicadores(equipo.reparto_foco(), PlayerGenerator.get_all_attributes()))
-		Entrenamiento.actualizar_racha(juvenil, foco)
 		var aprendida := Aprendizaje.procesar_jugador(juvenil, equipo, temporada_actual, rng)
 		if not aprendida.is_empty():
 			aprendizajes.append({"jugador": juvenil, "habilidad": aprendida})

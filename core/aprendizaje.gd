@@ -7,11 +7,15 @@ extends RefCounted
 ## jugador["habilidad"]: si ya tiene algo ahí (nacido con ella o
 ## aprendida antes), no puede aprender otra — no hace falta un flag aparte.
 ##
-## Requisitos: 2 temporadas SEGUIDAS de foco individual (core/
-## entrenamiento.gd) en el atributo asociado + ese atributo en 65+, y que
-## ya haya pasado al menos la temporada 3 de la partida.
+## Requisitos: 2 temporadas SEGUIDAS con el mismo atributo como el más
+## usado en la cancha (§7.3, jugador["xp_uso"]) + ese atributo en 65+, y
+## que ya haya pasado al menos la temporada 3 de la partida.
+##
+## Antes la racha salía del foco individual. Al sacarlo, el uso es lo que
+## queda que diga en qué se especializa un jugador, y no depende de que
+## alguien lo elija a mano.
 const TEMPORADA_MINIMA := 3
-const TEMPORADAS_FOCO_REQUERIDAS := 2
+const TEMPORADAS_RACHA_REQUERIDAS := 2
 const MEDIA_MINIMA_ATRIBUTO := 65
 const EDAD_JOVEN := 23
 
@@ -72,18 +76,52 @@ static func _elegir_habilidad(jugador: Dictionary, atributo: String, rng: Random
 	return {"nombre": pool[rng.randi() % pool.size()], "nivel": 1}
 
 
+## El atributo que más usó en la temporada, o "" si jugó menos de media
+## temporada de titular: un suplente con cuatro partidos no se especializa
+## en nada. La vara es la misma que usa Progresion para el efecto pleno
+## del uso.
+static func atributo_mas_usado(jugador: Dictionary) -> String:
+	var uso: Dictionary = jugador.get("xp_uso", {})
+	var total := 0.0
+	var mejor := ""
+	var maximo := 0.0
+	for a in uso:
+		total += float(uso[a])
+		if float(uso[a]) > maximo:
+			maximo = float(uso[a])
+			mejor = a
+	if total < Progresion.USO_TEMPORADA_PLENA * 0.5:
+		return ""
+	return mejor
+
+
+## Se llama una vez por jugador por temporada, ANTES de
+## Progresion.aplicar_temporada: esa función consume jugador["xp_uso"].
+## Si el atributo más usado cambió (o casi no jugó), la racha se corta:
+## §5 pide temporadas COMPLETAS seguidas, no sueltas.
+static func actualizar_racha(jugador: Dictionary) -> void:
+	var atributo := atributo_mas_usado(jugador)
+	if atributo == "":
+		jugador["uso_atributo"] = ""
+		jugador["uso_temporadas_consecutivas"] = 0
+	elif jugador.get("uso_atributo", "") == atributo:
+		jugador["uso_temporadas_consecutivas"] = int(jugador.get("uso_temporadas_consecutivas", 0)) + 1
+	else:
+		jugador["uso_atributo"] = atributo
+		jugador["uso_temporadas_consecutivas"] = 1
+
+
 ## Se llama una vez por jugador por temporada, DESPUÉS de Progresion.
 ## aplicar_temporada (para que el atributo ya refleje el crecimiento de
-## esta temporada) y de Entrenamiento.actualizar_racha (para que la racha
-## ya cuente esta temporada). Devuelve la habilidad aprendida, o {} si no
-## pasó nada.
+## esta temporada) y de actualizar_racha (para que la racha ya cuente
+## esta temporada). Devuelve la habilidad aprendida, o {} si no pasó nada.
 static func procesar_jugador(jugador: Dictionary, equipo: Team, temporada_actual: int, rng: RandomNumberGenerator) -> Dictionary:
 	if not jugador.get("habilidad", {}).is_empty():
 		return {}
 	if temporada_actual < TEMPORADA_MINIMA:
 		return {}
-	var atributo: String = jugador.get("foco_atributo", "")
-	if atributo == "" or jugador.get("foco_temporadas_consecutivas", 0) < TEMPORADAS_FOCO_REQUERIDAS:
+	var atributo: String = jugador.get("uso_atributo", "")
+	if atributo == "" or jugador.get("uso_temporadas_consecutivas", 0) < TEMPORADAS_RACHA_REQUERIDAS:
 		return {}
 	if int(jugador["atributos"].get(atributo, 0)) < MEDIA_MINIMA_ATRIBUTO:
 		return {}
