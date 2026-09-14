@@ -3,8 +3,8 @@ extends SceneTree
 ## Preparacion offline. Ejecutar al cambiar las hojas fuente.
 const RUTA := "res://assets/partido/jugadores.png"
 const CELDA := 64
-const TOTAL_CUADROS := 64
-const PEINADOS := ["puntas", "afro", "rapado", "atado"]
+const TOTAL_CUADROS := AtlasJugadores.TOTAL_CUADROS
+const PEINADOS := AtlasJugadores.PEINADOS
 const RUTAS := [RUTA, "res://assets/partido/jugadores_afro.png", "res://assets/partido/jugadores_rapado.png", "res://assets/partido/jugadores_atado.png"]
 const RUTAS_ACCIONES := ["res://assets/partido/recepcion_lateral.png", "res://assets/partido/recepcion_lateral_afro.png", "res://assets/partido/recepcion_lateral_rapado.png", "res://assets/partido/recepcion_lateral_atado.png"]
 # Límites medidos en la hoja entregada; los vuelos son más anchos.
@@ -12,24 +12,33 @@ const FILAS := [0, 197, 386, 565, 734, 914, 1086]
 const COLUMNAS_ARQUERO := [0, 178, 374, 582, 755, 916, 1098, 1275, 1448]
 
 static var _fuentes := {}
+static var _filas_acciones := {}
 
 func _init() -> void:
 	DirAccess.make_dir_recursive_absolute("res://assets/partido/preparados")
 	for estilo in range(PEINADOS.size()):
-		var hoja := Image.create(512, 512, false, Image.FORMAT_RGBA8)
+		var hoja := Image.create(512, ceili(TOTAL_CUADROS / 8.0) * CELDA, false, Image.FORMAT_RGBA8)
 		hoja.fill(Color.TRANSPARENT)
 		for indice in range(TOTAL_CUADROS):
 			var img := _generar_base(indice, estilo)
+			if img == null or not img.get_used_rect().has_area():
+				push_error("Cuadro invalido: %s / %d" % [PEINADOS[estilo], indice])
+				quit(1)
+				return
 			hoja.blit_rect(img, Rect2i(0, 0, CELDA, CELDA), Vector2i((indice % 8) * CELDA, (indice / 8) * CELDA))
 		var error := hoja.save_png("res://assets/partido/preparados/%s.png" % PEINADOS[estilo])
 		if error != OK:
 			push_error("No se pudo guardar el atlas: %s" % PEINADOS[estilo])
 			quit(1)
 			return
-	print("OK: cuatro atlas preparados, 256 cuadros")
+	print("OK: %d atlas preparados, %d cuadros" % [PEINADOS.size(), PEINADOS.size() * TOTAL_CUADROS])
 	quit()
 
 static func _generar_base(indice: int, estilo: int) -> Image:
+	if indice >= 64:
+		return _generar_accion(indice, estilo)
+	if estilo >= 4:
+		return _generar_variante(indice, estilo)
 	var ruta: String = RUTAS_ACCIONES[estilo] if indice >= 48 else RUTAS[estilo]
 	if not _fuentes.has(ruta):
 		var cargada := (load(ruta) as Texture2D).get_image()
@@ -71,6 +80,91 @@ static func _generar_base(indice: int, estilo: int) -> Image:
 	img.fill(Color.TRANSPARENT)
 	img.blit_rect(recorte, Rect2i(Vector2i.ZERO, recorte.get_size()), Vector2i((CELDA - recorte.get_width()) / 2, 58 - recorte.get_height()))
 	return img
+
+
+static func _generar_variante(indice: int, estilo: int) -> Image:
+	var ruta := "res://assets/partido/jugadores_%s.png" % PEINADOS[estilo]
+	if not _fuentes.has(ruta):
+		var cargada := Image.load_from_file(ruta)
+		cargada.convert(Image.FORMAT_RGBA8)
+		_fuentes[ruta] = cargada
+	var fuente: Image = _fuentes[ruta]
+	var celda := fuente.get_width() / 8
+	var alto := fuente.get_height() / 8
+	var recorte := fuente.get_region(Rect2i((indice % 8) * celda, (indice / 8) * alto, celda, alto))
+	_quitar_fondo_exterior(recorte)
+	for y in range(recorte.get_height()):
+		for x in range(recorte.get_width()):
+			var c := recorte.get_pixel(x, y)
+			c.a = 1.0 if c.a >= 0.7 else 0.0
+			recorte.set_pixel(x, y, c)
+	_aislar_personaje(recorte)
+	var limites := recorte.get_used_rect()
+	recorte = recorte.get_region(limites)
+	# Mantener escala del cuerpo y pivote de la celda original.
+	var referencia := _generar_base(indice, 0).get_used_rect()
+	var factor := float(referencia.size.y) / maxf(1.0, limites.size.y)
+	recorte.resize(mini(62, maxi(1, roundi(limites.size.x * factor))), referencia.size.y, Image.INTERPOLATE_NEAREST)
+	var img := Image.create(CELDA, CELDA, false, Image.FORMAT_RGBA8)
+	img.fill(Color.TRANSPARENT)
+	img.blit_rect(recorte, Rect2i(Vector2i.ZERO, recorte.get_size()), Vector2i((CELDA - recorte.get_width()) / 2, 58 - recorte.get_height()))
+	return img
+
+
+static func _generar_accion(indice: int, estilo: int) -> Image:
+	var accion: int = (indice - 64) / 4
+	var ruta := "res://assets/partido/acciones_%s.png" % ["volea", "control_pie", "taco"][accion]
+	var fila := estilo
+	if estilo == 10:
+		ruta = "res://assets/partido/acciones_trenzas.png"
+		fila = accion
+	if not _fuentes.has(ruta):
+		var cargada := Image.load_from_file(ruta)
+		cargada.convert(Image.FORMAT_RGBA8)
+		_quitar_fondo_exterior(cargada)
+		_fuentes[ruta] = cargada
+		_filas_acciones[ruta] = _detectar_filas(cargada)
+		assert(_filas_acciones[ruta].size() == (3 if estilo == 10 else 10), "Cantidad de filas incorrecta: " + ruta)
+	var fuente: Image = _fuentes[ruta]
+	var banda: Vector2i = _filas_acciones[ruta][fila]
+	var columna := (indice - 64) % 4
+	var ancho := fuente.get_width() / 4
+	var recorte := fuente.get_region(Rect2i(columna * ancho, banda.x, ancho, banda.y - banda.x))
+	_aislar_personaje(recorte)
+	var limites := recorte.get_used_rect()
+	assert(limites.has_area(), "Accion vacia: %d / %d" % [indice, estilo])
+	recorte = recorte.get_region(limites)
+	# Una escala por secuencia: conserva la flexion y el alto relativo de las poses.
+	var factor := 44.0 / float(banda.y - banda.x)
+	recorte.resize(maxi(1, roundi(limites.size.x * factor)), maxi(1, roundi(limites.size.y * factor)), Image.INTERPOLATE_NEAREST)
+	var img := Image.create(CELDA, CELDA, false, Image.FORMAT_RGBA8)
+	img.fill(Color.TRANSPARENT)
+	var apoyo := 58 - roundi((banda.y - (banda.x + limites.end.y)) * factor)
+	img.blit_rect(recorte, Rect2i(Vector2i.ZERO, recorte.get_size()), Vector2i((CELDA - recorte.get_width()) / 2, apoyo - recorte.get_height()))
+	return img
+
+
+static func _detectar_filas(img: Image) -> Array[Vector2i]:
+	var filas: Array[Vector2i] = []
+	var inicio := -1
+	var ultimo := -1
+	for y in range(img.get_height()):
+		var ocupado := false
+		for x in range(img.get_width()):
+			if img.get_pixel(x, y).a >= 0.7:
+				ocupado = true
+				break
+		if ocupado:
+			if inicio < 0:
+				inicio = y
+			ultimo = y
+		elif inicio >= 0 and y - ultimo >= 4:
+			if ultimo - inicio > 20:
+				filas.append(Vector2i(inicio, ultimo + 1))
+			inicio = -1
+	if inicio >= 0:
+		filas.append(Vector2i(inicio, ultimo + 1))
+	return filas
 
 
 static func _quitar_fondo_exterior(img: Image) -> void:

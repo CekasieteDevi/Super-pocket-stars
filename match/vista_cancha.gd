@@ -202,6 +202,7 @@ func _dibujar_estadio() -> void:
 	_panel(Vector3(xa, -A - PISTA, 0), Vector3(xb, -A - PISTA, 0),
 		Vector3(xb, ya, ALTO_TRIBUNA + salto), Vector3(xa, ya, ALTO_TRIBUNA + salto),
 		_tex_publico, METROS_TILE_PUBLICO, TINTE_TRIBUNA * luz)
+	_detallar_grada(Vector3(xa, -A - PISTA, 0), Vector3(xb, -A - PISTA, 0), Vector3(0, -PROF_TRIBUNA, ALTO_TRIBUNA + salto))
 	_plano(Vector3(xa, ya, ALTO_TRIBUNA), Vector3(xb, ya, ALTO_TRIBUNA),
 		Vector3(xb, ya - 3.0, ALTO_TRIBUNA + 5.0), Vector3(xa, ya - 3.0, ALTO_TRIBUNA + 5.0),
 		COLOR_TECHO)
@@ -213,6 +214,7 @@ func _dibujar_estadio() -> void:
 		_panel(Vector3(x0, ya, 0), Vector3(x0, yb, 0),
 			Vector3(x1, yb, ALTO_TRIBUNA + salto), Vector3(x1, ya, ALTO_TRIBUNA + salto),
 			_tex_publico, METROS_TILE_PUBLICO, TINTE_TRIBUNA_LATERAL * luz)
+		_detallar_grada(Vector3(x0, ya, 0), Vector3(x0, yb, 0), Vector3(x1 - x0, 0, ALTO_TRIBUNA + salto))
 
 	# 3. Muro perimetral: la pared baja que separa la pista del público.
 	# Va después de las tribunas porque está por delante de ellas.
@@ -236,6 +238,27 @@ func _dibujar_estadio() -> void:
 		Vector3(xb, A + PISTA + PROF_TRIBUNA_CERCA, ALTO_TRIBUNA_CERCA),
 		Vector3(xa, A + PISTA + PROF_TRIBUNA_CERCA, ALTO_TRIBUNA_CERCA + salto),
 		_tex_publico, METROS_TILE_PUBLICO, TINTE_TRIBUNA_CERCA * luz)
+
+
+func _detallar_grada(inicio: Vector3, fin: Vector3, subida: Vector3) -> void:
+	# Pasillos escalonados separan bloques; barandas siguen la perspectiva.
+	var sectores := maxi(2, roundi(inicio.distance_to(fin) / 19.0))
+	var eje := (fin - inicio).normalized()
+	for sector in range(1, sectores):
+		var centro := inicio.lerp(fin, float(sector) / sectores)
+		for escalon in range(18):
+			var a := centro + subida * (float(escalon) / 18.0)
+			var b := centro + subida * (float(escalon + 1) / 18.0)
+			_plano(a - eje * 0.8, a + eje * 0.8, b + eje * 0.8, b - eje * 0.8, Color("65666a") if escalon % 2 == 0 else Color("494d55"))
+		for lado in [-1.0, 1.0]:
+			var base: Vector3 = centro + eje * lado * 0.95
+			var alto: Vector3 = base + subida
+			draw_line(_p(base.x, base.y, 0.8), _p(alto.x, alto.y, alto.z + 0.8), Color("92999e"), 1.0)
+	for nivel in [0.48, 0.96]:
+		var a: Vector3 = inicio + subida * nivel
+		var b: Vector3 = fin + subida * nivel
+		draw_line(_p(a.x, a.y, a.z), _p(b.x, b.y, b.z), Color("222a36"), 3.0)
+		draw_line(_p(a.x, a.y, a.z + 0.5), _p(b.x, b.y, b.z + 0.5), Color("7b838c"), 1.0)
 
 
 ## Las franjas siguen la proyección: son paralelogramos, no rectángulos

@@ -402,6 +402,12 @@ func _mostrar(idx: int, t: float) -> void:
 			var origen: Dictionary = fotogramas[int(accion["desde"])]
 			var balon := Vector2(origen["pelota"]["x"], origen["pelota"]["y"])
 			ent["direccion"] = _direccion(balon - p)
+			if ent["accion"] in ["control_pie", "taco"]:
+				# El taco conserva la orientacion corporal; la pelota sale por detras.
+				for ejecutor in origen["jugadores"]:
+					if int(ejecutor["id"]) == int(j["id"]):
+						ent["direccion"] = _direccion(Vector2(float(ejecutor.get("ox", 1.0)), float(ejecutor.get("oy", 0.0))))
+						break
 			var fase := float(idx - int(accion["desde"])) + t
 			if pose in [SpritesPartido.CABECEA, SpritesPartido.CHILENA, SpritesPartido.VOLEA]:
 				ent["z"] = sin(clampf(fase / 3.0, 0.0, 1.0) * PI) * 0.65
@@ -433,6 +439,14 @@ func _mostrar(idx: int, t: float) -> void:
 			pos_pelota = p
 			z = lerpf(1.25, 0.0, clampf(float(ent["fase_animacion"]), 0.0, 1.0))
 			anclaje_pelota = Vector2(4, lerpf(-26.0, 0.0, clampf(float(ent["fase_animacion"]), 0.0, 1.0)))
+			if int(ent["direccion"]) in [5, 6, 7]:
+				anclaje_pelota.x *= -1.0
+			pelota_anclada = true
+		if str(ent["accion"]) == "control_pie" and int(pa.get("poseedor_id", -1)) == int(j["id"]):
+			var fase_control := clampf(float(ent["fase_animacion"]), 0.0, 1.0)
+			pos_pelota = p
+			z = lerpf(0.65, 0.0, fase_control)
+			anclaje_pelota = Vector2(lerpf(12.0, 5.0, fase_control), lerpf(-13.0, 0.0, fase_control))
 			if int(ent["direccion"]) in [5, 6, 7]:
 				anclaje_pelota.x *= -1.0
 			pelota_anclada = true
@@ -489,6 +503,7 @@ const TICKS_POR_ZANCADA := 2
 ## la pose un solo fotograma la deja como un parpadeo. Tirarse al piso
 ## dura más que pegarle a la pelota, y el arquero queda tendido.
 const DURACION_ACCION := {
+	"control_pie": 2, "taco": 2,
 	"pecho": 3, "lateral_manos": 2,
 	"bloquea": 3, "cae": 5, "chilena": 4, "volea": 3,
 	MotorEspacial.ACCION_PATEA: 2,
@@ -502,6 +517,7 @@ const DURACION_ACCION := {
 }
 
 const POSE_DE_ACCION := {
+	"control_pie": "control_pie", "taco": "taco",
 	"pecho": "pecho", "lateral_manos": "lateral_manos",
 	"bloquea": SpritesPartido.BLOQUEA, "cae": SpritesPartido.CAE,
 	"chilena": SpritesPartido.CHILENA, "volea": SpritesPartido.VOLEA,

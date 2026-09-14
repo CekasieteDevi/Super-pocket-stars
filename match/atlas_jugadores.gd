@@ -1,12 +1,12 @@
 class_name AtlasJugadores
 extends RefCounted
 
-## Cuadros preparados offline: ocho columnas y ocho filas por peinado.
+## Cuadros preparados offline: ocho columnas y diez filas por peinado.
 ## No recortar ni limpiar hojas fuente durante la reproducción.
 const RUTA := "res://assets/partido/jugadores.png"
 const CELDA := 64
-const TOTAL_CUADROS := 64
-const PEINADOS := ["puntas", "afro", "rapado", "atado"]
+const TOTAL_CUADROS := 76
+const PEINADOS := ["puntas", "afro", "rapado", "atado", "mohicano", "rastas", "degrade", "vincha", "rodete", "raya", "trenzas"]
 const CLIPS := {
 	"pecho": [48, 49, 50, 51, 52, 53, 54, 55],
 	"lateral_prepara": [56, 57, 58, 59],
@@ -16,7 +16,9 @@ const CLIPS := {
 	"bloquea": [31, 27, 27, 30],
 	"cae": [28, 29, 29, 30, 31],
 	"cabecea": [32, 33, 34, 31],
-	"volea": [32, 35, 35, 31],
+	"volea": [64, 65, 66, 67],
+	"control_pie": [68, 69, 70, 71],
+	"taco": [72, 73, 74, 75],
 	"chilena": [36, 37, 37, 38, 39],
 	"vuela": [40, 41, 42, 42, 43],
 	"festeja": [44, 45, 46, 45],

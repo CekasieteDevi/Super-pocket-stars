@@ -1,5 +1,9 @@
 # Sprites del partido
 
+Estado actual: once peinados y 836 cuadros, con volea, control con el pie y
+taco propios. Fuentes, indices, prompts y pruebas en [VARIEDAD.md](VARIEDAD.md).
+Las secciones siguientes conservan el historial de las primeras cuatro hojas.
+
 `jugadores.png`: hoja RGBA de 48 cuadros adaptada de las tres referencias de
 `inspiracion artistica`. Preparada con la herramienta integrada imagegen.
 `vista_previa.png`: contacto de los cuadros consumidos por el juego sobre césped.

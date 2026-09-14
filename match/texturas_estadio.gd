@@ -52,7 +52,7 @@ static func cesped(base: Color, aspereza: float) -> ImageTexture:
 ## lado sin costura visible. La celda tiene que dar unos 6-10 píxeles en
 ## pantalla al zoom de juego: más chico se lee como estática de TV, no
 ## como gente (ver METROS_TILE_PUBLICO en vista_cancha.gd).
-const CELDA := 6
+const CELDA := 10
 const FILAS := 8
 const COLUMNAS := 8
 
@@ -80,10 +80,13 @@ static func publico() -> ImageTexture:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = SEMILLA
 	for fila in range(FILAS):
+		img.fill_rect(Rect2i(0, fila * CELDA + 8, ancho, 2), Color("42444a"))
 		# Las filas impares van corridas media celda: sin eso quedan
 		# columnas perfectas y se ve una grilla, no una tribuna.
 		var corrimiento: int = CELDA / 2 if fila % 2 == 1 else 0
 		for col in range(COLUMNAS):
+			var asiento_x := (col * CELDA + corrimiento) % ancho
+			img.fill_rect(Rect2i(asiento_x + 2, fila * CELDA + 5, mini(6, ancho - asiento_x - 2), 3), Color("343e51"))
 			# Algún hueco: no hay estadio lleno hasta el último asiento.
 			if rng.randf() < 0.10:
 				continue
@@ -91,14 +94,26 @@ static func publico() -> ImageTexture:
 			var y0: int = fila * CELDA
 			var cuerpo: Color = TONOS_HINCHA[rng.randi() % TONOS_HINCHA.size()]
 			var piel: Color = PIEL_HINCHA[rng.randi() % PIEL_HINCHA.size()]
-			# Cuerpo de 4x3 con la cabeza de 2x2 encima, todo dentro de la
-			# celda para que el tile siga siendo tileable.
-			for dx in range(4):
+			var pelo := Color("30231d") if rng.randf() < 0.7 else Color("957448")
+			var pose := rng.randi_range(0, 3)
+			# Siluetas: sentado, brazos arriba, bufanda y camiseta rayada.
+			for dy in range(4):
+				for dx in range(5):
+					img.set_pixel((x0 + 2 + dx) % ancho, y0 + 4 + dy, cuerpo if dx < 3 else cuerpo.darkened(0.22))
+			for dy in range(3):
+				for dx in range(3):
+					img.set_pixel((x0 + 3 + dx) % ancho, y0 + 1 + dy, pelo if dy == 0 else piel)
+			for lado in [1, 7]:
 				for dy in range(3):
-					img.set_pixel((x0 + 1 + dx) % ancho, y0 + 3 + dy, cuerpo)
-			for dx in range(2):
-				for dy in range(2):
-					img.set_pixel((x0 + 2 + dx) % ancho, y0 + 1 + dy, piel)
+					img.set_pixel((x0 + lado) % ancho, y0 + (2 if pose in [1, 2] else 5) + dy, piel)
+			if pose == 2:
+				for dx in range(7):
+					img.set_pixel((x0 + 1 + dx) % ancho, y0 + 1, cuerpo.lightened(0.25) if dx % 2 == 0 else Color("b8b7ac"))
+			elif pose == 3:
+				for dy in range(3):
+					img.set_pixel((x0 + 4) % ancho, y0 + 5 + dy, cuerpo.lightened(0.3))
+			img.set_pixel((x0 + 3) % ancho, y0 + 8, Color("1b202b"))
+			img.set_pixel((x0 + 6) % ancho, y0 + 8, Color("1b202b"))
 	var tex := ImageTexture.create_from_image(img)
 	_cache["publico"] = tex
 	return tex

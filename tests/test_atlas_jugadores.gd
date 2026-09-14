@@ -9,7 +9,7 @@ func _init() -> void:
 		var clip: Array = AtlasJugadores.CLIPS[accion]
 		assert(AtlasJugadores.cuadro(accion, 0.0, 0, false) == clip[0])
 		assert(AtlasJugadores.cuadro(accion, 1.0, 0, false) == clip[-1])
-	for estilo in range(4):
+	for estilo in range(AtlasJugadores.PEINADOS.size()):
 		for i in range(AtlasJugadores.TOTAL_CUADROS):
 			var tex := AtlasJugadores.textura(i, Color.RED, Color.WHITE, Color.SADDLE_BROWN, false, 0, estilo)
 			var img := tex.get_image()
@@ -27,5 +27,5 @@ func _init() -> void:
 		pelotas[hash(img.get_data())] = true
 	assert(pelotas.size() > 6, "La pelota debe girar")
 	assert(SpritesPartido.pelota(12) == SpritesPartido.pelota(0))
-	print("OK: 256 cuadros, transparencia, espejos y secuencias")
+	print("OK: %d cuadros, transparencia, espejos y secuencias" % (AtlasJugadores.TOTAL_CUADROS * AtlasJugadores.PEINADOS.size()))
 	quit()
