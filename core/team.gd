@@ -27,6 +27,9 @@ const BANCO_FORMACION := ["ARQ", "DFC", "LAT", "MC", "MCO", "EXT", "DC"]
 ## suben, refuerzos que se pelean el puesto, gente que vuelve de
 ## prestamo.
 const PLANTEL_MAXIMO := 40
+## Años de contrato mínimos de un jugador que nace con el club. El techo
+## es el mismo que el de una renovación (Renovaciones.ANIOS_MAX).
+const CONTRATO_INICIAL_MIN := 2
 
 ## El plantel que MANTIENE un club de la IA: el once y un suplente por
 ## puesto, o sea lo que genera Team.generar.
@@ -330,7 +333,10 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 		var jugador := PlayerGenerator.generate(next_id, rng, pos, potencial_objetivo, pais, realizacion)
 		next_id += 1
 		t.jugadores.append(jugador)
-		t._registrar_fichaje(jugador, ValorJugador.calcular(jugador, 50.0, 3), rng.randi_range(1, 5))
+		# Piso de 2 años: con 1, un quinto del plantel se vencía en la
+		# primera intertemporada (740 de 3600 en la pirámide, semilla 12345)
+		# y el club arrancaba la partida perdiendo gente sin haber jugado.
+		t._registrar_fichaje(jugador, ValorJugador.calcular(jugador, 50.0, 3), rng.randi_range(CONTRATO_INICIAL_MIN, Renovaciones.ANIOS_MAX))
 		t.armonia += Personalidad.bonus_armonia(jugador)
 	# El banco nace con menos techo realizado que el once (ver
 	# NivelDivision.FACTOR_SUPLENTE). Antes salia del mismo molde y
@@ -344,7 +350,7 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 			realizacion * NivelDivision.FACTOR_SUPLENTE)
 		next_id += 1
 		t.banco.append(jugador)
-		t._registrar_fichaje(jugador, ValorJugador.calcular(jugador, 50.0, 3), rng.randi_range(1, 5))
+		t._registrar_fichaje(jugador, ValorJugador.calcular(jugador, 50.0, 3), rng.randi_range(CONTRATO_INICIAL_MIN, Renovaciones.ANIOS_MAX))
 		t.armonia += Personalidad.bonus_armonia(jugador)
 	t.armonia += rng.randf_range(-3.0, 5.0)
 	# §7.4.2: se entrena lo que se juega. Es el valor inicial y se puede

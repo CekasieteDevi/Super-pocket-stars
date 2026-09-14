@@ -1885,9 +1885,14 @@ func _construir_panel_historial(padre: Control) -> void:
 ## arriba a la derecha — la pantalla es toda cancha, que es el punto.
 func _construir_panel_partido_animado(padre: Control) -> void:
 	var panel := Control.new()
-	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# top_level: el panel se ancla a la pantalla y no al contenedor. Anclado
+	# al contenedor quedaban el riel y la barra de arriba vivos al costado:
+	# el zoom abierto del gol los dejaba ver, y un toque que buscaba los
+	# botones de velocidad caia en Copa o Mercado.
+	panel.top_level = true
 	panel.visible = false
 	padre.add_child(panel)
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	paneles["partido_animado"] = panel
 
 	vista_partido = VistaPartido.new()
@@ -3522,6 +3527,7 @@ var spin_negociacion_anios: SpinBox
 var spin_negociacion_clausula: SpinBox
 var boton_negociacion_accion: Button
 var boton_negociacion_rechazar: Button
+var boton_negociacion_retirar: Button
 var boton_negociacion_contra: Button
 var boton_negociacion_clausula: Button
 
@@ -3604,6 +3610,13 @@ func _construir_dialogo_negociacion() -> void:
 	boton_negociacion_rechazar.visible = false
 	boton_negociacion_rechazar.pressed.connect(_on_negociacion_rechazar)
 	fila_botones.add_child(boton_negociacion_rechazar)
+
+	boton_negociacion_retirar = Button.new()
+	boton_negociacion_retirar.text = "Retirar oferta"
+	boton_negociacion_retirar.custom_minimum_size = Vector2(180, Tema.ALTO_TACTIL)
+	boton_negociacion_retirar.visible = false
+	boton_negociacion_retirar.pressed.connect(_on_negociacion_retirar)
+	fila_botones.add_child(boton_negociacion_retirar)
 
 	# La clausula ajena: el atajo del que no quiere negociar. Se paga de
 	# mas pero la venta es obligatoria y nadie se puede ofender.
@@ -3792,6 +3805,7 @@ func _abrir_negociacion(vendedor: Team, jugador_id: int) -> void:
 	caja_negociacion_monto.visible = true
 	caja_negociacion_contrato.visible = false
 	boton_negociacion_rechazar.visible = false
+	boton_negociacion_retirar.visible = false
 	boton_negociacion_contra.visible = false
 	boton_negociacion_accion.text = "Enviar oferta"
 	boton_negociacion_accion.disabled = false
@@ -3841,6 +3855,8 @@ func _abrir_oferta(oferta_id: int) -> void:
 	caja_negociacion_monto.visible = me_toca
 	caja_negociacion_contrato.visible = a_firmar
 	boton_negociacion_rechazar.visible = me_toca
+	# Cuando no te toca, Rechazar no aplica: Retirar es la unica salida.
+	boton_negociacion_retirar.visible = not me_toca and Ofertas.abierta(o)
 	boton_negociacion_contra.visible = me_toca
 	boton_negociacion_clausula.visible = false
 	boton_negociacion_accion.disabled = not (me_toca or a_firmar)
@@ -3973,6 +3989,15 @@ func _on_negociacion_rechazar() -> void:
 	if o.is_empty():
 		return
 	_responder(o, "rechazar")
+
+
+func _on_negociacion_retirar() -> void:
+	var r := GameState.retirar_oferta(negociacion_oferta_id)
+	if not r["exito"]:
+		label_negociacion_estado.text = "[color=#d4a017]%s[/color]" % r["motivo"]
+		return
+	dialogo_negociacion.hide()
+	_mostrar_solapa_mercado(solapa_mercado_actual)
 
 
 func _firmar_contrato() -> void:
@@ -7529,7 +7554,8 @@ func _on_jugar_fecha() -> void:
 		_refrescar_objetivo()
 		return
 	if (not GameState.hay_fecha_pendiente() and not GameState.hay_partido_de_copa_hoy()
-			and not GameState.hay_partido_internacional_hoy()):
+			and not GameState.hay_partido_internacional_hoy()
+			and not GameState.hay_partido_de_playoff_hoy()):
 		return
 	# Ningun lesionado ni suspendido sale a la cancha. Si hay alguno en el
 	# once, el partido espera a que se resuelva (ver el modal de
@@ -7560,6 +7586,8 @@ func _jugar_el_partido_de_hoy() -> void:
 		_jugar_copa_ya()
 	elif GameState.hay_partido_internacional_hoy():
 		_jugar_internacional_ya()
+	elif GameState.hay_partido_de_playoff_hoy():
+		_jugar_playoff_ya()
 	else:
 		_jugar_fecha_ya()
 	# El boton puede haber muerto durante el partido: _refrescar_portada
@@ -7585,6 +7613,15 @@ func _jugar_internacional_ya() -> void:
 	if GameState.juego_terminado or not GameState.hay_partido_internacional_hoy():
 		return
 	GameState.jugar_partido_internacional()
+	_despues_del_partido_de_torneo()
+
+
+## El playoff de ascenso, despues de la ultima fecha. Mismo recorrido que
+## el cruce de copa.
+func _jugar_playoff_ya() -> void:
+	if GameState.juego_terminado or not GameState.hay_partido_de_playoff_hoy():
+		return
+	GameState.jugar_partido_de_playoff()
 	_despues_del_partido_de_torneo()
 
 
@@ -8372,13 +8409,19 @@ func _refrescar_portada() -> void:
 	# pueden quedar las dos esperando el mismo dia. Se juega primero la
 	# copa y despues la internacional.
 	var hay_internacional: bool = not hay_copa and GameState.hay_partido_internacional_hoy()
-	var hay_partido: bool = GameState.hay_partido_hoy() or hay_copa or hay_internacional
+	# El playoff de ascenso cae despues de la ultima fecha y tambien frena
+	# el dia. Va ultimo: las copas que sobran se drenan ese mismo dia.
+	var hay_playoff: bool = (not hay_copa and not hay_internacional
+		and GameState.hay_partido_de_playoff_hoy())
+	var hay_partido: bool = GameState.hay_partido_hoy() or hay_copa or hay_internacional or hay_playoff
 	var caja_partido := _tarjeta(contenedor_portada, Tema.AMBAR if hay_partido else Tema.BORDE)
 	var encabezado := Calendario.texto_largo(GameState.dia_absoluto)
 	if hay_copa:
 		encabezado = "%s  ·  %s  ·  %s" % [encabezado, copa.nombre, copa.ronda_actual()]
 	elif hay_internacional:
 		encabezado = "%s  ·  %s" % [encabezado, GameState.torneo_internacional_de_hoy()]
+	elif hay_playoff:
+		encabezado = "%s  ·  %s" % [encabezado, GameState.torneo_playoff_de_hoy()]
 	caja_partido.add_child(Tema.etiqueta_seccion(encabezado))
 	var rival: Team = _proximo_rival()
 	var de_local: bool = _juega_de_local()
@@ -8388,6 +8431,9 @@ func _refrescar_portada() -> void:
 	elif hay_internacional:
 		rival = GameState.rival_internacional()
 		de_local = GameState.internacional_de_local()
+	elif hay_playoff:
+		rival = GameState.rival_de_playoff()
+		de_local = GameState.playoff_de_local()
 	var titulo := Label.new()
 	if rival == null:
 		titulo.text = "Temporada terminada."
@@ -8439,6 +8485,8 @@ func _refrescar_portada() -> void:
 			btn_jugar.text = "Jugar el partido de copa"
 		elif hay_internacional:
 			btn_jugar.text = "Jugar el partido internacional"
+		elif hay_playoff:
+			btn_jugar.text = "Jugar el playoff de ascenso"
 		btn_jugar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		Tema.primario(btn_jugar)
 		btn_jugar.disabled = rival == null or GameState.juego_terminado
@@ -9272,6 +9320,7 @@ var label_cesion_estado: RichTextLabel
 var boton_cesion_aceptar: Button
 var boton_cesion_contra: Button
 var boton_cesion_rechazar: Button
+var boton_cesion_retirar: Button
 var cesion_topes: Dictionary = {}
 
 
@@ -9375,6 +9424,11 @@ func _construir_dialogo_cesion() -> void:
 	boton_cesion_rechazar.custom_minimum_size = Vector2(180, 48)
 	boton_cesion_rechazar.pressed.connect(_on_cesion_rechazar)
 	fila_botones.add_child(boton_cesion_rechazar)
+	boton_cesion_retirar = Button.new()
+	boton_cesion_retirar.text = "Echarse atrás"
+	boton_cesion_retirar.custom_minimum_size = Vector2(180, 48)
+	boton_cesion_retirar.pressed.connect(_on_cesion_retirar)
+	fila_botones.add_child(boton_cesion_retirar)
 
 	label_cesion_estado = RichTextLabel.new()
 	label_cesion_estado.bbcode_enabled = true
@@ -9421,6 +9475,8 @@ func _abrir_cesion(o: Dictionary) -> void:
 	boton_cesion_aceptar.visible = me_toca
 	boton_cesion_contra.visible = me_toca
 	boton_cesion_rechazar.visible = me_toca
+	# Igual que en las compras: si no te toca, Rechazar no aplica.
+	boton_cesion_retirar.visible = not me_toca and Ofertas.abierta(o)
 	option_cesion_duracion.disabled = not me_toca
 	spin_cesion_fee.editable = me_toca
 	slider_cesion_sueldo.editable = me_toca
@@ -9466,6 +9522,15 @@ func _on_cesion_contraofertar() -> void:
 	boton_cesion_aceptar.visible = false
 	boton_cesion_contra.visible = false
 	boton_cesion_rechazar.visible = false
+	_mostrar_solapa_mercado(solapa_mercado_actual)
+
+
+func _on_cesion_retirar() -> void:
+	var r := GameState.retirar_oferta(cesion_oferta_id)
+	if not r["exito"]:
+		label_cesion_estado.text = "[color=#d4a017]%s[/color]" % r["motivo"]
+		return
+	dialogo_cesion.hide()
 	_mostrar_solapa_mercado(solapa_mercado_actual)
 
 

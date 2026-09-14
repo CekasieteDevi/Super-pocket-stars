@@ -49,6 +49,8 @@ func _init() -> void:
 			# La ronda de copa frena el calendario para que el jugador la
 			# juegue. Sin pantalla se resuelve sola.
 			GameState.resolver_ronda_de_copa()
+		elif GameState.hay_partido_de_playoff_hoy():
+			GameState.resolver_playoffs()
 		else:
 			GameState.avanzar_un_dia()
 

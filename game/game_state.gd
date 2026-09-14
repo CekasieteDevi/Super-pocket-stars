@@ -79,6 +79,12 @@ var dia_proximo_partido: int = 0
 var dia_proxima_copa: int = -1
 var dia_proximo_internacional: int = -1
 
+## Los playoffs de ascenso ya jugados de la temporada que termina, por
+## límite entre divisiones (clave String: así vuelve de JSON). Se juegan
+## después de la última fecha y los aplica Piramide.fin_de_temporada. Antes
+## se simulaban adentro del cierre y el club del jugador no los jugaba.
+var playoffs_ascenso: Dictionary = {}
+
 var ultimo_resultado: Dictionary = {}
 var ultimo_log: Array = []
 var ultimos_eventos: Array = []
@@ -189,11 +195,15 @@ func partida_nueva(semilla: int = -1, nombre_club: String = "",
 	# anterior: el calendario, el ultimo partido, las noticias, el balance.
 	fecha_actual = 0
 	temporada_actual = 1
-	dia_temporada = 0
-	dia_absoluto = 0
+	# La partida arranca en receso, el dia en que abre el libro de pases
+	# previo a la temporada 1. Mismo mecanismo que el receso entre
+	# temporadas: `dia_temporada` negativo hasta el arranque de marzo.
+	dia_absoluto = Calendario.apertura_del_mercado_previo()
+	dia_temporada = -Calendario.dias_hasta_el_arranque(dia_absoluto)
 	dia_proximo_partido = 0
 	dia_proxima_copa = -1
 	dia_proximo_internacional = -1
+	playoffs_ascenso = {}
 	historial_partidos = []
 	copas_internacionales = {}
 	copas_pasadas = {}
@@ -208,6 +218,9 @@ func partida_nueva(semilla: int = -1, nombre_club: String = "",
 	ultima_posicion_final = {}
 	juego_terminado = false
 	motivo_fin_partida = ""
+	# El aviso de apertura sale de avanzar_un_dia, que compara ayer con hoy.
+	# El primer dia de la partida no tiene ayer, asi que se avisa aca.
+	_agregar_noticia("MERCADO: Se abrio el libro de pases: %d dias de mercado." % dias_de_mercado())
 
 
 ## El presupuesto de la PRIMERA temporada. Sin esto todos los clubes
@@ -659,7 +672,8 @@ func dias_hasta_el_partido() -> int:
 ##
 ## Si hoy hay partido no avanza nada: primero se juega.
 func avanzar_un_dia() -> Array:
-	if juego_terminado or hay_partido_hoy() or hay_partido_de_copa_hoy() or hay_partido_internacional_hoy():
+	if (juego_terminado or hay_partido_hoy() or hay_partido_de_copa_hoy()
+			or hay_partido_internacional_hoy() or hay_partido_de_playoff_hoy()):
 		return []
 	var noticias_antes: int = noticias.size()
 	# Los que se recuperan se preguntan ANTES y DESPUES: Team.avanzar_dias
@@ -726,7 +740,11 @@ func avanzar_un_dia() -> Array:
 	# La temporada cierra cuando no quedan fechas Y ya paso la semana de
 	# la ultima: si cerrara en el pitazo final, el jugador no llegaria a
 	# ver el ultimo resultado ni a cobrar los ultimos dias.
-	if not hay_fecha_pendiente() and dia_temporada >= dia_proximo_partido:
+	if _termino_la_liga():
+		# Los playoffs de ascenso van primero: son la continuacion de la
+		# liga. Los de la IA se juegan solos; si el club del jugador tiene
+		# cruce, la temporada lo espera igual que a una copa.
+		_jugar_playoffs(null, true)
 		# Hacen falta trece rondas de copa y en el calendario entran nueve
 		# miercoles: las que sobran se juegan aca, antes de cerrar. Si en
 		# alguna juega el equipo del jugador, la temporada ESPERA a que la
@@ -747,7 +765,8 @@ func avanzar_un_dia() -> Array:
 		# Sin `return`: las noticias de las rondas que si se jugaron recien
 		# se juntan al final de esta funcion, y salteando el tramo se
 		# perderian.
-		if copa_de_hoy() == null and not hay_partido_internacional_hoy():
+		if (copa_de_hoy() == null and not hay_partido_internacional_hoy()
+				and not hay_partido_de_playoff_hoy()):
 			dia_proxima_copa = -1
 			dia_proximo_internacional = -1
 			_cerrar_temporada()
@@ -777,7 +796,7 @@ func avanzar_un_dia() -> Array:
 ## decision. Saltar a ciegas seria volver al problema de antes.
 func avanzar_hasta_el_partido() -> Array:
 	var todo := []
-	while not hay_partido_hoy() and not hay_partido_de_copa_hoy() 			and not hay_partido_internacional_hoy() and not juego_terminado:
+	while not hay_partido_hoy() and not hay_partido_de_copa_hoy() 			and not hay_partido_internacional_hoy() and not hay_partido_de_playoff_hoy() 			and not juego_terminado:
 		var dia := avanzar_un_dia()
 		todo.append_array(dia)
 		if not dia.is_empty():
@@ -838,13 +857,15 @@ func _registrar_en_historial(torneo: String = "") -> void:
 func _nombre_de_jugador(id: int, local: String, visitante: String) -> String:
 	if id < 0:
 		return "?"
+	# En toda la piramide: el rival de copa o de playoff puede ser de otra
+	# division.
 	for nombre in [local, visitante]:
-		for e in liga_jugador().equipos:
-			if e.nombre != nombre:
-				continue
-			for j in e.jugadores + e.banco + e.cantera:
-				if int(j["id"]) == id:
-					return "%s %s" % [j.get("nombre", "?"), j.get("apellido", "")]
+		var e := _club_por_nombre(nombre)
+		if e == null:
+			continue
+		for j in e.jugadores + e.banco + e.cantera:
+			if int(j["id"]) == id:
+				return "%s %s" % [j.get("nombre", "?"), j.get("apellido", "")]
 	return "?"
 
 
@@ -1095,6 +1116,101 @@ func resolver_ronda_internacional() -> void:
 	_jugar_ronda_internacional()
 
 
+## Se jugó la última fecha y pasó su semana: es el momento del cierre, y
+## antes del cierre, del playoff de ascenso.
+func _termino_la_liga() -> bool:
+	return not hay_fecha_pendiente() and dia_temporada >= dia_proximo_partido
+
+
+## El cruce de playoff de ascenso que le toca al jugador HOY, o vacío.
+## Mismo contrato que copa_de_hoy(): sale de la tabla final y de lo que ya
+## se jugó, así que sobrevive a guardar y cargar la partida.
+func cruce_de_playoff_de_hoy() -> Dictionary:
+	if juego_terminado or not _termino_la_liga():
+		return {}
+	for cruce in piramide.cruces_de_playoff():
+		if playoffs_ascenso.has(str(cruce["limite"])):
+			continue
+		if cruce["local"] == equipo_jugador or cruce["visitante"] == equipo_jugador:
+			return cruce
+	return {}
+
+
+func hay_partido_de_playoff_hoy() -> bool:
+	return not cruce_de_playoff_de_hoy().is_empty()
+
+
+func rival_de_playoff() -> Team:
+	var cruce := cruce_de_playoff_de_hoy()
+	if cruce.is_empty():
+		return null
+	return cruce["visitante"] if cruce["local"] == equipo_jugador else cruce["local"]
+
+
+func playoff_de_local() -> bool:
+	var cruce := cruce_de_playoff_de_hoy()
+	return not cruce.is_empty() and cruce["local"] == equipo_jugador
+
+
+## Para el encabezado de la portada. Ejemplo: "Playoff de ascenso ·
+## División 9 vs División 10".
+func torneo_playoff_de_hoy() -> String:
+	var cruce := cruce_de_playoff_de_hoy()
+	if cruce.is_empty():
+		return ""
+	return "Playoff de ascenso  ·  División %d vs División %d" % [
+		int(cruce["limite"]) + 1, int(cruce["limite"]) + 2]
+
+
+## Juega el playoff del jugador con el motor espacial y fotogramas. La
+## llama el boton de la portada.
+func jugar_partido_de_playoff() -> void:
+	if not hay_partido_de_playoff_hoy():
+		return
+	_jugar_playoffs(equipo_jugador, false)
+
+
+## Resuelve los playoffs que falten SIN mirar el propio. Es lo que usa el
+## modo "saltar la temporada", igual que resolver_ronda_de_copa.
+func resolver_playoffs() -> void:
+	_jugar_playoffs(null, false)
+
+
+## Juega los playoffs de ascenso que falten. `esperar_al_jugador` deja
+## pendiente el cruce del club del jugador para que lo juegue desde la
+## portada. `equipo_seguido` pide su partido con fotogramas.
+##
+## Es un cruce de copa: no termina empatado (ver Piramide.jugar_playoff).
+func _jugar_playoffs(equipo_seguido: Team, esperar_al_jugador: bool) -> void:
+	for cruce in piramide.cruces_de_playoff():
+		var clave := str(cruce["limite"])
+		if playoffs_ascenso.has(clave):
+			continue
+		var local: Team = cruce["local"]
+		var visitante: Team = cruce["visitante"]
+		var es_el_del_jugador: bool = local == equipo_jugador or visitante == equipo_jugador
+		if es_el_del_jugador and esperar_al_jugador:
+			continue
+		var mirado: bool = es_el_del_jugador and equipo_seguido == equipo_jugador
+		var r := Piramide.jugar_playoff(local, visitante, rng, mirado)
+		var fila := Copa.fila_de_historial(r)
+		playoffs_ascenso[clave] = fila
+		var sube: bool = r["ganador"] == visitante
+
+		var division_arriba: int = int(cruce["limite"]) + 1
+		if mirado:
+			_tomar_ultimo_partido("Playoff de ascenso", Copa.detalle_seguido(r))
+		var cierre := ""
+		if str(fila["definicion"]) != "90 minutos":
+			cierre = " en %s%s" % [fila["definicion"], fila["penales_texto"]]
+		var desenlace := ("%s asciende a la División %d y %s desciende." % [
+			visitante.nombre, division_arriba, local.nombre]) if sube \
+			else ("%s se queda en la División %d." % [local.nombre, division_arriba])
+		_agregar_noticia("PLAYOFF DE ASCENSO (División %d vs %d): %s %d-%d %s%s. %s" % [
+			division_arriba, division_arriba + 1, local.nombre, int(fila["gl"]), int(fila["gv"]),
+			visitante.nombre, cierre, desenlace], "campeones")
+
+
 func _jugar_ronda_internacional(equipo_seguido: Team = null) -> void:
 	if internacional == null:
 		return
@@ -1148,6 +1264,22 @@ func _tomar_partido_de_torneo(nombre_torneo: String, s: Dictionary,
 		eliminatorio: bool) -> void:
 	if s.is_empty():
 		return
+	_tomar_ultimo_partido(nombre_torneo, s)
+	var paso: bool = str(s["ganador"]) == equipo_jugador.nombre
+	var cierre := ""
+	if str(s["definicion"]) != "90 minutos":
+		cierre = " en %s%s" % [s["definicion"], s["penales_texto"]]
+	var desenlace := ""
+	if eliminatorio:
+		desenlace = " Pasás de ronda." if paso else " Quedás eliminado."
+	_agregar_noticia("%s: %s %d-%d %s%s.%s" % [
+		nombre_torneo.to_upper(), s["local"], s["gl"], s["gv"], s["visitante"], cierre,
+		desenlace], "campeones")
+
+
+## El partido que acaba de jugar el jugador fuera de la liga pasa a ser
+## "el ultimo partido": lo mira la pantalla animada y entra al historial.
+func _tomar_ultimo_partido(nombre_torneo: String, s: Dictionary) -> void:
 	ultimo_resultado = {
 		"local": s["local"], "visitante": s["visitante"],
 		"gl": s["gl"], "gv": s["gv"], "goles_log": s["goles_log"],
@@ -1162,16 +1294,6 @@ func _tomar_partido_de_torneo(nombre_torneo: String, s: Dictionary,
 	ultimos_eventos = s["eventos"]
 	ultimos_fotogramas = s["fotogramas"]
 	_registrar_en_historial(nombre_torneo)
-	var paso: bool = str(s["ganador"]) == equipo_jugador.nombre
-	var cierre := ""
-	if str(s["definicion"]) != "90 minutos":
-		cierre = " en %s%s" % [s["definicion"], s["penales_texto"]]
-	var desenlace := ""
-	if eliminatorio:
-		desenlace = " Pasás de ronda." if paso else " Quedás eliminado."
-	_agregar_noticia("%s: %s %d-%d %s%s.%s" % [
-		nombre_torneo.to_upper(), s["local"], s["gl"], s["gv"], s["visitante"], cierre,
-		desenlace], "campeones")
 
 
 ## Copas + internacional con la temporada recién jugada, después ascensos/
@@ -1248,7 +1370,8 @@ func _cerrar_temporada() -> void:
 	# ingreso del año el presupuesto del que viene.
 	Sponsors.cobrar_temporada(equipo_jugador)
 
-	var resultado_piramide := piramide.fin_de_temporada(rng, equipo_jugador, temporada_actual)
+	var resultado_piramide := piramide.fin_de_temporada(rng, equipo_jugador, temporada_actual, playoffs_ascenso)
+	playoffs_ascenso = {}
 	# Los que colgaron los botines sin club: es por donde se vacia el pool
 	# de libres (ver AgentesLibres.envejecer_pool). Se nombra al de mejor
 	# media, que es el unico que alguien podria estar esperando fichar.
@@ -1571,6 +1694,17 @@ func responder_oferta(oferta_id: int, accion: String, monto: float = 0.0) -> Dic
 	return {"exito": false, "motivo": "Acción desconocida."}
 
 
+## Retirar una negociacion abierta que NO espera respuesta nuestra. Igual
+## que rechazar, se puede con el mercado cerrado: bajarse no es operar.
+func retirar_oferta(oferta_id: int) -> Dictionary:
+	var oferta := _oferta_por_id(oferta_id)
+	if oferta.is_empty() or not Ofertas.abierta(oferta):
+		return {"exito": false, "motivo": "Esa negociación ya no existe."}
+	Ofertas.retirar(oferta)
+	Ofertas.archivar(equipo_jugador)
+	return {"exito": true, "oferta": oferta}
+
+
 ## Los prestados que TENES vos y todavia se pueden comprar: el jugador,
 ## el club dueño, el precio pactado y cuando se vence la chance. La UI los
 ## muestra en el panel Cesion — la opcion se ejerce ANTES de que venza el
@@ -1700,7 +1834,9 @@ func cerrar_fichaje(oferta_id: int, sueldo: float, anios: int, clausula: float) 
 	if not r["exito"]:
 		return r
 	equipo_jugador.clausulas[jugador_id] = clausula
-	Investigadores.marcar_conocido(equipo_jugador, jugador_id)
+	# No se marca conocido: de uno propio la ficha se ve entera sin informe.
+	# Marcarlo lo metia en "Conocidos" y disparaba "Informe nuevo listo"
+	# sin que ningun investigador lo hubiera pedido.
 	oferta["estado"] = Ofertas.CERRADA
 	oferta["log"].append("Firmado: %d año(s) a %s, cláusula %s." % [
 		anios, Economia.formato_dinero(sueldo), Economia.formato_dinero(clausula)])
@@ -1758,7 +1894,7 @@ func pedir_prestamo(dueno: Team, jugador_id: int, duracion: String,
 		temporadas, porcentaje_sueldo, opcion_compra, plus)
 	if not cierre["exito"]:
 		return cierre
-	Investigadores.marcar_conocido(equipo_jugador, jugador_id)
+	# Sin marcar_conocido, por lo mismo que en cerrar_fichaje.
 	_agregar_noticia("PRÉSTAMO: %s se lleva a %s (%s) de %s por %s (fee %s)." % [
 		equipo_jugador.nombre, _nombre_completo(jugador), jugador["posicion"],
 		dueno.nombre, Prestamos.ETIQUETAS_DURACION.get(duracion, duracion),
@@ -1907,6 +2043,9 @@ func simular_temporada_completa() -> void:
 		if hay_partido_internacional_hoy():
 			resolver_ronda_internacional()
 			continue
+		if hay_partido_de_playoff_hoy():
+			resolver_playoffs()
+			continue
 		# Las novedades se descartan a proposito: esto es el modo
 		# "saltar la temporada", no se frena por nada.
 		avanzar_un_dia()
@@ -1993,6 +2132,7 @@ func guardar_partida() -> void:
 		"dia_proximo_partido": dia_proximo_partido,
 		"dia_proxima_copa": dia_proxima_copa,
 		"dia_proximo_internacional": dia_proximo_internacional,
+		"playoffs_ascenso": playoffs_ascenso,
 		"historial_partidos": historial_partidos,
 		"copas_internacionales": copas_internacionales,
 		"copas_pasadas": copas_pasadas,
@@ -2077,6 +2217,7 @@ func cargar_partida() -> bool:
 	noticias = []
 	for n in datos["noticias"]:
 		noticias.append(Noticias.normalizar(n))
+	playoffs_ascenso = datos.get("playoffs_ascenso", {})
 	historial_partidos = datos.get("historial_partidos", [])
 	copas_internacionales = datos.get("copas_internacionales", {})
 	copas_pasadas = datos.get("copas_pasadas", {})

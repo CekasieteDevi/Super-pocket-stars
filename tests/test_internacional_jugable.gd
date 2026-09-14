@@ -26,6 +26,10 @@ func _init() -> void:
 	# arbol: _ready() cargaria la partida guardada del usuario.
 	var gs = load("res://game/game_state.gd").new()
 	gs.partida_nueva(SEED, "Club Prueba")
+	# La partida arranca en el receso: los cruces se agendan con
+	# `dia_temporada` y un dia negativo se lee como "sin ronda".
+	while gs.en_receso():
+		gs.avanzar_un_dia()
 
 	_test_arranque(gs)
 	_test_partido_del_jugador(gs)
@@ -172,6 +176,9 @@ func _test_temporada_entera(semilla: int) -> void:
 			continue
 		if gs.hay_partido_internacional_hoy():
 			gs.resolver_ronda_internacional()
+			continue
+		if gs.hay_partido_de_playoff_hoy():
+			gs.resolver_playoffs()
 			continue
 		gs.avanzar_un_dia()
 

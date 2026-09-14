@@ -342,6 +342,15 @@ static func rechazar(oferta: Dictionary) -> void:
 	_anotar(oferta, "Rechazaste la oferta.")
 
 
+## Bajarse de una negociacion que espera al OTRO lado. Rechazar solo sirve
+## cuando te toca a vos: sin esto una oferta enviada quedaba colgada hasta
+## el cierre del libro de pases, y ocupaba el lugar de ese jugador.
+static func retirar(oferta: Dictionary) -> void:
+	oferta["estado"] = RETIRADA
+	_anotar(oferta, "Te echaste atras: la negociacion se cayo."
+		if bool(oferta["entrante"]) else "Retiraste la oferta.")
+
+
 ## Pasa una negociacion terminada al historial y la saca de la lista viva.
 static func archivar(equipo: Team) -> void:
 	var vivas := []

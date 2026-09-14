@@ -13,8 +13,9 @@ extends RefCounted
 ## cada una, posiciones 1-20:
 ##   - 1° y 2° de D+1 ascienden directo a D.
 ##   - 3° de D+1 juega un partido único contra el 18° de D por el 3er
-##     ascenso: si gana el visitante (3° de D+1), sube y el 18° de D baja;
-##     si gana o empata el local (18° de D), no se mueve nadie por ese cruce.
+##     ascenso, como cruce de copa (alargue y penales si hace falta): si
+##     gana el visitante (3° de D+1), sube y el 18° de D baja; si gana el
+##     local (18° de D), no se mueve nadie por ese cruce.
 ##   - 19° y 20° de D descienden directo a D+1.
 ## División 1 nunca asciende (no hay nada arriba) y división 10 nunca
 ## desciende (Fix #6 del GDD original: "en división 10 no hay descenso").
@@ -166,16 +167,12 @@ func jugar_temporada(rng: RandomNumberGenerator) -> void:
 ## cada división con su composición ya actualizada.
 ## equipo_protegido: el club del jugador humano, si corresponde — nunca
 ## participa del mercado automático entre clubes de la IA (ver Mercado).
-func fin_de_temporada(rng: RandomNumberGenerator, equipo_protegido: Team = null, temporada_actual: int = 0) -> Dictionary:
-	var ordenes := []  # por division: Array de Team, en el orden final de tabla
-	for liga in divisiones:
-		var mapa := {}
-		for equipo in liga.equipos:
-			mapa[equipo.nombre] = equipo
-		var orden := []
-		for nombre in liga.tabla_ordenada():
-			orden.append(mapa[nombre])
-		ordenes.append(orden)
+## playoffs_jugados: los playoffs de ascenso que ya se jugaron en el
+## calendario, por límite en String (ver GameState._jugar_playoffs). El
+## límite que falta se simula acá, como antes.
+func fin_de_temporada(rng: RandomNumberGenerator, equipo_protegido: Team = null, temporada_actual: int = 0,
+		playoffs_jugados: Dictionary = {}) -> Dictionary:
+	var ordenes := _ordenes_de_tabla()
 
 	# El pool envejece ANTES de que lleguen los vencimientos nuevos: los
 	# que quedan libres en este cierre ya envejecieron con su club y no
@@ -211,7 +208,7 @@ func fin_de_temporada(rng: RandomNumberGenerator, equipo_protegido: Team = null,
 					Economia.formato_dinero(t["valor"])],
 				"fichajes", mencion))
 
-	var movimientos := _ejecutar_ascensos_y_descensos(ordenes, rng)
+	var movimientos := _ejecutar_ascensos_y_descensos(ordenes, rng, playoffs_jugados)
 
 	for liga in divisiones:
 		liga.iniciar_temporada()
@@ -271,7 +268,45 @@ func renombrar(equipo: Team, nuevo: String) -> bool:
 	return true
 
 
-func _ejecutar_ascensos_y_descensos(ordenes: Array, rng: RandomNumberGenerator) -> Array:
+## Por division: Array de Team, en el orden de la tabla.
+func _ordenes_de_tabla() -> Array:
+	var ordenes := []
+	for liga in divisiones:
+		var mapa := {}
+		for equipo in liga.equipos:
+			mapa[equipo.nombre] = equipo
+		var orden := []
+		for nombre in liga.tabla_ordenada():
+			orden.append(mapa[nombre])
+		ordenes.append(orden)
+	return ordenes
+
+
+## Los cruces del playoff de ascenso con la tabla actual, uno por límite
+## entre divisiones: {"limite", "local" (18° de la de arriba), "visitante"
+## (3° de la de abajo)}. Tiene sentido con la liga terminada.
+func cruces_de_playoff() -> Array:
+	var ordenes := _ordenes_de_tabla()
+	var cruces := []
+	for limite in range(N_DIVISIONES - 1):
+		if ordenes[limite].size() < 18 or ordenes[limite + 1].size() < 3:
+			continue
+		cruces.append({"limite": limite, "local": ordenes[limite][17],
+			"visitante": ordenes[limite + 1][2]})
+	return cruces
+
+
+## El playoff es un cruce de copa: no termina empatado. Si los 90' quedan
+## iguales hay alargue y penales (ver Copa.resolver_cruce). Antes el empate
+## le alcanzaba al local; medido con SEED 7310 sobre 1350 cruces, el 3° de
+## abajo subia el 6,8% de las veces y ahora sube el 11,3%.
+static func jugar_playoff(local: Team, visitante: Team, rng: RandomNumberGenerator,
+		es_el_del_jugador: bool) -> Dictionary:
+	return Copa.resolver_cruce(local, visitante, rng, es_el_del_jugador)
+
+
+func _ejecutar_ascensos_y_descensos(ordenes: Array, rng: RandomNumberGenerator,
+		playoffs_jugados: Dictionary = {}) -> Array:
 	var movimientos := []
 
 	for limite in range(N_DIVISIONES - 1):
@@ -291,8 +326,15 @@ func _ejecutar_ascensos_y_descensos(ordenes: Array, rng: RandomNumberGenerator) 
 
 		var candidato: Team = orden_peor[2]
 		var defensor: Team = orden_mejor[17]
-		var resultado_playoff := MatchEngine.simular(defensor, candidato, rng, false)
-		if resultado_playoff["goles_visitante"] > resultado_playoff["goles_local"]:
+		# El jugado solo vale si es el MISMO cruce: si la tabla se hubiera
+		# movido desde que se jugó, aplicarlo subiría a quien no lo jugó.
+		var jugado: Dictionary = playoffs_jugados.get(str(limite), {})
+		var sube_candidato: bool
+		if str(jugado.get("local", "")) == defensor.nombre and str(jugado.get("visitante", "")) == candidato.nombre:
+			sube_candidato = str(jugado.get("ganador", "")) == candidato.nombre
+		else:
+			sube_candidato = jugar_playoff(defensor, candidato, rng, false)["ganador"] == candidato
+		if sube_candidato:
 			peor.equipos.erase(candidato)
 			mejor.equipos.append(candidato)
 			mejor.equipos.erase(defensor)

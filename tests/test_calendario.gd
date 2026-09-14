@@ -27,6 +27,10 @@ const GUION := preload("res://game/game_state.gd")
 func _nueva_partida(desplazamiento: int = 0) -> Node:
 	var gs = GUION.new()
 	gs.partida_nueva(SEED + desplazamiento)
+	# La partida arranca en el receso con el libro de pases abierto. Estos
+	# tests miden la temporada, asi que arrancan en el primer partido.
+	while gs.en_receso():
+		gs.avanzar_un_dia()
 	return gs
 
 
@@ -104,6 +108,8 @@ func _test_una_temporada_entera_cierra_bien() -> void:
 			# juegue. Sin pantalla se resuelve sola: si no, el dia no
 			# avanza mas y la temporada no cierra nunca.
 			gs.resolver_ronda_de_copa()
+		elif gs.hay_partido_de_playoff_hoy():
+			gs.resolver_playoffs()
 		else:
 			gs.avanzar_un_dia()
 		vueltas += 1

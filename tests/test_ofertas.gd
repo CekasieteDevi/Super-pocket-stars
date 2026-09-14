@@ -216,16 +216,16 @@ func _test_lo_terminado_va_al_historial() -> void:
 	var otro: Team = p["otro"]
 	var jugador: Dictionary = otro.jugadores[3]
 	var r: Dictionary = gs.enviar_oferta(otro, int(jugador["id"]), 1.0)
-	gs.responder_oferta(int(r["oferta"]["id"]), "rechazar")
-	# rechazar() sobre una PENDIENTE_ELLOS no aplica; se fuerza el estado.
-	r["oferta"]["estado"] = Ofertas.RECHAZADA
 	var vivas_antes := mio.ofertas.size()
-	Ofertas.archivar(mio)
-	if mio.ofertas.size() == vivas_antes - 1 and not mio.historial_mercado.is_empty():
-		print("OK: %d abiertas -> %d, y %d en el historial." % [
+	# Una enviada espera al otro club: Rechazar no aplica, Retirar si.
+	var retiro: Dictionary = gs.retirar_oferta(int(r["oferta"]["id"]))
+	if retiro["exito"] and mio.ofertas.size() == vivas_antes - 1 \
+			and str(mio.historial_mercado[-1]["estado"]) == Ofertas.RETIRADA:
+		print("OK: retirar una enviada la saca en el acto: %d abiertas -> %d, y %d en el historial." % [
 			vivas_antes, mio.ofertas.size(), mio.historial_mercado.size()])
 	else:
-		print("FALLA: abiertas=%d historial=%d" % [mio.ofertas.size(), mio.historial_mercado.size()])
+		print("FALLA: exito=%s abiertas=%d historial=%d" % [
+			retiro["exito"], mio.ofertas.size(), mio.historial_mercado.size()])
 
 
 func _test_guardado() -> void:

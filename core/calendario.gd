@@ -40,6 +40,19 @@ static func primer_dia_de_mercado() -> int:
 	return d
 
 
+## El dia en que abre la ventana que termina justo antes del dia 0. La
+## partida nueva arranca ahi: si arrancara el dia 0, la primera temporada
+## no tenia libro de pases hasta julio y el plantel inicial quedaba fijo
+## cuatro meses. Las demas temporadas ya tienen su ventana en el receso.
+static func apertura_del_mercado_previo() -> int:
+	var d := -1
+	while d > -400 and not hay_mercado(d):
+		d -= 1
+	while d > -400 and hay_mercado(d - 1):
+		d -= 1
+	return d
+
+
 static func hay_mercado(dia: int) -> bool:
 	return MESES_DE_MERCADO.has(int(fecha(dia)["month"]))
 

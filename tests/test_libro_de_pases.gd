@@ -17,6 +17,7 @@ const GUION := preload("res://game/game_state.gd")
 
 func _init() -> void:
 	_test_los_meses_de_mercado()
+	_test_la_partida_arranca_con_el_libro_de_pases()
 	_test_la_temporada_arranca_siempre_en_marzo()
 	_test_fuera_de_ventana_no_se_puede_operar()
 	_test_al_cerrar_se_cae_lo_que_estaba_abierto()
@@ -46,10 +47,44 @@ func _test_los_meses_de_mercado() -> void:
 	print("OK: abre en enero, febrero y julio; cerrado los otros %d meses." % cerrados.size())
 
 
+## Pasa los dias de receso hasta el arranque de la temporada.
+func _pasar_receso(gs) -> int:
+	var receso := 0
+	while gs.en_receso() and receso < 400:
+		gs.avanzar_un_dia()
+		receso += 1
+	return receso
+
+
+func _test_la_partida_arranca_con_el_libro_de_pases() -> void:
+	print("\n=== La partida nueva arranca con el mercado abierto ===")
+	# Si arrancara el dia del primer partido, la temporada 1 no tenia
+	# ventana hasta julio y el plantel inicial quedaba fijo cuatro meses.
+	var gs := GUION.new()
+	gs.partida_nueva(SEED + 5)
+	if not gs.hay_mercado_abierto() or not gs.en_receso():
+		print("FALLA: la partida arranca el %s, sin receso con mercado." %
+			Calendario.texto_largo(gs.dia_absoluto))
+		return
+	var dias_de_mercado: int = gs.dias_de_mercado() + 1
+	var receso := _pasar_receso(gs)
+	var f := Calendario.fecha(gs.dia_absoluto)
+	if int(f["month"]) != Calendario.MES_INICIAL or int(f["day"]) != Calendario.DIA_INICIAL:
+		print("FALLA: despues del receso la temporada 1 arranca el %s." %
+			Calendario.texto_largo(gs.dia_absoluto))
+		return
+	if not gs.hay_partido_hoy():
+		print("FALLA: el dia del arranque no hay partido.")
+		return
+	print("OK: la partida abre con %d dias de mercado y %d de receso, y juega el %s." % [
+		dias_de_mercado, receso, Calendario.texto_largo(gs.dia_absoluto)])
+
+
 func _test_la_temporada_arranca_siempre_en_marzo() -> void:
 	print("\n=== Cada temporada arranca en marzo ===")
 	var gs := GUION.new()
 	gs.partida_nueva(SEED)
+	_pasar_receso(gs)
 	var arranques := []
 	for temporada in range(2):
 		var f := Calendario.fecha(gs.dia_absoluto)
@@ -69,14 +104,12 @@ func _test_la_temporada_arranca_siempre_en_marzo() -> void:
 				# la juegue. Sin pantalla se resuelve sola: si no, el dia
 				# no avanza mas.
 				gs.resolver_ronda_de_copa()
+			elif gs.hay_partido_de_playoff_hoy():
+				gs.resolver_playoffs()
 			else:
 				gs.avanzar_un_dia()
 		# El receso: dias sin fecha hasta el arranque nuevo.
-		var receso := 0
-		while gs.en_receso() and receso < 400:
-			gs.avanzar_un_dia()
-			receso += 1
-		if receso == 0:
+		if _pasar_receso(gs) == 0:
 			print("FALLA: no hubo receso entre temporadas.")
 			return
 	print("OK: las temporadas arrancan el %s, con receso en el medio." % str(arranques))
@@ -86,9 +119,10 @@ func _test_fuera_de_ventana_no_se_puede_operar() -> void:
 	print("\n=== Con el mercado cerrado no se opera ===")
 	var gs := GUION.new()
 	gs.partida_nueva(SEED + 1)
-	# La partida arranca en marzo: cerrado.
+	# Pasado el receso la temporada arranca en marzo: cerrado.
+	_pasar_receso(gs)
 	if gs.hay_mercado_abierto():
-		print("FALLA: la partida arranca con el mercado abierto en marzo.")
+		print("FALLA: la temporada arranca con el mercado abierto en marzo.")
 		return
 	var vendedor: Team = null
 	for e in gs.liga_jugador().equipos:
@@ -218,6 +252,7 @@ func _test_una_partida_vieja_no_queda_con_ofertas_colgadas() -> void:
 	# que quedaban colgadas para siempre.
 	var gs := GUION.new()
 	gs.partida_nueva(SEED + 4)
+	_pasar_receso(gs)
 	var comprador: Team = null
 	for e in gs.liga_jugador().equipos:
 		if e != gs.equipo_jugador:
