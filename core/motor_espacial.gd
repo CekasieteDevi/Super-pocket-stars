@@ -1057,7 +1057,7 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 		# un extremo encara. Una sola definicion de "venir por la banda".
 		if absf(pos.y) >= float(f["banda_para_centrar"]) and mi_valor >= float(f["avance_para_centrar"]):
 			u_gambeta += wg["banda"]
-		var enganche := _opcion_enganche(estado, poseedor, jugador)
+		var enganche := _opcion_enganche(estado, poseedor, jugador, rival_a_encarar)
 		if not enganche.is_empty():
 			u_gambeta += 0.45 * (1.0 - enganche["riesgo"])
 		opciones.append({
@@ -1117,16 +1117,45 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 
 		# Leer la corrida preparada antes de descartar receptores lejanos.
 		var corrida: Dictionary = estado.get("desmarques", {}).get(id, {})
-		if bool(corrida.get("pase_atras", false)) and _zona_de_desborde(pos, es_local):
+		# Una ruptura o llegada central ya preparada tambien sirve para el
+		# pase atras: no exigir que haya nacido cuando la pelota estaba en banda.
+		var llegada_central := false
+		if corrida.get("tipo", "") in ["ruptura", "llegada"]:
+			var destino_corrida: Vector2 = corrida["destino"]
+			llegada_central = absf(destino_corrida.y) <= 11.0 and absf(arco_rival(es_local).x - destino_corrida.x) <= 22.0
+		if (bool(corrida.get("pase_atras", false)) or llegada_central) and _zona_de_desborde(pos, es_local):
 			var entrega: Vector2 = corrida["destino"]
+			var encuentro := _encuentro_pase_atras(estado, poseedor, comp, jugador, entrega, max_dist)
+			if not encuentro.is_empty():
+				entrega = encuentro["punto"]
 			var distancia_entrega := pos.distance_to(entrega)
-			var riesgo_entrega := riesgo_linea(estado, pos, entrega, es_local)
-			var tiempo_entrega := distancia_entrega / maxf(float(f["vel_pase_max"]), 1.0)
+			var riesgo_entrega := _riesgo_de_salida(estado, pos, entrega, es_local)
+			var velocidad_entrega := _por_atributo(jugador, atributo_pase(jugador, distancia_entrega), f["vel_pase_min"], f["vel_pase_max"])
+			var tiempo_entrega := distancia_entrega / maxf(velocidad_entrega, 1.0)
 			var llega_a_tiempo: bool = comp["pos"].distance_to(entrega) <= float(comp["vel_max"]) * tiempo_entrega * 0.75 + 1.5
-			if distancia_entrega <= max_dist and llega_a_tiempo and riesgo_entrega < 0.55 \
+			if bool(estado.get("medir_opciones_colectivas", false)):
+				_contar_jugada(estado, "pase_atras_evaluado")
+				if not llega_a_tiempo:
+					_contar_jugada(estado, "pase_atras_receptor_lejos")
+				if distancia_entrega > max_dist:
+					_contar_jugada(estado, "pase_atras_sin_alcance")
+				if riesgo_entrega >= 0.85:
+					_contar_jugada(estado, "pase_atras_tapado")
+					if not estado.has("muestra_pase_atras"):
+						var rivales_carril := []
+						for rival in estado["jugadores"].values():
+							if rival["equipo_local"] != es_local and _dist_a_segmento(rival["pos"], pos, entrega) < 6.0:
+								rivales_carril.append({"rol": rival["rol"], "pos": rival["pos"]})
+						estado["muestra_pase_atras"] = {"desde": pos, "destino": entrega, "receptor": comp["pos"], "rivales": rivales_carril}
+				if (entrega.x - pos.x) * (1.0 if es_local else -1.0) >= -2.0:
+					_contar_jugada(estado, "pase_atras_falta_fondo")
+			if distancia_entrega <= max_dist and llega_a_tiempo and riesgo_entrega < 0.85 \
 					and (entrega.x - pos.x) * (1.0 if es_local else -1.0) < -2.0:
 				opciones.append({"tipo": "pase", "objetivo_id": id, "punto": entrega,
-					"utilidad": wp["base"] + wp["seguridad"] * (1.0 - riesgo_entrega) + 1.1 * (1.0 - riesgo_entrega),
+					# La ventaja es dejar un rematador libre; el riesgo del envio
+					# ya pesa en seguridad y sigue resolviendose por intercepcion.
+					"utilidad": wp["base"] + wp["seguridad"] * (1.0 - riesgo_entrega)
+						+ 1.1 * (1.0 - presion_normalizada(estado, entrega, es_local)),
 					"detalle": {"pase_atras_al_area": true, "llegada_coordinada": true, "riesgo": riesgo_entrega, "dist": distancia_entrega}})
 		if ve_el_hueco and not es_arquero and corrida.get("tipo", "") in ["ruptura", "llegada"]:
 			var espacio: Vector2 = corrida["destino"]
@@ -1290,7 +1319,7 @@ static func _destino_de_opcion(estado: Dictionary, opcion: Dictionary, es_local:
 	# El pase al hueco NO va a los pies del compañero sino al espacio por
 	# delante, así que ahí manda el punto; en la pared, en cambio, `punto`
 	# es adónde sale a correr ÉL y la pelota va al compañero.
-	if tipo == "pase_hueco" and opcion.has("punto"):
+	if tipo in ["pase", "pase_largo", "pase_hueco"] and opcion.has("punto"):
 		return opcion["punto"]
 	if opcion.has("objetivo_id") and estado["jugadores"].has(int(opcion["objetivo_id"])):
 		return estado["jugadores"][int(opcion["objetivo_id"])]["pos"]
@@ -1389,7 +1418,105 @@ static func _rival_a_encarar(estado: Dictionary, pos: Vector2, es_local: bool) -
 ## pierde queda pasado — reusa la misma penalización del quite, que es
 ## exactamente lo que hace una gambeta real: sacarte un hombre de encima
 ## por unos segundos.
-static func _opcion_enganche(estado: Dictionary, poseedor: Dictionary, jugador: Dictionary) -> Dictionary:
+## Un rival a espaldas de la salida presiona, pero no tapa ese carril.
+## Dentro de dos metros sigue contando: aun puede disputar el primer toque.
+## Ajustar el encuentro a la carrera real en vez de esperar un punto fijo.
+static func _encuentro_pase_atras(estado: Dictionary, pasador: Dictionary, receptor: Dictionary,
+		jugador: Dictionary, previsto: Vector2, alcance: float) -> Dictionary:
+	var desde: Vector2 = pasador["pos"]
+	var pos: Vector2 = receptor["pos"]
+	var local: bool = pasador["equipo_local"]
+	var f: Dictionary = pesos()["fisica"]
+	var velocidad := _por_atributo(jugador, atributo_pase(jugador, desde.distance_to(previsto)), f["vel_pase_min"], f["vel_pase_max"])
+	var tiempo := desde.distance_to(pos) / maxf(velocidad, 1.0)
+	var anticipado := pos.move_toward(previsto, float(receptor["vel_max"]) * tiempo * 0.65)
+	var puntos := [previsto, anticipado, previsto + Vector2(-3.0 if local else 3.0, 0.0),
+		previsto + Vector2(0.0, -3.0), previsto + Vector2(0.0, 3.0)]
+	var mejor := {}
+	var mejor_valor := -INF
+	for punto in puntos:
+		var entrega: Vector2 = punto
+		var profundidad := absf(arco_rival(local).x - entrega.x)
+		if profundidad < 7.0 or profundidad > 22.0 or absf(entrega.y) > 11.0 \
+				or entrega.distance_to(previsto) > 8.0 or (entrega.x - desde.x) * (1.0 if local else -1.0) >= -2.0:
+			continue
+		var distancia := desde.distance_to(entrega)
+		var vel := _por_atributo(jugador, atributo_pase(jugador, distancia), f["vel_pase_min"], f["vel_pase_max"])
+		if distancia > alcance or pos.distance_to(entrega) > float(receptor["vel_max"]) * distancia / maxf(vel, 1.0) * 0.75 + 1.5:
+			continue
+		var riesgo := _riesgo_de_salida(estado, desde, entrega, local)
+		# Desviar el plan solo si abre un carril claro; no regalarla para variar.
+		if riesgo >= (0.85 if entrega == previsto else 0.65):
+			continue
+		var libertad := 1.0 - presion_normalizada(estado, entrega, local)
+		var valor := 1.0 - riesgo + 0.6 * libertad - entrega.distance_to(previsto) * 0.025
+		if valor > mejor_valor:
+			mejor_valor = valor
+			mejor = {"punto": entrega}
+	return mejor
+
+
+static func _riesgo_de_salida(estado: Dictionary, desde: Vector2, hasta: Vector2, local: bool, excluir: int = -1) -> float:
+	var peor := 0.0
+	var direccion := hasta - desde
+	for rival in estado["jugadores"].values():
+		if rival["equipo_local"] == local or int(rival["clave"]) == excluir:
+			continue
+		var relativo: Vector2 = rival["pos"] - desde
+		if relativo.dot(direccion) < 0.0 and relativo.length() > 2.0:
+			continue
+		peor = maxf(peor, clampf(1.0 - _dist_a_segmento(rival["pos"], desde, hasta) / 6.0, 0.0, 1.0))
+	return peor
+
+
+## Soltar despues de conducir si hay un companero libre que mejora el ataque.
+## Se aplica a las opciones ejecutables, despues del filtro de orientacion.
+static func _premiar_descarga_util(estado: Dictionary, poseedor: Dictionary, opciones: Array) -> void:
+	if poseedor["rol"] == "ARQ":
+		return
+	var ticks := int(estado["pelota"].get("ticks_con_pelota", 0))
+	var espera := clampf(float(ticks - 3) / 6.0, 0.0, 1.0)
+	var peso := float(pesos().get("asociacion_colectiva", {}).get("descarga_util", 0.35))
+	if espera <= 0.0 or peso <= 0.0:
+		return
+	var local: bool = poseedor["equipo_local"]
+	var pos: Vector2 = poseedor["pos"]
+	var mejor := -1
+	var valor_mejor := -INF
+	for i in range(opciones.size()):
+		var o: Dictionary = opciones[i]
+		if o["tipo"] not in ["pase", "pase_hueco", "pase_largo"]:
+			continue
+		var receptor: Dictionary = estado["jugadores"].get(o.get("objetivo_id", -1), {})
+		if receptor.is_empty() or receptor["rol"] == "ARQ":
+			continue
+		var destino: Vector2 = o.get("punto", receptor["pos"])
+		var avance := (destino.x - pos.x) * (1.0 if local else -1.0)
+		var apertura := absf(destino.y) - absf(pos.y) > 8.0 and avance >= -1.0
+		if avance < 3.0 and not apertura:
+			continue
+		if _riesgo_de_salida(estado, pos, destino, local) >= 0.45 or presion_normalizada(estado, destino, local) >= 0.35:
+			continue
+		if float(o["utilidad"]) > valor_mejor:
+			mejor = i
+			valor_mejor = float(o["utilidad"])
+	if mejor == -1:
+		return
+	var bono := peso * espera
+	opciones[mejor]["utilidad"] += bono
+	opciones[mejor]["detalle"]["descarga_util"] = true
+	for o in opciones:
+		if o["tipo"] == "conducir":
+			o["utilidad"] -= bono * 0.5
+
+
+static func _contar_jugada(estado: Dictionary, nombre: String) -> void:
+	var conteo: Dictionary = estado.get("jugadas_colectivas", {})
+	estado["jugadas_colectivas"] = conteo
+	conteo[nombre] = int(conteo.get(nombre, 0)) + 1
+
+
+static func _opcion_enganche(estado: Dictionary, poseedor: Dictionary, jugador: Dictionary, rival_duelo: int = -1) -> Dictionary:
 	var pos: Vector2 = poseedor["pos"]
 	var local: bool = poseedor["equipo_local"]
 	var f: Dictionary = pesos()["fisica"]
@@ -1405,11 +1532,16 @@ static func _opcion_enganche(estado: Dictionary, poseedor: Dictionary, jugador: 
 			break
 	if not amenaza:
 		return {}
-	var destino := pos + Vector2(2.0 if local else -2.0, -6.0 * signf(pos.y))
-	var riesgo := riesgo_linea(estado, pos, destino, local)
-	if riesgo >= 0.55 or presion_normalizada(estado, destino, local) >= 0.4:
-		return {}
-	return {"destino": destino, "riesgo": riesgo}
+	var mejor := {}
+	for avance in [2.0, 0.0, -2.0]:
+		var destino := pos + Vector2(avance * (1.0 if local else -1.0), -6.0 * signf(pos.y))
+		# El marcador se resuelve en el duelo; aca se comprueba la cobertura.
+		var riesgo := _riesgo_de_salida(estado, pos, destino, local, rival_duelo)
+		if riesgo >= 0.55 or presion_normalizada(estado, destino, local, rival_duelo) >= 0.4:
+			continue
+		if mejor.is_empty() or riesgo < float(mejor["riesgo"]):
+			mejor = {"destino": destino, "riesgo": riesgo}
+	return mejor
 
 
 static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador: Dictionary, clave_rival: int, enganche: Dictionary = {}) -> void:
@@ -1425,6 +1557,8 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 	var minuto := _minuto_int(estado)
 	var lado_g := "home" if es_local else "away"
 	estado["gambetas"][lado_g]["intentos"] += 1
+	if not enganche.is_empty():
+		_accion(estado, int(poseedor["clave"]), "amague_centro")
 	# El que va a ser encarado se tira a cortarla.
 	_accion(estado, clave_rival, ACCION_BARRIDA)
 	_xp_e(estado, poseedor, "control")
@@ -1720,6 +1854,25 @@ static func _transicion(estado: Dictionary, local: bool) -> float:
 
 ## El conductor compara carriles, no solo una recta al arco. Mantiene la
 ## eleccion un segundo para que la evasion no oscile en cada fotograma.
+static func _corredor_de_desborde(estado: Dictionary, e: Dictionary) -> Dictionary:
+	var pos: Vector2 = e["pos"]
+	var local: bool = e["equipo_local"]
+	if not _zona_de_desborde(pos, local):
+		return {}
+	var signo := 1.0 if local else -1.0
+	for clave in estado.get("desmarques", {}):
+		var plan: Dictionary = estado["desmarques"][clave]
+		if not bool(plan.get("pase_atras", false)) or int(plan.get("companero", -1)) != int(e["clave"]) \
+				or int(plan.get("hasta", -1)) <= int(estado["tick"]) or not estado["jugadores"].has(clave):
+			continue
+		# Ganar fondo sin cerrar la banda antes de que llegue el rematador.
+		var destino := Vector2(clampf(pos.x + 6.0 * signo, -MEDIO_LARGO + 2.0, MEDIO_LARGO - 2.0), pos.y)
+		if (destino.x - pos.x) * signo < 2.0 or riesgo_linea(estado, pos, destino, local) >= 0.45:
+			continue
+		return {"destino": destino}
+	return {}
+
+
 static func _corredor_elegido(estado: Dictionary, e: Dictionary) -> Vector2:
 	var tick: int = estado["tick"]
 	if tick < int(e.get("corredor_hasta", -1)):
@@ -1733,6 +1886,10 @@ static func _corredor_elegido(estado: Dictionary, e: Dictionary) -> Vector2:
 		frente = Vector2(1.0 if local else -1.0, 0.0)
 	var mejor := pos + frente * largo
 	var valor_mejor := -INF
+	var desborde := _corredor_de_desborde(estado, e)
+	if not desborde.is_empty():
+		mejor = desborde["destino"]
+		valor_mejor = 1.55 - riesgo_linea(estado, pos, mejor, local)
 	for giro in [0.0, -0.55, 0.55]:
 		var dir := frente.rotated(giro)
 		var destino := pos + dir * largo
@@ -1862,6 +2019,46 @@ static func _anotar_pase_de_ritmo(estado: Dictionary, clave_de: int, clave_a: in
 	r["pares"] = pares
 	var k := _clave_de_pareja(clave_de, clave_a)
 	pares[k] = int(pares.get(k, 0)) + 1
+	# Recordar circulacion real, solo despues de recibir el pase.
+	var de: Dictionary = estado["jugadores"].get(clave_de, {})
+	var a: Dictionary = estado["jugadores"].get(clave_a, {})
+	if de.is_empty() or a.is_empty() or de["equipo_local"] != a["equipo_local"]:
+		return
+	var avance: float = (a["pos"].x - de["pos"].x) * (1.0 if a["equipo_local"] else -1.0)
+	if avance >= 8.0:
+		r["toques_circulacion"] = 0
+		r["participantes_circulacion"] = {}
+	else:
+		r["toques_circulacion"] = int(r.get("toques_circulacion", 0)) + 1
+		var participantes: Dictionary = r.get("participantes_circulacion", {})
+		participantes[clave_de] = true
+		participantes[clave_a] = true
+		r["participantes_circulacion"] = participantes
+
+
+static func _ventana_tras_circular(estado: Dictionary, poseedor: Dictionary, opciones: Array) -> int:
+	var ritmo: Dictionary = estado.get("ritmo", {})
+	if bool(ritmo.get("local", not poseedor["equipo_local"])) != bool(poseedor["equipo_local"]) \
+			or int(ritmo.get("toques_circulacion", 0)) < 2 or ritmo.get("participantes_circulacion", {}).size() < 3:
+		return -1
+	var mejor := -1
+	var valor_mejor := -INF
+	for i in range(opciones.size()):
+		var o: Dictionary = opciones[i]
+		if o["tipo"] not in ["pase", "pase_hueco", "pase_largo"]:
+			continue
+		var receptor: Dictionary = estado["jugadores"].get(o.get("objetivo_id", -1), {})
+		if receptor.is_empty():
+			continue
+		var destino: Vector2 = o.get("punto", receptor["pos"])
+		var avance: float = (destino.x - poseedor["pos"].x) * (1.0 if poseedor["equipo_local"] else -1.0)
+		if avance < 8.0 or riesgo_linea(estado, poseedor["pos"], destino, poseedor["equipo_local"]) >= 0.35 \
+				or presion_normalizada(estado, destino, poseedor["equipo_local"]) >= 0.3:
+			continue
+		if float(o["utilidad"]) > valor_mejor:
+			valor_mejor = float(o["utilidad"])
+			mejor = i
+	return mejor
 
 
 ## Fase del equipo que ataca: circulacion, aceleracion o transicion.
@@ -2427,6 +2624,13 @@ static func _ponderar_plan(estado: Dictionary, opciones: Array, poseedor: Dictio
 	# seria devolversela. `devolver_a` queda en -1 mientras la jugada
 	# progrese o haya presion: devolver la pelota entonces esta bien.
 	var fase := fase_de_ritmo(estado, local)
+	var ventana := _ventana_tras_circular(estado, poseedor, opciones)
+	if ventana != -1 and fase != FASE_TRANSICION:
+		fase = FASE_ACELERACION
+		estado["ritmo"]["fase"] = fase
+		estado["ritmo"]["hasta"] = int(estado["tick"]) + TICKS_RITMO
+		opciones[ventana]["utilidad"] += 0.45
+		opciones[ventana]["detalle"]["aceleracion_preparada"] = true
 	var w_ritmo := pesos_ritmo()
 	# Etapa 7: cuanto necesita este equipo que el partido cambie.
 	var urg := urgencia(estado, local)
@@ -2455,7 +2659,7 @@ static func _ponderar_plan(estado: Dictionary, opciones: Array, poseedor: Dictio
 			var receptor: Dictionary = estado["jugadores"].get(int(o.get("objetivo_id", -1)), {})
 			if receptor.is_empty():
 				continue
-			var destino: Vector2 = o.get("punto", receptor["pos"]) if tipo == "pase_hueco" else receptor["pos"]
+			var destino: Vector2 = o.get("punto", receptor["pos"])
 			var adelante: float = (destino.x - pos.x) * (1.0 if local else -1.0)
 			var dist := pos.distance_to(destino)
 			var libertad := 1.0 - presion_normalizada(estado, destino, local)
@@ -2789,7 +2993,7 @@ static func _candidatos_desmarque(estado: Dictionary, e: Dictionary, poseedor: D
 	# El lateral de ese costado supera por fuera al extremo que fija marca.
 	if rol == "LAT" and poseedor["rol"] == "EXT" and pos.y * desde.y > 0.0 \
 			and absf(desde.y) >= 12.0 and absf(desde.y) <= MEDIO_ANCHO - 7.0 \
-			and (pos.x - desde.x) * signo <= 2.0 and pos.distance_to(desde) <= 16.0:
+			and (pos.x - desde.x) * signo <= 2.0 and pos.distance_to(desde) <= 24.0:
 		var atrae := false
 		for rival in estado["jugadores"].values():
 			if rival["equipo_local"] != local and rival["rol"] != "ARQ" and rival["pos"].distance_to(desde) < 8.0:
@@ -2811,9 +3015,14 @@ static func _candidatos_desmarque(estado: Dictionary, e: Dictionary, poseedor: D
 				"cambio_frente": true})
 	# Mientras el extremo desborda, una segunda linea entra al pase atras.
 	# Usa el cupo de llegadas y la separacion de destinos del reparto comun.
-	if _zona_de_desborde(desde, local) and rol in ["MC", "MCO", "DC", "EXT"]:
+	# Arrancar antes de que el extremo llegue al area: si espera a que
+	# gane fondo, el rematador tiene que recorrer veinte metros tarde.
+	if absf(desde.y) >= float(pesos()["fisica"]["banda_para_centrar"]) \
+			and absf(arco.x - desde.x) < 24.0 and rol in ["MC", "MCO", "DC", "EXT"]:
 		for lateral in [-6.0, 0.0, 6.0]:
-			var punto_atras := _destino_legal(estado, Vector2(arco.x - signo * 11.0, lateral), local)
+			# Si el extremo aun no gano fondo, ofrecer remate desde el borde.
+			var profundidad := clampf(absf(arco.x - desde.x) + 4.0, 11.0, 16.0)
+			var punto_atras := _destino_legal(estado, Vector2(arco.x - signo * profundidad, lateral), local)
 			if pos.distance_to(punto_atras) > 22.0 or (punto_atras.x - pos.x) * signo < -2.0:
 				continue
 			if presion_normalizada(estado, punto_atras, local) > 0.55:
@@ -3000,6 +3209,11 @@ static func _planificar_desmarques(estado: Dictionary, ataca_local: bool) -> voi
 		if bool(ancla["listo"]):
 			continue
 		var candidatos := _candidatos_desmarque(estado, e, poseedor, ancla["punto"])
+		if bool(estado.get("medir_opciones_colectivas", false)):
+			for candidato in candidatos:
+				for marca in ["doblamiento", "pase_atras", "diagonal_extremo", "nueve_baja", "relevo_nueve"]:
+					if bool(candidato.get(marca, false)):
+						_contar_jugada(estado, "candidato_" + marca)
 		if candidatos.is_empty():
 			continue
 		pendientes.append({"clave": clave, "candidatos": candidatos})
@@ -3067,11 +3281,14 @@ static func _planificar_desmarques(estado: Dictionary, ataca_local: bool) -> voi
 ## llegar, acotado entre el piso y el techo. El que va lejos sostiene la
 ## corrida; el que se acomoda dos metros vuelve a evaluar enseguida.
 static func _anotar_desmarque(estado: Dictionary, planes: Dictionary, clave: int, candidato: Dictionary) -> void:
+	for marca in ["pase_atras", "doblamiento", "diagonal_extremo", "nueve_baja", "relevo_nueve", "cambio_frente"]:
+		if bool(candidato.get(marca, false)):
+			_contar_jugada(estado, "plan_" + marca)
 	var e: Dictionary = estado["jugadores"][clave]
 	var viaje: float = e["pos"].distance_to(candidato["destino"]) / maxf(float(e["vel_max"]), 0.01)
 	var ticks: int = clampi(int(round(viaje / TICK_SEG)), TICKS_DESMARQUE_MIN, TICKS_DESMARQUE_MAX)
 	# Sostener la descarga hasta el siguiente reparto permite coordinar el relevo.
-	if bool(candidato.get("nueve_baja", false)):
+	if bool(candidato.get("nueve_baja", false)) or bool(candidato.get("pase_atras", false)):
 		ticks = mini(ticks + TICKS_DESMARQUE_MIN, TICKS_DESMARQUE_MAX)
 	planes[clave] = {
 		"tipo": str(candidato["tipo"]),
@@ -4956,6 +5173,7 @@ static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: i
 	pelota["en_vuelo"] = true
 	# Etapa 3: la llegada que se mida tiene que ser la de ESTE pase.
 	pelota.erase("llegada")
+	pelota.erase("pase_atras_coordinado")
 	# La pelota sale más fuerte cuanto mejor pega el que la toca: un pase
 	# flojo tarda más en llegar y le da tiempo al rival a meterse. En el
 	# arquero el atributo que manda es el suyo (pies/golpe), no `pases`.
@@ -5534,6 +5752,8 @@ static func _resolver_intercepcion(estado: Dictionary, mejor_id: int, minuto: in
 ## El pase termino: quien la toma, la pared, el offside y el evento.
 static func _resolver_recepcion(estado: Dictionary, receptor: int, hasta: Vector2, minuto: int) -> void:
 	var pelota: Dictionary = estado["pelota"]
+	var es_atras_coordinado: bool = bool(pelota.get("pase_atras_coordinado", false)) and receptor == int(pelota.get("destino_id", -1))
+	pelota.erase("pase_atras_coordinado")
 	var pasador_local: bool = pelota.get("pasador_local", true)
 	var e_receptor: Dictionary = estado["jugadores"][receptor]
 	# Etapa 3: la llegada que se capturo antes de que la pelota frenara. Sin
@@ -5608,6 +5828,8 @@ static func _resolver_recepcion(estado: Dictionary, receptor: int, hasta: Vector
 	# tirar, asi que la misma pelota no se juega dos veces.
 	if bool(pelota.get("es_pase", false)):
 		_controlar_recepcion(estado, receptor, llegada)
+		if es_atras_coordinado and e_receptor["equipo_local"] == pasador_local and int(pelota["poseedor_id"]) == receptor:
+			_contar_jugada(estado, "pase_atras_controlado")
 
 
 ## NOTA: acá vivía _soltar_pelota, que tras un quite ganado mandaba la
@@ -6828,10 +7050,26 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 		return
 	var presion := presion_normalizada(estado, poseedor["pos"], es_local)
 	var temp := temperatura(jugador, presion)
+	_premiar_descarga_util(estado, poseedor, opciones)
 	var elegida := elegir_softmax(opciones, temp, estado["rng"])
+	if bool(estado.get("medir_opciones_colectivas", false)):
+		var disponibles := {}
+		for opcion in opciones:
+			for marca in ["tercer_hombre", "llegada_coordinada", "cambio_frente", "corrida_preparada", "aceleracion_preparada"]:
+				if bool(opcion.get("detalle", {}).get(marca, false)):
+					disponibles[marca] = true
+			if not opcion.get("enganche", {}).is_empty():
+				disponibles["enganche"] = true
+		for marca in disponibles:
+			_contar_jugada(estado, "disponible_" + marca)
 
 	estado["decisiones"][elegida["tipo"]] = estado["decisiones"].get(elegida["tipo"], 0) + 1
 	_medir_pase_atras(estado, elegida, poseedor, presion)
+	for marca in ["tercer_hombre", "llegada_coordinada", "cambio_frente", "corrida_preparada", "aceleracion_preparada"]:
+		if bool(elegida.get("detalle", {}).get(marca, false)):
+			_contar_jugada(estado, "accion_" + marca)
+	if not elegida.get("enganche", {}).is_empty():
+		_contar_jugada(estado, "accion_enganche")
 	estado["ultima_decision"] = {
 		"tipo": elegida["tipo"], "temperatura": temp, "presion": presion,
 		"opciones": opciones, "jugador_rol": poseedor["rol"],
@@ -6842,6 +7080,8 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 			_conducir(estado, poseedor)
 		"pase":
 			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador, elegida.get("punto", null))
+			if bool(elegida.get("detalle", {}).get("llegada_coordinada", false)):
+				estado["pelota"]["pase_atras_coordinado"] = true
 		"pase_hueco":
 			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador, elegida["punto"])
 		"pase_largo":
@@ -7843,6 +8083,7 @@ static func _despejar(estado: Dictionary, poseedor: Dictionary, jugador: Diction
 ## Avanzar con la pelota hacia el arco rival. Más lento que correr libre
 ## (avance_conducir < 1): si no, nadie alcanza nunca al que la lleva.
 static func _conducir(estado: Dictionary, poseedor: Dictionary) -> void:
+	var inicio: Vector2 = poseedor["pos"]
 	var f: Dictionary = pesos()["fisica"]
 	var destino := _corredor_elegido(estado, poseedor)
 	var dir: Vector2 = (destino - poseedor["pos"]).normalized()
@@ -7876,6 +8117,8 @@ static func _conducir(estado: Dictionary, poseedor: Dictionary) -> void:
 	poseedor["pos"] = Vector2(
 		clampf(poseedor["pos"].x, -MEDIO_LARGO + 1.0, MEDIO_LARGO - 1.0),
 		clampf(poseedor["pos"].y, -MEDIO_ANCHO + 1.0, MEDIO_ANCHO - 1.0))
+	if bool(estado.get("medir_opciones_colectivas", false)):
+		estado["metros_conduccion"] = float(estado.get("metros_conduccion", 0.0)) + inicio.distance_to(poseedor["pos"])
 
 
 static func _intentar_robo(estado: Dictionary) -> void:
@@ -8399,6 +8642,7 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator,
 	estado["con_fotogramas"] = con_fotogramas
 	if con_diagnostico:
 		estado["registro_remates"] = []
+		estado["medir_opciones_colectivas"] = true
 
 	# Mismas ventanas de cambio que MatchEngine (§8.7): entretiempo, 60' y
 	# 75'. Se reusa _procesar_cambios sin tocarlo.
@@ -8465,6 +8709,9 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator,
 			"robos": estado["robos"],
 			"gambetas": estado["gambetas"],
 			"paredes": estado["paredes"],
+			"jugadas_colectivas": estado.get("jugadas_colectivas", {}),
+			"metros_conduccion": float(estado.get("metros_conduccion", 0.0)),
+			"muestra_pase_atras": estado.get("muestra_pase_atras", {}),
 			"centros": estado["centros"],
 			"despejes": estado.get("despejes", 0),
 			"faltas": estado.get("faltas", 0),

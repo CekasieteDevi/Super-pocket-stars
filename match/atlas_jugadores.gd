@@ -12,6 +12,8 @@ const CLIPS := {
 	"lateral_prepara": [56, 57, 58, 59],
 	"lateral_manos": [60, 61, 62, 63],
 	"patea": [8, 9, 10, 11, 12, 13, 14, 15],
+	# Arma el golpe, lo cancela y recoge el pie para salir conduciendo.
+	"amague_centro": [8, 9, 10, 9, 8, 68, 69, 71],
 	"barrida": [26, 26, 30, 31],
 	"bloquea": [31, 27, 27, 30],
 	"cae": [28, 29, 29, 30, 31],

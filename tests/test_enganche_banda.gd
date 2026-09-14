@@ -44,12 +44,18 @@ func _probar(local: bool, lado: float) -> void:
 	var pierde := false
 	for semilla in range(60):
 		var copia: Dictionary = estado.duplicate(true)
+		copia["con_fotogramas"] = true
+		copia["acciones_tick"] = []
 		copia["rng"] = RandomNumberGenerator.new()
 		copia["rng"].seed = semilla
 		var atacante: Dictionary = copia["jugadores"][a["clave"]]
 		atacante.erase("corredor")
 		var ganadas_antes: int = copia["gambetas"]["home" if local else "away"]["ganadas"]
 		MotorEspacial._resolver_gambeta(copia, atacante, jugador, rival["clave"], enganche)
+		var gesto := false
+		for accion in copia["acciones_tick"]:
+			gesto = gesto or (accion["clave"] == a["clave"] and accion["accion"] == "amague_centro")
+		_comprobar(gesto, "intento emite animacion de amague")
 		if copia["gambetas"]["home" if local else "away"]["ganadas"] > ganadas_antes:
 			gana = true
 			_comprobar(atacante["corredor"] == enganche["destino"] and atacante["pos"] == a["pos"], "gana y prepara giro sin teletransporte")
@@ -60,6 +66,12 @@ func _probar(local: bool, lado: float) -> void:
 			break
 	_comprobar(gana and pierde, "duelo conserva resultados distintos")
 	rival["pos"] = enganche["destino"]
+	var alternativa := MotorEspacial._opcion_enganche(estado, a, jugador)
+	_comprobar(alternativa.is_empty() or alternativa["destino"].distance_to(rival["pos"]) > 2.7, "busca otra salida si cubren la primera")
+	for e in estado["jugadores"].values():
+		if e["equipo_local"] != local and e["clave"] != rival["clave"]:
+			e["pos"] = a["pos"] + Vector2(-2.0 * signo, -6.0 * lado)
+			break
 	_comprobar(MotorEspacial._opcion_enganche(estado, a, jugador).is_empty(), "cobertura interior impide recorte")
 	a["pos"].y = 0.0
 	_comprobar(MotorEspacial._opcion_enganche(estado, a, jugador).is_empty(), "por el centro no amaga centro de banda")

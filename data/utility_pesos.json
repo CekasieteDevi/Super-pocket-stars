@@ -1,6 +1,9 @@
 {
   "_comentario": "Pesos de la utility AI del motor espacial (docs/motor_espacial.md §4). Tuneables sin recompilar. Las utilidades se normalizan 0..1 por termino y se suman pesadas; despues pasan por softmax con temperatura.",
   "_conducir": "camino es que tan despejado esta el corredor hacia el arco rival (fisica.corredor_conduccion). Separa 'estoy libre' de 'tengo por donde ir': espacio mira quien te rodea, camino mira quien te tapa el paso.",
+  "asociacion_colectiva": {
+    "descarga_util": 0.35
+  },
   "conducir": {
     "base": 0.3,
     "espacio": 0.5,

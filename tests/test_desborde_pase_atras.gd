@@ -37,9 +37,22 @@ func _probar(local: bool, lado: float) -> void:
 	MotorEspacial._anotar_desmarque(estado, estado["desmarques"], receptor["clave"], candidato)
 	var opcion := _pase(estado, a, escena["jugador"])
 	_comprobar(not opcion.is_empty(), "extremo ve pase atras a la corrida")
+	# Una llegada previa al cambio hacia banda tambien puede terminar atras.
+	estado["desmarques"][receptor["clave"]]["pase_atras"] = false
+	_comprobar(not _pase(estado, a, escena["jugador"]).is_empty(), "reconoce llegada central sin etiqueta especial")
+	estado["desmarques"][receptor["clave"]]["pase_atras"] = true
 	if not opcion.is_empty():
 		MotorEspacial._lanzar_pase(estado, a, receptor["clave"], escena["jugador"], opcion["punto"])
 		_comprobar(estado["pelota"]["destino_pos"] == candidato["destino"] and not estado["pelota"].get("es_centro", false), "pase al espacio sin centro aereo")
+	# El rematador todavia no alcanza el punto penal: encontrarlo antes.
+	receptor["pos"] = punto - Vector2(9.0 * signo, 0.0)
+	var ubicacion: Vector2 = receptor["pos"]
+	var anticipado := _pase(estado, a, escena["jugador"])
+	_comprobar(not anticipado.is_empty(), "ofrece encuentro antes del destino fijo")
+	if not anticipado.is_empty():
+		_comprobar(anticipado["punto"].distance_to(ubicacion) < punto.distance_to(ubicacion), "ajusta a la carrera actual")
+		_comprobar(MotorEspacial._destino_de_opcion(estado, anticipado, local) == anticipado["punto"], "orientacion evalua el punto de encuentro")
+		_comprobar(receptor["pos"] == ubicacion, "planear pase no teletransporta receptor")
 	receptor["pos"] = Vector2.ZERO
 	_comprobar(_pase(estado, a, escena["jugador"]).is_empty(), "espera si el volante esta demasiado lejos")
 	receptor["pos"] = punto

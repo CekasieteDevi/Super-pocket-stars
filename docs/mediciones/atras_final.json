@@ -1,0 +1,5084 @@
+{
+	"conteos": {
+		"accion_aceleracion_preparada": 10,
+		"accion_cambio_frente": 561,
+		"accion_corrida_preparada": 139,
+		"accion_enganche": 21,
+		"accion_llegada_coordinada": 5,
+		"accion_tercer_hombre": 32,
+		"candidato_diagonal_extremo": 540,
+		"candidato_doblamiento": 88,
+		"candidato_nueve_baja": 1845,
+		"candidato_pase_atras": 1466,
+		"candidato_relevo_nueve": 185,
+		"disponible_aceleracion_preparada": 29,
+		"disponible_cambio_frente": 1067,
+		"disponible_corrida_preparada": 757,
+		"disponible_enganche": 36,
+		"disponible_llegada_coordinada": 21,
+		"disponible_tercer_hombre": 150,
+		"pase_atras_controlado": 5,
+		"pase_atras_evaluado": 179,
+		"pase_atras_falta_fondo": 72,
+		"pase_atras_receptor_lejos": 68,
+		"pase_atras_sin_alcance": 14,
+		"pase_atras_tapado": 99,
+		"plan_cambio_frente": 602,
+		"plan_diagonal_extremo": 473,
+		"plan_doblamiento": 71,
+		"plan_nueve_baja": 1703,
+		"plan_pase_atras": 320,
+		"plan_relevo_nueve": 104
+	},
+	"descarga_util": 0.35,
+	"filas": [
+		{
+			"conteos": {
+				"accion_cambio_frente": 12,
+				"accion_corrida_preparada": 1,
+				"accion_tercer_hombre": 2,
+				"candidato_diagonal_extremo": 12,
+				"candidato_doblamiento": 1,
+				"candidato_nueve_baja": 20,
+				"candidato_pase_atras": 5,
+				"candidato_relevo_nueve": 2,
+				"disponible_cambio_frente": 22,
+				"disponible_corrida_preparada": 15,
+				"disponible_tercer_hombre": 4,
+				"plan_cambio_frente": 6,
+				"plan_diagonal_extremo": 11,
+				"plan_doblamiento": 1,
+				"plan_nueve_baja": 19,
+				"plan_pase_atras": 1,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"centro": 2,
+				"conducir": 14,
+				"despeje": 2,
+				"gambeta": 7,
+				"pared": 6,
+				"pase": 9,
+				"pase_hueco": 5,
+				"pase_largo": 15,
+				"tiro": 3
+			},
+			"division": 1,
+			"formaciones": [
+				"4-3-3",
+				"4-4-2"
+			],
+			"goles": 2,
+			"metros_conduccion": 302.791043698788,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 9,
+				"home": 26
+			},
+			"semilla": 20260914
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 1,
+				"accion_corrida_preparada": 2,
+				"candidato_nueve_baja": 18,
+				"candidato_pase_atras": 5,
+				"candidato_relevo_nueve": 1,
+				"disponible_cambio_frente": 8,
+				"disponible_corrida_preparada": 10,
+				"disponible_tercer_hombre": 6,
+				"pase_atras_evaluado": 1,
+				"pase_atras_falta_fondo": 1,
+				"plan_cambio_frente": 7,
+				"plan_nueve_baja": 17,
+				"plan_pase_atras": 2
+			},
+			"decisiones": {
+				"conducir": 17,
+				"despeje": 2,
+				"gambeta": 9,
+				"pared": 1,
+				"pase": 4,
+				"pase_hueco": 14,
+				"pase_largo": 4,
+				"tiro": 2
+			},
+			"division": 5,
+			"formaciones": [
+				"4-4-2",
+				"3-5-2"
+			],
+			"goles": 1,
+			"metros_conduccion": 271.753236696124,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 12,
+				"home": 16
+			},
+			"semilla": 20260915
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 8,
+				"accion_corrida_preparada": 1,
+				"candidato_diagonal_extremo": 6,
+				"candidato_doblamiento": 3,
+				"candidato_nueve_baja": 23,
+				"candidato_pase_atras": 23,
+				"candidato_relevo_nueve": 5,
+				"disponible_cambio_frente": 10,
+				"disponible_corrida_preparada": 5,
+				"pase_atras_evaluado": 2,
+				"pase_atras_falta_fondo": 2,
+				"pase_atras_receptor_lejos": 1,
+				"pase_atras_sin_alcance": 1,
+				"pase_atras_tapado": 2,
+				"plan_cambio_frente": 2,
+				"plan_diagonal_extremo": 4,
+				"plan_doblamiento": 1,
+				"plan_nueve_baja": 20,
+				"plan_pase_atras": 5,
+				"plan_relevo_nueve": 3
+			},
+			"decisiones": {
+				"conducir": 25,
+				"despeje": 2,
+				"pared": 2,
+				"pase": 10,
+				"pase_hueco": 9,
+				"pase_largo": 12,
+				"tiro": 5
+			},
+			"division": 10,
+			"formaciones": [
+				"4-4-2",
+				"4-4-2"
+			],
+			"goles": 2,
+			"metros_conduccion": 303.330874308944,
+			"muestra_pase_atras": {
+				"desde": "(37.12017, -18.26983)",
+				"destino": "(36.5, 6.0)",
+				"receptor": "(29.48066, 11.92629)",
+				"rivales": [
+					{
+						"pos": "(37.69382, -13.04751)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(35.40705, -11.69049)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 12,
+				"home": 13
+			},
+			"semilla": 20260916
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 6,
+				"accion_corrida_preparada": 1,
+				"candidato_diagonal_extremo": 1,
+				"candidato_doblamiento": 3,
+				"candidato_nueve_baja": 25,
+				"candidato_pase_atras": 29,
+				"disponible_cambio_frente": 6,
+				"disponible_corrida_preparada": 8,
+				"disponible_enganche": 1,
+				"disponible_tercer_hombre": 2,
+				"pase_atras_evaluado": 3,
+				"pase_atras_falta_fondo": 2,
+				"pase_atras_receptor_lejos": 2,
+				"pase_atras_tapado": 1,
+				"plan_cambio_frente": 6,
+				"plan_doblamiento": 2,
+				"plan_nueve_baja": 23,
+				"plan_pase_atras": 6
+			},
+			"decisiones": {
+				"centro": 3,
+				"conducir": 26,
+				"despeje": 5,
+				"gambeta": 2,
+				"pared": 1,
+				"pase": 9,
+				"pase_hueco": 15,
+				"pase_largo": 10,
+				"tiro": 6
+			},
+			"division": 1,
+			"formaciones": [
+				"5-3-2",
+				"4-4-2"
+			],
+			"goles": 2,
+			"metros_conduccion": 450.787710547447,
+			"muestra_pase_atras": {
+				"desde": "(-39.59238, -19.52038)",
+				"destino": "(-36.5, -6.0)",
+				"receptor": "(-21.56606, -0.383839)",
+				"rivales": [
+					{
+						"pos": "(-43.5, -15.77624)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(-38.25101, -20.20354)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(-38.18273, -14.14788)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(-40.19249, -6.994014)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 20,
+				"home": 12
+			},
+			"semilla": 20260917
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 4,
+				"accion_tercer_hombre": 1,
+				"candidato_nueve_baja": 28,
+				"candidato_pase_atras": 6,
+				"candidato_relevo_nueve": 1,
+				"disponible_aceleracion_preparada": 1,
+				"disponible_cambio_frente": 6,
+				"disponible_corrida_preparada": 6,
+				"disponible_llegada_coordinada": 1,
+				"disponible_tercer_hombre": 3,
+				"pase_atras_evaluado": 1,
+				"plan_cambio_frente": 4,
+				"plan_nueve_baja": 26,
+				"plan_pase_atras": 2,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"conducir": 35,
+				"despeje": 3,
+				"gambeta": 10,
+				"pared": 3,
+				"pase": 11,
+				"pase_hueco": 14,
+				"pase_largo": 15,
+				"tiro": 1
+			},
+			"division": 5,
+			"formaciones": [
+				"3-5-2",
+				"3-5-2"
+			],
+			"goles": 1,
+			"metros_conduccion": 480.699768349528,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 12,
+				"home": 19
+			},
+			"semilla": 20260918
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 2,
+				"accion_corrida_preparada": 1,
+				"candidato_nueve_baja": 12,
+				"candidato_pase_atras": 7,
+				"candidato_relevo_nueve": 3,
+				"disponible_cambio_frente": 6,
+				"disponible_corrida_preparada": 1,
+				"disponible_tercer_hombre": 1,
+				"plan_cambio_frente": 9,
+				"plan_nueve_baja": 12,
+				"plan_pase_atras": 1,
+				"plan_relevo_nueve": 2
+			},
+			"decisiones": {
+				"conducir": 33,
+				"pase": 14,
+				"pase_hueco": 4,
+				"pase_largo": 7,
+				"tiro": 2
+			},
+			"division": 10,
+			"formaciones": [
+				"4-4-2",
+				"3-5-2"
+			],
+			"goles": 5,
+			"metros_conduccion": 260.905371621251,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 7,
+				"home": 18
+			},
+			"semilla": 20260919
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 2,
+				"accion_corrida_preparada": 3,
+				"candidato_diagonal_extremo": 2,
+				"candidato_nueve_baja": 17,
+				"candidato_pase_atras": 3,
+				"candidato_relevo_nueve": 1,
+				"disponible_cambio_frente": 4,
+				"disponible_corrida_preparada": 13,
+				"disponible_enganche": 1,
+				"disponible_tercer_hombre": 3,
+				"plan_cambio_frente": 1,
+				"plan_diagonal_extremo": 2,
+				"plan_nueve_baja": 17,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"conducir": 27,
+				"despeje": 2,
+				"gambeta": 4,
+				"pared": 2,
+				"pase": 6,
+				"pase_hueco": 14,
+				"pase_largo": 6,
+				"tiro": 7
+			},
+			"division": 1,
+			"formaciones": [
+				"5-3-2",
+				"4-4-2"
+			],
+			"goles": 2,
+			"metros_conduccion": 396.364987671375,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 10,
+				"home": 19
+			},
+			"semilla": 20260920
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 10,
+				"accion_corrida_preparada": 3,
+				"candidato_diagonal_extremo": 14,
+				"candidato_nueve_baja": 17,
+				"candidato_pase_atras": 29,
+				"disponible_cambio_frente": 20,
+				"disponible_corrida_preparada": 13,
+				"disponible_tercer_hombre": 3,
+				"pase_atras_evaluado": 2,
+				"pase_atras_falta_fondo": 2,
+				"plan_cambio_frente": 14,
+				"plan_diagonal_extremo": 11,
+				"plan_nueve_baja": 16,
+				"plan_pase_atras": 5
+			},
+			"decisiones": {
+				"centro": 2,
+				"conducir": 18,
+				"despeje": 2,
+				"gambeta": 6,
+				"pase": 5,
+				"pase_hueco": 11,
+				"pase_largo": 20,
+				"tiro": 4
+			},
+			"division": 5,
+			"formaciones": [
+				"4-4-2",
+				"4-2-3-1"
+			],
+			"goles": 2,
+			"metros_conduccion": 323.519113242626,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 17,
+				"home": 13
+			},
+			"semilla": 20260921
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 7,
+				"candidato_diagonal_extremo": 16,
+				"candidato_doblamiento": 5,
+				"candidato_nueve_baja": 16,
+				"candidato_pase_atras": 9,
+				"disponible_cambio_frente": 12,
+				"disponible_corrida_preparada": 5,
+				"pase_atras_evaluado": 2,
+				"pase_atras_receptor_lejos": 2,
+				"pase_atras_sin_alcance": 1,
+				"pase_atras_tapado": 2,
+				"plan_cambio_frente": 11,
+				"plan_diagonal_extremo": 15,
+				"plan_doblamiento": 4,
+				"plan_nueve_baja": 14,
+				"plan_pase_atras": 4
+			},
+			"decisiones": {
+				"conducir": 37,
+				"despeje": 6,
+				"gambeta": 4,
+				"pared": 1,
+				"pase": 17,
+				"pase_hueco": 6,
+				"pase_largo": 12,
+				"tiro": 2
+			},
+			"division": 10,
+			"formaciones": [
+				"4-4-2",
+				"4-2-3-1"
+			],
+			"goles": 2,
+			"metros_conduccion": 299.690213009715,
+			"muestra_pase_atras": {
+				"desde": "(-43.9123, -14.20364)",
+				"destino": "(-39.63529, 0.0)",
+				"receptor": "(-21.13638, -1.440634)",
+				"rivales": [
+					{
+						"pos": "(-43.5, -10.74812)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(-43.5, 1.851879)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(-43.34928, -15.37298)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(-40.87967, -0.008424)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 20,
+				"home": 12
+			},
+			"semilla": 20260922
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 15,
+				"accion_corrida_preparada": 2,
+				"accion_enganche": 1,
+				"accion_tercer_hombre": 2,
+				"candidato_diagonal_extremo": 8,
+				"candidato_doblamiento": 5,
+				"candidato_nueve_baja": 26,
+				"candidato_relevo_nueve": 3,
+				"disponible_cambio_frente": 20,
+				"disponible_corrida_preparada": 13,
+				"disponible_enganche": 1,
+				"disponible_tercer_hombre": 5,
+				"plan_cambio_frente": 6,
+				"plan_diagonal_extremo": 8,
+				"plan_doblamiento": 1,
+				"plan_nueve_baja": 21,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 13,
+				"gambeta": 4,
+				"pared": 2,
+				"pase": 5,
+				"pase_hueco": 18,
+				"pase_largo": 17,
+				"tiro": 3
+			},
+			"division": 1,
+			"formaciones": [
+				"4-4-2",
+				"4-4-2"
+			],
+			"goles": 2,
+			"metros_conduccion": 415.615708708763,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 11,
+				"home": 22
+			},
+			"semilla": 20260923
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 12,
+				"accion_corrida_preparada": 2,
+				"candidato_diagonal_extremo": 12,
+				"candidato_nueve_baja": 20,
+				"candidato_pase_atras": 17,
+				"disponible_cambio_frente": 21,
+				"disponible_corrida_preparada": 24,
+				"disponible_tercer_hombre": 2,
+				"pase_atras_evaluado": 3,
+				"pase_atras_falta_fondo": 1,
+				"pase_atras_receptor_lejos": 2,
+				"pase_atras_tapado": 2,
+				"plan_cambio_frente": 12,
+				"plan_diagonal_extremo": 11,
+				"plan_nueve_baja": 20,
+				"plan_pase_atras": 3
+			},
+			"decisiones": {
+				"conducir": 18,
+				"despeje": 2,
+				"gambeta": 6,
+				"pared": 1,
+				"pase": 12,
+				"pase_hueco": 13,
+				"pase_largo": 17,
+				"tiro": 7
+			},
+			"division": 5,
+			"formaciones": [
+				"4-3-3",
+				"4-4-2"
+			],
+			"goles": 4,
+			"metros_conduccion": 305.420860394835,
+			"muestra_pase_atras": {
+				"desde": "(41.83728, 11.58108)",
+				"destino": "(37.08856, 0.0)",
+				"receptor": "(28.33959, 7.718622)",
+				"rivales": [
+					{
+						"pos": "(45.24109, 6.978697)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(41.06005, 11.80407)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(39.26501, -0.989244)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(39.92451, 9.346612)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 17,
+				"home": 22
+			},
+			"semilla": 20260924
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 7,
+				"accion_corrida_preparada": 2,
+				"candidato_diagonal_extremo": 2,
+				"candidato_doblamiento": 2,
+				"candidato_nueve_baja": 23,
+				"candidato_pase_atras": 23,
+				"candidato_relevo_nueve": 6,
+				"disponible_cambio_frente": 15,
+				"disponible_corrida_preparada": 5,
+				"disponible_tercer_hombre": 1,
+				"pase_atras_evaluado": 1,
+				"pase_atras_tapado": 1,
+				"plan_cambio_frente": 6,
+				"plan_diagonal_extremo": 2,
+				"plan_doblamiento": 2,
+				"plan_nueve_baja": 20,
+				"plan_pase_atras": 5,
+				"plan_relevo_nueve": 4
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 32,
+				"despeje": 3,
+				"gambeta": 2,
+				"pared": 1,
+				"pase": 8,
+				"pase_hueco": 14,
+				"pase_largo": 13,
+				"tiro": 2
+			},
+			"division": 10,
+			"formaciones": [
+				"4-4-2",
+				"4-4-2"
+			],
+			"goles": 0,
+			"metros_conduccion": 374.421167567372,
+			"muestra_pase_atras": {
+				"desde": "(-41.36473, 18.83764)",
+				"destino": "(-36.5, 6.0)",
+				"receptor": "(-35.06284, 1.70648)",
+				"rivales": [
+					{
+						"pos": "(-40.58884, 19.44544)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(-39.16862, 1.697652)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(-39.1722, 12.09687)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 16,
+				"home": 6
+			},
+			"semilla": 20260925
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 14,
+				"accion_corrida_preparada": 1,
+				"accion_tercer_hombre": 2,
+				"candidato_doblamiento": 4,
+				"candidato_nueve_baja": 14,
+				"candidato_pase_atras": 36,
+				"disponible_cambio_frente": 26,
+				"disponible_corrida_preparada": 4,
+				"disponible_tercer_hombre": 2,
+				"pase_atras_evaluado": 12,
+				"pase_atras_falta_fondo": 2,
+				"pase_atras_receptor_lejos": 2,
+				"pase_atras_tapado": 11,
+				"plan_cambio_frente": 23,
+				"plan_doblamiento": 3,
+				"plan_nueve_baja": 12,
+				"plan_pase_atras": 10
+			},
+			"decisiones": {
+				"centro": 2,
+				"conducir": 20,
+				"despeje": 3,
+				"gambeta": 10,
+				"pared": 5,
+				"pase": 9,
+				"pase_hueco": 6,
+				"pase_largo": 20,
+				"tiro": 5
+			},
+			"division": 1,
+			"formaciones": [
+				"3-5-2",
+				"4-3-3"
+			],
+			"goles": 2,
+			"metros_conduccion": 340.159719377756,
+			"muestra_pase_atras": {
+				"desde": "(-42.61086, 19.58401)",
+				"destino": "(-36.88592, -6.0)",
+				"receptor": "(-31.69144, -7.100545)",
+				"rivales": [
+					{
+						"pos": "(-43.5, -2.967875)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(-43.5, 6.132125)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(-43.5, 15.23213)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(-42.17841, 20.44042)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(-41.17841, 1.304146)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(-41.00012, 7.277721)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(-40.82698, 8.020559)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 26,
+				"home": 15
+			},
+			"semilla": 20260926
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 5,
+				"accion_corrida_preparada": 1,
+				"accion_tercer_hombre": 1,
+				"candidato_diagonal_extremo": 1,
+				"candidato_nueve_baja": 21,
+				"disponible_cambio_frente": 10,
+				"disponible_corrida_preparada": 15,
+				"disponible_tercer_hombre": 3,
+				"plan_diagonal_extremo": 1,
+				"plan_nueve_baja": 21
+			},
+			"decisiones": {
+				"conducir": 16,
+				"despeje": 1,
+				"gambeta": 5,
+				"pared": 1,
+				"pase": 7,
+				"pase_hueco": 19,
+				"pase_largo": 10,
+				"tiro": 3
+			},
+			"division": 5,
+			"formaciones": [
+				"4-4-2",
+				"4-4-2"
+			],
+			"goles": 3,
+			"metros_conduccion": 333.566907018423,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 17,
+				"home": 18
+			},
+			"semilla": 20260927
+		},
+		{
+			"conteos": {
+				"accion_aceleracion_preparada": 2,
+				"accion_cambio_frente": 9,
+				"accion_corrida_preparada": 1,
+				"candidato_diagonal_extremo": 16,
+				"candidato_doblamiento": 1,
+				"candidato_nueve_baja": 22,
+				"candidato_pase_atras": 9,
+				"disponible_aceleracion_preparada": 2,
+				"disponible_cambio_frente": 15,
+				"disponible_corrida_preparada": 4,
+				"pase_atras_evaluado": 1,
+				"pase_atras_falta_fondo": 1,
+				"pase_atras_receptor_lejos": 1,
+				"pase_atras_sin_alcance": 1,
+				"plan_cambio_frente": 8,
+				"plan_diagonal_extremo": 13,
+				"plan_doblamiento": 1,
+				"plan_nueve_baja": 20,
+				"plan_pase_atras": 3
+			},
+			"decisiones": {
+				"conducir": 37,
+				"despeje": 2,
+				"pared": 1,
+				"pase": 26,
+				"pase_hueco": 4,
+				"pase_largo": 14,
+				"tiro": 4
+			},
+			"division": 10,
+			"formaciones": [
+				"4-3-3",
+				"4-4-2"
+			],
+			"goles": 1,
+			"metros_conduccion": 296.417623445392,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 10,
+				"home": 26
+			},
+			"semilla": 20260928
+		},
+		{
+			"conteos": {
+				"accion_corrida_preparada": 1,
+				"candidato_nueve_baja": 26,
+				"candidato_relevo_nueve": 3,
+				"disponible_cambio_frente": 1,
+				"disponible_corrida_preparada": 5,
+				"disponible_tercer_hombre": 1,
+				"plan_nueve_baja": 24
+			},
+			"decisiones": {
+				"conducir": 19,
+				"despeje": 7,
+				"gambeta": 1,
+				"pared": 1,
+				"pase": 4,
+				"pase_hueco": 17,
+				"pase_largo": 6,
+				"tiro": 4
+			},
+			"division": 1,
+			"formaciones": [
+				"3-5-2",
+				"3-5-2"
+			],
+			"goles": 1,
+			"metros_conduccion": 407.388684898615,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 11,
+				"home": 9
+			},
+			"semilla": 20260929
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 12,
+				"accion_corrida_preparada": 3,
+				"candidato_diagonal_extremo": 19,
+				"candidato_nueve_baja": 21,
+				"candidato_pase_atras": 5,
+				"candidato_relevo_nueve": 3,
+				"disponible_cambio_frente": 25,
+				"disponible_corrida_preparada": 10,
+				"disponible_tercer_hombre": 3,
+				"plan_cambio_frente": 13,
+				"plan_diagonal_extremo": 16,
+				"plan_nueve_baja": 21,
+				"plan_pase_atras": 1,
+				"plan_relevo_nueve": 2
+			},
+			"decisiones": {
+				"centro": 3,
+				"conducir": 22,
+				"despeje": 1,
+				"gambeta": 8,
+				"pared": 2,
+				"pase": 9,
+				"pase_hueco": 11,
+				"pase_largo": 18,
+				"tiro": 1
+			},
+			"division": 5,
+			"formaciones": [
+				"4-2-3-1",
+				"4-4-2"
+			],
+			"goles": 2,
+			"metros_conduccion": 390.284877896309,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 20,
+				"home": 24
+			},
+			"semilla": 20260930
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 1,
+				"candidato_diagonal_extremo": 1,
+				"candidato_doblamiento": 1,
+				"candidato_nueve_baja": 30,
+				"candidato_relevo_nueve": 1,
+				"disponible_cambio_frente": 1,
+				"disponible_tercer_hombre": 1,
+				"plan_cambio_frente": 1,
+				"plan_diagonal_extremo": 1,
+				"plan_doblamiento": 1,
+				"plan_nueve_baja": 23,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"conducir": 53,
+				"despeje": 2,
+				"gambeta": 3,
+				"pared": 1,
+				"pase": 23,
+				"pase_hueco": 2,
+				"pase_largo": 7,
+				"tiro": 1
+			},
+			"division": 10,
+			"formaciones": [
+				"4-4-2",
+				"5-3-2"
+			],
+			"goles": 1,
+			"metros_conduccion": 403.956780835986,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 17,
+				"home": 13
+			},
+			"semilla": 20260931
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 9,
+				"candidato_diagonal_extremo": 10,
+				"candidato_nueve_baja": 17,
+				"candidato_pase_atras": 9,
+				"disponible_cambio_frente": 15,
+				"disponible_corrida_preparada": 10,
+				"plan_cambio_frente": 4,
+				"plan_diagonal_extremo": 8,
+				"plan_nueve_baja": 16,
+				"plan_pase_atras": 2
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 8,
+				"despeje": 6,
+				"gambeta": 6,
+				"pared": 1,
+				"pase": 4,
+				"pase_hueco": 14,
+				"pase_largo": 18,
+				"tiro": 5
+			},
+			"division": 1,
+			"formaciones": [
+				"4-4-2",
+				"4-2-3-1"
+			],
+			"goles": 3,
+			"metros_conduccion": 292.069118231535,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 19,
+				"home": 14
+			},
+			"semilla": 20260932
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 1,
+				"accion_corrida_preparada": 3,
+				"candidato_nueve_baja": 17,
+				"candidato_pase_atras": 3,
+				"candidato_relevo_nueve": 3,
+				"disponible_cambio_frente": 1,
+				"disponible_corrida_preparada": 5,
+				"disponible_tercer_hombre": 1,
+				"plan_nueve_baja": 17,
+				"plan_pase_atras": 1,
+				"plan_relevo_nueve": 2
+			},
+			"decisiones": {
+				"centro": 2,
+				"conducir": 27,
+				"despeje": 4,
+				"gambeta": 8,
+				"pared": 1,
+				"pase": 8,
+				"pase_hueco": 16,
+				"pase_largo": 5,
+				"tiro": 3
+			},
+			"division": 5,
+			"formaciones": [
+				"5-3-2",
+				"5-3-2"
+			],
+			"goles": 1,
+			"metros_conduccion": 343.814870759845,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 11,
+				"home": 13
+			},
+			"semilla": 20260933
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 2,
+				"accion_corrida_preparada": 1,
+				"accion_tercer_hombre": 1,
+				"candidato_diagonal_extremo": 13,
+				"candidato_doblamiento": 2,
+				"candidato_nueve_baja": 8,
+				"candidato_relevo_nueve": 1,
+				"disponible_cambio_frente": 5,
+				"disponible_corrida_preparada": 1,
+				"disponible_tercer_hombre": 1,
+				"plan_cambio_frente": 6,
+				"plan_diagonal_extremo": 13,
+				"plan_doblamiento": 2,
+				"plan_nueve_baja": 8,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"conducir": 42,
+				"despeje": 3,
+				"pared": 3,
+				"pase": 19,
+				"pase_hueco": 1,
+				"pase_largo": 12,
+				"tiro": 5
+			},
+			"division": 10,
+			"formaciones": [
+				"4-2-3-1",
+				"4-4-2"
+			],
+			"goles": 3,
+			"metros_conduccion": 307.04995290935,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 18,
+				"home": 16
+			},
+			"semilla": 20260934
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 19,
+				"accion_corrida_preparada": 1,
+				"accion_enganche": 1,
+				"accion_llegada_coordinada": 2,
+				"accion_tercer_hombre": 1,
+				"candidato_doblamiento": 1,
+				"candidato_nueve_baja": 10,
+				"candidato_pase_atras": 78,
+				"candidato_relevo_nueve": 1,
+				"disponible_cambio_frente": 34,
+				"disponible_corrida_preparada": 2,
+				"disponible_enganche": 2,
+				"disponible_llegada_coordinada": 3,
+				"disponible_tercer_hombre": 2,
+				"pase_atras_controlado": 2,
+				"pase_atras_evaluado": 10,
+				"pase_atras_receptor_lejos": 1,
+				"pase_atras_tapado": 6,
+				"plan_cambio_frente": 14,
+				"plan_doblamiento": 1,
+				"plan_nueve_baja": 10,
+				"plan_pase_atras": 15
+			},
+			"decisiones": {
+				"centro": 3,
+				"conducir": 9,
+				"despeje": 1,
+				"gambeta": 5,
+				"pared": 1,
+				"pase": 6,
+				"pase_hueco": 11,
+				"pase_largo": 23,
+				"tiro": 3
+			},
+			"division": 1,
+			"formaciones": [
+				"4-2-3-1",
+				"3-5-2"
+			],
+			"goles": 4,
+			"metros_conduccion": 276.721449941397,
+			"muestra_pase_atras": {
+				"desde": "(42.6353, -20.62913)",
+				"destino": "(38.6353, 6.0)",
+				"receptor": "(33.00571, 5.048213)",
+				"rivales": [
+					{
+						"pos": "(43.43051, -16.08375)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(43.5, -6.443282)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(43.5, 2.656718)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(41.66743, -22.87721)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(41.12336, -13.31665)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(39.26117, -3.562061)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(41.19014, -1.652629)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 12,
+				"home": 30
+			},
+			"semilla": 20260935
+		},
+		{
+			"conteos": {
+				"accion_corrida_preparada": 3,
+				"candidato_nueve_baja": 22,
+				"candidato_pase_atras": 6,
+				"disponible_corrida_preparada": 9,
+				"disponible_enganche": 1,
+				"pase_atras_evaluado": 2,
+				"pase_atras_receptor_lejos": 1,
+				"pase_atras_tapado": 1,
+				"plan_cambio_frente": 1,
+				"plan_nueve_baja": 19,
+				"plan_pase_atras": 2
+			},
+			"decisiones": {
+				"conducir": 40,
+				"despeje": 2,
+				"gambeta": 6,
+				"pared": 6,
+				"pase": 15,
+				"pase_hueco": 17,
+				"pase_largo": 2,
+				"tiro": 6
+			},
+			"division": 5,
+			"formaciones": [
+				"5-3-2",
+				"5-3-2"
+			],
+			"goles": 0,
+			"metros_conduccion": 404.781507611275,
+			"muestra_pase_atras": {
+				"desde": "(41.84098, -11.24926)",
+				"destino": "(36.5, 6.0)",
+				"receptor": "(36.21161, 5.475766)",
+				"rivales": [
+					{
+						"pos": "(43.474, -11.93143)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(38.31662, -9.626221)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(38.71059, -12.20241)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(37.97882, -12.09141)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(39.58487, -3.605089)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(38.67155, 3.141182)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 13,
+				"home": 19
+			},
+			"semilla": 20260936
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 7,
+				"accion_corrida_preparada": 1,
+				"candidato_diagonal_extremo": 3,
+				"candidato_nueve_baja": 19,
+				"candidato_pase_atras": 11,
+				"candidato_relevo_nueve": 3,
+				"disponible_aceleracion_preparada": 2,
+				"disponible_cambio_frente": 8,
+				"disponible_corrida_preparada": 2,
+				"pase_atras_evaluado": 1,
+				"pase_atras_receptor_lejos": 1,
+				"plan_diagonal_extremo": 1,
+				"plan_nueve_baja": 18,
+				"plan_pase_atras": 3,
+				"plan_relevo_nueve": 2
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 34,
+				"despeje": 1,
+				"pared": 2,
+				"pase": 12,
+				"pase_hueco": 3,
+				"pase_largo": 15,
+				"tiro": 3
+			},
+			"division": 10,
+			"formaciones": [
+				"5-3-2",
+				"4-4-2"
+			],
+			"goles": 1,
+			"metros_conduccion": 307.264776304364,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 18,
+				"home": 14
+			},
+			"semilla": 20260937
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 7,
+				"candidato_diagonal_extremo": 2,
+				"candidato_doblamiento": 1,
+				"candidato_nueve_baja": 24,
+				"candidato_pase_atras": 9,
+				"disponible_cambio_frente": 9,
+				"disponible_corrida_preparada": 10,
+				"disponible_tercer_hombre": 3,
+				"plan_cambio_frente": 2,
+				"plan_diagonal_extremo": 1,
+				"plan_doblamiento": 1,
+				"plan_nueve_baja": 24,
+				"plan_pase_atras": 3
+			},
+			"decisiones": {
+				"conducir": 21,
+				"despeje": 5,
+				"gambeta": 3,
+				"pase": 5,
+				"pase_hueco": 18,
+				"pase_largo": 11,
+				"tiro": 3
+			},
+			"division": 1,
+			"formaciones": [
+				"4-4-2",
+				"5-3-2"
+			],
+			"goles": 0,
+			"metros_conduccion": 378.201449632645,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 15,
+				"home": 17
+			},
+			"semilla": 20260938
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 8,
+				"accion_corrida_preparada": 3,
+				"accion_enganche": 2,
+				"candidato_diagonal_extremo": 16,
+				"candidato_doblamiento": 3,
+				"candidato_nueve_baja": 15,
+				"candidato_pase_atras": 25,
+				"candidato_relevo_nueve": 1,
+				"disponible_aceleracion_preparada": 1,
+				"disponible_cambio_frente": 21,
+				"disponible_corrida_preparada": 9,
+				"disponible_enganche": 3,
+				"pase_atras_evaluado": 2,
+				"pase_atras_tapado": 2,
+				"plan_cambio_frente": 10,
+				"plan_diagonal_extremo": 15,
+				"plan_doblamiento": 3,
+				"plan_nueve_baja": 14,
+				"plan_pase_atras": 9
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 21,
+				"despeje": 2,
+				"gambeta": 8,
+				"pase": 13,
+				"pase_hueco": 9,
+				"pase_largo": 18,
+				"tiro": 3
+			},
+			"division": 5,
+			"formaciones": [
+				"4-3-3",
+				"4-4-2"
+			],
+			"goles": 1,
+			"metros_conduccion": 343.087743520737,
+			"muestra_pase_atras": {
+				"desde": "(41.94107, 13.67121)",
+				"destino": "(36.5, -6.0)",
+				"receptor": "(35.965, -9.003408)",
+				"rivales": [
+					{
+						"pos": "(41.24395, 14.04136)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(35.46466, -1.322223)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(34.28598, 7.804014)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 14,
+				"home": 25
+			},
+			"semilla": 20260939
+		},
+		{
+			"conteos": {
+				"accion_aceleracion_preparada": 1,
+				"accion_cambio_frente": 3,
+				"accion_enganche": 1,
+				"candidato_diagonal_extremo": 1,
+				"candidato_nueve_baja": 20,
+				"candidato_pase_atras": 19,
+				"candidato_relevo_nueve": 3,
+				"disponible_aceleracion_preparada": 1,
+				"disponible_cambio_frente": 11,
+				"disponible_corrida_preparada": 1,
+				"disponible_enganche": 1,
+				"disponible_llegada_coordinada": 1,
+				"pase_atras_evaluado": 8,
+				"pase_atras_falta_fondo": 6,
+				"pase_atras_receptor_lejos": 5,
+				"pase_atras_tapado": 6,
+				"plan_cambio_frente": 19,
+				"plan_diagonal_extremo": 1,
+				"plan_nueve_baja": 20,
+				"plan_pase_atras": 5
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 38,
+				"despeje": 4,
+				"gambeta": 6,
+				"pared": 1,
+				"pase": 33,
+				"pase_hueco": 5,
+				"pase_largo": 13,
+				"tiro": 4
+			},
+			"division": 10,
+			"formaciones": [
+				"4-3-3",
+				"3-5-2"
+			],
+			"goles": 0,
+			"metros_conduccion": 307.288834914565,
+			"muestra_pase_atras": {
+				"desde": "(37.13415, 21.7041)",
+				"destino": "(36.5, 0.0)",
+				"receptor": "(35.40381, -5.352171)",
+				"rivales": [
+					{
+						"pos": "(36.24769, 21.69361)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(32.82029, 0.530481)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 4,
+				"home": 41
+			},
+			"semilla": 20260940
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 4,
+				"accion_corrida_preparada": 2,
+				"accion_enganche": 1,
+				"accion_tercer_hombre": 1,
+				"candidato_diagonal_extremo": 2,
+				"candidato_nueve_baja": 15,
+				"candidato_pase_atras": 10,
+				"disponible_cambio_frente": 6,
+				"disponible_corrida_preparada": 9,
+				"disponible_enganche": 1,
+				"disponible_tercer_hombre": 3,
+				"pase_atras_evaluado": 2,
+				"pase_atras_receptor_lejos": 2,
+				"plan_cambio_frente": 4,
+				"plan_diagonal_extremo": 2,
+				"plan_nueve_baja": 15,
+				"plan_pase_atras": 3
+			},
+			"decisiones": {
+				"conducir": 21,
+				"gambeta": 6,
+				"pared": 2,
+				"pase": 3,
+				"pase_hueco": 19,
+				"pase_largo": 10,
+				"tiro": 9
+			},
+			"division": 1,
+			"formaciones": [
+				"4-4-2",
+				"5-3-2"
+			],
+			"goles": 1,
+			"metros_conduccion": 427.601646006107,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 11,
+				"home": 19
+			},
+			"semilla": 20260941
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 2,
+				"candidato_diagonal_extremo": 2,
+				"candidato_nueve_baja": 23,
+				"candidato_pase_atras": 3,
+				"disponible_cambio_frente": 5,
+				"disponible_corrida_preparada": 9,
+				"disponible_tercer_hombre": 1,
+				"plan_cambio_frente": 1,
+				"plan_diagonal_extremo": 2,
+				"plan_nueve_baja": 15,
+				"plan_pase_atras": 1
+			},
+			"decisiones": {
+				"conducir": 17,
+				"despeje": 4,
+				"gambeta": 3,
+				"pared": 1,
+				"pase": 7,
+				"pase_hueco": 20,
+				"pase_largo": 7,
+				"tiro": 3
+			},
+			"division": 5,
+			"formaciones": [
+				"4-4-2",
+				"4-4-2"
+			],
+			"goles": 1,
+			"metros_conduccion": 342.370495870709,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 15,
+				"home": 8
+			},
+			"semilla": 20260942
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 1,
+				"accion_corrida_preparada": 1,
+				"accion_tercer_hombre": 1,
+				"candidato_nueve_baja": 26,
+				"candidato_relevo_nueve": 5,
+				"disponible_cambio_frente": 4,
+				"disponible_corrida_preparada": 4,
+				"disponible_tercer_hombre": 1,
+				"plan_cambio_frente": 6,
+				"plan_nueve_baja": 23,
+				"plan_relevo_nueve": 3
+			},
+			"decisiones": {
+				"conducir": 35,
+				"despeje": 7,
+				"gambeta": 1,
+				"pared": 2,
+				"pase": 11,
+				"pase_hueco": 8,
+				"pase_largo": 8,
+				"tiro": 3
+			},
+			"division": 10,
+			"formaciones": [
+				"3-5-2",
+				"4-4-2"
+			],
+			"goles": 2,
+			"metros_conduccion": 295.340618923306,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 9,
+				"home": 13
+			},
+			"semilla": 20260943
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 7,
+				"accion_corrida_preparada": 4,
+				"accion_tercer_hombre": 1,
+				"candidato_diagonal_extremo": 3,
+				"candidato_doblamiento": 1,
+				"candidato_nueve_baja": 15,
+				"candidato_pase_atras": 5,
+				"disponible_cambio_frente": 14,
+				"disponible_corrida_preparada": 7,
+				"disponible_enganche": 1,
+				"disponible_tercer_hombre": 2,
+				"plan_cambio_frente": 4,
+				"plan_diagonal_extremo": 3,
+				"plan_doblamiento": 1,
+				"plan_nueve_baja": 15,
+				"plan_pase_atras": 2
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 26,
+				"despeje": 2,
+				"gambeta": 5,
+				"pared": 4,
+				"pase": 8,
+				"pase_hueco": 13,
+				"pase_largo": 10,
+				"tiro": 7
+			},
+			"division": 1,
+			"formaciones": [
+				"4-3-3",
+				"5-3-2"
+			],
+			"goles": 3,
+			"metros_conduccion": 345.095822483301,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 20,
+				"home": 16
+			},
+			"semilla": 20260944
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 7,
+				"accion_corrida_preparada": 2,
+				"candidato_diagonal_extremo": 5,
+				"candidato_doblamiento": 2,
+				"candidato_nueve_baja": 19,
+				"candidato_pase_atras": 20,
+				"candidato_relevo_nueve": 1,
+				"disponible_aceleracion_preparada": 1,
+				"disponible_cambio_frente": 11,
+				"disponible_corrida_preparada": 17,
+				"disponible_tercer_hombre": 2,
+				"pase_atras_evaluado": 2,
+				"pase_atras_falta_fondo": 2,
+				"pase_atras_receptor_lejos": 1,
+				"pase_atras_tapado": 1,
+				"plan_cambio_frente": 5,
+				"plan_diagonal_extremo": 4,
+				"plan_doblamiento": 2,
+				"plan_nueve_baja": 19,
+				"plan_pase_atras": 3,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"centro": 2,
+				"conducir": 18,
+				"gambeta": 8,
+				"pase": 5,
+				"pase_hueco": 19,
+				"pase_largo": 14,
+				"tiro": 7
+			},
+			"division": 5,
+			"formaciones": [
+				"4-4-2",
+				"4-4-2"
+			],
+			"goles": 3,
+			"metros_conduccion": 332.436147123575,
+			"muestra_pase_atras": {
+				"desde": "(38.09771, -16.26921)",
+				"destino": "(36.5, 6.0)",
+				"receptor": "(35.50073, 6.595504)",
+				"rivales": [
+					{
+						"pos": "(37.28811, -16.26921)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(36.26711, -10.89422)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(36.23561, -0.494223)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 12,
+				"home": 24
+			},
+			"semilla": 20260945
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 12,
+				"accion_corrida_preparada": 3,
+				"candidato_diagonal_extremo": 3,
+				"candidato_doblamiento": 2,
+				"candidato_nueve_baja": 19,
+				"candidato_pase_atras": 13,
+				"candidato_relevo_nueve": 5,
+				"disponible_cambio_frente": 14,
+				"disponible_corrida_preparada": 13,
+				"disponible_tercer_hombre": 1,
+				"plan_diagonal_extremo": 2,
+				"plan_doblamiento": 2,
+				"plan_nueve_baja": 19,
+				"plan_pase_atras": 3,
+				"plan_relevo_nueve": 3
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 41,
+				"despeje": 1,
+				"gambeta": 1,
+				"pared": 2,
+				"pase": 16,
+				"pase_hueco": 6,
+				"pase_largo": 17,
+				"tiro": 4
+			},
+			"division": 10,
+			"formaciones": [
+				"4-4-2",
+				"4-4-2"
+			],
+			"goles": 1,
+			"metros_conduccion": 348.400723919272,
+			"muestra_pase_atras": {},
+			"offsides": 1,
+			"pases": {
+				"away": 18,
+				"home": 18
+			},
+			"semilla": 20260946
+		},
+		{
+			"conteos": {
+				"accion_aceleracion_preparada": 1,
+				"accion_cambio_frente": 8,
+				"accion_corrida_preparada": 6,
+				"accion_enganche": 4,
+				"accion_tercer_hombre": 4,
+				"candidato_diagonal_extremo": 8,
+				"candidato_doblamiento": 1,
+				"candidato_nueve_baja": 20,
+				"candidato_pase_atras": 18,
+				"candidato_relevo_nueve": 1,
+				"disponible_aceleracion_preparada": 1,
+				"disponible_cambio_frente": 20,
+				"disponible_corrida_preparada": 20,
+				"disponible_enganche": 4,
+				"disponible_tercer_hombre": 4,
+				"pase_atras_evaluado": 6,
+				"pase_atras_falta_fondo": 2,
+				"pase_atras_receptor_lejos": 4,
+				"pase_atras_tapado": 4,
+				"plan_cambio_frente": 7,
+				"plan_diagonal_extremo": 7,
+				"plan_doblamiento": 1,
+				"plan_nueve_baja": 20,
+				"plan_pase_atras": 5,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"conducir": 11,
+				"despeje": 5,
+				"gambeta": 10,
+				"pared": 7,
+				"pase": 8,
+				"pase_hueco": 12,
+				"pase_largo": 13,
+				"tiro": 6
+			},
+			"division": 1,
+			"formaciones": [
+				"4-4-2",
+				"4-3-3"
+			],
+			"goles": 1,
+			"metros_conduccion": 309.421722441912,
+			"muestra_pase_atras": {
+				"desde": "(-38.76527, -14.19853)",
+				"destino": "(-36.5, 0.0)",
+				"receptor": "(-24.08421, -12.99583)",
+				"rivales": [
+					{
+						"pos": "(-43.5, -10.63408)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(-38.36361, -15.8461)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(-33.65981, -4.498829)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(-36.85505, 0.143576)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 25,
+				"home": 17
+			},
+			"semilla": 20260947
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 1,
+				"accion_enganche": 1,
+				"accion_tercer_hombre": 2,
+				"candidato_diagonal_extremo": 6,
+				"candidato_nueve_baja": 21,
+				"candidato_pase_atras": 15,
+				"disponible_cambio_frente": 8,
+				"disponible_corrida_preparada": 8,
+				"disponible_enganche": 1,
+				"disponible_llegada_coordinada": 1,
+				"disponible_tercer_hombre": 2,
+				"pase_atras_evaluado": 4,
+				"pase_atras_falta_fondo": 3,
+				"pase_atras_receptor_lejos": 1,
+				"pase_atras_tapado": 1,
+				"plan_cambio_frente": 4,
+				"plan_diagonal_extremo": 5,
+				"plan_nueve_baja": 18,
+				"plan_pase_atras": 3
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 23,
+				"despeje": 2,
+				"gambeta": 11,
+				"pared": 2,
+				"pase": 25,
+				"pase_hueco": 16,
+				"pase_largo": 8,
+				"tiro": 4
+			},
+			"division": 5,
+			"formaciones": [
+				"4-3-3",
+				"5-3-2"
+			],
+			"goles": 1,
+			"metros_conduccion": 302.995049670339,
+			"muestra_pase_atras": {
+				"desde": "(42.37483, 28.50423)",
+				"destino": "(43.5, 4.972039)",
+				"receptor": "(43.5, 4.972039)",
+				"rivales": [
+					{
+						"pos": "(46.01501, 14.71486)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(43.5, 18.52587)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(41.18242, 29.08622)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(43.33966, 3.030177)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(37.70626, 14.19045)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 18,
+				"home": 26
+			},
+			"semilla": 20260948
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 8,
+				"candidato_diagonal_extremo": 1,
+				"candidato_doblamiento": 1,
+				"candidato_nueve_baja": 20,
+				"candidato_pase_atras": 24,
+				"candidato_relevo_nueve": 2,
+				"disponible_cambio_frente": 12,
+				"pase_atras_evaluado": 3,
+				"pase_atras_falta_fondo": 2,
+				"pase_atras_receptor_lejos": 2,
+				"pase_atras_tapado": 3,
+				"plan_cambio_frente": 6,
+				"plan_diagonal_extremo": 1,
+				"plan_doblamiento": 1,
+				"plan_nueve_baja": 20,
+				"plan_pase_atras": 5,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"conducir": 33,
+				"despeje": 3,
+				"gambeta": 1,
+				"pared": 1,
+				"pase": 12,
+				"pase_hueco": 2,
+				"pase_largo": 17,
+				"tiro": 5
+			},
+			"division": 10,
+			"formaciones": [
+				"4-4-2",
+				"3-5-2"
+			],
+			"goles": 3,
+			"metros_conduccion": 307.589464083314,
+			"muestra_pase_atras": {
+				"desde": "(38.55777, 16.44161)",
+				"destino": "(36.5, -6.0)",
+				"receptor": "(19.10461, -7.343618)",
+				"rivales": [
+					{
+						"pos": "(43.5, 5.095783)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(41.25555, 7.379148)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(37.8682, 17.2548)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(37.09618, 0.095081)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(37.04898, 5.964561)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(36.90065, 11.87579)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 10,
+				"home": 18
+			},
+			"semilla": 20260949
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 3,
+				"accion_corrida_preparada": 3,
+				"accion_llegada_coordinada": 1,
+				"accion_tercer_hombre": 1,
+				"candidato_diagonal_extremo": 4,
+				"candidato_doblamiento": 1,
+				"candidato_nueve_baja": 20,
+				"candidato_pase_atras": 27,
+				"candidato_relevo_nueve": 1,
+				"disponible_cambio_frente": 10,
+				"disponible_corrida_preparada": 13,
+				"disponible_llegada_coordinada": 1,
+				"disponible_tercer_hombre": 1,
+				"pase_atras_controlado": 1,
+				"pase_atras_evaluado": 4,
+				"pase_atras_falta_fondo": 2,
+				"pase_atras_receptor_lejos": 1,
+				"pase_atras_tapado": 3,
+				"plan_cambio_frente": 5,
+				"plan_diagonal_extremo": 4,
+				"plan_doblamiento": 1,
+				"plan_nueve_baja": 20,
+				"plan_pase_atras": 4,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 21,
+				"despeje": 4,
+				"gambeta": 2,
+				"pared": 3,
+				"pase": 15,
+				"pase_hueco": 9,
+				"pase_largo": 9,
+				"tiro": 8
+			},
+			"division": 1,
+			"formaciones": [
+				"5-3-2",
+				"4-3-3"
+			],
+			"goles": 3,
+			"metros_conduccion": 326.60651114583,
+			"muestra_pase_atras": {
+				"desde": "(-38.16672, 14.49515)",
+				"destino": "(-36.5, 0.0)",
+				"receptor": "(-27.81098, -0.545086)",
+				"rivales": [
+					{
+						"pos": "(-37.10353, 15.57036)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(-37.63144, -1.807693)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(-36.56457, 5.385859)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 27,
+				"home": 11
+			},
+			"semilla": 20260950
+		},
+		{
+			"conteos": {
+				"accion_aceleracion_preparada": 1,
+				"accion_cambio_frente": 4,
+				"accion_corrida_preparada": 1,
+				"accion_enganche": 1,
+				"accion_llegada_coordinada": 1,
+				"candidato_diagonal_extremo": 4,
+				"candidato_nueve_baja": 17,
+				"candidato_pase_atras": 21,
+				"disponible_aceleracion_preparada": 1,
+				"disponible_cambio_frente": 7,
+				"disponible_corrida_preparada": 4,
+				"disponible_enganche": 1,
+				"disponible_llegada_coordinada": 1,
+				"disponible_tercer_hombre": 1,
+				"pase_atras_controlado": 1,
+				"pase_atras_evaluado": 2,
+				"plan_cambio_frente": 4,
+				"plan_diagonal_extremo": 3,
+				"plan_nueve_baja": 15,
+				"plan_pase_atras": 5
+			},
+			"decisiones": {
+				"conducir": 20,
+				"gambeta": 7,
+				"pared": 2,
+				"pase": 3,
+				"pase_hueco": 11,
+				"pase_largo": 12,
+				"tiro": 5
+			},
+			"division": 5,
+			"formaciones": [
+				"5-3-2",
+				"4-2-3-1"
+			],
+			"goles": 2,
+			"metros_conduccion": 288.648271843791,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 14,
+				"home": 15
+			},
+			"semilla": 20260951
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 5,
+				"candidato_diagonal_extremo": 12,
+				"candidato_nueve_baja": 16,
+				"candidato_pase_atras": 33,
+				"candidato_relevo_nueve": 6,
+				"disponible_cambio_frente": 9,
+				"disponible_corrida_preparada": 3,
+				"pase_atras_evaluado": 1,
+				"pase_atras_sin_alcance": 1,
+				"pase_atras_tapado": 1,
+				"plan_cambio_frente": 6,
+				"plan_diagonal_extremo": 11,
+				"plan_nueve_baja": 14,
+				"plan_pase_atras": 8,
+				"plan_relevo_nueve": 4
+			},
+			"decisiones": {
+				"conducir": 50,
+				"despeje": 2,
+				"pase": 34,
+				"pase_hueco": 3,
+				"pase_largo": 8,
+				"tiro": 4
+			},
+			"division": 10,
+			"formaciones": [
+				"4-3-3",
+				"4-4-2"
+			],
+			"goles": 2,
+			"metros_conduccion": 344.671101391315,
+			"muestra_pase_atras": {
+				"desde": "(40.82029, -30.29428)",
+				"destino": "(36.5, -6.0)",
+				"receptor": "(34.60856, 1.300713)",
+				"rivales": [
+					{
+						"pos": "(43.5, -15.51995)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(40.99603, -26.88524)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(36.66137, -19.95656)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(34.84374, -4.448063)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 11,
+				"home": 31
+			},
+			"semilla": 20260952
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 5,
+				"accion_corrida_preparada": 2,
+				"candidato_diagonal_extremo": 1,
+				"candidato_nueve_baja": 19,
+				"candidato_pase_atras": 14,
+				"candidato_relevo_nueve": 4,
+				"disponible_cambio_frente": 7,
+				"disponible_corrida_preparada": 6,
+				"disponible_llegada_coordinada": 1,
+				"disponible_tercer_hombre": 2,
+				"pase_atras_evaluado": 2,
+				"pase_atras_sin_alcance": 1,
+				"pase_atras_tapado": 1,
+				"plan_cambio_frente": 6,
+				"plan_diagonal_extremo": 1,
+				"plan_nueve_baja": 19,
+				"plan_pase_atras": 3,
+				"plan_relevo_nueve": 2
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 23,
+				"despeje": 5,
+				"gambeta": 4,
+				"pared": 1,
+				"pase": 2,
+				"pase_hueco": 20,
+				"pase_largo": 7,
+				"tiro": 4
+			},
+			"division": 1,
+			"formaciones": [
+				"4-4-2",
+				"5-3-2"
+			],
+			"goles": 2,
+			"metros_conduccion": 424.051963925362,
+			"muestra_pase_atras": {
+				"desde": "(44.22871, -25.45791)",
+				"destino": "(37.86563, 6.0)",
+				"receptor": "(34.18592, 3.991247)",
+				"rivales": [
+					{
+						"pos": "(43.5, -17.67003)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(46.36101, -17.24525)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(43.5, 2.0)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(43.70858, -26.32432)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(42.53022, -16.44391)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(42.77916, -9.1817)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(42.535, -2.141753)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 7,
+				"home": 17
+			},
+			"semilla": 20260953
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 9,
+				"accion_corrida_preparada": 1,
+				"accion_tercer_hombre": 1,
+				"candidato_diagonal_extremo": 13,
+				"candidato_nueve_baja": 18,
+				"candidato_pase_atras": 6,
+				"candidato_relevo_nueve": 2,
+				"disponible_cambio_frente": 21,
+				"disponible_corrida_preparada": 32,
+				"disponible_tercer_hombre": 1,
+				"plan_cambio_frente": 8,
+				"plan_diagonal_extremo": 13,
+				"plan_nueve_baja": 15,
+				"plan_pase_atras": 2
+			},
+			"decisiones": {
+				"centro": 3,
+				"conducir": 20,
+				"gambeta": 8,
+				"pared": 2,
+				"pase": 19,
+				"pase_hueco": 11,
+				"pase_largo": 15,
+				"tiro": 5
+			},
+			"division": 5,
+			"formaciones": [
+				"4-3-3",
+				"4-4-2"
+			],
+			"goles": 4,
+			"metros_conduccion": 307.339626222849,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 13,
+				"home": 30
+			},
+			"semilla": 20260954
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 7,
+				"accion_corrida_preparada": 3,
+				"candidato_diagonal_extremo": 10,
+				"candidato_nueve_baja": 15,
+				"candidato_pase_atras": 27,
+				"candidato_relevo_nueve": 3,
+				"disponible_cambio_frente": 12,
+				"disponible_corrida_preparada": 7,
+				"pase_atras_evaluado": 3,
+				"pase_atras_falta_fondo": 3,
+				"pase_atras_receptor_lejos": 1,
+				"pase_atras_tapado": 2,
+				"plan_cambio_frente": 7,
+				"plan_diagonal_extremo": 9,
+				"plan_nueve_baja": 14,
+				"plan_pase_atras": 5,
+				"plan_relevo_nueve": 2
+			},
+			"decisiones": {
+				"conducir": 31,
+				"despeje": 3,
+				"gambeta": 4,
+				"pase": 13,
+				"pase_hueco": 6,
+				"pase_largo": 13,
+				"tiro": 3
+			},
+			"division": 10,
+			"formaciones": [
+				"4-2-3-1",
+				"4-4-2"
+			],
+			"goles": 2,
+			"metros_conduccion": 291.322305232286,
+			"muestra_pase_atras": {
+				"desde": "(37.06102, 15.4552)",
+				"destino": "(36.5, 0.0)",
+				"receptor": "(21.0209, -10.23165)",
+				"rivales": [
+					{
+						"pos": "(37.62081, 7.624969)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(36.07137, 16.06701)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(35.06951, 0.423856)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(33.52015, 10.00776)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 13,
+				"home": 22
+			},
+			"semilla": 20260955
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 9,
+				"accion_corrida_preparada": 2,
+				"candidato_diagonal_extremo": 1,
+				"candidato_nueve_baja": 20,
+				"candidato_pase_atras": 17,
+				"candidato_relevo_nueve": 2,
+				"disponible_cambio_frente": 19,
+				"disponible_corrida_preparada": 7,
+				"disponible_tercer_hombre": 3,
+				"plan_cambio_frente": 6,
+				"plan_diagonal_extremo": 1,
+				"plan_nueve_baja": 17,
+				"plan_pase_atras": 2,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 24,
+				"despeje": 8,
+				"gambeta": 3,
+				"pared": 5,
+				"pase": 1,
+				"pase_hueco": 12,
+				"pase_largo": 18,
+				"tiro": 3
+			},
+			"division": 1,
+			"formaciones": [
+				"4-2-3-1",
+				"5-3-2"
+			],
+			"goles": 0,
+			"metros_conduccion": 378.910848885775,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 13,
+				"home": 13
+			},
+			"semilla": 20260956
+		},
+		{
+			"conteos": {
+				"accion_aceleracion_preparada": 1,
+				"accion_cambio_frente": 4,
+				"accion_corrida_preparada": 6,
+				"accion_enganche": 2,
+				"accion_tercer_hombre": 1,
+				"candidato_diagonal_extremo": 16,
+				"candidato_nueve_baja": 18,
+				"candidato_pase_atras": 27,
+				"disponible_aceleracion_preparada": 1,
+				"disponible_cambio_frente": 15,
+				"disponible_corrida_preparada": 16,
+				"disponible_enganche": 2,
+				"disponible_tercer_hombre": 2,
+				"plan_cambio_frente": 6,
+				"plan_diagonal_extremo": 16,
+				"plan_nueve_baja": 15,
+				"plan_pase_atras": 9
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 12,
+				"despeje": 4,
+				"gambeta": 3,
+				"pared": 1,
+				"pase": 14,
+				"pase_hueco": 18,
+				"pase_largo": 9,
+				"tiro": 7
+			},
+			"division": 5,
+			"formaciones": [
+				"4-3-3",
+				"4-4-2"
+			],
+			"goles": 4,
+			"metros_conduccion": 295.662387266755,
+			"muestra_pase_atras": {},
+			"offsides": 1,
+			"pases": {
+				"away": 15,
+				"home": 21
+			},
+			"semilla": 20260957
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 3,
+				"candidato_diagonal_extremo": 16,
+				"candidato_nueve_baja": 11,
+				"candidato_pase_atras": 25,
+				"candidato_relevo_nueve": 1,
+				"disponible_cambio_frente": 5,
+				"disponible_corrida_preparada": 4,
+				"disponible_llegada_coordinada": 1,
+				"pase_atras_evaluado": 5,
+				"pase_atras_receptor_lejos": 3,
+				"pase_atras_sin_alcance": 1,
+				"pase_atras_tapado": 2,
+				"plan_cambio_frente": 13,
+				"plan_diagonal_extremo": 16,
+				"plan_nueve_baja": 10,
+				"plan_pase_atras": 7,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"conducir": 42,
+				"pared": 2,
+				"pase": 17,
+				"pase_hueco": 4,
+				"pase_largo": 8,
+				"tiro": 3
+			},
+			"division": 10,
+			"formaciones": [
+				"4-4-2",
+				"4-2-3-1"
+			],
+			"goles": 2,
+			"metros_conduccion": 309.096789166331,
+			"muestra_pase_atras": {
+				"desde": "(-42.29386, -11.77338)",
+				"destino": "(-37.70792, 0.0)",
+				"receptor": "(-34.52109, -10.00459)",
+				"rivales": [
+					{
+						"pos": "(-41.76667, -11.62941)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(-41.95414, -15.68597)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(-36.75744, 2.75454)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 19,
+				"home": 12
+			},
+			"semilla": 20260958
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 4,
+				"candidato_diagonal_extremo": 1,
+				"candidato_nueve_baja": 32,
+				"candidato_pase_atras": 11,
+				"candidato_relevo_nueve": 1,
+				"disponible_cambio_frente": 12,
+				"disponible_corrida_preparada": 6,
+				"plan_cambio_frente": 8,
+				"plan_diagonal_extremo": 1,
+				"plan_nueve_baja": 31,
+				"plan_pase_atras": 1,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"centro": 2,
+				"conducir": 20,
+				"despeje": 6,
+				"gambeta": 5,
+				"pared": 7,
+				"pase": 9,
+				"pase_hueco": 13,
+				"pase_largo": 9,
+				"tiro": 8
+			},
+			"division": 1,
+			"formaciones": [
+				"4-3-3",
+				"3-5-2"
+			],
+			"goles": 2,
+			"metros_conduccion": 421.006320297718,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 14,
+				"home": 17
+			},
+			"semilla": 20260959
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 6,
+				"accion_corrida_preparada": 3,
+				"candidato_diagonal_extremo": 1,
+				"candidato_doblamiento": 1,
+				"candidato_nueve_baja": 16,
+				"candidato_pase_atras": 8,
+				"candidato_relevo_nueve": 1,
+				"disponible_cambio_frente": 8,
+				"disponible_corrida_preparada": 9,
+				"disponible_tercer_hombre": 4,
+				"pase_atras_evaluado": 2,
+				"pase_atras_falta_fondo": 2,
+				"pase_atras_receptor_lejos": 1,
+				"plan_cambio_frente": 3,
+				"plan_diagonal_extremo": 1,
+				"plan_nueve_baja": 15,
+				"plan_pase_atras": 3,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"centro": 2,
+				"conducir": 14,
+				"despeje": 4,
+				"gambeta": 2,
+				"pared": 1,
+				"pase": 5,
+				"pase_hueco": 15,
+				"pase_largo": 16,
+				"tiro": 3
+			},
+			"division": 5,
+			"formaciones": [
+				"4-4-2",
+				"3-5-2"
+			],
+			"goles": 4,
+			"metros_conduccion": 314.093891620636,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 13,
+				"home": 19
+			},
+			"semilla": 20260960
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 4,
+				"candidato_diagonal_extremo": 3,
+				"candidato_nueve_baja": 33,
+				"candidato_pase_atras": 34,
+				"candidato_relevo_nueve": 8,
+				"disponible_aceleracion_preparada": 1,
+				"disponible_cambio_frente": 10,
+				"disponible_llegada_coordinada": 1,
+				"pase_atras_evaluado": 4,
+				"pase_atras_falta_fondo": 1,
+				"pase_atras_receptor_lejos": 3,
+				"pase_atras_tapado": 1,
+				"plan_cambio_frente": 6,
+				"plan_diagonal_extremo": 2,
+				"plan_nueve_baja": 26,
+				"plan_pase_atras": 5,
+				"plan_relevo_nueve": 4
+			},
+			"decisiones": {
+				"conducir": 40,
+				"despeje": 5,
+				"gambeta": 2,
+				"pared": 1,
+				"pase": 20,
+				"pase_largo": 8,
+				"tiro": 6
+			},
+			"division": 10,
+			"formaciones": [
+				"4-4-2",
+				"5-3-2"
+			],
+			"goles": 1,
+			"metros_conduccion": 333.275404855609,
+			"muestra_pase_atras": {
+				"desde": "(41.28907, -12.00325)",
+				"destino": "(36.5, 6.0)",
+				"receptor": "(32.71783, 13.21608)",
+				"rivales": [
+					{
+						"pos": "(40.34862, -13.72438)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(42.15749, -7.11673)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(34.60755, -4.671925)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(37.44672, 2.67686)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 7,
+				"home": 19
+			},
+			"semilla": 20260961
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 4,
+				"accion_corrida_preparada": 2,
+				"candidato_diagonal_extremo": 3,
+				"candidato_doblamiento": 3,
+				"candidato_nueve_baja": 18,
+				"candidato_relevo_nueve": 2,
+				"disponible_cambio_frente": 6,
+				"disponible_corrida_preparada": 10,
+				"disponible_tercer_hombre": 3,
+				"plan_cambio_frente": 5,
+				"plan_diagonal_extremo": 3,
+				"plan_doblamiento": 2,
+				"plan_nueve_baja": 14
+			},
+			"decisiones": {
+				"centro": 2,
+				"conducir": 14,
+				"gambeta": 2,
+				"pase": 8,
+				"pase_hueco": 25,
+				"pase_largo": 6,
+				"tiro": 6
+			},
+			"division": 1,
+			"formaciones": [
+				"4-4-2",
+				"4-4-2"
+			],
+			"goles": 4,
+			"metros_conduccion": 398.067465931177,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 10,
+				"home": 25
+			},
+			"semilla": 20260962
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 4,
+				"accion_corrida_preparada": 3,
+				"candidato_diagonal_extremo": 6,
+				"candidato_nueve_baja": 12,
+				"candidato_pase_atras": 14,
+				"disponible_cambio_frente": 10,
+				"disponible_corrida_preparada": 5,
+				"disponible_tercer_hombre": 1,
+				"pase_atras_evaluado": 1,
+				"pase_atras_falta_fondo": 1,
+				"plan_cambio_frente": 3,
+				"plan_diagonal_extremo": 4,
+				"plan_nueve_baja": 12,
+				"plan_pase_atras": 2
+			},
+			"decisiones": {
+				"centro": 3,
+				"conducir": 25,
+				"gambeta": 2,
+				"pared": 5,
+				"pase": 13,
+				"pase_hueco": 14,
+				"pase_largo": 15,
+				"tiro": 5
+			},
+			"division": 5,
+			"formaciones": [
+				"4-2-3-1",
+				"5-3-2"
+			],
+			"goles": 1,
+			"metros_conduccion": 371.504842668772,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 13,
+				"home": 24
+			},
+			"semilla": 20260963
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 4,
+				"candidato_nueve_baja": 26,
+				"candidato_relevo_nueve": 1,
+				"disponible_aceleracion_preparada": 1,
+				"disponible_cambio_frente": 4,
+				"disponible_corrida_preparada": 2,
+				"plan_cambio_frente": 3,
+				"plan_nueve_baja": 24,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"conducir": 44,
+				"despeje": 1,
+				"pase": 14,
+				"pase_hueco": 1,
+				"pase_largo": 11,
+				"tiro": 2
+			},
+			"division": 10,
+			"formaciones": [
+				"5-3-2",
+				"3-5-2"
+			],
+			"goles": 0,
+			"metros_conduccion": 348.184334427118,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 15,
+				"home": 19
+			},
+			"semilla": 20260964
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 9,
+				"accion_corrida_preparada": 5,
+				"candidato_diagonal_extremo": 1,
+				"candidato_doblamiento": 4,
+				"candidato_nueve_baja": 25,
+				"candidato_pase_atras": 7,
+				"candidato_relevo_nueve": 1,
+				"disponible_cambio_frente": 13,
+				"disponible_corrida_preparada": 12,
+				"disponible_tercer_hombre": 7,
+				"pase_atras_evaluado": 1,
+				"pase_atras_receptor_lejos": 1,
+				"pase_atras_tapado": 1,
+				"plan_cambio_frente": 7,
+				"plan_diagonal_extremo": 1,
+				"plan_doblamiento": 3,
+				"plan_nueve_baja": 25,
+				"plan_pase_atras": 1,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"centro": 2,
+				"conducir": 17,
+				"despeje": 2,
+				"gambeta": 5,
+				"pase_hueco": 23,
+				"pase_largo": 14,
+				"tiro": 3
+			},
+			"division": 1,
+			"formaciones": [
+				"4-4-2",
+				"4-4-2"
+			],
+			"goles": 3,
+			"metros_conduccion": 391.83821401,
+			"muestra_pase_atras": {
+				"desde": "(-39.55641, -15.24795)",
+				"destino": "(-36.5, -6.0)",
+				"receptor": "(-29.61724, 0.467597)",
+				"rivales": [
+					{
+						"pos": "(-38.26754, -15.78495)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(-37.6204, -10.72473)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(-37.6204, -0.324734)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 15,
+				"home": 17
+			},
+			"semilla": 20260965
+		},
+		{
+			"conteos": {
+				"accion_aceleracion_preparada": 1,
+				"accion_cambio_frente": 4,
+				"accion_corrida_preparada": 1,
+				"accion_tercer_hombre": 2,
+				"candidato_nueve_baja": 25,
+				"candidato_relevo_nueve": 1,
+				"disponible_aceleracion_preparada": 1,
+				"disponible_cambio_frente": 10,
+				"disponible_corrida_preparada": 19,
+				"disponible_tercer_hombre": 5,
+				"plan_cambio_frente": 3,
+				"plan_nueve_baja": 23,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"conducir": 19,
+				"despeje": 2,
+				"gambeta": 5,
+				"pared": 3,
+				"pase": 7,
+				"pase_hueco": 19,
+				"pase_largo": 15,
+				"tiro": 4
+			},
+			"division": 5,
+			"formaciones": [
+				"3-5-2",
+				"4-4-2"
+			],
+			"goles": 1,
+			"metros_conduccion": 408.368637934327,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 20,
+				"home": 9
+			},
+			"semilla": 20260966
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 3,
+				"accion_tercer_hombre": 1,
+				"candidato_doblamiento": 2,
+				"candidato_nueve_baja": 10,
+				"candidato_pase_atras": 8,
+				"candidato_relevo_nueve": 3,
+				"disponible_cambio_frente": 6,
+				"disponible_corrida_preparada": 2,
+				"disponible_tercer_hombre": 1,
+				"plan_cambio_frente": 1,
+				"plan_doblamiento": 2,
+				"plan_nueve_baja": 9,
+				"plan_pase_atras": 2,
+				"plan_relevo_nueve": 3
+			},
+			"decisiones": {
+				"conducir": 33,
+				"despeje": 6,
+				"pared": 3,
+				"pase": 12,
+				"pase_hueco": 3,
+				"pase_largo": 10,
+				"tiro": 5
+			},
+			"division": 10,
+			"formaciones": [
+				"3-5-2",
+				"4-4-2"
+			],
+			"goles": 2,
+			"metros_conduccion": 301.203316897154,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 10,
+				"home": 18
+			},
+			"semilla": 20260967
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 9,
+				"accion_corrida_preparada": 2,
+				"accion_enganche": 1,
+				"accion_tercer_hombre": 1,
+				"candidato_nueve_baja": 16,
+				"candidato_pase_atras": 68,
+				"candidato_relevo_nueve": 3,
+				"disponible_cambio_frente": 14,
+				"disponible_corrida_preparada": 14,
+				"disponible_enganche": 3,
+				"disponible_llegada_coordinada": 1,
+				"disponible_tercer_hombre": 3,
+				"pase_atras_evaluado": 9,
+				"pase_atras_falta_fondo": 3,
+				"pase_atras_receptor_lejos": 3,
+				"pase_atras_sin_alcance": 1,
+				"pase_atras_tapado": 4,
+				"plan_cambio_frente": 14,
+				"plan_nueve_baja": 14,
+				"plan_pase_atras": 11,
+				"plan_relevo_nueve": 2
+			},
+			"decisiones": {
+				"centro": 2,
+				"conducir": 19,
+				"gambeta": 6,
+				"pared": 4,
+				"pase": 5,
+				"pase_hueco": 20,
+				"pase_largo": 14,
+				"tiro": 4
+			},
+			"division": 1,
+			"formaciones": [
+				"4-4-2",
+				"3-5-2"
+			],
+			"goles": 3,
+			"metros_conduccion": 445.953998595476,
+			"muestra_pase_atras": {
+				"desde": "(38.22195, 18.75148)",
+				"destino": "(36.5, 0.0)",
+				"receptor": "(24.4443, -2.489888)",
+				"rivales": [
+					{
+						"pos": "(41.94924, 9.03969)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(43.5, 14.95744)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(37.59494, 19.57494)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(36.6331, 0.983685)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(36.43121, 6.926487)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(36.49799, 12.74579)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 18,
+				"home": 19
+			},
+			"semilla": 20260968
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 4,
+				"accion_corrida_preparada": 2,
+				"accion_tercer_hombre": 1,
+				"candidato_diagonal_extremo": 18,
+				"candidato_doblamiento": 1,
+				"candidato_nueve_baja": 15,
+				"candidato_pase_atras": 3,
+				"disponible_cambio_frente": 13,
+				"disponible_corrida_preparada": 12,
+				"disponible_tercer_hombre": 5,
+				"plan_cambio_frente": 10,
+				"plan_diagonal_extremo": 15,
+				"plan_doblamiento": 1,
+				"plan_nueve_baja": 15,
+				"plan_pase_atras": 1
+			},
+			"decisiones": {
+				"conducir": 13,
+				"despeje": 2,
+				"gambeta": 8,
+				"pared": 5,
+				"pase": 11,
+				"pase_hueco": 14,
+				"pase_largo": 14,
+				"tiro": 2
+			},
+			"division": 5,
+			"formaciones": [
+				"4-4-2",
+				"4-2-3-1"
+			],
+			"goles": 2,
+			"metros_conduccion": 314.283529087901,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 27,
+				"home": 18
+			},
+			"semilla": 20260969
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 1,
+				"candidato_diagonal_extremo": 17,
+				"candidato_nueve_baja": 14,
+				"candidato_relevo_nueve": 2,
+				"disponible_aceleracion_preparada": 1,
+				"disponible_cambio_frente": 1,
+				"disponible_corrida_preparada": 2,
+				"plan_cambio_frente": 5,
+				"plan_diagonal_extremo": 17,
+				"plan_nueve_baja": 14,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"conducir": 33,
+				"despeje": 2,
+				"gambeta": 1,
+				"pared": 1,
+				"pase": 15,
+				"pase_hueco": 2,
+				"pase_largo": 9,
+				"tiro": 4
+			},
+			"division": 10,
+			"formaciones": [
+				"4-3-3",
+				"4-4-2"
+			],
+			"goles": 2,
+			"metros_conduccion": 250.795767769217,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 8,
+				"home": 21
+			},
+			"semilla": 20260970
+		},
+		{
+			"conteos": {
+				"accion_aceleracion_preparada": 1,
+				"accion_cambio_frente": 10,
+				"accion_corrida_preparada": 1,
+				"candidato_diagonal_extremo": 5,
+				"candidato_doblamiento": 1,
+				"candidato_nueve_baja": 11,
+				"candidato_pase_atras": 54,
+				"disponible_aceleracion_preparada": 2,
+				"disponible_cambio_frente": 21,
+				"disponible_corrida_preparada": 7,
+				"disponible_enganche": 1,
+				"disponible_tercer_hombre": 2,
+				"pase_atras_evaluado": 8,
+				"pase_atras_falta_fondo": 6,
+				"pase_atras_receptor_lejos": 3,
+				"pase_atras_tapado": 3,
+				"plan_cambio_frente": 10,
+				"plan_diagonal_extremo": 5,
+				"plan_nueve_baja": 11,
+				"plan_pase_atras": 9
+			},
+			"decisiones": {
+				"centro": 3,
+				"conducir": 12,
+				"despeje": 3,
+				"gambeta": 4,
+				"pared": 1,
+				"pase": 6,
+				"pase_hueco": 7,
+				"pase_largo": 17,
+				"tiro": 3
+			},
+			"division": 1,
+			"formaciones": [
+				"4-4-2",
+				"4-2-3-1"
+			],
+			"goles": 1,
+			"metros_conduccion": 271.480155289173,
+			"muestra_pase_atras": {
+				"desde": "(-43.15597, 17.43752)",
+				"destino": "(-36.98101, -6.0)",
+				"receptor": "(-36.98101, -6.0)",
+				"rivales": [
+					{
+						"pos": "(-43.5, -0.839695)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(-42.46656, 18.20102)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(-45.96674, 9.556355)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(-41.39313, 1.190958)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(-41.0494, 11.6874)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 21,
+				"home": 10
+			},
+			"semilla": 20260971
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 6,
+				"accion_corrida_preparada": 2,
+				"accion_tercer_hombre": 1,
+				"candidato_diagonal_extremo": 3,
+				"candidato_doblamiento": 3,
+				"candidato_nueve_baja": 21,
+				"candidato_pase_atras": 12,
+				"disponible_cambio_frente": 11,
+				"disponible_corrida_preparada": 17,
+				"disponible_tercer_hombre": 7,
+				"plan_cambio_frente": 3,
+				"plan_diagonal_extremo": 3,
+				"plan_doblamiento": 3,
+				"plan_nueve_baja": 19,
+				"plan_pase_atras": 3
+			},
+			"decisiones": {
+				"centro": 3,
+				"conducir": 26,
+				"gambeta": 8,
+				"pared": 3,
+				"pase": 5,
+				"pase_hueco": 15,
+				"pase_largo": 12,
+				"tiro": 4
+			},
+			"division": 5,
+			"formaciones": [
+				"4-4-2",
+				"4-4-2"
+			],
+			"goles": 2,
+			"metros_conduccion": 374.675431445241,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 17,
+				"home": 22
+			},
+			"semilla": 20260972
+		},
+		{
+			"conteos": {
+				"candidato_diagonal_extremo": 9,
+				"candidato_nueve_baja": 16,
+				"candidato_pase_atras": 6,
+				"candidato_relevo_nueve": 3,
+				"disponible_cambio_frente": 3,
+				"pase_atras_evaluado": 2,
+				"pase_atras_falta_fondo": 2,
+				"pase_atras_receptor_lejos": 2,
+				"pase_atras_tapado": 2,
+				"plan_cambio_frente": 3,
+				"plan_diagonal_extremo": 8,
+				"plan_nueve_baja": 11,
+				"plan_pase_atras": 2,
+				"plan_relevo_nueve": 2
+			},
+			"decisiones": {
+				"conducir": 64,
+				"despeje": 3,
+				"pared": 3,
+				"pase": 32,
+				"pase_hueco": 1,
+				"pase_largo": 4,
+				"tiro": 4
+			},
+			"division": 10,
+			"formaciones": [
+				"5-3-2",
+				"4-3-3"
+			],
+			"goles": 2,
+			"metros_conduccion": 425.459487035871,
+			"muestra_pase_atras": {
+				"desde": "(37.94095, -14.31232)",
+				"destino": "(36.5, -6.0)",
+				"receptor": "(19.25303, -12.70668)",
+				"rivales": [
+					{
+						"pos": "(42.75697, -11.24156)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(39.76111, -8.557631)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(37.45446, -14.79057)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(36.45446, -12.9767)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 25,
+				"home": 13
+			},
+			"semilla": 20260973
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 7,
+				"accion_corrida_preparada": 4,
+				"candidato_diagonal_extremo": 2,
+				"candidato_nueve_baja": 19,
+				"candidato_pase_atras": 15,
+				"disponible_cambio_frente": 13,
+				"disponible_corrida_preparada": 10,
+				"disponible_llegada_coordinada": 1,
+				"disponible_tercer_hombre": 2,
+				"pase_atras_evaluado": 4,
+				"pase_atras_falta_fondo": 2,
+				"pase_atras_tapado": 2,
+				"plan_cambio_frente": 10,
+				"plan_diagonal_extremo": 2,
+				"plan_nueve_baja": 17,
+				"plan_pase_atras": 2
+			},
+			"decisiones": {
+				"conducir": 15,
+				"despeje": 3,
+				"gambeta": 2,
+				"pase": 5,
+				"pase_hueco": 18,
+				"pase_largo": 12,
+				"tiro": 6
+			},
+			"division": 1,
+			"formaciones": [
+				"3-5-2",
+				"4-4-2"
+			],
+			"goles": 4,
+			"metros_conduccion": 423.183380246162,
+			"muestra_pase_atras": {
+				"desde": "(-41.97939, 17.80042)",
+				"destino": "(-37.97939, 6.0)",
+				"receptor": "(-36.797, 6.0)",
+				"rivales": [
+					{
+						"pos": "(-42.13002, 15.26957)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(-43.5, 14.64066)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(-39.15819, 21.87076)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(-39.4337, 0.783446)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(-39.41327, 6.637832)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(-39.40301, 12.49004)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 20,
+				"home": 11
+			},
+			"semilla": 20260974
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 4,
+				"accion_corrida_preparada": 3,
+				"candidato_nueve_baja": 18,
+				"candidato_pase_atras": 20,
+				"candidato_relevo_nueve": 1,
+				"disponible_cambio_frente": 12,
+				"disponible_corrida_preparada": 8,
+				"disponible_enganche": 1,
+				"pase_atras_evaluado": 4,
+				"pase_atras_falta_fondo": 4,
+				"plan_cambio_frente": 8,
+				"plan_nueve_baja": 16,
+				"plan_pase_atras": 4,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 17,
+				"despeje": 6,
+				"gambeta": 8,
+				"pared": 3,
+				"pase": 13,
+				"pase_hueco": 11,
+				"pase_largo": 5,
+				"tiro": 6
+			},
+			"division": 5,
+			"formaciones": [
+				"3-5-2",
+				"4-3-3"
+			],
+			"goles": 3,
+			"metros_conduccion": 329.165808066726,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 23,
+				"home": 6
+			},
+			"semilla": 20260975
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 1,
+				"candidato_nueve_baja": 22,
+				"disponible_cambio_frente": 1,
+				"plan_cambio_frente": 3,
+				"plan_nueve_baja": 21
+			},
+			"decisiones": {
+				"conducir": 44,
+				"despeje": 3,
+				"gambeta": 1,
+				"pared": 2,
+				"pase": 14,
+				"pase_hueco": 2,
+				"pase_largo": 7,
+				"tiro": 6
+			},
+			"division": 10,
+			"formaciones": [
+				"3-5-2",
+				"3-5-2"
+			],
+			"goles": 3,
+			"metros_conduccion": 408.036624670029,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 9,
+				"home": 10
+			},
+			"semilla": 20260976
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 9,
+				"accion_corrida_preparada": 2,
+				"accion_tercer_hombre": 2,
+				"candidato_nueve_baja": 18,
+				"candidato_pase_atras": 11,
+				"disponible_cambio_frente": 19,
+				"disponible_corrida_preparada": 7,
+				"disponible_llegada_coordinada": 1,
+				"disponible_tercer_hombre": 2,
+				"pase_atras_evaluado": 1,
+				"plan_cambio_frente": 9,
+				"plan_nueve_baja": 18,
+				"plan_pase_atras": 2
+			},
+			"decisiones": {
+				"centro": 2,
+				"conducir": 17,
+				"gambeta": 2,
+				"pared": 2,
+				"pase": 9,
+				"pase_hueco": 12,
+				"pase_largo": 13,
+				"tiro": 6
+			},
+			"division": 1,
+			"formaciones": [
+				"4-3-3",
+				"3-5-2"
+			],
+			"goles": 1,
+			"metros_conduccion": 318.623426198959,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 17,
+				"home": 17
+			},
+			"semilla": 20260977
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 1,
+				"accion_corrida_preparada": 2,
+				"candidato_nueve_baja": 22,
+				"disponible_aceleracion_preparada": 1,
+				"disponible_cambio_frente": 1,
+				"disponible_corrida_preparada": 4,
+				"disponible_tercer_hombre": 1,
+				"plan_nueve_baja": 21
+			},
+			"decisiones": {
+				"conducir": 35,
+				"despeje": 5,
+				"gambeta": 3,
+				"pared": 4,
+				"pase": 13,
+				"pase_hueco": 8,
+				"pase_largo": 5,
+				"tiro": 3
+			},
+			"division": 5,
+			"formaciones": [
+				"5-3-2",
+				"5-3-2"
+			],
+			"goles": 2,
+			"metros_conduccion": 390.274607032537,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 13,
+				"home": 16
+			},
+			"semilla": 20260978
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 2,
+				"candidato_diagonal_extremo": 6,
+				"candidato_doblamiento": 1,
+				"candidato_nueve_baja": 17,
+				"candidato_pase_atras": 12,
+				"candidato_relevo_nueve": 7,
+				"disponible_cambio_frente": 7,
+				"disponible_corrida_preparada": 2,
+				"pase_atras_evaluado": 1,
+				"pase_atras_falta_fondo": 1,
+				"pase_atras_receptor_lejos": 1,
+				"plan_cambio_frente": 8,
+				"plan_diagonal_extremo": 4,
+				"plan_doblamiento": 1,
+				"plan_nueve_baja": 16,
+				"plan_pase_atras": 3,
+				"plan_relevo_nueve": 3
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 36,
+				"despeje": 2,
+				"gambeta": 2,
+				"pase": 25,
+				"pase_hueco": 2,
+				"pase_largo": 5,
+				"tiro": 3
+			},
+			"division": 10,
+			"formaciones": [
+				"4-4-2",
+				"4-3-3"
+			],
+			"goles": 2,
+			"metros_conduccion": 279.30540664494,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 16,
+				"home": 16
+			},
+			"semilla": 20260979
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 6,
+				"accion_corrida_preparada": 2,
+				"accion_enganche": 1,
+				"accion_tercer_hombre": 1,
+				"candidato_diagonal_extremo": 7,
+				"candidato_doblamiento": 2,
+				"candidato_nueve_baja": 21,
+				"candidato_pase_atras": 26,
+				"candidato_relevo_nueve": 2,
+				"disponible_cambio_frente": 9,
+				"disponible_corrida_preparada": 17,
+				"disponible_enganche": 1,
+				"disponible_llegada_coordinada": 1,
+				"disponible_tercer_hombre": 7,
+				"pase_atras_evaluado": 1,
+				"plan_cambio_frente": 7,
+				"plan_diagonal_extremo": 6,
+				"plan_doblamiento": 2,
+				"plan_nueve_baja": 20,
+				"plan_pase_atras": 5
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 19,
+				"gambeta": 9,
+				"pared": 3,
+				"pase": 2,
+				"pase_hueco": 12,
+				"pase_largo": 8,
+				"tiro": 6
+			},
+			"division": 1,
+			"formaciones": [
+				"4-4-2",
+				"4-4-2"
+			],
+			"goles": 3,
+			"metros_conduccion": 362.808840751648,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 11,
+				"home": 17
+			},
+			"semilla": 20260980
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 3,
+				"accion_corrida_preparada": 1,
+				"candidato_diagonal_extremo": 2,
+				"candidato_nueve_baja": 16,
+				"disponible_cambio_frente": 5,
+				"disponible_corrida_preparada": 11,
+				"disponible_tercer_hombre": 2,
+				"plan_diagonal_extremo": 1,
+				"plan_nueve_baja": 12
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 22,
+				"despeje": 1,
+				"gambeta": 2,
+				"pared": 1,
+				"pase": 5,
+				"pase_hueco": 8,
+				"pase_largo": 8,
+				"tiro": 5
+			},
+			"division": 5,
+			"formaciones": [
+				"5-3-2",
+				"4-4-2"
+			],
+			"goles": 4,
+			"metros_conduccion": 279.265604004264,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 15,
+				"home": 11
+			},
+			"semilla": 20260981
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 7,
+				"candidato_diagonal_extremo": 8,
+				"candidato_nueve_baja": 20,
+				"candidato_pase_atras": 16,
+				"candidato_relevo_nueve": 8,
+				"disponible_cambio_frente": 9,
+				"disponible_corrida_preparada": 3,
+				"plan_cambio_frente": 2,
+				"plan_diagonal_extremo": 6,
+				"plan_nueve_baja": 19,
+				"plan_pase_atras": 4,
+				"plan_relevo_nueve": 5
+			},
+			"decisiones": {
+				"conducir": 40,
+				"despeje": 3,
+				"pase": 15,
+				"pase_hueco": 3,
+				"pase_largo": 11,
+				"tiro": 6
+			},
+			"division": 10,
+			"formaciones": [
+				"4-4-2",
+				"4-4-2"
+			],
+			"goles": 3,
+			"metros_conduccion": 353.326163679361,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 12,
+				"home": 12
+			},
+			"semilla": 20260982
+		},
+		{
+			"conteos": {
+				"accion_aceleracion_preparada": 1,
+				"accion_cambio_frente": 1,
+				"accion_corrida_preparada": 4,
+				"candidato_diagonal_extremo": 3,
+				"candidato_doblamiento": 1,
+				"candidato_nueve_baja": 24,
+				"candidato_pase_atras": 2,
+				"candidato_relevo_nueve": 1,
+				"disponible_aceleracion_preparada": 1,
+				"disponible_cambio_frente": 2,
+				"disponible_corrida_preparada": 12,
+				"pase_atras_evaluado": 1,
+				"pase_atras_falta_fondo": 1,
+				"pase_atras_receptor_lejos": 1,
+				"pase_atras_tapado": 1,
+				"plan_diagonal_extremo": 3,
+				"plan_nueve_baja": 22,
+				"plan_pase_atras": 1,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 26,
+				"despeje": 1,
+				"gambeta": 11,
+				"pase": 7,
+				"pase_hueco": 19,
+				"pase_largo": 5,
+				"tiro": 6
+			},
+			"division": 1,
+			"formaciones": [
+				"4-4-2",
+				"5-3-2"
+			],
+			"goles": 4,
+			"metros_conduccion": 434.400209069252,
+			"muestra_pase_atras": {
+				"desde": "(37.44349, 17.40596)",
+				"destino": "(36.5, 6.0)",
+				"receptor": "(29.63996, 7.633423)",
+				"rivales": [
+					{
+						"pos": "(41.91275, 8.235498)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(37.49238, 15.46132)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(37.327, 4.817504)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(34.77979, 17.01362)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 14,
+				"home": 18
+			},
+			"semilla": 20260983
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 16,
+				"accion_corrida_preparada": 1,
+				"candidato_diagonal_extremo": 16,
+				"candidato_nueve_baja": 24,
+				"candidato_pase_atras": 10,
+				"candidato_relevo_nueve": 4,
+				"disponible_cambio_frente": 25,
+				"disponible_corrida_preparada": 17,
+				"disponible_tercer_hombre": 2,
+				"plan_cambio_frente": 23,
+				"plan_diagonal_extremo": 14,
+				"plan_nueve_baja": 21,
+				"plan_pase_atras": 3,
+				"plan_relevo_nueve": 2
+			},
+			"decisiones": {
+				"conducir": 16,
+				"despeje": 3,
+				"gambeta": 7,
+				"pase": 7,
+				"pase_hueco": 11,
+				"pase_largo": 23,
+				"tiro": 6
+			},
+			"division": 5,
+			"formaciones": [
+				"4-4-2",
+				"4-2-3-1"
+			],
+			"goles": 4,
+			"metros_conduccion": 377.429763272405,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 21,
+				"home": 15
+			},
+			"semilla": 20260984
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 4,
+				"candidato_diagonal_extremo": 1,
+				"candidato_doblamiento": 2,
+				"candidato_nueve_baja": 29,
+				"candidato_pase_atras": 2,
+				"candidato_relevo_nueve": 6,
+				"disponible_aceleracion_preparada": 1,
+				"disponible_cambio_frente": 9,
+				"disponible_corrida_preparada": 1,
+				"plan_cambio_frente": 3,
+				"plan_diagonal_extremo": 1,
+				"plan_doblamiento": 2,
+				"plan_nueve_baja": 27,
+				"plan_pase_atras": 1,
+				"plan_relevo_nueve": 3
+			},
+			"decisiones": {
+				"conducir": 41,
+				"despeje": 3,
+				"pared": 1,
+				"pase": 15,
+				"pase_largo": 11,
+				"tiro": 6
+			},
+			"division": 10,
+			"formaciones": [
+				"4-4-2",
+				"3-5-2"
+			],
+			"goles": 2,
+			"metros_conduccion": 330.146994203329,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 13,
+				"home": 15
+			},
+			"semilla": 20260985
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 4,
+				"accion_corrida_preparada": 3,
+				"candidato_diagonal_extremo": 12,
+				"candidato_doblamiento": 1,
+				"candidato_nueve_baja": 16,
+				"candidato_pase_atras": 23,
+				"candidato_relevo_nueve": 4,
+				"disponible_cambio_frente": 11,
+				"disponible_corrida_preparada": 16,
+				"pase_atras_evaluado": 4,
+				"pase_atras_falta_fondo": 2,
+				"pase_atras_receptor_lejos": 1,
+				"pase_atras_tapado": 2,
+				"plan_cambio_frente": 8,
+				"plan_diagonal_extremo": 10,
+				"plan_doblamiento": 1,
+				"plan_nueve_baja": 16,
+				"plan_pase_atras": 4
+			},
+			"decisiones": {
+				"centro": 2,
+				"conducir": 14,
+				"despeje": 4,
+				"gambeta": 4,
+				"pared": 2,
+				"pase": 7,
+				"pase_hueco": 15,
+				"pase_largo": 16,
+				"tiro": 8
+			},
+			"division": 1,
+			"formaciones": [
+				"4-2-3-1",
+				"4-4-2"
+			],
+			"goles": 3,
+			"metros_conduccion": 399.924064338207,
+			"muestra_pase_atras": {
+				"desde": "(40.12173, -22.88364)",
+				"destino": "(36.5, 6.0)",
+				"receptor": "(31.61818, 8.551295)",
+				"rivales": [
+					{
+						"pos": "(43.5, -13.16509)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(38.51163, -22.88364)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(38.13713, -13.20927)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(39.18578, -11.3303)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 15,
+				"home": 19
+			},
+			"semilla": 20260986
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 5,
+				"accion_corrida_preparada": 3,
+				"candidato_diagonal_extremo": 6,
+				"candidato_nueve_baja": 9,
+				"candidato_pase_atras": 24,
+				"candidato_relevo_nueve": 2,
+				"disponible_cambio_frente": 9,
+				"disponible_corrida_preparada": 9,
+				"disponible_llegada_coordinada": 1,
+				"pase_atras_evaluado": 4,
+				"pase_atras_falta_fondo": 1,
+				"pase_atras_receptor_lejos": 2,
+				"pase_atras_tapado": 1,
+				"plan_cambio_frente": 2,
+				"plan_diagonal_extremo": 5,
+				"plan_nueve_baja": 9,
+				"plan_pase_atras": 6
+			},
+			"decisiones": {
+				"centro": 4,
+				"conducir": 19,
+				"despeje": 4,
+				"gambeta": 9,
+				"pase": 15,
+				"pase_hueco": 12,
+				"pase_largo": 10,
+				"tiro": 6
+			},
+			"division": 5,
+			"formaciones": [
+				"5-3-2",
+				"4-3-3"
+			],
+			"goles": 2,
+			"metros_conduccion": 274.950597152114,
+			"muestra_pase_atras": {
+				"desde": "(38.73594, -19.20743)",
+				"destino": "(36.5, -6.0)",
+				"receptor": "(17.22379, -6.406642)",
+				"rivales": [
+					{
+						"pos": "(39.73984, -14.81779)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(38.8021, -22.90138)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(36.33778, -17.99707)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(36.1327, -14.71677)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(36.07201, -6.726606)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 21,
+				"home": 15
+			},
+			"semilla": 20260987
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 1,
+				"accion_corrida_preparada": 2,
+				"candidato_diagonal_extremo": 20,
+				"candidato_doblamiento": 1,
+				"candidato_nueve_baja": 17,
+				"candidato_pase_atras": 8,
+				"candidato_relevo_nueve": 2,
+				"disponible_cambio_frente": 6,
+				"disponible_corrida_preparada": 3,
+				"plan_cambio_frente": 8,
+				"plan_diagonal_extremo": 18,
+				"plan_doblamiento": 1,
+				"plan_nueve_baja": 16,
+				"plan_pase_atras": 2,
+				"plan_relevo_nueve": 2
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 42,
+				"despeje": 4,
+				"pase": 26,
+				"pase_hueco": 3,
+				"pase_largo": 6,
+				"tiro": 3
+			},
+			"division": 10,
+			"formaciones": [
+				"4-4-2",
+				"4-3-3"
+			],
+			"goles": 2,
+			"metros_conduccion": 320.920010685921,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 17,
+				"home": 16
+			},
+			"semilla": 20260988
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 12,
+				"accion_corrida_preparada": 1,
+				"candidato_diagonal_extremo": 1,
+				"candidato_nueve_baja": 11,
+				"candidato_pase_atras": 52,
+				"candidato_relevo_nueve": 1,
+				"disponible_cambio_frente": 21,
+				"disponible_corrida_preparada": 2,
+				"disponible_enganche": 3,
+				"disponible_llegada_coordinada": 1,
+				"pase_atras_evaluado": 12,
+				"pase_atras_falta_fondo": 4,
+				"pase_atras_receptor_lejos": 2,
+				"pase_atras_sin_alcance": 1,
+				"pase_atras_tapado": 8,
+				"plan_cambio_frente": 13,
+				"plan_diagonal_extremo": 1,
+				"plan_nueve_baja": 11,
+				"plan_pase_atras": 12,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"centro": 3,
+				"conducir": 12,
+				"despeje": 7,
+				"gambeta": 1,
+				"pared": 3,
+				"pase": 1,
+				"pase_hueco": 10,
+				"pase_largo": 18,
+				"tiro": 3
+			},
+			"division": 1,
+			"formaciones": [
+				"4-2-3-1",
+				"3-5-2"
+			],
+			"goles": 0,
+			"metros_conduccion": 306.129567205906,
+			"muestra_pase_atras": {
+				"desde": "(39.60902, 18.26154)",
+				"destino": "(36.5, 0.0)",
+				"receptor": "(35.62093, 0.001712)",
+				"rivales": [
+					{
+						"pos": "(37.61898, 17.0316)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(36.17296, 0.014577)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(35.79325, 5.782438)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(36.78008, 11.80566)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 7,
+				"home": 17
+			},
+			"semilla": 20260989
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 17,
+				"accion_corrida_preparada": 2,
+				"accion_enganche": 1,
+				"accion_llegada_coordinada": 1,
+				"candidato_diagonal_extremo": 1,
+				"candidato_nueve_baja": 12,
+				"candidato_pase_atras": 57,
+				"disponible_cambio_frente": 31,
+				"disponible_corrida_preparada": 8,
+				"disponible_enganche": 2,
+				"disponible_llegada_coordinada": 1,
+				"disponible_tercer_hombre": 3,
+				"pase_atras_controlado": 1,
+				"pase_atras_evaluado": 9,
+				"pase_atras_falta_fondo": 2,
+				"pase_atras_receptor_lejos": 3,
+				"pase_atras_sin_alcance": 2,
+				"pase_atras_tapado": 6,
+				"plan_cambio_frente": 22,
+				"plan_diagonal_extremo": 1,
+				"plan_nueve_baja": 11,
+				"plan_pase_atras": 11
+			},
+			"decisiones": {
+				"centro": 3,
+				"conducir": 13,
+				"despeje": 1,
+				"gambeta": 8,
+				"pared": 2,
+				"pase": 8,
+				"pase_hueco": 13,
+				"pase_largo": 24,
+				"tiro": 4
+			},
+			"division": 5,
+			"formaciones": [
+				"3-5-2",
+				"4-2-3-1"
+			],
+			"goles": 4,
+			"metros_conduccion": 295.525315374136,
+			"muestra_pase_atras": {
+				"desde": "(-44.11919, -21.41763)",
+				"destino": "(-40.11919, 6.0)",
+				"receptor": "(-31.7114, 5.989384)",
+				"rivales": [
+					{
+						"pos": "(-43.5, -15.75108)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(-43.5, -6.651079)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(-45.49143, -4.105264)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(-43.7037, -22.47943)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(-42.78916, -13.64136)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(-42.82468, -7.759592)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(-42.82468, -1.909592)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 29,
+				"home": 11
+			},
+			"semilla": 20260990
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 9,
+				"candidato_diagonal_extremo": 6,
+				"candidato_doblamiento": 6,
+				"candidato_nueve_baja": 37,
+				"candidato_pase_atras": 36,
+				"candidato_relevo_nueve": 10,
+				"disponible_aceleracion_preparada": 1,
+				"disponible_cambio_frente": 16,
+				"disponible_tercer_hombre": 2,
+				"pase_atras_evaluado": 2,
+				"pase_atras_falta_fondo": 1,
+				"pase_atras_receptor_lejos": 1,
+				"pase_atras_sin_alcance": 1,
+				"pase_atras_tapado": 2,
+				"plan_cambio_frente": 6,
+				"plan_diagonal_extremo": 4,
+				"plan_doblamiento": 5,
+				"plan_nueve_baja": 33,
+				"plan_pase_atras": 5,
+				"plan_relevo_nueve": 6
+			},
+			"decisiones": {
+				"conducir": 43,
+				"despeje": 2,
+				"gambeta": 3,
+				"pared": 4,
+				"pase": 15,
+				"pase_largo": 16,
+				"tiro": 3
+			},
+			"division": 10,
+			"formaciones": [
+				"4-4-2",
+				"4-4-2"
+			],
+			"goles": 0,
+			"metros_conduccion": 407.458769470453,
+			"muestra_pase_atras": {
+				"desde": "(42.59747, 18.78415)",
+				"destino": "(36.9191, 6.0)",
+				"receptor": "(26.53136, 1.074383)",
+				"rivales": [
+					{
+						"pos": "(42.76252, 21.49143)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(39.37681, 11.68199)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 15,
+				"home": 17
+			},
+			"semilla": 20260991
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 5,
+				"accion_corrida_preparada": 1,
+				"accion_enganche": 1,
+				"candidato_diagonal_extremo": 2,
+				"candidato_doblamiento": 5,
+				"candidato_nueve_baja": 23,
+				"candidato_pase_atras": 12,
+				"candidato_relevo_nueve": 1,
+				"disponible_cambio_frente": 8,
+				"disponible_corrida_preparada": 12,
+				"disponible_enganche": 1,
+				"disponible_llegada_coordinada": 1,
+				"disponible_tercer_hombre": 3,
+				"pase_atras_evaluado": 1,
+				"plan_cambio_frente": 7,
+				"plan_diagonal_extremo": 1,
+				"plan_doblamiento": 5,
+				"plan_nueve_baja": 23,
+				"plan_pase_atras": 2,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"conducir": 11,
+				"despeje": 5,
+				"gambeta": 3,
+				"pared": 3,
+				"pase": 5,
+				"pase_hueco": 22,
+				"pase_largo": 8,
+				"tiro": 4
+			},
+			"division": 1,
+			"formaciones": [
+				"4-4-2",
+				"4-4-2"
+			],
+			"goles": 2,
+			"metros_conduccion": 418.490446418524,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 16,
+				"home": 15
+			},
+			"semilla": 20260992
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 1,
+				"accion_corrida_preparada": 1,
+				"candidato_doblamiento": 1,
+				"candidato_nueve_baja": 23,
+				"candidato_relevo_nueve": 2,
+				"disponible_cambio_frente": 1,
+				"disponible_corrida_preparada": 14,
+				"disponible_tercer_hombre": 2,
+				"plan_doblamiento": 1,
+				"plan_nueve_baja": 23,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"conducir": 32,
+				"despeje": 8,
+				"gambeta": 6,
+				"pared": 2,
+				"pase": 5,
+				"pase_hueco": 9,
+				"pase_largo": 7,
+				"tiro": 4
+			},
+			"division": 5,
+			"formaciones": [
+				"4-4-2",
+				"5-3-2"
+			],
+			"goles": 1,
+			"metros_conduccion": 409.334129497409,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 14,
+				"home": 7
+			},
+			"semilla": 20260993
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 5,
+				"accion_corrida_preparada": 1,
+				"candidato_diagonal_extremo": 4,
+				"candidato_nueve_baja": 10,
+				"candidato_pase_atras": 19,
+				"disponible_cambio_frente": 8,
+				"disponible_corrida_preparada": 4,
+				"plan_cambio_frente": 6,
+				"plan_diagonal_extremo": 3,
+				"plan_nueve_baja": 8,
+				"plan_pase_atras": 4
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 26,
+				"despeje": 3,
+				"pared": 1,
+				"pase": 13,
+				"pase_hueco": 1,
+				"pase_largo": 20,
+				"tiro": 5
+			},
+			"division": 10,
+			"formaciones": [
+				"5-3-2",
+				"4-2-3-1"
+			],
+			"goles": 2,
+			"metros_conduccion": 259.160816118121,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 23,
+				"home": 11
+			},
+			"semilla": 20260994
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 7,
+				"accion_corrida_preparada": 3,
+				"candidato_diagonal_extremo": 6,
+				"candidato_doblamiento": 1,
+				"candidato_nueve_baja": 22,
+				"candidato_pase_atras": 12,
+				"candidato_relevo_nueve": 1,
+				"disponible_cambio_frente": 16,
+				"disponible_corrida_preparada": 16,
+				"disponible_tercer_hombre": 4,
+				"pase_atras_evaluado": 2,
+				"pase_atras_falta_fondo": 1,
+				"pase_atras_receptor_lejos": 2,
+				"pase_atras_tapado": 2,
+				"plan_cambio_frente": 8,
+				"plan_diagonal_extremo": 3,
+				"plan_nueve_baja": 21,
+				"plan_pase_atras": 4,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"centro": 3,
+				"conducir": 20,
+				"despeje": 2,
+				"gambeta": 10,
+				"pared": 2,
+				"pase": 22,
+				"pase_hueco": 13,
+				"pase_largo": 8,
+				"tiro": 6
+			},
+			"division": 1,
+			"formaciones": [
+				"4-3-3",
+				"5-3-2"
+			],
+			"goles": 1,
+			"metros_conduccion": 419.463595926762,
+			"muestra_pase_atras": {
+				"desde": "(39.39321, 11.07553)",
+				"destino": "(36.5, -6.0)",
+				"receptor": "(25.58775, 3.054624)",
+				"rivales": [
+					{
+						"pos": "(38.38126, 11.07553)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(43.5, 13.12266)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(37.29657, -3.273565)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(35.62103, 11.0774)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 18,
+				"home": 26
+			},
+			"semilla": 20260995
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 2,
+				"accion_corrida_preparada": 1,
+				"candidato_diagonal_extremo": 4,
+				"candidato_nueve_baja": 24,
+				"candidato_pase_atras": 9,
+				"candidato_relevo_nueve": 2,
+				"disponible_aceleracion_preparada": 1,
+				"disponible_cambio_frente": 8,
+				"disponible_corrida_preparada": 7,
+				"disponible_enganche": 1,
+				"disponible_llegada_coordinada": 1,
+				"pase_atras_evaluado": 3,
+				"pase_atras_falta_fondo": 2,
+				"pase_atras_tapado": 1,
+				"plan_cambio_frente": 2,
+				"plan_diagonal_extremo": 3,
+				"plan_nueve_baja": 21,
+				"plan_pase_atras": 2,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 28,
+				"despeje": 5,
+				"gambeta": 7,
+				"pared": 4,
+				"pase": 16,
+				"pase_hueco": 8,
+				"pase_largo": 6,
+				"tiro": 7
+			},
+			"division": 5,
+			"formaciones": [
+				"5-3-2",
+				"4-3-3"
+			],
+			"goles": 2,
+			"metros_conduccion": 354.135576561093,
+			"muestra_pase_atras": {
+				"desde": "(-36.72654, -13.53602)",
+				"destino": "(-36.5, 6.0)",
+				"receptor": "(-37.29876, 10.85898)",
+				"rivales": [
+					{
+						"pos": "(-35.63036, -12.86394)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(-37.02285, -4.712278)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 20,
+				"home": 12
+			},
+			"semilla": 20260996
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 4,
+				"accion_corrida_preparada": 1,
+				"candidato_doblamiento": 1,
+				"candidato_nueve_baja": 15,
+				"candidato_relevo_nueve": 1,
+				"disponible_cambio_frente": 5,
+				"disponible_corrida_preparada": 3,
+				"plan_doblamiento": 1,
+				"plan_nueve_baja": 13,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"conducir": 48,
+				"despeje": 1,
+				"gambeta": 1,
+				"pase": 18,
+				"pase_hueco": 6,
+				"pase_largo": 9,
+				"tiro": 1
+			},
+			"division": 10,
+			"formaciones": [
+				"4-4-2",
+				"5-3-2"
+			],
+			"goles": 1,
+			"metros_conduccion": 338.949436962605,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 22,
+				"home": 16
+			},
+			"semilla": 20260997
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 17,
+				"accion_corrida_preparada": 2,
+				"candidato_diagonal_extremo": 25,
+				"candidato_doblamiento": 2,
+				"candidato_nueve_baja": 17,
+				"candidato_pase_atras": 13,
+				"candidato_relevo_nueve": 1,
+				"disponible_cambio_frente": 24,
+				"disponible_corrida_preparada": 7,
+				"disponible_tercer_hombre": 1,
+				"pase_atras_evaluado": 1,
+				"pase_atras_falta_fondo": 1,
+				"pase_atras_receptor_lejos": 1,
+				"pase_atras_tapado": 1,
+				"plan_cambio_frente": 15,
+				"plan_diagonal_extremo": 23,
+				"plan_doblamiento": 2,
+				"plan_nueve_baja": 16,
+				"plan_pase_atras": 1,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"centro": 2,
+				"conducir": 10,
+				"gambeta": 6,
+				"pared": 3,
+				"pase": 3,
+				"pase_hueco": 16,
+				"pase_largo": 22
+			},
+			"division": 1,
+			"formaciones": [
+				"4-4-2",
+				"4-2-3-1"
+			],
+			"goles": 0,
+			"metros_conduccion": 398.673463523388,
+			"muestra_pase_atras": {
+				"desde": "(-36.7577, -11.8107)",
+				"destino": "(-36.5, -6.0)",
+				"receptor": "(-27.30037, 0.593954)",
+				"rivales": [
+					{
+						"pos": "(-37.00999, -12.3996)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(-39.50573, -1.720978)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(-31.42793, -7.759766)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 12,
+				"home": 20
+			},
+			"semilla": 20260998
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 7,
+				"accion_corrida_preparada": 1,
+				"candidato_diagonal_extremo": 15,
+				"candidato_doblamiento": 2,
+				"candidato_nueve_baja": 12,
+				"candidato_pase_atras": 26,
+				"disponible_aceleracion_preparada": 1,
+				"disponible_cambio_frente": 16,
+				"disponible_corrida_preparada": 12,
+				"disponible_tercer_hombre": 1,
+				"pase_atras_evaluado": 2,
+				"pase_atras_falta_fondo": 2,
+				"plan_cambio_frente": 5,
+				"plan_diagonal_extremo": 14,
+				"plan_doblamiento": 2,
+				"plan_nueve_baja": 11,
+				"plan_pase_atras": 7
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 18,
+				"despeje": 4,
+				"gambeta": 7,
+				"pared": 1,
+				"pase": 15,
+				"pase_hueco": 6,
+				"pase_largo": 10,
+				"tiro": 6
+			},
+			"division": 5,
+			"formaciones": [
+				"4-3-3",
+				"4-4-2"
+			],
+			"goles": 3,
+			"metros_conduccion": 277.587773859501,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 20,
+				"home": 19
+			},
+			"semilla": 20260999
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 8,
+				"accion_enganche": 1,
+				"candidato_diagonal_extremo": 15,
+				"candidato_doblamiento": 1,
+				"candidato_nueve_baja": 20,
+				"candidato_pase_atras": 16,
+				"candidato_relevo_nueve": 4,
+				"disponible_aceleracion_preparada": 2,
+				"disponible_cambio_frente": 15,
+				"disponible_corrida_preparada": 5,
+				"disponible_enganche": 1,
+				"disponible_tercer_hombre": 1,
+				"pase_atras_evaluado": 3,
+				"pase_atras_receptor_lejos": 1,
+				"pase_atras_sin_alcance": 2,
+				"pase_atras_tapado": 3,
+				"plan_cambio_frente": 7,
+				"plan_diagonal_extremo": 11,
+				"plan_doblamiento": 1,
+				"plan_nueve_baja": 19,
+				"plan_pase_atras": 5,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 33,
+				"despeje": 1,
+				"gambeta": 2,
+				"pared": 3,
+				"pase": 22,
+				"pase_hueco": 2,
+				"pase_largo": 17,
+				"tiro": 3
+			},
+			"division": 10,
+			"formaciones": [
+				"4-3-3",
+				"4-4-2"
+			],
+			"goles": 2,
+			"metros_conduccion": 288.063717097044,
+			"muestra_pase_atras": {
+				"desde": "(-39.95921, -25.92383)",
+				"destino": "(-36.5, 6.0)",
+				"receptor": "(-27.7394, 6.932647)",
+				"rivales": [
+					{
+						"pos": "(-43.5, -14.25684)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(-39.41298, -26.16792)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(-40.18729, -19.91418)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(-36.17909, -22.56704)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(-37.11242, -1.438088)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 22,
+				"home": 19
+			},
+			"semilla": 20261000
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 1,
+				"accion_corrida_preparada": 1,
+				"candidato_nueve_baja": 25,
+				"candidato_pase_atras": 13,
+				"candidato_relevo_nueve": 1,
+				"disponible_cambio_frente": 1,
+				"disponible_corrida_preparada": 3,
+				"pase_atras_evaluado": 2,
+				"pase_atras_receptor_lejos": 1,
+				"pase_atras_tapado": 2,
+				"plan_cambio_frente": 1,
+				"plan_nueve_baja": 24,
+				"plan_pase_atras": 2,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 28,
+				"despeje": 6,
+				"gambeta": 6,
+				"pared": 1,
+				"pase": 7,
+				"pase_hueco": 13,
+				"pase_largo": 3,
+				"tiro": 5
+			},
+			"division": 1,
+			"formaciones": [
+				"3-5-2",
+				"5-3-2"
+			],
+			"goles": 2,
+			"metros_conduccion": 477.728228986263,
+			"muestra_pase_atras": {
+				"desde": "(39.33213, -16.69282)",
+				"destino": "(36.5, 0.0)",
+				"receptor": "(22.74057, -0.110094)",
+				"rivales": [
+					{
+						"pos": "(43.5, -14.80785)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(39.17049, -18.10014)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(37.97077, -12.99249)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(39.97077, -5.842485)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(37.97077, 1.307514)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 13,
+				"home": 9
+			},
+			"semilla": 20261001
+		},
+		{
+			"conteos": {
+				"accion_corrida_preparada": 1,
+				"accion_enganche": 1,
+				"accion_tercer_hombre": 1,
+				"candidato_nueve_baja": 20,
+				"candidato_pase_atras": 3,
+				"candidato_relevo_nueve": 2,
+				"disponible_corrida_preparada": 6,
+				"disponible_enganche": 1,
+				"disponible_tercer_hombre": 1,
+				"plan_nueve_baja": 20,
+				"plan_pase_atras": 1,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 31,
+				"despeje": 6,
+				"gambeta": 7,
+				"pared": 3,
+				"pase": 7,
+				"pase_hueco": 14,
+				"pase_largo": 1,
+				"tiro": 6
+			},
+			"division": 5,
+			"formaciones": [
+				"5-3-2",
+				"5-3-2"
+			],
+			"goles": 3,
+			"metros_conduccion": 384.316304624081,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 13,
+				"home": 11
+			},
+			"semilla": 20261002
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 5,
+				"candidato_diagonal_extremo": 18,
+				"candidato_doblamiento": 2,
+				"candidato_nueve_baja": 17,
+				"candidato_pase_atras": 19,
+				"candidato_relevo_nueve": 18,
+				"disponible_aceleracion_preparada": 1,
+				"disponible_cambio_frente": 11,
+				"disponible_corrida_preparada": 5,
+				"pase_atras_evaluado": 1,
+				"pase_atras_falta_fondo": 1,
+				"plan_cambio_frente": 6,
+				"plan_diagonal_extremo": 17,
+				"plan_doblamiento": 1,
+				"plan_nueve_baja": 17,
+				"plan_pase_atras": 5,
+				"plan_relevo_nueve": 10
+			},
+			"decisiones": {
+				"conducir": 32,
+				"despeje": 3,
+				"pared": 5,
+				"pase": 32,
+				"pase_hueco": 7,
+				"pase_largo": 12,
+				"tiro": 4
+			},
+			"division": 10,
+			"formaciones": [
+				"4-4-2",
+				"4-3-3"
+			],
+			"goles": 1,
+			"metros_conduccion": 295.356032043695,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 27,
+				"home": 20
+			},
+			"semilla": 20261003
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 15,
+				"accion_corrida_preparada": 1,
+				"accion_enganche": 1,
+				"candidato_diagonal_extremo": 10,
+				"candidato_doblamiento": 3,
+				"candidato_nueve_baja": 17,
+				"candidato_pase_atras": 38,
+				"candidato_relevo_nueve": 1,
+				"disponible_cambio_frente": 30,
+				"disponible_corrida_preparada": 8,
+				"disponible_enganche": 1,
+				"disponible_tercer_hombre": 1,
+				"pase_atras_evaluado": 3,
+				"pase_atras_falta_fondo": 1,
+				"pase_atras_receptor_lejos": 2,
+				"pase_atras_tapado": 2,
+				"plan_cambio_frente": 8,
+				"plan_diagonal_extremo": 9,
+				"plan_doblamiento": 3,
+				"plan_nueve_baja": 16,
+				"plan_pase_atras": 8,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"centro": 5,
+				"conducir": 9,
+				"despeje": 5,
+				"gambeta": 8,
+				"pared": 3,
+				"pase": 15,
+				"pase_hueco": 12,
+				"pase_largo": 18,
+				"tiro": 4
+			},
+			"division": 1,
+			"formaciones": [
+				"4-3-3",
+				"4-4-2"
+			],
+			"goles": 1,
+			"metros_conduccion": 285.246999174356,
+			"muestra_pase_atras": {
+				"desde": "(42.22415, -21.19439)",
+				"destino": "(36.85084, 6.0)",
+				"receptor": "(22.74914, 9.2383)",
+				"rivales": [
+					{
+						"pos": "(43.5, -12.84084)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(43.5, -0.240839)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(41.06472, -22.21342)",
+						"rol": "LAT"
+					},
+					{
+						"pos": "(38.96928, -4.80067)",
+						"rol": "MC"
+					},
+					{
+						"pos": "(40.2484, -2.518193)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 15,
+				"home": 31
+			},
+			"semilla": 20261004
+		},
+		{
+			"conteos": {
+				"candidato_nueve_baja": 28,
+				"candidato_relevo_nueve": 1,
+				"disponible_cambio_frente": 3,
+				"disponible_corrida_preparada": 5,
+				"disponible_tercer_hombre": 2,
+				"plan_cambio_frente": 2,
+				"plan_nueve_baja": 23,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"conducir": 26,
+				"despeje": 3,
+				"gambeta": 5,
+				"pase": 8,
+				"pase_hueco": 11,
+				"pase_largo": 6,
+				"tiro": 4
+			},
+			"division": 5,
+			"formaciones": [
+				"3-5-2",
+				"5-3-2"
+			],
+			"goles": 0,
+			"metros_conduccion": 373.686320871115,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 15,
+				"home": 11
+			},
+			"semilla": 20261005
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 4,
+				"candidato_nueve_baja": 20,
+				"candidato_pase_atras": 12,
+				"candidato_relevo_nueve": 2,
+				"disponible_cambio_frente": 7,
+				"disponible_corrida_preparada": 2,
+				"plan_cambio_frente": 3,
+				"plan_nueve_baja": 18,
+				"plan_pase_atras": 3,
+				"plan_relevo_nueve": 1
+			},
+			"decisiones": {
+				"conducir": 44,
+				"despeje": 7,
+				"pared": 4,
+				"pase": 17,
+				"pase_hueco": 3,
+				"pase_largo": 11,
+				"tiro": 3
+			},
+			"division": 10,
+			"formaciones": [
+				"3-5-2",
+				"4-4-2"
+			],
+			"goles": 0,
+			"metros_conduccion": 397.482082530856,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 17,
+				"home": 12
+			},
+			"semilla": 20261006
+		},
+		{
+			"conteos": {
+				"accion_aceleracion_preparada": 1,
+				"accion_cambio_frente": 3,
+				"accion_corrida_preparada": 1,
+				"candidato_nueve_baja": 26,
+				"candidato_pase_atras": 2,
+				"disponible_aceleracion_preparada": 1,
+				"disponible_cambio_frente": 5,
+				"disponible_corrida_preparada": 3,
+				"plan_cambio_frente": 5,
+				"plan_nueve_baja": 26,
+				"plan_pase_atras": 1
+			},
+			"decisiones": {
+				"conducir": 27,
+				"despeje": 4,
+				"gambeta": 4,
+				"pared": 2,
+				"pase": 3,
+				"pase_hueco": 17,
+				"pase_largo": 8,
+				"tiro": 4
+			},
+			"division": 1,
+			"formaciones": [
+				"3-5-2",
+				"3-5-2"
+			],
+			"goles": 2,
+			"metros_conduccion": 438.703830212355,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 17,
+				"home": 12
+			},
+			"semilla": 20261007
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 8,
+				"candidato_diagonal_extremo": 19,
+				"candidato_nueve_baja": 17,
+				"candidato_pase_atras": 6,
+				"disponible_aceleracion_preparada": 2,
+				"disponible_cambio_frente": 18,
+				"disponible_corrida_preparada": 11,
+				"disponible_tercer_hombre": 1,
+				"plan_cambio_frente": 17,
+				"plan_diagonal_extremo": 17,
+				"plan_nueve_baja": 16,
+				"plan_pase_atras": 2
+			},
+			"decisiones": {
+				"centro": 1,
+				"conducir": 11,
+				"despeje": 3,
+				"gambeta": 1,
+				"pared": 6,
+				"pase": 16,
+				"pase_hueco": 12,
+				"pase_largo": 17,
+				"tiro": 2
+			},
+			"division": 5,
+			"formaciones": [
+				"4-3-3",
+				"4-2-3-1"
+			],
+			"goles": 2,
+			"metros_conduccion": 280.113600641489,
+			"muestra_pase_atras": {},
+			"offsides": 0,
+			"pases": {
+				"away": 24,
+				"home": 18
+			},
+			"semilla": 20261008
+		},
+		{
+			"conteos": {
+				"accion_cambio_frente": 6,
+				"candidato_diagonal_extremo": 2,
+				"candidato_doblamiento": 1,
+				"candidato_nueve_baja": 4,
+				"candidato_pase_atras": 56,
+				"disponible_cambio_frente": 12,
+				"disponible_corrida_preparada": 3,
+				"disponible_llegada_coordinada": 1,
+				"disponible_tercer_hombre": 1,
+				"pase_atras_evaluado": 6,
+				"pase_atras_receptor_lejos": 4,
+				"pase_atras_sin_alcance": 1,
+				"pase_atras_tapado": 3,
+				"plan_cambio_frente": 11,
+				"plan_diagonal_extremo": 2,
+				"plan_doblamiento": 1,
+				"plan_nueve_baja": 4,
+				"plan_pase_atras": 10
+			},
+			"decisiones": {
+				"centro": 2,
+				"conducir": 33,
+				"despeje": 4,
+				"pared": 1,
+				"pase": 14,
+				"pase_hueco": 2,
+				"pase_largo": 21,
+				"tiro": 2
+			},
+			"division": 10,
+			"formaciones": [
+				"4-2-3-1",
+				"3-5-2"
+			],
+			"goles": 2,
+			"metros_conduccion": 242.9157628268,
+			"muestra_pase_atras": {
+				"desde": "(45.40483, 22.30763)",
+				"destino": "(39.49923, 6.0)",
+				"receptor": "(27.8704, -0.731367)",
+				"rivales": [
+					{
+						"pos": "(43.11485, 5.476973)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(43.41253, 18.08826)",
+						"rol": "DFC"
+					},
+					{
+						"pos": "(38.4506, 5.738942)",
+						"rol": "MC"
+					}
+				]
+			},
+			"offsides": 0,
+			"pases": {
+				"away": 7,
+				"home": 29
+			},
+			"semilla": 20261009
+		}
+	],
+	"partidos": 96,
+	"semilla_inicial": 20260914
+}

@@ -503,6 +503,7 @@ const TICKS_POR_ZANCADA := 2
 ## la pose un solo fotograma la deja como un parpadeo. Tirarse al piso
 ## dura más que pegarle a la pelota, y el arquero queda tendido.
 const DURACION_ACCION := {
+	"amague_centro": 3,
 	"control_pie": 2, "taco": 2,
 	"pecho": 3, "lateral_manos": 2,
 	"bloquea": 3, "cae": 5, "chilena": 4, "volea": 3,
@@ -517,6 +518,7 @@ const DURACION_ACCION := {
 }
 
 const POSE_DE_ACCION := {
+	"amague_centro": "amague_centro",
 	"control_pie": "control_pie", "taco": "taco",
 	"pecho": "pecho", "lateral_manos": "lateral_manos",
 	"bloquea": SpritesPartido.BLOQUEA, "cae": SpritesPartido.CAE,

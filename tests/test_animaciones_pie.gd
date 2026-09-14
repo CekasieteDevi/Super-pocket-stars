@@ -39,7 +39,7 @@ func _probar() -> void:
 	# Recorrido completo de cada gesto, ambos espejos, pausa y salto hacia atras.
 	for direccion in [Vector2.LEFT, Vector2.RIGHT]:
 		receptor["orientacion"] = direccion
-		for accion in ["control_pie", "volea", "taco"]:
+		for accion in ["control_pie", "volea", "taco", "amague_centro"]:
 			estado["fotogramas"] = []
 			pelota["poseedor_id"] = clave if accion == "control_pie" else -1
 			for tick in range(6):

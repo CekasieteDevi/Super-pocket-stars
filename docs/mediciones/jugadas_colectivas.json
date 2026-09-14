@@ -1,0 +1,14 @@
+{
+	"conteos": {
+		"accion_aceleracion_preparada": 1,
+		"accion_cambio_frente": 38,
+		"accion_corrida_preparada": 13,
+		"plan_cambio_frente": 65,
+		"plan_diagonal_extremo": 43,
+		"plan_nueve_baja": 145,
+		"plan_pase_atras": 16,
+		"plan_relevo_nueve": 18
+	},
+	"partidos": 8,
+	"semilla_inicial": 20260914
+}
