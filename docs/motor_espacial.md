@@ -600,11 +600,11 @@ Tres cosas del diseño de la tanda:
   una Callable que MIRA cada penal ya resuelto y lo pone en la cancha.
 - **Un penal de la tanda no es un gol del partido.** No toca el marcador,
   no hay festejo ni saque del medio, y el reloj se planta en 120'.
-- **Cada equipo patea al arco al que venía atacando**, no los dos al mismo
-  arco como en una tanda real. El lado al que ataca un equipo sale de
-  `es_local` en todo el motor y cambiarlo solo para la tanda tocaría media
-  docena de funciones. Es la misma clase de ficción que el reloj de 90
-  minutos en 4.
+- **Los dos equipos patean al mismo arco** (actualizado 2026-09-14). Adentro
+  del motor cada equipo sigue pateando al arco que atacaba, porque el lado
+  sale de `es_local` en todo el motor. `_push_fotograma` gira 180 grados el
+  fotograma de cada penal visitante. En pantalla todos los penales van al
+  arco derecho. Girar conserva el costado del remate y de la estirada.
 
 Medido con 60 cruces a eliminación directa (`tests/_diag_alargue_espacial.gd`,
 semilla 4242): **46 se definen en los 90', 5 en el alargue y 9 por penales**.

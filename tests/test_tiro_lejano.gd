@@ -95,10 +95,19 @@ func _medir(local: bool, distancia: float, tiro: float) -> Dictionary:
 
 
 func _test_punteria(local: bool) -> void:
+	# La escena no tiene a nadie cerca: presion cero. Desde la etapa 9 la
+	# presion se centra en su media (presion_referencia), asi que presion cero
+	# suma punteria en TODAS las distancias y el tope de 0,85 aplasta la
+	# diferencia de cerca. Esta prueba mide la distancia sola: la presion se
+	# neutraliza y se prueba aparte en test_contexto_ocasion.gd.
+	var resolucion: Dictionary = MotorEspacial.pesos()["tiro_resolucion"]
+	var referencia = resolucion.get("presion_referencia", 0.0)
+	resolucion["presion_referencia"] = 0.0
 	var bajo_cerca := _medir(local, 10.0, 20.0)
 	var bajo_lejos := _medir(local, 28.0, 20.0)
 	var alto_cerca := _medir(local, 10.0, 90.0)
 	var alto_lejos := _medir(local, 28.0, 90.0)
+	resolucion["presion_referencia"] = referencia
 	print("PUNTERIA local=%s bajo=%s/%s alto=%s/%s (cerca/lejos)" % [
 		local, bajo_cerca, bajo_lejos, alto_cerca, alto_lejos])
 	_comprobar(bajo_lejos["puerta"] < bajo_cerca["puerta"] and alto_lejos["puerta"] < alto_cerca["puerta"],

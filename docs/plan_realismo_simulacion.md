@@ -2132,6 +2132,44 @@ Los seis puntos tienen implementación. La etapa completa sigue abierta
 hasta calibración final, comparación con el abstracto y revisión visual.
 Esta medición descriptiva no sustituye la matriz con equipos desparejos e ida/vuelta.
 
+### Aceptación final (2026-09-14)
+
+Calibrada y comparada con el abstracto. Ver [informe completo](mediciones/aceptacion_etapa9.md).
+
+Un embudo nuevo (`tests/_diag_embudo_remates.gd`) corre los dos motores con
+los mismos planteles, 600 partidos con ida y vuelta. Encontró tres causas
+de la brecha de goles:
+
+1. La fuerza del remate y la cobertura del arquero multiplicaban el
+   atributo absoluto. El arquero de primera atajaba 63% contra 47% en
+   décima; el abstracto, 46% y 45%.
+2. El remate medio llegaba al arquero con 4,6 puntos menos (factor de
+   fuerza medio 0,90).
+3. Los partidos parejos generan 13% a 28% menos remates.
+
+Cambios en `core/motor_espacial.gd` y `tiro_resolucion`:
+
+- `puntos_de_contexto`: fuerza, cobertura y bloqueo a quemarropa cuentan
+  en puntos al nivel de referencia.
+- `fuerza_referencia` 0,90: la fuerza se centra en su media.
+- `castigo_presion` 0,25 centrado en `presion_referencia` 0,37: la presión
+  de los rivales que no son el candidato al bloqueo resta puntería al
+  remate de pie.
+
+Brecha de goles con el abstracto, antes → después: 1/1 −38% → −11%; 1/4
+−19% → −4%; 5/5 −30% → −13%; 5/8 −17% → −11%; 10/10 −36% → −29%; 10/7
+−16% → −10%. Décima pareja sigue fuera del 15% por volumen de remates
+(5,9 contra 8,2), que es generación de juego y no calidad de ocasión.
+
+Remate lejano: los intentos de 25 m o más con tiro 70-99 pasan de 66 a 74
+en 300 partidos y convierten 16,7% → 16,2%. La conversión por calidad
+geométrica ahora crece con la calidad. Realismo (168 partidos): goles
++11,5%, remates −1,9%; mismo resultado con y sin fotogramas.
+
+`tests/test_aceptacion_ocasion.gd` (nuevo) cubre ángulo, presión, bloqueador,
+arquero corrido y la misma ocasión en 40 y en 85, para los dos lados.
+Pendiente: revisión visual.
+
 ### Validación cuantitativa de la etapa 9 (2026-09-13)
 
 Matriz terminada: 600 enfrentamientos, 100 por combinación de división y
@@ -2190,7 +2228,7 @@ Revisar cómo reportan fallos las pruebas: no asumir que exit code cero implica 
 - [x] 6. Decisiones del arquero. Ver "Etapa 6: resultados".
 - [x] 7. Contexto del marcador. Ver "Etapa 7: resultados".
 - [x] 8. Identidad individual. Ver "Etapa 8: resultados".
-- [ ] 9. Calidad de ocasiones. Puntos 9.1–9.6 implementados; aceptación final pendiente. Ver límites e informe de 9.6.
+- [x] 9. Calidad de ocasiones. Puntos 9.1–9.6 y calibración final. Ver "Aceptación final"; revisión visual pendiente.
 - [ ] Regresión, calibración, revisión visual y documentación final.
 
 ## Texto para iniciar la implementación

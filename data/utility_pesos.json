@@ -70,7 +70,11 @@
     "porteria_base": 0.49,
     "porteria_calidad": 0.5,
     "palo": 0.05,
-    "fuerza_base": 0.84
+    "fuerza_base": 0.84,
+    "_contexto_etapa9": "Aceptacion de la etapa 9, medido con tests/_diag_embudo_remates.gd (600 partidos, los mismos planteles en los dos motores, ida y vuelta). castigo_presion: cuanto resta a la punteria del remate de pie la presion de los rivales que no son el candidato al bloqueo, centrada en presion_referencia (0.37, la presion media de esos remates en las seis celdas: 0.32 a 0.40). Antes la presion no movia la punteria: 55-60% al arco con presion baja y 59-61% con alta. Con 0.25 el remate de primera con presion alta va al arco 50% contra 69% sin presion. fuerza_referencia: el factor_fuerza medio de los remates que llegan al arquero, 0.90 en las seis celdas (0.897 a 0.904). El duelo lo cuenta en puntos contra esa media (MotorEspacial.puntos_de_contexto): con 1.0 el remate medio perdia 4.6 puntos contra el arquero y el espacial convertia 46-51% de los remates al arco en los partidos parejos contra 49-55% del abstracto.",
+    "castigo_presion": 0.25,
+    "presion_referencia": 0.37,
+    "fuerza_referencia": 0.90
   },
   "temperatura": {
     "base": 0.55,

@@ -24,6 +24,7 @@ func _init() -> void:
 	fallos += _test_la_tanda_se_patea_en_la_cancha(casos)
 	fallos += _test_la_tanda_no_toca_el_marcador(casos)
 	fallos += _test_el_marcador_de_la_tanda_coincide(casos)
+	fallos += _test_la_tanda_se_patea_a_un_solo_arco(casos)
 	fallos += _test_en_liga_el_empate_sigue_siendo_empate()
 	fallos += _test_mirar_la_tanda_no_la_cambia()
 	print("\nFALLOS=%d" % fallos)
@@ -194,6 +195,39 @@ func _test_el_marcador_de_la_tanda_coincide(casos: Dictionary) -> int:
 		return 1
 	print("OK: pantalla y resultado dicen lo mismo, %d-%d." % [
 		int(ultimo["home"]), int(ultimo["away"])])
+	return 0
+
+
+## En una tanda real los dos equipos patean al mismo arco. Antes cada uno
+## pateaba al arco que atacaba y la camara cruzaba la cancha en cada penal.
+func _test_la_tanda_se_patea_a_un_solo_arco(casos: Dictionary) -> int:
+	print("\n=== Los dos equipos patean la tanda al mismo arco ===")
+	if not casos.has("penales"):
+		print("FALLA: no hay cruce definido por penales para revisar.")
+		return 1
+	var r: Dictionary = casos["penales"]
+	var por_lado := {"home": 0, "away": 0}
+	# Penales.definir arranca siempre con el local: el primer penal dice
+	# como se llama.
+	var nombre_local := ""
+	for f in r["fotogramas"]:
+		for ev in f.get("eventos", []):
+			if str(ev.get("tipo", "")) != "penal_tanda":
+				continue
+			if nombre_local == "":
+				nombre_local = str(ev["equipo"])
+			var lado: String = "home" if str(ev["equipo"]) == nombre_local else "away"
+			if float(f["pelota"]["x"]) <= 0.0:
+				print("FALLA: un penal de '%s' termina en el arco izquierdo (x=%.1f)." % [
+					lado, float(f["pelota"]["x"])])
+				return 1
+			por_lado[lado] += 1
+	if por_lado["home"] == 0 or por_lado["away"] == 0:
+		print("FALLA: faltan penales de un equipo: %d local, %d visitante." % [
+			por_lado["home"], por_lado["away"]])
+		return 1
+	print("OK: %d penales del local y %d del visitante, todos al arco derecho." % [
+		por_lado["home"], por_lado["away"]])
 	return 0
 
 
