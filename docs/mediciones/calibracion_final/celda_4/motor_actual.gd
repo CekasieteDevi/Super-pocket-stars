@@ -1,4 +1,4 @@
-class_name MotorEspacial
+
 extends RefCounted
 
 ## Motor de partido ESPACIAL — MVP (ver docs/motor_espacial.md).
@@ -688,15 +688,6 @@ static func _armar_jugadores(equipo: Team, es_local: bool, estado: Dictionary) -
 			# Se copia acá para no tener que buscar el dict del jugador en
 			# cada tick solo para medir el desmarque (ver offside).
 			"inteligencia": float(j["atributos"]["inteligencia"]),
-			# Etapa 5: el esfuerzo se cobra en cada tick con Team.desgastar,
-			# que pide `energia`. Buscar el dict del jugador 22 veces por
-			# tick costaba mas que la cuenta.
-			"energia": int(j["atributos"]["energia"]),
-			"reserva": 1.0,
-			# Etapa 3: hacia donde mira y cuanto gira por segundo. Todos
-			# arrancan mirando al arco que atacan, que es como se forman.
-			"orientacion": orientacion_inicial(es_local),
-			"giro": _giro_de(j),
 			# Enfocado (§6): "no se va en offside". No se modela como
 			# inteligencia extra —eso le mejoraría también la lectura del
 			# pase— sino como un factor propio sobre el margen de error al
@@ -769,14 +760,6 @@ static func crear_estado(home: Team, away: Team, rng: RandomNumberGenerator) -> 
 		# _planificar_ritmo. `ritmo_stats` solo mide.
 		"ritmo": {},
 		"ritmo_stats": {},
-		# Etapa 5: carga de esfuerzo cobrada y ticks con la reserva baja.
-		# Solo mide. Ver _contabilizar_esfuerzo.
-		"esfuerzo_stats": {"carga": 0.0, "ticks_jugador": 0, "ticks_reserva_baja": 0},
-		# Etapa 3: recepciones de pase, dificultad sumada, toques largos, y
-		# demora de control contra la cadencia vieja de los controles
-		# limpios. Solo mide. Ver _controlar_recepcion.
-		"control_stats": {"recepciones": 0, "dificultad": 0.0, "toques_largos": 0,
-				"demora": 0, "cadencia": 0},
 	}
 	_armar_jugadores(home, true, estado)
 	_armar_jugadores(away, false, estado)
@@ -3158,17 +3141,8 @@ static func _mover_hacia(e: Dictionary, objetivo: Vector2, factor: float = 1.0) 
 		rapidez *= clampf((alineacion + 1.0) * 0.5,
 			float(pesos()["fisica"]["freno_giro"]), 1.0)
 
-	# Etapa 5: la reserva de sprint baja el techo de la corrida, no el trote.
-	# Por eso es un minimo contra el factor y no un multiplicador: el que
-	# camina a su marca no nota que viene de piques. El factor mayor que
-	# uno es del que entra o sale de la cancha, que no juega la jugada.
-	var techo: float = factor if factor > 1.0 else minf(factor, capacidad_de_sprint(e))
-	var tope: float = float(e["vel_max"]) * techo
+	var tope: float = float(e["vel_max"]) * factor
 	rapidez = minf(rapidez + float(e.get("aceleracion", 3.0)) * TICK_SEG, tope)
-	# Etapa 3: corriendo, el cuerpo sigue a la carrera con giro limitado. Al
-	# trote se sigue mirando la jugada (ver _mirar_la_pelota).
-	if rapidez >= float(pesos_control()["rapidez_para_girar"]):
-		girar_hacia(e, dir)
 	var paso: float = rapidez * TICK_SEG
 	e["recorrido"] = float(e.get("recorrido", 0.0)) + minf(paso, dist)
 	if paso >= dist:
@@ -3179,455 +3153,6 @@ static func _mover_hacia(e: Dictionary, objetivo: Vector2, factor: float = 1.0) 
 	e["pos"] = e["pos"] + dir * paso
 	e["vel"] = dir * rapidez
 	e["rapidez"] = rapidez
-
-
-# ---------------------------------------------------------------------------
-# Control y orientacion corporal (etapa 3)
-# ---------------------------------------------------------------------------
-## Hasta la etapa 3 el motor no sabia hacia donde miraba nadie. Recibir de
-## frente o de espaldas costaba lo mismo, y la unica demora de control era
-## `fisica.ticks_control`: una espera fija por atributo antes de decidir.
-##
-## Ahora cada jugador tiene:
-##
-## - `orientacion`: vector normalizado en el dict espacial. Gira con
-##   velocidad angular limitada por `agilidad` (`giro`, radianes por
-##   segundo). Corriendo sigue a la carrera; al trote o quieto mira la pelota.
-## - Control pendiente: `pelota.control`, con la clave del receptor y su
-##   demora en ticks. Vive en la pelota porque se borra en el mismo lugar
-##   donde cambia el poseedor (_entregar_pelota, el arquero y el saque).
-## - Habilitacion de la accion: el poseedor decide recien cuando
-##   `ticks_con_pelota` llega a la demora. Es el mismo contador que usaba la
-##   espera vieja, asi que sin control pendiente el motor decide igual que
-##   antes.
-##
-## La recepcion de un pase se resuelve UNA vez (_controlar_recepcion):
-## calcula la dificultad, tira una vez el RNG del partido y decide entre
-## control limpio, con su demora, o toque largo con la pelota suelta.
-
-## Pesos de la etapa. Como en las otras etapas, el lector trae los valores
-## por defecto y queda cacheado: `rapidez_para_girar` se lee en cada paso de
-## cada jugador.
-static var _pesos_control_cache: Dictionary = {}
-
-static func pesos_control() -> Dictionary:
-	if not _pesos_control_cache.is_empty():
-		return _pesos_control_cache
-	var d: Dictionary = pesos().get("control", {})
-	_pesos_control_cache = {
-		"giro_lento": float(d.get("giro_lento", 4.0)),
-		"giro_rapido": float(d.get("giro_rapido", 9.0)),
-		"rapidez_para_girar": float(d.get("rapidez_para_girar", 2.0)),
-		"cono_sin_giro": float(d.get("cono_sin_giro", 2.0)),
-		"peso_velocidad": float(d.get("peso_velocidad", 0.3)),
-		"peso_altura": float(d.get("peso_altura", 0.2)),
-		"peso_presion": float(d.get("peso_presion", 0.3)),
-		"peso_angulo": float(d.get("peso_angulo", 0.2)),
-		"demora_facil": float(d.get("demora_facil", 0.6)),
-		"demora_dificil": float(d.get("demora_dificil", 1.6)),
-		"malo_max": float(d.get("malo_max", 0.3)),
-		"alivio_control": float(d.get("alivio_control", 0.8)),
-		"mezcla_absoluta": float(d.get("mezcla_absoluta", 0.5)),
-		"toque_largo_min": float(d.get("toque_largo_min", 2.0)),
-		"toque_largo_max": float(d.get("toque_largo_max", 6.0)),
-		"toque_desvio": float(d.get("toque_desvio", 0.9)),
-	}
-	return _pesos_control_cache
-
-
-## Hacia donde mira un equipo formado: al arco que ataca.
-static func orientacion_inicial(es_local: bool) -> Vector2:
-	return Vector2(1.0, 0.0) if es_local else Vector2(-1.0, 0.0)
-
-
-## Radianes por segundo que gira este jugador. `agilidad` se lee absoluta,
-## como la velocidad: girar es fisico y no depende del rival.
-static func _giro_de(jugador: Dictionary) -> float:
-	var w := pesos_control()
-	return _por_atributo(jugador, "agilidad", w["giro_lento"], w["giro_rapido"], 1.0)
-
-
-## La orientacion de un dict espacial, siempre normalizada. Un dict viejo sin
-## el campo mira al arco que ataca.
-static func orientacion_de(e: Dictionary) -> Vector2:
-	var o = e.get("orientacion", null)
-	if o is Vector2 and o.length_squared() > 0.000001:
-		return o.normalized()
-	return orientacion_inicial(bool(e.get("equipo_local", true)))
-
-
-## Gira el cuerpo un tick hacia `hacia`, sin pasar del giro maximo. Un
-## vector nulo no cambia nada: normalizarlo daria cualquier cosa.
-static func girar_hacia(e: Dictionary, hacia: Vector2) -> void:
-	if hacia.length_squared() < 0.000001:
-		return
-	var objetivo: Vector2 = hacia.normalized()
-	var actual := orientacion_de(e)
-	var angulo: float = actual.angle_to(objetivo)
-	var maximo: float = float(e.get("giro", pesos_control()["giro_lento"])) * TICK_SEG
-	if absf(angulo) <= maximo:
-		e["orientacion"] = objetivo
-	else:
-		e["orientacion"] = actual.rotated(signf(angulo) * maximo)
-
-
-## Ticks que tarda en dejar `hacia` dentro del cono en que juega sin girar.
-## Cero si ya esta adentro.
-static func ticks_para_girar(e: Dictionary, hacia: Vector2) -> int:
-	if hacia.length_squared() < 0.000001:
-		return 0
-	var exceso: float = absf(orientacion_de(e).angle_to(hacia)) - float(pesos_control()["cono_sin_giro"])
-	if exceso <= 0.0:
-		return 0
-	var por_tick: float = maxf(float(e.get("giro", pesos_control()["giro_lento"])) * TICK_SEG, 0.01)
-	return int(ceil(exceso / por_tick))
-
-
-## Los que no corren miran la pelota. Corre despues de mover a todos, asi
-## que no le suma giro al que ya giro corriendo: ese quedo por encima de
-## `rapidez_para_girar`. El poseedor no entra aca; lo gira _conducir.
-static func _mirar_la_pelota(estado: Dictionary) -> void:
-	var umbral: float = float(pesos_control()["rapidez_para_girar"])
-	var pelota_pos: Vector2 = estado["pelota"]["pos"]
-	var poseedor: int = int(estado["pelota"]["poseedor_id"])
-	for id in estado["jugadores"]:
-		if int(id) == poseedor:
-			continue
-		var e: Dictionary = estado["jugadores"][id]
-		if float(e.get("rapidez", 0.0)) >= umbral:
-			continue
-		girar_hacia(e, pelota_pos - e["pos"])
-
-
-## Espera vieja antes de decidir, en ticks: `fisica.ticks_control` segun
-## `control`, acortada por la asociacion del estilo. Sigue siendo la cadencia
-## con que el poseedor reconsidera mientras conduce, y la demora de cualquier
-## posesion que no empieza con una recepcion (quite, rebote, arquero).
-static func cadencia_de_decision(jugador: Dictionary, equipo: Team) -> int:
-	var f: Dictionary = pesos()["fisica"]
-	var ticks: int = int(round(_por_atributo(jugador, "control", f["ticks_control_malo"], f["ticks_control_bueno"])))
-	var asociacion: float = float(Estilos.plan(equipo.estilo)["asociacion"])
-	ticks = int(round(float(ticks) * lerpf(1.0, 0.75, asociacion)))
-	return maxi(ticks, 1)
-
-
-## Que tan dificil es controlar la pelota que llega. Cuenta pura: no toca el
-## RNG ni al jugador. Devuelve los cuatro terminos por separado para medir.
-##
-## - velocidad: 0 a la velocidad del pase mas flojo, 1 a la del mas fuerte.
-## - altura: la altura maxima del vuelo contra la del centro.
-## - presion: la misma presion normalizada que usan las decisiones.
-## - angulo: 0 con la pelota llegando de frente al cuerpo, 1 por la espalda.
-static func dificultad_de_recepcion(estado: Dictionary, e: Dictionary, vel_llegada: Vector2,
-		altura: float) -> Dictionary:
-	var f: Dictionary = pesos()["fisica"]
-	var w := pesos_control()
-	var v: float = vel_llegada.length()
-	var t_vel: float = clampf((v - float(f["vel_pase_min"]))
-			/ maxf(float(f["vel_pase_max"]) - float(f["vel_pase_min"]), 0.01), 0.0, 1.0)
-	var t_alt: float = clampf(altura / maxf(float(f["altura_centro"]), 0.01), 0.0, 1.0)
-	var t_pres: float = presion_normalizada(estado, e["pos"], bool(e["equipo_local"]))
-	# Sin velocidad no hay de donde llega: el angulo queda en el medio.
-	var t_ang := 0.5
-	if v > 0.01:
-		t_ang = (1.0 - orientacion_de(e).dot(-vel_llegada / v)) * 0.5
-	var d: float = float(w["peso_velocidad"]) * t_vel + float(w["peso_altura"]) * t_alt \
-			+ float(w["peso_presion"]) * t_pres + float(w["peso_angulo"]) * t_ang
-	return {"dificultad": clampf(d, 0.0, 1.0), "velocidad": t_vel, "altura": t_alt,
-			"presion": t_pres, "angulo": t_ang}
-
-
-## Ticks hasta poder jugar la pelota recibida. Reemplaza a la espera vieja
-## en la primera decision: la escala por la dificultad, no se le suma.
-static func demora_de_control(jugador: Dictionary, equipo: Team, dificultad: float) -> int:
-	var w := pesos_control()
-	var f: Dictionary = pesos()["fisica"]
-	# Los mismos redondeos que cadencia_de_decision: con factor 1 la demora
-	# da exactamente la espera vieja.
-	var base: float = float(int(round(_por_atributo(jugador, "control", f["ticks_control_malo"], f["ticks_control_bueno"]))))
-	base *= lerpf(1.0, 0.75, float(Estilos.plan(equipo.estilo)["asociacion"]))
-	var factor: float = lerpf(float(w["demora_facil"]), float(w["demora_dificil"]), clampf(dificultad, 0.0, 1.0))
-	return maxi(int(round(base * factor)), 1)
-
-
-## Chance de que la recepcion termine en toque largo. Crece con la dificultad
-## y baja con `control`: con dificultad cero nadie la pierde.
-static func prob_toque_largo(jugador: Dictionary, dificultad: float) -> float:
-	var w := pesos_control()
-	var control: float = _por_atributo(jugador, "control", 0.0, 1.0, float(w["mezcla_absoluta"]))
-	return clampf(float(w["malo_max"]) * clampf(dificultad, 0.0, 1.0)
-			* (1.0 - float(w["alivio_control"]) * control), 0.0, 1.0)
-
-
-## La recepcion de un pase, una sola vez. La llama _resolver_recepcion con
-## la velocidad y la altura capturadas ANTES de que la pelota frenara o se
-## le entregara al receptor.
-static func _controlar_recepcion(estado: Dictionary, clave: int, llegada: Dictionary) -> void:
-	if not estado["jugadores"].has(clave):
-		return
-	var e: Dictionary = estado["jugadores"][clave]
-	# El arquero la toma con las manos o la para con su propia rama.
-	if str(e["rol"]) == "ARQ":
-		return
-	var equipo := _equipo_de(estado, bool(e["equipo_local"]))
-	var jugador := _dict_jugador(estado, equipo, int(e["jugador_id"]))
-	if jugador.is_empty():
-		return
-	var vel: Vector2 = llegada.get("vel", Vector2.ZERO)
-	var desc := dificultad_de_recepcion(estado, e, vel, float(llegada.get("altura", 0.0)))
-	var dificultad: float = float(desc["dificultad"])
-	if not estado.has("control_stats"):
-		estado["control_stats"] = {}
-	var stats: Dictionary = estado["control_stats"]
-	for clave_stat in ["recepciones", "toques_largos", "demora", "cadencia"]:
-		if not stats.has(clave_stat):
-			stats[clave_stat] = 0
-	stats["recepciones"] = int(stats["recepciones"]) + 1
-	for termino in ["dificultad", "velocidad", "altura", "presion", "angulo"]:
-		stats[termino] = float(stats.get(termino, 0.0)) + float(desc[termino])
-	if estado["rng"].randf() < prob_toque_largo(jugador, dificultad):
-		stats["toques_largos"] = int(stats["toques_largos"]) + 1
-		_toque_largo(estado, e, vel, dificultad)
-		return
-	var demora := demora_de_control(jugador, equipo, dificultad)
-	stats["demora"] = int(stats["demora"]) + demora
-	stats["cadencia"] = int(stats["cadencia"]) + cadencia_de_decision(jugador, equipo)
-	estado["pelota"]["control"] = {"clave": clave, "demora": demora}
-
-
-## Control malo: la pelota se le va unos metros en la direccion en que venia,
-## desviada. Queda suelta y la agarra el que llegue: el receptor la va a
-## buscar y el rival tambien. No se le adjudica a nadie.
-static func _toque_largo(estado: Dictionary, e: Dictionary, vel: Vector2, dificultad: float) -> void:
-	var w := pesos_control()
-	var rng: RandomNumberGenerator = estado["rng"]
-	var base: Vector2 = vel.normalized() if vel.length_squared() > 0.0001 else orientacion_de(e)
-	var dir: Vector2 = base.rotated(rng.randf_range(-1.0, 1.0) * float(w["toque_desvio"]))
-	var largo: float = lerpf(float(w["toque_largo_min"]), float(w["toque_largo_max"]),
-			clampf(dificultad * (0.5 + rng.randf()), 0.0, 1.0))
-	var desde: Vector2 = e["pos"]
-	var destino := Vector2(
-		clampf(desde.x + dir.x * largo, -MEDIO_LARGO + 1.0, MEDIO_LARGO - 1.0),
-		clampf(desde.y + dir.y * largo, -MEDIO_ANCHO + 1.0, MEDIO_ANCHO - 1.0))
-	_soltar_pelota(estado, desde, destino, bool(e["equipo_local"]))
-	var pelota: Dictionary = estado["pelota"]
-	# Rueda en dos ticks: a la velocidad del rebote llegaba en uno y no se
-	# veia que se le escapaba.
-	var real: float = desde.distance_to(destino)
-	pelota["vel"] = (destino - desde).normalized() * maxf(real / (2.0 * TICK_SEG), VEL_PELOTA_QUIETA) \
-			if real > 0.01 else Vector2.ZERO
-	pelota["offside"] = false
-	pelota["es_centro"] = false
-	pelota["es_remate"] = false
-	pelota["altura_max"] = 0.0
-	pelota["z"] = 0.0
-	pelota.erase("pared_a")
-	# El receptor sale a buscar su propio toque (ver `esperando` en _tick).
-	pelota["destino_id"] = int(e["clave"])
-
-
-## Saca las opciones que mandan la pelota fuera del cono del cuerpo. Girar
-## 180 grados con la pelota exige tiempo: esas opciones vuelven cuando el
-## cuerpo gira. Conducir, gambeta y despeje no tienen destino y quedan.
-static func _opciones_orientadas(estado: Dictionary, opciones: Array, poseedor: Dictionary) -> Array:
-	var es_local: bool = bool(poseedor["equipo_local"])
-	var quedan: Array = []
-	for op in opciones:
-		var destino = _destino_de_opcion(estado, op, es_local)
-		if destino == null or ticks_para_girar(poseedor, destino - poseedor["pos"]) == 0:
-			quedan.append(op)
-	return quedan
-
-
-# ---------------------------------------------------------------------------
-# Cansancio por esfuerzo (etapa 5)
-# ---------------------------------------------------------------------------
-## Hasta la etapa 5 la resistencia solo bajaba en los duelos: el volante que
-## corria el partido entero terminaba igual que el que miraba de lejos. La
-## linea de base lo medía: el cansancio dependia de los duelos jugados y no
-## de los metros corridos.
-##
-## Ahora hay dos costos, y cada uno tiene UN solo responsable:
-##
-## - Correr: `_contabilizar_esfuerzo`, una vez por tick y por jugador. Lee
-##   la rapidez que dejo el movimiento y cobra por intensidad.
-## - El contacto: `_duelo_simple` y el duelo del remate, como antes, pero
-##   con `multiplicador_desgaste` mas chico, porque ya no pagan el partido
-##   entero. Ninguno de los dos mira la rapidez, asi que no se cobra dos
-##   veces el mismo pique.
-##
-## Hay dos depositos distintos:
-##
-## - La RESERVA de sprint, de 0 a 1, en el dict espacial del jugador. Se
-##   gasta en segundos de pique y se recupera en segundos de trote. Corre en
-##   `TICK_SEG` reales: es la fisica de la jugada, no los 90 minutos.
-## - La RESISTENCIA de siempre, en `Team`. Es la fatiga acumulada del
-##   partido; la reserva no la toca y caminar no la devuelve.
-##
-## La resistencia sigue afectando la ejecucion solo por
-## `Duel.atributo_efectivo`. La reserva solo baja la velocidad punta.
-
-## Pesos del esfuerzo. Como los de las otras etapas, el lector trae los
-## valores por defecto y el resultado queda cacheado: se lee 22 veces por
-## tick.
-static var _pesos_esfuerzo_cache: Dictionary = {}
-
-static func pesos_esfuerzo() -> Dictionary:
-	if not _pesos_esfuerzo_cache.is_empty():
-		return _pesos_esfuerzo_cache
-	var d: Dictionary = pesos().get("esfuerzo", {})
-	_pesos_esfuerzo_cache = {
-		"peso_aceleracion": float(d.get("peso_aceleracion", 0.5)),
-		"umbral_sprint": float(d.get("umbral_sprint", 0.55)),
-		"consumo_sprint": float(d.get("consumo_sprint", 0.10)),
-		"recuperacion_reserva": float(d.get("recuperacion_reserva", 0.07)),
-		"reserva_para_frenar": float(d.get("reserva_para_frenar", 0.5)),
-		"piso_sprint": float(d.get("piso_sprint", 0.85)),
-		"desgaste_por_segundo": float(d.get("desgaste_por_segundo", 0.0)),
-		"recuperacion_entretiempo": float(d.get("recuperacion_entretiempo", 0.0)),
-		"tope_entretiempo": float(d.get("tope_entretiempo", 0.0)),
-	}
-	return _pesos_esfuerzo_cache
-
-
-## Cuanto le cuesta a un jugador el tick que acaba de correr. Es el cuadrado
-## de su rapidez sobre su velocidad punta, mas lo que acelero sobre lo mas
-## que puede acelerar en un tick. El cuadrado hace que trotar a media
-## maquina cueste un cuarto de un pique, y la aceleracion cobra el arranque
-## aunque todavia vaya despacio.
-static func intensidad_de_esfuerzo(rapidez: float, rapidez_previa: float,
-		vel_max: float, aceleracion: float, w: Dictionary = {}) -> float:
-	if w.is_empty():
-		w = pesos_esfuerzo()
-	var v: float = clampf(rapidez / maxf(vel_max, 0.1), 0.0, 1.0)
-	var arranque: float = clampf(maxf(rapidez - rapidez_previa, 0.0) / maxf(aceleracion * TICK_SEG, 0.01), 0.0, 1.0)
-	return v * v + float(w["peso_aceleracion"]) * arranque
-
-
-## Que fraccion de su velocidad punta le deja la reserva. Con la reserva por
-## encima de `reserva_para_frenar` no pierde nada; debajo cae de forma suave
-## hasta `piso_sprint`. La curva suave evita un escalon en la velocidad del
-## tick en que la reserva cruza el umbral.
-static func capacidad_de_sprint(e: Dictionary) -> float:
-	var reserva: float = float(e.get("reserva", 1.0))
-	# Camino corto: casi siempre la reserva esta llena, y esto corre en cada
-	# paso de cada jugador.
-	if reserva >= 1.0:
-		return 1.0
-	var w := pesos_esfuerzo()
-	var t: float = clampf(reserva / maxf(float(w["reserva_para_frenar"]), 0.01), 0.0, 1.0)
-	return lerpf(float(w["piso_sprint"]), 1.0, t * t * (3.0 - 2.0 * t))
-
-
-## Mueve la reserva un tick. Por encima del umbral gasta en proporcion a lo
-## que se paso; por debajo recupera, mas cuanto mas despacio va. Parado
-## recupera la tasa completa.
-static func actualizar_reserva(e: Dictionary, intensidad: float, w: Dictionary = {}) -> void:
-	if w.is_empty():
-		w = pesos_esfuerzo()
-	var umbral: float = float(w["umbral_sprint"])
-	var reserva: float = float(e.get("reserva", 1.0))
-	if intensidad > umbral:
-		var tope: float = 1.0 + float(w["peso_aceleracion"])
-		reserva -= float(w["consumo_sprint"]) * (intensidad - umbral) / maxf(tope - umbral, 0.01) * TICK_SEG
-	elif reserva < 1.0:
-		reserva += float(w["recuperacion_reserva"]) * (1.0 - intensidad / maxf(umbral, 0.01)) * TICK_SEG
-	e["reserva"] = clampf(reserva, 0.0, 1.0)
-
-
-## El cobro del esfuerzo, una vez por tick, al cerrar el tick. Va despues de
-## todo el movimiento, asi que lee la rapidez final de cada uno.
-##
-## `en_juego` es false en el juego detenido: festejo, falta, cambio. Ahi la
-## reserva se recupera —el que trota a su marca respira— pero la
-## resistencia no se cobra. Tampoco se cobra al que esta entrando o
-## saliendo, ni en la tanda de penales.
-##
-## No toca el RNG ni decide nada, y cada jugador se cobra solo: el orden del
-## recorrido no cambia el resultado.
-##
-## Los pesos se leen una vez y los contadores se escriben al final: la
-## primera version los leia y escribia por jugador y costaba +17% por
-## partido (corridas pareadas).
-static func _contabilizar_esfuerzo(estado: Dictionary, en_juego: bool) -> void:
-	var w := pesos_esfuerzo()
-	var cobrar: bool = en_juego and not bool(estado.get("en_tanda", false))
-	var por_segundo: float = float(w["desgaste_por_segundo"])
-	var umbral_bajo: float = float(w["reserva_para_frenar"])
-	# Las mismas cuentas que intensidad_de_esfuerzo y actualizar_reserva,
-	# escritas en linea: llamarlas por jugador duplicaba el costo del cobro.
-	var peso_acel: float = float(w["peso_aceleracion"])
-	var umbral: float = float(w["umbral_sprint"])
-	var gasto: float = float(w["consumo_sprint"]) / maxf(1.0 + peso_acel - umbral, 0.01) * TICK_SEG
-	var repone: float = float(w["recuperacion_reserva"]) * TICK_SEG
-	var inv_umbral: float = 1.0 / maxf(umbral, 0.01)
-	var hay_transito: bool = not (estado.get("saliendo", []).is_empty() and estado.get("entrando", []).is_empty())
-	var home: Team = estado["home"]
-	var away: Team = estado["away"]
-	var carga_tick := 0.0
-	var ticks_j := 0
-	var bajos := 0
-	for id in estado["jugadores"]:
-		var e: Dictionary = estado["jugadores"][id]
-		var rapidez: float = e["rapidez"]
-		var previa: float = e.get("rapidez_previa", rapidez)
-		e["rapidez_previa"] = rapidez
-		if hay_transito and _en_transito(estado, id):
-			continue
-		var v: float = minf(rapidez / maxf(float(e["vel_max"]), 0.1), 1.0)
-		var intensidad: float = v * v
-		if rapidez > previa:
-			intensidad += peso_acel * minf((rapidez - previa) / maxf(float(e["aceleracion"]) * TICK_SEG, 0.01), 1.0)
-		var reserva: float = e.get("reserva", 1.0)
-		if intensidad > umbral:
-			reserva = maxf(reserva - gasto * (intensidad - umbral), 0.0)
-			e["reserva"] = reserva
-		elif reserva < 1.0:
-			reserva = minf(reserva + repone * (1.0 - intensidad * inv_umbral), 1.0)
-			e["reserva"] = reserva
-		if not cobrar:
-			continue
-		var carga: float = intensidad * TICK_SEG
-		carga_tick += carga
-		ticks_j += 1
-		if reserva < umbral_bajo:
-			bajos += 1
-		if carga > 0.0:
-			e["esfuerzo"] = float(e.get("esfuerzo", 0.0)) + carga
-			if por_segundo > 0.0:
-				var equipo: Team = home if bool(e["equipo_local"]) else away
-				equipo.desgastar(e["jugador_id"], e["energia"], carga * por_segundo)
-	if not cobrar:
-		return
-	if not estado.has("esfuerzo_stats"):
-		estado["esfuerzo_stats"] = {"carga": 0.0, "ticks_jugador": 0, "ticks_reserva_baja": 0}
-	var st: Dictionary = estado["esfuerzo_stats"]
-	st["carga"] = float(st["carga"]) + carga_tick
-	st["ticks_jugador"] = int(st["ticks_jugador"]) + ticks_j
-	st["ticks_reserva_baja"] = int(st["ticks_reserva_baja"]) + bajos
-
-
-## El entretiempo. Devuelve una parte de lo que se perdio en el primer
-## tiempo, con tope, y llena la reserva de todos. Nunca pasa de la energia
-## con la que el jugador arranco el partido: el descanso no borra la semana.
-##
-## Va solo antes del segundo tiempo. Entre el 90' y el alargue no hay
-## descanso real, asi que ahi solo se llena la reserva (ver _jugar_periodo).
-static func _recuperar_entretiempo(estado: Dictionary) -> void:
-	var w := pesos_esfuerzo()
-	for equipo in [estado["home"], estado["away"]]:
-		for j in equipo.todos_los_jugadores():
-			var id: int = int(j["id"])
-			var perdida: float = maxf(float(equipo.fatiga_acumulada.get(id, 1.0)) - equipo.resistencia_pct(id), 0.0)
-			var cantidad: float = minf(perdida * float(w["recuperacion_entretiempo"]), float(w["tope_entretiempo"]))
-			if cantidad > 0.0:
-				equipo.recuperar(id, cantidad)
-
-
-static func _llenar_reservas(estado: Dictionary) -> void:
-	for id in estado["jugadores"]:
-		estado["jugadores"][id]["reserva"] = 1.0
-		estado["jugadores"][id]["rapidez_previa"] = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -3758,8 +3283,6 @@ static func _reiniciar_desde_medio(estado: Dictionary, saca_local: bool, mitad: 
 		e["pos"] = p
 		e["vel"] = Vector2.ZERO
 		e["rapidez"] = 0.0
-		# Etapa 3: en el saque del medio todos miran al arco que atacan.
-		e["orientacion"] = orientacion_inicial(bool(e["equipo_local"]))
 		# La marca se resetea a donde quedó parado: si arrastrara la del
 		# balón parado anterior, en el saque del medio los 22 arrancarían
 		# caminando hacia la última falta en vez de esperar la pelota.
@@ -3773,7 +3296,6 @@ static func _reiniciar_desde_medio(estado: Dictionary, saca_local: bool, mitad: 
 	estado["pelota"]["z"] = 0.0
 	estado["pelota"]["ticks_con_pelota"] = 0
 	estado["pelota"].erase("saliendo")
-	estado["pelota"].erase("control")
 	# El saque del medio cancela cualquier balón parado pendiente: si un
 	# tiempo termina con el juego detenido, el siguiente no puede arrancar
 	# esperando una falta que ya no existe.
@@ -4315,7 +3837,6 @@ static func _dar_pelota_al_arquero(estado: Dictionary, arquero_local: bool, saqu
 	estado["pelota"]["vel"] = Vector2.ZERO
 	estado["pelota"]["en_vuelo"] = false
 	estado["pelota"]["ticks_con_pelota"] = 0
-	estado["pelota"].erase("control")
 
 
 ## La pelota se fue de la cancha. Decide qué se cobra según por dónde
@@ -4659,8 +4180,6 @@ static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: i
 	_xp_e(estado, poseedor, "fuerza" if es_pelotazo else "pases")
 	pelota["poseedor_id"] = -1
 	pelota["en_vuelo"] = true
-	# Etapa 3: la llegada que se mida tiene que ser la de ESTE pase.
-	pelota.erase("llegada")
 	# La pelota sale más fuerte cuanto mejor pega el que la toca: un pase
 	# flojo tarda más en llegar y le da tiempo al rival a meterse. En el
 	# arquero el atributo que manda es el suyo (pies/golpe), no `pases`.
@@ -4715,9 +4234,6 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 	# (paso 2), el que se para sin pelota (paso 3) y el que reparte la
 	# defensa leen todos el mismo numero dentro del tick.
 	_planificar_marcador(estado)
-	# Etapa 5: si el tick EMPIEZA con el juego corriendo, se cobra el
-	# esfuerzo. El tick que corta el juego (gol, falta) todavia fue jugado.
-	estado["esfuerzo_en_juego"] = int(estado.get("detenido", 0)) <= 0
 	var eventos_antes: int = estado["eventos"].size()
 	if con_fotogramas:
 		estado["acciones_tick"] = []
@@ -4766,7 +4282,6 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 				# del centro. Por eso no se veia quien pateaba.
 				var factor: float = FACTOR_CORRE_A_LA_PELOTA if id == ejecutor_bp 					else FACTOR_TROTE_PARADO
 				_mover_hacia(e_p, e_p.get("marca", e_p["pos"]), factor)
-			_mirar_la_pelota(estado)
 		# El que sale camina hacia afuera y el que entra trota a su lugar;
 		# el saque espera a que terminen.
 		if not _avanzar_entradas_y_salidas(estado):
@@ -4892,9 +4407,6 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 		# arco y arrancaban a retroceder antes de saber si era gol.
 		var mi_equipo_tiene: bool = e["equipo_local"] == equipo_con_pelota
 		_mover_hacia(e, _objetivo_sin_pelota(estado, e, equipo, mi_equipo_tiene))
-	# Etapa 3: los que quedaron al trote o quietos se perfilan hacia la
-	# pelota, despues de moverse todos y desde la misma posicion de pelota.
-	_mirar_la_pelota(estado)
 
 	# 4. Intento de robo: el rival más cercano al poseedor puede quitársela.
 	# Salvo que este tick ya se haya resuelto una gambeta, que es el mismo
@@ -4926,8 +4438,6 @@ static func _cerrar_tick(estado: Dictionary, con_fotogramas: bool, eventos_antes
 			{"t": 0, "rol": e_m["rol"], "id": int(e_m["jugador_id"]), "local": bool(e_m["equipo_local"])})
 		reg["t"] = int(reg["t"]) + 1
 		estado["ticks_en_cancha"][k_m] = reg
-
-	_contabilizar_esfuerzo(estado, bool(estado.get("esfuerzo_en_juego", false)))
 
 	estado["tick"] += 1
 	# El reloj MOSTRADO avanza 90 minutos a lo largo de los 960 ticks del
@@ -5101,9 +4611,6 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 	if receptor == -1:
 		_dar_pelota_al_arquero(estado, not pasador_local, true)
 		return
-	# Etapa 3: como llego el pase, antes de que _dirigir_pelota_a le baje
-	# la altura y la pelota empiece a frenar. Con esto se mide el control.
-	pelota["llegada"] = {"vel": pelota["vel"], "altura": float(pelota.get("altura_max", 0.0))}
 	# El pase cae donde cae: el que se la queda puede estar a varios
 	# metros del punto de llegada, porque se movio mientras la pelota
 	# viajaba. La pelota rueda hasta el y la posesion cambia al llegar.
@@ -5241,11 +4748,6 @@ static func _resolver_recepcion(estado: Dictionary, receptor: int, hasta: Vector
 	var pelota: Dictionary = estado["pelota"]
 	var pasador_local: bool = pelota.get("pasador_local", true)
 	var e_receptor: Dictionary = estado["jugadores"][receptor]
-	# Etapa 3: la llegada que se capturo antes de que la pelota frenara. Sin
-	# captura (recepcion en el acto) la pelota todavia trae su vuelo.
-	var llegada: Dictionary = pelota.get("llegada",
-			{"vel": pelota["vel"], "altura": float(pelota.get("altura_max", 0.0))})
-	pelota.erase("llegada")
 
 	# Si esto era el primer pase de una pared y llegó a un compañero, el
 	# muro NO se queda con la pelota: la devuelve de primera al que salió
@@ -5302,12 +4804,6 @@ static func _resolver_recepcion(estado: Dictionary, receptor: int, hasta: Vector
 			"rival": _equipo_de(estado, not pasador_local).nombre,
 			"jugador_posicion": e_receptor["rol"], "resultado": "pierde",
 		})
-
-	# Etapa 3: el pase llego y quedo registrado; falta que la controle. Solo
-	# los pases: una pelota suelta o un toque largo recuperado no vuelven a
-	# tirar, asi que la misma pelota no se juega dos veces.
-	if bool(pelota.get("es_pase", false)):
-		_controlar_recepcion(estado, receptor, llegada)
 
 
 ## NOTA: acá vivía _soltar_pelota, que tras un quite ganado mandaba la
@@ -5482,13 +4978,6 @@ static func _sincronizar_cambios(estado: Dictionary, instantaneo: bool = false) 
 				"rol": rol, "base": base, "pos": entra_por, "vel": Vector2.ZERO,
 				"objetivo": base, "vel_max": _vel_max(j),
 				"aceleracion": _aceleracion(j), "rapidez": 0.0,
-				# Etapa 5: el suplente entra con su propia condicion. La
-				# resistencia ya es suya en Team; la reserva arranca llena
-				# porque viene del banco, no del pique del que sale.
-				"energia": int(j["atributos"]["energia"]), "reserva": 1.0,
-				# Etapa 3: el suplente entra mirando al arco que ataca y
-				# gira con su propia agilidad, no con la del que sale.
-				"orientacion": orientacion_inicial(es_local), "giro": _giro_de(j),
 			}
 			if instantaneo:
 				estado["jugadores"][clave]["marca"] = destino
@@ -5596,10 +5085,6 @@ static func _entregar_pelota(estado: Dictionary, clave: int) -> void:
 	pelota["vel"] = Vector2.ZERO
 	pelota["pos"] = estado["jugadores"][clave]["pos"]
 	_limpiar_dirigida(pelota)
-	# Etapa 3: nuevo poseedor, sin control pendiente. Si viene de un pase,
-	# _controlar_recepcion le pone el suyo despues.
-	pelota.erase("control")
-	pelota.erase("llegada")
 	pelota["ticks_con_pelota"] = 0
 	pelota.erase("altura_salida")
 	# Una recepci?n termina el vuelo anterior; su altura no pasa al pr?ximo pase.
@@ -6478,45 +5963,21 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 	# control la toca y sigue, uno malo la pelea y frena el juego. Es lo
 	# que hace que una división 10 se vea trabada y un partido de élite
 	# fluya.
-	var cadencia := cadencia_de_decision(jugador, equipo)
-	# Etapa 3: la primera decision despues de recibir un pase espera la
-	# demora de control de ESA recepcion, en lugar de la cadencia. Despues
-	# reconsidera cada `cadencia` ticks, como antes. Sin control pendiente
-	# la demora es la cadencia y el motor decide en los mismos ticks que
-	# antes de la etapa.
-	var demora := cadencia
-	var control: Dictionary = pelota.get("control", {})
-	if int(control.get("clave", -1)) == int(poseedor["clave"]):
-		demora = int(control["demora"])
+	var ticks_control: int = int(round(_por_atributo(jugador, "control", f["ticks_control_malo"], f["ticks_control_bueno"])))
+	var asociacion: float = float(Estilos.plan(equipo.estilo)["asociacion"])
+	ticks_control = int(round(float(ticks_control) * lerpf(1.0, 0.75, asociacion)))
+	ticks_control = maxi(ticks_control, 1)
 	var ticks: int = int(pelota.get("ticks_con_pelota", 0))
-	if ticks < demora or (ticks - demora) % cadencia != 0:
+	if ticks == 0 or ticks % ticks_control != 0:
 		# El arquero no sale conduciendo mientras piensa: se queda con la
 		# pelota. Quitarle "conducir" de las opciones no alcanzaba, porque
 		# este atajo lo hace avanzar igual en todos los ticks en que no
 		# decide — y así se lo veía salir caminando del área.
 		if poseedor["rol"] != "ARQ":
 			_conducir(estado, poseedor)
-		else:
-			girar_hacia(poseedor, arco_rival(es_local) - poseedor["pos"])
 		return
 
 	var opciones := evaluar_opciones(estado, poseedor, jugador)
-	# Etapa 3: lo que manda la pelota a su espalda espera a que gire. Si no
-	# queda nada para jugar, gira este tick y vuelve a decidir en el
-	# siguiente: el giro avanza cada tick, asi que la espera tiene fin.
-	if not opciones.is_empty():
-		var orientadas := _opciones_orientadas(estado, opciones, poseedor)
-		if orientadas.size() < opciones.size():
-			var st_c: Dictionary = estado.get("control_stats", {})
-			st_c["decisiones_con_giro"] = int(st_c.get("decisiones_con_giro", 0)) + 1
-		if orientadas.is_empty():
-			pelota["control"] = {"clave": int(poseedor["clave"]), "demora": ticks + 1}
-			if poseedor["rol"] != "ARQ":
-				_conducir(estado, poseedor)
-			else:
-				girar_hacia(poseedor, arco_rival(es_local) - poseedor["pos"])
-			return
-		opciones = orientadas
 	if opciones.is_empty():
 		# Sin opciones y sin poder conducir, el arquero se quedaría con la
 		# pelota para siempre: la revienta, que es lo que hace cualquier
@@ -7553,11 +7014,6 @@ static func _conducir(estado: Dictionary, poseedor: Dictionary) -> void:
 	if fase_de_ritmo(estado, bool(poseedor["equipo_local"])) == FASE_CIRCULACION:
 		factor *= float(pesos_ritmo()["pausa_conduccion"])
 	_mover_hacia(poseedor, poseedor["pos"] + dir * 20.0, factor)
-	# Etapa 3: arrancando con la pelota va despacio y _mover_hacia no lo
-	# gira; perfilarse hacia donde va es deliberado. Corriendo ya lo giro
-	# _mover_hacia y girarlo de nuevo le daria el doble de giro.
-	if float(poseedor.get("rapidez", 0.0)) < float(pesos_control()["rapidez_para_girar"]):
-		girar_hacia(poseedor, dir)
 	# El que lleva la pelota sí puede meterse en el área (a diferencia de
 	# los que se posicionan sin ella, ver LIMITE_X), pero no atravesar la
 	# línea de fondo.
@@ -7684,10 +7140,6 @@ static func _push_fotograma(estado: Dictionary, eventos_del_tick: Array = []) ->
 			# cambia de partido a partido y le daria otro pelo cada vez.
 			"jugador_id": e["jugador_id"], "numero": int(e.get("numero", 0)),
 			"recorrido": float(e.get("recorrido", 0.0)),
-			# Etapa 3: hacia donde mira. Opcional: la vista lo usa con el
-			# jugador quieto y los fotogramas viejos no lo traen.
-			"ox": float(e["orientacion"].x) if e.has("orientacion") else orientacion_inicial(bool(e["equipo_local"])).x,
-			"oy": float(e["orientacion"].y) if e.has("orientacion") else 0.0,
 		})
 	# Adonde tiene que mirar la camara. Normalmente null y la vista sigue
 	# la pelota; con alguien saliendo o entrando la accion es el jugador y
@@ -7807,12 +7259,6 @@ static func _jugar_periodo(estado: Dictionary, home: Team, away: Team, saca_loca
 	# de que se acomoden los 22 (ver _cerrar_transitos).
 	_cerrar_transitos(estado)
 	_sincronizar_cambios(estado, true)
-	# Etapa 5: todo periodo arranca con la reserva de sprint llena. Solo el
-	# entretiempo devuelve ademas algo de resistencia; el corte antes del
-	# alargue no es un descanso.
-	if numero == 2:
-		_recuperar_entretiempo(estado)
-	_llenar_reservas(estado)
 	_reiniciar_desde_medio(estado, saca_local, numero)
 	estado["minuto"] = minuto_inicio
 	estado["periodo"] = numero
@@ -8164,10 +7610,5 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator,
 			# Etapa 6: salidas, achiques, rechazos y cobertura en el duelo.
 			# Solo mide.
 			"arqueros": estado.get("arqueros_stats", {}),
-			# Etapa 5: carga de esfuerzo y reserva baja. Solo mide.
-			"esfuerzo": estado.get("esfuerzo_stats", {}),
-			# Etapa 3: recepciones, dificultad, toques largos y demora. Solo
-			# mide.
-			"control": estado.get("control_stats", {}),
 		},
 	}

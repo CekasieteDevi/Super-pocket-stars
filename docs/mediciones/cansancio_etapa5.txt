@@ -1,0 +1,23 @@
+# antes (5291883, multiplicador_desgaste 12, sin esfuerzo)
+## Cansancio por motor - semilla 55100, 20 partidos por division
+div  motor      media desvio cambios   corr  por rol
+D1   espacial    93.1   7.36   0.25   0.51  ARQ 94.3  DFC 99.1  LAT 98.2  MC 90.7  MCO 90.9  EXT 91.7  DC 82.9  goles 1.80
+D1   abstracto   95.8   3.72   0.00   0.00  ARQ 99.3  DFC 96.7  LAT 91.7  MC 92.5  MCO 94.1  EXT 99.5  DC 99.3  goles 2.85
+D5   espacial    89.1  11.12   0.90   0.41  ARQ 90.8  DFC 98.0  LAT 97.1  MC 84.7  MCO 89.2  EXT 87.9  DC 73.8  goles 1.65
+D5   abstracto   93.3   5.60   0.20   0.00  ARQ 98.9  DFC 94.6  LAT 87.7  MC 87.8  MCO 91.5  EXT 99.2  DC 99.0  goles 2.45
+D10  espacial    82.8  14.97   2.50   0.19  ARQ 88.7  DFC 95.0  LAT 94.2  MC 74.0  MCO 76.6  EXT 81.4  DC 63.0  goles 1.75
+D10  abstracto   90.8   7.51   0.65   0.00  ARQ 98.3  DFC 92.4  LAT 82.9  MC 83.7  MCO 87.9  EXT 98.8  DC 98.4  goles 2.90
+todas espacial  media 88.3  desvio 11.15  cambios 1.22  corr 0.37  goles 1.73
+todas abstracto media 93.3  desvio 5.61  cambios 0.28  corr 0.00  goles 2.73
+
+# etapa 5 (multiplicador 5, desgaste_por_segundo 0.15)
+## Cansancio por motor - semilla 55100, 20 partidos por division
+div  motor      media desvio cambios   corr  por rol
+D1   espacial    93.2   3.50   0.00   0.61  ARQ 97.0  DFC 95.8  LAT 95.0  MC 91.7  MCO 91.6  EXT 92.3  DC 88.3  goles 1.70  carga 125.1 s  reserva<umbral 2.8%
+D1   abstracto   95.8   3.72   0.00   0.00  ARQ 99.3  DFC 96.7  LAT 91.7  MC 92.5  MCO 94.1  EXT 99.5  DC 99.3  goles 2.85  carga 0.0 s  reserva<umbral 0.0%
+D5   espacial    88.6   5.56   0.70   0.58  ARQ 95.0  DFC 93.1  LAT 91.7  MC 85.8  MCO 84.1  EXT 86.6  DC 81.2  goles 1.50  carga 131.3 s  reserva<umbral 7.0%
+D5   abstracto   93.3   5.60   0.20   0.00  ARQ 98.9  DFC 94.6  LAT 87.7  MC 87.8  MCO 91.5  EXT 99.2  DC 99.0  goles 2.45  carga 0.0 s  reserva<umbral 0.0%
+D10  espacial    82.5   8.14   2.00   0.55  ARQ 93.4  DFC 88.6  LAT 87.4  MC 77.9  MCO 79.0  EXT 81.0  DC 70.1  goles 1.45  carga 135.5 s  reserva<umbral 7.8%
+D10  abstracto   90.8   7.51   0.65   0.00  ARQ 98.3  DFC 92.4  LAT 82.9  MC 83.7  MCO 87.9  EXT 98.8  DC 98.4  goles 2.90  carga 0.0 s  reserva<umbral 0.0%
+todas espacial  media 88.1  desvio 5.73  cambios 0.90  corr 0.58  goles 1.55
+todas abstracto media 93.3  desvio 5.61  cambios 0.28  corr 0.00  goles 2.73

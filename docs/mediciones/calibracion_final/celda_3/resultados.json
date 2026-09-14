@@ -1,0 +1,3311 @@
+{
+	"abstracto_sha256": "6515e7c3424099378b551b4a1a8d1201ec4a40e0914e049a5f65a611edabf4fc",
+	"actual_sha256": "c236459729b92c016094a2b5a52914a12e4e9e2b29add9de37ca181066101291",
+	"base": "Última medición de 9.6, con sus pesos históricos; resto de dependencias compartidas.",
+	"base_sha256": "988931384f7589d011452cec41dc71eec93820455fd66f78126c945fb9059315",
+	"diferencias_fotogramas": 0,
+	"filas": [
+		{
+			"abstracto": {
+				"goles": 2,
+				"local": 2,
+				"ms": 22.669,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 1,
+				"local": 1,
+				"ms": 511.097,
+				"tiros": 5,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 1,
+				"local": 1,
+				"ms": 515.167,
+				"tiros": 5,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 591.917,
+			"semilla": 97000,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 0,
+				"ms": 26.828,
+				"tiros": null,
+				"visitante": 4
+			},
+			"actual": {
+				"goles": 4,
+				"local": 0,
+				"ms": 439.576,
+				"tiros": 9,
+				"visitante": 4
+			},
+			"base": {
+				"goles": 4,
+				"local": 0,
+				"ms": 469.844,
+				"tiros": 9,
+				"visitante": 4
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 492.84,
+			"semilla": 97000,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 6,
+				"local": 6,
+				"ms": 29.292,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 2,
+				"local": 2,
+				"ms": 443.571,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 2,
+				"local": 2,
+				"ms": 471.777,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 520.121,
+			"semilla": 97001,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 2,
+				"local": 1,
+				"ms": 21.153,
+				"tiros": null,
+				"visitante": 1
+			},
+			"actual": {
+				"goles": 1,
+				"local": 0,
+				"ms": 546.382,
+				"tiros": 7,
+				"visitante": 1
+			},
+			"base": {
+				"goles": 1,
+				"local": 0,
+				"ms": 495.111,
+				"tiros": 7,
+				"visitante": 1
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 535.679,
+			"semilla": 97001,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 4,
+				"ms": 28.441,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 5,
+				"local": 5,
+				"ms": 406.181,
+				"tiros": 11,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 5,
+				"local": 5,
+				"ms": 709.135,
+				"tiros": 11,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 508.647,
+			"semilla": 97002,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 5,
+				"local": 0,
+				"ms": 29.905,
+				"tiros": null,
+				"visitante": 5
+			},
+			"actual": {
+				"goles": 5,
+				"local": 1,
+				"ms": 513.468,
+				"tiros": 13,
+				"visitante": 4
+			},
+			"base": {
+				"goles": 5,
+				"local": 1,
+				"ms": 538.075,
+				"tiros": 13,
+				"visitante": 4
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 579.339,
+			"semilla": 97002,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 7,
+				"local": 7,
+				"ms": 28.497,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 6,
+				"local": 6,
+				"ms": 557.905,
+				"tiros": 7,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 6,
+				"local": 6,
+				"ms": 546.511,
+				"tiros": 7,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 613.557,
+			"semilla": 97003,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 7,
+				"local": 0,
+				"ms": 30.118,
+				"tiros": null,
+				"visitante": 7
+			},
+			"actual": {
+				"goles": 3,
+				"local": 0,
+				"ms": 544.521,
+				"tiros": 6,
+				"visitante": 3
+			},
+			"base": {
+				"goles": 3,
+				"local": 0,
+				"ms": 555.644,
+				"tiros": 6,
+				"visitante": 3
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 584.985,
+			"semilla": 97003,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 7,
+				"local": 7,
+				"ms": 25.272,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 2,
+				"local": 2,
+				"ms": 524.659,
+				"tiros": 10,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 2,
+				"local": 2,
+				"ms": 543.07,
+				"tiros": 10,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 582.145,
+			"semilla": 97004,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 7,
+				"local": 0,
+				"ms": 27.269,
+				"tiros": null,
+				"visitante": 7
+			},
+			"actual": {
+				"goles": 3,
+				"local": 0,
+				"ms": 516.683,
+				"tiros": 12,
+				"visitante": 3
+			},
+			"base": {
+				"goles": 3,
+				"local": 0,
+				"ms": 603.611,
+				"tiros": 12,
+				"visitante": 3
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 556.788,
+			"semilla": 97004,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 5,
+				"local": 5,
+				"ms": 29.599,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 2,
+				"local": 2,
+				"ms": 461.742,
+				"tiros": 7,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 2,
+				"local": 2,
+				"ms": 529.176,
+				"tiros": 7,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 546.267,
+			"semilla": 97005,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 3,
+				"local": 0,
+				"ms": 27.204,
+				"tiros": null,
+				"visitante": 3
+			},
+			"actual": {
+				"goles": 1,
+				"local": 0,
+				"ms": 611.067,
+				"tiros": 4,
+				"visitante": 1
+			},
+			"base": {
+				"goles": 1,
+				"local": 0,
+				"ms": 605.371,
+				"tiros": 4,
+				"visitante": 1
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 662.459,
+			"semilla": 97005,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 5,
+				"local": 5,
+				"ms": 29.522,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 3,
+				"local": 3,
+				"ms": 571.792,
+				"tiros": 8,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 3,
+				"local": 3,
+				"ms": 598.41,
+				"tiros": 8,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 599.154,
+			"semilla": 97006,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 2,
+				"local": 0,
+				"ms": 28.964,
+				"tiros": null,
+				"visitante": 2
+			},
+			"actual": {
+				"goles": 2,
+				"local": 1,
+				"ms": 582.481,
+				"tiros": 8,
+				"visitante": 1
+			},
+			"base": {
+				"goles": 2,
+				"local": 1,
+				"ms": 580.701,
+				"tiros": 8,
+				"visitante": 1
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 623.535,
+			"semilla": 97006,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 2,
+				"local": 2,
+				"ms": 29.021,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 4,
+				"local": 4,
+				"ms": 591.679,
+				"tiros": 7,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 4,
+				"local": 4,
+				"ms": 559.213,
+				"tiros": 7,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 568.173,
+			"semilla": 97007,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 2,
+				"local": 0,
+				"ms": 29.525,
+				"tiros": null,
+				"visitante": 2
+			},
+			"actual": {
+				"goles": 3,
+				"local": 0,
+				"ms": 574.935,
+				"tiros": 8,
+				"visitante": 3
+			},
+			"base": {
+				"goles": 3,
+				"local": 0,
+				"ms": 559.642,
+				"tiros": 8,
+				"visitante": 3
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 625.793,
+			"semilla": 97007,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 4,
+				"ms": 26.719,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 5,
+				"local": 4,
+				"ms": 543.235,
+				"tiros": 7,
+				"visitante": 1
+			},
+			"base": {
+				"goles": 5,
+				"local": 4,
+				"ms": 552.555,
+				"tiros": 7,
+				"visitante": 1
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 603.72,
+			"semilla": 97008,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 3,
+				"local": 0,
+				"ms": 28.738,
+				"tiros": null,
+				"visitante": 3
+			},
+			"actual": {
+				"goles": 1,
+				"local": 0,
+				"ms": 542.125,
+				"tiros": 7,
+				"visitante": 1
+			},
+			"base": {
+				"goles": 1,
+				"local": 0,
+				"ms": 535.463,
+				"tiros": 7,
+				"visitante": 1
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 578.373,
+			"semilla": 97008,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 4,
+				"ms": 27.142,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 4,
+				"local": 4,
+				"ms": 545.175,
+				"tiros": 11,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 4,
+				"local": 4,
+				"ms": 546.742,
+				"tiros": 11,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 595.192,
+			"semilla": 97009,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 3,
+				"local": 0,
+				"ms": 26.572,
+				"tiros": null,
+				"visitante": 3
+			},
+			"actual": {
+				"goles": 3,
+				"local": 0,
+				"ms": 538.285,
+				"tiros": 9,
+				"visitante": 3
+			},
+			"base": {
+				"goles": 3,
+				"local": 0,
+				"ms": 487.17,
+				"tiros": 9,
+				"visitante": 3
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 507.479,
+			"semilla": 97009,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 4,
+				"ms": 25.233,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 6,
+				"local": 6,
+				"ms": 473.396,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 6,
+				"local": 6,
+				"ms": 480.6,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 522.957,
+			"semilla": 97010,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 0,
+				"ms": 26.152,
+				"tiros": null,
+				"visitante": 4
+			},
+			"actual": {
+				"goles": 1,
+				"local": 0,
+				"ms": 587.799,
+				"tiros": 4,
+				"visitante": 1
+			},
+			"base": {
+				"goles": 1,
+				"local": 0,
+				"ms": 579.006,
+				"tiros": 4,
+				"visitante": 1
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 616.395,
+			"semilla": 97010,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 4,
+				"ms": 22.676,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 4,
+				"local": 4,
+				"ms": 455.932,
+				"tiros": 11,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 4,
+				"local": 4,
+				"ms": 426.723,
+				"tiros": 11,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 482.467,
+			"semilla": 97011,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 0,
+				"ms": 23.169,
+				"tiros": null,
+				"visitante": 4
+			},
+			"actual": {
+				"goles": 3,
+				"local": 0,
+				"ms": 421.729,
+				"tiros": 8,
+				"visitante": 3
+			},
+			"base": {
+				"goles": 3,
+				"local": 0,
+				"ms": 465.621,
+				"tiros": 8,
+				"visitante": 3
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 486.2,
+			"semilla": 97011,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 3,
+				"local": 3,
+				"ms": 20.955,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 2,
+				"local": 2,
+				"ms": 457.12,
+				"tiros": 7,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 2,
+				"local": 2,
+				"ms": 453.749,
+				"tiros": 7,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 511.995,
+			"semilla": 97012,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 3,
+				"local": 0,
+				"ms": 28.665,
+				"tiros": null,
+				"visitante": 3
+			},
+			"actual": {
+				"goles": 3,
+				"local": 0,
+				"ms": 488.131,
+				"tiros": 9,
+				"visitante": 3
+			},
+			"base": {
+				"goles": 3,
+				"local": 0,
+				"ms": 484.856,
+				"tiros": 9,
+				"visitante": 3
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 527.035,
+			"semilla": 97012,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 4,
+				"ms": 23.713,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 4,
+				"local": 4,
+				"ms": 454.13,
+				"tiros": 7,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 4,
+				"local": 4,
+				"ms": 475.627,
+				"tiros": 7,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 532.307,
+			"semilla": 97013,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 5,
+				"local": 0,
+				"ms": 28.583,
+				"tiros": null,
+				"visitante": 5
+			},
+			"actual": {
+				"goles": 3,
+				"local": 0,
+				"ms": 481.671,
+				"tiros": 6,
+				"visitante": 3
+			},
+			"base": {
+				"goles": 3,
+				"local": 0,
+				"ms": 489.383,
+				"tiros": 6,
+				"visitante": 3
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 539.645,
+			"semilla": 97013,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 4,
+				"ms": 27.139,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 1,
+				"local": 1,
+				"ms": 500.481,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 1,
+				"local": 1,
+				"ms": 574.465,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 604.793,
+			"semilla": 97014,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 0,
+				"local": 0,
+				"ms": 28.869,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 2,
+				"local": 0,
+				"ms": 580.611,
+				"tiros": 8,
+				"visitante": 2
+			},
+			"base": {
+				"goles": 2,
+				"local": 0,
+				"ms": 588.175,
+				"tiros": 8,
+				"visitante": 2
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 634.031,
+			"semilla": 97014,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 6,
+				"local": 6,
+				"ms": 26.735,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 3,
+				"local": 3,
+				"ms": 570.007,
+				"tiros": 6,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 3,
+				"local": 3,
+				"ms": 552.608,
+				"tiros": 6,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 584.214,
+			"semilla": 97015,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 5,
+				"local": 0,
+				"ms": 28.21,
+				"tiros": null,
+				"visitante": 5
+			},
+			"actual": {
+				"goles": 4,
+				"local": 0,
+				"ms": 550.645,
+				"tiros": 10,
+				"visitante": 4
+			},
+			"base": {
+				"goles": 4,
+				"local": 0,
+				"ms": 540.886,
+				"tiros": 10,
+				"visitante": 4
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 580.545,
+			"semilla": 97015,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 3,
+				"local": 3,
+				"ms": 24.987,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 5,
+				"local": 5,
+				"ms": 564.343,
+				"tiros": 8,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 5,
+				"local": 5,
+				"ms": 550.522,
+				"tiros": 8,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 594.392,
+			"semilla": 97016,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 2,
+				"local": 1,
+				"ms": 27.777,
+				"tiros": null,
+				"visitante": 1
+			},
+			"actual": {
+				"goles": 5,
+				"local": 1,
+				"ms": 530.417,
+				"tiros": 14,
+				"visitante": 4
+			},
+			"base": {
+				"goles": 5,
+				"local": 1,
+				"ms": 531.934,
+				"tiros": 14,
+				"visitante": 4
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 575.533,
+			"semilla": 97016,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 5,
+				"local": 5,
+				"ms": 28.804,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 6,
+				"local": 6,
+				"ms": 536.589,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 6,
+				"local": 6,
+				"ms": 535.552,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 576.086,
+			"semilla": 97017,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 0,
+				"ms": 26.062,
+				"tiros": null,
+				"visitante": 4
+			},
+			"actual": {
+				"goles": 4,
+				"local": 0,
+				"ms": 598.648,
+				"tiros": 7,
+				"visitante": 4
+			},
+			"base": {
+				"goles": 4,
+				"local": 0,
+				"ms": 600.592,
+				"tiros": 7,
+				"visitante": 4
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 641.108,
+			"semilla": 97017,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 4,
+				"ms": 29.737,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 7,
+				"local": 7,
+				"ms": 515.643,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 7,
+				"local": 7,
+				"ms": 519.822,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 589.924,
+			"semilla": 97018,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 6,
+				"local": 0,
+				"ms": 29.341,
+				"tiros": null,
+				"visitante": 6
+			},
+			"actual": {
+				"goles": 4,
+				"local": 1,
+				"ms": 542.133,
+				"tiros": 8,
+				"visitante": 3
+			},
+			"base": {
+				"goles": 4,
+				"local": 1,
+				"ms": 513.278,
+				"tiros": 8,
+				"visitante": 3
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 595.719,
+			"semilla": 97018,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 3,
+				"local": 3,
+				"ms": 28.289,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 2,
+				"local": 2,
+				"ms": 507.648,
+				"tiros": 6,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 2,
+				"local": 2,
+				"ms": 526.203,
+				"tiros": 6,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 567.443,
+			"semilla": 97019,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 3,
+				"local": 1,
+				"ms": 30.239,
+				"tiros": null,
+				"visitante": 2
+			},
+			"actual": {
+				"goles": 2,
+				"local": 0,
+				"ms": 549.13,
+				"tiros": 9,
+				"visitante": 2
+			},
+			"base": {
+				"goles": 2,
+				"local": 0,
+				"ms": 579.09,
+				"tiros": 9,
+				"visitante": 2
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 613.66,
+			"semilla": 97019,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 5,
+				"local": 5,
+				"ms": 27.39,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 4,
+				"local": 4,
+				"ms": 529.672,
+				"tiros": 6,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 4,
+				"local": 4,
+				"ms": 519.401,
+				"tiros": 6,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 569.902,
+			"semilla": 97020,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 3,
+				"local": 0,
+				"ms": 30.486,
+				"tiros": null,
+				"visitante": 3
+			},
+			"actual": {
+				"goles": 4,
+				"local": 0,
+				"ms": 510.125,
+				"tiros": 9,
+				"visitante": 4
+			},
+			"base": {
+				"goles": 4,
+				"local": 0,
+				"ms": 508.657,
+				"tiros": 9,
+				"visitante": 4
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 558.085,
+			"semilla": 97020,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 5,
+				"local": 5,
+				"ms": 30.321,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 8,
+				"local": 8,
+				"ms": 576.579,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 8,
+				"local": 8,
+				"ms": 564.499,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 625.719,
+			"semilla": 97021,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 2,
+				"local": 1,
+				"ms": 31.383,
+				"tiros": null,
+				"visitante": 1
+			},
+			"actual": {
+				"goles": 1,
+				"local": 0,
+				"ms": 603.936,
+				"tiros": 4,
+				"visitante": 1
+			},
+			"base": {
+				"goles": 1,
+				"local": 0,
+				"ms": 626.448,
+				"tiros": 4,
+				"visitante": 1
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 682.482,
+			"semilla": 97021,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 5,
+				"local": 5,
+				"ms": 28.357,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 4,
+				"local": 4,
+				"ms": 526.567,
+				"tiros": 6,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 4,
+				"local": 4,
+				"ms": 532.518,
+				"tiros": 6,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 577.323,
+			"semilla": 97022,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 5,
+				"local": 0,
+				"ms": 28.813,
+				"tiros": null,
+				"visitante": 5
+			},
+			"actual": {
+				"goles": 4,
+				"local": 0,
+				"ms": 548.247,
+				"tiros": 9,
+				"visitante": 4
+			},
+			"base": {
+				"goles": 4,
+				"local": 0,
+				"ms": 554.947,
+				"tiros": 9,
+				"visitante": 4
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 609.272,
+			"semilla": 97022,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 6,
+				"local": 6,
+				"ms": 28.196,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 7,
+				"local": 7,
+				"ms": 493.106,
+				"tiros": 11,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 7,
+				"local": 7,
+				"ms": 501.753,
+				"tiros": 11,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 555.473,
+			"semilla": 97023,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 1,
+				"local": 0,
+				"ms": 25.144,
+				"tiros": null,
+				"visitante": 1
+			},
+			"actual": {
+				"goles": 4,
+				"local": 0,
+				"ms": 557.758,
+				"tiros": 9,
+				"visitante": 4
+			},
+			"base": {
+				"goles": 4,
+				"local": 0,
+				"ms": 555.58,
+				"tiros": 9,
+				"visitante": 4
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 616.067,
+			"semilla": 97023,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 3,
+				"local": 2,
+				"ms": 29.993,
+				"tiros": null,
+				"visitante": 1
+			},
+			"actual": {
+				"goles": 3,
+				"local": 3,
+				"ms": 588.667,
+				"tiros": 5,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 3,
+				"local": 3,
+				"ms": 581.102,
+				"tiros": 5,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 625.972,
+			"semilla": 97024,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 3,
+				"local": 0,
+				"ms": 29.698,
+				"tiros": null,
+				"visitante": 3
+			},
+			"actual": {
+				"goles": 0,
+				"local": 0,
+				"ms": 592.877,
+				"tiros": 7,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 0,
+				"local": 0,
+				"ms": 583.992,
+				"tiros": 7,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 625.066,
+			"semilla": 97024,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 4,
+				"ms": 28.377,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 4,
+				"local": 4,
+				"ms": 541.458,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 4,
+				"local": 4,
+				"ms": 530.72,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 594.704,
+			"semilla": 97025,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 6,
+				"local": 0,
+				"ms": 27.934,
+				"tiros": null,
+				"visitante": 6
+			},
+			"actual": {
+				"goles": 4,
+				"local": 0,
+				"ms": 598.978,
+				"tiros": 8,
+				"visitante": 4
+			},
+			"base": {
+				"goles": 4,
+				"local": 0,
+				"ms": 581.585,
+				"tiros": 8,
+				"visitante": 4
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 634.17,
+			"semilla": 97025,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 6,
+				"local": 6,
+				"ms": 27.317,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 9,
+				"local": 9,
+				"ms": 505.678,
+				"tiros": 11,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 9,
+				"local": 9,
+				"ms": 511.713,
+				"tiros": 11,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 555.607,
+			"semilla": 97026,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 0,
+				"ms": 27.743,
+				"tiros": null,
+				"visitante": 4
+			},
+			"actual": {
+				"goles": 4,
+				"local": 0,
+				"ms": 527.13,
+				"tiros": 8,
+				"visitante": 4
+			},
+			"base": {
+				"goles": 4,
+				"local": 0,
+				"ms": 533.991,
+				"tiros": 8,
+				"visitante": 4
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 577.539,
+			"semilla": 97026,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 3,
+				"local": 3,
+				"ms": 25.599,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 0,
+				"local": 0,
+				"ms": 605.861,
+				"tiros": 5,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 0,
+				"local": 0,
+				"ms": 597.916,
+				"tiros": 5,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 653.257,
+			"semilla": 97027,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 0,
+				"ms": 27.605,
+				"tiros": null,
+				"visitante": 4
+			},
+			"actual": {
+				"goles": 4,
+				"local": 0,
+				"ms": 511.891,
+				"tiros": 8,
+				"visitante": 4
+			},
+			"base": {
+				"goles": 4,
+				"local": 0,
+				"ms": 520.257,
+				"tiros": 8,
+				"visitante": 4
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 580.75,
+			"semilla": 97027,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 1,
+				"local": 1,
+				"ms": 29.073,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 6,
+				"local": 6,
+				"ms": 582.318,
+				"tiros": 8,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 6,
+				"local": 6,
+				"ms": 551.777,
+				"tiros": 8,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 632.168,
+			"semilla": 97028,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 0,
+				"local": 0,
+				"ms": 25.133,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 3,
+				"local": 0,
+				"ms": 586.765,
+				"tiros": 8,
+				"visitante": 3
+			},
+			"base": {
+				"goles": 3,
+				"local": 0,
+				"ms": 597.304,
+				"tiros": 8,
+				"visitante": 3
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 647.426,
+			"semilla": 97028,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 5,
+				"local": 5,
+				"ms": 28.982,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 4,
+				"local": 4,
+				"ms": 499.508,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 4,
+				"local": 4,
+				"ms": 549.787,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 563.119,
+			"semilla": 97029,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 2,
+				"local": 1,
+				"ms": 34.931,
+				"tiros": null,
+				"visitante": 1
+			},
+			"actual": {
+				"goles": 0,
+				"local": 0,
+				"ms": 590.969,
+				"tiros": 4,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 0,
+				"local": 0,
+				"ms": 611.866,
+				"tiros": 4,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 681.889,
+			"semilla": 97029,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 6,
+				"local": 4,
+				"ms": 29.673,
+				"tiros": null,
+				"visitante": 2
+			},
+			"actual": {
+				"goles": 4,
+				"local": 3,
+				"ms": 548.522,
+				"tiros": 10,
+				"visitante": 1
+			},
+			"base": {
+				"goles": 4,
+				"local": 3,
+				"ms": 608.746,
+				"tiros": 10,
+				"visitante": 1
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 632.329,
+			"semilla": 97030,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 1,
+				"local": 1,
+				"ms": 29.011,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 1,
+				"local": 1,
+				"ms": 581.503,
+				"tiros": 10,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 1,
+				"local": 1,
+				"ms": 585.578,
+				"tiros": 10,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 618.31,
+			"semilla": 97030,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 6,
+				"local": 6,
+				"ms": 29.417,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 5,
+				"local": 5,
+				"ms": 578.991,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 5,
+				"local": 5,
+				"ms": 554.336,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 630.197,
+			"semilla": 97031,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 6,
+				"local": 0,
+				"ms": 30.899,
+				"tiros": null,
+				"visitante": 6
+			},
+			"actual": {
+				"goles": 6,
+				"local": 0,
+				"ms": 525.763,
+				"tiros": 9,
+				"visitante": 6
+			},
+			"base": {
+				"goles": 6,
+				"local": 0,
+				"ms": 545.766,
+				"tiros": 9,
+				"visitante": 6
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 587.977,
+			"semilla": 97031,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 6,
+				"local": 6,
+				"ms": 26.989,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 7,
+				"local": 7,
+				"ms": 536.834,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 7,
+				"local": 7,
+				"ms": 501.051,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 569.528,
+			"semilla": 97032,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 5,
+				"local": 0,
+				"ms": 29.564,
+				"tiros": null,
+				"visitante": 5
+			},
+			"actual": {
+				"goles": 6,
+				"local": 0,
+				"ms": 559.06,
+				"tiros": 8,
+				"visitante": 6
+			},
+			"base": {
+				"goles": 6,
+				"local": 0,
+				"ms": 566.996,
+				"tiros": 8,
+				"visitante": 6
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 624.192,
+			"semilla": 97032,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 5,
+				"local": 5,
+				"ms": 28.302,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 3,
+				"local": 3,
+				"ms": 577.069,
+				"tiros": 8,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 3,
+				"local": 3,
+				"ms": 585.846,
+				"tiros": 8,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 634.475,
+			"semilla": 97033,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 0,
+				"ms": 27.068,
+				"tiros": null,
+				"visitante": 4
+			},
+			"actual": {
+				"goles": 2,
+				"local": 0,
+				"ms": 602.161,
+				"tiros": 4,
+				"visitante": 2
+			},
+			"base": {
+				"goles": 2,
+				"local": 0,
+				"ms": 568.394,
+				"tiros": 4,
+				"visitante": 2
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 633.024,
+			"semilla": 97033,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 4,
+				"ms": 25.054,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 3,
+				"local": 3,
+				"ms": 521.406,
+				"tiros": 7,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 3,
+				"local": 3,
+				"ms": 513.632,
+				"tiros": 7,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 547.426,
+			"semilla": 97034,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 3,
+				"local": 1,
+				"ms": 26.907,
+				"tiros": null,
+				"visitante": 2
+			},
+			"actual": {
+				"goles": 0,
+				"local": 0,
+				"ms": 541.063,
+				"tiros": 10,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 0,
+				"local": 0,
+				"ms": 613.907,
+				"tiros": 10,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 628.726,
+			"semilla": 97034,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 5,
+				"local": 5,
+				"ms": 27.711,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 6,
+				"local": 6,
+				"ms": 407.966,
+				"tiros": 14,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 6,
+				"local": 6,
+				"ms": 418.96,
+				"tiros": 14,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 492.548,
+			"semilla": 97035,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 3,
+				"local": 0,
+				"ms": 21.669,
+				"tiros": null,
+				"visitante": 3
+			},
+			"actual": {
+				"goles": 5,
+				"local": 0,
+				"ms": 473.231,
+				"tiros": 10,
+				"visitante": 5
+			},
+			"base": {
+				"goles": 5,
+				"local": 0,
+				"ms": 483.27,
+				"tiros": 10,
+				"visitante": 5
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 548.122,
+			"semilla": 97035,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 2,
+				"local": 2,
+				"ms": 30.428,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 0,
+				"local": 0,
+				"ms": 561.688,
+				"tiros": 7,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 0,
+				"local": 0,
+				"ms": 528.232,
+				"tiros": 7,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 572.385,
+			"semilla": 97036,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 5,
+				"local": 0,
+				"ms": 27.048,
+				"tiros": null,
+				"visitante": 5
+			},
+			"actual": {
+				"goles": 0,
+				"local": 0,
+				"ms": 577.901,
+				"tiros": 2,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 0,
+				"local": 0,
+				"ms": 584.425,
+				"tiros": 2,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 600.987,
+			"semilla": 97036,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 2,
+				"local": 2,
+				"ms": 24.775,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 7,
+				"local": 6,
+				"ms": 507.602,
+				"tiros": 9,
+				"visitante": 1
+			},
+			"base": {
+				"goles": 7,
+				"local": 6,
+				"ms": 510.662,
+				"tiros": 9,
+				"visitante": 1
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 559.483,
+			"semilla": 97037,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 0,
+				"ms": 25.584,
+				"tiros": null,
+				"visitante": 4
+			},
+			"actual": {
+				"goles": 5,
+				"local": 0,
+				"ms": 546.071,
+				"tiros": 8,
+				"visitante": 5
+			},
+			"base": {
+				"goles": 5,
+				"local": 0,
+				"ms": 560.231,
+				"tiros": 8,
+				"visitante": 5
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 600.897,
+			"semilla": 97037,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 6,
+				"local": 5,
+				"ms": 28.664,
+				"tiros": null,
+				"visitante": 1
+			},
+			"actual": {
+				"goles": 3,
+				"local": 2,
+				"ms": 616.684,
+				"tiros": 9,
+				"visitante": 1
+			},
+			"base": {
+				"goles": 3,
+				"local": 2,
+				"ms": 602.671,
+				"tiros": 9,
+				"visitante": 1
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 654.669,
+			"semilla": 97038,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 5,
+				"local": 2,
+				"ms": 28.969,
+				"tiros": null,
+				"visitante": 3
+			},
+			"actual": {
+				"goles": 4,
+				"local": 0,
+				"ms": 514.081,
+				"tiros": 9,
+				"visitante": 4
+			},
+			"base": {
+				"goles": 4,
+				"local": 0,
+				"ms": 500.231,
+				"tiros": 9,
+				"visitante": 4
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 571.593,
+			"semilla": 97038,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 6,
+				"local": 6,
+				"ms": 29.076,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 4,
+				"local": 4,
+				"ms": 565.307,
+				"tiros": 6,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 4,
+				"local": 4,
+				"ms": 566.182,
+				"tiros": 6,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 613.432,
+			"semilla": 97039,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 6,
+				"local": 0,
+				"ms": 28.931,
+				"tiros": null,
+				"visitante": 6
+			},
+			"actual": {
+				"goles": 3,
+				"local": 0,
+				"ms": 589.881,
+				"tiros": 8,
+				"visitante": 3
+			},
+			"base": {
+				"goles": 3,
+				"local": 0,
+				"ms": 599.313,
+				"tiros": 8,
+				"visitante": 3
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 650.904,
+			"semilla": 97039,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 3,
+				"local": 3,
+				"ms": 29.33,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 2,
+				"local": 2,
+				"ms": 586.35,
+				"tiros": 7,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 2,
+				"local": 2,
+				"ms": 593.615,
+				"tiros": 7,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 643.621,
+			"semilla": 97040,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 0,
+				"ms": 26.661,
+				"tiros": null,
+				"visitante": 4
+			},
+			"actual": {
+				"goles": 1,
+				"local": 0,
+				"ms": 584.014,
+				"tiros": 5,
+				"visitante": 1
+			},
+			"base": {
+				"goles": 1,
+				"local": 0,
+				"ms": 561.926,
+				"tiros": 5,
+				"visitante": 1
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 631.429,
+			"semilla": 97040,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 6,
+				"local": 6,
+				"ms": 28.3,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 5,
+				"local": 5,
+				"ms": 518.308,
+				"tiros": 6,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 5,
+				"local": 5,
+				"ms": 513.861,
+				"tiros": 6,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 572.678,
+			"semilla": 97041,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 0,
+				"ms": 27.448,
+				"tiros": null,
+				"visitante": 4
+			},
+			"actual": {
+				"goles": 3,
+				"local": 0,
+				"ms": 549.686,
+				"tiros": 7,
+				"visitante": 3
+			},
+			"base": {
+				"goles": 3,
+				"local": 0,
+				"ms": 543.405,
+				"tiros": 7,
+				"visitante": 3
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 601.398,
+			"semilla": 97041,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 5,
+				"local": 5,
+				"ms": 29.571,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 4,
+				"local": 4,
+				"ms": 535.437,
+				"tiros": 5,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 4,
+				"local": 4,
+				"ms": 495.401,
+				"tiros": 5,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 552.429,
+			"semilla": 97042,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 3,
+				"local": 0,
+				"ms": 27.966,
+				"tiros": null,
+				"visitante": 3
+			},
+			"actual": {
+				"goles": 5,
+				"local": 0,
+				"ms": 571.095,
+				"tiros": 7,
+				"visitante": 5
+			},
+			"base": {
+				"goles": 5,
+				"local": 0,
+				"ms": 561.34,
+				"tiros": 7,
+				"visitante": 5
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 595.824,
+			"semilla": 97042,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 3,
+				"local": 3,
+				"ms": 26.985,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 1,
+				"local": 1,
+				"ms": 541.36,
+				"tiros": 7,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 1,
+				"local": 1,
+				"ms": 547.031,
+				"tiros": 7,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 607.678,
+			"semilla": 97043,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 3,
+				"local": 0,
+				"ms": 27.614,
+				"tiros": null,
+				"visitante": 3
+			},
+			"actual": {
+				"goles": 1,
+				"local": 1,
+				"ms": 562.123,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 1,
+				"local": 1,
+				"ms": 559.298,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 601.901,
+			"semilla": 97043,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 4,
+				"ms": 25.822,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 3,
+				"local": 3,
+				"ms": 595.467,
+				"tiros": 8,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 3,
+				"local": 3,
+				"ms": 588.871,
+				"tiros": 8,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 645.151,
+			"semilla": 97044,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 6,
+				"local": 0,
+				"ms": 25.922,
+				"tiros": null,
+				"visitante": 6
+			},
+			"actual": {
+				"goles": 2,
+				"local": 1,
+				"ms": 560.769,
+				"tiros": 5,
+				"visitante": 1
+			},
+			"base": {
+				"goles": 2,
+				"local": 1,
+				"ms": 575.884,
+				"tiros": 5,
+				"visitante": 1
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 630.879,
+			"semilla": 97044,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 5,
+				"local": 5,
+				"ms": 29.588,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 2,
+				"local": 2,
+				"ms": 578.298,
+				"tiros": 5,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 2,
+				"local": 2,
+				"ms": 536.646,
+				"tiros": 5,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 568.122,
+			"semilla": 97045,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 6,
+				"local": 0,
+				"ms": 26.857,
+				"tiros": null,
+				"visitante": 6
+			},
+			"actual": {
+				"goles": 3,
+				"local": 1,
+				"ms": 482.121,
+				"tiros": 8,
+				"visitante": 2
+			},
+			"base": {
+				"goles": 3,
+				"local": 1,
+				"ms": 447.619,
+				"tiros": 8,
+				"visitante": 2
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 511.213,
+			"semilla": 97045,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 6,
+				"local": 6,
+				"ms": 26.822,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 2,
+				"local": 2,
+				"ms": 550.17,
+				"tiros": 3,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 2,
+				"local": 2,
+				"ms": 574.926,
+				"tiros": 3,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 637.24,
+			"semilla": 97046,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 5,
+				"local": 4,
+				"ms": 24.996,
+				"tiros": null,
+				"visitante": 1
+			},
+			"actual": {
+				"goles": 0,
+				"local": 0,
+				"ms": 580.242,
+				"tiros": 3,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 0,
+				"local": 0,
+				"ms": 571.43,
+				"tiros": 3,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 611.312,
+			"semilla": 97046,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 5,
+				"local": 5,
+				"ms": 26.724,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 2,
+				"local": 2,
+				"ms": 523.513,
+				"tiros": 6,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 2,
+				"local": 2,
+				"ms": 601.486,
+				"tiros": 6,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 562.805,
+			"semilla": 97047,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 0,
+				"ms": 26.048,
+				"tiros": null,
+				"visitante": 4
+			},
+			"actual": {
+				"goles": 5,
+				"local": 0,
+				"ms": 550.43,
+				"tiros": 9,
+				"visitante": 5
+			},
+			"base": {
+				"goles": 5,
+				"local": 0,
+				"ms": 579.863,
+				"tiros": 9,
+				"visitante": 5
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 596.597,
+			"semilla": 97047,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 2,
+				"local": 2,
+				"ms": 26.649,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 3,
+				"local": 3,
+				"ms": 579.139,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 3,
+				"local": 3,
+				"ms": 577.484,
+				"tiros": 9,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 615.394,
+			"semilla": 97048,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 0,
+				"ms": 24.096,
+				"tiros": null,
+				"visitante": 4
+			},
+			"actual": {
+				"goles": 2,
+				"local": 0,
+				"ms": 523.83,
+				"tiros": 8,
+				"visitante": 2
+			},
+			"base": {
+				"goles": 2,
+				"local": 0,
+				"ms": 507.787,
+				"tiros": 8,
+				"visitante": 2
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Tiki taka",
+				"Juego directo"
+			],
+			"ms_con_fotogramas": 636.042,
+			"semilla": 97048,
+			"vuelta": true
+		},
+		{
+			"abstracto": {
+				"goles": 4,
+				"local": 4,
+				"ms": 22.831,
+				"tiros": null,
+				"visitante": 0
+			},
+			"actual": {
+				"goles": 4,
+				"local": 4,
+				"ms": 479.24,
+				"tiros": 13,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 4,
+				"local": 4,
+				"ms": 466.507,
+				"tiros": 13,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 536.216,
+			"semilla": 97049,
+			"vuelta": false
+		},
+		{
+			"abstracto": {
+				"goles": 1,
+				"local": 0,
+				"ms": 24.217,
+				"tiros": null,
+				"visitante": 1
+			},
+			"actual": {
+				"goles": 0,
+				"local": 0,
+				"ms": 576.601,
+				"tiros": 8,
+				"visitante": 0
+			},
+			"base": {
+				"goles": 0,
+				"local": 0,
+				"ms": 563.459,
+				"tiros": 8,
+				"visitante": 0
+			},
+			"coincide": true,
+			"division_a": 5,
+			"division_b": 8,
+			"estilos": [
+				"Presion alta",
+				"Contragolpe"
+			],
+			"ms_con_fotogramas": 577.86,
+			"semilla": 97049,
+			"vuelta": true
+		}
+	],
+	"parejas_por_celda": 50,
+	"semilla": 97000
+}

@@ -699,6 +699,230 @@ paralelo`.
   cambio ajeno sin commitear que ya anotaban las etapas 0 y 1. No lo
   toque.
 
+## Etapa 3: resultados (2026-09-13)
+
+Estado: terminada. Archivos tocados:
+
+- `core/motor_espacial.gd`: seccion nueva "Control y orientacion corporal
+  (etapa 3)" despues de `_mover_hacia`; el giro en `_mover_hacia` y en
+  `_conducir`; `_mirar_la_pelota` en el paso 3 de `_tick` y en el juego
+  detenido; la llegada capturada en `_avanzar_pelota`; el control en
+  `_resolver_recepcion`; la demora y el filtro de orientacion en
+  `_decidir_y_ejecutar`; `orientacion` y `giro` en el dict de titulares y
+  suplentes; `ox`/`oy` en el fotograma; `stats.control` en `simular`.
+- `match/vista_partido.gd`: el jugador quieto se dibuja mirando hacia su
+  orientacion.
+- `data/utility_pesos.json`: seccion nueva `control`.
+- `tests/test_control_orientacion.gd` (nuevo): treinta comprobaciones.
+- `tests/_diag_control.gd` (nuevo): barrido de los pesos. Mide, no falla.
+- `tests/_diag_realismo.gd`: metricas nuevas de control.
+- `docs/mediciones/realismo_etapa3.csv` y `realismo_etapa3_antes.csv`.
+
+### Que hace ahora el motor
+
+**Orientacion** (puntos 1 y 2). Cada jugador tiene `orientacion`, un vector
+normalizado, y `giro`, en radianes por segundo segun `agilidad` leida
+absoluta (4,0 con 0 y 9,0 con 100). Arranca mirando al arco que ataca, y
+lo mismo en el saque del medio y al entrar un suplente.
+
+- Por encima de 2 m/s el cuerpo sigue a la carrera (`_mover_hacia`).
+- Por debajo mira la pelota (`_mirar_la_pelota`, despues de mover a todos).
+- El poseedor que arranca despacio se perfila hacia donde conduce.
+- El arquero que espera con la pelota gira hacia el arco rival.
+- Un vector nulo no cambia la orientacion.
+
+**Dificultad de la recepcion** (punto 3). `_avanzar_pelota` guarda la
+velocidad y la altura del pase en `pelota.llegada` ANTES de que
+`_dirigir_pelota_a` le baje la altura y la pelota frene. La dificultad
+suma cuatro terminos:
+
+| termino | 0 | 1 | peso |
+| --- | --- | --- | --- |
+| velocidad | `vel_pase_min` | `vel_pase_max` | 0,3 |
+| altura del vuelo | raso | `altura_centro` | 0,2 |
+| presion | `presion_normalizada` 0 | 1 | 0,3 |
+| angulo | pelota de frente al cuerpo | por la espalda | 0,2 |
+
+**Una sola demora** (punto 4). La espera vieja era `ticks_control`: el
+poseedor decidia cada 2 a 9 ticks segun `control` y estilo. Ahora:
+
+- `cadencia_de_decision` conserva esa cuenta tal cual.
+- `demora_de_control` la multiplica por 0,8 con dificultad 0 y por 1,8 con
+  dificultad 1. Con factor 1 da exactamente la cadencia (198 de 198 casos
+  en el test).
+- La primera decision despues de un pase espera la demora; despues
+  reconsidera cada `cadencia` ticks, como antes.
+- Una posesion que no empieza con un pase (quite, rebote, arquero, saque)
+  no tiene control pendiente y decide en los mismos ticks que antes.
+
+**Calidad del toque** (puntos 5 y 6). `_controlar_recepcion` corre UNA vez
+por pase recibido por un jugador de campo, despues del offside y del
+evento del pase. Tira una vez el RNG del partido. La chance de toque largo
+es `malo_max` × dificultad × (1 − 0,8 × `control`), con `control` mezclado
+mitad relativo y mitad absoluto.
+
+- El toque largo sale en la direccion en que venia la pelota, desviado
+  hasta 0,9 rad, a 2-6 m segun la dificultad, y rueda dos ticks.
+- La pelota queda suelta. Nadie la recibe por decreto: el receptor sale a
+  buscarla (`destino_id`) y el rival tambien.
+- La recupera la intercepcion y el contacto de siempre. La pelota suelta
+  no vuelve a tirar control, asi que no hay tirada por tick de contacto.
+- El arquero y el muro de la pared quedan afuera: el primero la toma con
+  su rama, el segundo la devuelve de primera.
+
+**Pase de primera y giro** (punto 7). `_opciones_orientadas` saca las
+opciones que mandan la pelota a mas de 2,5 rad (143°) del cuerpo. Vuelven
+cuando el cuerpo gira. Conducir, gambeta y despeje no tienen destino y
+quedan siempre. Si no queda ninguna opcion, el poseedor gira ese tick y
+vuelve a decidir en el siguiente: el giro avanza cada tick, asi que la
+espera termina. Un control facil de un buen tecnico da demora 1 o 2, que
+es el pase de primera cuando la direccion es compatible. El remate de
+primera y el cabezazo siguen por `_resolver_centro`.
+
+**Vista** (punto 8). El fotograma trae `ox`/`oy`. Quieto, el sprite mira
+hacia la orientacion; corriendo manda el avance, como siempre. Un
+fotograma viejo sin el campo se dibuja igual que antes.
+
+### Calibracion
+
+`tests/_diag_control.gd`, 200 partidos por configuracion (D1 parejo, D1
+favorito, D5 y D10 parejos, dos cruces de estilos), mismas semillas. La
+"neutra" apaga toque largo, demora y cono.
+
+| config | goles | remates | pases | toques largos | demora / cadencia | decisiones con giro |
+| --- | --- | --- | --- | --- | --- | --- |
+| neutra | 2,17 | 7,00 | 40,1 | 0 | 1,00 | 0% |
+| demora 0,6/1,6, cono 2,0, malo 0,3 | 2,38 | 7,42 | 38,3 | 1,78 | 0,80 | 88% |
+| demora 0,8/1,8, sin cono | 2,21 | 6,97 | 39,7 | 1,82 | 0,98 | 0% |
+| demora 0,8/1,8, cono 2,5, malo 0,3 | 2,39 | 7,24 | 38,3 | 1,83 | 0,98 | 78% |
+| **demora 0,8/1,8, cono 2,5, malo 0,5** | 2,35 | 7,17 | 37,8 | 2,92 | 0,98 | 77% |
+
+- La dificultad media de una recepcion es 0,24: velocidad 0,47, presion
+  0,09, angulo 0,18. Con demora 0,6/1,6 la primera decision salia al 80%
+  de la espera vieja; con 0,8/1,8 sale al 98%. El ritmo medio no cambia.
+- El cono es lo que mueve goles y pases. Con 2,0 rad le sacaba opciones al
+  88% de las decisiones; con 2,5 al 78%, casi siempre el pase al arquero o
+  al central que quedo a la espalda.
+- `malo_max` 0,5 lleva los toques largos al 7% de las recepciones sin mover
+  los goles.
+
+### Medicion, contra la copia "antes"
+
+La copia del proyecto se hizo antes de tocar nada (`etapa3_antes`), con los
+cambios de la etapa 5 sin commitear incluidos. Misma configuracion que las
+etapas anteriores: semilla 77100, 12 partidos por celda, 14 celdas, 168
+partidos.
+
+| metrica | antes | etapa 3 | cambio |
+| --- | --- | --- | --- |
+| goles | 2,607 | 2,911 | +11,6% |
+| tiros | 7,82 | 7,91 | +1,1% |
+| posesion_pct | 53,2 | 53,1 | -0,1 pts |
+| controlada_pct | 56,9 | 56,9 | 0,0 pts |
+| pelota_parada_pct | 21,9 | 22,3 | +0,4 pts |
+| pases | 40,26 | 37,81 | -6,1% |
+| perdidas | 18,88 | 19,88 | +5,3% |
+| duracion_posesion_seg | 3,56 | 3,40 | -4,6% |
+| recuperaciones_altas | 7,38 | 7,80 | +5,7% |
+| faltas | 3,08 | 3,01 | -2,1% |
+| resistencia_final_pct | 88,9 | 88,7 | -0,2 pts |
+| recepciones de pase | - | 40,8 | |
+| toques largos | - | 2,48 | |
+| dificultad media | - | 0,237 | |
+| demora / cadencia | - | 0,979 | |
+
+Por division: `controlada_pct` 54,4 → 55,0 en D1, 57,1 → 56,4 en D5 y
+60,4 → 60,2 en D10. Toques largos por partido: 2,25 en D1, 2,33 en D5 y
+2,96 en D10.
+
+Ninguna metrica cruza el 15%. Lo que se mueve cuenta una historia: el pase
+a la espalda sale menos (-6,1% de pases), la pelota se pierde un 5,3% mas
+por los toques largos y la posesion dura un 4,6% menos. Los remates no se
+mueven y los goles suben 11,6%, o sea que sube la conversion (33% → 37%).
+El barrido lo atribuye al cono, no al toque ni a la demora. La diferencia
+entre dos corridas con distinto RNG tiene un error estandar de unos 0,18
+goles, asi que el +0,30 son 1,7 errores: la direccion coincide con el
+barrido, el tamaño no es preciso.
+
+Paridad: la validacion final (`mediciones/calibracion_final.md`) medía el
+espacial entre 18% y 50% por debajo del abstracto en goles. Esta etapa
+acerca los dos motores; no los cruza.
+
+Invariante 2 se mantiene: los 168 partidos dan el mismo resultado con y sin
+fotogramas, y el test compara ademas `stats.control`.
+
+### Costo
+
+Tres pares alternados en la misma sesion, 6 partidos por celda:
+
+| par | antes | etapa 3 |
+| --- | --- | --- |
+| 1 | 408,2 ms | 428,9 ms |
+| 2 | 406,6 ms | 433,4 ms |
+| 3 | 409,9 ms | 424,8 ms |
+
+**+5,1% sin fotogramas y +7,5% con fotogramas** (443,3 contra 476,4 ms).
+Debajo del 20%. El gasto es el giro de los 22 por tick y, con fotogramas,
+`ox`/`oy`. Despues de medir se saco una llamada doble a `orientacion_de` en
+el fotograma; no cambia resultados y no se volvio a medir.
+
+### Verificaciones
+
+`tests/test_control_orientacion.gd`, `FALLOS=0`:
+
+- Media vuelta: 3 ticks con agilidad 5 y 2 con 95; ningun tick gira mas que
+  `giro` × `TICK_SEG`. El vector nulo no cambia nada ni da NaN.
+- Quieto mira la pelota; corriendo sigue su carrera. Para los dos lados.
+- Misma escena, pase de 18 m/s: dificultad 0,16 de frente y 0,36 de
+  espaldas; demora 7 y 9 ticks; toque largo 0,074 y 0,166. Para los dos
+  lados.
+- Dificultad 0,00 con el pase mas suave, 0,30 con el mas fuerte, 0,20 con
+  el suave que viene alto, 0,14 con un rival a 1,5 m. Dificultad cero no
+  hace toque largo.
+- Con factor 1 la demora da la cadencia en 198 de 198 casos; con los pesos
+  reales, cadencia 6 da demora 5 facil y 10 dificil.
+- Sin control pendiente decide en el tick de la cadencia; con demora 5, en
+  el tick 5.
+- 600 recepciones de espaldas: control 15 hace 109 toques largos y demora
+  9,0 ticks; control 95, 39 y 2,0. El control alto tambien falla.
+- Un control limpio consume exactamente una tirada del RNG. Un pase que
+  rueda 8 ticks hasta el receptor cuenta una recepcion.
+- 60 toques largos: ninguno queda en los pies de nadie, el mas largo va a
+  5,1 m. La pelota suelta la recupera el equipo del receptor 43 veces y el
+  rival 17.
+- De espaldas al arco no juega al 9 pero si al central y conduce; gira en
+  los ticks estimados y el pase al 9 vuelve. Para los dos lados.
+- El arquero de espaldas con todos adelante no juega en el primer tick,
+  gira y la juega en el segundo.
+- Saque del medio: 22 de 22 miran al arco que atacan. El suplente entra
+  orientado y con su propia agilidad.
+- La vista dibuja igual un fotograma viejo; quieto mira hacia `ox`/`oy`.
+- 6 partidos: mismo resultado y mismo `stats.control` con y sin fotogramas;
+  orientaciones normalizadas; 217 recepciones y 11 toques largos; la
+  posesion mas larga de un jugador dura 29 ticks.
+
+Regresion completa: `ARCHIVOS_CON_FALLAS=0 de 123 en 413s con 8 en
+paralelo`. No se hizo commit.
+
+### Pendiente de esta etapa
+
+- **`controlada_pct` no se movio (56,9% contra 56,9%).** La etapa 0 lo
+  marcaba como el numero de esta etapa. El control agrega toques largos,
+  que restan tiempo con dueño; ningun mecanismo de la etapa suma. En D1 subio
+  0,6 puntos y en D10 bajo 0,2, que es la direccion buscada pero dentro del
+  ruido. La pelota libre sigue siendo casi la mitad del juego abierto.
+- **Goles +11,6%, por la conversion.** El barrido lo atribuye al cono de
+  giro. No se midio que remates cambiaron; es de la etapa 9.
+- **Revision visual: no hecha.** Control largo, recepcion de espaldas y el
+  sprite quieto orientado son justamente lo que hay que mirar animado.
+- **Pie preferido sigue midiendo contra el eje de la cancha.** Su
+  comentario dice que el motor no modela hacia donde mira el cuerpo; ahora
+  lo modela. Pasarlo a la orientacion es un cambio de balance aparte.
+- **La presion pesa poco en la dificultad** (0,09 de media): la mayoria de
+  los pases llegan sin nadie encima. `peso_presion` no se barrio.
+- `giro_lento`, `giro_rapido`, `rapidez_para_girar` y `toque_desvio` no se
+  barrieron: se eligieron por fisica y se midio que no rompen nada.
+
 ## Etapa 4: resultados (2026-09-11)
 
 Estado: terminada. Archivos tocados:
@@ -1352,6 +1576,210 @@ paralelo`.
   cambio ajeno sin commitear que ya anotaban las etapas 0, 1, 2, 4 y 7.
   No lo toque.
 
+## Etapa 5: resultados (2026-09-13)
+
+Estado: terminada. Archivos tocados:
+
+- `core/motor_espacial.gd`: seccion nueva "Cansancio por esfuerzo (etapa
+  5)" despues de `_mover_hacia`; el techo de sprint en `_mover_hacia`; la
+  marca `esfuerzo_en_juego` al principio de `_tick`; el cobro en
+  `_cerrar_tick`; `energia` y `reserva` en el dict espacial de titulares y
+  suplentes; el entretiempo y la reserva llena en `_jugar_periodo`;
+  `stats.esfuerzo` en `simular`.
+- `core/team.gd`: `recuperar`, la contracara de `desgastar`.
+- `data/utility_pesos.json`: seccion nueva `esfuerzo`;
+  `fisica.multiplicador_desgaste` baja de 12 a 5.
+- `tests/test_cansancio_esfuerzo.gd` (nuevo): diecinueve comprobaciones.
+- `tests/_diag_cansancio.gd` y `tests/_diag_esfuerzo_barrido.gd` (nuevos):
+  mediciones.
+- `docs/mediciones/realismo_etapa5.csv`, `realismo_etapa5_antes.csv` y
+  `cansancio_etapa5.txt` (nuevos).
+
+### Inventario del desgaste previo (punto 1)
+
+- `_duelo_simple`: los dos jugadores, `multiplicador_desgaste` 12. Lo
+  usan el robo, la gambeta y los duelos fisicos.
+- Duelo del remate en `_resolver_tiro`: rematador y arquero, mismo
+  multiplicador.
+- Arco desprotegido en `_resolver_tiro`: solo el rematador.
+- Bloqueo (`_gana_bloqueo`) e intercepcion (`_gana_intercepcion`): leen la
+  resistencia y no cobran.
+- Tiempo y carrera: nada. El motor espacial no cobraba el partido jugado.
+
+No habia cobro duplicado. El problema era el contrario: un solo
+responsable (el duelo) pagaba todo el partido.
+
+### Que hace ahora el motor
+
+Dos costos, cada uno con un solo responsable:
+
+- **Correr**: `_contabilizar_esfuerzo`, una vez por tick y por jugador, al
+  cerrar el tick. La intensidad es `(rapidez / vel_max)^2` mas `0,5` por
+  el arranque (lo que acelero sobre lo mas que puede acelerar en un tick).
+  La carga es intensidad por `TICK_SEG` y se cobra con `Team.desgastar`.
+- **El contacto**: los mismos duelos de antes, con `multiplicador_desgaste`
+  5. El duelo no lee la rapidez: el test comprueba que cobra lo mismo
+  quieto que lanzado.
+
+Dos depositos distintos:
+
+- **Reserva de sprint** (0 a 1, en el dict espacial). Por encima de
+  intensidad 0,55 se gasta (`consumo_sprint` 0,06 por segundo a pleno);
+  por debajo se recupera (`recuperacion_reserva` 0,07 por segundo
+  parado). Corre en segundos reales de `TICK_SEG`.
+- **Resistencia** de `Team`, la de siempre. Caminar no la devuelve.
+
+Con la reserva debajo de 0,5, la velocidad punta cae con curva suave hasta
+el 85% (`piso_sprint`). Es un techo, no un multiplicador: el trote a la
+marca no se entera. La resistencia sigue pesando en la ejecucion solo por
+`Duel.atributo_efectivo`.
+
+**Lo que no cobra** (punto 6): el tick que empieza con el juego detenido
+(falta, gol, festejo, cambio), el que entra o sale de la cancha, y la tanda
+de penales. En esas pausas la reserva si se recupera.
+
+**Entretiempo**: devuelve el 25% de lo perdido en el primer tiempo, con
+tope de 0,03, y nunca pasa de la energia con la que el jugador arranco el
+partido. El corte antes del alargue no devuelve resistencia. Todo periodo
+arranca con la reserva llena.
+
+**Suplentes**: entran con su propia resistencia de `Team`, su `energia` y
+la reserva llena.
+
+### Calibracion
+
+- `consumo_sprint`: barrido con `_diag_esfuerzo_barrido.gd`, 12 partidos.
+  Con 0,10 el 33% de los ticks de jugador quedaban con la reserva baja,
+  o sea medio equipo trotando todo el partido. Con 0,06 queda en 6%.
+- `desgaste_por_segundo` y `multiplicador_desgaste`: elegidos para que la
+  resistencia final media del espacial no se mueva. El duelo pasa de 12 a
+  5 y correr cubre el resto. Con 0,16 la media daba 87,7%; con 0,15,
+  88,1%, contra 88,3% antes.
+
+### Medicion: cansancio por motor
+
+`tests/_diag_cansancio.gd`, 20 partidos por division (1, 5 y 10), semilla
+55100, contra la copia "antes" del mismo commit (`5291883`). Media de los
+22 titulares con arqueros; desvio entre los de campo.
+
+| metrica | antes | etapa 5 | abstracto |
+| --- | --- | --- | --- |
+| resistencia final media | 88,3% | 88,1% | 93,3% |
+| desvio entre jugadores de campo | 11,15 | 5,73 | 5,61 |
+| correlacion metros / energia perdida | 0,37 | 0,58 | - |
+| cambios por cansancio por partido | 1,22 | 0,90 | 0,28 |
+
+Por rol, en decima: DC 63,0% → 70,1%; MC 74,0% → 77,9%; DFC 95,0% →
+88,6%; LAT 94,2% → 87,4%; ARQ 88,7% → 93,4%.
+
+Lo que cuenta: el nueve ya no termina fundido por recibir todas las
+patadas, y el central que corre la linea ya no termina fresco. La
+dispersion se parte a la mitad y queda igual a la del abstracto. El
+arquero sube porque ya no paga cada remate como un partido entero.
+
+### Medicion: realismo, contra la copia "antes"
+
+`tests/_diag_realismo.gd`, misma configuracion que las etapas anteriores:
+semilla 77100, 12 partidos por celda, 14 celdas, 168 partidos.
+
+| metrica | antes | etapa 5 | cambio |
+| --- | --- | --- | --- |
+| goles | 2,613 | 2,607 | -0,2% |
+| tiros | 7,86 | 7,82 | -0,5% |
+| posesion_pct | 54,2 | 53,2 | -1,0 pts |
+| controlada_pct | 57,0 | 56,9 | -0,1 pts |
+| pases | 40,05 | 40,26 | +0,5% |
+| perdidas | 19,02 | 18,88 | -0,8% |
+| recuperaciones_altas | 7,45 | 7,38 | -1,0% |
+| faltas | 2,77 | 3,08 | +11,2% |
+| amarillas | 1,30 | 1,52 | +17,4% |
+| resistencia_final_pct | 88,6 | 88,9 | +0,3 pts |
+| recorrido_total_m | 16656 | 16785 | +0,8% |
+
+Goles y remates no se mueven. Diferencia pareada de goles: -0,006 por
+partido con error estandar 0,125.
+
+**Faltas y amarillas**: se investigo si era efecto de la etapa. Con otra
+semilla (55900, 90 partidos, `_diag_esfuerzo_barrido.gd`) el modelo viejo
+da 2,90 faltas y el nuevo 2,94 (+1,4%), con los mismos robos intentados
+(24,7 contra 25,2). La diferencia de la tabla es ruido de muestra: 465
+contra 517 faltas es 1,7 desvios, y las amarillas cuelgan de las faltas.
+
+Invariante 2 se mantiene: los 168 partidos dan el mismo resultado con y sin
+fotogramas, y el test compara ademas la resistencia final de los 22.
+
+### Costo
+
+Tres pares alternados en la misma sesion, 6 partidos por celda:
+
+| par | antes | etapa 5 |
+| --- | --- | --- |
+| 1 | 361,1 ms | 399,0 ms |
+| 2 | 367,5 ms | 402,0 ms |
+| 3 | 367,2 ms | 398,5 ms |
+
+**+9,5% sin fotogramas y +8,7% con fotogramas** (399,3 contra 434,1 ms).
+Debajo del 20% que el plan marca como señal.
+
+La primera version costaba +17,4%. El cobro llamaba dos funciones por
+jugador, leia los pesos y escribia los contadores en cada vuelta: 34,7 ms
+por cada mil ticks. Con la cuenta en linea, los pesos leidos una vez y los
+contadores escritos al final, 22,9 ms. El resultado de los 84 partidos es
+identico entre las dos versiones. Lo que queda es sobre todo
+`Team.desgastar`, 22 llamadas por tick.
+
+### Verificaciones
+
+`tests/test_cansancio_esfuerzo.gd`, `FALLOS=0`:
+
+- 20 s sprintando dejan la reserva en 0,45 y cuestan 0,0175 de resistencia;
+  caminando, 1,00 y 0,0017. Para los dos lados.
+- Caminar 40 s sube la reserva de 0,22 a 1,00 y la resistencia no vuelve.
+- Juego detenido, festejo y tanda no cobran resistencia ni carga; la
+  reserva si se mueve.
+- El que sale hacia el lateral no paga la caminata.
+- La capacidad sube sin escalones de 0,85 a 1; mayor salto 0,0045 por
+  centesimo de reserva.
+- Con la reserva vacia la punta cae de 6,85 a 5,82 m/s; el trote queda en
+  3,08 m/s con reserva llena o vacia.
+- 4000 ticks alternando piques y descanso: reserva en [0,1] y ninguna
+  resistencia de los 22 fuera de [0,55; 1].
+- El entretiempo devuelve 0,030 con tope, una fraccion de lo poco perdido
+  y nada al que no perdio; cada periodo llena la reserva.
+- El suplente entra con reserva llena, su `energia` y su resistencia, no
+  la del que sale.
+- El duelo cobra 0,0309 quieto y 0,0309 lanzado.
+- Cobrar el esfuerzo y el entretiempo no mueven el RNG.
+- 8 partidos de decima: mismo marcador y misma energia de los 22 con y sin
+  fotogramas; 27 cambios por cansancio con config descanso; correlacion
+  0,40 entre metros y energia perdida; reserva baja en el 7,4% de los
+  ticks de jugador.
+
+Regresion completa: `ARCHIVOS_CON_FALLAS=0 de 122 en 342s con 8 en
+paralelo`. No se hizo commit.
+
+### Pendiente de esta etapa
+
+- **Revision visual: no hecha.** El pique que se apaga con la reserva baja
+  es justamente lo que hay que mirar animado.
+- **La paridad de cansancio con `MatchEngine` ya estaba rota y sigue
+  igual.** El espacial termina en 88,1% y el abstracto en 93,3%, y el
+  espacial saca 0,90 cambios por cansancio contra 0,28. La brecha es
+  previa a la etapa (88,3% contra 93,3%). Como `fatiga_acumulada` arranca
+  del final del partido, el club del jugador llega a cada fecha mas
+  cansado que la IA. Cerrarla es una decision de balance: se hace bajando
+  `desgaste_por_segundo`, no tocando el abstracto.
+- **La reserva no entra en las estimaciones de llegada.**
+  `_tiempo_de_llegada` (defensa) sigue usando la resistencia y
+  `_alcance_en` (arquero) la punta completa. Un presionante con la reserva
+  vacia se estima un poco mas rapido de lo que corre.
+- **El entretiempo se aplica despues de la ventana de cambios del 45'**:
+  el que sale en el entretiempo se evalua con la resistencia del final del
+  primer tiempo, sin la recuperacion.
+- `consumo_sprint`, `piso_sprint` y la recuperacion del entretiempo no se
+  barrieron a fondo: se eligieron para mover poco y se midio que mueven
+  poco.
+
 ## Etapa 6: resultados (2026-09-13)
 
 Estado: terminada. Archivos tocados:
@@ -1704,6 +2132,20 @@ Los seis puntos tienen implementación. La etapa completa sigue abierta
 hasta calibración final, comparación con el abstracto y revisión visual.
 Esta medición descriptiva no sustituye la matriz con equipos desparejos e ida/vuelta.
 
+### Validación cuantitativa de la etapa 9 (2026-09-13)
+
+Matriz terminada: 600 enfrentamientos, 100 por combinación de división y
+desigualdad, con ida/vuelta; 2400 simulaciones. Cero diferencias del resultado
+completo y RNG entre ejecución con y sin fotogramas. Goles y remates sin
+variación frente a la base 9.6; coste entre −1,07% y +0,13% por celda.
+
+El espacial produce entre 18,2% y 50% menos goles que el abstracto. La brecha
+ya está en la base y los intervalos emparejados excluyen cero. No se ajustaron
+pesos. Falta identificar la causa mediante un embudo comparable de ocasiones,
+remates y destinos; la revisión visual sigue pendiente. La medición no cierra
+la aceptación general ni representa una comparación contra la etapa 0.
+Ver [informe, método y evidencia](mediciones/calibracion_final.md).
+
 ## Orden de integración por tick
 
 Adaptarlo a las interrupciones y orden real del motor; preservar primero las rutas de pelota parada y cambios:
@@ -1742,9 +2184,9 @@ Revisar cómo reportan fallos las pruebas: no asumir que exit code cero implica 
 - [x] 0. Línea de base y diagnóstico reproducible. Ver "Etapa 0: resultados".
 - [x] 1. Juego sin pelota. Ver "Etapa 1: resultados".
 - [x] 2. Defensa coordinada. Ver "Etapa 2: resultados".
-- [ ] 3. Control y orientación corporal. Salteada: la etapa 4 se hizo antes.
+- [x] 3. Control y orientación corporal. Ver "Etapa 3: resultados".
 - [x] 4. Ritmo variable. Ver "Etapa 4: resultados".
-- [ ] 5. Cansancio por esfuerzo.
+- [x] 5. Cansancio por esfuerzo. Ver "Etapa 5: resultados".
 - [x] 6. Decisiones del arquero. Ver "Etapa 6: resultados".
 - [x] 7. Contexto del marcador. Ver "Etapa 7: resultados".
 - [x] 8. Identidad individual. Ver "Etapa 8: resultados".

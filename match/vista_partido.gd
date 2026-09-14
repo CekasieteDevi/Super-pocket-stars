@@ -384,7 +384,7 @@ func _mostrar(idx: int, t: float) -> void:
 			"tipo": "jugador", "z": 0.0, "pos": p,
 			"color": _color_de(j),
 			"color_short": color_short_local if j["equipo_local"] else color_short_visitante,
-			"direccion": _direccion(avance),
+			"direccion": _direccion_de_jugador(j, avance),
 			"pose": pose,
 			"pelo": AtlasJugadores.estilo_de(jugador_id),
 			"color_pelo": SpritesPartido.tono_pelo_de(jugador_id),
@@ -573,6 +573,15 @@ static func _direccion(avance: Vector2) -> int:
 	if avance.length_squared() < 0.0004:
 		return SpritesPartido.ABAJO
 	return SpritesPartido.direccion_desde(ProyeccionPartido.direccion_pantalla(avance))
+
+
+## Hacia donde dibujar al jugador. Corriendo manda el avance, como siempre.
+## Quieto, la orientacion del motor (etapa 3): antes todos los quietos
+## miraban a camara. Un fotograma viejo sin `ox`/`oy` sigue igual que antes.
+static func _direccion_de_jugador(j: Dictionary, avance: Vector2) -> int:
+	if avance.length() / MotorEspacial.TICK_SEG >= VELOCIDAD_CORRIENDO or not j.has("ox"):
+		return _direccion(avance)
+	return _direccion(Vector2(float(j["ox"]), float(j.get("oy", 0.0))))
 
 
 static func _pose(avance: Vector2, idx: int, recorrido: float = -1.0, id: int = 0) -> String:

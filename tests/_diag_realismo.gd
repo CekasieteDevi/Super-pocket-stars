@@ -181,7 +181,22 @@ func _metricas_de_stats(corrida: Dictionary) -> Dictionary:
 	var pos_total := maxf(float(pos["home"]) + float(pos["away"]), 1.0)
 	var robos: Dictionary = st["robos"]
 	var pd: Dictionary = st["pase_detalle"]
+	# Etapa 3: los fotogramas viejos y el motor antes de la etapa no traen
+	# `control`, asi que todo se lee con get() y da cero.
+	var ctl: Dictionary = st.get("control", {})
+	var recepciones := float(ctl.get("recepciones", 0))
+	var limpias := recepciones - float(ctl.get("toques_largos", 0))
 	return {
+		# Recepciones de pase controladas por un jugador de campo, y cuantas
+		# terminaron en toque largo. Por partido.
+		"recepciones": recepciones,
+		"toques_largos": float(ctl.get("toques_largos", 0)),
+		# Dificultad media por recepcion (0 a 1).
+		"dificultad_media": float(ctl.get("dificultad", 0.0)) / maxf(recepciones, 1.0),
+		# Demora de control media sobre la cadencia vieja, en los controles
+		# limpios. 1 = la primera decision sale cuando salia antes.
+		"demora_sobre_cadencia": float(ctl.get("demora", 0)) / maxf(float(ctl.get("cadencia", 0)), 1.0),
+		"demora_media_ticks": float(ctl.get("demora", 0)) / maxf(limpias, 1.0),
 		"goles": float(res["goles_local"]) + float(res["goles_visitante"]),
 		"goles_local": float(res["goles_local"]),
 		"goles_visitante": float(res["goles_visitante"]),

@@ -1375,6 +1375,18 @@ func desgastar(jugador_id: int, energia_attr: int, multiplicador: float = 1.0) -
 	resistencia[jugador_id] = max(0.55, resistencia_pct(jugador_id) - decay)
 
 
+## La contracara de `desgastar`, para el entretiempo del MotorEspacial
+## (etapa 5). Nunca pasa de la energia con la que el jugador arranco el
+## partido: el descanso de quince minutos no devuelve la fatiga de la
+## semana.
+func recuperar(jugador_id: int, cantidad: float) -> void:
+	var techo: float = fatiga_acumulada.get(jugador_id, 1.0)
+	var actual: float = resistencia_pct(jugador_id)
+	if actual >= techo:
+		return
+	resistencia[jugador_id] = minf(techo, actual + maxf(cantidad, 0.0))
+
+
 func esta_lesionado(jugador_id: int) -> bool:
 	return lesiones.has(jugador_id)
 

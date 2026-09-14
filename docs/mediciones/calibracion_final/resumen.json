@@ -1,0 +1,264 @@
+{
+  "partidos": 600,
+  "simulaciones": 2400,
+  "metodo_ic": "Bootstrap de 5000 remuestras de parejas ida/vuelta, percentiles 2.5 y 97.5; semilla 97000.",
+  "versiones": [
+    "c236459729b92c016094a2b5a52914a12e4e9e2b29add9de37ca181066101291",
+    "988931384f7589d011452cec41dc71eec93820455fd66f78126c945fb9059315",
+    "6515e7c3424099378b551b4a1a8d1201ec4a40e0914e049a5f65a611edabf4fc"
+  ],
+  "celdas": [
+    {
+      "division_a": 1,
+      "division_b": 1,
+      "partidos": 100,
+      "parejas": 50,
+      "actual": {
+        "goles": 1.58,
+        "ms": 569.2438,
+        "tiros": 7.4,
+        "goles_a": 0.76,
+        "goles_b": 0.8200000000000001
+      },
+      "base": {
+        "goles": 1.58,
+        "ms": 568.4791,
+        "tiros": 7.4,
+        "goles_a": 0.76,
+        "goles_b": 0.8200000000000001
+      },
+      "abstracto": {
+        "goles": 2.89,
+        "ms": 27.273130000000002,
+        "goles_a": 1.29,
+        "goles_b": 1.6
+      },
+      "ms_con_fotogramas": 611.67593,
+      "ic95_diferencia_base": [
+        0,
+        0
+      ],
+      "ic95_diferencia_abstracto": [
+        -1.77,
+        -0.88
+      ],
+      "goles_vs_base_pct": 0.0,
+      "goles_vs_abstracto_pct": -45.32871972318338,
+      "tiros_vs_base_pct": 0.0,
+      "coste_vs_base_pct": 0.13451681864820042,
+      "senales": [
+        "goles_vs_abstracto_pct"
+      ]
+    },
+    {
+      "division_a": 1,
+      "division_b": 4,
+      "partidos": 100,
+      "parejas": 50,
+      "actual": {
+        "goles": 3.62,
+        "ms": 535.97555,
+        "tiros": 8.39,
+        "goles_a": 3.42,
+        "goles_b": 0.20000000000000018
+      },
+      "base": {
+        "goles": 3.62,
+        "ms": 539.02688,
+        "tiros": 8.39,
+        "goles_a": 3.42,
+        "goles_b": 0.20000000000000018
+      },
+      "abstracto": {
+        "goles": 4.52,
+        "ms": 26.8415,
+        "goles_a": 4.42,
+        "goles_b": 0.09999999999999964
+      },
+      "ms_con_fotogramas": 590.56603,
+      "ic95_diferencia_base": [
+        0,
+        0
+      ],
+      "ic95_diferencia_abstracto": [
+        -1.34,
+        -0.47
+      ],
+      "goles_vs_base_pct": 0.0,
+      "goles_vs_abstracto_pct": -19.911504424778748,
+      "tiros_vs_base_pct": 0.0,
+      "coste_vs_base_pct": -0.5660812314220776,
+      "senales": [
+        "goles_vs_abstracto_pct"
+      ]
+    },
+    {
+      "division_a": 5,
+      "division_b": 5,
+      "partidos": 100,
+      "parejas": 50,
+      "actual": {
+        "goles": 1.76,
+        "ms": 561.77167,
+        "tiros": 6.96,
+        "goles_a": 0.77,
+        "goles_b": 0.99
+      },
+      "base": {
+        "goles": 1.76,
+        "ms": 567.49158,
+        "tiros": 6.96,
+        "goles_a": 0.77,
+        "goles_b": 0.99
+      },
+      "abstracto": {
+        "goles": 2.61,
+        "ms": 26.70571,
+        "goles_a": 1.22,
+        "goles_b": 1.39
+      },
+      "ms_con_fotogramas": 612.01086,
+      "ic95_diferencia_base": [
+        0,
+        0
+      ],
+      "ic95_diferencia_abstracto": [
+        -1.24,
+        -0.47
+      ],
+      "goles_vs_base_pct": 0.0,
+      "goles_vs_abstracto_pct": -32.56704980842912,
+      "tiros_vs_base_pct": 0.0,
+      "coste_vs_base_pct": -1.0079286110289076,
+      "senales": [
+        "goles_vs_abstracto_pct"
+      ]
+    },
+    {
+      "division_a": 5,
+      "division_b": 8,
+      "partidos": 100,
+      "parejas": 50,
+      "actual": {
+        "goles": 3.32,
+        "ms": 539.71829,
+        "tiros": 7.86,
+        "goles_a": 3.2,
+        "goles_b": 0.11999999999999966
+      },
+      "base": {
+        "goles": 3.32,
+        "ms": 545.53161,
+        "tiros": 7.86,
+        "goles_a": 3.2,
+        "goles_b": 0.11999999999999966
+      },
+      "abstracto": {
+        "goles": 4.06,
+        "ms": 27.504459999999998,
+        "goles_a": 3.89,
+        "goles_b": 0.16999999999999948
+      },
+      "ms_con_fotogramas": 589.25595,
+      "ic95_diferencia_base": [
+        0,
+        0
+      ],
+      "ic95_diferencia_abstracto": [
+        -1.21,
+        -0.24
+      ],
+      "goles_vs_base_pct": 0.0,
+      "goles_vs_abstracto_pct": -18.226600985221676,
+      "tiros_vs_base_pct": 0.0,
+      "coste_vs_base_pct": -1.0656247765367777,
+      "senales": [
+        "goles_vs_abstracto_pct"
+      ]
+    },
+    {
+      "division_a": 10,
+      "division_b": 10,
+      "partidos": 100,
+      "parejas": 50,
+      "actual": {
+        "goles": 1.51,
+        "ms": 559.89189,
+        "tiros": 6.02,
+        "goles_a": 0.62,
+        "goles_b": 0.89
+      },
+      "base": {
+        "goles": 1.51,
+        "ms": 562.44604,
+        "tiros": 6.02,
+        "goles_a": 0.62,
+        "goles_b": 0.89
+      },
+      "abstracto": {
+        "goles": 3.02,
+        "ms": 26.68882,
+        "goles_a": 1.43,
+        "goles_b": 1.59
+      },
+      "ms_con_fotogramas": 607.88757,
+      "ic95_diferencia_base": [
+        0,
+        0
+      ],
+      "ic95_diferencia_abstracto": [
+        -1.85,
+        -1.16
+      ],
+      "goles_vs_base_pct": 0.0,
+      "goles_vs_abstracto_pct": -50.0,
+      "tiros_vs_base_pct": 0.0,
+      "coste_vs_base_pct": -0.4541146738272106,
+      "senales": [
+        "goles_vs_abstracto_pct"
+      ]
+    },
+    {
+      "division_a": 10,
+      "division_b": 7,
+      "partidos": 100,
+      "parejas": 50,
+      "actual": {
+        "goles": 3.32,
+        "ms": 546.578,
+        "tiros": 7.5,
+        "goles_a": 0.09,
+        "goles_b": 3.23
+      },
+      "base": {
+        "goles": 3.32,
+        "ms": 546.92025,
+        "tiros": 7.5,
+        "goles_a": 0.09,
+        "goles_b": 3.23
+      },
+      "abstracto": {
+        "goles": 4.2,
+        "ms": 26.73759,
+        "goles_a": 0.12,
+        "goles_b": 4.08
+      },
+      "ms_con_fotogramas": 593.93847,
+      "ic95_diferencia_base": [
+        0,
+        0
+      ],
+      "ic95_diferencia_abstracto": [
+        -1.24,
+        -0.5
+      ],
+      "goles_vs_base_pct": 0.0,
+      "goles_vs_abstracto_pct": -20.952380952380956,
+      "tiros_vs_base_pct": 0.0,
+      "coste_vs_base_pct": -0.0625776792868904,
+      "senales": [
+        "goles_vs_abstracto_pct"
+      ]
+    }
+  ]
+}
