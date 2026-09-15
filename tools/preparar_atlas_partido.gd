@@ -113,7 +113,7 @@ static func _generar_variante(indice: int, estilo: int) -> Image:
 
 static func _generar_accion(indice: int, estilo: int) -> Image:
 	var accion: int = (indice - 64) / 4
-	var ruta := "res://assets/partido/acciones_%s.png" % ["volea", "control_pie", "taco"][accion]
+	var ruta := "res://assets/partido/acciones_%s.png" % ["volea_v2", "control_pie", "taco"][accion] if accion < 3 else "res://assets/partido/acciones_palomita.png"
 	var fila := estilo
 	if estilo == 10:
 		ruta = "res://assets/partido/acciones_trenzas.png"

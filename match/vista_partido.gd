@@ -77,6 +77,41 @@ var _parpadeo_restante := 0.0
 ## marcador ya actualizado.
 var _idx_congelado := -1
 
+## Cuántos van al banderín, goleador incluido. Con dos parece un abrazo
+## casual; con cuatro ya se lee como el grupo que sale a festejar.
+const FESTEJANTES := 4
+
+## Tope de la carrera al banderín, en segundos de partido. Un gol desde
+## afuera del área deja al goleador a 40 m del córner: a velocidad punta
+## son casi seis segundos y el festejo tapaba el partido. Pasado el tope,
+## corren más rápido en vez de tardar más. Con 3,2 s un goleador a 36 m
+## corría a 11 m/s y se veía acelerado; con 4 s queda en 9 m/s.
+const SEG_CARRERA_MAX := 4.0
+
+## Cuánto saltan juntos en el banderín después de llegar.
+const SEG_ABRAZO := 1.4
+
+## Cuánto adentro de la cancha queda el goleador respecto del banderín.
+## Parado justo en la esquina, el sprite tapa el banderín que se dibuja ahí.
+## Con 1,6 m los de atrás del grupo quedaban pisando la línea de fondo en
+## el laboratorio "festejo_banderin".
+const RETIRO_BANDERIN_M := 2.5
+
+## Lugares de los compañeros alrededor del goleador, en metros hacia el
+## centro de la cancha (x hacia el medio, y hacia adentro del lateral).
+## Con 1,4 m de separación los cuatro sprites se fundían en una mancha.
+## La y va más separada porque la proyección la aplasta a la mitad.
+const LUGARES_FESTEJO := [Vector2(2.2, 0.2), Vector2(0.6, 2.8), Vector2(2.8, 3.0), Vector2(4.4, 1.0)]
+
+## clave -> {"desde": Vector2, "hasta": Vector2, "vel": float}. Vacío si el
+## gol no arma festejo en el banderín (no se encontró al goleador).
+var _festejo_grupo: Dictionary = {}
+## Duración del festejo en segundos de PARTIDO. _festejo_total es la misma
+## duración ya dividida por la velocidad elegida.
+var _festejo_duracion := 0.0
+## Clave del que metió el gol: es a quien sigue la cámara en el festejo.
+var _festejo_goleador := -1
+
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -135,6 +170,7 @@ func iniciar(lista: Array, c_local: Color, c_visitante: Color,
 	_festejo_restante = 0.0
 	_parpadeo_restante = 0.0
 	_idx_congelado = -1
+	_festejo_grupo.clear()
 	_tarjetas.clear()
 	_idx_narrado = 0
 	hud.relato = ""
@@ -162,6 +198,10 @@ func _preparar_sprites() -> void:
 					cuadros[id][indice] = true
 					cuadros[id][indice + 16] = true
 				for indice in [24, 25, 40]:
+					cuadros[id][indice] = true
+				# Cualquiera puede terminar festejando en el banderín, no
+				# solo el que tiene la acción de festejo en la grabación.
+				for indice in AtlasJugadores.CLIPS["festeja"]:
 					cuadros[id][indice] = true
 		for a in f.get("acciones", []):
 			var id := int(a["clave"])
@@ -202,6 +242,7 @@ func saltar_al_final() -> void:
 	_festejo_restante = 0.0
 	_parpadeo_restante = 0.0
 	_idx_congelado = -1
+	_festejo_grupo.clear()
 	_tarjetas.clear()
 	_mostrar(fotogramas.size() - 1, 0.0)
 	_finalizar()
@@ -248,6 +289,14 @@ func _avanzar_efectos(delta: float) -> void:
 	if _festejo_restante > 0.0:
 		_festejo_restante = maxf(_festejo_restante - delta, 0.0)
 		if _festejo_restante == 0.0:
+			# El festejo termina en el banderín y la grabación sigue con
+			# todos donde estaban al entrar la pelota. Se corta directo al
+			# saque del medio, como en la tele: sin el salto, el goleador
+			# reaparecía en el área festejando otra vez solo.
+			if not _festejo_grupo.is_empty():
+				_festejo_grupo.clear()
+				_parpadeo_restante = SEG_PARPADEO
+				posicion = float(_fin_de_la_pausa(_idx_congelado))
 			_idx_congelado = -1
 	hud.festejo = _festejo_restante / _festejo_total if _festejo_restante > 0.0 else 0.0
 	vista.euforia = hud.festejo
@@ -294,9 +343,123 @@ func _narrar(idx: int) -> void:
 	_relato_restante = _relato_total
 	hud.relato_alfa = 1.0
 	if _es_gol(mejor):
-		_festejo_total = maxf(SEG_FESTEJO / maxf(velocidad, 1.0), 0.15)
+		_festejo_goleador = int(_con_clave(mejor).get("clave", -1))
+		_festejo_grupo = armar_festejo(fotogramas[idx], _festejo_goleador)
+		_festejo_duracion = SEG_FESTEJO
+		for clave in _festejo_grupo:
+			var g: Dictionary = _festejo_grupo[clave]
+			var carrera: float = (g["hasta"] - g["desde"]).length() / float(g["vel"])
+			_festejo_duracion = maxf(_festejo_duracion, carrera + SEG_ABRAZO)
+		_festejo_total = maxf(_festejo_duracion / maxf(velocidad, 1.0), 0.15)
 		_festejo_restante = _festejo_total
 		_idx_congelado = idx
+
+
+## El goleador y sus compañeros más cercanos corren al banderín del córner
+## más próximo, del lado del arco donde entró la pelota. Es solo vista: el
+## motor no se entera, así que no mueve el balance ni la paridad.
+static func armar_festejo(fotograma: Dictionary, clave_goleador: int) -> Dictionary:
+	var goleador = null
+	for j in fotograma["jugadores"]:
+		if int(j["id"]) == clave_goleador:
+			goleador = j
+			break
+	if goleador == null:
+		return {}
+	var pos_goleador := Vector2(goleador["x"], goleador["y"])
+	var pelota := Vector2(fotograma["pelota"]["x"], fotograma["pelota"]["y"])
+	# La pelota está en la red: su X dice qué arco. La Y del goleador dice
+	# qué banderín le queda más cerca.
+	var sx := 1.0 if pelota.x >= 0.0 else -1.0
+	var sy := 1.0 if pos_goleador.y >= 0.0 else -1.0
+	var hacia_adentro := Vector2(-sx, -sy)
+	var destino := Vector2(sx * ProyeccionPartido.MEDIO_LARGO, sy * ProyeccionPartido.MEDIO_ANCHO) \
+		+ hacia_adentro * RETIRO_BANDERIN_M
+
+	var companeros: Array = []
+	for j in fotograma["jugadores"]:
+		if int(j["id"]) == clave_goleador or j["equipo_local"] != goleador["equipo_local"]:
+			continue
+		if str(j.get("rol", "")) == "ARQ":
+			continue
+		companeros.append(j)
+	companeros.sort_custom(func(a, b):
+		return pos_goleador.distance_squared_to(Vector2(a["x"], a["y"])) \
+			< pos_goleador.distance_squared_to(Vector2(b["x"], b["y"])))
+
+	# La misma velocidad punta que el motor le da al más rápido: más lento
+	# se veía un trote, no la corrida del gol.
+	var vel_punta := float(MotorEspacial.pesos()["fisica"]["vel_max"])
+	var grupo := {}
+	var lugares: Array = [Vector2.ZERO]
+	for lugar in LUGARES_FESTEJO:
+		lugares.append(Vector2(lugar.x * hacia_adentro.x, lugar.y * hacia_adentro.y))
+	var elegidos: Array = [goleador]
+	elegidos.append_array(companeros.slice(0, FESTEJANTES - 1))
+	for i in elegidos.size():
+		var j: Dictionary = elegidos[i]
+		var desde := Vector2(j["x"], j["y"])
+		var hasta: Vector2 = destino + lugares[i]
+		var distancia := desde.distance_to(hasta)
+		grupo[int(j["id"])] = {
+			"desde": desde, "hasta": hasta,
+			"vel": maxf(vel_punta, distancia / SEG_CARRERA_MAX),
+		}
+	return grupo
+
+
+## Pisa la entidad de un jugador del grupo con su momento del festejo:
+## corriendo al banderín o saltando ya en el banderín.
+func _aplicar_festejo(ent: Dictionary, clave: int) -> void:
+	var g: Dictionary = _festejo_grupo[clave]
+	var tiempo: float = (1.0 - _festejo_restante / _festejo_total) * _festejo_duracion
+	var desde: Vector2 = g["desde"]
+	var hasta: Vector2 = g["hasta"]
+	var distancia := desde.distance_to(hasta)
+	var recorrido: float = minf(tiempo * float(g["vel"]), distancia)
+	var jugador_id := int(clave)
+	if recorrido < distancia:
+		ent["pos"] = desde.move_toward(hasta, recorrido)
+		ent["pose"] = SpritesPartido.CORRE_A
+		ent["accion"] = ""
+		ent["z"] = 0.0
+		ent["direccion"] = _direccion(hasta - desde)
+		# Misma cadencia de piernas que en juego (ver _mostrar).
+		ent["fase_animacion"] = recorrido * 2.5 + posmod(jugador_id, 8)
+		return
+	# Desfasados por clave: los cuatro saltando al mismo tiempo parecían
+	# un solo sprite repetido.
+	var llegada: float = tiempo - distancia / float(g["vel"]) + posmod(jugador_id, 4) * 0.2
+	ent["pos"] = hasta
+	ent["pose"] = SpritesPartido.FESTEJA
+	ent["accion"] = MotorEspacial.ACCION_FESTEJA
+	ent["direccion"] = SpritesPartido.ABAJO
+	ent["fase_animacion"] = fposmod(llegada / 0.8, 1.0)
+	ent["z"] = absf(sin(llegada * 4.0 * PI)) * 0.45
+
+
+## Primer fotograma después del gol en que el juego vuelve a correr o se
+## reubica a los 22 para el saque. Los fotogramas viejos no traen
+## "detenido": ahí no se salta nada.
+func _fin_de_la_pausa(idx_gol: int) -> int:
+	for i in range(idx_gol + 1, fotogramas.size()):
+		var f: Dictionary = fotogramas[i]
+		if not f.has("detenido"):
+			return idx_gol
+		if bool(f.get("corte", false)) or int(f["detenido"]) == 0:
+			return i
+	return idx_gol
+
+
+## Dónde mirar durante el festejo: el medio del grupo, no la pelota en la red.
+##
+## Sigue al GOLEADOR, no al medio del grupo. Con el medio, los compañeros
+## que arrancan lejos arrastraban la cámara y el goleador quedaba fuera de
+## cuadro mientras se veía a otro corriendo.
+func _centro_festejo() -> Vector2:
+	var g: Dictionary = _festejo_grupo[_festejo_goleador]
+	var tiempo: float = (1.0 - _festejo_restante / _festejo_total) * _festejo_duracion
+	return (g["desde"] as Vector2).move_toward(g["hasta"], tiempo * float(g["vel"]))
 
 
 static func _es_gol(ev: Dictionary) -> bool:
@@ -349,8 +512,12 @@ func _mostrar(idx: int, t: float) -> void:
 	var z: float = float(pa.get("z", 0.0))
 	if b != null and t > 0.0:
 		var pb: Dictionary = b["pelota"]
-		pos_pelota = _mezclar(pos_pelota, Vector2(pb["x"], pb["y"]), t)
-		z = lerpf(z, float(pb.get("z", 0.0)), t)
+		# Al cruzar la linea, el siguiente fotograma ya puede tener la pelota
+		# puesta para el lateral/corner. No interpolar ese salto por toda la
+		# cancha: sostener afuera hace legible el rebote y la salida.
+		if bool(pa.get("saliendo", false)) == bool(pb.get("saliendo", false)):
+			pos_pelota = _mezclar(pos_pelota, Vector2(pb["x"], pb["y"]), t)
+			z = lerpf(z, float(pb.get("z", 0.0)), t)
 
 	var ents: Array = []
 	var pelota_anclada := false
@@ -409,7 +576,7 @@ func _mostrar(idx: int, t: float) -> void:
 						ent["direccion"] = _direccion(Vector2(float(ejecutor.get("ox", 1.0)), float(ejecutor.get("oy", 0.0))))
 						break
 			var fase := float(idx - int(accion["desde"])) + t
-			if pose in [SpritesPartido.CABECEA, SpritesPartido.CHILENA, SpritesPartido.VOLEA]:
+			if pose in [SpritesPartido.CABECEA, SpritesPartido.CHILENA, SpritesPartido.VOLEA, SpritesPartido.PALOMITA]:
 				ent["z"] = sin(clampf(fase / 3.0, 0.0, 1.0) * PI) * 0.65
 			elif pose == SpritesPartido.FESTEJA:
 				ent["z"] = absf(sin(fase * PI)) * 0.45
@@ -450,6 +617,8 @@ func _mostrar(idx: int, t: float) -> void:
 			if int(ent["direccion"]) in [5, 6, 7]:
 				anclaje_pelota.x *= -1.0
 			pelota_anclada = true
+		if _festejo_restante > 0.0 and _festejo_grupo.has(int(j["id"])):
+			_aplicar_festejo(ent, int(j["id"]))
 		ents.append(ent)
 
 	ents.append({"tipo": "pelota", "color": Color.WHITE, "z": z, "pos": pos_pelota,
@@ -506,7 +675,7 @@ const DURACION_ACCION := {
 	"amague_centro": 3,
 	"control_pie": 2, "taco": 2,
 	"pecho": 3, "lateral_manos": 2,
-	"bloquea": 3, "cae": 5, "chilena": 4, "volea": 3,
+	"bloquea": 3, "cae": 5, "chilena": 4, "volea": 3, "palomita": 4,
 	MotorEspacial.ACCION_PATEA: 2,
 	MotorEspacial.ACCION_CABECEA: 2,
 	MotorEspacial.ACCION_BARRIDA: 3,
@@ -523,6 +692,7 @@ const POSE_DE_ACCION := {
 	"pecho": "pecho", "lateral_manos": "lateral_manos",
 	"bloquea": SpritesPartido.BLOQUEA, "cae": SpritesPartido.CAE,
 	"chilena": SpritesPartido.CHILENA, "volea": SpritesPartido.VOLEA,
+	MotorEspacial.ACCION_PALOMITA: SpritesPartido.PALOMITA,
 	MotorEspacial.ACCION_PATEA: SpritesPartido.PATEA,
 	MotorEspacial.ACCION_CABECEA: SpritesPartido.CABECEA,
 	MotorEspacial.ACCION_BARRIDA: SpritesPartido.BARRIDA,
@@ -561,6 +731,8 @@ func _acciones_activas(idx: int) -> Dictionary:
 				var edad := idx - i
 				if accion in ["cae", "barrida", "chilena", "bloquea"] and edad == int(DURACION_ACCION[accion]) - 1:
 					pose = SpritesPartido.RECUPERA
+				if accion == "palomita" and edad == int(DURACION_ACCION[accion]) - 1:
+					pose = SpritesPartido.PALOMITA_CAER
 				if accion == "festeja" and edad % 3 == 1:
 					pose = SpritesPartido.CABECEA
 				activas[a["clave"]] = {"pose": pose, "desde": i, "accion": accion}
@@ -628,6 +800,10 @@ func _seguir_camara(idx: int, delta: float) -> void:
 	if foco != null:
 		actual = Vector2(float(foco["x"]), float(foco["y"]))
 	var vel := Vector2.ZERO
+	if _festejo_restante > 0.0 and not _festejo_grupo.is_empty():
+		vista.camara.encuadrar_festejo()
+		vista.camara.seguir(_centro_festejo(), Vector2.ZERO, size, delta)
+		return
 	if idx + 1 < fotogramas.size():
 		var siguiente = fotogramas[idx + 1].get("foco", null)
 		var destino := actual

@@ -14,11 +14,15 @@ var paneles: Dictionary = {}  # nombre -> Control, para mostrar/ocultar en bloqu
 
 var contenedor_ficha: VBoxContainer
 var ficha_jugador_id := -1
+var ficha_publica_liga := false
+## Panel desde el que se abrio la ficha. Permite volver al contexto correcto.
+var ficha_origen: String = "plantel"
 ## De que club es el jugador de la ficha. null = uno propio. Si es ajeno,
 ## la ficha se dibuja en modo AJENO: sin lo que solo sabe un club de su
 ## propia gente y sin las habilidades dormidas (ver _refrescar_ficha).
 var ficha_club: Team = null
 var boton_volver_ficha: Button
+var boton_investigar_ficha: Button
 var option_formacion: OptionButton
 var barra_familiaridad: ProgressBar
 var label_familiaridad: Label
@@ -933,13 +937,13 @@ func _construir_panel_ficha(padre: Control) -> void:
 
 	boton_volver_ficha = Button.new()
 	boton_volver_ficha.text = "< Volver al plantel"
-	boton_volver_ficha.pressed.connect(func():
-		if ficha_club != null:
-			_mostrar_mercado()
-		else:
-			_mostrar_plantel()
-	)
+	boton_volver_ficha.pressed.connect(_volver_desde_ficha)
 	panel.add_child(boton_volver_ficha)
+
+	boton_investigar_ficha = Button.new()
+	boton_investigar_ficha.text = "Investigar"
+	boton_investigar_ficha.pressed.connect(_investigar_desde_ficha)
+	panel.add_child(boton_investigar_ficha)
 
 	# El dorsal se cambia desde la ficha y no desde la lista del plantel:
 	# es una decision por jugador y aca esta el jugador entero a la vista.
@@ -960,11 +964,33 @@ func _construir_panel_ficha(padre: Control) -> void:
 
 ## club = null para uno propio; el Team dueño si es ajeno (viene del
 ## mercado, y solo se llega hasta aca con el informe terminado).
-func _mostrar_ficha(jugador_id: int, club: Team = null) -> void:
+func _mostrar_ficha(jugador_id: int, club: Team = null,
+	publica_liga: bool = false) -> void:
 	ficha_jugador_id = jugador_id
 	ficha_club = club
+	ficha_publica_liga = publica_liga
+	if publica_liga:
+		ficha_origen = "jugadores_liga"
+	elif club != null:
+		ficha_origen = "mercado"
+	else:
+		ficha_origen = "plantel"
 	_ocultar_todos()
 	paneles["ficha"].visible = true
+	_refrescar_ficha()
+
+
+func _volver_desde_ficha() -> void:
+	match ficha_origen:
+		"jugadores_liga": _mostrar_jugadores_liga()
+		"mercado": _mostrar_mercado()
+		_: _mostrar_plantel()
+
+
+func _investigar_desde_ficha() -> void:
+	if ficha_club == null:
+		return
+	_asignar_investigador(ficha_club, ficha_jugador_id)
 	_refrescar_ficha()
 
 
@@ -983,25 +1009,37 @@ func _refrescar_ficha() -> void:
 
 	var ajeno: bool = ficha_club != null
 	var equipo: Team = ficha_club if ajeno else GameState.equipo_jugador
-	boton_volver_ficha.text = "< Volver al mercado" if ajeno else "< Volver al plantel"
+	match ficha_origen:
+		"jugadores_liga": boton_volver_ficha.text = "< Volver a estadísticas"
+		"mercado": boton_volver_ficha.text = "< Volver al mercado"
+		_: boton_volver_ficha.text = "< Volver al plantel"
 	# El numero de un jugador ajeno no se toca: es el club del rival.
 	# La cantera tampoco lleva dorsal — el plantel de partido son 18.
 	boton_dorsal_ficha.visible = (not ajeno
 		and GameState.equipo_jugador.dorsal_de(ficha_jugador_id) > 0)
 
-	# De un ajeno solo se llega hasta aca con el informe terminado, pero se
-	# vuelve a chequear igual: la ficha se puede quedar abierta mientras
-	# pasa el tiempo y el jugador puede haber cambiado de club.
-	if ajeno and not Investigadores.conoce(GameState.equipo_jugador, ficha_jugador_id):
-		contenedor_ficha.add_child(_texto_suave("Todavia no lo investigaste."))
-		return
-
-	# _buscar_jugador_por_id ya mira titulares, banco y cantera.
+	# _buscar_jugador_por_id mira todo el plantel, incluidas las reservas.
 	var j := _buscar_jugador_por_id(equipo, ficha_jugador_id)
 	if j.is_empty():
 		contenedor_ficha.add_child(_texto_suave(
 			"Ese jugador ya no esta en %s." % (equipo.nombre if ajeno else "el plantel")))
 		return
+
+	var conocido := not ajeno or Investigadores.conoce(GameState.equipo_jugador, ficha_jugador_id)
+	var progreso := Investigadores.progreso(GameState.equipo_jugador, ficha_jugador_id)
+	boton_investigar_ficha.visible = ajeno and not conocido and progreso < 0.0 \
+		and not Investigadores.libres(GameState.equipo_jugador).is_empty()
+	if ajeno and not conocido:
+		# De un rival solo son publicos nombre, club, puesto y edad. La ficha
+		# completa aparece cuando termina el informe del investigador.
+		contenedor_ficha.add_child(_cabecera_publica_de_ficha(equipo, j))
+		if progreso >= 0.0:
+			contenedor_ficha.add_child(_texto_suave("Investigacion en curso."))
+		elif Investigadores.libres(GameState.equipo_jugador).is_empty():
+			contenedor_ficha.add_child(_texto_suave("No tenes investigadores libres."))
+		return
+
+	boton_investigar_ficha.visible = false
 
 	contenedor_ficha.add_child(_cabecera_de_ficha(equipo, j, ajeno))
 
@@ -1042,6 +1080,29 @@ func _refrescar_ficha() -> void:
 
 
 ## Quien es y como esta: la franja de arriba, a todo el ancho.
+func _cabecera_publica_de_ficha(equipo: Team, j: Dictionary) -> Control:
+	var tarjeta := Componentes.tarjeta()
+	var caja := VBoxContainer.new()
+	caja.add_theme_constant_override("separation", 5)
+	tarjeta.add_child(caja)
+
+	var nombre := Label.new()
+	nombre.text = "%s   %s" % [_nombre_jugador(j), equipo.nombre]
+	Tema.numero(nombre, 26)
+	caja.add_child(nombre)
+
+	var datos := Label.new()
+	datos.text = "%s  ·  %d años" % [str(j["posicion"]), int(j["edad"])]
+	datos.add_theme_color_override("font_color", Tema.SUAVE)
+	caja.add_child(datos)
+
+	var aviso := Label.new()
+	aviso.text = "Datos ocultos. Necesitas investigar a este jugador."
+	aviso.add_theme_color_override("font_color", Tema.AMBAR)
+	caja.add_child(aviso)
+	return tarjeta
+
+
 func _cabecera_de_ficha(equipo: Team, j: Dictionary, ajeno: bool) -> Control:
 	var id: int = int(j["id"])
 	var tarjeta := Componentes.tarjeta()
@@ -1128,8 +1189,6 @@ func _cabecera_de_ficha(equipo: Team, j: Dictionary, ajeno: bool) -> Control:
 	pie.append("Contrato %d año(s)  ·  sueldo %s" % [
 		int(equipo.contratos.get(id, 0)),
 		Economia.formato_dinero(equipo.sueldos.get(id, 0))])
-	if equipo.clausulas.has(id):
-		pie.append("cláusula %s" % Economia.formato_dinero(equipo.clausulas[id]))
 	datos.add_child(_texto_suave("   ·   ".join(pie)))
 
 	# Lo que lo deja afuera va en rojo y al final, que es donde se mira
@@ -1803,8 +1862,14 @@ func _refrescar_jugadores_liga() -> void:
 		var color: Color = Tema.AMBAR if soy_yo else Tema.TEXTO
 		dentro.add_child(Componentes.celda_numero(
 			str(puesto), Componentes.COL_POSICION, Tema.SUAVE, HORIZONTAL_ALIGNMENT_RIGHT))
-		dentro.add_child(Componentes.celda(
-			str(f["nombre"]), Componentes.COL_NOMBRE + 40, color))
+		var club_fila: Team = _equipo_de_jugador_en_liga(liga, int(f["id"]))
+		var nombre := Componentes.boton_de_celda(
+			str(f["nombre"]), Componentes.COL_NOMBRE + 40,
+			HORIZONTAL_ALIGNMENT_LEFT, color)
+		if club_fila != null:
+			nombre.pressed.connect(func():
+				_mostrar_ficha(int(f["id"]), club_fila, true))
+		dentro.add_child(nombre)
 		dentro.add_child(Componentes.celda(
 			str(f["posicion"]), Componentes.COL_POS, Tema.SUAVE))
 		dentro.add_child(Componentes.celda(
@@ -3007,9 +3072,9 @@ func _refrescar_investigaciones() -> void:
 			dentro.add_child(Componentes.celda("%s  ·  media %.1f  ·  %d años" % [
 				j["posicion"], float(j["media"]), int(j["edad"])], 250, Tema.SUAVE))
 
-		# Menos de 120 dias es menos de media temporada: alcanza para
-		# decidir si conviene volver a mirarlo antes de que se tape.
-		var pronto: bool = dias < 120
+		# Menos de 60 dias es menos de un cuarto de temporada: conviene
+		# decidir si vale la pena volver a mirarlo antes de que se tape.
+		var pronto: bool = dias < 60
 		dentro.add_child(Componentes.celda(
 			("VENCE PRONTO · %d dias" % dias) if pronto else ("vence en %d dias" % dias),
 			220, Tema.ROJO if pronto else Tema.SUAVE))
@@ -3524,12 +3589,10 @@ var caja_negociacion_contrato: VBoxContainer
 var spin_negociacion_monto: SpinBox
 var spin_negociacion_sueldo: SpinBox
 var spin_negociacion_anios: SpinBox
-var spin_negociacion_clausula: SpinBox
 var boton_negociacion_accion: Button
 var boton_negociacion_rechazar: Button
 var boton_negociacion_retirar: Button
 var boton_negociacion_contra: Button
-var boton_negociacion_clausula: Button
 
 
 func _construir_dialogo_negociacion() -> void:
@@ -3565,7 +3628,11 @@ func _construir_dialogo_negociacion() -> void:
 	spin_negociacion_monto = SpinBox.new()
 	spin_negociacion_monto.min_value = 0
 	spin_negociacion_monto.max_value = 1000000000
-	spin_negociacion_monto.step = 1000
+	# La contraoferta debe aceptar cualquier monto entero, no solo múltiplos
+	# de $1.000.
+	spin_negociacion_monto.step = 1
+	# Tomar el texto escrito también al hacer clic directamente en el botón.
+	spin_negociacion_monto.update_on_text_changed = true
 	spin_negociacion_monto.custom_minimum_size = Vector2(240, Tema.ALTO_TACTIL)
 	spin_negociacion_monto.value_changed.connect(func(_v): _refrescar_riesgo())
 	fila_monto.add_child(spin_negociacion_monto)
@@ -3585,8 +3652,6 @@ func _construir_dialogo_negociacion() -> void:
 	spin_negociacion_anios.value = 3
 	# La clausula la ponés vos: alta lo blinda contra que te lo saquen,
 	# pero a él lo encierra y te lo cobra pidiendo más sueldo.
-	spin_negociacion_clausula = _fila_spin(caja_negociacion_contrato,
-		"Cláusula de rescisión", 0, 5000000000, 1)
 
 	var fila_botones := HBoxContainer.new()
 	caja.add_child(fila_botones)
@@ -3620,10 +3685,6 @@ func _construir_dialogo_negociacion() -> void:
 
 	# La clausula ajena: el atajo del que no quiere negociar. Se paga de
 	# mas pero la venta es obligatoria y nadie se puede ofender.
-	boton_negociacion_clausula = Button.new()
-	boton_negociacion_clausula.custom_minimum_size = Vector2(240, Tema.ALTO_TACTIL)
-	boton_negociacion_clausula.pressed.connect(_on_negociacion_clausula)
-	fila_botones.add_child(boton_negociacion_clausula)
 
 	var cerrar := Button.new()
 	cerrar.text = "Cerrar"
@@ -3788,10 +3849,6 @@ func _abrir_negociacion(vendedor: Team, jugador_id: int) -> void:
 		caja_negociacion_datos.add_child(_caja_dato(
 			"Le quedan", "%d año(s)" % int(vendedor.contratos.get(jugador_id, 0))))
 		spin_negociacion_monto.value = ceil(pedido / spin_negociacion_monto.step) * spin_negociacion_monto.step
-		var clausula: float = vendedor.clausulas.get(jugador_id, 0.0)
-		boton_negociacion_clausula.visible = clausula > 0.0
-		boton_negociacion_clausula.text = "Pagar cláusula (%s)" % Economia.formato_dinero(clausula)
-		boton_negociacion_clausula.disabled = GameState.equipo_jugador.caja["fichajes"] < clausula
 	else:
 		caja_negociacion_datos.add_child(_caja_dato("Vale", "?", Tema.SUAVE))
 		caja_negociacion_datos.add_child(_caja_dato("Piden", "?", Tema.SUAVE))
@@ -3800,7 +3857,6 @@ func _abrir_negociacion(vendedor: Team, jugador_id: int) -> void:
 			"Tu presupuesto",
 			Economia.formato_dinero(GameState.equipo_jugador.caja["fichajes"]), Tema.VERDE))
 		spin_negociacion_monto.value = 0
-		boton_negociacion_clausula.visible = false
 
 	caja_negociacion_monto.visible = true
 	caja_negociacion_contrato.visible = false
@@ -3858,7 +3914,6 @@ func _abrir_oferta(oferta_id: int) -> void:
 	# Cuando no te toca, Rechazar no aplica: Retirar es la unica salida.
 	boton_negociacion_retirar.visible = not me_toca and Ofertas.abierta(o)
 	boton_negociacion_contra.visible = me_toca
-	boton_negociacion_clausula.visible = false
 	boton_negociacion_accion.disabled = not (me_toca or a_firmar)
 	boton_negociacion_accion.visible = me_toca or a_firmar
 
@@ -3934,8 +3989,6 @@ func _precargar_contrato(o: Dictionary) -> void:
 		jugador, float(vendedor.sueldos.get(id, 0.0)),
 		GameState.division_de(vendedor), GameState.division_jugador)
 	spin_negociacion_sueldo.value = ceil(pretende / spin_negociacion_sueldo.step) * spin_negociacion_sueldo.step
-	var normal := ValorJugador.calcular(jugador, 50.0, 3) * Team.FACTOR_CLAUSULA
-	spin_negociacion_clausula.value = ceil(normal / spin_negociacion_clausula.step) * spin_negociacion_clausula.step
 
 
 func _on_negociacion_accion() -> void:
@@ -3959,7 +4012,6 @@ func _enviar_oferta_nueva() -> void:
 		return
 	label_negociacion_estado.text = "[color=#27ae60]Oferta enviada. %s te contesta en unos dias — la seguis en Ofertas enviadas.[/color]" % negociacion_vendedor.nombre
 	boton_negociacion_accion.disabled = true
-	boton_negociacion_clausula.visible = false
 	_on_buscar_mercado()
 
 
@@ -4003,7 +4055,7 @@ func _on_negociacion_retirar() -> void:
 func _firmar_contrato() -> void:
 	var r := GameState.cerrar_fichaje(
 		negociacion_oferta_id, float(spin_negociacion_sueldo.value),
-		int(spin_negociacion_anios.value), float(spin_negociacion_clausula.value))
+		int(spin_negociacion_anios.value))
 	if not r["exito"]:
 		label_negociacion_estado.text = "[color=#d4a017]%s[/color]" % r["motivo"]
 		return
@@ -4011,31 +4063,6 @@ func _firmar_contrato() -> void:
 	boton_negociacion_accion.disabled = true
 	_mostrar_solapa_mercado(solapa_mercado_actual)
 
-
-func _on_negociacion_clausula() -> void:
-	var r := GameState.pagar_clausula(negociacion_vendedor, negociacion_jugador_id)
-	if not r["exito"]:
-		label_negociacion_estado.text = "[color=#d4a017]%s[/color]" % r["motivo"]
-		return
-	label_negociacion_estado.text = "[color=#27ae60]Clausula pagada: %s es tuyo por %s.[/color]" % [
-		_nombre_jugador(r["jugador"]), Economia.formato_dinero(r["precio"])]
-	boton_negociacion_accion.disabled = true
-	boton_negociacion_clausula.disabled = true
-	_on_buscar_mercado()
-
-
-func _on_pagar_clausula(vendedor: Team, jugador_id: int) -> void:
-	var resultado := GameState.pagar_clausula(vendedor, jugador_id)
-	if resultado["exito"]:
-		label_mercado_estado.text = "Clausula pagada: entra un %s, sale un %s, se pago %s." % [
-			resultado["jugador_entra"]["posicion"], resultado["jugador_sale"]["posicion"], Economia.formato_dinero(resultado["clausula"])
-		]
-	else:
-		label_mercado_estado.text = "No se pudo: %s" % resultado["motivo"]
-
-	_refrescar_mercado()
-	_refrescar_plantel()
-	_refrescar_economia()
 
 
 ## Agentes libres: no se paga fee de transferencia, solo el sueldo. Es la
@@ -4286,9 +4313,8 @@ func _construir_panel_traspaso(padre: Control) -> void:
 	scroll.add_child(contenedor_traspaso)
 
 
-## Titulares y banco: son los unicos por los que llegan ofertas
-## (Ofertas.generar_entrantes), asi que marcar a un juvenil de la cantera
-## no haria nada.
+## Titulares, banco y reservas: son los jugadores del plantel por los que
+## pueden llegar ofertas (Ofertas.generar_entrantes). La cantera queda fuera.
 func _refrescar_traspaso() -> void:
 	for hijo in contenedor_traspaso.get_children():
 		hijo.queue_free()
@@ -4299,6 +4325,8 @@ func _refrescar_traspaso() -> void:
 		lista.append({"jugador": j, "origen": "titular"})
 	for j in equipo.banco:
 		lista.append({"jugador": j, "origen": "banco"})
+	for j in equipo.reservas:
+		lista.append({"jugador": j, "origen": "reserva"})
 
 	if lista.is_empty():
 		contenedor_traspaso.add_child(_tarjeta_vacia("No tenes jugadores en el plantel."))
@@ -5334,10 +5362,17 @@ func _on_contratar_investigador(estrellas: int) -> void:
 
 
 func _buscar_jugador_por_id(equipo: Team, jugador_id: int) -> Dictionary:
-	for j in equipo.jugadores + equipo.banco + equipo.cantera:
-		if j["id"] == jugador_id:
+	for j in equipo.jugadores + equipo.banco + equipo.reservas + equipo.cantera:
+		if int(j["id"]) == jugador_id:
 			return j
 	return {}
+
+
+func _equipo_de_jugador_en_liga(liga: Liga, jugador_id: int) -> Team:
+	for equipo in liga.equipos:
+		if not _buscar_jugador_por_id(equipo, jugador_id).is_empty():
+			return equipo
+	return null
 
 
 func _on_mejorar_instalacion(categoria: String) -> void:
@@ -8049,7 +8084,9 @@ func _refrescar_barra_contexto() -> void:
 	label_barra_fecha.text = Calendario.texto_corto(GameState.dia_absoluto)
 
 
-func _mostrar_seccion(clave: String) -> void:
+## `panel_destino` elige la subsolapa de llegada. Sin eso, un boton que lleva a un
+## lugar puntual aterrizaba en la primera subsolapa de la seccion.
+func _mostrar_seccion(clave: String, panel_destino: String = "") -> void:
 	seccion_actual = clave
 	for c in botones_seccion:
 		Tema.seleccionado(botones_seccion[c], c == clave)
@@ -8074,7 +8111,9 @@ func _mostrar_seccion(clave: String) -> void:
 		btn.set_meta("panel", panel)
 		btn.pressed.connect(func(): _mostrar_panel_de_seccion(panel))
 		barra_subsolapas.add_child(btn)
-	if not subpaneles.is_empty():
+	if panel_destino != "":
+		_mostrar_panel_de_seccion(panel_destino)
+	elif not subpaneles.is_empty():
 		_mostrar_panel_de_seccion(str(subpaneles[0][0]))
 
 
@@ -8289,7 +8328,7 @@ func _refrescar_portada() -> void:
 	var btn_form := Button.new()
 	btn_form.text = "Ver formacion"
 	btn_form.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
-	btn_form.pressed.connect(func(): _mostrar_seccion("equipo"))
+	btn_form.pressed.connect(func(): _mostrar_seccion("equipo", "formacion"))
 	fila_acciones.add_child(btn_form)
 
 	# Simular tambien vive aca y no solo en Partido: la portada es desde
@@ -8333,12 +8372,7 @@ func _refrescar_portada() -> void:
 		var btn := Button.new()
 		btn.text = str(p["accion"])
 		btn.custom_minimum_size = Vector2(180, Tema.ALTO_TACTIL)
-		# Casi todos los pendientes se resuelven en Mercado, pero el veto no
-		# tiene nada que decidir alla: se acusa aca y se va.
-		if p.has("al_tocar"):
-			btn.pressed.connect(p["al_tocar"])
-		else:
-			btn.pressed.connect(func(): _mostrar_seccion("mercado"))
+		btn.pressed.connect(p["al_tocar"])
 		fila.add_child(btn)
 
 	# --- Estado del club ---------------------------------------------------
@@ -8370,8 +8404,12 @@ func _pendientes_de_portada() -> Array:
 	var equipo := GameState.equipo_jugador
 	var salida := []
 	for o in equipo.ofertas:
+		# Cada boton abre SU oferta. Antes todos llevaban a la tabla del
+		# mercado y habia que ir a la solapa y buscar la fila a mano.
+		var ir_a_oferta := func(): _ir_a_oferta(int(o["id"]), bool(o["entrante"]))
 		if str(o["estado"]) == Ofertas.PENDIENTE_NOSOTROS:
 			salida.append({
+				"al_tocar": ir_a_oferta,
 				"color": Tema.ROJO,
 				"titulo": "%s ofrece %s por %s" % [
 					str(o["club"]), Economia.formato_dinero(o["monto"]), str(o["jugador"])]
@@ -8382,6 +8420,7 @@ func _pendientes_de_portada() -> Array:
 			})
 		elif str(o["estado"]) == Ofertas.ACUERDO_CLUB and not bool(o["entrante"]):
 			salida.append({
+				"al_tocar": ir_a_oferta,
 				"color": Tema.AMBAR,
 				"titulo": "Acordaste %s por %s" % [
 					Economia.formato_dinero(o["monto"]), str(o["jugador"])],
@@ -8407,16 +8446,34 @@ func _pendientes_de_portada() -> Array:
 			"accion": "Aceptar",
 			"al_tocar": acusar,
 		})
+	# El informe mas nuevo es el de mas dias de vigencia: ese abre el boton.
+	var id_informe := -1
+	var dias_informe := Investigadores.DIAS_VIGENCIA - 30
 	for id in equipo.conocimiento:
-		if int(equipo.conocimiento[id]) > Investigadores.DIAS_VIGENCIA - 30:
-			salida.append({
-				"color": Tema.CELESTE,
-				"titulo": "Informe nuevo listo",
-				"detalle": "Ya podes ver su ficha completa en el mercado.",
-				"accion": "Ver",
-			})
-			break
+		if int(equipo.conocimiento[id]) > dias_informe:
+			dias_informe = int(equipo.conocimiento[id])
+			id_informe = int(id)
+	if id_informe != -1:
+		var ver_informe := func():
+			_mostrar_seccion("mercado", "mercado")
+			_mostrar_solapa_mercado("investigaciones")
+			_mostrar_modal_jugador(id_informe)
+		salida.append({
+			"color": Tema.CELESTE,
+			"titulo": "Informe nuevo listo",
+			"detalle": "Ya podes ver su ficha completa.",
+			"accion": "Ver",
+			"al_tocar": ver_informe,
+		})
 	return salida
+
+
+## Lleva a la solapa de la oferta y la abre encima. La solapa queda debajo
+## para que al cerrar el modal se vuelva a la lista de esa oferta.
+func _ir_a_oferta(oferta_id: int, entrante: bool) -> void:
+	_mostrar_seccion("mercado", "mercado")
+	_mostrar_solapa_mercado("recibidas" if entrante else "enviadas")
+	_abrir_oferta(oferta_id)
 
 
 
@@ -9053,8 +9110,7 @@ func _refrescar_modal_alineacion() -> void:
 		_cerrar_modal_alineacion()
 		# A Formacion, que es donde se mueve gente entre el once y el
 		# banco. De ahi el jugador vuelve solo y le da a Jugar otra vez.
-		_mostrar_seccion("equipo")
-		_mostrar_panel_de_seccion("formacion"))
+		_mostrar_seccion("equipo", "formacion"))
 	acciones.add_child(btn_mano)
 
 

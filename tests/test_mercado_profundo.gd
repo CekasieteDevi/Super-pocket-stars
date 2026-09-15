@@ -11,12 +11,9 @@ func _init() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = SEED
 
-	_test_clausula_se_fija_al_fichar(rng)
 	_test_resistencia_mayor_para_capitan(rng)
 	_test_resistencia_mayor_para_figura_de_la_posicion(rng)
 	_test_oferta_comun_puede_ser_rechazada_por_resistencia(rng)
-	_test_clausula_fuerza_la_venta_pase_lo_que_pase(rng)
-	_test_clausula_rechazo_sin_fondos(rng)
 
 	quit()
 

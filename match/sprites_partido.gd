@@ -64,6 +64,9 @@ const BLOQUEA := "bloquea"
 const CAE := "cae"
 const CHILENA := "chilena"
 const VOLEA := "volea"
+const PALOMITA := "palomita"
+const PALOMITA_PREPARA := "palomita_prepara"
+const PALOMITA_CAER := "palomita_caer"
 const RECUPERA := "recupera"
 
 # Siluetas completas: contacto, equilibrio y recuperaci?n diferenciados.
@@ -72,6 +75,9 @@ const POSES_ESPECIALES := {
 	CAE: ["....................", "....................", "..HHHH..............", ".HSSSSS...SS........", "..SSoSSJJJJSS.......", "...dSSJJJJJJDD......", "....SSbJJJDDDDSSMMB.", "...SS..bbbDD........", "..SS.......SSMMBB...", "...................."],
 	CHILENA: [".............BB.....", "............MM......", "...........SS.......", ".....BB...SS........", "......MM.DDD........", ".......DDDDD........", ".......JJJJb........", "....SSJJJJJJSS......", "...SS.JJJJJ..SS.....", "......dSS.....SS....", ".....SSoSS..........", ".....HSSSH..........", "......HHH...........", "....................", "....................", "...................."],
 	VOLEA: ["......HHHH..........", ".....HSSSSH.........", ".....SSoSSS.........", "......dSS...........", "...SSJJJJJJ.........", "..SSbJJJJJJSS.......", "....bJJJJJJ.SS......", ".....DDDDDD.........", ".....DDD.DDSSMMBBBB.", ".....SS.............", ".....MM.............", "....BBB.............", "...................."],
+	PALOMITA: ["....................", "....................", "...HHHH.............", "..HSSSSH............", "..SSoSSS............", "...dSS..............", "SSJJJJJJSS..........", "SSbJJJJJJJJSS.......", "..SSDDDDDD..........", "....DDD..DDD........", ".....MM.............", "....BBB.............", "...................."],
+	PALOMITA_PREPARA: ["....................", "....................", "......HHHH..........", ".....HSSSSH.........", ".....SSoSSS.........", "......dSS...........", "...SSJJJJJJSS.......", "..SSbJJJJJJJJSS.....", "....DDDDDD..........", "...DDD..DDD.........", "..MM....MM..........", ".BBB..BBB..........."],
+	PALOMITA_CAER: ["....................", "....................", "....................", "....................", "....HHHH............", "...HSSSSH...........", "...SSoSSS...........", "....dSS.............", ".SSJJJJJJSS.........", "SSbJJJJJJJJSS.......", "..DDDDDD............", "..DDD..DDD..........", "..BBB..BBB.........."],
 	RECUPERA: ["................", ".....HHHH.......", "....HSSSSH......", "....SSoSSS......", ".....dSS........", "....JJJJJJ......", "...SbJJJJJS.....", "...S.DDDDD.S....", "..SS.DD.SS.SS...", ".....MM..MM.....", "....BBB..BBB...."],
 }
 
@@ -445,6 +451,39 @@ const FILA_NUMERO := ALTO_CABEZA + 1
 const DIRECCIONES_CON_NUMERO := [ARRIBA, ARRIBA_DER]
 
 static var _cache: Dictionary = {}
+static var _palomita_png: Image = null
+static var _palomita_cache: Dictionary = {}
+
+
+## Cuadros PNG de la palomita. Van fuera del atlas principal para que una
+## pose horizontal nunca pueda desplazar ni contaminar otro cuadro.
+static func palomita_png(color_camiseta: Color, color_short: Color,
+		frame: int, espejo: bool = false) -> ImageTexture:
+	var pantalon := color_short if color_short.a > 0.0 else SHORT
+	var clave := "%s_%s_%d_%s" % [color_camiseta.to_html(), pantalon.to_html(), frame, espejo]
+	if _palomita_cache.has(clave):
+		return _palomita_cache[clave]
+	if _palomita_png == null:
+		_palomita_png = (load("res://assets/partido/palomita_frames.png") as Texture2D).get_image()
+	var img: Image = _palomita_png.get_region(Rect2i(clampi(frame, 0, 3) * 64, 0, 64, 64))
+	for y in range(img.get_height()):
+		for x in range(img.get_width()):
+			var p := img.get_pixel(x, y)
+			if p.a <= 0.0:
+				continue
+			var brillo := clampf(p.get_luminance() / 0.55, 0.65, 1.15)
+			# El azul fuerte es la mascara de camiseta. El negro queda intacto
+			# para conservar el contorno pixel-art.
+			if p.b > 0.25 and p.b > p.r * 1.35 and p.b > p.g * 1.05:
+				p = Color(color_camiseta.r * brillo, color_camiseta.g * brillo, color_camiseta.b * brillo, p.a)
+			elif p.r > 0.82 and p.g > 0.82 and p.b > 0.82:
+				p = Color(pantalon.r * brillo, pantalon.g * brillo, pantalon.b * brillo, p.a)
+			img.set_pixel(x, y, p)
+	if espejo:
+		img.flip_x()
+	var tex := ImageTexture.create_from_image(img)
+	_palomita_cache[clave] = tex
+	return tex
 
 
 ## Qué peinado le toca a un jugador. Sale de su id y no de un sorteo, así
@@ -496,7 +535,7 @@ static func jugador(color_camiseta: Color, direccion: int = ABAJO, pose: String 
 	var paleta := _paleta(color_camiseta, color_short, color_pelo)
 	var tex: ImageTexture
 	match pose:
-		BLOQUEA, CAE, CHILENA, VOLEA, RECUPERA:
+		BLOQUEA, CAE, CHILENA, VOLEA, PALOMITA, PALOMITA_PREPARA, PALOMITA_CAER, RECUPERA:
 			tex = _construir(POSES_ESPECIALES[pose], paleta, espejo)
 		BARRIDA:
 			tex = _construir(BARRIDA_TENDIDA, paleta, espejo)

@@ -15,7 +15,6 @@
     "progreso": 1.0,
     "seguridad": 0.45,
     "distancia": 0.55,
-    "arquero_apurado": 1.6,
     "retroceso_libre": 1.2
   },
   "_gambeta": "Encarar a un rival puntual. base bajo porque no deberia ser la opcion por defecto; habilidad la hace atractiva para los buenos de control; presion la desalienta cuando hay varios encima. banda es el extremo que encara para acomodarse frente al arco: se suma solo si estas abierto Y adelantado (los dos umbrales de puede_centrar). Barrido con tests/_diag_banda.gd sobre 30 partidos: sin el termino, el 3,5% de las decisiones desde la banda eran gambeta; 0,5 da 6,2%, 1,0 da 12,0%, 1,5 da 14,5% y 2,0 da 18,7%, y a partir de 1,5 empieza a comerse los centros (2,6 -> 2,2 por partido).",
@@ -49,8 +48,7 @@
     "base": 0.2,
     "progreso": 0.7,
     "presion": 0.55,
-    "salida": 0.45,
-    "arquero_apurado": 1.6
+    "salida": 0.45
   },
   "_pase_hueco": "Pase al espacio por delante del companero, no a los pies. Progreso alto y riesgo alto: rompe la linea rival pero la pelota viaja mas y por zona disputada. Solo lo ve quien tiene vision suficiente.",
   "pase_hueco": {
@@ -221,8 +219,8 @@
     "acel_max": 5.2,
     "freno_giro": 0.35,
     "vel_salida_min": 11.0,
+    "_tercio_propio_arquero": "Con un rival de campo a esta distancia de su arco o menos, el arquero no sale jugando corto: la revienta (despeje o pelotazo). Medido con tests/_diag_arquero_regala.gd.",
     "tercio_propio_arquero": 30.0,
-    "invasores_para_reventarla": 3.0,
     "_mezcla_fisica_rango_tiro": "Mezcla del alcance: 0 relativo al nivel del partido, 1 atributo absoluto. Afecta la habilitacion fisica del intento; no aumenta su utilidad.",
     "mezcla_fisica_rango_tiro": 0.8,
     "_apoyo_del_nueve": "Cuanto del apoyo le toca al 9. En cero: no baja, se queda de referencia. Medido, que baje aunque sea un poco cuesta 0,4 goles por partido en las tres divisiones — el equipo se queda sin nadie en el area. Los que bajan a recibir son el enganche y los extremos.",

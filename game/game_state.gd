@@ -1804,7 +1804,8 @@ func topes_de_cesion(oferta: Dictionary) -> Dictionary:
 ## con el jugador. La clausula es tuya: ponersela alta lo blinda contra
 ## que te lo saquen, pero a el lo encierra y lo cobra (ver
 ## Negociacion.PESO_CLAUSULA).
-func cerrar_fichaje(oferta_id: int, sueldo: float, anios: int, clausula: float) -> Dictionary:
+func cerrar_fichaje(oferta_id: int, sueldo: float, anios: int,
+		_clausula_obsoleta: float = 0.0) -> Dictionary:
 	if not hay_mercado_abierto():
 		return _mercado_cerrado()
 	var oferta := _oferta_por_id(oferta_id)
@@ -1820,26 +1821,31 @@ func cerrar_fichaje(oferta_id: int, sueldo: float, anios: int, clausula: float) 
 		return {"exito": false, "motivo": "Ese jugador ya no está en ese club."}
 	var jugador: Dictionary = donde["jugador"]
 
-	var normal: float = maxf(1.0, ValorJugador.calcular(
-		jugador, vendedor.animo.get(jugador_id, 50.0), 3) * Team.FACTOR_CLAUSULA)
 	var detalle := Negociacion.interes_jugador(
 		jugador, vendedor.animo.get(jugador_id, 50.0),
 		float(vendedor.sueldos.get(jugador_id, 0.0)), sueldo,
-		division_de(vendedor), division_jugador, clausula / normal)
+		division_de(vendedor), division_jugador)
 	if not detalle["acepta"]:
-		return {"exito": false, "motivo": Negociacion.motivo_rechazo(detalle), "detalle": detalle}
+		var motivo := Negociacion.motivo_rechazo(detalle)
+		oferta["estado"] = Ofertas.SIN_ACUERDO
+		oferta["log"].append("%s no quiso firmar con %s: %s Se queda en su club." % [
+			oferta["jugador"], equipo_jugador.nombre, motivo])
+		_agregar_noticia("FICHAJE: %s rechazó firmar con %s. Se queda en %s: %s" % [
+			oferta["jugador"], equipo_jugador.nombre, vendedor.nombre, motivo],
+			"fichajes", [Noticias.mencion(jugador, vendedor.nombre)])
+		Ofertas.archivar(equipo_jugador)
+		return {"exito": false, "motivo": motivo, "detalle": detalle}
 
 	var r := Mercado.ejecutar_pase(
 		equipo_jugador, vendedor, jugador_id, float(oferta["monto"]), sueldo, anios, rng)
 	if not r["exito"]:
 		return r
-	equipo_jugador.clausulas[jugador_id] = clausula
 	# No se marca conocido: de uno propio la ficha se ve entera sin informe.
 	# Marcarlo lo metia en "Conocidos" y disparaba "Informe nuevo listo"
 	# sin que ningun investigador lo hubiera pedido.
 	oferta["estado"] = Ofertas.CERRADA
-	oferta["log"].append("Firmado: %d año(s) a %s, cláusula %s." % [
-		anios, Economia.formato_dinero(sueldo), Economia.formato_dinero(clausula)])
+	oferta["log"].append("Firmado: %d año(s) a %s." % [
+		anios, Economia.formato_dinero(sueldo)])
 	_agregar_noticia("FICHAJE: %s se lleva a %s (%s) de %s por %s." % [
 		equipo_jugador.nombre, _nombre_completo(jugador), r["posicion"],
 		vendedor.nombre, Economia.formato_dinero(oferta["monto"])],
@@ -1950,7 +1956,7 @@ func division_de(club: Team) -> int:
 func pagar_clausula(vendedor: Team, jugador_objetivo_id: int) -> Dictionary:
 	if not hay_mercado_abierto():
 		return _mercado_cerrado()
-	var resultado := Mercado.comprar_al_contado(equipo_jugador, vendedor, jugador_objetivo_id, rng, true)
+	var resultado := Mercado.comprar_al_contado(equipo_jugador, vendedor, jugador_objetivo_id, rng)
 	if resultado["exito"]:
 		_agregar_noticia("CLÁUSULA: %s paga la cláusula de %s (%s, %s) por %s." % [
 			equipo_jugador.nombre, _nombre_completo(resultado["jugador"]),

@@ -53,8 +53,12 @@ const SITUACIONES := [
 		"que": "La pelota sale por la banda y se reanuda con un saque de banda."},
 	{"clave": "cabezazo", "nombre": "Centro y gol de cabeza",
 		"que": "El centro sale desde la banda, cruza el área por arriba, el delantero le gana de arriba al defensor y la cabecea al gol."},
+	{"clave": "palomita", "nombre": "Centro y gol de palomita",
+		"que": "Centro bajo al area, vuelo horizontal, cabezazo de palomita y gol. El clip termina al acabar el festejo."},
 	{"clave": "gol", "nombre": "Gol y festejo",
 		"que": "Remate al arco desde el borde del área y el saque del medio posterior."},
+	{"clave": "festejo_banderin", "nombre": "Festejo en el banderín",
+		"que": "Gol desde el costado del área. El goleador y los tres compañeros más cercanos corren al banderín a festejar juntos."},
 	{"clave": "saque_arco", "nombre": "Saque de arco",
 		"que": "La pelota se va por el fondo y el arquero la pone en juego."},
 	{"clave": "cambio", "nombre": "Cambio",
@@ -120,8 +124,12 @@ static func generar(clave: String, local: Team, visitante: Team,
 			_montar_lateral(estado)
 		"cabezazo":
 			_montar_cabezazo(estado)
+		"palomita":
+			_montar_palomita(estado)
 		"gol":
 			_montar_gol(estado)
+		"festejo_banderin":
+			_montar_festejo_banderin(estado)
 		"saque_arco":
 			_montar_saque_arco(estado)
 		"cambio":
@@ -137,17 +145,35 @@ static func generar(clave: String, local: Team, visitante: Team,
 	estado["fotogramas"].clear()
 	MotorEspacial._push_fotograma(estado, estado["eventos"].slice(eventos_antes))
 
-	# Etapa 1: hasta que se resuelva lo que se monto.
-	for i in range(TICKS_TOPE):
-		if not _jugada_en_curso(estado):
-			break
-		MotorEspacial._tick(estado, true)
+	# La palomita es un clip cerrado: centro, remate, gol y pausa completa.
+	# No se reproduce el saque del medio ni una jugada aleatoria posterior.
+	if clave == "palomita":
+		var gol_visto := false
+		var ticks_post_gol := 0
+		for i in range(TICKS_TOPE):
+			if gol_visto and ticks_post_gol >= int(MotorEspacial.TICKS_DETENIDO["gol"]):
+				break
+			MotorEspacial._tick(estado, true)
+			if gol_visto:
+				ticks_post_gol += 1
+			else:
+				for ev in estado["eventos"]:
+					if str(ev.get("resultado", "")) == "gol":
+						gol_visto = true
+						break
+	else:
+		# Etapa 1: hasta que se resuelva lo que se monto.
+		for i in range(TICKS_TOPE):
+			if not _jugada_en_curso(estado):
+				break
+			MotorEspacial._tick(estado, true)
 	# Etapa 2: un rato fijo para ver como sigue. Fijo y no "hasta que se
 	# calme": despues de la jugada el partido sigue para siempre, y
 	# esperar a que no pase nada terminaba dando el clip entero de 200
 	# ticks otra vez.
-	for i in range(TICKS_DE_CIERRE):
-		MotorEspacial._tick(estado, true)
+	if clave != "palomita":
+		for i in range(TICKS_DE_CIERRE):
+			MotorEspacial._tick(estado, true)
 
 	return {
 		"goles_local": local.goles,
@@ -313,12 +339,19 @@ static func _montar_lateral(estado: Dictionary) -> void:
 ## Ahora se saltea el duelo y se llama derecho a _lanzar_remate con
 ## tipo "gol". La pelota viaja igual, el arquero se tira igual y el
 ## festejo es el de siempre: lo unico que no pasa es la tirada.
-static func _montar_gol(estado: Dictionary) -> void:
+## El festejo en el banderín es de la vista (VistaPartido.armar_festejo):
+## acá solo se monta un gol que lo haga legible. Desde el costado del área
+## el goleador queda cerca de un banderín y la corrida entra en cámara.
+static func _montar_festejo_banderin(estado: Dictionary) -> void:
+	_montar_gol(estado, Vector2(13.0, -14.0))
+
+
+static func _montar_gol(estado: Dictionary, desplazamiento := Vector2(14.0, 2.0)) -> void:
 	var eq_a: Team = MotorEspacial._equipo_de(estado, true)
 	var eq_d: Team = MotorEspacial._equipo_de(estado, false)
 	var arco := MotorEspacial.arco_rival(true)
 	var hacia: float = -1.0 if arco.x > 0.0 else 1.0
-	var punto := Vector2(arco.x + hacia * 14.0, 2.0)
+	var punto := Vector2(arco.x + hacia * desplazamiento.x, desplazamiento.y)
 	var mejor := {}
 	for j in eq_a.jugadores_en_cancha():
 		if mejor.is_empty() or float(j["atributos"]["tiro"]) > float(mejor["atributos"]["tiro"]):
@@ -475,6 +508,13 @@ static func _montar_cabezazo(estado: Dictionary) -> void:
 	# CABEZA. Ver el comentario de arriba y MotorEspacial._resolver_tiro.
 	estado["forzar_remate"] = "gol"
 	estado["forzar_remate_attr"] = "cabezazo"
+
+
+## Misma escena y mismo centro que el cabezazo, pero fuerza la variante
+## visual de palomita. El motor sigue resolviendo el centro y el remate.
+static func _montar_palomita(estado: Dictionary) -> void:
+	_montar_cabezazo(estado)
+	estado["forzar_centro_accion"] = MotorEspacial.ACCION_PALOMITA
 
 
 static func _montar_saque_arco(estado: Dictionary) -> void:

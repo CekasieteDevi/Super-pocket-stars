@@ -26,7 +26,7 @@ func _init() -> void:
 	var id: int = vendedor.jugadores[0]["id"]
 	var contratos_antes: float = comprador.caja["contratos"]
 	var planilla_antes := _sueldos_totales(comprador)
-	var resultado := Mercado.comprar_al_contado(comprador, vendedor, id, rng, true)
+	var resultado := Mercado.comprar_al_contado(comprador, vendedor, id, rng)
 
 	if not resultado["exito"]:
 		print("FALLA: la compra no se concreto: ", resultado["motivo"])

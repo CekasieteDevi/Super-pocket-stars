@@ -13,7 +13,6 @@ func _init() -> void:
 	_test_comprar_de_otra_division(rng)
 	_test_comprar_una_joya_de_la_cantera(rng)
 	_test_sin_plata_no_hay_compra(rng)
-	_test_la_clausula_no_se_puede_rechazar(rng)
 	quit()
 
 
@@ -44,7 +43,11 @@ func _test_comprar_de_otra_division(rng: RandomNumberGenerator) -> void:
 	var objetivo: Dictionary = lejano.jugadores[7]
 	var id: int = objetivo["id"]
 	var antes := lejano.jugadores.size() + lejano.banco.size()
-	var r := Mercado.comprar_al_contado(mio, lejano, id, rng, true)  # clausula: sin rechazo
+	var r := Mercado.comprar_al_contado(mio, lejano, id, rng)
+	for _intento in range(10):
+		if not bool(r.get("resistencia", false)):
+			break
+		r = Mercado.comprar_al_contado(mio, lejano, id, rng)
 	var lo_tengo := not Mercado.ubicar(mio, id).is_empty()
 	var lo_perdio := Mercado.ubicar(lejano, id).is_empty()
 	if r["exito"] and lo_tengo and lo_perdio and lejano.jugadores.size() + lejano.banco.size() == antes:
@@ -65,7 +68,14 @@ func _test_comprar_una_joya_de_la_cantera(rng: RandomNumberGenerator) -> void:
 	var joya: Dictionary = chico.cantera[0]
 	var id: int = joya["id"]
 	var cantera_antes := chico.cantera.size()
-	var r := Mercado.comprar_al_contado(mio, chico, id, rng, true)
+	# Sin la clausula no hay compra forzada: la joya de un club chico
+	# resiste la venta a proposito (ver Mercado.resistencia_venta). Lo que
+	# se prueba es que la cantera SE PUEDE comprar, asi que se insiste.
+	var r := Mercado.comprar_al_contado(mio, chico, id, rng)
+	for _intento in range(10):
+		if not bool(r.get("resistencia", false)):
+			break
+		r = Mercado.comprar_al_contado(mio, chico, id, rng)
 	if r["exito"] and r["origen"] == "cantera" and chico.cantera.size() == cantera_antes - 1 \
 			and not Mercado.ubicar(mio, id).is_empty():
 		print("OK: la joya (potencial %d) paso de la cantera de decima a primera." % int(joya["potencial"]))
@@ -81,7 +91,7 @@ func _test_sin_plata_no_hay_compra(rng: RandomNumberGenerator) -> void:
 	pobre.caja["fichajes"] = 1000.0
 	pobre.caja["contratos"] = 1000000.0
 	var id: int = rico.jugadores[10]["id"]
-	var r := Mercado.comprar_al_contado(pobre, rico, id, rng, true)
+	var r := Mercado.comprar_al_contado(pobre, rico, id, rng)
 	if not r["exito"] and str(r["motivo"]).contains("presupuesto"):
 		print("OK: decima puede OFERTAR por un crack de primera, lo que no puede es pagarlo.")
 	else:
@@ -100,7 +110,7 @@ func _test_la_clausula_no_se_puede_rechazar(rng: RandomNumberGenerator) -> void:
 		if rival.jugadores.is_empty():
 			break
 		var id: int = rival.jugadores[0]["id"]
-		var r := Mercado.comprar_al_contado(mio, rival, id, rng, true)
+		var r := Mercado.comprar_al_contado(mio, rival, id, rng)
 		if not r["exito"]:
 			fallos += 1
 	if fallos == 0:

@@ -54,7 +54,6 @@ const UMBRAL_ACEPTA := 0.5
 ## nubes lo blinda contra que te lo saquen, pero a el lo encierra, y lo
 ## cobra: por cada vez que la clausula supera a la normal (valor x
 ## Team.FACTOR_CLAUSULA), pierde estas ganas de firmar.
-const PESO_CLAUSULA := 0.12
 
 
 ## Un hincha del club no se quiere ir ni loco. Un mercenario va donde
@@ -111,8 +110,7 @@ static func sueldo_pretendido(jugador: Dictionary, sueldo_actual: float,
 ## `exceso_clausula` = cuantas veces la clausula ofrecida supera a la
 ## normal. 1.0 = la de siempre, 3.0 = el triple.
 static func interes_jugador(jugador: Dictionary, animo: float, sueldo_actual: float,
-		sueldo_ofrecido: float, division_origen: int, division_destino: int,
-		exceso_clausula: float = 1.0) -> Dictionary:
+		sueldo_ofrecido: float, division_origen: int, division_destino: int) -> Dictionary:
 	var peso_division := PESO_DIVISION
 	var peso_sueldo := PESO_SUELDO
 	if Personalidad.tiene(jugador, "Mercenario"):
@@ -124,10 +122,9 @@ static func interes_jugador(jugador: Dictionary, animo: float, sueldo_actual: fl
 	var mejora: float = sueldo_ofrecido / maxf(1.0, sueldo_actual)
 	var por_sueldo: float = clampf((mejora - 1.0) * peso_sueldo, TOPE_SUELDO_ABAJO, TOPE_SUELDO_ARRIBA)
 	var por_rasgo: float = -PENALIZACION_HINCHA if Personalidad.tiene(jugador, "Hincha del club") else 0.0
-	var por_clausula: float = -maxf(0.0, exceso_clausula - 1.0) * PESO_CLAUSULA
 
 	var total: float = clampf(
-		0.5 + por_division + por_animo + por_sueldo + por_rasgo + por_clausula, 0.0, 1.0)
+		0.5 + por_division + por_animo + por_sueldo + por_rasgo, 0.0, 1.0)
 	return {
 		"interes": total,
 		"acepta": total >= UMBRAL_ACEPTA,
@@ -135,7 +132,6 @@ static func interes_jugador(jugador: Dictionary, animo: float, sueldo_actual: fl
 		"por_animo": por_animo,
 		"por_sueldo": por_sueldo,
 		"por_rasgo": por_rasgo,
-		"por_clausula": por_clausula,
 	}
 
 
@@ -145,7 +141,7 @@ static func interes_jugador(jugador: Dictionary, animo: float, sueldo_actual: fl
 static func motivo_rechazo(detalle: Dictionary) -> String:
 	var peor := ""
 	var valor := 0.0
-	for clave in ["por_division", "por_animo", "por_sueldo", "por_rasgo", "por_clausula"]:
+	for clave in ["por_division", "por_animo", "por_sueldo", "por_rasgo"]:
 		var v: float = float(detalle[clave])
 		if v < valor:
 			valor = v
@@ -157,8 +153,6 @@ static func motivo_rechazo(detalle: Dictionary) -> String:
 			return "El sueldo que le ofrecés es peor que el que tiene."
 		"por_rasgo":
 			return "Es hincha del club y no se quiere ir."
-		"por_clausula":
-			return "La cláusula que le querés poner lo encierra. Bajala o pagale más."
 		_:
 			return "Está cómodo donde está: no le movés el amperímetro."
 

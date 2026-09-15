@@ -551,8 +551,13 @@ func _dibujar_cuerpo(ent: Dictionary) -> void:
 	var indice := AtlasJugadores.cuadro(accion, float(ent.get("fase_animacion", 0.0)), dir,
 		pose in [SpritesPartido.CORRE_A, SpritesPartido.CORRE_B], bool(ent.get("arquero", false)))
 	var espejo := bool(ent.get("espejo", false)) if accion == "vuela" else dir in [5, 6, 7]
-	var tex := AtlasJugadores.textura(indice, ent["color"], ent.get("color_short", Color.WHITE),
-		ent.get("color_pelo", SpritesPartido.PELO), espejo, int(ent.get("numero", 0)), int(ent.get("pelo", 0)))
+	var tex: Texture2D
+	if accion == MotorEspacial.ACCION_PALOMITA:
+		var frame := mini(3, int(clampf(float(ent.get("fase_animacion", 0.0)), 0.0, 0.999) * 4.0))
+		tex = SpritesPartido.palomita_png(ent["color"], ent.get("color_short", Color.WHITE), frame, espejo)
+	else:
+		tex = AtlasJugadores.textura(indice, ent["color"], ent.get("color_short", Color.WHITE),
+				ent.get("color_pelo", SpritesPartido.PELO), espejo, int(ent.get("numero", 0)), int(ent.get("pelo", 0)))
 	var lado := 64.0 * escala
 	# Pivote com?n en los pies: no cambia con el ancho de una patada.
 	draw_texture_rect(tex, Rect2((punto - Vector2(lado * 0.5, lado * 0.90625)).round(),

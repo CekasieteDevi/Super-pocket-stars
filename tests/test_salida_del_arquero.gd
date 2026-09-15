@@ -1,7 +1,7 @@
 extends SceneTree
 
-## §4.2: con rivales metidos en su propio tercio, el arquero la manda
-## lejos en vez de repartirla corto — y eso lo decide su INTELIGENCIA.
+## §4.2: con un rival metido en su propio tercio, el arquero la manda
+## lejos en vez de repartirla corto. Es una regla, no un peso.
 ##
 ## Viene de verlo jugando: el arquero atajaba, se la daba a un central con
 ## delanteros encima, se la sacaban en la puerta del area y le pegaban al
@@ -68,7 +68,8 @@ func _escena(inteligencia: int, invasores: int, semilla: int, estilo := "") -> D
 			if str(e["rol"]) in ["DFC", "LAT"]:
 				e["pos"] = Vector2(-36.0, -10.0 if int(id) % 2 == 0 else 10.0)
 			continue
-		if metidos < invasores:
+		# El arquero rival no cuenta como invasor: no va a cortar ningun pase.
+		if metidos < invasores and str(e["rol"]) != "ARQ":
 			e["pos"] = Vector2(-32.0 + metidos * 2.0, -8.0 + metidos * 8.0)
 			metidos += 1
 		else:
@@ -100,39 +101,48 @@ func _brecha(inteligencia: int, invasores: int, semilla: int, estilo := "") -> f
 	return mejor_largo - mejor_corto
 
 
-func _promedio_brecha(inteligencia: int, invasores: int) -> float:
-	var suma := 0.0
-	var n := 40
-	for i in range(n):
-		suma += _brecha(inteligencia, invasores, SEED + i)
-	return suma / float(n)
+## Los tipos de opcion que le quedan al arquero en la escena.
+func _tipos(inteligencia: int, invasores: int, semilla: int) -> Dictionary:
+	var d := _escena(inteligencia, invasores, semilla)
+	var jug := MotorEspacial._dict_jugador(
+		d["estado"], d["casa"], int(d["arquero"]["jugador_id"]))
+	var tipos := {}
+	for o in MotorEspacial.evaluar_opciones(d["estado"], d["arquero"], jug):
+		tipos[str(o["tipo"])] = true
+	return tipos
 
 
+## Con un solo rival en su tercio la revienta, sea lucido o limitado. Antes
+## lo decidia la inteligencia, y el limitado regalaba la pelota en la
+## puerta del area (tests/_diag_arquero_regala.gd).
 func _test_el_arquero_lucido_la_revienta() -> void:
-	print("=== Con rivales en su tercio, al lucido le pesa mas sacarla ===")
-	var lucido := _promedio_brecha(95, 3)
-	var limitado := _promedio_brecha(10, 3)
-	if lucido <= limitado:
-		fallos += 1
-		print("FALLA: lucido %.2f, limitado %.2f; el lucido tendria que preferirlo mas." % [
-			lucido, limitado])
-		return
-	print("OK: con 3 rivales encima, al lucido reventarla le rinde %.2f mas que darla corto, y al limitado %.2f." % [
-		lucido, limitado])
+	print("=== Con un rival en su tercio, ningun arquero sale jugando corto ===")
+	for inteligencia in [10, 95]:
+		for i in range(20):
+			var tipos := _tipos(inteligencia, 1, SEED + i)
+			if tipos.has("pase") or tipos.has("pase_hueco"):
+				fallos += 1
+				print("FALLA: inteligencia %d, semilla %d: todavia puede darla corto %s." % [
+					inteligencia, SEED + i, tipos.keys()])
+				return
+			if not tipos.has("despeje"):
+				fallos += 1
+				print("FALLA: inteligencia %d, semilla %d: no tiene el despeje %s." % [
+					inteligencia, SEED + i, tipos.keys()])
+				return
+	print("OK: con un rival encima, lucido y limitado solo pueden despejar o tirar el pelotazo.")
 
 
 func _test_sin_rivales_cerca_reparte_tranquilo() -> void:
-	print("
-=== Sin nadie cerca, la presion no le mueve la decision ===")
-	var presionado := _promedio_brecha(95, 3)
-	var tranquilo := _promedio_brecha(95, 0)
-	if presionado <= tranquilo:
-		fallos += 1
-		print("FALLA: presionado %.2f, tranquilo %.2f; la presion tendria que empujarlo a sacarla." % [
-			presionado, tranquilo])
-		return
-	print("OK: presionado %.2f contra %.2f tranquilo: la diferencia son los rivales." % [
-		presionado, tranquilo])
+	print("\n=== Sin nadie cerca, puede salir jugando corto ===")
+	for i in range(20):
+		var tipos := _tipos(60, 0, SEED + i)
+		if not tipos.has("pase"):
+			fallos += 1
+			print("FALLA: semilla %d: sin rivales cerca no tiene el pase corto %s." % [
+				SEED + i, tipos.keys()])
+			return
+	print("OK: sin rivales en su tercio le queda el pase corto.")
 
 
 ## Etapa 6, punto 6: la salida la decide el sistema de pases de siempre, con

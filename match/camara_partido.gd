@@ -19,6 +19,12 @@ const PX_POR_METRO_BASE := 22.0
 const PX_POR_METRO_AREA := 18.0
 const PX_POR_METRO_GOL := 15.0
 
+## El festejo en el banderín va CERRADO, al revés que el gol. Con el plano
+## abierto del gol el tope de MARGEN_M no deja subir la cámara hasta el
+## córner: el grupo quedaba pegado al borde de arriba, abajo del marcador.
+## Con 26 px/m el córner entra a un cuarto de pantalla del borde.
+const PX_POR_METRO_FESTEJO := 26.0
+
 ## Segundos de la pelota que la cámara mira "hacia adelante". Sin esto la
 ## cámara siempre va atrás de la jugada.
 const ANTICIPACION := 0.45
@@ -60,6 +66,10 @@ func fijar_encuadre(en_area: bool, festejo: bool) -> void:
 		_objetivo_zoom = PX_POR_METRO_AREA
 	else:
 		_objetivo_zoom = PX_POR_METRO_BASE
+
+
+func encuadrar_festejo() -> void:
+	_objetivo_zoom = PX_POR_METRO_FESTEJO
 
 
 ## Nunca mostrar el vacío: el centro se limita para que el encuadre quede

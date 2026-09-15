@@ -308,6 +308,23 @@ const DESPEJE_RED := 0.5
 const AREA_LARGO := 16.5
 const AREA_MEDIO_ANCHO := 20.16
 
+## Metros hasta la linea de fondo desde los que la banda ya es el ultimo
+## tramo: de ahi para adentro el extremo engancha y la segunda linea llega
+## al pase atras. Estaba escrito a mano en _opcion_enganche y en la llegada
+## de _candidatos_desmarque.
+const ULTIMO_TRAMO_BANDA := 24.0
+
+## Desde el ultimo tercio de la cancha el cambio de frente deja de valer:
+## la pelota cruza por delante del area y el ataque se reinicia en la otra
+## banda en vez de terminar. Medido con tests/_diag_centro_lado_a_lado.gd
+## (semilla 4400, 30 partidos): cortandolo solo a 24 m, desde 24-35 m el
+## 68% de los pelotazos seguia yendo a la otra banda. Con el tercio, 0%.
+const ULTIMO_TERCIO := LARGO / 3.0
+
+## Metros desde la linea de fondo adonde ataca el 9 un centro desde el
+## ultimo tramo: entre el area chica (5,5 m) y el punto penal (11 m).
+const PROFUNDIDAD_DEL_NUEVE_AL_CENTRO := 8.0
+
 ## Metros extra que cubre un arquero tirándose, por encima de lo que
 ## alcanza a correr mientras la pelota viaja.
 const ALCANCE_ESTIRADA := 2.0
@@ -466,6 +483,8 @@ const ACCION_BARRIDA := "barrida"
 const ACCION_VUELA := "vuela"
 ## Un cabezazo no es una patada: sale de un salto y la anima otro sprite.
 const ACCION_CABECEA := "cabecea"
+## Cabezazo en vuelo horizontal, normalmente tras un centro bajo.
+const ACCION_PALOMITA := "palomita"
 ## El gol. Es la unica accion que no dura un instante: el goleador festeja
 ## todo lo que dura la pelota en la red (TICKS_DETENIDO["gol"]).
 const ACCION_FESTEJA := "festeja"
@@ -528,6 +547,27 @@ static func arco_rival(equipo_local: bool) -> Vector2:
 ## Arco que DEFIENDE este equipo.
 static func arco_propio(equipo_local: bool) -> Vector2:
 	return Vector2(-MEDIO_LARGO, 0.0) if equipo_local else Vector2(MEDIO_LARGO, 0.0)
+
+
+## ¿Hay un rival de campo metido en el tercio del arquero? Si lo hay, el
+## arquero la revienta: no sale jugando corto, ni con la pelota en las
+## manos ni en el saque de arco.
+##
+## Antes era un peso que ponderaba la inteligencia, y el saque de arco se la
+## tocaba siempre al defensor mas atrasado. Se veia: la toca al central, el
+## delantero corta el pase y remata, una y otra vez. Medido con
+## tests/_diag_arquero_regala.gd (280 partidos, semilla 77100): el 33% de
+## las salidas del arquero se perdia en el propio tercio, y el 17% de los
+## goles salia de ahi. Con un solo rival alcanza: el que corta el pase es uno.
+static func _arquero_encerrado(estado: Dictionary, es_local: bool) -> bool:
+	var arco_x: float = arco_propio(es_local).x
+	var tercio: float = float(pesos()["fisica"]["tercio_propio_arquero"])
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		if e["equipo_local"] != es_local and e["rol"] != "ARQ" \
+				and absf(arco_x - e["pos"].x) <= tercio:
+			return true
+	return false
 
 
 ## Qué tan buena es una posición para atacar: 1.0 pegado al arco rival,
@@ -957,31 +997,9 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 	# jugando con la pelota en la puerta del propio arco.
 	var acorralado: bool = mi_valor <= float(f["zona_despeje"]) 		and presion >= float(f["presion_despeje"])
 
-	# §4.2: con rivales metidos en tu propio tercio, el arquero la manda
-	# lejos en vez de repartirla corto.
-	#
-	# La medicion no mostraba que el arquero eligiera MAL —el companero al
-	# que se la da esta libre (presion 0,02) y la tasa de pase del motor es
-	# 73%, que es realista— pero salir jugando con tres rivales rondando el
-	# area es una decision, y en el futbol de verdad solo la toma el que
-	# sabe. Lo pondera la INTELIGENCIA: un arquero lucido la revienta, uno
-	# limitado insiste en salir jugando y regala la pelota en la puerta del
-	# area, que es justo el error que uno espera de una division baja.
-	var arquero_apurado := 0.0
-	if es_arquero:
-		var arco_propio := arco_rival(not es_local)
-		var invasores := 0
-		for id_r in estado["jugadores"]:
-			var er: Dictionary = estado["jugadores"][id_r]
-			if er["equipo_local"] == es_local:
-				continue
-			if absf(arco_propio.x - er["pos"].x) <= float(pesos()["fisica"]["tercio_propio_arquero"]):
-				invasores += 1
-		var lucidez_arq: float = clampf(
-			float(jugador["atributos"]["inteligencia"]) / 100.0, 0.0, 1.0)
-		arquero_apurado = clampf(
-			float(invasores) / float(pesos()["fisica"]["invasores_para_reventarla"]),
-			0.0, 1.0) * lucidez_arq
+	# §4.2: con un rival en su tercio, el arquero no sale jugando corto.
+	# Es una REGLA, como `acorralado`, no un peso (ver _arquero_encerrado).
+	var arquero_encerrado: bool = es_arquero and _arquero_encerrado(estado, es_local)
 
 	# --- Conducir -----------------------------------------------------
 	# `camino_libre` responde una pregunta que ningun otro termino hacia:
@@ -1022,7 +1040,9 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 	# Metido en tu campo y con gente encima: reventarla arriba y lejos. A
 	# diferencia del pelotazo no busca a nadie — es sacarla de la zona de
 	# peligro, y por eso no pide ningún atributo técnico.
-	if mi_valor <= float(f["zona_despeje"]) and presion >= float(f["presion_despeje"]):
+	# El arquero encerrado siempre lo tiene: si ningun companero queda a
+	# tiro de pelotazo, el despeje es la unica salida que le queda.
+	if acorralado or arquero_encerrado:
 		var wd: Dictionary = w["despeje"]
 		opciones.append({
 			"tipo": "despeje",
@@ -1195,13 +1215,29 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 					"detalle": {"dist": distancia_espacio, "riesgo": riesgo_espacio, "corrida_preparada": true}})
 
 		# El centro tiene alcance aereo, independiente del pase corto.
-		if puede_centrar and dist <= max_largo and _en_el_area(comp["pos"], es_local):
+		# Tambien se cuelga al ESPACIO: al punto del area adonde ya corre un
+		# companero. Con el centro solo al que estaba parado adentro, casi
+		# nunca habia a quien: medido (tests/_diag_centro_lado_a_lado.gd,
+		# semilla 4400, 30 partidos), con la pelota abierta entre 20 y 32 m
+		# el 9 pisaba el area el 16% del tiempo y salian 0,6 centros por
+		# partido. Sin receptor el extremo cambiaba de frente por encima del area.
+		var punto_centro = null
+		if puede_centrar and _en_el_area(comp["pos"], es_local):
+			punto_centro = comp["pos"]
+		elif puede_centrar and corrida.get("tipo", "") in ["ruptura", "llegada"] \
+				and _en_el_area(corrida["destino"], es_local):
+			var destino_centro: Vector2 = corrida["destino"]
+			var velocidad_centro := _por_atributo(jugador, atributo_pase(jugador, pos.distance_to(destino_centro)), f["vel_pase_min"], f["vel_pase_max"])
+			var tiempo_centro := pos.distance_to(destino_centro) / maxf(velocidad_centro, 1.0)
+			if comp["pos"].distance_to(destino_centro) <= float(comp["vel_max"]) * tiempo_centro * 0.75 + 1.5:
+				punto_centro = destino_centro
+		if punto_centro != null and pos.distance_to(punto_centro) <= max_largo:
 			var wce: Dictionary = w["centro"]
 			var u_centro: float = wce["base"] \
 				+ wce["punteria"] * (float(jugador["atributos"]["centros"]) / 100.0) \
-				+ wce["progreso"] * (valor_posicion(comp["pos"], es_local) - mi_valor)
+				+ wce["progreso"] * (valor_posicion(punto_centro, es_local) - mi_valor)
 			opciones.append({
-				"tipo": "centro", "utilidad": u_centro, "objetivo_id": id,
+				"tipo": "centro", "utilidad": u_centro, "objetivo_id": id, "punto": punto_centro,
 				"detalle": {"centros": jugador["atributos"]["centros"]},
 			})
 
@@ -1217,14 +1253,20 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 			var cambia_banda: bool = pos.y * comp["pos"].y < 0.0 and absf(pos.y - comp["pos"].y) >= AREA_MEDIO_ANCHO \
 				and progreso_hacia(comp, pos, es_local) >= -0.06 \
 				and (presion > 0.2 or camino_libre < 0.5) \
-				and presion_normalizada(estado, comp["pos"], es_local) < 0.25
+				and presion_normalizada(estado, comp["pos"], es_local) < 0.25 \
+				and absf(arco_rival(es_local).x - pos.x) >= ULTIMO_TERCIO
 			cambia_banda = cambia_banda or ventaja_cambio > 0.0
 			if dist > max_largo or (progreso_hacia(comp, pos, es_local) <= 0.0 and not cambia_banda):
+				continue
+			# Tampoco por progreso: desde el ultimo tercio, un pelotazo a la otra
+			# banda pasa por encima del area igual (ver _ventaja_cambio_frente).
+			if pos.y * comp["pos"].y < 0.0 and absf(comp["pos"].y) >= float(f["banda_para_centrar"]) \
+					and absf(arco_rival(es_local).x - pos.x) < ULTIMO_TERCIO:
 				continue
 			var u_largo: float = wl["base"] \
 				+ wl["progreso"] * (valor_posicion(comp["pos"], es_local) - mi_valor) \
 				+ wl["presion"] * presion \
-				+ wl["salida"] * (1.0 - mi_valor) 				+ wl["arquero_apurado"] * arquero_apurado
+				+ wl["salida"] * (1.0 - mi_valor)
 			u_largo += ventaja_cambio * 0.9
 			opciones.append({
 				"tipo": "pase_largo", "utilidad": u_largo, "objetivo_id": id,
@@ -1236,7 +1278,7 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 		var u_pase: float = wp["base"] \
 			+ wp["progreso"] * progreso \
 			+ wp["seguridad"] * (1.0 - riesgo) \
-			- wp["distancia"] * (dist / max_dist) 			- wp["arquero_apurado"] * arquero_apurado
+			- wp["distancia"] * (dist / max_dist)
 		# El pase atras es un recurso para salir de una presion, no la
 		# jugada de un jugador libre y con la cancha abierta por delante.
 		# Sin esto competia de igual a igual con seguir corriendo, y encima
@@ -1293,7 +1335,9 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 		# tiene que salir a buscarlo. Rompe la línea de fondo rival, pero
 		# la pelota viaja más y por una zona más disputada, así que la
 		# chance de que la corten es bastante mayor.
-		if not ve_el_hueco:
+		# El arquero no la tira al hueco: medido, el 62% de esos pases los
+		# cortaba el rival en el propio tercio (tests/_diag_arquero_regala.gd).
+		if not ve_el_hueco or es_arquero:
 			continue
 		var punto := _punto_al_hueco(comp, es_local)
 		var dist_hueco: float = pos.distance_to(punto)
@@ -1320,7 +1364,7 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 	# Ver `acorralado` arriba: con la pelota en tu propia zona y gente
 	# encima, se descartan las opciones de seguir jugandola. Se filtra al
 	# final y no en cada bloque para que la regla se lea de una sola vez.
-	if acorralado:
+	if acorralado or arquero_encerrado:
 		var salidas := []
 		for o in opciones:
 			if SALIDAS_DE_EMERGENCIA.has(str(o["tipo"])):
@@ -1542,7 +1586,7 @@ static func _opcion_enganche(estado: Dictionary, poseedor: Dictionary, jugador: 
 	var f: Dictionary = pesos()["fisica"]
 	var distancia_arco := absf(arco_rival(local).x - pos.x)
 	if poseedor["rol"] == "ARQ" or absf(pos.y) < float(f["banda_para_centrar"]) \
-			or distancia_arco < 6.0 or distancia_arco > 24.0 \
+			or distancia_arco < 6.0 or distancia_arco > ULTIMO_TRAMO_BANDA \
 			or float(jugador["atributos"]["centros"]) < float(f["centros_minimo"]):
 		return {}
 	var amenaza := false
@@ -1659,6 +1703,37 @@ static func remata_de_acrobacia(jugador: Dictionary) -> bool:
 	return float(jugador["atributos"]["volea"]) > float(jugador["atributos"]["cabezazo"]) + 12.0
 
 
+## Chance de intentar una volea cuando el centro cae dentro del area.
+## No reemplaza al cabezazo: premia la volea, pero deja que aparezca tambien
+## en delanteros mixtos. La distancia evita que todo centro termine igual.
+static func chance_volea_desde_centro(jugador: Dictionary, punto: Vector2,
+		arco: Vector2, rng: RandomNumberGenerator) -> bool:
+	var attrs: Dictionary = jugador["atributos"]
+	var volea := float(attrs.get("volea", 0.0))
+	var cabezazo := float(attrs.get("cabezazo", 0.0))
+	var distancia := punto.distance_to(arco)
+	var zona := clampf(1.0 - absf(distancia - 12.0) / 12.0, 0.0, 1.0)
+	var tecnica := clampf((volea - cabezazo + 35.0) / 100.0, 0.0, 1.0)
+	var chance := clampf(0.035 + tecnica * 0.25 + zona * 0.075, 0.0, 0.34)
+	return rng.randf() < chance
+
+
+## Variante rara del cabezazo: centro bajo, zona de remate cercana y jugador
+## con buena capacidad aérea/agilidad.
+static func remata_de_palomita(jugador: Dictionary, punto: Vector2,
+		arco: Vector2, rng: RandomNumberGenerator) -> bool:
+	var distancia := punto.distance_to(arco)
+	if distancia < 5.0 or distancia > 18.0:
+		return false
+	var attrs: Dictionary = jugador["atributos"]
+	var calidad := clampf((float(attrs.get("cabezazo", 0.0)) * 0.45 \
+		+ float(attrs.get("salto", 0.0)) * 0.25 \
+		+ float(attrs.get("agilidad", 0.0)) * 0.30) / 100.0, 0.0, 1.0)
+	var cercania := 1.0 - absf(distancia - 11.0) / 7.0
+	var chance := clampf(0.035 + calidad * 0.10 + maxf(cercania, 0.0) * 0.075, 0.0, 0.22)
+	return rng.randf() < chance
+
+
 static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bool, minuto: int) -> void:
 	var f: Dictionary = pesos()["fisica"]
 	var rng: RandomNumberGenerator = estado["rng"]
@@ -1747,14 +1822,25 @@ static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bo
 		if _en_el_area(punto, ataca_local):
 			var acrobacia := remata_de_acrobacia(j_a)
 			var accion := ACCION_CABECEA
-			if not acrobacia:
-				estado["centros"]["cabezazos"] = int(estado["centros"].get("cabezazos", 0)) + 1
-			if acrobacia:
-				# Cerca del arco puede intentar la chilena; la volea sigue siendo
-				# la salida habitual. Ambas usan la misma tecnica de remate aereo.
-				accion = "chilena" if punto.distance_to(arco_rival(ataca_local)) < 9.0 and rng.randf() < 0.25 else "volea"
+			var accion_forzada := str(estado.get("forzar_centro_accion", ""))
+			var palomita_forzada := accion_forzada == ACCION_PALOMITA \
+				or bool(estado.get("forzar_palomita", false))
+			if palomita_forzada or (accion_forzada not in ["volea", "chilena"] \
+				and not acrobacia and remata_de_palomita(j_a, punto, arco_rival(ataca_local), rng)):
+				estado.erase("forzar_centro_accion")
+				estado.erase("forzar_palomita")
+				accion = ACCION_PALOMITA
+				estado["centros"]["palomitas"] = int(estado["centros"].get("palomitas", 0)) + 1
+			elif acrobacia or accion_forzada in ["volea", "chilena"] \
+				or chance_volea_desde_centro(j_a, punto, arco_rival(ataca_local), rng):
+				estado.erase("forzar_centro_accion")
+				accion = accion_forzada if accion_forzada in ["volea", "chilena"] else \
+					("chilena" if punto.distance_to(arco_rival(ataca_local)) < 9.0 and rng.randf() < 0.25 else "volea")
 				estado["centros"][accion + "s"] = int(estado["centros"].get(accion + "s", 0)) + 1
-			_resolver_tiro(estado, estado["jugadores"][atacante], j_a, "volea" if acrobacia else "cabezazo", accion)
+			else:
+				estado["centros"]["cabezazos"] = int(estado["centros"].get("cabezazos", 0)) + 1
+			var attr_remate := "volea" if accion in ["volea", "chilena"] else "cabezazo"
+			_resolver_tiro(estado, estado["jugadores"][atacante], j_a, attr_remate, accion)
 	else:
 		_entregar_rodando(estado, defensor)
 		estado["eventos"].append({
@@ -2915,6 +3001,12 @@ static func _valor_de_desmarque(estado: Dictionary, e: Dictionary, poseedor: Dic
 static func _ventaja_cambio_frente(estado: Dictionary, desde: Vector2, destino: Vector2, local: bool) -> float:
 	if absf(desde.y) < 10.0 or desde.y * destino.y >= 0.0 or absf(destino.y) < 16.0:
 		return 0.0
+	# En el ultimo tercio cambiar de frente es cruzarla por encima
+	# del area. Medido (tests/_diag_centro_lado_a_lado.gd, semilla 4400): el
+	# 53% de los pelotazos desde la zona de centro iba al extremo de la otra
+	# banda, y solo el 15% terminaba en remate. Ahi la jugada es el centro.
+	if absf(arco_rival(local).x - desde.x) < ULTIMO_TERCIO:
+		return 0.0
 	if (destino.x - desde.x) * (1.0 if local else -1.0) < -6.0:
 		return 0.0
 	var presion_destino := presion_normalizada(estado, destino, local)
@@ -3038,10 +3130,16 @@ static func _candidatos_desmarque(estado: Dictionary, e: Dictionary, poseedor: D
 	# Arrancar antes de que el extremo llegue al area: si espera a que
 	# gane fondo, el rematador tiene que recorrer veinte metros tarde.
 	if absf(desde.y) >= float(pesos()["fisica"]["banda_para_centrar"]) \
-			and absf(arco.x - desde.x) < 24.0 and rol in ["MC", "MCO", "DC", "EXT"]:
+			and absf(arco.x - desde.x) < ULTIMO_TRAMO_BANDA and rol in ["MC", "MCO", "DC", "EXT"]:
 		for lateral in [-6.0, 0.0, 6.0]:
 			# Si el extremo aun no gano fondo, ofrecer remate desde el borde.
 			var profundidad := clampf(absf(arco.x - desde.x) + 4.0, 11.0, 16.0)
+			# El 9 no espera el pase atras en el punto penal: ataca el
+			# centro entre el area chica y el penal. Con los 11-16 m de los
+			# demas, medido en tests/_diag_mco_llegada.gd (semilla 4400), su
+			# plan quedaba a 14,4 m del fondo y el estaba a 19,8 m.
+			if rol == "DC":
+				profundidad = PROFUNDIDAD_DEL_NUEVE_AL_CENTRO
 			var punto_atras := _destino_legal(estado, Vector2(arco.x - signo * profundidad, lateral), local)
 			if pos.distance_to(punto_atras) > 22.0 or (punto_atras.x - pos.x) * signo < -2.0:
 				continue
@@ -5560,6 +5658,16 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 	var pelota: Dictionary = estado["pelota"]
 	var pasador_local: bool = pelota.get("pasador_local", true)
 	var minuto := _minuto_int(estado)
+	# Dejar un tick la pelota fuera de la cancha. Si cobramos el lateral o
+	# corner en el mismo tick que cruza la linea, el fotograma se reemplaza
+	# por la pelota ya acomodada para el saque y parece que se frena frente
+	# al arco (sobre todo despues de un rebote central).
+	if pelota.has("salida_cruzada"):
+		var datos_cruce: Dictionary = pelota["salida_cruzada"]
+		pelota.erase("salida_cruzada")
+		pelota.erase("saliendo")
+		_resolver_salida(estado, datos_cruce["punto"], bool(datos_cruce["toco_local"]))
+		return
 	# La pelota que ya tiene dueno decidido NO dobla hacia el: sigue
 	# derecho y va frenando, y el tipo va a buscarla. Apuntarsela —como
 	# hacia la primera version de esto— se ve como un iman: la pelota
@@ -5626,10 +5734,12 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 	if pelota.has("saliendo"):
 		if llego:
 			var datos_salida: Dictionary = pelota["saliendo"]
-			pelota.erase("saliendo")
+			# `saliendo` queda visible en el snapshot de este tick. El siguiente
+			# tick cobra el reinicio, ya con la pelota claramente afuera.
+			pelota["salida_cruzada"] = datos_salida
 			pelota["altura_max"] = 0.0
 			pelota["z"] = 0.0
-			_resolver_salida(estado, datos_salida["punto"], bool(datos_salida["toco_local"]))
+			pelota["vel"] = Vector2.ZERO
 		return
 
 	var origen: Vector2 = pelota.get("origen_pos", desde)
@@ -7173,7 +7283,7 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 			# altura conserva sus controles e intercepciones reales al caer.
 			estado["pelota"]["altura_max"] = float(f["z_inalcanzable"]) * 1.4
 		"centro":
-			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador)
+			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador, elegida.get("punto", null))
 			# El centro se lanza como pase, así que el XP de `pases` ya se
 			# sumó; se corrige acá, que es donde se sabe que era centro.
 			_xp_e(estado, poseedor, "pases", -1.0)
@@ -8009,6 +8119,12 @@ static func _tocar_corto(estado: Dictionary, saca_local: bool) -> void:
 	if jugador.is_empty():
 		return
 
+	# Saque de arco con rivales cerca: la revienta en vez de tocarla al
+	# central (ver _arquero_encerrado).
+	if poseedor["rol"] == "ARQ" and _arquero_encerrado(estado, saca_local):
+		_despejar(estado, poseedor, jugador)
+		return
+
 	var f: Dictionary = pesos()["fisica"]
 	var attr := atributo_pase(jugador, 0.0)
 	var max_corto: float = _por_atributo(jugador, attr,
@@ -8363,6 +8479,7 @@ static func _push_fotograma(estado: Dictionary, eventos_del_tick: Array = []) ->
 			# cuando la UI lo soporte.
 			"z": float(estado["pelota"].get("z", 0.0)),
 			"poseedor_id": estado["pelota"]["poseedor_id"],
+			"saliendo": estado["pelota"].has("saliendo"),
 		},
 		"jugadores": jugadores,
 		"decision": estado.get("ultima_decision", null),

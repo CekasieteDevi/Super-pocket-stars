@@ -11,7 +11,6 @@ var gs = null
 
 func _init() -> void:
 	_test_pase_completo()
-	_test_una_clausula_desmedida_espanta_al_jugador()
 	_test_el_jugador_puede_decir_que_no()
 	if gs != null:
 		gs.free()
@@ -65,8 +64,7 @@ func _test_pase_completo() -> void:
 		return
 
 	var sueldo: float = maxf(1000.0, float(vendedor.sueldos.get(id, 1000.0))) * 4.0
-	var clausula := ValorJugador.calcular(jugador, 50.0, 3) * Team.FACTOR_CLAUSULA
-	var cierre: Dictionary = gs.cerrar_fichaje(int(r["oferta"]["id"]), sueldo, 4, clausula)
+	var cierre: Dictionary = gs.cerrar_fichaje(int(r["oferta"]["id"]), sueldo, 4)
 	if not cierre["exito"]:
 		print("FALLA: el jugador rechazo un sueldo x4 (%s)." % cierre["motivo"])
 		return
@@ -75,15 +73,13 @@ func _test_pase_completo() -> void:
 	var lo_perdio := Mercado.ubicar(vendedor, id).is_empty()
 	var sueldo_ok: bool = is_equal_approx(float(gs.equipo_jugador.sueldos[id]), sueldo)
 	var anios_ok: bool = int(gs.equipo_jugador.contratos[id]) == 4
-	var clausula_ok: bool = is_equal_approx(float(gs.equipo_jugador.clausulas[id]), clausula)
 	var plantel_ok: bool = vendedor.jugadores.size() + vendedor.banco.size() == plantel_antes
-	if lo_tengo and lo_perdio and sueldo_ok and anios_ok and clausula_ok and plantel_ok:
-		print("OK: cerrado por %s, 4 anios a %s, clausula %s, vendedor sigue con %d." % [
-			Economia.formato_dinero(pedido), Economia.formato_dinero(sueldo),
-			Economia.formato_dinero(clausula), plantel_antes])
+	if lo_tengo and lo_perdio and sueldo_ok and anios_ok and plantel_ok:
+		print("OK: cerrado por %s, 4 anios a %s, vendedor sigue con %d." % [
+			Economia.formato_dinero(pedido), Economia.formato_dinero(sueldo), plantel_antes])
 	else:
-		print("FALLA: tengo=%s perdio=%s sueldo=%s anios=%s clausula=%s plantel=%s" % [
-			lo_tengo, lo_perdio, sueldo_ok, anios_ok, clausula_ok, plantel_ok])
+		print("FALLA: tengo=%s perdio=%s sueldo=%s anios=%s plantel=%s" % [
+			lo_tengo, lo_perdio, sueldo_ok, anios_ok, plantel_ok])
 
 
 func _test_una_clausula_desmedida_espanta_al_jugador() -> void:

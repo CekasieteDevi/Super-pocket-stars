@@ -49,9 +49,23 @@ const PUESTOS_DE_ARRIBA := 3
 const PUESTOS_DE_ABAJO := 3
 
 
+## §3: el ánimo entra al duelo. Lineal alrededor de 50, que es neutro y
+## es donde nace todo jugador: con 100 suma esto, con 0 lo resta. El
+## ±3 queda por debajo de los bonus de ocasión (+4) porque el ánimo está
+## prendido todo el año y los otros solo en partidos puntuales.
+##
+## Medido con tests/_diag_animo_bola_de_nieve.gd (divisiones 1, 5 y 10,
+## 4 semillas): el desvío de puntos pasa de ~16 a ~17,5 y queda dentro
+## del ruido entre semillas. Subir Team.DERIVA_ANIMO_POR_SEMANA a 1,5 o 2
+## no achica esa brecha y aplasta el ánimo contra 50: con 2, el top 3
+## termina en 55 y el bonus casi desaparece. Por eso la deriva quedó en 1.
+const BONUS_ANIMO_MAXIMO := 3.0
+
+
 ## Lo que suma la motivación para este jugador en este partido.
 static func modificador(jugador: Dictionary, equipo: Team, rival: Team) -> float:
-	var total := 0.0
+	var animo: float = clampf(equipo.animo.get(jugador["id"], 50.0), 0.0, 100.0)
+	var total := (animo - 50.0) / 50.0 * BONUS_ANIMO_MAXIMO
 	if es_ex_club(jugador, rival):
 		total += BONUS_EX_CLUB
 	if equipo.recta_final_caliente:

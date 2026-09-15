@@ -199,7 +199,7 @@ static func _responde_vendedor(equipo: Team, oferta: Dictionary, vendedor: Team,
 		return
 	if int(oferta["ronda"]) >= RONDAS_MAXIMAS:
 		oferta["estado"] = RETIRADA
-		_anotar(oferta, "%s se cansó de negociar y se levantó de la mesa." % vendedor.nombre)
+		_anotar(oferta, "%s rechazó tu contraoferta y se levantó de la mesa." % vendedor.nombre)
 		return
 
 	oferta["monto"] = float(r["pedido"])
@@ -233,7 +233,7 @@ static func _responde_comprador(equipo: Team, oferta: Dictionary, comprador: Tea
 		return
 	if int(oferta["ronda"]) >= RONDAS_MAXIMAS:
 		oferta["estado"] = RETIRADA
-		_anotar(oferta, "%s no llega a esa cifra y se retira." % comprador.nombre)
+		_anotar(oferta, "%s rechazó tu contraoferta y se retira." % comprador.nombre)
 		return
 
 	# Le pone lo que puede: su tope, o lo que le entra en la caja.
@@ -241,7 +241,7 @@ static func _responde_comprador(equipo: Team, oferta: Dictionary, comprador: Tea
 		comprador.caja["fichajes"] * Mercado.FRACCION_MAXIMA_POR_FICHAJE)
 	if mejorado <= float(oferta["monto"]) * 0.5:
 		oferta["estado"] = RETIRADA
-		_anotar(oferta, "%s no puede pagar eso y se retira." % comprador.nombre)
+		_anotar(oferta, "%s rechazó tu contraoferta: no puede pagar eso y se retira." % comprador.nombre)
 		return
 	oferta["monto"] = mejorado
 	oferta["estado"] = PENDIENTE_NOSOTROS

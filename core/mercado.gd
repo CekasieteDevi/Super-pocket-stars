@@ -205,7 +205,7 @@ static func ubicar(vendedor: Team, jugador_id: int) -> Dictionary:
 ## dabas tu titular mas flojo de ese puesto) y pagar_clausula(). Las dos
 ## miraban solo vendedor.jugadores y las dos quedaron borradas.
 static func comprar_al_contado(comprador: Team, vendedor: Team, jugador_id: int,
-		rng: RandomNumberGenerator, forzar: bool = false) -> Dictionary:
+		rng: RandomNumberGenerator, _forzar_obsoleto: bool = false) -> Dictionary:
 	if comprador == vendedor:
 		return {"exito": false, "motivo": "Ese jugador ya es tuyo."}
 	var donde := ubicar(vendedor, jugador_id)
@@ -215,7 +215,7 @@ static func comprar_al_contado(comprador: Team, vendedor: Team, jugador_id: int,
 
 	var valor := ValorJugador.calcular(
 		jugador, vendedor.animo.get(jugador_id, 50.0), vendedor.contratos.get(jugador_id, 3))
-	var precio: float = vendedor.clausulas.get(jugador_id, valor * Team.FACTOR_CLAUSULA) if forzar else valor
+	var precio: float = valor
 
 	if comprador.caja["fichajes"] < precio:
 		return {"exito": false, "motivo": "No te alcanza el presupuesto de Fichajes.",
@@ -226,9 +226,9 @@ static func comprar_al_contado(comprador: Team, vendedor: Team, jugador_id: int,
 	if not Economia.puede_pagar_contrato(comprador, sueldo):
 		return Economia.motivo_contrato_corto(comprador, sueldo)
 
-	if not forzar and rng.randf() < resistencia_venta(vendedor, jugador):
+	if rng.randf() < resistencia_venta(vendedor, jugador):
 		return {"exito": false, "motivo": "El club no quiere desprenderse de esa pieza con una oferta común.",
-			"resistencia": true, "clausula": vendedor.clausulas.get(jugador_id, valor * Team.FACTOR_CLAUSULA)}
+			"resistencia": true}
 
 	# La cantera no es plantel: sale de la lista y listo, no hay hueco que
 	# tapar. Del plantel si, y de eso se encarga Team.perder_jugador.

@@ -240,6 +240,7 @@ var sponsors: Array = []
 var sponsors_ofertas: Array = []
 var ingresos_sponsors: float = 0.0
 var sueldos: Dictionary = {}  # jugador_id -> sueldo anual
+var clausulas: Dictionary = {} # Campo legado; no participa del juego.
 var contratos: Dictionary = {}  # jugador_id -> años restantes
 ## A quién se le venció el contrato en el último cierre y quién le tapó el
 ## puesto. Solo lo llena el club del jugador humano (ver
@@ -254,7 +255,6 @@ var vencimientos_del_cierre: Array = []
 ## obligatoria — sin la resistencia que tiene una oferta común (ver
 ## Mercado.resistencia_venta). Se fija al ficharlo (_registrar_fichaje) y
 ## no cambia mientras esté en el club.
-var clausulas: Dictionary = {}  # jugador_id -> monto de la cláusula
 var reputacion: float = 50.0  # 0-100, afecta entradas/sponsors (§10.5)
 var quebrado: bool = false
 ## Objetivos de directiva (§10.5/§15): la directiva te pide un resultado
@@ -446,7 +446,6 @@ func guardar() -> Dictionary:
 		"ingresos_sponsors": ingresos_sponsors,
 		"sueldos": _claves_a_texto(sueldos), "contratos": _claves_a_texto(contratos),
 		"vencimientos_del_cierre": vencimientos_del_cierre,
-		"clausulas": _claves_a_texto(clausulas),
 		"renovaciones": _claves_a_texto(renovaciones),
 		"reputacion": reputacion, "quebrado": quebrado, "scouts": scouts, "instalaciones": instalaciones,
 		"familiaridad": familiaridad, "quimica": quimica,
@@ -580,7 +579,6 @@ static func cargar(datos: Dictionary) -> Team:
 	t.ingresos_sponsors = float(datos.get("ingresos_sponsors", 0.0))
 	t.sueldos = _claves_a_entero(datos["sueldos"])
 	t.contratos = _claves_a_entero(datos["contratos"])
-	t.clausulas = _claves_a_entero(datos.get("clausulas", {}))
 	t.renovaciones = _claves_a_entero(datos.get("renovaciones", {}))
 	t.reputacion = datos["reputacion"]
 	t.quebrado = datos["quebrado"]
@@ -859,6 +857,9 @@ func jugadores_sanos_count() -> int:
 			count += 1
 	return count
 
+# Compatibilidad de tests antiguos. La mecánica ya no usa este valor.
+const FACTOR_CLAUSULA := 1.8
+
 
 ## §8.7: disponible para jugar AHORA — ni lesionado, ni expulsado en el
 ## partido en curso, ni cumpliendo una suspensión por tarjetas.
@@ -868,7 +869,6 @@ func puede_jugar(jugador_id: int) -> bool:
 
 ## Cuánto más que el valor de mercado hace falta pagar para forzar una
 ## venta sin resistencia (ver Mercado.pagar_clausula).
-const FACTOR_CLAUSULA := 1.8
 
 
 ## Da de alta a un jugador que se suma al plantel (fichaje, ascenso desde
@@ -901,7 +901,6 @@ func _registrar_fichaje(jugador: Dictionary, valor: float, contrato_anios: int =
 		caja["contratos"] -= sueldos[id]
 	animo[id] = 50.0
 	fatiga_acumulada[id] = 1.0
-	clausulas[id] = valor * FACTOR_CLAUSULA
 
 
 ## Da de baja a un jugador que se va del club (vendido, liberado).
@@ -919,7 +918,6 @@ func _limpiar_registro(id: int) -> void:
 	animo.erase(id)
 	fatiga_acumulada.erase(id)
 	lesiones.erase(id)
-	clausulas.erase(id)
 
 
 ## Mete a un jugador en el banco. La usa el mercado cuando un fichaje
@@ -1613,7 +1611,6 @@ func ajustar_convocatorias_de_emergencia(minimo: int) -> Dictionary:
 				# volveria a la cantera curado de arriba.
 				sueldos.erase(j["id"])
 				contratos.erase(j["id"])
-				clausulas.erase(j["id"])
 				banco.remove_at(i)
 				cantera.append(j)
 				bajados.append(j)

@@ -153,6 +153,9 @@ func _test_observabilidad() -> void:
 		"cada intento y gol no penal tiene una sola fila de diagnóstico")
 	for resultado in [normal, diagnostico, visual]:
 		resultado.erase("fotogramas")
-		resultado["stats"].erase("registro_remates")
+		# Solo existen con el diagnostico prendido: comparar si se midio no
+		# dice nada de si el partido cambio.
+		for clave in ["registro_remates", "jugadas_colectivas", "metros_conduccion", "muestra_pase_atras"]:
+			resultado["stats"].erase(clave)
 	_comprobar(normal == diagnostico and normal == visual,
 		"diagnóstico y fotogramas conservan eventos, estadísticas, XP y RNG")

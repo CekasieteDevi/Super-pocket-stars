@@ -54,10 +54,9 @@ func _test_team_roundtrip(rng: RandomNumberGenerator) -> void:
 	ok = ok and cargado.instalaciones["medica"] == 4
 	ok = ok and cargado.suspendidos.get(id_jugador, 0) == 2  # sobrevive como INT, no como "id_jugador" string
 	ok = ok and is_equal_approx(cargado.sueldos.get(id_jugador, -1.0), equipo.sueldos[id_jugador])
-	ok = ok and is_equal_approx(cargado.clausulas.get(id_jugador, -1.0), equipo.clausulas[id_jugador])
 
 	if ok:
-		print("OK: reputacion, quebrado, instalaciones, cantera, suspendidos (con clave int) y sueldos/clausulas sobreviven la vuelta.")
+		print("OK: reputacion, quebrado, instalaciones, cantera, suspendidos (con clave int) y sueldos sobreviven la vuelta.")
 	else:
 		print("FALLA: cargado=%s" % [cargado.guardar()])
 

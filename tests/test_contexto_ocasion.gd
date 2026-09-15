@@ -49,12 +49,20 @@ func _init() -> void:
 				var probabilidad: float = remate["ejecucion"]["probabilidad_modelo_porteria_sin_bloqueo"]
 				iguales = iguales and probabilidad >= 0.0 and probabilidad <= 1.0
 				remates += 1
-			normal["stats"].erase("registro_remates")
-			observado["stats"].erase("registro_remates")
+			_quitar_mediciones(normal)
+			_quitar_mediciones(observado)
 			iguales = iguales and normal == observado
 	_comprobar(iguales and remates > 0, "30 pares conservan eventos, estadísticas, XP y RNG; %d ocasiones registradas" % remates)
 	print("FALLOS=%d" % fallos)
 	quit(1 if fallos else 0)
+
+
+## Lo que SOLO existe con el diagnostico prendido: el registro de remates y
+## los contadores de medir_opciones_colectivas. Compararlos es comparar si
+## se midio, no si el partido cambio.
+static func _quitar_mediciones(resultado: Dictionary) -> void:
+	for clave in ["registro_remates", "jugadas_colectivas", "metros_conduccion", "muestra_pase_atras"]:
+		resultado["stats"].erase(clave)
 
 
 func _comprobar(condicion: bool, mensaje: String) -> void:
