@@ -98,6 +98,14 @@ static func linea(evento: Dictionary, nombres: Dictionary) -> String:
 static func _quien(evento: Dictionary, nombres: Dictionary) -> String:
 	var clave := int(evento.get("clave", -1))
 	if clave != -1 and nombres.has(clave):
-		return str(nombres[clave])
+		var nombre := str(nombres[clave])
+		# `nombres` conserva el puesto natural del jugador, pero durante el
+		# partido puede ocupar otro slot (por una eleccion tactica o un
+		# cambio). La cancha muestra el rol del slot; el relato debe hacer lo
+		# mismo para no decir "DFC" cuando en pantalla juega de "DC".
+		var rol := str(evento.get("jugador_posicion", ""))
+		if rol != "" and nombre.find(" ") != -1:
+			return "%s%s" % [rol, nombre.substr(nombre.find(" "))]
+		return nombre
 	var rol := str(evento.get("jugador_posicion", ""))
 	return rol if rol != "" else "el equipo"
