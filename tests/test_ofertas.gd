@@ -13,6 +13,7 @@ func _init() -> void:
 	_test_la_miseria_corta_la_negociacion()
 	_test_el_veto_se_avisa_una_sola_vez()
 	_test_llegan_ofertas_por_los_mios()
+	_test_el_crack_de_abajo_lo_buscan_los_de_arriba()
 	_test_aceptar_no_garantiza_la_venta()
 	_test_lo_terminado_va_al_historial()
 	_test_guardado()
@@ -162,17 +163,54 @@ func _test_llegan_ofertas_por_los_mios() -> void:
 	var p := _partida()
 	var mio: Team = p["mio"]
 	var rng: RandomNumberGenerator = p["rng"]
-	var recibidas := 0
+	# Se limpia la bandeja en cada vuelta: una oferta abierta bloquea otra
+	# por el mismo jugador, y sin limpiar el test medía cuantos jugadores
+	# destacan en el plantel y no si llegan ofertas.
+	var recibidas := []
 	for _i in range(60):
-		recibidas += Ofertas.generar_entrantes(mio, p["piramide"], rng, 7, 4).size()
+		recibidas.append_array(Ofertas.generar_entrantes(mio, p["piramide"], rng, 7, 4))
+		mio.ofertas.clear()
 	var todas_por_los_mios := true
-	for o in mio.ofertas:
+	for o in recibidas:
 		if not bool(o["entrante"]) or Mercado.ubicar(mio, int(o["jugador_id"])).is_empty():
 			todas_por_los_mios = false
-	if recibidas > 5 and todas_por_los_mios:
-		print("OK: %d ofertas en 60 semanas, todas por jugadores del plantel." % recibidas)
+	if recibidas.size() > 30 and todas_por_los_mios:
+		print("OK: %d ofertas en 60 semanas, todas por jugadores del plantel." % recibidas.size())
 	else:
-		print("FALLA: %d ofertas, coherentes=%s" % [recibidas, todas_por_los_mios])
+		print("FALLA: %d ofertas, coherentes=%s" % [recibidas.size(), todas_por_los_mios])
+
+
+func _test_el_crack_de_abajo_lo_buscan_los_de_arriba() -> void:
+	print("\n=== El crack de una division baja recibe ofertas; el suplente flojo no ===")
+	var p := _partida(6)
+	var mio: Team = p["mio"]
+	var rng: RandomNumberGenerator = p["rng"]
+	# Media de dos divisiones mas arriba: es el que un club de arriba ficha.
+	var crack: Dictionary = mio.jugadores[10]
+	crack["media"] = NivelDivision.media_de(4) + 2.0
+	crack["edad"] = 25
+	var flojo: Dictionary = mio.banco[0]
+	flojo["media"] = mio.media_equipo() - 10.0
+	flojo["edad"] = 30
+
+	var por_crack := 0
+	var de_arriba := 0
+	var por_flojo := 0
+	for _i in range(400):
+		for o in Ofertas.generar_entrantes(mio, p["piramide"], rng, 2, 6):
+			if int(o["jugador_id"]) == int(crack["id"]):
+				por_crack += 1
+				for d in range(6):
+					for e in p["piramide"].divisiones[d].equipos:
+						if e.nombre == str(o["club"]):
+							de_arriba += 1
+			elif int(o["jugador_id"]) == int(flojo["id"]):
+				por_flojo += 1
+		mio.ofertas.clear()
+	if por_crack >= 10 and de_arriba == por_crack and por_flojo == 0:
+		print("OK: %d ofertas por el crack, todas de divisiones de arriba; ninguna por el flojo." % por_crack)
+	else:
+		print("FALLA: crack=%d (de arriba %d) flojo=%d" % [por_crack, de_arriba, por_flojo])
 
 
 func _test_aceptar_no_garantiza_la_venta() -> void:

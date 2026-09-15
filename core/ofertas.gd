@@ -363,7 +363,11 @@ static func archivar(equipo: Team) -> void:
 
 
 ## Cada cuantos dias, en promedio, algun club se fija en tu plantel.
-const DIAS_ENTRE_INTERESES := 9.0
+## Estaba en 9 y ademas el club que miraba era uno al azar, sin chequear si
+## le servia o podia pagar: medido con tests/_diag_ofertas_entrantes.gd,
+## llegaban ~6 ofertas por ventana, casi todas por suplentes, y NINGUNA
+## por un crack con media de dos divisiones mas arriba.
+const DIAS_ENTRE_INTERESES := 2.0
 
 ## Cuanto de lo que vale el jugador ofrecen de arranque. Empiezan tirando
 ## abajo a proposito: para eso existe la contraoferta.
@@ -371,50 +375,68 @@ const OFERTA_INICIAL_MIN := 0.65
 const OFERTA_INICIAL_MAX := 1.05
 
 
-## Los otros clubes vienen a buscar a los tuyos. Cuanto mejor sea el
-## jugador y mas rico el que mira, mas seguido pasa.
+## Los otros clubes vienen a buscar a los tuyos.
 ##
-## Solo miran a los que TIENEN valor de reventa: no hay ofertas por el
-## cuarto arquero. Y no ofertan por alguien que ya tiene una negociacion
-## abierta, que seria una encerrona.
+## Miran solo a los que se destacan en TU plantel: media de club para
+## arriba, o un pibe con techo por encima del club. El que esta por debajo
+## de tu propia media no llama la atencion de nadie.
+##
+## Mira toda la piramide. Un club oferta solo por alguien que LE SIRVE
+## (Mercado.puntaje_interes) y que puede pagar. Con un club al azar, el
+## crack de una division baja casi nunca lo veia uno de arriba con caja.
+##
+## No ofertan por alguien que ya tiene una negociacion abierta, que seria
+## una encerrona.
 static func generar_entrantes(equipo: Team, piramide, rng: RandomNumberGenerator,
-		dias: int, division_propia: int) -> Array:
+		dias: int, _division_propia: int) -> Array:
 	var nuevas := []
 	if rng.randf() > float(dias) / DIAS_ENTRE_INTERESES:
 		return nuevas
 
+	var media_club := equipo.media_equipo()
+	var nivel_club := equipo.nivel_potencial()
 	# Los que marcaste "no disponible" no entran ni al sorteo: por ellos
 	# no llega ninguna oferta (ver core/traspasos.gd).
 	var candidatos := []
 	for j in equipo.todos_los_jugadores():
-		if Traspasos.acepta_ofertas(equipo, int(j["id"])):
+		var id_c := int(j["id"])
+		if not Traspasos.acepta_ofertas(equipo, id_c):
+			continue
+		var destaca: bool = float(j["media"]) >= media_club or (
+			int(j["edad"]) <= Mercado.EDAD_JOYA and float(j["potencial"]) >= nivel_club + Mercado.MEJORA_MINIMA_ENTRE_DIVISIONES)
+		if not destaca:
+			continue
+		var ocupado := false
+		for o in equipo.ofertas:
+			if int(o["jugador_id"]) == id_c and abierta(o):
+				ocupado = true
+				break
+		if not ocupado:
 			candidatos.append(j)
 	if candidatos.is_empty():
 		return nuevas
-	var jugador: Dictionary = candidatos[rng.randi() % candidatos.size()]
-	var id := int(jugador["id"])
-	for o in equipo.ofertas:
-		if int(o["jugador_id"]) == id and abierta(o):
-			return nuevas
 
-	var valor := ValorJugador.calcular(jugador, equipo.animo.get(id, 50.0), equipo.contratos.get(id, 3))
-	# Un club de cualquier division, con sesgo a los de cerca: los mismos
-	# que compran en Mercado.ventana_entre_divisiones.
-	var total_div: int = piramide.divisiones.size()
-	var paso: int = int(rng.randf() * rng.randf() * float(total_div))
-	if rng.randf() < 0.5:
-		paso = -paso
-	var d: int = clampi(division_propia + paso, 0, total_div - 1)
-	var clubes: Array = piramide.divisiones[d].equipos
-	var comprador: Team = clubes[rng.randi() % clubes.size()]
-	if comprador == equipo:
+	var opciones := []
+	for liga in piramide.divisiones:
+		for mira in liga.equipos:
+			if mira == equipo or mira.quebrado:
+				continue
+			opciones.append_array(_los_que_le_sirven(mira, equipo, candidatos))
+	var elegida := _sortear(opciones, rng)
+	if elegida.is_empty():
 		return nuevas
+	var comprador: Team = elegida["comprador"]
+	var jugador: Dictionary = elegida["jugador"]
+	var valor := float(elegida["valor"])
+	var tope := float(elegida["tope"])
+	var id := int(jugador["id"])
 
-	var monto: float = valor * rng.randf_range(OFERTA_INICIAL_MIN, OFERTA_INICIAL_MAX)
+	# Nunca ofrece mas de lo que se anima a gastar en un fichaje: el club
+	# que llega justo tira abajo, el rico elige en todo el rango.
+	var techo_oferta: float = minf(OFERTA_INICIAL_MAX, tope / valor)
+	var monto: float = valor * rng.randf_range(OFERTA_INICIAL_MIN, techo_oferta)
 	# En venta rapida ofrecen entre 40% y 50% menos que eso.
 	monto *= Traspasos.factor_oferta(equipo, id, rng)
-	if comprador.caja["fichajes"] < monto:
-		return nuevas
 
 	var oferta := nueva(equipo.siguiente_id_oferta, comprador.nombre, jugador, monto, true, rng)
 	equipo.siguiente_id_oferta += 1
@@ -423,3 +445,48 @@ static func generar_entrantes(equipo: Team, piramide, rng: RandomNumberGenerator
 	equipo.ofertas.append(oferta)
 	nuevas.append(oferta)
 	return nuevas
+
+
+## Los candidatos que le sirven a `comprador` y le entran en la caja, cada
+## uno como {comprador, jugador, valor, tope, peso}.
+##
+## El peso es el puntaje de interes por el valor: la plata que hay en
+## juego. Solo con el puntaje, el suplente que refuerza a un club de
+## decima pesaba lo mismo que el crack, y la bandeja se llenaba de ofertas
+## por jugadores que no juegan.
+static func _los_que_le_sirven(comprador: Team, dueno: Team, candidatos: Array) -> Array:
+	var opciones := []
+	var tope: float = float(comprador.caja["fichajes"]) * Mercado.FRACCION_MAXIMA_POR_FICHAJE
+	if tope <= 0.0:
+		return opciones
+	var a_mejorar := Mercado.medias_a_mejorar(comprador)
+	var nivel := comprador.nivel_potencial()
+	for j in candidatos:
+		var posicion := str(j["posicion"])
+		if not a_mejorar.has(posicion):
+			continue
+		var puntaje := Mercado.puntaje_interes(j, float(a_mejorar[posicion]), nivel)
+		if puntaje <= 0.0:
+			continue
+		var id := int(j["id"])
+		var valor := ValorJugador.calcular(j, dueno.animo.get(id, 50.0), dueno.contratos.get(id, 3))
+		# Ni tirando abajo le alcanza: no lo mira.
+		if valor <= 0.0 or valor * OFERTA_INICIAL_MIN > tope:
+			continue
+		opciones.append({"comprador": comprador, "jugador": j, "valor": valor,
+			"tope": tope, "peso": puntaje * valor})
+	return opciones
+
+
+static func _sortear(opciones: Array, rng: RandomNumberGenerator) -> Dictionary:
+	if opciones.is_empty():
+		return {}
+	var suma := 0.0
+	for o in opciones:
+		suma += float(o["peso"])
+	var tiro := rng.randf() * suma
+	for o in opciones:
+		tiro -= float(o["peso"])
+		if tiro <= 0.0:
+			return o
+	return opciones[-1]

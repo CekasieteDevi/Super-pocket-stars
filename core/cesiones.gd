@@ -37,10 +37,12 @@ const AYUDAS := {
 }
 
 ## Cada cuantos dias, en promedio, algun club se fija en tu lista de
-## cedibles. Mas seguido que las ofertas de compra (Ofertas.DIAS_ENTRE_
-## INTERESES = 9): la lista la abris vos a proposito, asi que abrirla y no
-## recibir nada en dos meses seria una mecanica muerta.
-const DIAS_ENTRE_PEDIDOS := 6.0
+## cedibles. El mismo ritmo que las ofertas de compra: la lista la abris
+## vos a proposito, asi que abrirla y no recibir nada seria una mecanica
+## muerta. Estaba en 6 con UN club al azar que casi nunca servia: medido
+## con tests/_diag_pedidos_cesion.gd, con banco y reservas cedibles
+## llegaban 0,8 pedidos por ventana en tercera y 1,5 en septima.
+const DIAS_ENTRE_PEDIDOS := Ofertas.DIAS_ENTRE_INTERESES
 
 ## Cuanto ofrecen de fee, como fraccion del valor del jugador. El piso es
 ## el 10% fijo que cobraba la cesion vieja (Prestamos.FEE_PORCENTAJE);
@@ -187,9 +189,15 @@ static func evaluar_contraoferta(pide: Team, dueno: Team, jugador: Dictionary,
 
 ## Un club viene a pedirte prestado a alguien de tu lista de cedibles.
 ##
-## Mira solo a los que marcaste DISPONIBLE, elige un club de tu division o
-## de mas abajo, y arma un pedido tirando de todos los numeros para su
-## lado. Devuelve la oferta nueva o {} si esta vez no vino nadie.
+## Mira solo a los que marcaste DISPONIBLE. Recorre los clubes de tu
+## division y de hasta DIVISIONES_ABAJO_MAX mas abajo, y junta los pares
+## club-jugador donde el jugador mejora al club. Sortea con peso por esa
+## mejora y arma el pedido tirando de todos los numeros para su lado. Si
+## el par sorteado no cierra (no le entra en la caja, el jugador no iria),
+## prueba con otro. Devuelve la oferta nueva o {} si no vino nadie.
+##
+## Antes miraba UN club al azar y se rendia si no servia: el que de verdad
+## lo necesitaba casi nunca salia sorteado.
 static func generar_pedido(equipo: Team, piramide, rng: RandomNumberGenerator,
 		dias: int, division_propia: int) -> Dictionary:
 	if rng.randf() > float(dias) / DIAS_ENTRE_PEDIDOS:
@@ -203,28 +211,56 @@ static func generar_pedido(equipo: Team, piramide, rng: RandomNumberGenerator,
 		# Al que ya cediste no te lo pueden volver a pedir: no esta.
 		if equipo.prestados_afuera.has(id):
 			continue
-		candidatos.append(j)
+		var ocupado := false
+		for o in equipo.ofertas:
+			if int(o["jugador_id"]) == id and Ofertas.abierta(o):
+				ocupado = true
+				break
+		if not ocupado:
+			candidatos.append(j)
 	if candidatos.is_empty():
 		return {}
-	var jugador: Dictionary = candidatos[rng.randi() % candidatos.size()]
-	var id_j := int(jugador["id"])
-	for o in equipo.ofertas:
-		if int(o["jugador_id"]) == id_j and Ofertas.abierta(o):
-			return {}
 
 	# Piden de tu division para abajo: el que pide prestado es el que no
 	# puede comprar, y ese esta abajo.
-	var total_div: int = piramide.divisiones.size()
-	var paso: int = int(rng.randf() * rng.randf() * float(DIVISIONES_ABAJO_MAX + 1))
-	var d: int = clampi(division_propia + paso, 0, total_div - 1)
-	var clubes: Array = piramide.divisiones[d].equipos
-	var pide: Team = clubes[rng.randi() % clubes.size()]
-	if pide == equipo or pide.quebrado:
-		return {}
-	# Nadie pide prestado a alguien peor que lo que ya tiene.
-	if float(jugador["media"]) < pide.media_equipo() + VENTAJA_MINIMA:
-		return {}
+	var pares := []
+	var ultima: int = mini(division_propia + DIVISIONES_ABAJO_MAX, piramide.divisiones.size() - 1)
+	for d in range(division_propia, ultima + 1):
+		for pide in piramide.divisiones[d].equipos:
+			if pide == equipo or pide.quebrado:
+				continue
+			var media_pide: float = pide.media_equipo()
+			for j in candidatos:
+				# Nadie pide prestado a alguien peor que lo que ya tiene.
+				var ventaja: float = float(j["media"]) - media_pide
+				if ventaja >= VENTAJA_MINIMA:
+					pares.append({"pide": pide, "division": d, "jugador": j, "peso": ventaja})
 
+	while not pares.is_empty():
+		var suma := 0.0
+		for par in pares:
+			suma += float(par["peso"])
+		var tiro := rng.randf() * suma
+		var i := 0
+		while i < pares.size() - 1:
+			tiro -= float(pares[i]["peso"])
+			if tiro <= 0.0:
+				break
+			i += 1
+		var par: Dictionary = pares[i]
+		pares.remove_at(i)
+		var oferta := _armar_pedido(equipo, par["pide"], int(par["division"]), par["jugador"],
+			rng, division_propia)
+		if not oferta.is_empty():
+			return oferta
+	return {}
+
+
+## Los terminos iniciales del pedido de `pide` por `jugador`, o {} si ese
+## club no puede pedirlo.
+static func _armar_pedido(equipo: Team, pide: Team, d: int, jugador: Dictionary,
+		rng: RandomNumberGenerator, division_propia: int) -> Dictionary:
+	var id_j := int(jugador["id"])
 	var duracion: String = ["medio", "una", "una", "dos"][rng.randi() % 4]
 	var temporadas: float = float(Prestamos.DURACIONES[duracion])
 	var t := topes(pide, equipo, jugador, temporadas)

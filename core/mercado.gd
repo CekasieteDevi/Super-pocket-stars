@@ -298,6 +298,32 @@ static func ventana_entre_divisiones(piramide, rng: RandomNumberGenerator, equip
 	return transferencias
 
 
+## Cuanto le interesa a un club un jugador de otro. 0 = no le interesa.
+##
+## REFUERZO: cuanto mejora al titular mas flojo de ese puesto
+## (`media_a_mejorar`). JOYA: cuanto supera su techo al nivel del club.
+## Es el mismo criterio para la IA entre clubes y para las ofertas que le
+## llegan al jugador humano (Ofertas.generar_entrantes).
+static func puntaje_interes(jugador: Dictionary, media_a_mejorar: float, nivel_comprador: int) -> float:
+	var refuerzo: float = float(jugador["media"]) - media_a_mejorar
+	var techo: float = float(jugador["potencial"]) - float(nivel_comprador)
+	var puntaje: float = refuerzo if refuerzo >= MEJORA_MINIMA_ENTRE_DIVISIONES else 0.0
+	if int(jugador["edad"]) <= EDAD_JOYA and techo > 0.0:
+		puntaje = maxf(puntaje, techo)
+	return puntaje
+
+
+## El titular mas flojo de cada puesto: posicion -> media. Es contra quien
+## se mide si un fichaje refuerza.
+static func medias_a_mejorar(equipo: Team) -> Dictionary:
+	var salida := {}
+	for j in equipo.jugadores:
+		var p := str(j["posicion"])
+		if not salida.has(p) or float(j["media"]) < float(salida[p]):
+			salida[p] = float(j["media"])
+	return salida
+
+
 static func _intentar_compra(piramide, division_compradora: int, comprador: Team,
 		rng: RandomNumberGenerator, equipo_protegido: Team) -> Dictionary:
 	var tope: float = comprador.caja["fichajes"] * FRACCION_MAXIMA_POR_FICHAJE
@@ -341,16 +367,13 @@ static func _intentar_compra(piramide, division_compradora: int, comprador: Team
 	for j in vendedor.todos_los_jugadores() + vendedor.cantera:
 		if j["posicion"] != posicion:
 			continue
-		var refuerzo: float = float(j["media"]) - float(a_mejorar["media"])
-		var techo: float = float(j["potencial"]) - float(nivel_comprador)
-		var joya: bool = int(j["edad"]) <= EDAD_JOYA and techo > 0.0
-		var puntaje: float = refuerzo if refuerzo >= MEJORA_MINIMA_ENTRE_DIVISIONES else 0.0
-		if joya:
-			puntaje = maxf(puntaje, techo)
+		var puntaje := puntaje_interes(j, float(a_mejorar["media"]), nivel_comprador)
 		if puntaje > mejor_puntaje:
 			mejor_puntaje = puntaje
 			mejor_id = int(j["id"])
-			es_joya = joya and refuerzo < MEJORA_MINIMA_ENTRE_DIVISIONES
+			# Si interesa sin mejorar el puesto, lo unico que lo explica
+			# es el techo.
+			es_joya = float(j["media"]) - float(a_mejorar["media"]) < MEJORA_MINIMA_ENTRE_DIVISIONES
 	if mejor_id == -1:
 		return {}
 
