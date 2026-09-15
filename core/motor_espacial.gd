@@ -4672,6 +4672,8 @@ static func _lanzar_remate(estado: Dictionary, poseedor: Dictionary, datos: Dict
 	var arco := arco_rival(es_local)
 	var lado: float = 1.0 if arco.x > 0.0 else -1.0
 	var tipo := str(datos["tipo"])
+	estado["pelota"].erase("trayectoria_curva")
+	estado["pelota"].erase("progreso_trayectoria")
 
 	# Hasta dónde llega el arquero mientras la pelota viaja. Es lo que
 	# decide ADÓNDE va el remate: una atajada tiene que ir a un punto que
@@ -4738,6 +4740,10 @@ static func _lanzar_remate(estado: Dictionary, poseedor: Dictionary, datos: Dict
 		# metía en la red de afuera y quedaba ahí.
 		var cruce := _cruce_fuera_del_arco(poseedor["pos"], Vector2(arco.x, destino.y))
 		destino = _descanso_detras_del_arco(poseedor["pos"], cruce)
+	var trayectoria_curva := _trayectoria_curva_remate(poseedor["pos"], destino, datos, tipo, rng)
+	if not trayectoria_curva.is_empty():
+		datos["curva_m"] = float(trayectoria_curva["curva_m"])
+		datos["calidad_tiro"] = float(trayectoria_curva["calidad_tiro"])
 	var pelota: Dictionary = estado["pelota"]
 	pelota["poseedor_id"] = -1
 	pelota["en_vuelo"] = true
@@ -4749,6 +4755,8 @@ static func _lanzar_remate(estado: Dictionary, poseedor: Dictionary, datos: Dict
 	pelota["origen_pos"] = poseedor["pos"]
 	pelota["destino_pos"] = destino
 	pelota["destino_id"] = -1
+	pelota["trayectoria_curva"] = trayectoria_curva
+	pelota["progreso_trayectoria"] = 0.0
 	pelota["pasador_local"] = es_local
 	pelota["altura_max"] = altura
 	pelota["ticks_con_pelota"] = 0
@@ -4777,6 +4785,40 @@ static func _lanzar_remate(estado: Dictionary, poseedor: Dictionary, datos: Dict
 		# también.
 		datos["destino_arquero"] = Vector2(
 			clampf(arq_pos.x, -ARQUERO_X_MIN, ARQUERO_X_MIN), destino.y)
+
+
+## Decide si el remate sale con rosca. La geometria manda la oportunidad:
+## de frente casi nunca hay curva; en diagonal, efecto y tiro la vuelven
+## frecuente. `forzar_curva` existe solo para la escena del laboratorio.
+static func _trayectoria_curva_remate(desde: Vector2, destino: Vector2,
+		datos: Dictionary, tipo: String, rng: RandomNumberGenerator) -> Dictionary:
+	if tipo not in ["gol", "atajada", "palo", "afuera"]:
+		return {}
+	var jugador: Dictionary = datos.get("jugador", {})
+	var attrs: Dictionary = jugador.get("atributos", {})
+	var tiro_attr := "tiros_libres" if datos.get("tiro_libre", false) else "tiro"
+	var tiro := clampf(float(attrs.get(tiro_attr, attrs.get("tiro", 50))) / 100.0, 0.0, 1.0)
+	var efecto := clampf(float(attrs.get("efecto", 0)) / 100.0, 0.0, 1.0)
+	var direccion := (destino - desde).normalized()
+	var diagonal := clampf(absf(direccion.y), 0.0, 1.0)
+	if diagonal < 0.20 or efecto < 0.18:
+		if not bool(datos.get("forzar_curva", false)):
+			return {}
+	var probabilidad := diagonal * (0.08 + efecto * 0.92) * (0.40 + tiro * 0.60)
+	if not bool(datos.get("forzar_curva", false)) and rng.randf() > probabilidad:
+		return {}
+	var calidad := clampf(0.55 * tiro + 0.45 * efecto, 0.0, 1.0)
+	# La desviacion se exagera un poco en pantalla: la proyeccion de la
+	# cancha aplasta el ancho y una rosca real de 1 m apenas se percibe.
+	var curva_m := diagonal * (1.6 + 5.8 * efecto) * (0.55 + 0.45 * tiro)
+	var hacia_centro := -signf(desde.y)
+	if is_zero_approx(hacia_centro):
+		hacia_centro = 1.0 if direccion.y < 0.0 else -1.0
+	var amplitud := curva_m * 1.6
+	var control := desde.lerp(destino, 0.5) + Vector2(0.0, hacia_centro * amplitud)
+	return {"origen": desde, "control": control, "destino": destino,
+		"longitud": desde.distance_to(control) + control.distance_to(destino),
+		"curva_m": amplitud, "calidad_tiro": calidad}
 
 
 ## Gol: la pelota se queda EN LA RED y los jugadores vuelven caminando al
@@ -4833,6 +4875,10 @@ static func _aplicar_remate(estado: Dictionary, datos: Dictionary) -> void:
 	var rng: RandomNumberGenerator = estado["rng"]
 	var minuto := _minuto_int(estado)
 	var tipo := str(datos["tipo"])
+	# El rastro vive durante el vuelo; al resolverlo no puede quedar pegado
+	# sobre el saque siguiente.
+	estado["pelota"].erase("trayectoria_curva")
+	estado["pelota"].erase("progreso_trayectoria")
 
 	if tipo == "afuera" or tipo == "palo":
 		estado["eventos"].append({
@@ -4864,6 +4910,9 @@ static func _aplicar_remate(estado: Dictionary, datos: Dictionary) -> void:
 		"equipo": eq_a.nombre, "rival": eq_d.nombre,
 		"jugador_posicion": datos["rol"], "clave": datos["clave"],
 		"resultado": ("gol" if gol else ("atajado" if es_penal else "atajada")),
+		"con_efecto": float(datos.get("curva_m", 0.0)) > 0.0,
+		"curva_m": float(datos.get("curva_m", 0.0)),
+		"calidad_tiro": float(datos.get("calidad_tiro", 0.0)),
 	})
 	var jugador: Dictionary = datos.get("jugador", {})
 	var dist: float = float(datos.get("dist", 0.0))
@@ -5683,8 +5732,28 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 	var destino: Vector2 = pelota.get("destino_pos", desde)
 	var paso: float = pelota["vel"].length() * TICK_SEG
 	var restante: float = desde.distance_to(destino)
-	var llego: bool = paso >= restante
-	var hasta: Vector2 = destino if llego else desde + pelota["vel"].normalized() * paso
+	var llego: bool
+	var hasta: Vector2
+	var trayectoria: Dictionary = pelota.get("trayectoria_curva", {})
+	if bool(pelota.get("es_remate", false)) and not trayectoria.is_empty():
+		# El remate recorre una Bezier cuadratica. La resolucion sigue igual;
+		# solo cambia el camino que ve la pelota.
+		var avance_anterior := float(pelota.get("progreso_trayectoria", 0.0))
+		var longitud := maxf(float(trayectoria.get("longitud", restante)), 0.01)
+		var avance := minf(1.0, avance_anterior + paso / longitud)
+		var origen_tray := trayectoria["origen"] as Vector2
+		var control_tray := trayectoria["control"] as Vector2
+		var destino_tray := trayectoria["destino"] as Vector2
+		hasta = origen_tray.lerp(control_tray, avance).lerp(
+			control_tray.lerp(destino_tray, avance), avance)
+		pelota["progreso_trayectoria"] = avance
+		pelota["vel"] = (hasta - desde) / TICK_SEG
+		llego = avance >= 0.999
+		destino = destino_tray
+		restante = (destino_tray - hasta).length()
+	else:
+		llego = paso >= restante
+		hasta = destino if llego else desde + pelota["vel"].normalized() * paso
 	pelota["pos"] = hasta
 
 	# Intercepción: se mide contra el SEGMENTO recorrido este tick, no
@@ -5702,7 +5771,8 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 	var altura_max: float = float(pelota.get("altura_max", 0.0))
 	var origen_z: Vector2 = pelota.get("origen_pos", desde)
 	var total: float = origen_z.distance_to(destino)
-	var avanzado: float = clampf(origen_z.distance_to(hasta) / maxf(total, 0.01), 0.0, 1.0)
+	var avanzado: float = float(pelota.get("progreso_trayectoria",
+		clampf(origen_z.distance_to(hasta) / maxf(total, 0.01), 0.0, 1.0)))
 	pelota["z"] = altura_max * 4.0 * avanzado * (1.0 - avanzado) + float(pelota.get("altura_salida", 0.0)) * (1.0 - avanzado)
 
 	# La pelota ya tiene dueno y nadie se la disputa en el camino: la
@@ -8426,6 +8496,22 @@ static func _intentar_robo(estado: Dictionary) -> void:
 		_penalizar(estado, mejor_id, jug_d)
 
 
+static func _serializar_trayectoria(trayectoria: Dictionary, giro: float, progreso: float) -> Dictionary:
+	if trayectoria.is_empty():
+		return {}
+	var origen: Vector2 = trayectoria.get("origen", Vector2.ZERO)
+	var control: Vector2 = trayectoria.get("control", Vector2.ZERO)
+	var destino: Vector2 = trayectoria.get("destino", Vector2.ZERO)
+	return {
+		"origen": {"x": origen.x * giro, "y": origen.y * giro},
+		"control": {"x": control.x * giro, "y": control.y * giro},
+		"destino": {"x": destino.x * giro, "y": destino.y * giro},
+		"progreso": progreso,
+		"curva_m": float(trayectoria.get("curva_m", 0.0)),
+		"calidad_tiro": float(trayectoria.get("calidad_tiro", 0.0)),
+	}
+
+
 static func _push_fotograma(estado: Dictionary, eventos_del_tick: Array = []) -> void:
 	# En la tanda los dos equipos patean al MISMO arco. El motor sigue
 	# pateando cada penal al arco que ataca ese equipo (ver
@@ -8480,6 +8566,8 @@ static func _push_fotograma(estado: Dictionary, eventos_del_tick: Array = []) ->
 			"z": float(estado["pelota"].get("z", 0.0)),
 			"poseedor_id": estado["pelota"]["poseedor_id"],
 			"saliendo": estado["pelota"].has("saliendo"),
+			"trayectoria": _serializar_trayectoria(estado["pelota"].get("trayectoria_curva", {}), giro,
+				float(estado["pelota"].get("progreso_trayectoria", 0.0))),
 		},
 		"jugadores": jugadores,
 		"decision": estado.get("ultima_decision", null),

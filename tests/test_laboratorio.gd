@@ -58,8 +58,10 @@ func _init() -> void:
 	fallas += _test_siempre_da_lo_mismo()
 	fallas += _test_el_gol_es_gol()
 	fallas += _test_el_cabezazo_es_de_cabeza()
+	fallas += _test_la_volea_es_volea()
 	fallas += _test_el_corner_tiene_gente_en_el_area()
 	fallas += _test_el_clip_arranca_en_la_jugada()
+	fallas += _test_el_tiro_con_efecto_recorre_curva()
 	print("FALLOS=%d" % fallas)
 	quit()
 
@@ -197,6 +199,31 @@ func _test_el_cabezazo_es_de_cabeza() -> int:
 	return 0
 
 
+func _test_la_volea_es_volea() -> int:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = SEED
+	var casa := Team.generar("Casa", rng, 0)
+	var visita := Team.generar("Visita", rng, 400)
+	var propio := RandomNumberGenerator.new()
+	propio.seed = Laboratorio.SEMILLA
+	var r := Laboratorio.generar("volea", casa, visita, propio)
+	var voleas := 0
+	var centros := 0
+	for f in r["fotogramas"]:
+		for a in f.get("acciones", []):
+			if str(a.get("accion", "")) == "volea":
+				voleas += 1
+	for e in r["eventos"]:
+		if str(e.get("tipo", "")) == "centro" and str(e.get("resultado", "")) == "gana":
+			centros += 1
+	if voleas < 1 or centros < 1 or int(r["goles_local"]) != 1:
+		print("FALLA: el laboratorio de volea dio %d voleas, %d centros ganados y termino %d-%d." % [
+			voleas, centros, int(r["goles_local"]), int(r["goles_visitante"])])
+		return 1
+	print("OK: el laboratorio muestra centro, volea y gol.")
+	return 0
+
+
 ## Un corner sin nadie en el area se juega para atras: el ejecutor no
 ## tiene a quien buscar.
 func _test_el_corner_tiene_gente_en_el_area() -> int:
@@ -268,4 +295,31 @@ func _test_el_clip_arranca_en_la_jugada() -> int:
 				print("FALLA: el clip de %s narra el saque inicial." % s["clave"])
 				return 1
 	print("OK: las 9 jugadas arrancan con la escena ya montada y ninguna narra el saque inicial.")
+	return 0
+
+
+func _test_el_tiro_con_efecto_recorre_curva() -> int:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = SEED
+	var casa := Team.generar("Casa", rng, 0)
+	var visita := Team.generar("Visita", rng, 400)
+	var propio := RandomNumberGenerator.new()
+	propio.seed = Laboratorio.SEMILLA
+	var r := Laboratorio.generar("tiro_efecto", casa, visita, propio)
+	var curvas := 0
+	var curva_max := 0.0
+	for f in r["fotogramas"]:
+		var tr: Dictionary = f["pelota"].get("trayectoria", {})
+		if tr.is_empty():
+			continue
+		curvas += 1
+		curva_max = maxf(curva_max, float(tr.get("curva_m", 0.0)))
+	var evento_ok := false
+	for e in r["eventos"]:
+		if str(e.get("tipo", "")) == "tiro_puerta":
+			evento_ok = bool(e.get("con_efecto", false)) and float(e.get("curva_m", 0.0)) > 0.0
+	if curvas < 2 or curva_max <= 0.0 or not evento_ok or int(r["goles_local"]) != 1:
+		print("FALLA: el tiro con efecto no recorre una curva completa (%d cuadros, %.2f m)." % [curvas, curva_max])
+		return 1
+	print("OK: el tiro con efecto recorre curva de %.2f m y termina en gol." % curva_max)
 	return 0

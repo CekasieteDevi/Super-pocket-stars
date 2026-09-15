@@ -53,7 +53,11 @@ static func linea(evento: Dictionary, nombres: Dictionary) -> String:
 	match str(evento.get("tipo", "")):
 		"tiro_puerta":
 			if res == "gol":
+				if bool(evento.get("con_efecto", false)):
+					return "¡GOL CON EFECTO de %s! %s" % [quien, equipo]
 				return "¡GOL de %s! %s" % [quien, equipo]
+			if bool(evento.get("con_efecto", false)):
+				return "Remata con efecto %s y ataja el arquero" % quien
 			return "Remata %s y ataja el arquero" % quien
 		"penal":
 			if res == "gol":

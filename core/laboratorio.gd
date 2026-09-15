@@ -53,10 +53,14 @@ const SITUACIONES := [
 		"que": "La pelota sale por la banda y se reanuda con un saque de banda."},
 	{"clave": "cabezazo", "nombre": "Centro y gol de cabeza",
 		"que": "El centro sale desde la banda, cruza el área por arriba, el delantero le gana de arriba al defensor y la cabecea al gol."},
+	{"clave": "volea", "nombre": "Centro y gol de volea",
+		"que": "Centro desde la banda, control del vuelo y volea de primera. Se ve el golpe completo y el balon termina en gol."},
 	{"clave": "palomita", "nombre": "Centro y gol de palomita",
 		"que": "Centro bajo al area, vuelo horizontal, cabezazo de palomita y gol. El clip termina al acabar el festejo."},
 	{"clave": "gol", "nombre": "Gol y festejo",
 		"que": "Remate al arco desde el borde del área y el saque del medio posterior."},
+	{"clave": "tiro_efecto", "nombre": "Tiro con efecto",
+		"que": "El atacante entra en diagonal y curva la pelota al segundo palo. Efecto y tiro mandan la forma y la calidad."},
 	{"clave": "festejo_banderin", "nombre": "Festejo en el banderín",
 		"que": "Gol desde el costado del área. El goleador y los tres compañeros más cercanos corren al banderín a festejar juntos."},
 	{"clave": "saque_arco", "nombre": "Saque de arco",
@@ -124,10 +128,14 @@ static func generar(clave: String, local: Team, visitante: Team,
 			_montar_lateral(estado)
 		"cabezazo":
 			_montar_cabezazo(estado)
+		"volea":
+			_montar_volea(estado)
 		"palomita":
 			_montar_palomita(estado)
 		"gol":
 			_montar_gol(estado)
+		"tiro_efecto":
+			_montar_tiro_efecto(estado)
 		"festejo_banderin":
 			_montar_festejo_banderin(estado)
 		"saque_arco":
@@ -376,6 +384,44 @@ static func _montar_gol(estado: Dictionary, desplazamiento := Vector2(14.0, 2.0)
 	})
 
 
+## Gol garantizado desde un costado del area. La diagonal es deliberada:
+## es la situacion donde el efecto aparece de forma natural y permite leer
+## la curva hasta el segundo palo.
+static func _montar_tiro_efecto(estado: Dictionary) -> void:
+	var eq_a: Team = MotorEspacial._equipo_de(estado, true)
+	var eq_d: Team = MotorEspacial._equipo_de(estado, false)
+	var arco := MotorEspacial.arco_rival(true)
+	var hacia: float = -1.0 if arco.x > 0.0 else 1.0
+	var mejor := {}
+	for j in eq_a.jugadores_en_cancha():
+		var attrs: Dictionary = j.get("atributos", {})
+		var val := float(attrs.get("tiro", 0)) * 0.55 + float(attrs.get("efecto", 0)) * 0.45
+		if mejor.is_empty() or val > float(mejor.get("val", -1.0)):
+			mejor = {"j": j, "val": val}
+	if mejor.is_empty():
+		return
+	var jugador: Dictionary = mejor["j"]
+	var clave := MotorEspacial.clave_de(int(jugador["id"]), true)
+	if not estado["jugadores"].has(clave):
+		return
+	var punto := Vector2(arco.x + hacia * 18.0, -16.0)
+	var poseedor: Dictionary = estado["jugadores"][clave]
+	poseedor["pos"] = punto
+	poseedor["vel"] = Vector2.ZERO
+	poseedor["rapidez"] = 0.0
+	MotorEspacial._entregar_pelota(estado, clave)
+	estado["pelota"]["pos"] = punto
+	estado["forzar_remate"] = "gol"
+	estado["forzar_remate_attr"] = "tiro"
+	var arquero := eq_d.arquero()
+	MotorEspacial._lanzar_remate(estado, poseedor, {
+		"tipo": "gol", "es_local": true, "clave": clave,
+		"rol": poseedor["rol"], "jugador": jugador,
+		"agarre": float(arquero.get("atributos", {}).get("agarre", 50)) / 100.0,
+		"dist": punto.distance_to(arco), "forzar_curva": true,
+	})
+
+
 ## Un centro desde la banda que termina en gol de cabeza.
 ##
 ## El centro es de verdad: vuela por arriba, no se puede cortar en el
@@ -515,6 +561,15 @@ static func _montar_cabezazo(estado: Dictionary) -> void:
 static func _montar_palomita(estado: Dictionary) -> void:
 	_montar_cabezazo(estado)
 	estado["forzar_centro_accion"] = MotorEspacial.ACCION_PALOMITA
+
+
+## Misma escena de centro, pero fija el remate de volea y el atributo que
+## alimenta la punteria. El motor sigue recorriendo el centro real y dibuja
+## la misma accion que en un partido normal.
+static func _montar_volea(estado: Dictionary) -> void:
+	_montar_cabezazo(estado)
+	estado["forzar_centro_accion"] = "volea"
+	estado["forzar_remate_attr"] = "volea"
 
 
 static func _montar_saque_arco(estado: Dictionary) -> void:

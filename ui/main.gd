@@ -6108,6 +6108,12 @@ func _reproducir_laboratorio(clave: String) -> void:
 	if r["fotogramas"].is_empty():
 		laboratorio_estado.text = "Esa jugada no genero nada."
 		return
+	if clave == "tiro_efecto":
+		for ev in r["eventos"]:
+			if str(ev.get("tipo", "")) == "tiro_puerta":
+				laboratorio_estado.text = "Tiro con efecto listo: curva %.1f m · calidad %.0f%%." % [
+					float(ev.get("curva_m", 0.0)), float(ev.get("calidad_tiro", 0.0)) * 100.0]
+				break
 
 	# Al terminar (o al tocar Menu) se vuelve ACA, no al club: se esta
 	# probando animaciones y lo normal es querer ver la siguiente.
