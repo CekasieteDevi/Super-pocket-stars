@@ -81,6 +81,11 @@ func _ready() -> void:
 
 	_boton_menu = _boton("Menú", 76.0, func(): menu_pedido.emit())
 	add_child(_boton_menu)
+	# El botón recién sabe su ancho después del primer layout. Se reubica
+	# cuando cambia, no en cada _draw: mover controles en cada cuadro
+	# dispara el layout del HUD sesenta veces por segundo.
+	_boton_menu.resized.connect(_reubicar)
+	_reubicar.call_deferred()
 
 
 func _boton(texto: String, ancho: float, al_tocar: Callable) -> Button:
@@ -121,7 +126,6 @@ func _reubicar() -> void:
 
 
 func _draw() -> void:
-	_reubicar()
 	var fuente := ThemeDB.fallback_font
 	_dibujar_marcador(fuente)
 	_dibujar_reloj(fuente)

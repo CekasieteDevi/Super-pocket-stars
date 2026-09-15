@@ -86,9 +86,8 @@ var estado_cancha := "regular"
 ## quien sabe qué jugador cometió la falta.
 var tarjetas: Array = []
 
-## Euforia de la tribuna, 0 a 1. La misma señal que el festejo del HUD.
-## El público se levanta y se aclara; sin esto un gol lo festeja el
-## cartel solo y el estadio se queda quieto.
+## Euforia del festejo, 0 a 1. La consume el HUD; el decorado permanece
+## cacheado para no regenerar cientos de polígonos durante el gol.
 var euforia := 0.0
 
 ## Cada entidad: {"pos": Vector2 (metros), "z": float, "tipo": "jugador"/"pelota",
@@ -100,6 +99,16 @@ var _tex_pelota: ImageTexture
 var _tex_publico: ImageTexture
 var _tex_red: ImageTexture
 static var _mallas_desgaste := {}
+
+## El decorado no se mueve: solo la cámara. Dibujarlo polígono por polígono
+## en cada cuadro costaba 1,5 ms de GDScript y 469 draw calls en escritorio
+## (tests/_diag_rendimiento_partido.gd), y en el celular eso tiraba el
+## partido. Se arma UNA vez en coordenadas de proyección sin cámara (ver
+## _q) y cada cuadro se dibuja con una sola transformación.
+## clave -> Array de comandos (ver ConstructorDecorado).
+static var _decorados := {}
+## Mientras no es null, _plano/_panel/_linea anotan en vez de dibujar.
+var _constructor: ConstructorDecorado = null
 
 
 func _ready() -> void:
@@ -131,12 +140,61 @@ func _p(x: float, y: float, z: float = 0.0) -> Vector2:
 
 func _draw() -> void:
 	var pal: Dictionary = PALETAS.get(estado_cancha, PALETAS["regular"])
-	_dibujar_estadio()
-	_dibujar_cesped(pal)
-	_dibujar_lineas(pal)
+	draw_rect(Rect2(Vector2.ZERO, size), COLOR_CIELO)
+	# El decorado queda cacheado también durante el festejo. Regenerarlo para
+	# animar la tribuna costaba cientos de draw calls por frame y congelaba la
+	# celebración en teléfonos lentos. La euforia sigue animando HUD y cancha.
+	_ejecutar(_decorado("fondo_" + estado_cancha, func():
+		_dibujar_estadio()
+		_dibujar_franjas(pal)))
+	_dibujar_desgaste()
+	_ejecutar(_decorado("lineas_" + estado_cancha, func(): _dibujar_lineas(pal)))
 	_dibujar_banderines()
 	_dibujar_entidades()
 	_dibujar_tarjetas()
+
+
+## Arma (una sola vez) los comandos de `clave` corriendo `dibujar` con el
+## constructor enchufado. Es la MISMA función que dibuja en directo: la
+## geometría tiene una sola fuente.
+func _decorado(clave: String, dibujar: Callable) -> Array:
+	if not _decorados.has(clave):
+		_constructor = ConstructorDecorado.new()
+		dibujar.call()
+		_decorados[clave] = _constructor.terminar()
+		_constructor = null
+	return _decorados[clave]
+
+
+## Proyección sin cámara ni zoom. La proyección es afín, así que pasar de
+## acá a pantalla es una sola transformación (ver _transformacion_q).
+static func _q(v: Vector3) -> Vector2:
+	return Vector2(v.x + v.y * ProyeccionPartido.SHEAR_X,
+		v.y * ProyeccionPartido.COMPRESION_Y - v.z * ProyeccionPartido.ESCALA_Z)
+
+
+func _transformacion_q() -> Transform2D:
+	var ppm := camara.px_por_metro
+	var c := camara.centro
+	var origen := size * 0.5 - _q(Vector3(c.x, c.y, 0.0)) * ppm
+	return Transform2D(Vector2(ppm, 0.0), Vector2(0.0, ppm), origen)
+
+
+func _ejecutar(comandos: Array) -> void:
+	var ppm := camara.px_por_metro
+	draw_set_transform_matrix(_transformacion_q())
+	for cmd in comandos:
+		if cmd.has("malla"):
+			draw_mesh(cmd["malla"], cmd["tex"])
+			continue
+		# Los anchos van en píxeles de pantalla, como en draw_line: se
+		# dividen por el zoom porque la transformación los escala.
+		var px: float = maxf(float(cmd["min"]), ppm * float(cmd["factor"]))
+		if cmd.has("puntos"):
+			draw_multiline(cmd["puntos"], cmd["color"], px / ppm)
+		else:
+			draw_circle(cmd["centro"], px * float(cmd["radio"]) / ppm, cmd["color"])
+	draw_set_transform_matrix(Transform2D.IDENTITY)
 
 
 # ---------------------------------------------------------------------------
@@ -151,6 +209,10 @@ func _panel(p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3,
 		tex: Texture2D, metros_tile: float, tinte: Color = Color.WHITE) -> void:
 	var u: float = p0.distance_to(p1) / metros_tile
 	var v: float = p0.distance_to(p3) / metros_tile
+	if _constructor != null:
+		_constructor.cuadrilatero([_q(p0), _q(p1), _q(p2), _q(p3)],
+			[Vector2(0, 0), Vector2(u, 0), Vector2(u, v), Vector2(0, v)], tinte, tex)
+		return
 	draw_colored_polygon(
 		PackedVector2Array([
 			_p(p0.x, p0.y, p0.z), _p(p1.x, p1.y, p1.z),
@@ -161,28 +223,21 @@ func _panel(p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3,
 
 
 func _plano(p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3, c: Color) -> void:
+	if _constructor != null:
+		_constructor.cuadrilatero([_q(p0), _q(p1), _q(p2), _q(p3)], [], c, null)
+		return
 	draw_colored_polygon(PackedVector2Array([
 		_p(p0.x, p0.y, p0.z), _p(p1.x, p1.y, p1.z),
 		_p(p2.x, p2.y, p2.z), _p(p3.x, p3.y, p3.z),
 	]), c)
 
 
-## Cuánto se levanta la tribuna en el pico del festejo, en metros. Chico
-## a propósito: es un salto, no un terremoto.
-const SALTO_EUFORIA := 0.9
-
-
 func _dibujar_estadio() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), COLOR_CIELO)
 	var L := ProyeccionPartido.MEDIO_LARGO
 	var A := ProyeccionPartido.MEDIO_ANCHO
-	# El salto se aplica a la ALTURA de las tribunas, no a su posición: el
-	# frente queda clavado en el muro y solo se mueve el mar de gente.
-	var salto: float = 0.0
+	# Geometría estática: se construye una vez y se reutiliza en cada frame.
+	var salto := 0.0
 	var luz := Color.WHITE
-	if euforia > 0.01:
-		salto = sin(Time.get_ticks_msec() / 55.0) * SALTO_EUFORIA * euforia
-		luz = Color(1.0 + euforia * 0.55, 1.0 + euforia * 0.55, 1.0 + euforia * 0.45)
 
 	# Pista: la banda entre la línea de cal y el muro.
 	_plano(Vector3(-L - PISTA, -A - PISTA, 0), Vector3(L + PISTA, -A - PISTA, 0),
@@ -244,26 +299,40 @@ func _detallar_grada(inicio: Vector3, fin: Vector3, subida: Vector3) -> void:
 	# Pasillos escalonados separan bloques; barandas siguen la perspectiva.
 	var sectores := maxi(2, roundi(inicio.distance_to(fin) / 19.0))
 	var eje := (fin - inicio).normalized()
+	# Todos los escalones y DESPUÉS todas las barandas: los sectores están a
+	# 19 m y no se pisan, así que el orden no cambia el dibujo, pero junta
+	# los polígonos en una sola malla y las líneas en un solo trazo.
 	for sector in range(1, sectores):
 		var centro := inicio.lerp(fin, float(sector) / sectores)
 		for escalon in range(18):
 			var a := centro + subida * (float(escalon) / 18.0)
 			var b := centro + subida * (float(escalon + 1) / 18.0)
 			_plano(a - eje * 0.8, a + eje * 0.8, b + eje * 0.8, b - eje * 0.8, Color("65666a") if escalon % 2 == 0 else Color("494d55"))
+	for sector in range(1, sectores):
+		var centro := inicio.lerp(fin, float(sector) / sectores)
 		for lado in [-1.0, 1.0]:
 			var base: Vector3 = centro + eje * lado * 0.95
 			var alto: Vector3 = base + subida
-			draw_line(_p(base.x, base.y, 0.8), _p(alto.x, alto.y, alto.z + 0.8), Color("92999e"), 1.0)
+			_linea(Vector3(base.x, base.y, 0.8), Vector3(alto.x, alto.y, alto.z + 0.8), Color("92999e"), 1.0)
 	for nivel in [0.48, 0.96]:
 		var a: Vector3 = inicio + subida * nivel
 		var b: Vector3 = fin + subida * nivel
-		draw_line(_p(a.x, a.y, a.z), _p(b.x, b.y, b.z), Color("222a36"), 3.0)
-		draw_line(_p(a.x, a.y, a.z + 0.5), _p(b.x, b.y, b.z + 0.5), Color("7b838c"), 1.0)
+		_linea(a, b, Color("222a36"), 3.0)
+		_linea(a + Vector3(0, 0, 0.5), b + Vector3(0, 0, 0.5), Color("7b838c"), 1.0)
+
+
+## Una línea de `min_px` píxeles, o `factor` píxeles por metro de zoom si
+## da más.
+func _linea(a: Vector3, b: Vector3, c: Color, min_px: float, factor: float = 0.0) -> void:
+	if _constructor != null:
+		_constructor.linea(_q(a), _q(b), c, min_px, factor)
+		return
+	draw_line(_p(a.x, a.y, a.z), _p(b.x, b.y, b.z), c, maxf(min_px, camara.px_por_metro * factor))
 
 
 ## Las franjas siguen la proyección: son paralelogramos, no rectángulos
 ## verticales. Es lo que hace que la cancha se lea inclinada.
-func _dibujar_cesped(pal: Dictionary) -> void:
+func _dibujar_franjas(pal: Dictionary) -> void:
 	var tex := TexturasEstadio.cesped(pal["claro"], float(pal["aspereza"]))
 	var paso := ProyeccionPartido.LARGO / float(FRANJAS)
 	var y0 := -ProyeccionPartido.MEDIO_ANCHO
@@ -283,6 +352,8 @@ func _dibujar_cesped(pal: Dictionary) -> void:
 			tex, METROS_TILE_CESPED,
 			Color.WHITE if i % 2 == 0 else tinte_oscuro)
 
+
+func _dibujar_desgaste() -> void:
 	# Geometria fija, una sola orden de dibujo y sin azar por fotograma.
 	var origen := _p(0, 0)
 	var transformacion := Transform2D(_p(1, 0) - origen, _p(0, 1) - origen, origen)
@@ -319,41 +390,50 @@ static func _malla_desgaste(estado: String) -> ArrayMesh:
 
 func _dibujar_lineas(pal: Dictionary) -> void:
 	var c: Color = pal["linea"]
-	var grosor := maxf(1.5, camara.px_por_metro * 0.06)
 	var L := ProyeccionPartido.MEDIO_LARGO
 	var A := ProyeccionPartido.MEDIO_ANCHO
 
-	_poli([Vector2(-L, -A), Vector2(L, -A), Vector2(L, A), Vector2(-L, A)], c, grosor)
-	draw_line(_p(0, -A), _p(0, A), c, grosor)
-	_circulo(Vector2.ZERO, 9.15, c, grosor)
+	_poli([Vector2(-L, -A), Vector2(L, -A), Vector2(L, A), Vector2(-L, A)], c)
+	_linea(Vector3(0, -A, 0), Vector3(0, A, 0), c, GROSOR_CAL_MIN, GROSOR_CAL_FACTOR)
+	_circulo(Vector2.ZERO, 9.15, c)
 
 	for lado in [-1.0, 1.0]:
 		# Área grande (16,5 x 40,32) y chica (5,5 x 18,32), reglamentarias.
 		_poli([
 			Vector2(lado * L, -20.16), Vector2(lado * (L - 16.5), -20.16),
 			Vector2(lado * (L - 16.5), 20.16), Vector2(lado * L, 20.16),
-		], c, grosor)
+		], c)
 		_poli([
 			Vector2(lado * L, -9.16), Vector2(lado * (L - 5.5), -9.16),
 			Vector2(lado * (L - 5.5), 9.16), Vector2(lado * L, 9.16),
-		], c, grosor)
-		draw_circle(_p(lado * (L - 11.0), 0.0), grosor * 1.2, c)
+		], c)
+		var punto_penal := Vector3(lado * (L - 11.0), 0.0, 0.0)
+		if _constructor != null:
+			_constructor.circulo(_q(punto_penal), c, GROSOR_CAL_MIN, GROSOR_CAL_FACTOR, 1.2)
+		else:
+			draw_circle(_p(punto_penal.x, punto_penal.y),
+				maxf(GROSOR_CAL_MIN, camara.px_por_metro * GROSOR_CAL_FACTOR) * 1.2, c)
 
 
-func _poli(puntos: Array, c: Color, grosor: float) -> void:
+## Grosor de la cal: 1,5 px, o 6 cm por metro de zoom si da más.
+const GROSOR_CAL_MIN := 1.5
+const GROSOR_CAL_FACTOR := 0.06
+
+
+func _poli(puntos: Array, c: Color) -> void:
 	for i in range(puntos.size()):
 		var a: Vector2 = puntos[i]
 		var b: Vector2 = puntos[(i + 1) % puntos.size()]
-		draw_line(_p(a.x, a.y), _p(b.x, b.y), c, grosor)
+		_linea(Vector3(a.x, a.y, 0), Vector3(b.x, b.y, 0), c, GROSOR_CAL_MIN, GROSOR_CAL_FACTOR)
 
 
-func _circulo(centro: Vector2, radio: float, c: Color, grosor: float) -> void:
+func _circulo(centro: Vector2, radio: float, c: Color) -> void:
 	var pasos := 28
-	var previo := _p(centro.x + radio, centro.y)
+	var previo := Vector3(centro.x + radio, centro.y, 0)
 	for i in range(1, pasos + 1):
 		var ang := TAU * float(i) / pasos
-		var actual := _p(centro.x + cos(ang) * radio, centro.y + sin(ang) * radio)
-		draw_line(previo, actual, c, grosor)
+		var actual := Vector3(centro.x + cos(ang) * radio, centro.y + sin(ang) * radio, 0)
+		_linea(previo, actual, c, GROSOR_CAL_MIN, GROSOR_CAL_FACTOR)
 		previo = actual
 
 
@@ -403,10 +483,8 @@ func _arco_frente(lado: float) -> void:
 
 
 func _barra(a: Vector3, b: Vector3) -> void:
-	draw_line(_p(a.x, a.y, a.z), _p(b.x, b.y, b.z), Color("23383e"),
-		maxf(4.5, camara.px_por_metro * 0.24))
-	draw_line(_p(a.x, a.y, a.z), _p(b.x, b.y, b.z), COLOR_ARCO,
-		maxf(2.0, camara.px_por_metro * 0.12))
+	_linea(a, b, Color("23383e"), 4.5, 0.24)
+	_linea(a, b, COLOR_ARCO, 2.0, 0.12)
 
 
 # ---------------------------------------------------------------------------
@@ -430,8 +508,12 @@ func _dibujar_entidades() -> void:
 			_dibujar_sombra(ent)
 	for ent in orden:
 		match ent["tipo"]:
-			"arco_fondo": _arco_fondo(float(ent["lado"]))
-			"arco_frente": _arco_frente(float(ent["lado"]))
+			"arco_fondo":
+				var lado_fondo := float(ent["lado"])
+				_ejecutar(_decorado("arco_fondo_%d" % int(lado_fondo), func(): _arco_fondo(lado_fondo)))
+			"arco_frente":
+				var lado_frente := float(ent["lado"])
+				_ejecutar(_decorado("arco_frente_%d" % int(lado_frente), func(): _arco_frente(lado_frente)))
 			_: _dibujar_cuerpo(ent)
 
 
@@ -507,3 +589,74 @@ func _dibujar_banderines() -> void:
 			draw_line(pie, punta, Color("f5e8b9"), 1.0)
 			var vuelo := camara.px_por_metro * 0.48
 			draw_colored_polygon(PackedVector2Array([punta, punta + Vector2(vuelo, 3), punta + Vector2(0, vuelo * 0.65)]), Color("eac35e"))
+
+
+## Junta lo que dibujaría el decorado en comandos baratos de repetir:
+## polígonos seguidos con la misma textura en UNA malla, y líneas seguidas
+## del mismo color y grosor en UN draw_multiline. Respeta el orden: un
+## cambio de textura o de tipo cierra el lote y abre otro.
+class ConstructorDecorado:
+	var comandos: Array = []
+	var _tex: Texture2D = null
+	var _vertices := PackedVector2Array()
+	var _uvs := PackedVector2Array()
+	var _colores := PackedColorArray()
+	var _indices := PackedInt32Array()
+	var _lineas: Dictionary = {}
+
+	func cuadrilatero(puntos: Array, uvs: Array, color: Color, tex: Texture2D) -> void:
+		_cerrar_lineas()
+		if tex != _tex and not _vertices.is_empty():
+			_cerrar_malla()
+		_tex = tex
+		var base := _vertices.size()
+		for i in range(4):
+			_vertices.append(puntos[i])
+			_uvs.append(uvs[i] if not uvs.is_empty() else Vector2.ZERO)
+			_colores.append(color)
+		_indices.append_array(PackedInt32Array([base, base + 1, base + 2, base, base + 2, base + 3]))
+
+	func linea(a: Vector2, b: Vector2, color: Color, min_px: float, factor: float) -> void:
+		_cerrar_malla()
+		if not _lineas.is_empty() and (_lineas["color"] != color
+				or _lineas["min"] != min_px or _lineas["factor"] != factor):
+			_cerrar_lineas()
+		if _lineas.is_empty():
+			_lineas = {"puntos": PackedVector2Array(), "color": color, "min": min_px, "factor": factor}
+		var puntos: PackedVector2Array = _lineas["puntos"]
+		puntos.append(a)
+		puntos.append(b)
+		_lineas["puntos"] = puntos
+
+	func circulo(centro: Vector2, color: Color, min_px: float, factor: float, radio: float) -> void:
+		_cerrar_malla()
+		_cerrar_lineas()
+		comandos.append({"centro": centro, "color": color, "min": min_px, "factor": factor, "radio": radio})
+
+	func terminar() -> Array:
+		_cerrar_malla()
+		_cerrar_lineas()
+		return comandos
+
+	func _cerrar_lineas() -> void:
+		if not _lineas.is_empty():
+			comandos.append(_lineas)
+			_lineas = {}
+
+	func _cerrar_malla() -> void:
+		if _vertices.is_empty():
+			return
+		var arrays := []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = _vertices
+		arrays[Mesh.ARRAY_TEX_UV] = _uvs
+		arrays[Mesh.ARRAY_COLOR] = _colores
+		arrays[Mesh.ARRAY_INDEX] = _indices
+		var malla := ArrayMesh.new()
+		malla.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		comandos.append({"malla": malla, "tex": _tex})
+		_vertices = PackedVector2Array()
+		_uvs = PackedVector2Array()
+		_colores = PackedColorArray()
+		_indices = PackedInt32Array()
+		_tex = null

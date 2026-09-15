@@ -28,6 +28,7 @@ const CLIPS := {
 static var _fuentes := {}
 static var _cache := {}
 static var _bases := {}
+static var _tenidas := {}
 
 
 static func cuadro(accion: String, fase: float, direccion: int, corriendo: bool,
@@ -52,39 +53,23 @@ static func textura(indice: int, camiseta: Color, pantalon: Color, pelo: Color,
 		_cache.erase(clave)
 		_cache[clave] = existente
 		return existente
-	var base_clave := "%d_%d" % [indice, estilo]
-	var img: Image
-	if _bases.has(base_clave):
-		img = _bases[base_clave].duplicate()
-	else:
-		var ruta := "res://assets/partido/preparados/%s.png" % PEINADOS[estilo]
-		if not _fuentes.has(estilo):
-			var preparada := (load(ruta) as Texture2D).get_image()
-			preparada.decompress()
-			preparada.convert(Image.FORMAT_RGBA8)
-			_fuentes[estilo] = preparada
-		var hoja: Image = _fuentes[estilo]
-		img = hoja.get_region(Rect2i((indice % 8) * CELDA, (indice / 8) * CELDA, CELDA, CELDA))
-		_bases[base_clave] = img.duplicate()
-	for y in range(CELDA):
-		for x in range(CELDA):
-			var c := img.get_pixel(x, y)
-			if c.a < 0.1:
-				continue
-			# Máscaras cromáticas: conservar piel, contorno y brillos.
-			if c.b > c.r * 1.35 and c.b > c.g * 1.1 and c.b > 0.18:
-				var luz := clampf(c.v / 0.85, 0.25, 1.2)
-				var tinte := camiseta * luz
-				tinte.a = c.a
-				img.set_pixel(x, y, tinte)
-			elif pantalon.a > 0.0 and c.s < 0.18 and c.v > 0.72 and (y > 29 or indice in [37, 38]) and indice not in [40, 41, 42, 43]:
-				var tinte := pantalon * c.v
-				tinte.a = c.a
-				img.set_pixel(x, y, tinte)
-			elif c.r > c.g * 1.15 and c.g > c.b * 1.15 and c.v < 0.48:
-				var tinte := pelo * clampf(c.v / 0.3, 0.45, 1.5)
-				tinte.a = c.a
-				img.set_pixel(x, y, tinte)
+	# El teñido es lo caro y no depende del espejo ni del dorsal: la misma
+	# camiseta mirando a cada lado sale de una sola pasada.
+	var clave_tenida := "%d_%s_%s_%s_%d" % [indice, camiseta.to_html(), pantalon.to_html(), pelo.to_html(), estilo]
+	var tenida: Image = _tenidas.get(clave_tenida)
+	if tenida == null:
+		var mascara := _mascara(indice, estilo)
+		tenida = (mascara["img"] as Image).duplicate()
+		_tenir(tenida, mascara["camiseta"], camiseta)
+		if pantalon.a > 0.0:
+			_tenir(tenida, mascara["pantalon"], pantalon)
+		else:
+			_tenir(tenida, mascara["pelo_sin_pantalon"], pelo)
+		_tenir(tenida, mascara["pelo"], pelo)
+		if _tenidas.size() >= 1024:
+			_tenidas.erase(_tenidas.keys()[0])
+		_tenidas[clave_tenida] = tenida
+	var img: Image = tenida.duplicate()
 	if espejo:
 		img.flip_x()
 	# Estampar después del espejo mantiene legibles los dorsales.
@@ -104,6 +89,89 @@ static func textura(indice: int, camiseta: Color, pantalon: Color, pelo: Color,
 		_cache.erase(_cache.keys()[0])
 	_cache[clave] = tex
 	return tex
+
+
+## Qué píxeles del cuadro son camiseta, pantalón y pelo, con el factor de
+## luz de cada uno. Se clasifica UNA vez por cuadro y peinado: antes se
+## recorrían los 4096 píxeles con get_pixel en cada textura, y preparar los
+## sprites de un partido tardaba 340 ms en escritorio
+## (tests/_diag_rendimiento_partido.gd), varios segundos en el celular.
+##
+## Cada lista es [índices de píxel, factor de luz, alfa]. `pantalon` y
+## `pelo_sin_pantalon` son los mismos candidatos: si el club no eligió
+## pantalón, esos píxeles caen a la regla del pelo, como antes.
+static func _mascara(indice: int, estilo: int) -> Dictionary:
+	var base_clave := "%d_%d" % [indice, estilo]
+	if _bases.has(base_clave):
+		return _bases[base_clave]
+	if not _fuentes.has(estilo):
+		var ruta := "res://assets/partido/preparados/%s.png" % PEINADOS[estilo]
+		var preparada := (load(ruta) as Texture2D).get_image()
+		preparada.decompress()
+		preparada.convert(Image.FORMAT_RGBA8)
+		_fuentes[estilo] = preparada
+	var hoja: Image = _fuentes[estilo]
+	var img := hoja.get_region(Rect2i((indice % 8) * CELDA, (indice / 8) * CELDA, CELDA, CELDA))
+	# Van en variables sueltas y no dentro de un Array porque un
+	# Packed*Array se COPIA al sacarlo de un contenedor, y el append se
+	# perdería. Los factores van en 64 bits: en 32 el redondeo cambiaba un
+	# nivel de color en casi todos los píxeles teñidos.
+	var admite_pantalon: bool = indice not in [40, 41, 42, 43]
+	var pix_camiseta := PackedInt32Array()
+	var luz_camiseta := PackedFloat64Array()
+	var alfa_camiseta := PackedFloat64Array()
+	var pix_pantalon := PackedInt32Array()
+	var luz_pantalon := PackedFloat64Array()
+	var alfa_pantalon := PackedFloat64Array()
+	var pix_pelo := PackedInt32Array()
+	var luz_pelo := PackedFloat64Array()
+	var alfa_pelo := PackedFloat64Array()
+	var pix_pelo_sp := PackedInt32Array()
+	var luz_pelo_sp := PackedFloat64Array()
+	var alfa_pelo_sp := PackedFloat64Array()
+	for y in range(CELDA):
+		for x in range(CELDA):
+			var c := img.get_pixel(x, y)
+			if c.a < 0.1:
+				continue
+			# Máscaras cromáticas: conservar piel, contorno y brillos.
+			var pixel := y * CELDA + x
+			var es_pelo := c.r > c.g * 1.15 and c.g > c.b * 1.15 and c.v < 0.48
+			if c.b > c.r * 1.35 and c.b > c.g * 1.1 and c.b > 0.18:
+				pix_camiseta.append(pixel)
+				luz_camiseta.append(clampf(c.v / 0.85, 0.25, 1.2))
+				alfa_camiseta.append(c.a)
+			elif admite_pantalon and c.s < 0.18 and c.v > 0.72 and (y > 29 or indice in [37, 38]):
+				pix_pantalon.append(pixel)
+				luz_pantalon.append(c.v)
+				alfa_pantalon.append(c.a)
+				if es_pelo:
+					pix_pelo_sp.append(pixel)
+					luz_pelo_sp.append(clampf(c.v / 0.3, 0.45, 1.5))
+					alfa_pelo_sp.append(c.a)
+			elif es_pelo:
+				pix_pelo.append(pixel)
+				luz_pelo.append(clampf(c.v / 0.3, 0.45, 1.5))
+				alfa_pelo.append(c.a)
+	var listas := {
+		"img": img,
+		"camiseta": [pix_camiseta, luz_camiseta, alfa_camiseta],
+		"pantalon": [pix_pantalon, luz_pantalon, alfa_pantalon],
+		"pelo": [pix_pelo, luz_pelo, alfa_pelo],
+		"pelo_sin_pantalon": [pix_pelo_sp, luz_pelo_sp, alfa_pelo_sp],
+	}
+	_bases[base_clave] = listas
+	return listas
+
+
+static func _tenir(img: Image, lista: Array, color: Color) -> void:
+	var pixeles: PackedInt32Array = lista[0]
+	var luces: PackedFloat64Array = lista[1]
+	var alfas: PackedFloat64Array = lista[2]
+	for i in range(pixeles.size()):
+		var tinte := color * luces[i]
+		tinte.a = alfas[i]
+		img.set_pixel(pixeles[i] % CELDA, pixeles[i] / CELDA, tinte)
 
 
 static func estilo_de(jugador_id: int) -> int:
