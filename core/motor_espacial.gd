@@ -281,6 +281,26 @@ const MARGEN_SALIDA := 3.0
 ## saber dónde termina la portería y dónde empieza el afuera.
 const ARCO_MEDIO_ANCHO := 3.66
 
+## Cuánto se mete la red detrás de la línea. No es reglamentario: es el
+## arco que dibuja VistaCancha, que lee este mismo número.
+const PROFUNDIDAD_ARCO := 2.2
+
+## Dónde frena la pelota que se va por el fondo, en metros detrás de la
+## línea. Con la cámara inclinada, una pelota quieta a menos de ~3,7 m
+## detrás de la línea y cerca del arco cae ENCIMA del dibujo de la red, y
+## se ve trabada en ella: medido con tests/_diag_pelota_en_la_red.gd, le
+## pasaba al 38% de las salidas por el fondo. La pista mide 5 m
+## (VistaCancha.PISTA), así que 4 m todavía queda adentro del estadio.
+const DESCANSO_FONDO := 4.0
+## O, si no llega a pasar el arco, a cuánto del palo hacia el costado.
+## Con la cámara inclinada, el arco lejano tapa en pantalla hasta ~4,7 m
+## de costado, contando la pelota.
+const DESCANSO_COSTADO := 5.0
+
+## Distancia mínima entre la pelota que se va y el costado de la red,
+## contando el radio de la pelota.
+const DESPEJE_RED := 0.5
+
 ## El area grande, en metros reglamentarios desde la linea de fondo y
 ## desde el centro del arco. Estaban escritos a mano dentro de
 ## _en_el_area; ahora los lee tambien el carril de banda, que gira hacia
@@ -4605,10 +4625,21 @@ static func _lanzar_remate(estado: Dictionary, poseedor: Dictionary, datos: Dict
 	# al fotograma siguiente aparecía en sus manos. Medido con Presión
 	# alta (tests/_diag_arquero_posicion.gd): el vuelo terminaba a 6,16 m
 	# de él y el 86% de las atajadas daban ese salto.
-	# Todo lo demás termina adentro o pasando el arco.
-	var x_destino: float = arq_pos.x - lado * 0.3 if tipo == "atajada" else arco.x + lado * 1.2
+	# El gol termina adentro del arco. El palo, en el palo: sobre la
+	# línea, no 1,2 m adentro, que es donde está la red de afuera.
+	var x_destino: float = arco.x + lado * 1.2
+	if tipo == "atajada":
+		x_destino = arq_pos.x - lado * 0.3
+	elif tipo == "palo":
+		x_destino = arco.x
 	var destino := Vector2(x_destino,
 		clampf(y_destino, -MEDIO_ANCHO + 1.0, MEDIO_ANCHO - 1.0))
+	if tipo == "afuera":
+		# Afuera cruza la línea por fuera del palo y sigue hasta pasar el
+		# arco. Frenaba 1,2 m detrás de la línea: un remate cruzado se
+		# metía en la red de afuera y quedaba ahí.
+		var cruce := _cruce_fuera_del_arco(poseedor["pos"], Vector2(arco.x, destino.y))
+		destino = _descanso_detras_del_arco(poseedor["pos"], cruce)
 	var pelota: Dictionary = estado["pelota"]
 	pelota["poseedor_id"] = -1
 	pelota["en_vuelo"] = true
@@ -4841,9 +4872,11 @@ static func _pelota_fuera(estado: Dictionary, punto: Vector2, toco_local: bool) 
 	if absf(punto.y) >= MEDIO_ANCHO:
 		salida = Vector2(punto.x, punto.y + signf(punto.y) * MARGEN_SALIDA)
 	else:
-		salida = Vector2(punto.x + signf(punto.x) * MARGEN_SALIDA, punto.y)
-	if es_corner:
-		salida = punto + (punto - desde).normalized() * MARGEN_SALIDA
+		# Por el fondo cruza por fuera del palo y sigue la misma recta
+		# hasta pasar el arco, sin atravesar la red (ver DESCANSO_FONDO).
+		# Una pelota que no es remate no se mete entre los palos.
+		punto = _cruce_fuera_del_arco(desde, punto)
+		salida = _descanso_detras_del_arco(desde, punto)
 	if desde.distance_to(salida) < 0.5:
 		_resolver_salida(estado, punto, toco_local)
 		return
@@ -4862,6 +4895,56 @@ static func _pelota_fuera(estado: Dictionary, punto: Vector2, toco_local: bool) 
 	pelota.erase("altura_salida")
 	pelota.erase("pared_a")
 	pelota["vel"] = (salida - desde).normalized() 		* maxf(pelota["vel"].length(), float(pesos()["fisica"]["vel_salida_min"]))
+
+
+## Dónde cruza la línea de fondo una pelota que va de `desde` a `cruce`
+## y se va afuera. Si la recta, una vez pasada la línea, se cierra hacia
+## el arco y entraría a la red de afuera, el cruce se abre hasta que pase
+## a DESPEJE_RED del costado de la red. Es el remate cruzado desde la
+## banda: cruzaba la línea a 4,5 m del centro y se metía en la red.
+static func _cruce_fuera_del_arco(desde: Vector2, cruce: Vector2) -> Vector2:
+	var lado := signf(cruce.x)
+	var s := signf(cruce.y) if absf(cruce.y) > 0.01 else 1.0
+	# Metros de avance en X desde `desde` hasta la línea. Con menos de uno
+	# la recta es casi paralela a la línea y la cuenta se dispara.
+	var dx := maxf(lado * (cruce.x - desde.x), 1.0)
+	var fondo := PROFUNDIDAD_ARCO + DESPEJE_RED
+	var costado := ARCO_MEDIO_ANCHO + DESPEJE_RED
+	# y(fondo) = cruce.y + (cruce.y - desde.y) * fondo / dx, y tiene que
+	# quedar a `costado` o más, del mismo lado que el cruce.
+	var minimo := (costado + s * desde.y * fondo / dx) / (1.0 + fondo / dx)
+	var y := s * clampf(maxf(absf(cruce.y), minimo), costado, MEDIO_ANCHO - 1.0)
+	return Vector2(cruce.x, y)
+
+
+## Dónde frena, sobre la recta `desde` -> `cruce`, la pelota que se va por
+## el fondo: DESCANSO_FONDO detrás de la línea. Una recta casi paralela a
+## la línea llegaría lejísimos, así que el tramo después del cruce tiene
+## tope.
+static func _descanso_detras_del_arco(desde: Vector2, cruce: Vector2) -> Vector2:
+	var dir := (cruce - desde).normalized()
+	var lado := signf(cruce.x)
+	# Si venía desde atrás de la línea (el rebote del palo), no vuelve a
+	# la cancha: se va derecho para afuera.
+	if lado * dir.x < 0.0 or dir == Vector2.ZERO:
+		dir = Vector2(lado, 0.0)
+	var avance_x := lado * dir.x
+	var tramo := DESCANSO_FONDO * 2.0
+	if avance_x > 0.05:
+		tramo = minf(DESCANSO_FONDO / avance_x, tramo)
+	var descanso := cruce + dir * tramo
+	if lado * (descanso.x - cruce.x) >= DESCANSO_FONDO - 0.01 \
+			or absf(descanso.y) >= ARCO_MEDIO_ANCHO + DESCANSO_COSTADO:
+		return descanso
+	# Una recta empinada que se cierra hacia el arco no llega a pasarlo con
+	# el tope: frena antes, todavía lejos del palo. Si ya cruzó cerca del
+	# palo, no le queda otra que seguir hasta pasar el arco por detrás.
+	var hacia_el_arco := signf(dir.y) != signf(cruce.y) and absf(dir.y) > 0.01
+	if hacia_el_arco:
+		var hasta_el_costado := (absf(cruce.y) - ARCO_MEDIO_ANCHO - DESCANSO_COSTADO) / absf(dir.y)
+		if hasta_el_costado >= 1.0:
+			return cruce + dir * hasta_el_costado
+	return cruce + dir * (DESCANSO_FONDO / maxf(avance_x, 0.05))
 
 
 ## Ya cruzó la línea: se cobra lo que corresponda según por dónde salió y

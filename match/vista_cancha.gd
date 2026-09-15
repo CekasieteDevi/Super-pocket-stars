@@ -56,10 +56,11 @@ const METROS_TILE_RED := 0.22
 
 ## Arco reglamentario: 7,32 x 2,44. El fondo (la profundidad de la red) no
 ## es reglamentario, es lo que hace que se vea como un arco y no como un
-## rectángulo dibujado en el aire.
-const ARCO_MEDIO_ANCHO := 3.66
+## rectángulo dibujado en el aire. Ancho y fondo salen del motor: la
+## pelota que se va tiene que frenar fuera de ESTE arco.
+const ARCO_MEDIO_ANCHO := MotorEspacial.ARCO_MEDIO_ANCHO
 const ARCO_ALTO := 2.44
-const ARCO_FONDO := 2.2
+const ARCO_FONDO := MotorEspacial.PROFUNDIDAD_ARCO
 const ARCO_ALTO_FONDO := 1.5
 
 ## Geometría del estadio, en metros desde el borde de la cancha.
