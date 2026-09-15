@@ -29,10 +29,10 @@ const ESTRELLAS_MIN := 1
 const ESTRELLAS_MAX := 10
 
 ## Cuántos DÍAS tarda en completar un informe, según las estrellas. Una
-## temporada son ~266 días (38 fechas), asi que 1 estrella es media
-## temporada y 10 estrellas tres semanas.
-const DIAS_UNA_ESTRELLA := 133.0
-const DIAS_DIEZ_ESTRELLAS := 21.0
+## temporada son ~266 días (38 fechas), asi que 1 estrella tarda cerca de
+## un tercio de temporada y 10 estrellas una semana.
+const DIAS_UNA_ESTRELLA := 90.0
+const DIAS_DIEZ_ESTRELLAS := 7.0
 
 ## Cuánto dura un informe antes de quedar viejo, en días de calendario.
 ## Tres temporadas (~266 días cada una).

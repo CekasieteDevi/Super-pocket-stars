@@ -53,7 +53,7 @@ func _test_un_informe_tarda_y_termina(rng: RandomNumberGenerator) -> void:
 	e.avanzar_dias(30)
 	var a_medias := Investigadores.progreso(e, objetivo)
 	if Investigadores.conoce(e, objetivo):
-		print("FALLA: lo conocio a los 30 dias, deberia tardar ~133.")
+		print("FALLA: lo conocio a los 30 dias, deberia tardar ~90.")
 		return
 	e.avanzar_dias(120)
 	if Investigadores.conoce(e, objetivo) and Investigadores.libres(e).size() == 1:
