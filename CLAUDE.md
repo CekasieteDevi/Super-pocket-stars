@@ -16,6 +16,10 @@ Editalo cuando quieras: lo que esté acá lo sigo.
 
 ## Godot
 
+- El proyecto usa `opengl3` de forma permanente. Al abrir el editor, mantener
+  `--rendering-method gl_compatibility --rendering-driver opengl3`; no usar
+  `d3d12`, porque provoca el crash de acceso a memoria de Godot.
+
 - No está en el PATH. Se llama por ruta completa:
   `"E:\IntelliJ\Super Pocket Stars\Godot_v4.7.1-stable_win64_console.exe"`
 - Después de agregar un `class_name` nuevo hay que reconstruir la caché o

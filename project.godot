@@ -41,8 +41,7 @@ window/handheld/orientation=4
 
 [rendering]
 
-; Requerido para exportar a Android: sin esto Godot rechaza el export.
-textures/vram_compression/import_etc2_astc=true
-rendering_device/driver.windows="d3d12"
+# OpenGL evita el crash de acceso a memoria del editor Godot en este entorno.
+rendering_device/driver.windows="opengl3"
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
