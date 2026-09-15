@@ -695,6 +695,8 @@ static func _normalizar_jugadores(lista: Array) -> Array:
 		# asi que no hay que normalizarlo; solo garantizar que exista.
 		if not j.has("xp_uso"):
 			j["xp_uso"] = {}
+		if not j.has("rendimiento"):
+			j["rendimiento"] = {}
 		for attr in j["atributos"]:
 			j["atributos"][attr] = int(j["atributos"][attr])
 		# §7.2: los guardados anteriores a los techos por atributo no

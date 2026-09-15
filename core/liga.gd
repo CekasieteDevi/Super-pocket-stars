@@ -361,6 +361,12 @@ func _actualizar_estado_jugadores(home: Team, away: Team, r: Dictionary) -> void
 	var xp: Dictionary = r.get("xp", {})
 	_acumular_xp(home, xp.get("home", {}))
 	_acumular_xp(away, xp.get("away", {}))
+	# §7.1: lo que HIZO en la cancha (goles, asistencias, goles recibidos)
+	# también lo consume Progresion. Sale de goles_log y del marcador, que
+	# los dos motores entregan igual: el club del usuario no crece a otro
+	# ritmo por jugar con el motor espacial.
+	_acumular_rendimiento(home, xp.get("home", {}), r, true)
+	_acumular_rendimiento(away, xp.get("away", {}), r, false)
 	# Lo que hace el cedido en el club que lo pidio, para poder contarselo
 	# al dueño cuando vuelve (ver Prestamos.procesar_retornos). Los goles
 	# ya los cuenta EstadisticasLiga, pero por LIGA: el prestado juega en
@@ -398,6 +404,43 @@ static func _acumular_xp(equipo: Team, por_jugador: Dictionary) -> void:
 		for a in d:
 			acum[a] = float(acum.get(a, 0.0)) + float(d[a])
 		j["xp_uso"] = acum
+
+
+## Los minutos salen del XP del partido: los dos motores reparten
+## `minutos/90` por jugador, así que la suma ya es la fracción jugada. Los
+## goles del marcador se reparten por esa fracción porque el motor
+## abstracto no sabe quién estaba en la cancha en cada gol.
+static func _acumular_rendimiento(equipo: Team, xp_equipo: Dictionary, r: Dictionary, es_local: bool) -> void:
+	if xp_equipo.is_empty():
+		return
+	var a_favor := float(r["goles_local"] if es_local else r["goles_visitante"])
+	var en_contra := float(r["goles_visitante"] if es_local else r["goles_local"])
+	var goles := {}
+	var asistencias := {}
+	for gol in r.get("goles_log", []):
+		if str(gol.get("equipo", "")) != equipo.nombre:
+			continue
+		var g := int(gol.get("jugador_id", -1))
+		goles[g] = int(goles.get(g, 0)) + 1
+		var a := int(gol.get("asistencia_id", -1))
+		asistencias[a] = int(asistencias.get(a, 0)) + 1
+	for j in equipo.todos_los_jugadores():
+		var id := int(j["id"])
+		var d = xp_equipo.get(id, null)
+		if d == null:
+			continue
+		var fraccion := 0.0
+		for attr in d:
+			fraccion += maxf(float(d[attr]), 0.0)
+		if fraccion <= 0.0:
+			continue
+		var rend: Dictionary = j.get("rendimiento", {})
+		rend["partidos"] = float(rend.get("partidos", 0.0)) + fraccion
+		rend["goles"] = float(rend.get("goles", 0.0)) + float(goles.get(id, 0))
+		rend["asistencias"] = float(rend.get("asistencias", 0.0)) + float(asistencias.get(id, 0))
+		rend["a_favor"] = float(rend.get("a_favor", 0.0)) + a_favor * fraccion
+		rend["en_contra"] = float(rend.get("en_contra", 0.0)) + en_contra * fraccion
+		j["rendimiento"] = rend
 
 
 ## §6: racha de partidos SEGUIDOS de titular (Comodón, ver Progresion.
@@ -553,7 +596,7 @@ func _procesar_cantera(equipo: Team, rng: RandomNumberGenerator, es_protegido: b
 	for juvenil in equipo.cantera:
 		Aprendizaje.actualizar_racha(juvenil)
 		Progresion.aplicar_temporada(juvenil, rng, Mentores.multiplicador_para(juvenil, bonus_mentor), mult_entrenamiento,
-			FocoEquipo.multiplicadores(equipo.reparto_foco(), PlayerGenerator.get_all_attributes()))
+			FocoEquipo.multiplicadores(equipo.reparto_foco(), PlayerGenerator.get_all_attributes()), true)
 		var aprendida := Aprendizaje.procesar_jugador(juvenil, equipo, temporada_actual, rng)
 		if not aprendida.is_empty():
 			aprendizajes.append({"jugador": juvenil, "habilidad": aprendida})

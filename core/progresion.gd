@@ -8,9 +8,12 @@ extends RefCounted
 ## por temporada, al final: crecimiento hacia el potencial para los jóvenes,
 ## declive diferenciado por grupo de atributos para los veteranos.
 
+## La edad pesa poco a propósito: lo que decide el crecimiento son los
+## minutos y el rendimiento. Con 2.0 a los 17 y un GOAT a 2.0, un DC de
+## media 50 subía 23 puntos en una temporada y llegaba a 84 a los 18.
 const CURVA_EDAD := [
-	{"min": 15, "max": 18, "mult": 2.0},
-	{"min": 19, "max": 23, "mult": 1.5},
+	{"min": 15, "max": 18, "mult": 1.25},
+	{"min": 19, "max": 23, "mult": 1.15},
 	{"min": 24, "max": 28, "mult": 1.0},
 	{"min": 29, "max": 32, "mult": 0.5},
 	{"min": 33, "max": 35, "mult": 0.2},
@@ -26,11 +29,66 @@ const DECLIVE_POR_GRUPO := {
 	"mental": -0.15,
 }
 
-## §4 punto 2: un GOAT crece ~2x más rápido que un Del montón.
+## §4 punto 2: un GOAT crece más rápido que un Del montón. La diferencia
+## era 2x y se bajó a 1.3x porque el tier ya paga dos veces: el GOAT tiene
+## el techo más alto, y la distancia al techo ya lo hace crecer más.
 const VELOCIDAD_POR_TIER := {
-	"GOAT": 2.0, "Idolo": 1.8, "Prodigio": 1.6, "Prometedor": 1.4,
-	"Solido": 1.2, "Correcto": 1.1, "Del monton": 1.0, "Justito": 0.9,
-	"Limitado": 0.8, "Descarte": 0.7,
+	"GOAT": 1.3, "Idolo": 1.24, "Prodigio": 1.18, "Prometedor": 1.12,
+	"Solido": 1.06, "Correcto": 1.03, "Del monton": 1.0, "Justito": 0.97,
+	"Limitado": 0.94, "Descarte": 0.91,
+}
+
+## Fracción de la distancia al techo que se cierra por temporada, antes de
+## multiplicadores. Calibrada con tests/_diag_desarrollo_por_rendimiento.gd.
+const TASA_CRECIMIENTO := 0.08
+## Rendimientos decrecientes: el crecimiento escala con
+## (distancia / DISTANCIA_REFERENCIA) ^ EXPONENTE_CERCANIA. A 25 puntos del
+## techo el factor es 1; a 5 puntos es 0.57; a 1 punto, 0.32. Los últimos
+## puntos cuestan años.
+const DISTANCIA_REFERENCIA := 25.0
+const EXPONENTE_CERCANIA := 0.35
+
+## §7.1 minutos: el que no juega crece a este piso. Entrenar sirve, pero
+## sin partidos no alcanza.
+const PISO_SIN_JUGAR := 0.25
+## Partidos-equivalentes para el efecto pleno. Medido en la pirámide
+## (tests/_diag_rendimiento_por_puesto.gd): el titular p75 juega 33 de 38.
+const PARTIDOS_PLENOS := 30.0
+## La cantera no juega la liga: juega sus propios partidos de juveniles.
+## Cuenta como media temporada de titular.
+const PARTIDOS_CANTERA := 15.0
+
+## §7.1 rendimiento: el factor va de RENDIMIENTO_MINIMO a RENDIMIENTO_MAXIMO.
+## Cada desvío por encima de lo esperable para su puesto suma
+## RENDIMIENTO_POR_DESVIO.
+const RENDIMIENTO_POR_DESVIO := 0.35
+const RENDIMIENTO_MINIMO := 0.6
+const RENDIMIENTO_MAXIMO := 1.5
+## Partidos que hacen falta para creerle a la muestra a medias. Con 4
+## partidos y dos goles, un DC no es un crack: el factor casi no se mueve.
+const PARTIDOS_CONFIANZA := 10.0
+
+## Lo esperable por puesto, por partido jugado: [media, desvío]. Medido en
+## una temporada de la pirámide con tests/_diag_rendimiento_por_puesto.gd
+## (semilla 777, jugadores con 10+ partidos). El motor abstracto solo hace
+## goles a DC, EXT y MCO, y asistencias a esos tres y al MC: por eso un
+## defensor se mide por los goles que recibe su equipo con él en cancha.
+const REFERENCIA_PUESTO := {
+	"ofensivo": {"DC": [0.48, 0.30], "EXT": [0.41, 0.23], "MCO": [0.27, 0.21], "MC": [0.12, 0.08]},
+	"en_contra": [1.32, 0.54],
+	"diferencia": [0.0, 0.92],
+}
+## Cuánto pesa cada cosa según el puesto: [ofensivo, en_contra, diferencia].
+## Un DC vive del gol; un central, de que no le hagan goles; todos suman
+## algo de lo que hace el equipo con ellos en cancha.
+const PESOS_RENDIMIENTO := {
+	"DC": [0.75, 0.0, 0.25],
+	"EXT": [0.6, 0.0, 0.4],
+	"MCO": [0.5, 0.0, 0.5],
+	"MC": [0.4, 0.3, 0.3],
+	"LAT": [0.0, 0.6, 0.4],
+	"DFC": [0.0, 0.7, 0.3],
+	"ARQ": [0.0, 0.8, 0.2],
 }
 
 const ATTR_GROUPS_PATH := "res://data/attribute_groups.json"
@@ -100,6 +158,42 @@ static func multiplicador_uso(jugador: Dictionary, atributo: String) -> float:
 	return 1.0 + MULTIPLICADOR_USO * relativo * carga
 
 
+## §7.1 minutos: de PISO_SIN_JUGAR (no jugó) a 1 (PARTIDOS_PLENOS o más).
+static func factor_minutos(jugador: Dictionary, en_cantera: bool = false) -> float:
+	var partidos := PARTIDOS_CANTERA if en_cantera \
+		else float(jugador.get("rendimiento", {}).get("partidos", 0.0))
+	return PISO_SIN_JUGAR + (1.0 - PISO_SIN_JUGAR) * clampf(partidos / PARTIDOS_PLENOS, 0.0, 1.0)
+
+
+## §7.1 rendimiento: cuántos desvíos rindió por encima de lo esperable para
+## su puesto. Positivo = mejor que el promedio. Sin partidos da 0.
+static func desvios_rendimiento(jugador: Dictionary) -> float:
+	var rend: Dictionary = jugador.get("rendimiento", {})
+	var partidos := float(rend.get("partidos", 0.0))
+	if partidos <= 0.0:
+		return 0.0
+	var puesto := str(jugador.get("posicion", ""))
+	var pesos: Array = PESOS_RENDIMIENTO.get(puesto, [0.0, 0.5, 0.5])
+	var z := 0.0
+	var ref_of: Array = REFERENCIA_PUESTO["ofensivo"].get(puesto, [])
+	if pesos[0] > 0.0 and not ref_of.is_empty():
+		var ofensivo := (float(rend.get("goles", 0.0)) + 0.6 * float(rend.get("asistencias", 0.0))) / partidos
+		z += pesos[0] * (ofensivo - ref_of[0]) / ref_of[1]
+	var ref_ec: Array = REFERENCIA_PUESTO["en_contra"]
+	# Menos goles recibidos es mejor: el signo va dado vuelta.
+	z += pesos[1] * (ref_ec[0] - float(rend.get("en_contra", 0.0)) / partidos) / ref_ec[1]
+	var ref_dif: Array = REFERENCIA_PUESTO["diferencia"]
+	var diferencia := (float(rend.get("a_favor", 0.0)) - float(rend.get("en_contra", 0.0))) / partidos
+	z += pesos[2] * (diferencia - ref_dif[0]) / ref_dif[1]
+	# Una muestra chica se acerca a 0: cuatro partidos buenos no alcanzan.
+	return z * partidos / (partidos + PARTIDOS_CONFIANZA)
+
+
+static func factor_rendimiento(jugador: Dictionary) -> float:
+	return clampf(1.0 + RENDIMIENTO_POR_DESVIO * desvios_rendimiento(jugador),
+		RENDIMIENTO_MINIMO, RENDIMIENTO_MAXIMO)
+
+
 ## Envejece un año al jugador y mueve sus atributos. Modifica el dict in
 ## place. mult_mentor (§6 extendido, Mentores.multiplicador_para): bonus de
 ## crecimiento si hay un veterano líder en su plantel y este jugador es
@@ -113,12 +207,17 @@ static func multiplicador_uso(jugador: Dictionary, atributo: String) -> float:
 ## 2026-09-14. Medido con semilla fija: un DC de 17 con foco en
 ## tiro, uso y foco de equipo técnico cerraba el 100% de la distancia a su
 ## techo en UNA temporada, porque todos los bonus se multiplican.
+##
+## `en_cantera`: el juvenil no juega la liga, así que sus minutos cuentan
+## como PARTIDOS_CANTERA y su rendimiento como neutro.
 static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator, mult_mentor: float = 1.0,
-		mult_entrenamiento: float = 1.0, mult_area: Dictionary = {}) -> void:
+		mult_entrenamiento: float = 1.0, mult_area: Dictionary = {}, en_cantera: bool = false) -> void:
 	jugador["edad"] += 1
 	var mult_edad := _multiplicador_crecimiento(jugador["edad"])
 	var mult_tier: float = VELOCIDAD_POR_TIER.get(jugador["genetica_tier"], 1.0)
 	var mult_personalidad: float = Personalidad.factor_entrenamiento(jugador)
+	var mult_juego: float = factor_minutos(jugador, en_cantera) \
+		* (1.0 if en_cantera else factor_rendimiento(jugador))
 
 	# §6 Comodón: "si es titular fijo 15 partidos, deja de crecer" — se
 	# congela del todo el crecimiento de esta temporada (ni siquiera el
@@ -140,7 +239,9 @@ static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator, m
 				if distancia > 0.0:
 					var mult_uso: float = multiplicador_uso(jugador, attr)
 					var mult_equipo: float = float(mult_area.get(attr, 1.0))
-					cambio = distancia * 0.12 * mult_edad * mult_tier * mult_personalidad * mult_mentor * mult_entrenamiento * mult_uso * mult_equipo
+					var cercania: float = pow(distancia / DISTANCIA_REFERENCIA, EXPONENTE_CERCANIA)
+					cambio = distancia * cercania * TASA_CRECIMIENTO * mult_edad * mult_tier * mult_juego \
+						* mult_personalidad * mult_mentor * mult_entrenamiento * mult_uso * mult_equipo
 				cambio += rng.randfn(0.0, 0.6)
 				# El techo es techo: el ruido aleatorio no puede empujar
 				# por encima. Antes se sumaba igual estando ya en el tope,
@@ -161,6 +262,7 @@ static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator, m
 	# El uso se consume al cerrar la temporada: lo que jugó este año no
 	# puede seguir acelerándolo el año que viene.
 	jugador["xp_uso"] = {}
+	jugador["rendimiento"] = {}
 	jugador["media"] = PlayerGenerator.compute_media(jugador["atributos"], jugador["posicion"])
 	var mejor := PlayerGenerator.best_position(jugador["atributos"])
 	jugador["mejor_posicion"] = mejor["posicion"]

@@ -52,11 +52,14 @@ func _test_el_crecimiento_respeta_el_techo_propio(rng: RandomNumberGenerator) ->
 		j["atributos"][attr] = 40
 	j["potenciales"]["tiro"] = 95
 	j["potenciales"]["quite"] = 42
+	# Titular con un rendimiento promedio: desde §7.1 el que no juega crece
+	# al piso, y lo que mide este test es el techo, no los minutos.
 	for t in range(4):
+		j["rendimiento"] = {"partidos": 34.0, "goles": 16.0, "asistencias": 5.0, "a_favor": 45.0, "en_contra": 45.0}
 		Progresion.aplicar_temporada(j, rng)
 	var tiro: int = j["atributos"]["tiro"]
 	var quite: int = j["atributos"]["quite"]
-	if tiro > 60 and quite < 50:
+	if tiro > 55 and quite < 50:
 		print("OK: tiro 40 -> %d (techo 95), quite 40 -> %d (techo 42)." % [tiro, quite])
 	else:
 		print("FALLA: tiro=%d quite=%d" % [tiro, quite])

@@ -33,7 +33,10 @@ const PORCENTAJE_SUELDO_MINIMO := 0.5
 ## Cuanto crece por temporada, en el calculo que hace el dueño de lo que
 ## va a valer su jugador cuando termine el prestamo. Es una ESTIMACION
 ## suya, no la verdad: se apoya en el techo que le queda por realizar.
-const CRECIMIENTO_ESTIMADO := 0.55
+## Estaba en 0.55. Desde que el crecimiento depende de minutos y
+## rendimiento, un GOAT titular promedio cierra ~20% de su distancia al
+## techo por temporada (tests/_diag_desarrollo_por_rendimiento.gd).
+const CRECIMIENTO_ESTIMADO := 0.2
 
 ## Cuanto por encima de esa estimacion tiene que estar la opcion de compra
 ## para que el dueño la firme. Vender el futuro sale mas caro que vender
