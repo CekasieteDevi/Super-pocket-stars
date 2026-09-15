@@ -2907,8 +2907,9 @@ func _refrescar_investigaciones() -> void:
 		Tema.primario(btn_contratar)
 	btn_contratar.pressed.connect(func():
 		solapa_instalaciones = "investigadores"
-		_mostrar_seccion("equipo")
-		_mostrar_panel_de_seccion("instalaciones")
+		# Instalaciones es de Club, no de Equipo: con "equipo" quedaba la
+		# barra de subsolapas de Equipo arriba de un panel que no es suyo.
+		_mostrar_seccion("club", "instalaciones")
 	)
 	fila_cab.add_child(btn_contratar)
 
