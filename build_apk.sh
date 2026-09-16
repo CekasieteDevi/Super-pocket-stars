@@ -10,7 +10,7 @@
 # Uso:  bash build_apk.sh
 set -euo pipefail
 
-GODOT="E:/IntelliJ/Super Pocket Stars/Godot_v4.7.1-stable_win64_console.exe"
+GODOT="E:/IntelliJ/Super Pocket Stars/Godot_v4.7.2-stable_win64_console.exe"
 PROYECTO="$(cd "$(dirname "$0")" && pwd)"
 SALIDA="$PROYECTO/../build/SuperPocketStars.apk"
 KEYSTORE="C:/Users/Administrator/AppData/Roaming/Godot/keystores/debug.keystore"

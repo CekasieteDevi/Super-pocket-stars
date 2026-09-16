@@ -70,7 +70,7 @@ Desde la raíz del repositorio, crear una carpeta de salida y ejecutar por
 cada `celda` de 0 a 5 (el ejemplo muestra la primera):
 
 ```powershell
-& '..\Godot_v4.7.1-stable_win64_console.exe' --headless --path . --script tests/_diag_calibracion_final.gd -- parejas=50 celda=0 instantanea=docs/mediciones/calibracion_final/instantanea salida=docs/mediciones/calibracion_final/celda_0
+& '..\Godot_v4.7.2-stable_win64_console.exe' --headless --path . --script tests/_diag_calibracion_final.gd -- parejas=50 celda=0 instantanea=docs/mediciones/calibracion_final/instantanea salida=docs/mediciones/calibracion_final/celda_0
 python tests/_analizar_calibracion.py docs/mediciones/calibracion_final
 ```
 

@@ -42,7 +42,7 @@ Su hash y estabilidad durante la corrida quedan en el JSON.
 ## Reproducir
 
 ```powershell
-& '..\Godot_v4.7.1-stable_win64_console.exe' --headless --path . --script tests/_diag_remates.gd -- partidos=100 salida=docs/mediciones/ocasion_etapa96/ocasiones.json
+& '..\Godot_v4.7.2-stable_win64_console.exe' --headless --path . --script tests/_diag_remates.gd -- partidos=100 salida=docs/mediciones/ocasion_etapa96/ocasiones.json
 ```
 
 Son 100 partidos por división, divisiones 1/5/10, semillas 4400–4499:

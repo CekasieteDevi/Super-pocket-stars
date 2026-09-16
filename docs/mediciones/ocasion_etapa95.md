@@ -95,5 +95,5 @@ por `.gdignore`. Motor medido después:
 Reproducir desde la raíz del proyecto:
 
 ```powershell
-& '..\Godot_v4.7.1-stable_win64_console.exe' --headless --path . --script tests/_diag_arcos_desprotegidos.gd -- antes=docs/mediciones/ocasion_etapa95/motor_antes.gd salida=../balance_arcos.json
+& '..\Godot_v4.7.2-stable_win64_console.exe' --headless --path . --script tests/_diag_arcos_desprotegidos.gd -- antes=docs/mediciones/ocasion_etapa95/motor_antes.gd salida=../balance_arcos.json
 ```

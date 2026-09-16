@@ -75,7 +75,7 @@ para que Godot no importe la copia como código de producción.
 Reproducir desde la raíz del proyecto:
 
 ```powershell
-& '..\Godot_v4.7.1-stable_win64_console.exe' --headless --path . --script tests/_diag_integracion_ocasion.gd -- antes=docs/mediciones/ocasion_etapa93/motor_antes.gd salida=../comparacion_ocasion.json
+& '..\Godot_v4.7.2-stable_win64_console.exe' --headless --path . --script tests/_diag_integracion_ocasion.gd -- antes=docs/mediciones/ocasion_etapa93/motor_antes.gd salida=../comparacion_ocasion.json
 ```
 
 `test_barrera_tiro_libre.gd` pasa sus tres comprobaciones: defensa ubicada

@@ -16,7 +16,7 @@
 set -u
 cd "$(dirname "$0")/.."
 
-GODOT="${GODOT:-E:/IntelliJ/Super Pocket Stars/Godot_v4.7.1-stable_win64_console.exe}"
+GODOT="${GODOT:-E:/IntelliJ/Super Pocket Stars/Godot_v4.7.2-stable_win64_console.exe}"
 if [ ! -f "$GODOT" ]; then
 	echo "No encuentro Godot en: $GODOT"
 	echo "Pasalo con GODOT=/ruta/al/godot bash tests/correr_regresion.sh"

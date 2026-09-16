@@ -1,5 +1,9 @@
 extends Control
 
+## Se precarga de forma explicita para que el editor no dependa del escaneo
+## de class_name globales al abrir el proyecto.
+const ESCUDO_CLUB_SCRIPT = preload("res://ui/escudo_club.gd")
+
 ## Fase 4 del roadmap (GDD §13): UI mínima — plantel/formación, tabla,
 ## resultado de partido. Fase 7: la tabla ahora es la de la división real
 ## del jugador dentro de la pirámide. Fase 9: paneles de Economía, Cantera
@@ -76,6 +80,7 @@ const ETIQUETAS_CAMBIOS := {"equilibrado": "Equilibrado", "descanso": "Priorizar
 var vista_partido: VistaPartido
 var resumen_partido: CenterContainer
 var contenedor_resumen: VBoxContainer
+var capa_resumen_partido: CanvasLayer
 var contenedor_economia: VBoxContainer
 var lista_cantera: RichTextLabel
 var contenedor_cantera_botones: VBoxContainer
@@ -127,14 +132,31 @@ var boton_borrar_partida: Button
 var capa_inicio: CanvasLayer
 var menu_inicio: VBoxContainer
 var formulario_inicio: VBoxContainer
+var formulario_escudo: VBoxContainer
 var campo_nombre_club: LineEdit
+var campo_abreviacion: LineEdit
 var fila_camiseta: HBoxContainer
 var fila_short: HBoxContainer
+var fila_camiseta_secundaria: HBoxContainer
+var fila_short_secundario: HBoxContainer
 var boton_comenzar: Button
+var boton_crear_club: Button
 var boton_cargar_inicio: Button
 var label_inicio_estado: Label
 var color_camiseta_elegido := 0
 var color_short_elegido := 8
+var color_camiseta_secundaria_elegido := 1
+var color_short_secundario_elegido := 7
+var color_escudo_elegido := 0
+var color_logo_elegido := 7
+var escudo_forma_elegida := 0
+var logo_forma_elegida := 0
+var preview_escudo
+var etiqueta_nombre_escudo: Label
+var etiqueta_nombre_logo: Label
+var etiqueta_color_escudo: Label
+var etiqueta_color_logo: Label
+var normalizando_abreviacion := false
 var dialogo_borrar_partida: ConfirmationDialog
 var boton_partida_nueva: Button
 var dialogo_partida_nueva: ConfirmationDialog
@@ -260,7 +282,7 @@ func _construir_pantalla_inicio() -> void:
 	var centro := CenterContainer.new()
 	fondo.add_child(centro)
 	var caja := VBoxContainer.new()
-	caja.custom_minimum_size = Vector2(560, 0)
+	caja.custom_minimum_size = Vector2(820, 0)
 	caja.add_theme_constant_override("separation", 14)
 	centro.add_child(caja)
 
@@ -282,6 +304,8 @@ func _construir_pantalla_inicio() -> void:
 	btn_nueva.pressed.connect(func():
 		menu_inicio.visible = false
 		formulario_inicio.visible = true
+		formulario_escudo.visible = false
+		_refrescar_colores_elegidos()
 		campo_nombre_club.grab_focus())
 	menu_inicio.add_child(btn_nueva)
 
@@ -312,13 +336,49 @@ func _construir_pantalla_inicio() -> void:
 	campo_nombre_club.text_changed.connect(func(_t): _validar_club_nuevo())
 	formulario_inicio.add_child(campo_nombre_club)
 
-	formulario_inicio.add_child(Tema.etiqueta_seccion("Camiseta"))
-	fila_camiseta = _fila_de_colores(true)
-	formulario_inicio.add_child(fila_camiseta)
+	var fila_identidad := HBoxContainer.new()
+	fila_identidad.add_theme_constant_override("separation", 10)
+	formulario_inicio.add_child(fila_identidad)
+	var caja_abreviacion := VBoxContainer.new()
+	caja_abreviacion.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	caja_abreviacion.add_child(Tema.etiqueta_seccion("Abreviación del marcador"))
+	campo_abreviacion = LineEdit.new()
+	campo_abreviacion.placeholder_text = "ABC"
+	campo_abreviacion.max_length = 3
+	campo_abreviacion.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	campo_abreviacion.text_changed.connect(_normalizar_abreviacion)
+	caja_abreviacion.add_child(campo_abreviacion)
+	var ayuda_abreviacion := Label.new()
+	ayuda_abreviacion.text = "Máximo 3 letras o números"
+	ayuda_abreviacion.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+	ayuda_abreviacion.add_theme_color_override("font_color", Tema.SUAVE)
+	caja_abreviacion.add_child(ayuda_abreviacion)
+	fila_identidad.add_child(caja_abreviacion)
 
-	formulario_inicio.add_child(Tema.etiqueta_seccion("Pantalón"))
-	fila_short = _fila_de_colores(false)
-	formulario_inicio.add_child(fila_short)
+	formulario_inicio.add_child(Tema.etiqueta_seccion("Colores del uniforme"))
+	var cuadricula_colores := GridContainer.new()
+	cuadricula_colores.columns = 2
+	cuadricula_colores.add_theme_constant_override("h_separation", 18)
+	cuadricula_colores.add_theme_constant_override("v_separation", 8)
+	formulario_inicio.add_child(cuadricula_colores)
+	var caja_principal := VBoxContainer.new()
+	caja_principal.add_child(Tema.etiqueta_seccion("Uniforme principal"))
+	caja_principal.add_child(_etiqueta_color("Camiseta"))
+	fila_camiseta = _fila_de_colores("camiseta")
+	caja_principal.add_child(fila_camiseta)
+	caja_principal.add_child(_etiqueta_color("Pantalón"))
+	fila_short = _fila_de_colores("short")
+	caja_principal.add_child(fila_short)
+	cuadricula_colores.add_child(caja_principal)
+	var caja_secundaria := VBoxContainer.new()
+	caja_secundaria.add_child(Tema.etiqueta_seccion("Uniforme secundario"))
+	caja_secundaria.add_child(_etiqueta_color("Camiseta"))
+	fila_camiseta_secundaria = _fila_de_colores("camiseta_secundaria")
+	caja_secundaria.add_child(fila_camiseta_secundaria)
+	caja_secundaria.add_child(_etiqueta_color("Pantalón"))
+	fila_short_secundario = _fila_de_colores("short_secundario")
+	caja_secundaria.add_child(fila_short_secundario)
+	cuadricula_colores.add_child(caja_secundaria)
 
 	var acciones := HBoxContainer.new()
 	acciones.add_theme_constant_override("separation", 10)
@@ -334,35 +394,129 @@ func _construir_pantalla_inicio() -> void:
 	acciones.add_child(btn_volver)
 
 	boton_comenzar = Button.new()
-	boton_comenzar.text = "Comenzar"
+	boton_comenzar.text = "Siguiente: escudo"
 	boton_comenzar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	boton_comenzar.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
 	Tema.primario(boton_comenzar)
-	boton_comenzar.pressed.connect(_on_comenzar_partida)
+	boton_comenzar.pressed.connect(_mostrar_formulario_escudo)
 	acciones.add_child(boton_comenzar)
+
+	# --- Segunda pantalla: escudo y logo ---------------------------------
+	formulario_escudo = VBoxContainer.new()
+	formulario_escudo.visible = false
+	formulario_escudo.add_theme_constant_override("separation", 8)
+	caja.add_child(formulario_escudo)
+	formulario_escudo.add_child(Tema.etiqueta_seccion("Escudo del club  ·  paso 2 de 2"))
+	var ayuda_escudo := Label.new()
+	ayuda_escudo.text = "Elegí una forma de escudo, un logo y sus colores."
+	ayuda_escudo.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	ayuda_escudo.add_theme_color_override("font_color", Tema.SUAVE)
+	formulario_escudo.add_child(ayuda_escudo)
+
+	var fila_navegacion_escudo := HBoxContainer.new()
+	fila_navegacion_escudo.add_theme_constant_override("separation", 8)
+	formulario_escudo.add_child(fila_navegacion_escudo)
+	fila_navegacion_escudo.add_child(_boton_flecha("‹", func(): _cambiar_escudo(-1)))
+	etiqueta_nombre_escudo = Label.new()
+	etiqueta_nombre_escudo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	etiqueta_nombre_escudo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	Tema.numero(etiqueta_nombre_escudo, Tema.TAM_BASE, Tema.AMBAR)
+	fila_navegacion_escudo.add_child(etiqueta_nombre_escudo)
+	fila_navegacion_escudo.add_child(_boton_flecha("›", func(): _cambiar_escudo(1)))
+
+	preview_escudo = ESCUDO_CLUB_SCRIPT.new()
+	preview_escudo.custom_minimum_size = Vector2(0, 190)
+	preview_escudo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	formulario_escudo.add_child(preview_escudo)
+
+	var fila_navegacion_logo := HBoxContainer.new()
+	fila_navegacion_logo.add_theme_constant_override("separation", 8)
+	formulario_escudo.add_child(fila_navegacion_logo)
+	fila_navegacion_logo.add_child(_boton_flecha("‹", func(): _cambiar_logo(-1)))
+	etiqueta_nombre_logo = Label.new()
+	etiqueta_nombre_logo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	etiqueta_nombre_logo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	Tema.numero(etiqueta_nombre_logo, Tema.TAM_BASE, Tema.AMBAR)
+	fila_navegacion_logo.add_child(etiqueta_nombre_logo)
+	fila_navegacion_logo.add_child(_boton_flecha("›", func(): _cambiar_logo(1)))
+
+	var colores_identidad := GridContainer.new()
+	colores_identidad.columns = 2
+	colores_identidad.add_theme_constant_override("h_separation", 18)
+	formulario_escudo.add_child(colores_identidad)
+	var colores_escudo := VBoxContainer.new()
+	etiqueta_color_escudo = _etiqueta_color("Color del escudo")
+	colores_escudo.add_child(etiqueta_color_escudo)
+	colores_escudo.add_child(_fila_de_colores("escudo"))
+	colores_identidad.add_child(colores_escudo)
+	var colores_logo := VBoxContainer.new()
+	etiqueta_color_logo = _etiqueta_color("Color del logo · tocá un color")
+	colores_logo.add_child(etiqueta_color_logo)
+	colores_logo.add_child(_fila_de_colores("logo"))
+	colores_identidad.add_child(colores_logo)
+
+	var acciones_escudo := HBoxContainer.new()
+	formulario_escudo.add_child(acciones_escudo)
+	var volver_escudo := Button.new()
+	volver_escudo.text = "Volver"
+	volver_escudo.custom_minimum_size = Vector2(140, Tema.ALTO_TACTIL)
+	volver_escudo.pressed.connect(_volver_a_colores)
+	acciones_escudo.add_child(volver_escudo)
+	boton_crear_club = Button.new()
+	boton_crear_club.text = "Crear club"
+	boton_crear_club.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	boton_crear_club.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	Tema.primario(boton_crear_club)
+	boton_crear_club.pressed.connect(_on_comenzar_partida)
+	acciones_escudo.add_child(boton_crear_club)
+	_refrescar_preview_escudo()
 
 
 ## Los diez colores como botones cuadrados. Se marca el elegido con un
 ## borde ambar: sobre una fila de colores, cualquier otra señal (un tilde,
 ## una sombra) se pierde contra el propio color del boton.
-func _fila_de_colores(es_camiseta: bool) -> HBoxContainer:
+func _fila_de_colores(tipo: String) -> HBoxContainer:
 	var fila := HBoxContainer.new()
-	fila.add_theme_constant_override("separation", 8)
+	fila.add_theme_constant_override("separation", 4)
 	for i in range(ColoresClub.PALETA.size()):
 		var c: Color = ColoresClub.PALETA[i]
 		var b := Button.new()
-		b.custom_minimum_size = Vector2(46, 46)
+		b.custom_minimum_size = Vector2(34, 34)
 		b.tooltip_text = ColoresClub.NOMBRES[i]
 		_pintar_muestra(b, c, false)
 		var idx := i
-		b.pressed.connect(func():
-			if es_camiseta:
-				color_camiseta_elegido = idx
-			else:
-				color_short_elegido = idx
-			_refrescar_colores_elegidos())
+		b.pressed.connect(func(): _seleccionar_color(tipo, idx))
 		fila.add_child(b)
 	return fila
+
+
+func _etiqueta_color(texto: String) -> Label:
+	var l := Label.new()
+	l.text = texto
+	l.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+	l.add_theme_color_override("font_color", Tema.SUAVE)
+	return l
+
+
+func _boton_flecha(texto: String, accion: Callable) -> Button:
+	var b := Button.new()
+	b.text = texto
+	b.custom_minimum_size = Vector2(52, Tema.ALTO_TACTIL)
+	b.add_theme_font_size_override("font_size", 30)
+	b.pressed.connect(accion)
+	return b
+
+
+func _seleccionar_color(tipo: String, idx: int) -> void:
+	match tipo:
+		"camiseta": color_camiseta_elegido = idx
+		"short": color_short_elegido = idx
+		"camiseta_secundaria": color_camiseta_secundaria_elegido = idx
+		"short_secundario": color_short_secundario_elegido = idx
+		"escudo": color_escudo_elegido = idx
+		"logo": color_logo_elegido = idx
+	_refrescar_colores_elegidos()
+	_refrescar_preview_escudo()
 
 
 func _pintar_muestra(boton: Button, color: Color, elegido: bool) -> void:
@@ -383,27 +537,102 @@ func _pintar_muestra(boton: Button, color: Color, elegido: bool) -> void:
 
 
 func _refrescar_colores_elegidos() -> void:
-	for i in range(fila_camiseta.get_child_count()):
-		_pintar_muestra(fila_camiseta.get_child(i), ColoresClub.PALETA[i],
-			i == color_camiseta_elegido)
-	for i in range(fila_short.get_child_count()):
-		_pintar_muestra(fila_short.get_child(i), ColoresClub.PALETA[i],
-			i == color_short_elegido)
+	_refrescar_fila_color(fila_camiseta, color_camiseta_elegido)
+	_refrescar_fila_color(fila_short, color_short_elegido)
+	_refrescar_fila_color(fila_camiseta_secundaria, color_camiseta_secundaria_elegido)
+	_refrescar_fila_color(fila_short_secundario, color_short_secundario_elegido)
+	if etiqueta_color_escudo != null:
+		etiqueta_color_escudo.text = "Color del escudo · %s" % ColoresClub.NOMBRES[color_escudo_elegido]
+	if etiqueta_color_logo != null:
+		etiqueta_color_logo.text = "Color del logo · %s" % ColoresClub.NOMBRES[color_logo_elegido]
+	if formulario_escudo != null:
+		for fila in formulario_escudo.find_children("*", "HBoxContainer", true, false):
+			if fila.get_child_count() != ColoresClub.PALETA.size():
+				continue
+			var padre := fila.get_parent()
+			var titulo := str(padre.get_child(0).text) if padre.get_child_count() > 0 else ""
+			_refrescar_fila_color(fila, color_escudo_elegido if titulo == "Color del escudo" else color_logo_elegido)
 	_validar_club_nuevo()
 
 
-## Comenzar solo se habilita con un nombre usable, y si no lo es dice por
-## que: un boton apagado y mudo se lee como un boton roto.
+func _refrescar_fila_color(fila: HBoxContainer, elegido: int) -> void:
+	if fila == null:
+		return
+	for i in range(fila.get_child_count()):
+		_pintar_muestra(fila.get_child(i), ColoresClub.PALETA[i], i == elegido)
+
+
+func _normalizar_abreviacion(_texto: String) -> void:
+	if normalizando_abreviacion or campo_abreviacion == null:
+		return
+	normalizando_abreviacion = true
+	var posicion_cursor := campo_abreviacion.caret_column
+	var limpio := ""
+	var texto_mayuscula := campo_abreviacion.text.to_upper()
+	for indice in range(texto_mayuscula.length()):
+		var caracter := texto_mayuscula.substr(indice, 1)
+		var codigo := caracter.unicode_at(0)
+		if (codigo >= 65 and codigo <= 90) or (codigo >= 48 and codigo <= 57):
+			limpio += caracter
+			if limpio.length() == 3:
+				break
+	if campo_abreviacion.text != limpio:
+		campo_abreviacion.text = limpio
+		campo_abreviacion.caret_column = mini(posicion_cursor, limpio.length())
+	normalizando_abreviacion = false
+	_validar_club_nuevo()
+
+
+func _cambiar_escudo(delta: int) -> void:
+	escudo_forma_elegida = posmod(escudo_forma_elegida + delta, ESCUDO_CLUB_SCRIPT.NOMBRES_ESCUDOS.size())
+	_refrescar_preview_escudo()
+
+
+func _cambiar_logo(delta: int) -> void:
+	logo_forma_elegida = posmod(logo_forma_elegida + delta, ESCUDO_CLUB_SCRIPT.NOMBRES_LOGOS.size())
+	_refrescar_preview_escudo()
+
+
+func _refrescar_preview_escudo() -> void:
+	if preview_escudo == null:
+		return
+	preview_escudo.configurar(escudo_forma_elegida, logo_forma_elegida,
+		ColoresClub.PALETA[color_escudo_elegido], ColoresClub.PALETA[color_logo_elegido])
+	if etiqueta_nombre_escudo != null:
+		etiqueta_nombre_escudo.text = "Escudo  ·  %s" % ESCUDO_CLUB_SCRIPT.NOMBRES_ESCUDOS[escudo_forma_elegida]
+	if etiqueta_nombre_logo != null:
+		etiqueta_nombre_logo.text = "Logo  ·  %s" % ESCUDO_CLUB_SCRIPT.NOMBRES_LOGOS[logo_forma_elegida]
+
+
+func _mostrar_formulario_escudo() -> void:
+	_validar_club_nuevo()
+	if boton_comenzar.disabled:
+		return
+	formulario_inicio.visible = false
+	formulario_escudo.visible = true
+	label_inicio_estado.text = ""
+	_refrescar_preview_escudo()
+
+
+func _volver_a_colores() -> void:
+	formulario_escudo.visible = false
+	formulario_inicio.visible = true
+	label_inicio_estado.text = ""
+	_refrescar_colores_elegidos()
+
+
 func _validar_club_nuevo() -> void:
+	if campo_nombre_club == null or boton_comenzar == null:
+		return
 	var nombre := campo_nombre_club.text.strip_edges()
 	var motivo := ""
 	if nombre == "":
 		motivo = "Poné el nombre de tu club."
-	elif GameState.piramide != null and GameState.piramide.existe_nombre(nombre):
-		motivo = "Ya hay un club con ese nombre en la pirámide. Elegí otro."
-	elif color_camiseta_elegido == color_short_elegido:
-		motivo = "La camiseta y el pantalón no pueden ser del mismo color."
+	elif campo_abreviacion == null or campo_abreviacion.text.strip_edges() == "":
+		motivo = "Poné una abreviación para el marcador."
 	boton_comenzar.disabled = motivo != ""
+	if boton_crear_club != null:
+		boton_crear_club.disabled = motivo != ""
 	label_inicio_estado.text = motivo
 
 
@@ -411,6 +640,7 @@ func _mostrar_inicio() -> void:
 	capa_inicio.visible = true
 	menu_inicio.visible = true
 	formulario_inicio.visible = false
+	formulario_escudo.visible = false
 	_refrescar_inicio()
 
 
@@ -432,9 +662,18 @@ func _on_cargar_desde_inicio() -> void:
 
 
 func _on_comenzar_partida() -> void:
+	_validar_club_nuevo()
+	if boton_crear_club != null and boton_crear_club.disabled:
+		return
 	GameState.partida_nueva(-1, campo_nombre_club.text.strip_edges(),
 		ColoresClub.PALETA[color_camiseta_elegido],
-		ColoresClub.PALETA[color_short_elegido])
+		ColoresClub.PALETA[color_short_elegido],
+		campo_abreviacion.text.strip_edges().to_upper(),
+		ColoresClub.PALETA[color_camiseta_secundaria_elegido],
+		ColoresClub.PALETA[color_short_secundario_elegido],
+		escudo_forma_elegida, logo_forma_elegida,
+		ColoresClub.PALETA[color_escudo_elegido],
+		ColoresClub.PALETA[color_logo_elegido])
 	_entrar_al_juego()
 
 
@@ -1983,15 +2222,16 @@ func _construir_panel_partido_animado(padre: Control) -> void:
 	# cancha y de ahi se sale a mano: cerrar de una no dejaba ver el
 	# ultimo minuto ni enterarse de como termino.
 	vista_partido.terminado.connect(func():
-		if not paneles["partido_animado"].visible:
-			return
 		# Un clip del laboratorio no tiene resumen de partido que mostrar:
 		# se vuelve a la lista para poder tirar la jugada siguiente.
 		if viendo_laboratorio:
 			viendo_laboratorio = false
 			_mostrar_laboratorio()
 			return
-		_mostrar_resumen_partido())
+		# Saltar emite terminado desde el callback del boton. Diferir un frame
+		# asegura que el panel ya quedo en el ultimo fotograma antes de mostrar
+		# el cartel de estadisticas.
+		call_deferred("_mostrar_resumen_partido"))
 
 	_construir_resumen_partido(self)
 
@@ -2001,10 +2241,17 @@ func _construir_panel_partido_animado(padre: Control) -> void:
 ## Va ENCIMA de la cancha y no en otra pantalla, para poder mirar el
 ## ultimo fotograma mientras se leen los numeros.
 func _construir_resumen_partido(padre: Control) -> void:
+	# La cancha animada es `top_level` y vive en otro contenedor. Un
+	# CenterContainer comun podia quedar debajo de esa vista aunque estuviera
+	# visible. CanvasLayer garantiza que el marcador y las estadisticas sean
+	# realmente un overlay, tambien al usar Saltar.
+	capa_resumen_partido = CanvasLayer.new()
+	capa_resumen_partido.layer = 12
+	padre.add_child(capa_resumen_partido)
 	resumen_partido = CenterContainer.new()
 	resumen_partido.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	resumen_partido.visible = false
-	padre.add_child(resumen_partido)
+	capa_resumen_partido.add_child(resumen_partido)
 
 	var tarjeta := PanelContainer.new()
 	tarjeta.custom_minimum_size = Vector2(560, 0)
@@ -2042,7 +2289,12 @@ func _mostrar_resumen_partido() -> void:
 	contenedor_resumen.add_child(Tema.etiqueta_seccion("Final del partido"))
 
 	var marcador := Label.new()
-	marcador.text = "%s   %d - %d   %s" % [r["local"], r["gl"], r["gv"], r["visitante"]]
+	var equipo_local_marcador := _equipo_por_nombre(str(r["local"]))
+	var equipo_visitante_marcador := _equipo_por_nombre(str(r["visitante"]))
+	marcador.text = "%s   %d - %d   %s" % [
+		_nombre_marcador(equipo_local_marcador) if equipo_local_marcador != null else r["local"],
+		r["gl"], r["gv"],
+		_nombre_marcador(equipo_visitante_marcador) if equipo_visitante_marcador != null else r["visitante"]]
 	# En un cruce de copa el marcador no alcanza: 1-1 puede ser un pase de
 	# ronda o una eliminacion. Se dice como se cerro.
 	var definicion := str(r.get("definicion", "90 minutos"))
@@ -6139,7 +6391,9 @@ func _reproducir_laboratorio(clave: String) -> void:
 		copia_local.nombre, copia_visitante.nombre,
 		VistaPartido.construir_nombres(copia_local, copia_visitante),
 		VistaCancha.estado_desde_calidad(copia_local.calidad_cancha),
-		copia_local.color_short, copia_visitante.color_short)
+		copia_local.color_short, copia_visitante.color_short,
+		_nombre_marcador(copia_local), _nombre_marcador(copia_visitante),
+		copia_local.identidad_visual(), copia_visitante.identidad_visual())
 	vista_partido.velocidad = velocidad_partido_elegida
 
 
@@ -6738,6 +6992,7 @@ const VACIO_POR_SOLAPA := {
 	"fichajes": "Todavia no se movio nadie.",
 	"lesiones": "Nadie se rompio todavia. Ojala siga asi.",
 	"campeones": "Todavia no se corono nadie: los titulos se reparten al cerrar la temporada.",
+	"club": "Todavia no jugaste ningun partido.",
 }
 
 
@@ -6748,6 +7003,9 @@ func _refrescar_noticias() -> void:
 		Tema.seleccionado(botones_solapa_noticias[clave], clave == noticias_solapa)
 	for hijo in contenedor_noticias.get_children():
 		hijo.queue_free()
+	if noticias_solapa == "club":
+		_refrescar_tab_club()
+		return
 
 	var lista := Noticias.filtrar(GameState.noticias, noticias_solapa)
 	if lista.is_empty():
@@ -6765,6 +7023,168 @@ func _refrescar_noticias() -> void:
 	# primero que se leia era lo mas viejo del feed.
 	for n in lista:
 		contenedor_noticias.add_child(_tarjeta_de_noticia(n))
+
+
+## Historial del club dentro de Noticias: una tarjeta por partido, con una
+## lectura corta de la causa principal. Los datos vienen congelados desde
+## GameState para que el analisis no cambie al avanzar la temporada.
+func _refrescar_tab_club() -> void:
+	var historial: Array = GameState.historial_partidos
+	if historial.is_empty():
+		var vacio := Componentes.tarjeta()
+		var l := Label.new()
+		l.text = str(VACIO_POR_SOLAPA["club"])
+		l.add_theme_color_override("font_color", Tema.SUAVE)
+		vacio.add_child(l)
+		contenedor_noticias.add_child(vacio)
+		return
+	for reg in historial:
+		contenedor_noticias.add_child(_tarjeta_de_partido_club(reg))
+
+
+func _tarjeta_de_partido_club(reg: Dictionary) -> Control:
+	var tarjeta := Componentes.tarjeta(_color_del_resultado(reg))
+	var caja := VBoxContainer.new()
+	caja.add_theme_constant_override("separation", 4)
+	tarjeta.add_child(caja)
+
+	var encabezado := Label.new()
+	encabezado.text = "Temporada %d  ·  %s  ·  %s" % [
+		int(reg.get("temporada", 1)),
+		str(reg.get("torneo", "")) if str(reg.get("torneo", "")) != "" else "Fecha %d" % int(reg.get("fecha", 0)),
+		Calendario.texto_medio(int(reg.get("dia", 0)))]
+	encabezado.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+	encabezado.add_theme_color_override("font_color", Tema.SUAVE)
+	caja.add_child(encabezado)
+
+	var marcador := Label.new()
+	var local: String = str(reg.get("local", ""))
+	marcador.text = "%s   %d - %d   %s" % [
+		local, int(reg.get("gl", 0)), int(reg.get("gv", 0)), str(reg.get("visitante", ""))]
+	marcador.text += "  ·  %s" % _resultado_de_club(reg)
+	marcador.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	Tema.numero(marcador, 20, _color_del_resultado(reg))
+	caja.add_child(marcador)
+
+	var analisis := Label.new()
+	analisis.text = "Analisis: " + _analisis_de_partido(reg)
+	analisis.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	analisis.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	caja.add_child(analisis)
+
+	var datos := _texto_estadisticas_club(reg)
+	if datos != "":
+		var estadisticas := Label.new()
+		estadisticas.text = datos
+		estadisticas.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		estadisticas.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+		estadisticas.add_theme_color_override("font_color", Tema.SUAVE)
+		caja.add_child(estadisticas)
+	return tarjeta
+
+
+func _resultado_de_club(reg: Dictionary) -> String:
+	var mio: String = GameState.equipo_jugador.nombre
+	var ganador := str(reg.get("ganador", ""))
+	if ganador != "":
+		return "Ganaste" if ganador == mio else "Perdiste"
+	var propios: int = int(reg.get("gl", 0)) if str(reg.get("local", "")) == mio else int(reg.get("gv", 0))
+	var ajenos: int = int(reg.get("gv", 0)) if str(reg.get("local", "")) == mio else int(reg.get("gl", 0))
+	if propios > ajenos:
+		return "Ganaste"
+	if propios < ajenos:
+		return "Perdiste"
+	return "Empate"
+
+
+func _datos_lado_club(reg: Dictionary, local: bool) -> Dictionary:
+	var datos: Dictionary = reg.get("analisis", {})
+	var clave := "local" if local else "visitante"
+	return datos.get(clave, {})
+
+
+func _analisis_de_partido(reg: Dictionary) -> String:
+	var resultado := _resultado_de_club(reg)
+	if bool(reg.get("forfeit", false)):
+		if resultado == "Perdiste":
+			return "Fue un partido administrativo: no pudimos presentar el equipo completo."
+		if resultado == "Empate":
+			return "Fue un empate administrativo: ninguno pudo presentar el equipo completo."
+		return "Ganamos por un partido administrativo."
+	var soy_local: bool = str(reg.get("local", "")) == GameState.equipo_jugador.nombre
+	var yo := _datos_lado_club(reg, soy_local)
+	var rival := _datos_lado_club(reg, not soy_local)
+	var stats: Dictionary = reg.get("stats", {})
+	var stats_yo: Dictionary = stats.get("local" if soy_local else "visitante", {})
+	var stats_rival: Dictionary = stats.get("visitante" if soy_local else "local", {})
+	var media_yo := float(yo.get("media", 0.0))
+	var media_rival := float(rival.get("media", 0.0))
+	var division_yo := int(yo.get("division", 0))
+	var division_rival := int(rival.get("division", 0))
+	if str(reg.get("definicion", "90 minutos")) == "penales":
+		return "Ganamos en los penales despues de empatar en el partido." if resultado == "Ganaste" else "Se perdio en los penales despues de empatar en el partido."
+
+	# Primero la diferencia de calidad. Es la explicacion mas clara en una
+	# copa desigual y evita inventar una causa tactica para un 0-3 esperable.
+	if media_yo > 0.0 and media_rival > 0.0 \
+			and (absf(media_yo - media_rival) >= 6.0 \
+			or (division_yo > 0 and division_rival > 0 \
+			and abs(division_yo - division_rival) >= 2)):
+		if resultado == "Perdiste" and media_rival > media_yo:
+			return "Se perdio porque tenian mas calidad que nosotros."
+		if resultado == "Ganaste" and media_yo > media_rival:
+			return "Ganamos porque teniamos mas calidad que ellos."
+		if resultado == "Empate":
+			if media_rival > media_yo:
+				return "Empatamos contra un rival de mayor calidad; fue un buen resultado."
+			return "Empatamos pese a tener mas calidad; nos falto resolverlo."
+
+	var tiros_yo := int(stats_yo.get("tiros", 0))
+	var tiros_rival := int(stats_rival.get("tiros", 0))
+	var arco_yo := int(stats_yo.get("tiros_al_arco", 0))
+	var arco_rival := int(stats_rival.get("tiros_al_arco", 0))
+	var atajadas_rival := int(rival.get("atajadas", -1))
+	var atajadas_yo := int(yo.get("atajadas", -1))
+	if resultado == "Ganaste" and atajadas_rival == 0 and arco_yo > 0:
+		return "Ganamos porque el golero rival no tapo ningun tiro al arco."
+	if resultado == "Perdiste" and atajadas_yo == 0 and arco_rival > 0:
+		return "Se perdio porque nuestro golero no tapo ningun tiro al arco."
+	if resultado == "Ganaste" and arco_yo >= arco_rival + 2:
+		return "Ganamos porque fuimos mas peligrosos: %d tiros al arco contra %d." % [arco_yo, arco_rival]
+	if resultado == "Perdiste" and arco_rival >= arco_yo + 2:
+		return "Se perdio porque ellos generaron mas peligro: %d tiros al arco contra %d." % [arco_rival, arco_yo]
+	if tiros_yo >= 5 and tiros_yo - arco_yo >= 4 and resultado != "Ganaste":
+		return "Nos falto punteria: tuvimos %d tiros y solo %d fueron al arco." % [tiros_yo, arco_yo]
+	if yo.has("tactica") and float(yo.get("tactica", 100.0)) < 45.0:
+		return "La nueva tactica todavia no estaba asimilada por el equipo."
+	if yo.has("animo") and float(yo.get("animo", 50.0)) < 38.0:
+		return "El animo bajo del plantel pudo pesar en el partido."
+	if resultado == "Ganaste":
+		return "Ganamos en un partido parejo y aprovechamos mejor nuestras chances."
+	if resultado == "Perdiste":
+		return "Se perdio en un partido parejo; falto aprovechar mejor las chances."
+	return "Fue un partido parejo y termino en empate."
+
+
+func _texto_estadisticas_club(reg: Dictionary) -> String:
+	var stats: Dictionary = reg.get("stats", {})
+	if stats.is_empty():
+		return "Estadisticas: no disponibles para este partido."
+	var soy_local: bool = str(reg.get("local", "")) == GameState.equipo_jugador.nombre
+	var yo: Dictionary = stats.get("local" if soy_local else "visitante", {})
+	var rival: Dictionary = stats.get("visitante" if soy_local else "local", {})
+	# Partidas viejas pueden traer el contenedor `stats`, pero con todo en
+	# cero. Mostrar 50/50 y 0 tiros seria inventar datos, especialmente en
+	# una derrota amplia. El motor nuevo guarda acciones reales.
+	var hay_datos := int(yo.get("acciones", 0)) > 0 or int(rival.get("acciones", 0)) > 0 \
+			or int(yo.get("tiros", 0)) > 0 or int(rival.get("tiros", 0)) > 0 \
+			or int(yo.get("pases_intentados", 0)) > 0 or int(rival.get("pases_intentados", 0)) > 0
+	if not hay_datos:
+		return "Estadisticas: no disponibles para este partido."
+	return "Estadisticas: tiros %d-%d  ·  al arco %d-%d  ·  posesion %.0f%%-%.0f%%" % [
+		int(yo.get("tiros", 0)), int(rival.get("tiros", 0)),
+		int(yo.get("tiros_al_arco", 0)), int(rival.get("tiros_al_arco", 0)),
+		float(yo.get("posesion_pct", 50.0)), float(rival.get("posesion_pct", 50.0))]
 
 
 func _tarjeta_de_noticia(n: Dictionary) -> Control:
@@ -7276,8 +7696,10 @@ func _tarjeta_marcador(r: Dictionary) -> Control:
 	var fila := HBoxContainer.new()
 	caja.add_child(fila)
 	var mio: String = GameState.equipo_jugador.nombre
+	var equipo_local := _equipo_por_nombre(str(r["local"]))
+	var equipo_visitante := _equipo_por_nombre(str(r["visitante"]))
 	var l_local := Label.new()
-	l_local.text = str(r["local"])
+	l_local.text = _nombre_marcador(equipo_local) if equipo_local != null else str(r["local"])
 	l_local.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	l_local.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	l_local.clip_text = true
@@ -7290,7 +7712,7 @@ func _tarjeta_marcador(r: Dictionary) -> Control:
 	fila.add_child(marcador)
 
 	var l_visita := Label.new()
-	l_visita.text = str(r["visitante"])
+	l_visita.text = _nombre_marcador(equipo_visitante) if equipo_visitante != null else str(r["visitante"])
 	l_visita.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	l_visita.clip_text = true
 	Tema.numero(l_visita, 22, Tema.AMBAR if str(r["visitante"]) == mio else Tema.TEXTO)
@@ -7302,6 +7724,9 @@ func _tarjeta_marcador(r: Dictionary) -> Control:
 ## resultado antes de que leas los numeros.
 func _color_del_resultado(r: Dictionary) -> Color:
 	var mio: String = GameState.equipo_jugador.nombre
+	var ganador := str(r.get("ganador", ""))
+	if ganador != "":
+		return Tema.VERDE if ganador == mio else Tema.ROJO
 	var propios: int = int(r["gl"]) if str(r["local"]) == mio else int(r["gv"])
 	var ajenos: int = int(r["gv"]) if str(r["local"]) == mio else int(r["gl"])
 	if propios > ajenos:
@@ -7855,7 +8280,9 @@ func _mostrar_partido_animado() -> void:
 		local.nombre, visitante.nombre,
 		VistaPartido.construir_nombres(local, visitante),
 		VistaCancha.estado_desde_calidad(local.calidad_cancha),
-		local.color_short, visitante.color_short)
+		local.color_short, visitante.color_short,
+		_nombre_marcador(local), _nombre_marcador(visitante),
+		local.identidad_visual(), visitante.identidad_visual())
 	vista_partido.velocidad = velocidad_partido_elegida
 
 
@@ -7868,6 +8295,13 @@ func _equipo_por_nombre(nombre: String) -> Team:
 			if e.nombre == nombre:
 				return e
 	return null
+
+
+func _nombre_marcador(equipo: Team) -> String:
+	if equipo == null:
+		return ""
+	var corto := equipo.abreviacion.strip_edges()
+	return corto if corto != "" else equipo.nombre
 
 
 func _mostrar_economia() -> void:

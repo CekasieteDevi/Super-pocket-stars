@@ -11,7 +11,7 @@ signal terminado
 ## Ticks de juego por segundo real a x1. El motor simula a 0.25s por tick,
 ## así que 4 ticks/seg es TIEMPO REAL de fútbol: un pase tarda lo que
 ## tarda un pase.
-const TICKS_POR_SEGUNDO := 4.0
+const TICKS_POR_SEGUNDO := 1.0 / MotorEspacial.TICK_SEG
 
 ## A 4 fotogramas por segundo hay que interpolar o se ve a saltos. Pero si
 ## dos fotogramas seguidos ponen a alguien más lejos que esto, es un salto
@@ -146,7 +146,9 @@ func iniciar(lista: Array, c_local: Color, c_visitante: Color,
 		nombre_local: String = "", nombre_visitante: String = "",
 		tabla_nombres: Dictionary = {}, estado_cancha: String = "regular",
 		short_local: Color = Color.TRANSPARENT,
-		short_visitante: Color = Color.TRANSPARENT) -> void:
+		short_visitante: Color = Color.TRANSPARENT,
+		abreviacion_local: String = "", abreviacion_visitante: String = "",
+		identidad_local: Dictionary = {}, identidad_visitante: Dictionary = {}) -> void:
 	fotogramas = lista
 	color_local = c_local
 	color_visitante = c_visitante
@@ -161,8 +163,11 @@ func iniciar(lista: Array, c_local: Color, c_visitante: Color,
 	vista.estado_cancha = estado_cancha
 	hud.nombre_local = nombre_local
 	hud.nombre_visitante = nombre_visitante
+	hud.nombre_local_marcador = abreviacion_local
+	hud.nombre_visitante_marcador = abreviacion_visitante
 	hud.color_local = c_local
 	hud.color_visitante = c_visitante
+	hud.configurar_identidades(identidad_local, identidad_visitante)
 	posicion = 0.0
 	pausado = false
 	_terminado = false
@@ -245,7 +250,10 @@ func saltar_al_final() -> void:
 	_festejo_grupo.clear()
 	_tarjetas.clear()
 	_mostrar(fotogramas.size() - 1, 0.0)
-	_finalizar()
+	# El boton vive dentro del mismo evento de input que cambia la cancha.
+	# Emitir terminado en diferido deja que ese evento termine y evita que la
+	# UI tape el resumen justo cuando se salta al ultimo fotograma.
+	call_deferred("_finalizar")
 
 
 func _process(delta: float) -> void:
@@ -578,7 +586,13 @@ func _mostrar(idx: int, t: float) -> void:
 						ent["direccion"] = _direccion(Vector2(float(ejecutor.get("ox", 1.0)), float(ejecutor.get("oy", 0.0))))
 						break
 			var fase := float(idx - int(accion["desde"])) + t
-			if str(accion.get("accion", "")) in ACCIONES_CON_CONTACTO:
+			# El fotograma de patea ya se guarda DESPUES de avanzar el remate.
+			# Si la pelota ya se alejo, anclarla al pie la hacia retroceder y
+			# parecia que el tiro se trababa. Solo anclar el contacto si sigue
+			# realmente junto al jugador.
+			if str(accion.get("accion", "")) in ACCIONES_CON_CONTACTO \
+					and bool(pa.get("es_remate", false)) \
+					and pos_pelota.distance_to(p) <= 0.75:
 				# El fotograma ya avanzó la pelota un paso. La dirección sigue
 				# siendo la del contacto original.
 				var direccion_contacto := ProyeccionPartido.direccion_pantalla(balon - Vector2(j["x"], j["y"]))

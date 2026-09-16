@@ -21,7 +21,7 @@ Editalo cuando quieras: lo que esté acá lo sigo.
   `d3d12`, porque provoca el crash de acceso a memoria de Godot.
 
 - No está en el PATH. Se llama por ruta completa:
-  `"E:\IntelliJ\Super Pocket Stars\Godot_v4.7.1-stable_win64_console.exe"`
+  `"E:\IntelliJ\Super Pocket Stars\Godot_v4.7.2-stable_win64_console.exe"`
 - Después de agregar un `class_name` nuevo hay que reconstruir la caché o
   no compila:
   `<godot> --path . --headless --editor --quit`

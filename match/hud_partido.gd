@@ -1,6 +1,8 @@
 class_name HudPartido
 extends Control
 
+const ESCUDO_CLUB_SCRIPT = preload("res://ui/escudo_club.gd")
+
 ## Marcador, reloj, quién tiene la pelota y los controles.
 ##
 ## Distribución pensada para celular horizontal: todo lo que se toca va en
@@ -28,6 +30,8 @@ const COLOR_TENUE := Color(0.72, 0.74, 0.78)
 
 var nombre_local := ""
 var nombre_visitante := ""
+var nombre_local_marcador := ""
+var nombre_visitante_marcador := ""
 var color_local := Color.WHITE
 var color_visitante := Color.WHITE
 var goles_local := 0
@@ -62,6 +66,8 @@ var parpadeo := 0.0
 var _columna: VBoxContainer
 var _boton_pausa: Button
 var _boton_menu: Button
+var _escudo_local: Control
+var _escudo_visitante: Control
 
 
 func _ready() -> void:
@@ -87,6 +93,13 @@ func _ready() -> void:
 	_boton_menu.resized.connect(_reubicar)
 	_reubicar.call_deferred()
 
+	_escudo_local = ESCUDO_CLUB_SCRIPT.new()
+	_escudo_visitante = ESCUDO_CLUB_SCRIPT.new()
+	add_child(_escudo_local)
+	add_child(_escudo_visitante)
+	_escudo_local.configurar(0, 0, color_local, Color.WHITE)
+	_escudo_visitante.configurar(0, 0, color_visitante, Color.WHITE)
+
 
 func _boton(texto: String, ancho: float, al_tocar: Callable) -> Button:
 	var b := Button.new()
@@ -99,6 +112,21 @@ func _boton(texto: String, ancho: float, al_tocar: Callable) -> Button:
 
 func marcar_pausa(pausado: bool) -> void:
 	_boton_pausa.text = "Seguir" if pausado else "Pausa"
+
+
+func configurar_identidades(identidad_local: Dictionary, identidad_visitante: Dictionary) -> void:
+	if _escudo_local == null or _escudo_visitante == null:
+		return
+	_escudo_local.configurar(
+		int(identidad_local.get("escudo_forma", 0)),
+		int(identidad_local.get("logo_forma", 0)),
+		identidad_local.get("color_escudo", color_local),
+		identidad_local.get("color_logo", Color.WHITE))
+	_escudo_visitante.configurar(
+		int(identidad_visitante.get("escudo_forma", 0)),
+		int(identidad_visitante.get("logo_forma", 0)),
+		identidad_visitante.get("color_escudo", color_visitante),
+		identidad_visitante.get("color_logo", Color.WHITE))
 
 
 func _notification(que: int) -> void:
@@ -143,10 +171,12 @@ func _dibujar_marcador(fuente: Font) -> void:
 		resultado += "  (%d-%d)" % [int(tanda.get("home", 0)), int(tanda.get("away", 0))]
 	var tam_nombre := 18
 	var tam_resultado := 26
-	var an_local := fuente.get_string_size(nombre_local, HORIZONTAL_ALIGNMENT_LEFT, -1, tam_nombre).x
-	var an_visita := fuente.get_string_size(nombre_visitante, HORIZONTAL_ALIGNMENT_LEFT, -1, tam_nombre).x
+	var texto_local := nombre_local_marcador if nombre_local_marcador != "" else nombre_local
+	var texto_visitante := nombre_visitante_marcador if nombre_visitante_marcador != "" else nombre_visitante
+	var an_local := fuente.get_string_size(texto_local, HORIZONTAL_ALIGNMENT_LEFT, -1, tam_nombre).x
+	var an_visita := fuente.get_string_size(texto_visitante, HORIZONTAL_ALIGNMENT_LEFT, -1, tam_nombre).x
 	var an_res := fuente.get_string_size(resultado, HORIZONTAL_ALIGNMENT_LEFT, -1, tam_resultado).x
-	var chip := 18.0
+	var chip := 24.0
 	var hueco := 12.0
 	var ancho := chip * 2 + an_local + an_visita + an_res + hueco * 5
 	var alto := 42.0
@@ -156,15 +186,27 @@ func _dibujar_marcador(fuente: Font) -> void:
 	draw_rect(Rect2(Vector2(x, y), Vector2(ancho, alto)), COLOR_PANEL)
 	var cx := x + hueco * 0.5
 	var medio := y + alto * 0.5
-	draw_rect(Rect2(Vector2(cx, medio - chip * 0.5), Vector2(chip, chip)), color_local)
+	if _escudo_local == null:
+		draw_rect(Rect2(Vector2(cx, medio - chip * 0.5), Vector2(chip, chip)), color_local)
+	else:
+		_ubicar_escudo(_escudo_local, Vector2(cx + chip * 0.5, medio))
 	cx += chip + hueco
-	draw_string(fuente, Vector2(cx, medio + 6), nombre_local, HORIZONTAL_ALIGNMENT_LEFT, -1, tam_nombre, COLOR_TEXTO)
+	draw_string(fuente, Vector2(cx, medio + 6), texto_local, HORIZONTAL_ALIGNMENT_LEFT, -1, tam_nombre, COLOR_TEXTO)
 	cx += an_local + hueco
 	draw_string(fuente, Vector2(cx, medio + 9), resultado, HORIZONTAL_ALIGNMENT_LEFT, -1, tam_resultado, COLOR_TEXTO)
 	cx += an_res + hueco
-	draw_string(fuente, Vector2(cx, medio + 6), nombre_visitante, HORIZONTAL_ALIGNMENT_LEFT, -1, tam_nombre, COLOR_TEXTO)
+	draw_string(fuente, Vector2(cx, medio + 6), texto_visitante, HORIZONTAL_ALIGNMENT_LEFT, -1, tam_nombre, COLOR_TEXTO)
 	cx += an_visita + hueco
-	draw_rect(Rect2(Vector2(cx, medio - chip * 0.5), Vector2(chip, chip)), color_visitante)
+	if _escudo_visitante == null:
+		draw_rect(Rect2(Vector2(cx, medio - chip * 0.5), Vector2(chip, chip)), color_visitante)
+	else:
+		_ubicar_escudo(_escudo_visitante, Vector2(cx + chip * 0.5, medio))
+
+
+func _ubicar_escudo(escudo: Control, centro: Vector2) -> void:
+	var tamano := 30.0
+	escudo.position = centro - Vector2.ONE * tamano * 0.5
+	escudo.size = Vector2.ONE * tamano
 
 
 func _dibujar_reloj(fuente: Font) -> void:

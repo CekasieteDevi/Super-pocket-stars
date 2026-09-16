@@ -98,7 +98,6 @@ var ultimos_fotogramas: Array = []
 ## resueltos a nombres— y no los eventos crudos: un partido genera cientos
 ## de eventos y el archivo de guardado ya pesa varios megas.
 var historial_partidos: Array = []
-const MAX_HISTORIAL_PARTIDOS := 120
 
 ## Copas en curso. Ya no se resuelven de una sola vez al cerrar la
 ## temporada: se arman al empezarla y se juegan una ronda por semana
@@ -160,7 +159,11 @@ func _ready() -> void:
 ## nueva pedida desde el menu no, porque volver a jugar el mismo mundo con
 ## los mismos 200 clubes no es empezar de nuevo.
 func partida_nueva(semilla: int = -1, nombre_club: String = "",
-		camiseta: Color = Color.TRANSPARENT, short: Color = Color.TRANSPARENT) -> void:
+		camiseta: Color = Color.TRANSPARENT, short: Color = Color.TRANSPARENT,
+		abreviacion: String = "", camiseta_secundaria: Color = Color.TRANSPARENT,
+		short_secundario: Color = Color.TRANSPARENT, escudo: int = 0,
+		logo: int = 0, color_escudo_elegido: Color = Color.TRANSPARENT,
+		color_logo_elegido: Color = Color.TRANSPARENT) -> void:
 	rng = RandomNumberGenerator.new()
 	if semilla < 0:
 		rng.randomize()
@@ -173,11 +176,43 @@ func partida_nueva(semilla: int = -1, nombre_club: String = "",
 	# demasiados indices como para cambiarlo sin romper algo.
 	var mio: Team = piramide.divisiones[DIVISION_INICIAL].equipos[0]
 	if nombre_club.strip_edges() != "":
-		piramide.renombrar(mio, nombre_club)
+		var nombre_deseado := nombre_club.strip_edges()
+		# El nombre puede repetirse entre partidas. Si justo choca con un
+		# club generado en ESTE mundo nuevo, se mueve ese club antes de
+		# renombrar al equipo del jugador.
+		var ocupado: Team = null
+		for liga in piramide.divisiones:
+			for equipo in liga.equipos:
+				if equipo != mio and equipo.nombre == nombre_deseado:
+					ocupado = equipo
+					break
+			if ocupado != null:
+				break
+		if ocupado != null:
+			var nombres_usados := {}
+			for liga in piramide.divisiones:
+				for equipo in liga.equipos:
+					nombres_usados[equipo.nombre] = true
+			var reemplazo := GeneradorNombres.nombre_club(rng, nombres_usados)
+			piramide.renombrar(ocupado, reemplazo)
+		piramide.renombrar(mio, nombre_deseado)
+		mio.abreviacion = Team.abreviacion_por_defecto(mio.nombre)
 	if camiseta.a > 0.0:
 		mio.color_camiseta = camiseta
 	if short.a > 0.0:
 		mio.color_short = short
+	if abreviacion.strip_edges() != "":
+		mio.abreviacion = abreviacion.strip_edges().to_upper()
+	if camiseta_secundaria.a > 0.0:
+		mio.color_camiseta_secundaria = camiseta_secundaria
+	if short_secundario.a > 0.0:
+		mio.color_short_secundario = short_secundario
+	mio.escudo_forma = clampi(escudo, 0, 9)
+	mio.logo_forma = clampi(logo, 0, 9)
+	if color_escudo_elegido.a > 0.0:
+		mio.color_escudo = color_escudo_elegido
+	if color_logo_elegido.a > 0.0:
+		mio.color_logo = color_logo_elegido
 	_sembrar_presupuestos()
 	confederacion = Confederacion.generar(piramide, rng)
 	seleccion = Seleccion.new()
@@ -846,9 +881,12 @@ func _registrar_en_historial(torneo: String = "") -> void:
 		"gl": int(ultimo_resultado.get("gl", 0)),
 		"gv": int(ultimo_resultado.get("gv", 0)),
 		"stats": stats, "hitos": hitos,
+		"analisis": _datos_de_analisis_partido(local, visitante, stats),
+		"forfeit": bool(ultimo_resultado.get("forfeit", false)),
+		"definicion": str(ultimo_resultado.get("definicion", "90 minutos")),
+		"penales_texto": str(ultimo_resultado.get("penales_texto", "")),
+		"ganador": str(ultimo_resultado.get("ganador", "")),
 	})
-	if historial_partidos.size() > MAX_HISTORIAL_PARTIDOS:
-		historial_partidos.resize(MAX_HISTORIAL_PARTIDOS)
 
 
 ## De id de jugador a nombre, buscando en los dos planteles del partido.
@@ -867,6 +905,47 @@ func _nombre_de_jugador(id: int, local: String, visitante: String) -> String:
 			if int(j["id"]) == id:
 				return "%s %s" % [j.get("nombre", "?"), j.get("apellido", "")]
 	return "?"
+
+
+## Foto de los factores que pueden explicar el resultado. Se guarda junto
+## al partido porque calidad, animo y tactica cambian despues.
+func _datos_de_analisis_partido(local: String, visitante: String,
+		stats: Dictionary) -> Dictionary:
+	var salida := {"local": {}, "visitante": {}}
+	for nombre in [local, visitante]:
+		var fila: Dictionary = stats.get(nombre, {})
+		var datos := {
+			"media": 0.0, "division": 0, "formacion": "", "estilo": "",
+			"tactica": 0.0, "animo": 50.0, "atajadas": 0,
+			"tiros_fuera": int(fila.get("tiros", 0)) - int(fila.get("tiros_al_arco", 0)),
+		}
+		var equipo := _club_por_nombre(nombre)
+		if equipo != null:
+			datos["media"] = equipo.media_equipo()
+			datos["division"] = equipo.division_actual + 1 if equipo.division_actual >= 0 else 0
+			datos["formacion"] = equipo.formacion
+			datos["estilo"] = equipo.estilo
+			datos["tactica"] = Familiaridad.nivel(equipo)
+			datos["animo"] = _animo_medio(equipo)
+		for evento in ultimos_eventos:
+			if str(evento.get("equipo", "")) != nombre:
+				continue
+			var tipo := str(evento.get("tipo", ""))
+			var resultado := str(evento.get("resultado", ""))
+			if tipo in ["tiro_puerta", "rebote", "penal"] \
+					and resultado in ["atajada", "atajado"]:
+				datos["atajadas"] = int(datos["atajadas"]) + 1
+		salida["local" if nombre == local else "visitante"] = datos
+	return salida
+
+
+func _animo_medio(equipo: Team) -> float:
+	if equipo.jugadores.is_empty():
+		return 50.0
+	var total := 0.0
+	for jugador in equipo.jugadores:
+		total += float(equipo.animo.get(int(jugador["id"]), 50.0))
+	return total / float(equipo.jugadores.size())
 
 
 ## El jugador por el que va una negociacion, para que su nombre quede
@@ -1289,6 +1368,7 @@ func _tomar_ultimo_partido(nombre_torneo: String, s: Dictionary) -> void:
 		# perder) la tanda.
 		"definicion": s["definicion"], "penales_texto": s["penales_texto"],
 		"ganador": s["ganador"],
+		"forfeit": bool(s.get("forfeit", false)),
 	}
 	ultimo_log = s["log"]
 	ultimos_eventos = s["eventos"]
@@ -1930,6 +2010,10 @@ func _club_por_nombre(nombre: String) -> Team:
 		for e in liga.equipos:
 			if e.nombre == nombre:
 				return e
+	if confederacion != null:
+		var exterior: Variant = confederacion.indice_de_equipos().get(nombre, null)
+		if exterior is Team:
+			return exterior
 	return null
 
 

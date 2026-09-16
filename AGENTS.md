@@ -1,5 +1,13 @@
 # GODOT / WINDOWS RULES
 
+## Version obligatoria
+
+Usar siempre Godot 4.7.2-stable:
+
+- Editor: `E:\IntelliJ\Super Pocket Stars\Godot_v4.7.2-stable_win64.exe`
+- Console: `E:\IntelliJ\Super Pocket Stars\Godot_v4.7.2-stable_win64_console.exe`
+- No usar Godot 4.7.1 ni otra versión.
+
 Never execute Godot from Codex.
 
 Never run:

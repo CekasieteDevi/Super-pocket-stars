@@ -23,6 +23,7 @@ const SOLAPAS := [
 	["fichajes", "Fichajes"],
 	["lesiones", "Lesiones"],
 	["campeones", "Campeones"],
+	["club", "Club"],
 ]
 
 const CATEGORIAS := ["rumores", "fichajes", "lesiones", "campeones", "club"]

@@ -46,6 +46,41 @@ static func plantel_de_la_ia() -> int:
 	return FORMACION.size() + BANCO_FORMACION.size()
 
 
+## Identidad pseudoaleatoria estable. Usa el nombre como semilla para que los
+## clubes de IA mantengan el mismo escudo entre cargas y no alteren el RNG del
+## motor de partidos.
+static func identidad_predeterminada(nombre_club: String) -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash("identidad-club:%s" % nombre_club)
+	var escudo := rng.randi_range(0, 9)
+	var logo := rng.randi_range(0, 9)
+	var color_escudo := rng.randi_range(0, ColoresClub.PALETA.size() - 1)
+	var color_logo := rng.randi_range(0, ColoresClub.PALETA.size() - 1)
+	if color_logo == color_escudo:
+		color_logo = (color_logo + 1) % ColoresClub.PALETA.size()
+	return {
+		"escudo_forma": escudo,
+		"logo_forma": logo,
+		"color_escudo": ColoresClub.PALETA[color_escudo],
+		"color_logo": ColoresClub.PALETA[color_logo],
+	}
+
+
+func identidad_visual() -> Dictionary:
+	var identidad := identidad_predeterminada(nombre)
+	# Partidas viejas no traen estos campos. Solo en ese caso se usa la
+	# identidad estable; los clubes nuevos y el club del jugador conservan la
+	# elección guardada.
+	if color_escudo.a > 0.0 or color_logo.a > 0.0:
+		identidad["escudo_forma"] = escudo_forma
+		identidad["logo_forma"] = logo_forma
+		if color_escudo.a > 0.0:
+			identidad["color_escudo"] = color_escudo
+		if color_logo.a > 0.0:
+			identidad["color_logo"] = color_logo
+	return identidad
+
+
 ## Cuantos suplentes se sientan en el banco: los que pueden entrar por un
 ## cambio. El resto del plantel son RESERVAS y no van al partido.
 ##
@@ -77,6 +112,9 @@ const DERIVA_ANIMO_POR_SEMANA := 1.0
 const DORSAL_MAXIMO := 99
 
 var nombre: String
+## Identidad visible del club. La abreviacion se usa en el marcador; para
+## clubes viejos o de IA se genera una corta y estable desde el nombre.
+var abreviacion: String = ""
 var jugadores: Array = []  # 11 dicts (PlayerGenerator.generate), uno por puesto de FORMACION (titulares)
 var banco: Array = []  # hasta max_suplentes() dicts: los suplentes que VAN al partido
 ## El resto del plantel. Entrenan, cobran sueldo, progresan y se pueden
@@ -130,6 +168,12 @@ var division_actual: int = -1
 ## los 199 clubes de la IA. Solo el club del jugador los elige.
 var color_camiseta: Color = Color.TRANSPARENT
 var color_short: Color = Color.TRANSPARENT
+var color_camiseta_secundaria: Color = Color.TRANSPARENT
+var color_short_secundario: Color = Color.TRANSPARENT
+var escudo_forma: int = 0
+var logo_forma: int = 0
+var color_escudo: Color = Color.TRANSPARENT
+var color_logo: Color = Color.TRANSPARENT
 
 ## §8.4#28: este partido es de copa. Transitorio: lo prende la Copa antes
 ## de simular el cruce y lo apaga despues, porque el mismo club juega la
@@ -321,6 +365,12 @@ var prestados_propios: Dictionary = {}  # jugador_id -> {"club_dueno":Team, "tem
 static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int = 0, potencial_objetivo: int = -1, pais: String = "Uruguay", realizacion: Vector2 = PlayerGenerator.REALIZACION_TITULAR) -> Team:
 	var t := Team.new()
 	t.nombre = nombre
+	t.abreviacion = abreviacion_por_defecto(nombre)
+	var identidad := identidad_predeterminada(nombre)
+	t.escudo_forma = identidad["escudo_forma"]
+	t.logo_forma = identidad["logo_forma"]
+	t.color_escudo = identidad["color_escudo"]
+	t.color_logo = identidad["color_logo"]
 	# El estilo se elige ANTES que el plantel: de el sale la formacion, y
 	# de la formacion que puestos hay que generar. Al reves, el club
 	# terminaba con un plantel de 4-2-3-1 parado en 3-5-2, con gente fuera
@@ -383,6 +433,28 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 	return t
 
 
+static func abreviacion_por_defecto(nombre_club: String) -> String:
+	var partes := nombre_club.strip_edges().split(" ", false)
+	var salida := ""
+	if partes.size() >= 3:
+		for parte in partes:
+			var inicial := str(parte).to_upper().substr(0, 1)
+			if inicial.length() > 0 and inicial[0].unicode_at(0) >= 65 and inicial[0].unicode_at(0) <= 90:
+				salida += inicial
+				if salida.length() == 3:
+					break
+	else:
+		var texto_mayuscula := nombre_club.to_upper()
+		for indice in range(texto_mayuscula.length()):
+			var caracter := texto_mayuscula.substr(indice, 1)
+			var codigo := caracter.unicode_at(0)
+			if (codigo >= 65 and codigo <= 90) or (codigo >= 48 and codigo <= 57):
+				salida += caracter
+				if salida.length() == 3:
+					break
+	return salida
+
+
 ## Guardado de partida (§12 del GDD, "guardado... y guardado incremental"
 ## simplificado a JSON entero por ahora — ver game/game_state.gd). Todo lo
 ## que persiste entre sesiones, MENOS el estado de un partido en curso
@@ -420,7 +492,7 @@ func guardar() -> Dictionary:
 		}
 
 	return {
-		"nombre": nombre, "estilo": estilo, "dt": dt, "calidad_cancha": calidad_cancha,
+		"nombre": nombre, "abreviacion": abreviacion, "estilo": estilo, "dt": dt, "calidad_cancha": calidad_cancha,
 		"formacion": formacion,
 		"carga_entrenamiento": carga_entrenamiento,
 		"carga_suma": carga_suma, "carga_semanas": carga_semanas,
@@ -452,6 +524,10 @@ func guardar() -> Dictionary:
 		"dorsales": _claves_a_texto(dorsales),
 		# Como texto y no como Color: el guardado es JSON.
 		"color_camiseta": color_camiseta.to_html(), "color_short": color_short.to_html(),
+		"color_camiseta_secundaria": color_camiseta_secundaria.to_html(),
+		"color_short_secundario": color_short_secundario.to_html(),
+		"escudo_forma": escudo_forma, "logo_forma": logo_forma,
+		"color_escudo": color_escudo.to_html(), "color_logo": color_logo.to_html(),
 		"config_cambios": config_cambios,
 		"objetivo_temporada": objetivo_temporada, "objetivos_incumplidos_seguidos": objetivos_incumplidos_seguidos,
 		"fans": fans, "racha_sin_ganar": racha_sin_ganar, "rival_directo": rival_directo,
@@ -463,6 +539,7 @@ func guardar() -> Dictionary:
 static func cargar(datos: Dictionary) -> Team:
 	var t := Team.new()
 	t.nombre = datos["nombre"]
+	t.abreviacion = str(datos.get("abreviacion", abreviacion_por_defecto(t.nombre))).to_upper()
 	if datos.has("estilo"):
 		t.estilo = datos["estilo"]
 	else:
@@ -598,6 +675,16 @@ static func cargar(datos: Dictionary) -> Team:
 	var sho := str(datos.get("color_short", ""))
 	t.color_camiseta = Color.from_string(cam, Color.TRANSPARENT) if cam != "" else Color.TRANSPARENT
 	t.color_short = Color.from_string(sho, Color.TRANSPARENT) if sho != "" else Color.TRANSPARENT
+	var cam_sec := str(datos.get("color_camiseta_secundaria", ""))
+	var sho_sec := str(datos.get("color_short_secundario", ""))
+	t.color_camiseta_secundaria = Color.from_string(cam_sec, Color.TRANSPARENT) if cam_sec != "" else Color.TRANSPARENT
+	t.color_short_secundario = Color.from_string(sho_sec, Color.TRANSPARENT) if sho_sec != "" else Color.TRANSPARENT
+	t.escudo_forma = clampi(int(datos.get("escudo_forma", 0)), 0, 9)
+	t.logo_forma = clampi(int(datos.get("logo_forma", 0)), 0, 9)
+	var col_escudo := str(datos.get("color_escudo", ""))
+	var col_logo := str(datos.get("color_logo", ""))
+	t.color_escudo = Color.from_string(col_escudo, Color.TRANSPARENT) if col_escudo != "" else Color.TRANSPARENT
+	t.color_logo = Color.from_string(col_logo, Color.TRANSPARENT) if col_logo != "" else Color.TRANSPARENT
 	# Una partida anterior a esto no trae dorsales: quedan en {} y
 	# _asegurar_dorsales los reparte por el orden de la alineacion, que es
 	# el numero que esa partida ya venia mostrando.

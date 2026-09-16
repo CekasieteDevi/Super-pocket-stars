@@ -6,7 +6,7 @@ fotogramas. Ver §10 (resultados del MVP) y §11 (con qué equipos está
 calibrado y por qué el número a vigilar es la paridad con
 `match_engine.gd`, no el realismo).
 
-Un partido dura **960 ticks = 4 minutos reales** (2 por tiempo) y el reloj
+Un partido dura **600 ticks = 4 minutos reales** (2 por tiempo) y el reloj
 marca 0-90 como ficción: ver el comentario de `TICKS_POR_MITAD` en
 `core/motor_espacial.gd` para por qué no hay alternativa si se quiere ver
 el partido completo con movimiento creíble.

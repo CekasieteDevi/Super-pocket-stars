@@ -255,6 +255,7 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 		if con_log:
 			resultado_seguido = {"local": home.nombre, "visitante": away.nombre,
 				"gl": r["goles_local"], "gv": r["goles_visitante"],
+				"forfeit": bool(r.get("forfeit", false)),
 				# Quien los hizo: lo usa el resumen de fin de partido, y
 				# era el unico dato del partido que no llegaba a la UI.
 				"goles_log": r.get("goles_log", [])}

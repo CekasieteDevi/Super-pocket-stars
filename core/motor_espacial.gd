@@ -22,7 +22,9 @@ extends RefCounted
 const PESOS_PATH := "res://data/utility_pesos.json"
 
 ## Decisión 2 del doc: 0.25s por tick.
-const TICK_SEG := 0.25
+## 0,4 s por tick: conserva los 120 s reales por mitad, pero evita hacer
+## 960 pasos antes de mostrar el partido en celulares.
+const TICK_SEG := 0.4
 ## Cuantos ticks como maximo rueda la pelota sin dueno antes de que se la
 ## demos igual (ver _dirigir_pelota_a). Dos segundos: la pelota frena en
 ## medio metro y el que se la quedo corre siete metros por segundo, asi
@@ -34,14 +36,18 @@ const TICKS_DIRIGIDA_MAX := 5
 const FRENADO_PELOTA_SUELTA := 0.35
 ## Por debajo de esta velocidad la pelota queda quieta (m/s).
 const VEL_PELOTA_QUIETA := 1.0
+## Distancia de contacto real para tomar una pelota suelta. `radio_control`
+## sirve para resolver un control, pero usarlo aca hacia que el jugador
+## recibiera la pelota a mas de un metro y pareciera que se la arrastraban.
+const RADIO_TOMA_PELOTA := 0.35
 ## Con que velocidad se le escapa la pelota al que pierde un duelo cuerpo
 ## a cuerpo, hacia el que se la saco (m/s). Ahi la pelota estaba quieta
 ## en sus pies, asi que la direccion la da el duelo y no un vuelo previo.
 const VEL_ESCAPE_DUELO := 6.0
 
 ## Un partido dura 2 minutos REALES por tiempo, jugados a velocidad real
-## (la UI reproduce 4 fotogramas por segundo, o sea 1 seg de pantalla = 1
-## seg de simulación). Eso son 480 ticks por tiempo.
+## (la UI reproduce 2,5 fotogramas por segundo, o sea 1 seg de pantalla = 1
+## seg de simulación). Eso son 300 ticks por tiempo.
 ##
 ## No se puede mostrar 90 minutos en 4 sin acelerar 22 veces, y a 22x un
 ## jugador que corre a 7 m/s se ve corriendo a 157: ilegible. Tampoco sirve
@@ -54,7 +60,7 @@ const VEL_ESCAPE_DUELO := 6.0
 ##
 ## Costo asumido: al haber 4 minutos de juego en vez de 90, las llegadas
 ## son más seguidas que en un partido real. Se ve arcade, no televisado.
-const TICKS_POR_MITAD := 480
+const TICKS_POR_MITAD := 300
 const MINUTOS_MOSTRADOS_POR_MITAD := 45.0
 
 ## Alargue (§8.7): dos tiempos de 15' que se juegan con el MISMO motor y a
@@ -1628,7 +1634,12 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 	if not enganche.is_empty():
 		_accion(estado, int(poseedor["clave"]), "amague_centro")
 	# El que va a ser encarado se tira a cortarla.
-	_accion(estado, clave_rival, ACCION_BARRIDA)
+	# La gambeta puede empezar antes, pero la barrida y la falta necesitan
+	# contacto real. Antes el defensor se tiraba y podia cometer falta a los
+	# ocho metros, que en pantalla se ve como una falta por bluetooth.
+	var hay_contacto: bool = e_rival["pos"].distance_to(poseedor["pos"]) <= float(f["radio_tackle"])
+	if hay_contacto:
+		_accion(estado, clave_rival, ACCION_BARRIDA)
 	_xp_e(estado, poseedor, "control")
 	_xp_e(estado, e_rival, "quite")
 
@@ -1650,7 +1661,7 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 	# pasaba; ahora el defensor puede bajarlo también cuando le gana, que
 	# es lo que hace el que no llega. La falta se COBRA —con su tarjeta,
 	# su parada de juego y su tiro libre— en vez de amonestar suelto.
-	if estado["rng"].randf() < float(f["prob_falta_por_duelo"]):
+	if hay_contacto and estado["rng"].randf() < float(f["prob_falta_por_duelo"]):
 		_cobrar_falta(estado, poseedor["pos"], es_local, defensor, eq_d, eq_a, minuto)
 		return
 
@@ -5973,8 +5984,13 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 	if pelota.has("dirigida_a"):
 		var dueno: int = int(pelota["dirigida_a"])
 		var alcanzada: bool = not estado["jugadores"].has(dueno) \
-			or estado["jugadores"][dueno]["pos"].distance_to(hasta) <= float(f["radio_control"])
-		if alcanzada or int(pelota["ticks_dirigida"]) >= TICKS_DIRIGIDA_MAX:
+			or estado["jugadores"][dueno]["pos"].distance_to(hasta) <= RADIO_TOMA_PELOTA
+		# Una entrega de pelota suelta no vence por tiempo: el jugador va hasta
+		# ella. El timeout queda para pases/intercepciones, donde si el objetivo
+		# desaparece hay que destrabar la jugada.
+		var vencio_timeout: bool = int(pelota["ticks_dirigida"]) >= TICKS_DIRIGIDA_MAX \
+			and str(pelota.get("pendiente", "")) != "entrega"
+		if alcanzada or vencio_timeout:
 			_completar_dirigida(estado, minuto, alcanzada)
 		return
 
@@ -6100,7 +6116,7 @@ static func _dirigir_pelota_a(estado: Dictionary, clave: int, velocidad: float,
 		pendiente: String, punto_llegada: Vector2) -> bool:
 	var pelota: Dictionary = estado["pelota"]
 	var meta: Vector2 = estado["jugadores"][clave]["pos"]
-	if pelota["pos"].distance_to(meta) <= float(pesos()["fisica"]["radio_control"]):
+	if pelota["pos"].distance_to(meta) <= RADIO_TOMA_PELOTA:
 		return false
 	pelota["dirigida_a"] = clave
 	pelota["pendiente"] = pendiente
@@ -7750,8 +7766,11 @@ static func _cobrar_falta(estado: Dictionary, punto: Vector2, victima_local: boo
 			if distancia < distancia_victima:
 				distancia_victima = distancia
 				victima = int(clave)
-	if victima != -1:
-		_accion(estado, victima, "cae")
+	# Nunca cobrar una falta si no hay una victima dentro del radio de
+	# contacto. Esto protege tambien a futuros llamadores de esta funcion.
+	if victima == -1 or distancia_victima > pow(float(pesos()["fisica"]["radio_tackle"]), 2):
+		return
+	_accion(estado, victima, "cae")
 	estado["faltas"] = int(estado.get("faltas", 0)) + 1
 	_chequear_tarjeta_de_falta(estado, infractor, eq_infractor, eq_victima, minuto)
 	estado["eventos"].append({
@@ -8831,6 +8850,8 @@ static func _push_fotograma(estado: Dictionary, eventos_del_tick: Array = []) ->
 			# cuando la UI lo soporte.
 			"z": float(estado["pelota"].get("z", 0.0)),
 			"poseedor_id": estado["pelota"]["poseedor_id"],
+			"es_pase": bool(estado["pelota"].get("es_pase", false)),
+			"es_remate": bool(estado["pelota"].get("es_remate", false)),
 			"saliendo": estado["pelota"].has("saliendo"),
 			"trayectoria": _serializar_trayectoria(estado["pelota"].get("trayectoria_curva", {}), giro,
 				float(estado["pelota"].get("progreso_trayectoria", 0.0))),
