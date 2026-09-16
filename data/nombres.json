@@ -1,7 +1,9 @@
 {
   "tipos_club": [
     "Club Atlético", "Deportivo", "Sportivo", "Atlético", "Racing",
-    "Unión", "Estudiantes", "Juventud", "Porvenir", "Social", "Rampla"
+    "Unión", "Estudiantes", "Juventud", "Porvenir", "Social", "Rampla",
+    "Asociación", "Centro Atlético", "Instituto", "Nacional", "Oriental",
+    "Central", "Defensor", "Universal", "Huracán", "Libertad"
   ],
   "nombres_club": [
     "Alborada", "Amanecer", "Cardal", "Espinillo", "Ceibal", "Talar",
@@ -11,7 +13,19 @@
     "Villa Real", "Las Colinas", "Fortín", "El Faro", "Aurora",
     "Sol Naciente", "Media Luna", "Tres Cruces", "El Pinar", "Robledo",
     "Santa Lucía", "Arroyo Seco", "Las Piedras", "Monte Alto", "Del Este",
-    "La Blanqueada", "Punta Norte", "Sauce Viejo", "Barrio Nuevo"
+    "La Blanqueada", "Punta Norte", "Sauce Viejo", "Barrio Nuevo",
+    "Bella Unión", "Campo Verde", "Cañada Grande", "Cerro Largo", "Colonia Nueva",
+    "El Ombú", "El Quebracho", "El Tala", "Estación Central", "Flor de Maroñas",
+    "Fuente del Puma", "Guardia Vieja", "La Cañada", "La Estacada", "La Herradura",
+    "La Loma", "La Paz", "Las Acacias", "Las Flores", "Los Aromos", "Los Eucaliptos",
+    "Los Tilos", "Manga Norte", "Marina del Este", "Mirador del Plata", "Paso del Molino",
+    "Paso Verde", "Peñarol Chico", "Plaza del Sol", "Prado Norte", "Pueblo Nuevo",
+    "Puerto del Este", "Punta del Lago", "Rincón del Cerro", "Rincón del Sol", "San Benito",
+    "San Gabriel", "San Joaquín", "San Martín", "San Miguel", "San Pedro", "Santa Elena",
+    "Santa Isabel", "Santa Rita", "Sierra Azul", "Sol de Mayo", "Sol del Prado",
+    "Tierra Adentro", "Tres Ombúes", "Valle Azul", "Valle del Sol", "Villa Aurora",
+    "Villa del Parque", "Villa Esperanza", "Villa del Lago", "Villa Norte", "Villa Unión",
+    "Vista Hermosa", "Yatay", "Zorzal"
   ],
   "nombres_jugador": [
     "Diego", "Mateo", "Nicolás", "Santiago", "Facundo", "Braian", "Agustín",
@@ -21,7 +35,21 @@
     "Marcelo", "Nahuel", "Octavio", "Pablo", "Ramiro", "Tomás", "Valentín",
     "Walter", "Andrés", "Bautista", "Ciro", "Darío", "Ezequiel", "Guido",
     "Héctor", "Iván", "Jonathan", "Kevin", "Lautaro", "Maximino", "Nelson",
-    "Osvaldo", "Patricio", "Rafael"
+    "Osvaldo", "Patricio", "Rafael",
+    "Adrián", "Alan", "Alejandro", "Alexis", "Alfonso", "Álvaro", "Amadeo",
+    "Ambrosio", "Ariel", "Armando", "Arturo", "Benicio", "Benjamín", "Bernardo",
+    "Blas", "Boris", "Camilo", "Carlos", "Carmelo", "Casimiro", "Claudio",
+    "Clemente", "Conrado", "Constantino", "Cristóbal", "Dante", "David", "Demian",
+    "Domingo", "Eduardo", "Elías", "Eliseo", "Eloy", "Emanuel", "Enzo", "Eric",
+    "Esteban", "Evaristo", "Felipe", "Fermín", "Fernando", "Flavio", "Francisco",
+    "Genaro", "Gerardo", "Germán", "Gervasio", "Gregorio", "Guillermo", "Gustavo",
+    "Hilario", "Horacio", "Hugo", "Ismael", "Jacobo", "Jerónimo", "Jesús", "Joel",
+    "Jorge", "José", "Josué", "Juan", "Lisandro", "Lorenzo", "Luciano", "Luis",
+    "Manuel", "Marco", "Mariano", "Mario", "Mauricio", "Máximo", "Miguel", "Milton",
+    "Moisés", "Néstor", "Noel", "Norberto", "Omar", "Orlando", "Pascual", "Pedro",
+    "Plácido", "Próspero", "Ricardo", "Roberto", "Rolando", "Rubén", "Salvador",
+    "Samuel", "Sandro", "Saúl", "Simón", "Teodoro", "Thiago", "Tobías", "Ulises",
+    "Vicente", "Víctor", "Wilfredo"
   ],
   "apellidos_jugador": [
     "Rodríguez", "González", "Fernández", "Pérez", "Sánchez", "Romero",
@@ -32,6 +60,19 @@
     "Batista", "Coitiño", "Larrosa", "Píriz", "Umpiérrez", "Bergara",
     "Curbelo", "Denis", "Etcheverry", "Ferreira", "Giménez", "Hornos",
     "Iglesias", "Jara", "Leites", "Méndez", "Navarro", "Ocampo", "Paredes",
-    "Quintana", "Rivas", "Saravia", "Uriarte", "Varela", "Zunino"
+    "Quintana", "Rivas", "Saravia", "Uriarte", "Varela", "Zunino",
+    "Abal", "Acevedo", "Alvez", "Aquino", "Aranda", "Arce", "Arias", "Ayala",
+    "Barrios", "Benítez", "Bianchi", "Bidegain", "Borda", "Bordaberry", "Borrás",
+    "Boschi", "Cáceres", "Calzada", "Cantero", "Carballo", "Carrasco", "Casal",
+    "Castro", "Cejas", "Centurión", "Cerda", "Chagas", "Chaves", "Cordero", "Costa",
+    "Couto", "Cuello", "Curutchet", "Dávila", "De León", "De los Santos", "Díaz",
+    "Domínguez", "Duarte", "Echeverría", "Escobar", "Espinosa", "Fagúndez", "Farías",
+    "Figueroa", "Fontes", "Fraga", "Franco", "Freitas", "Gallardo", "Gallo", "García",
+    "Garay", "Godín", "Gómez", "Guerra", "Gutiérrez", "Guzmán", "Hernández", "Irigoyen",
+    "Jaume", "Lemos", "Lorenzo", "Lozano", "Maciel", "Maidana", "Mansilla", "Márquez",
+    "Martínez", "Mascia", "Mattos", "Mayada", "Mieres", "Miraballes", "Moreira", "Morán",
+    "Morales", "Moreno", "Moyano", "Muñoz", "Olveira", "Oribe", "Palacios", "Perdomo",
+    "Pereira", "Pereyra", "Piñeiro", "Ponce", "Posada", "Prieto", "Puig", "Recalde",
+    "Rey", "Reyes", "Rivero", "Riveros", "Rossi", "Ruiz", "Sabatini", "Salgado"
   ]
 }

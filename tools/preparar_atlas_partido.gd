@@ -113,9 +113,13 @@ static func _generar_variante(indice: int, estilo: int) -> Image:
 
 static func _generar_accion(indice: int, estilo: int) -> Image:
 	var accion: int = (indice - 64) / 4
-	var ruta := "res://assets/partido/acciones_%s.png" % ["volea", "control_pie", "taco"][accion] if accion < 3 else "res://assets/partido/acciones_palomita.png"
+	var rutas := ["volea", "control_pie", "taco", "palomita", "arquero_agarra", "arquero_saque_arco"]
+	var ruta := "res://assets/partido/acciones_%s.png" % rutas[accion]
 	var fila := estilo
-	if estilo == 10:
+	var accion_arquero := accion >= 4
+	if accion_arquero:
+		fila = 0
+	if estilo == 10 and not accion_arquero:
 		ruta = "res://assets/partido/acciones_trenzas.png"
 		fila = accion
 	if not _fuentes.has(ruta):
@@ -124,7 +128,7 @@ static func _generar_accion(indice: int, estilo: int) -> Image:
 		_quitar_fondo_exterior(cargada)
 		_fuentes[ruta] = cargada
 		_filas_acciones[ruta] = _detectar_filas(cargada)
-		assert(_filas_acciones[ruta].size() == (3 if estilo == 10 else 10), "Cantidad de filas incorrecta: " + ruta)
+		assert(_filas_acciones[ruta].size() == (1 if accion_arquero else (3 if estilo == 10 else 10)), "Cantidad de filas incorrecta: " + ruta)
 	var fuente: Image = _fuentes[ruta]
 	var banda: Vector2i = _filas_acciones[ruta][fila]
 	var columna := (indice - 64) % 4

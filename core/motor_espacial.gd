@@ -483,6 +483,10 @@ const ACCION_BARRIDA := "barrida"
 const ACCION_VUELA := "vuela"
 ## Un cabezazo no es una patada: sale de un salto y la anima otro sprite.
 const ACCION_CABECEA := "cabecea"
+## El arquero asegura una atajada y sostiene la pelota antes de jugarla.
+const ACCION_AGARRA := "agarra"
+## Saque de arco con secuencia propia de armado, impacto y seguimiento.
+const ACCION_SAQUE_ARCO := "saque_arco"
 ## Cabezazo en vuelo horizontal, normalmente tras un centro bajo.
 const ACCION_PALOMITA := "palomita"
 ## El gol. Es la unica accion que no dura un instante: el goleador festeja
@@ -4493,8 +4497,9 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 	var ocasion := describir_ocasion(estado, poseedor["pos"], es_local, attr_remate)
 	var remate_id := _nuevo_id_remate(estado)
 	var clave := "home" if es_local else "away"
-	_accion(estado, int(poseedor["clave"]),
-		accion_remate if accion_remate != "" else (ACCION_CABECEA if attr_remate == "cabezazo" else ("volea" if attr_remate == "volea" else ACCION_PATEA)))
+	var accion_animacion := accion_remate if accion_remate != "" else (
+		ACCION_CABECEA if attr_remate == "cabezazo" else ("volea" if attr_remate == "volea" else ACCION_PATEA))
+	_accion(estado, int(poseedor["clave"]), accion_animacion)
 	_xp_e(estado, poseedor, attr_remate)
 	# El laboratorio monta jugadas para MIRAR la animacion, y una jugada
 	# que unas veces termina en gol y otras no deja comparar nada entre
@@ -4583,6 +4588,7 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 			"remate_id": remate_id,
 			"tipo": "afuera" if roll > chance_porteria + chance_palo else "palo",
 			"es_local": es_local, "clave": poseedor["clave"], "rol": poseedor["rol"],
+			"accion": accion_animacion,
 		})
 		return
 
@@ -4595,7 +4601,8 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 		_lanzar_remate(estado, poseedor, {"remate_id": remate_id,
 			"tipo": "gol", "es_local": es_local, "clave": poseedor["clave"],
 			"rol": poseedor["rol"], "jugador": jugador,
-			"dist": ocasion["distancia"], "arco_desprotegido": true, "tras_rechazo": tras_rechazo})
+			"dist": ocasion["distancia"], "arco_desprotegido": true, "tras_rechazo": tras_rechazo,
+			"accion": accion_animacion})
 		return
 
 	# El remate se debilita según desde dónde salió: un tiro de 30 metros
@@ -4643,7 +4650,7 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 		"es_local": es_local, "clave": poseedor["clave"], "rol": poseedor["rol"],
 		"jugador": jugador, "agarre": float(arquero["atributos"]["agarre"]) / 100.0,
 		"dist": poseedor["pos"].distance_to(arco_rival(es_local)),
-		"tras_rechazo": tras_rechazo,
+		"tras_rechazo": tras_rechazo, "accion": accion_animacion,
 	})
 
 
@@ -4694,7 +4701,16 @@ static func _lanzar_remate(estado: Dictionary, poseedor: Dictionary, datos: Dict
 		alcance = _alcance_en(e_arq, segundos_vuelo) + ALCANCE_ESTIRADA
 
 	var y_destino := 0.0
-	var altura := 0.9
+	# La altura nace de la acción, no solo del resultado. Una volea o un
+	# cabezazo tienen que salir del gesto en el aire; un tiro normal apenas
+	# se levanta. Antes el valor se pisaba abajo y todos los remates parecían
+	# rodados.
+	var accion_animacion := str(datos.get("accion", ACCION_PATEA))
+	var altura := 0.30
+	if accion_animacion == ACCION_CABECEA:
+		altura = 1.65
+	elif accion_animacion in ["volea", "chilena"]:
+		altura = 1.35
 	match tipo:
 		"atajada":
 			# Va a donde el arquero LLEGA: por eso la ataja.
@@ -4761,8 +4777,6 @@ static func _lanzar_remate(estado: Dictionary, poseedor: Dictionary, datos: Dict
 	pelota["altura_max"] = altura
 	pelota["ticks_con_pelota"] = 0
 	pelota.erase("altura_salida")
-	# Una recepción termina el vuelo anterior; su altura no pasa al próximo pase.
-	pelota["altura_max"] = 0.0
 	pelota["z"] = 0.0
 	pelota.erase("pared_a")
 	var dir: Vector2 = (destino - poseedor["pos"]).normalized()
@@ -4917,6 +4931,9 @@ static func _aplicar_remate(estado: Dictionary, datos: Dictionary) -> void:
 	var jugador: Dictionary = datos.get("jugador", {})
 	var dist: float = float(datos.get("dist", 0.0))
 	if gol:
+		if estado.has("cadena_rebotes"):
+			estado.erase("cadena_rebotes")
+			estado.erase("foco_laboratorio")
 		eq_a.goles += 1
 		if bool(datos.get("tras_rechazo", false)):
 			_stats_arqueros(estado)["goles_tras_rechazo"] += 1
@@ -4942,10 +4959,19 @@ static func _aplicar_remate(estado: Dictionary, datos: Dictionary) -> void:
 	# El arquero no siempre la retiene. Cuanto mejor su agarre, más veces
 	# la queda. Si no, la rechaza: al córner o a un costado (etapa 6).
 	# El penal manoteado sigue yendo al córner: su rebote es otra jugada.
-	if rng.randf() > float(datos.get("agarre", 0.5)):
+	var agarre: float = clampf(float(datos.get("agarre", 0.5)), 0.0, 1.0)
+	# El agarre domina la retencion. Reflejos y estirada ya influyeron en
+	# llegar a la pelota, pero no convierten una mano blanda en control limpio.
+	var chance_rebote: float = clampf(0.04 + (1.0 - agarre) * 0.58, 0.04, 0.62)
+	var cadena_rebotes: Dictionary = estado.get("cadena_rebotes", {})
+	var rebote_forzado := not es_penal and int(cadena_rebotes.get("rebotes_pendientes", 0)) > 0
+	if rebote_forzado or rng.randf() < chance_rebote:
 		if es_penal:
 			_manotear_al_corner(estado, es_local)
 		else:
+			if rebote_forzado:
+				cadena_rebotes["rebotes_pendientes"] = int(cadena_rebotes["rebotes_pendientes"]) - 1
+				estado["forzar_rebote_aereo"] = true
 			_rechazar_remate(estado, datos)
 	else:
 		_dar_pelota_al_arquero(estado, not es_local)
@@ -4993,6 +5019,7 @@ static func _dar_pelota_al_arquero(estado: Dictionary, arquero_local: bool, saqu
 	estado["pelota"]["en_vuelo"] = false
 	estado["pelota"]["ticks_con_pelota"] = 0
 	estado["pelota"].erase("control")
+	_accion(estado, arquero_clave, ACCION_AGARRA)
 
 
 ## La pelota se fue de la cancha. Decide qué se cobra según por dónde
@@ -5239,9 +5266,173 @@ static func _soltar_pelota(estado: Dictionary, desde: Vector2, destino: Vector2,
 	pelota["destino_id"] = -1
 	pelota["pasador_local"] = toco_local
 	pelota["es_pase"] = false
+	pelota["es_centro"] = false
+	pelota["es_remate"] = false
+	pelota["altura_max"] = 0.0
+	pelota["z"] = 0.0
 	pelota["origen_pos"] = desde
 	pelota["ticks_con_pelota"] = 0
 	pelota.erase("altura_salida")
+
+
+## Resuelve el rebote de una atajada cuando llega a tierra. El rebote puede
+## ser de un defensor, de un atacante o una disputa arriba. Si queda para un
+## atacante dentro del area, existe una segunda definicion de cabeza/volea.
+static func _resolver_rebote_arquero(estado: Dictionary, punto: Vector2, minuto: int) -> void:
+	var pelota: Dictionary = estado["pelota"]
+	var ataca_local: bool = bool(pelota.get("rebote_ataca_local", true))
+	var eq_a := _equipo_de(estado, ataca_local)
+	var eq_d := _equipo_de(estado, not ataca_local)
+	var rng: RandomNumberGenerator = estado["rng"]
+	var alto: bool = bool(pelota.get("rebote_alto", false))
+	var autogol: bool = bool(pelota.get("rebote_autogol", false))
+	pelota.erase("es_rebote_arquero")
+	pelota.erase("rebote_alto")
+	pelota.erase("rebote_ataca_local")
+	pelota.erase("rebote_autogol")
+
+	if autogol:
+		eq_a.goles += 1
+		estado["eventos"].append({
+			"minuto": minuto, "tipo": "rebote_arquero", "equipo": eq_a.nombre,
+			"rival": eq_d.nombre, "jugador_posicion": "ARQ",
+			"resultado": "gol", "autogol": true,
+		})
+		estado["goles_log"].append({"minuto": minuto, "equipo": eq_a.nombre,
+			"jugador_id": -1, "asistencia_id": -1, "autogol": true})
+		estado["log"].append("min %d - GOL en contra tras rebote del arquero (%s)" % [minuto, eq_d.nombre])
+		_festejar_gol(estado, not ataca_local)
+		return
+
+	var atacante := _mas_cercano_del_equipo(estado, punto, ataca_local)
+	var defensor := _mas_cercano_del_equipo(estado, punto, not ataca_local)
+	var cadena: Dictionary = estado.get("cadena_rebotes", {})
+	var paso_cadena := int(cadena.get("paso", 0))
+	var duelo_cadena := false
+	if not cadena.is_empty():
+		var atacantes_cadena: Array = cadena.get("atacantes", [])
+		var defensor_cadena := int(cadena.get("defensor", -1))
+		if paso_cadena < atacantes_cadena.size():
+			var atacante_cadena := int(atacantes_cadena[paso_cadena])
+			if estado["jugadores"].has(atacante_cadena):
+				atacante = atacante_cadena
+				duelo_cadena = true
+		if estado["jugadores"].has(defensor_cadena):
+			defensor = defensor_cadena
+	if atacante == -1 and defensor == -1:
+		_dar_pelota_al_arquero(estado, not ataca_local, true)
+		return
+	if atacante == -1:
+		_entregar_rodando(estado, defensor)
+		_registrar_resultado_rebote(estado, minuto, ataca_local, defensor, "defensor")
+		return
+	if defensor == -1:
+		_entregar_rodando(estado, atacante)
+		_registrar_resultado_rebote(estado, minuto, ataca_local, atacante, "atacante")
+		_intentar_remate_rebote(estado, atacante, punto, ataca_local, alto, minuto)
+		return
+
+	var gana_atacante := duelo_cadena
+	var e_a: Dictionary = estado["jugadores"][atacante]
+	var e_d: Dictionary = estado["jugadores"][defensor]
+	var j_a := _dict_jugador(estado, eq_a, int(e_a["jugador_id"]))
+	var j_d := _dict_jugador(estado, eq_d, int(e_d["jugador_id"]))
+	if duelo_cadena:
+		gana_atacante = true
+	elif j_a.is_empty() or j_d.is_empty():
+		gana_atacante = punto.distance_to(e_a["pos"]) <= punto.distance_to(e_d["pos"])
+	else:
+		var a_val: float
+		var d_val: float
+		if alto:
+			a_val = float(j_a["atributos"].get("cabezazo", 50.0)) * 0.60 \
+				+ float(j_a["atributos"].get("salto", 50.0)) * 0.40
+			d_val = float(j_d["atributos"].get("salto", 50.0)) * 0.45 \
+				+ float(j_d["atributos"].get("cabezazo", 50.0)) * 0.25 \
+				+ float(j_d["atributos"].get("fuerza", 50.0)) * 0.30
+		else:
+			a_val = float(j_a["atributos"].get("control", 50.0)) * 0.45 \
+				+ float(j_a["atributos"].get("agilidad", 50.0)) * 0.25 \
+				+ float(j_a["atributos"].get("fuerza", 50.0)) * 0.15 \
+				+ float(j_a["atributos"].get("inteligencia", 50.0)) * 0.15
+			d_val = float(j_d["atributos"].get("quite", 50.0)) * 0.55 \
+				+ float(j_d["atributos"].get("agilidad", 50.0)) * 0.20 \
+				+ float(j_d["atributos"].get("fuerza", 50.0)) * 0.25
+		var diferencia_distancia: float = clampf(
+			(punto.distance_to(e_d["pos"]) - punto.distance_to(e_a["pos"])) * 2.0, -15.0, 15.0)
+		var res := Duel.resolver(
+			Duel.atributo_efectivo(a_val + diferencia_distancia, "tecnico", eq_a.resistencia_pct(j_a["id"])),
+			Duel.atributo_efectivo(d_val, "defensivo", eq_d.resistencia_pct(j_d["id"])),
+			MatchEngine._bloques_equipo(eq_a, eq_d, j_a, "cabezazo" if alto else "control", minuto, rng),
+			MatchEngine._bloques_equipo(eq_d, eq_a, j_d, "salto" if alto else "quite", minuto, rng))
+		gana_atacante = Duel.gana_atacante(res, rng)
+
+	var ganador: int = atacante if gana_atacante else defensor
+	_entregar_rodando(estado, ganador)
+	_registrar_resultado_rebote(estado, minuto, ataca_local, ganador, "atacante" if gana_atacante else "defensor")
+	if gana_atacante:
+		# Si el ganador estaba fuera del radio de control, la pelota rueda
+		# hasta sus pies. Guardar el remate evita que la entrega borre la
+		# cadena antes de resolverlo.
+		if estado["pelota"].has("dirigida_a"):
+			estado["pelota"]["rebote_remate_pendiente"] = {
+				"atacante": atacante, "punto": punto,
+				"ataca_local": ataca_local, "alto": alto,
+			}
+		else:
+			_intentar_remate_rebote(estado, atacante, punto, ataca_local, alto, minuto)
+
+
+static func _intentar_remate_rebote(estado: Dictionary, atacante: int, punto: Vector2,
+		ataca_local: bool, alto: bool, minuto: int) -> void:
+	if not estado["jugadores"].has(atacante):
+		return
+	var e: Dictionary = estado["jugadores"][atacante]
+	var jugador := _dict_jugador(estado, _equipo_de(estado, ataca_local), int(e["jugador_id"]))
+	if jugador.is_empty() or not _en_el_area(punto, ataca_local):
+		return
+	var attrs: Dictionary = jugador["atributos"]
+	var cadena: Dictionary = estado.get("cadena_rebotes", {})
+	var paso_cadena := int(cadena.get("paso", 0))
+	var remates_cadena: Array = cadena.get("remates", [])
+	var remate_cadena_forzado: bool = not cadena.is_empty() and paso_cadena < remates_cadena.size()
+	if not cadena.is_empty():
+		if remate_cadena_forzado:
+			var plan: Dictionary = remates_cadena[paso_cadena]
+			var atributo_cadena := str(plan.get("atributo", "cabezazo"))
+			estado["forzar_remate"] = str(plan.get("resultado", "atajada"))
+			estado["forzar_remate_attr"] = atributo_cadena
+			_resolver_tiro(estado, e, jugador, atributo_cadena,
+				str(plan.get("accion", ACCION_CABECEA)))
+			cadena["paso"] = paso_cadena + 1
+			return
+	if e["pos"].distance_to(punto) > float(pesos()["fisica"]["radio_control"]) and not remate_cadena_forzado:
+		return
+	var chance: float = 0.28 + float(attrs.get("tiro", 50.0)) / 100.0 * 0.32
+	if alto:
+		chance += float(attrs.get("cabezazo", 50.0)) / 100.0 * 0.18
+	else:
+		chance += float(attrs.get("volea", 50.0)) / 100.0 * 0.18
+	if estado["rng"].randf() > clampf(chance, 0.20, 0.78):
+		return
+	var accion := "volea"
+	var atributo := "volea"
+	if alto and estado["rng"].randf() >= clampf(0.08 + float(attrs.get("volea", 50.0)) / 100.0 * 0.30, 0.08, 0.38):
+		accion = ACCION_CABECEA
+		atributo = "cabezazo"
+	_resolver_tiro(estado, e, jugador, atributo, accion)
+
+
+static func _registrar_resultado_rebote(estado: Dictionary, minuto: int,
+		ataca_local: bool, ganador: int, bando: String) -> void:
+	var e: Dictionary = estado["jugadores"][ganador]
+	var eq_a := _equipo_de(estado, ataca_local)
+	var eq_d := _equipo_de(estado, not ataca_local)
+	estado["eventos"].append({
+		"minuto": minuto, "tipo": "rebote_arquero", "equipo": eq_a.nombre,
+		"rival": eq_d.nombre, "jugador_posicion": e["rol"],
+		"clave": ganador, "resultado": "control_%s" % bando,
+	})
 
 
 ## ¿Hay un defensor metido en la línea del remate? Devuelve su clave, o -1.
@@ -5823,7 +6014,8 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 	# que un centro sea un centro y no un pase raso con más recorrido.
 	var mejor_id := -1
 	var mejor_d: float = radio_inter
-	if float(pelota.get("z", 0.0)) <= float(f["z_inalcanzable"]):
+	if not bool(pelota.get("es_rebote_arquero", false)) \
+			and float(pelota.get("z", 0.0)) <= float(f["z_inalcanzable"]):
 		for id in estado["jugadores"]:
 			var e: Dictionary = estado["jugadores"][id]
 			if e["equipo_local"] == pasador_local:
@@ -5873,6 +6065,13 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 		estado.erase("recibiendo_centro")
 		return
 
+	# Un rechazo del arquero puede caer dividido, quedar para un companero
+	# o dejar un segundo remate. Resolverlo al llegar al punto real permite
+	# disputar rebotes altos sin teletransportar la pelota a unos pies.
+	if bool(pelota.get("es_rebote_arquero", false)):
+		_resolver_rebote_arquero(estado, hasta, minuto)
+		return
+
 	var receptor := _mas_cercano_a(estado, hasta)
 	if receptor == -1:
 		_dar_pelota_al_arquero(estado, not pasador_local, true)
@@ -5918,6 +6117,10 @@ static func _dirigir_pelota_a(estado: Dictionary, clave: int, velocidad: float,
 	# gano, y si conservara altura la parabola la levantaria de nuevo.
 	pelota["altura_max"] = 0.0
 	pelota["z"] = 0.0
+	pelota.erase("es_rebote_arquero")
+	pelota.erase("rebote_alto")
+	pelota.erase("rebote_ataca_local")
+	pelota.erase("rebote_autogol")
 	pelota.erase("altura_salida")
 	return true
 
@@ -5963,6 +6166,8 @@ static func _completar_dirigida(estado: Dictionary, minuto: int, alcanzada: bool
 	var pendiente: String = str(pelota["pendiente"])
 	var punto: Vector2 = pelota["punto_llegada"]
 	var pecho: bool = bool(pelota.get("pecho_al_llegar", false))
+	var remate_rebote_pendiente: Dictionary = pelota.get("rebote_remate_pendiente", {})
+	pelota.erase("rebote_remate_pendiente")
 	_limpiar_dirigida(pelota)
 	# Se fue de la cancha mientras la pelota rodaba (expulsion, cambio):
 	# la agarra el mas cercano, que es lo que pasa en la cancha.
@@ -5990,6 +6195,11 @@ static func _completar_dirigida(estado: Dictionary, minuto: int, alcanzada: bool
 		_resolver_intercepcion(estado, clave, minuto)
 	else:
 		_resolver_recepcion(estado, clave, punto, minuto)
+	if not remate_rebote_pendiente.is_empty() and estado["jugadores"].has(clave):
+		_intentar_remate_rebote(estado, int(remate_rebote_pendiente.get("atacante", clave)),
+				remate_rebote_pendiente.get("punto", pelota["pos"]),
+				bool(remate_rebote_pendiente.get("ataca_local", true)),
+				bool(remate_rebote_pendiente.get("alto", false)), minuto)
 
 
 static func _limpiar_dirigida(pelota: Dictionary) -> void:
@@ -6824,6 +7034,18 @@ static func _rechazar_remate(estado: Dictionary, datos: Dictionary) -> void:
 	var desde: Vector2 = e_arq["pos"]
 	var hacia_campo := Vector2(-signf(arco_rival(ataca_local).x), 0.0)
 	var largo_medio: float = 0.5 * (float(f["rebote_largo_min"]) + float(f["rebote_largo_max"]))
+	var jugador_arq := _dict_jugador(estado, _equipo_de(estado, not ataca_local), int(e_arq["jugador_id"]))
+	var attrs_arq: Dictionary = jugador_arq.get("atributos", {})
+	var agarre: float = clampf(float(datos.get("agarre", float(attrs_arq.get("agarre", 50.0)) / 100.0)), 0.0, 1.0)
+	var reflejos: float = clampf(float(attrs_arq.get("reflejos", 50.0)) / 100.0, 0.0, 1.0)
+	var estirada: float = clampf(float(attrs_arq.get("estirada", 50.0)) / 100.0, 0.0, 1.0)
+	var calidad_rechazo: float = clampf(agarre * 0.55 + reflejos * 0.25 + estirada * 0.20, 0.0, 1.0)
+	var dificultad_rebote: float = clampf(1.0 - float(datos.get("dist", 16.0)) / float(w["rechazo_dist_comoda"]), 0.0, 1.0)
+	# Un arquero con peor agarre/reflejos no solo rechaza mas: tambien deja
+	# rebotes altos y dificiles de leer. El buen arquero tiende a amortiguar.
+	var chance_rebote_alto: float = clampf(0.62 - calidad_rechazo * 0.45
+		+ dificultad_rebote * 0.12, 0.12, 0.70)
+	var rebote_alto: bool = rng.randf() < chance_rebote_alto
 
 	var linea_x: float = arco_rival(ataca_local).x
 	var angulo: float = deg_to_rad(float(ANGULOS_RECHAZO[0]))
@@ -6855,6 +7077,17 @@ static func _rechazar_remate(estado: Dictionary, datos: Dictionary) -> void:
 	var dir: Vector2 = hacia_campo.rotated(angulo + rng.randf_range(-1.0, 1.0) * dispersion)
 	var largo: float = rng.randf_range(float(f["rebote_largo_min"]), float(f["rebote_largo_max"]))
 	var destino: Vector2 = desde + dir * largo
+	var rebote_aereo_forzado := bool(estado.get("forzar_rebote_aereo", false))
+	if rebote_aereo_forzado:
+		var cadena: Dictionary = estado.get("cadena_rebotes", {})
+		var punto_forzado: Vector2 = cadena.get("punto", desde + hacia_campo * 5.5)
+		if punto_forzado.distance_to(desde) < 0.5:
+			punto_forzado = desde + hacia_campo * 5.5
+		destino = punto_forzado
+		dir = (destino - desde).normalized()
+		largo = desde.distance_to(destino)
+		rebote_alto = true
+		estado.erase("forzar_rebote_aereo")
 	# Para atras sale por el fondo si la linea esta dentro del rebote mas
 	# largo: la desvio con la fuerza del remate, no con la del rebote suelto.
 	# Si no llega —casi paralela a la linea, o manoteada lejos del arco—
@@ -6868,6 +7101,21 @@ static func _rechazar_remate(estado: Dictionary, datos: Dictionary) -> void:
 	elif absf(destino.x) >= MEDIO_LARGO or absf(destino.y) >= MEDIO_ANCHO:
 		cruce = _cruce_con_la_linea(desde, dir)
 	if cruce != Vector2.INF:
+		# Error extremo: una pelota manoteada hacia atras puede meterse en
+		# el propio arco. Es raro y depende de la calidad del arquero.
+		if absf(cruce.x) >= MEDIO_LARGO - 0.01 and absf(cruce.y) <= ARCO_MEDIO_ANCHO \
+			and dir.dot(hacia_campo) < 0.0:
+			var chance_autogol: float = clampf(0.003 + (1.0 - calidad_rechazo) * 0.014, 0.001, 0.018)
+			if rng.randf() < chance_autogol:
+				stats["rechazos_en_juego"] += 1
+				estado["ultimo_rechazo_tick"] = int(estado["tick"])
+				_soltar_pelota(estado, desde, cruce, not ataca_local)
+				var pelota_autogol: Dictionary = estado["pelota"]
+				pelota_autogol["es_rebote_arquero"] = true
+				pelota_autogol["rebote_ataca_local"] = ataca_local
+				pelota_autogol["rebote_autogol"] = true
+				pelota_autogol["rebote_alto"] = false
+				return
 		# Por el fondo, nunca adentro del arco propio: la saca por al lado.
 		if absf(cruce.x) >= MEDIO_LARGO - 0.01 and absf(cruce.y) <= ARCO_MEDIO_ANCHO + 0.5:
 			cruce.y = (ARCO_MEDIO_ANCHO + 0.5) * (1.0 if cruce.y >= 0.0 else -1.0)
@@ -6877,6 +7125,20 @@ static func _rechazar_remate(estado: Dictionary, datos: Dictionary) -> void:
 	stats["rechazos_en_juego"] += 1
 	estado["ultimo_rechazo_tick"] = int(estado["tick"])
 	_soltar_pelota(estado, desde, destino, not ataca_local)
+	var pelota_rebote: Dictionary = estado["pelota"]
+	pelota_rebote["es_rebote_arquero"] = true
+	pelota_rebote["rebote_ataca_local"] = ataca_local
+	pelota_rebote["rebote_alto"] = rebote_alto
+	pelota_rebote["altura_max"] = clampf(1.35 + (1.0 - calidad_rechazo) * 2.8
+		+ rng.randf_range(-0.25, 0.45), 1.1, 4.5) if rebote_alto else 0.0
+	estado["eventos"].append({
+		"minuto": _minuto_int(estado), "tipo": "rebote_arquero",
+		"equipo": _equipo_de(estado, ataca_local).nombre,
+		"rival": _equipo_de(estado, not ataca_local).nombre,
+		"jugador_posicion": "ARQ", "clave": clave,
+		"resultado": "alto" if rebote_alto else "raso",
+		"altura": float(pelota_rebote["altura_max"]),
+	})
 
 
 # ---------------------------------------------------------------------------
@@ -8332,7 +8594,8 @@ static func _despejar(estado: Dictionary, poseedor: Dictionary, jugador: Diction
 			-MEDIO_ANCHO + 1.0, MEDIO_ANCHO - 1.0))
 
 	var pelota: Dictionary = estado["pelota"]
-	_accion(estado, int(poseedor["clave"]), ACCION_PATEA)
+	var accion_despeje := ACCION_SAQUE_ARCO if poseedor["rol"] == "ARQ" else ACCION_PATEA
+	_accion(estado, int(poseedor["clave"]), accion_despeje)
 	pelota["poseedor_id"] = -1
 	pelota["en_vuelo"] = true
 	pelota["pos"] = poseedor["pos"]
@@ -8539,6 +8802,9 @@ static func _push_fotograma(estado: Dictionary, eventos_del_tick: Array = []) ->
 	# la pelota; con alguien saliendo o entrando la accion es el jugador y
 	# no la pelota, que se quedo quieta a treinta metros de ahi.
 	var foco = null
+	if estado.has("foco_laboratorio"):
+		var foco_laboratorio: Vector2 = estado["foco_laboratorio"]
+		foco = {"x": foco_laboratorio.x * giro, "y": foco_laboratorio.y * giro}
 	var en_transito: Array = estado.get("saliendo", []) + estado.get("entrando", [])
 	if not en_transito.is_empty():
 		var clave_f: int = int(en_transito[0]["clave"])

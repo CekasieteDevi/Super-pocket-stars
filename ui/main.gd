@@ -138,10 +138,20 @@ var color_short_elegido := 8
 var dialogo_borrar_partida: ConfirmationDialog
 var boton_partida_nueva: Button
 var dialogo_partida_nueva: ConfirmationDialog
+var option_fps: OptionButton
+var option_velocidad_partido: OptionButton
+
+const OPCIONES_FPS := [30, 60, 120]
+const OPCIONES_VELOCIDAD_PARTIDO := [1.0, 2.0, 4.0, 8.0, 16.0]
+const RUTA_OPCIONES := "user://opciones.cfg"
+var fps_elegido := 60
+var velocidad_partido_elegida := 1.0
 
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_cargar_opciones()
+	Engine.max_fps = fps_elegido
 
 	# El sistema visual entero vive en ui/tema.gd y se hereda desde la raiz.
 	theme = Tema.construir()
@@ -203,6 +213,7 @@ func _ready() -> void:
 	_construir_panel_cantera(contenedor)
 	_construir_panel_noticias(contenedor)
 	_construir_panel_partida_guardado(contenedor)
+	_construir_panel_opciones(contenedor)
 	_construir_panel_ficha(contenedor)
 	_construir_panel_formacion(contenedor)
 	_construir_dialogo_novedades()
@@ -1982,7 +1993,7 @@ func _construir_panel_partido_animado(padre: Control) -> void:
 			return
 		_mostrar_resumen_partido())
 
-	_construir_resumen_partido(panel)
+	_construir_resumen_partido(self)
 
 
 ## El cuadro de fin de partido: marcador grande y las estadisticas.
@@ -2115,7 +2126,7 @@ func _mostrar_resumen_partido() -> void:
 	Tema.primario(btn_cerrar)
 	btn_cerrar.pressed.connect(func():
 		resumen_partido.visible = false
-		_volver_al_club())
+		_mostrar_seccion("jugar"))
 	contenedor_resumen.add_child(btn_cerrar)
 
 	resumen_partido.visible = true
@@ -6129,6 +6140,7 @@ func _reproducir_laboratorio(clave: String) -> void:
 		VistaPartido.construir_nombres(copia_local, copia_visitante),
 		VistaCancha.estado_desde_calidad(copia_local.calidad_cancha),
 		copia_local.color_short, copia_visitante.color_short)
+	vista_partido.velocidad = velocidad_partido_elegida
 
 
 ## LA VITRINA: todo lo que ganó el club, arriba el resumen y abajo el
@@ -7049,6 +7061,73 @@ func _construir_panel_partida_guardado(padre: Control) -> void:
 	add_child(dialogo_borrar_partida)
 
 
+func _construir_panel_opciones(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	padre.add_child(panel)
+	paneles["opciones"] = panel
+
+	var tarjeta := Componentes.tarjeta()
+	panel.add_child(tarjeta)
+	var dentro := VBoxContainer.new()
+	dentro.add_child(Tema.etiqueta_seccion("Preferencias de juego"))
+	tarjeta.add_child(dentro)
+
+	option_fps = OptionButton.new()
+	for fps in OPCIONES_FPS:
+		option_fps.add_item(str(fps))
+	option_fps.custom_minimum_size = Vector2(150, Tema.ALTO_TACTIL)
+	option_fps.item_selected.connect(_on_fps_seleccionado)
+	dentro.add_child(_grupo_filtro("FPS", option_fps))
+
+	option_velocidad_partido = OptionButton.new()
+	for velocidad in OPCIONES_VELOCIDAD_PARTIDO:
+		option_velocidad_partido.add_item(str(int(velocidad)) + "x")
+	option_velocidad_partido.custom_minimum_size = Vector2(150, Tema.ALTO_TACTIL)
+	option_velocidad_partido.item_selected.connect(_on_velocidad_partido_seleccionada)
+	dentro.add_child(_grupo_filtro("Velocidad de partido", option_velocidad_partido))
+
+
+func _mostrar_opciones() -> void:
+	_ocultar_todos()
+	paneles["opciones"].visible = true
+	option_fps.select(OPCIONES_FPS.find(fps_elegido))
+	option_velocidad_partido.select(OPCIONES_VELOCIDAD_PARTIDO.find(velocidad_partido_elegida))
+
+
+func _on_fps_seleccionado(indice: int) -> void:
+	fps_elegido = int(OPCIONES_FPS[indice])
+	Engine.max_fps = fps_elegido
+	_guardar_opciones()
+
+
+func _on_velocidad_partido_seleccionada(indice: int) -> void:
+	velocidad_partido_elegida = float(OPCIONES_VELOCIDAD_PARTIDO[indice])
+	if vista_partido != null and is_instance_valid(vista_partido):
+		vista_partido.velocidad = velocidad_partido_elegida
+	_guardar_opciones()
+
+
+func _cargar_opciones() -> void:
+	var archivo := ConfigFile.new()
+	if archivo.load(RUTA_OPCIONES) != OK:
+		return
+	fps_elegido = int(archivo.get_value("video", "fps", 60))
+	velocidad_partido_elegida = float(archivo.get_value("partido", "velocidad", 1.0))
+	if not OPCIONES_FPS.has(fps_elegido):
+		fps_elegido = 60
+	if OPCIONES_VELOCIDAD_PARTIDO.find(velocidad_partido_elegida) == -1:
+		velocidad_partido_elegida = 1.0
+
+
+func _guardar_opciones() -> void:
+	var archivo := ConfigFile.new()
+	archivo.set_value("video", "fps", fps_elegido)
+	archivo.set_value("partido", "velocidad", velocidad_partido_elegida)
+	archivo.save(RUTA_OPCIONES)
+
+
 func _refrescar_partida_guardado() -> void:
 	var hay_guardado := GameState.hay_partida_guardada()
 	boton_cargar_partida.disabled = not hay_guardado
@@ -7384,10 +7463,29 @@ func _on_jugar_fecha() -> void:
 	await _jugar_el_partido_de_hoy()
 
 
+## Juega el partido y muestra directamente el resumen final, dejando la
+## cancha congelada en el último fotograma detrás del cartel.
+func _on_saltar_a_resultado() -> void:
+	if GameState.juego_terminado:
+		_refrescar_objetivo()
+		return
+	if (not GameState.hay_fecha_pendiente() and not GameState.hay_partido_de_copa_hoy()
+			and not GameState.hay_partido_internacional_hoy()
+			and not GameState.hay_partido_de_playoff_hoy()):
+		return
+	if _avisar_alineacion():
+		return
+	# Resolver sin abrir la vista ni reproducir fotogramas.
+	await _jugar_el_partido_de_hoy(false)
+	# El resultado queda como modal sobre la portada actualizada.
+	_mostrar_seccion("jugar")
+	_mostrar_resumen_partido()
+
+
 ## Hoy toca liga o toca copa, nunca las dos: el calendario no avanza
 ## mientras haya un cruce de copa esperando (GameState.avanzar_un_dia).
 ## Existe para que el modal de alineacion no tenga que saber cual es.
-func _jugar_el_partido_de_hoy() -> void:
+func _jugar_el_partido_de_hoy(mostrar_partido: bool = true) -> void:
 	# Simular el partido bloquea el hilo. Los dos await dejan que Godot
 	# dibuje el aviso ANTES de empezar a laburar: sin ellos la pantalla
 	# se congela sin explicacion y parece colgada. Mismo truco que
@@ -7401,13 +7499,13 @@ func _jugar_el_partido_de_hoy() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	if GameState.hay_partido_de_copa_hoy():
-		_jugar_copa_ya()
+		_jugar_copa_ya(mostrar_partido)
 	elif GameState.hay_partido_internacional_hoy():
-		_jugar_internacional_ya()
+		_jugar_internacional_ya(mostrar_partido)
 	elif GameState.hay_partido_de_playoff_hoy():
-		_jugar_playoff_ya()
+		_jugar_playoff_ya(mostrar_partido)
 	else:
-		_jugar_fecha_ya()
+		_jugar_fecha_ya(mostrar_partido)
 	# El boton puede haber muerto durante el partido: _refrescar_portada
 	# reconstruye la caja entera. Por eso se revalida antes de tocarlo.
 	if hay_boton and is_instance_valid(boton_jugar_partido):
@@ -7417,43 +7515,43 @@ func _jugar_el_partido_de_hoy() -> void:
 
 ## El cruce de copa, ya con el once en orden. Mismo recorrido que el de
 ## liga: se juega, se refresca todo y se abre la pantalla del partido.
-func _jugar_copa_ya() -> void:
+func _jugar_copa_ya(mostrar_partido: bool = true) -> void:
 	if GameState.juego_terminado or not GameState.hay_partido_de_copa_hoy():
 		return
 	GameState.jugar_partido_de_copa()
-	_despues_del_partido_de_torneo()
+	_despues_del_partido_de_torneo(mostrar_partido)
 
 
 ## El partido internacional de hoy: una fecha de la fase de liga, la
 ## previa, el playoff o una ronda del knockout. Mismo recorrido que el
 ## cruce de copa.
-func _jugar_internacional_ya() -> void:
+func _jugar_internacional_ya(mostrar_partido: bool = true) -> void:
 	if GameState.juego_terminado or not GameState.hay_partido_internacional_hoy():
 		return
 	GameState.jugar_partido_internacional()
-	_despues_del_partido_de_torneo()
+	_despues_del_partido_de_torneo(mostrar_partido)
 
 
 ## El playoff de ascenso, despues de la ultima fecha. Mismo recorrido que
 ## el cruce de copa.
-func _jugar_playoff_ya() -> void:
+func _jugar_playoff_ya(mostrar_partido: bool = true) -> void:
 	if GameState.juego_terminado or not GameState.hay_partido_de_playoff_hoy():
 		return
 	GameState.jugar_partido_de_playoff()
-	_despues_del_partido_de_torneo()
+	_despues_del_partido_de_torneo(mostrar_partido)
 
 
-func _despues_del_partido_de_torneo() -> void:
+func _despues_del_partido_de_torneo(mostrar_partido: bool = true) -> void:
 	_refrescar_historial_partidos()
 	_refrescar_plantel()
 	_refrescar_objetivo()
 	_refrescar_barra_contexto()
-	if not GameState.ultimos_fotogramas.is_empty():
+	if mostrar_partido and not GameState.ultimos_fotogramas.is_empty():
 		_mostrar_partido_animado()
 
 
 ## El partido en si, ya con el once en orden.
-func _jugar_fecha_ya() -> void:
+func _jugar_fecha_ya(mostrar_partido: bool = true) -> void:
 	if GameState.juego_terminado or not GameState.hay_fecha_pendiente():
 		return
 
@@ -7474,11 +7572,11 @@ func _jugar_fecha_ya() -> void:
 	# como leer el diario antes de mirar el partido. Ahora se abre solo, y
 	# adentro estan los controles para acelerar (x1 a x16) o saltar directo
 	# al resultado.
-	if not GameState.ultimos_fotogramas.is_empty():
+	if mostrar_partido and not GameState.ultimos_fotogramas.is_empty():
 		_mostrar_partido_animado()
 	# El resumen va DESPUES del partido animado: primero se mira el ultimo
 	# partido del año y despues se cierra el año.
-	if cerro_temporada:
+	if mostrar_partido and cerro_temporada:
 		_mostrar_resumen_temporada()
 
 
@@ -7758,6 +7856,7 @@ func _mostrar_partido_animado() -> void:
 		VistaPartido.construir_nombres(local, visitante),
 		VistaCancha.estado_desde_calidad(local.calidad_cancha),
 		local.color_short, visitante.color_short)
+	vista_partido.velocidad = velocidad_partido_elegida
 
 
 func _equipo_por_nombre(nombre: String) -> Team:
@@ -7990,7 +8089,7 @@ const SECCIONES := [
 	{"clave": "mas", "nombre": "Mas", "paneles": [
 		["noticias", "Noticias"], ["vitrina", "Vitrina"],
 		["seleccion", "Seleccion"], ["laboratorio", "Laboratorio"],
-		["partida", "Partida"]]},
+		["partida", "Partida"], ["opciones", "Opciones"]]},
 ]
 
 var seccion_actual: String = "jugar"
@@ -8145,6 +8244,7 @@ func _mostrar_panel_de_seccion(clave: String) -> void:
 		"laboratorio": "_mostrar_laboratorio",
 		"sponsors": "_mostrar_sponsors", "seleccion": "_mostrar_seleccion",
 		"partida": "_mostrar_partida_panel",
+		"opciones": "_mostrar_opciones",
 	}
 	if metodos.has(clave):
 		call(str(metodos[clave]))
@@ -8331,11 +8431,13 @@ func _refrescar_portada() -> void:
 		btn_salto.disabled = GameState.juego_terminado
 		btn_salto.pressed.connect(func(): _avanzar_dias(true))
 		fila_acciones.add_child(btn_salto)
-	var btn_form := Button.new()
-	btn_form.text = "Ver formacion"
-	btn_form.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
-	btn_form.pressed.connect(func(): _mostrar_seccion("equipo", "formacion"))
-	fila_acciones.add_child(btn_form)
+	if hay_partido:
+		var btn_form := Button.new()
+		btn_form.text = "Saltar a resultado"
+		btn_form.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
+		btn_form.disabled = rival == null or GameState.juego_terminado
+		btn_form.pressed.connect(_on_saltar_a_resultado)
+		fila_acciones.add_child(btn_form)
 
 	# Simular tambien vive aca y no solo en Partido: la portada es desde
 	# donde se juega, y mandar al jugador a otra seccion a buscar el boton

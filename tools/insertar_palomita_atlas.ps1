@@ -8,12 +8,12 @@ $prepared = Join-Path $PSScriptRoot '..\assets\partido\preparados'
 
 Get-ChildItem $prepared -Filter '*.png' | ForEach-Object {
     $old = [System.Drawing.Bitmap]::FromFile($_.FullName)
-    $out = [System.Drawing.Bitmap]::new(512,640,[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $out = [System.Drawing.Bitmap]::new(512,704,[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
     $g = [System.Drawing.Graphics]::FromImage($out)
     $g.Clear([System.Drawing.Color]::Transparent)
     $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
     $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::Half
-    $g.DrawImage($old, 0, 0, 512, 640)
+    $g.DrawImage($old, 0, 0, 512, 704)
     for ($i = 0; $i -lt 4; $i++) {
         $bounds = [System.Drawing.Rectangle]::new(($i * $cellWidth),0,$cellWidth,$cellHeight)
         $crop = [System.Drawing.Bitmap]::new($cellWidth,$cellHeight,[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)

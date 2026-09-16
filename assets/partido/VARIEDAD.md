@@ -2,14 +2,16 @@
 
 Once peinados: puntas, afro, rapado, atado, mohicano, rastas, degrade alto,
 vincha con pelo largo, rodete, raya al costado y trenzas pegadas al cuero cabelludo.
-La ultima ampliacion agrega cinco peinados (320 cuadros base) y tres secuencias
-propias para los once estilos (132 cuadros). Total: 836 cuadros, 76 por estilo.
+La ultima ampliacion agrega cinco peinados (320 cuadros base), tres secuencias
+propias para los once estilos y dos secuencias del arquero. Total: 924 cuadros,
+84 por estilo.
 Asignacion estable por ID, dorsales y recoloreado.
 
 Fuentes: `jugadores_mohicano.png` y `jugadores_rastas.png`.
 Las cinco fuentes nuevas son `jugadores_{degrade,vincha,rodete,raya,trenzas}.png`.
-Consumo: once hojas `preparados/{peinado}.png`, 512 x 640 RGBA, celdas de 64 px.
-Los indices 76 a 79 son relleno transparente y no pertenecen a los clips.
+Consumo: once hojas `preparados/{peinado}.png`, 512 x 704 RGBA, celdas de 64 px.
+Indices 76 a 79: arquero ataja y asegura la pelota. Indices 80 a 83: saque de
+arco, con armado, impacto y seguimiento.
 Preparacion reproducible: `tools/preparar_atlas_partido.gd`.
 Vista comparativa: `vista_previa_peinados.png`; cada fila es un peinado.
 `vista_previa_acciones.png`: cuatro fases de volea, control con el pie y taco,
@@ -26,13 +28,19 @@ en ese orden. Filas con el mismo orden de peinados.
 - Taco: 72-75; preparacion, flexion, contacto posterior y recuperacion. Se
   elige para pases de campo de hasta 8 m hacia atras respecto al cuerpo;
   no para pelotazos. Conserva la orientacion corporal al reproducir.
+- Arquero agarra: 76-79; manos hacia la pelota, cierre, control y posesion.
+  La pelota real se ancla a las manos y evita dibujarse dos veces en los cuadros
+  finales.
+- Saque de arco: 80-83; apoyo, armado, contacto y seguimiento. El motor lo
+  emite cuando el arquero despeja.
 
 Las condiciones solo emiten datos visuales. No cambian duelos, trayectorias,
 atributos ni estado del RNG. Las texturas se preparan antes del partido.
 
 Fuentes de movimientos: `acciones_{volea,control_pie,taco}.png` contienen
 cuatro columnas y diez filas; `acciones_trenzas.png` contiene las tres
-secuencias del ultimo peinado. La preparacion detecta bandas de filas,
+secuencias del ultimo peinado. `acciones_arquero_{agarra,saque_arco}.png`
+son tiras RGBA de cuatro cuadros. La preparacion detecta bandas de filas,
 convierte RGB a RGBA si hace falta y elimina el fondo exterior. Usa una
 escala comun dentro de cada secuencia para conservar flexiones y apoyos.
 

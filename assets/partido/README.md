@@ -59,7 +59,7 @@ Prueba adicional: `tests/test_pecho_lateral.gd`.
 ## Rendimiento
 
 `preparados/{puntas,afro,rapado,atado}.png` contiene cuatro atlas RGBA de
-512 × 512. Regenerar al modificar fuentes:
+512 × 704. Regenerar al modificar fuentes:
 
 ```
 godot --headless --path . --script tools/preparar_atlas_partido.gd

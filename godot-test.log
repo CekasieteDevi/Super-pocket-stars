@@ -1,0 +1,27 @@
+Godot Engine v4.7.1.stable.official.a13da4feb - https://godotengine.org
+
+OK: expulsion    46 fotogramas, 21 en cancha al final, eventos { "tarjeta": 1, "pase": 1, "centro": 1 }
+OK: penal        41 fotogramas, 22 en cancha al final, eventos { "falta": 1, "penal": 1 }
+OK: corner       45 fotogramas, 22 en cancha al final, eventos { "corner": 1, "centro": 1, "tiro_puerta": 1 }
+OK: tiro_libre   43 fotogramas, 22 en cancha al final, eventos { "falta": 1, "tiro": 1, "pase": 2 }
+OK: lateral      31 fotogramas, 22 en cancha al final, eventos { "lateral": 1, "pase": 1, "gambeta": 1 }
+OK: cabezazo     21 fotogramas, 22 en cancha al final, eventos { "centro": 1, "tiro_puerta": 1 }
+OK: volea        21 fotogramas, 22 en cancha al final, eventos { "centro": 1, "tiro_puerta": 1 }
+OK: palomita     18 fotogramas, 22 en cancha al final, eventos { "centro": 1, "tiro_puerta": 1 }
+OK: gol          21 fotogramas, 22 en cancha al final, eventos { "tiro_puerta": 1 }
+OK: tiro_efecto  21 fotogramas, 22 en cancha al final, eventos { "tiro_puerta": 1 }
+OK: festejo_banderin 21 fotogramas, 22 en cancha al final, eventos { "tiro_puerta": 1 }
+OK: saque_arco   29 fotogramas, 22 en cancha al final, eventos { "saque_arco": 1, "pase": 1, "gambeta": 1, "tiro": 1 }
+OK: cadena_rebotes 57 fotogramas, 22 en cancha al final, eventos { "tiro_puerta": 3, "rebote_arquero": 4, "pase": 1, "gambeta": 1, "tarjeta": 1, "falta": 1 }
+OK: cambio       64 fotogramas, 22 en cancha al final, eventos { "cambio": 2, "gambeta": 2 }
+OK: reproducir las 14 jugadas no deja lesiones, suspensiones ni goles en los equipos reales.
+OK: las 14 jugadas dan exactamente lo mismo al repetirlas.
+OK: el clip del gol termina 1-0 y canta el gol una sola vez, las 3 veces.
+OK: el clip del cabezazo gana el centro de arriba, cabecea una vez y termina 1-0, los 8 planteles.
+OK: el laboratorio muestra centro, volea y gol.
+OK: en el corner llegan a haber 7 atacantes adentro del area.
+OK: las 9 jugadas arrancan con la escena ya montada y ninguna narra el saque inicial.
+OK: el tiro con efecto recorre curva de 3.77 m y termina en gol.
+FALLOS=0
+ERROR: Failed to read the root certificate store.
+   at: get_system_ca_certificates (platform/windows/os_windows.cpp:2582)

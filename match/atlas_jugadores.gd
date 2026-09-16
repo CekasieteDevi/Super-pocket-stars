@@ -1,11 +1,11 @@
 class_name AtlasJugadores
 extends RefCounted
 
-## Cuadros preparados offline: ocho columnas y diez filas por peinado.
+## Cuadros preparados offline: ocho columnas y once filas por peinado.
 ## No recortar ni limpiar hojas fuente durante la reproducción.
 const RUTA := "res://assets/partido/jugadores.png"
 const CELDA := 64
-const TOTAL_CUADROS := 76
+const TOTAL_CUADROS := 84
 const PEINADOS := ["puntas", "afro", "rapado", "atado", "mohicano", "rastas", "degrade", "vincha", "rodete", "raya", "trenzas"]
 const CLIPS := {
 	"pecho": [48, 49, 50, 51, 52, 53, 54, 55],
@@ -21,6 +21,8 @@ const CLIPS := {
 	"volea": [64, 65, 66, 67],
 	"control_pie": [68, 69, 70, 71],
 	"taco": [72, 73, 74, 75],
+	"agarra": [76, 77, 78, 79],
+	"saque_arco": [80, 81, 82, 83],
 	"chilena": [36, 37, 37, 38, 39],
 	"vuela": [40, 41, 42, 42, 43],
 	"festeja": [44, 45, 46, 45],
@@ -116,7 +118,9 @@ static func _mascara(indice: int, estilo: int) -> Dictionary:
 	# Packed*Array se COPIA al sacarlo de un contenedor, y el append se
 	# perdería. Los factores van en 64 bits: en 32 el redondeo cambiaba un
 	# nivel de color en casi todos los píxeles teñidos.
-	var admite_pantalon: bool = indice not in [40, 41, 42, 43]
+	# Las poses nuevas del arquero traen guantes y pelota blancos: no son
+	# pantalón y deben quedar blancos aunque el club use otra tonalidad.
+	var admite_pantalon: bool = indice not in [40, 41, 42, 43, 76, 77, 78, 79, 80, 81, 82, 83]
 	var pix_camiseta := PackedInt32Array()
 	var luz_camiseta := PackedFloat64Array()
 	var alfa_camiseta := PackedFloat64Array()

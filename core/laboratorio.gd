@@ -65,6 +65,8 @@ const SITUACIONES := [
 		"que": "Gol desde el costado del área. El goleador y los tres compañeros más cercanos corren al banderín a festejar juntos."},
 	{"clave": "saque_arco", "nombre": "Saque de arco",
 		"que": "La pelota se va por el fondo y el arquero la pone en juego."},
+	{"clave": "cadena_rebotes", "nombre": "Cadena de rebotes aéreos",
+		"que": "Remate, rebote aéreo, duelo de cabeza ganado por otro delantero, segundo rebote aéreo y gol de volea."},
 	{"clave": "cambio", "nombre": "Cambio",
 		"que": "Se detiene el juego, el que sale camina hasta el lateral y el suplente entra por ahí mismo a ocupar su lugar."},
 ]
@@ -140,6 +142,8 @@ static func generar(clave: String, local: Team, visitante: Team,
 			_montar_festejo_banderin(estado)
 		"saque_arco":
 			_montar_saque_arco(estado)
+		"cadena_rebotes":
+			_montar_cadena_rebotes(estado)
 		"cambio":
 			_montar_cambio(estado)
 
@@ -200,6 +204,8 @@ static func generar(clave: String, local: Team, visitante: Team,
 ## clip no terminaba nunca.
 static func _jugada_en_curso(estado: Dictionary) -> bool:
 	if int(estado.get("detenido", 0)) > 0:
+		return true
+	if estado.has("cadena_rebotes"):
 		return true
 	return not estado.get("expulsado", {}).is_empty()
 
@@ -574,6 +580,94 @@ static func _montar_volea(estado: Dictionary) -> void:
 
 static func _montar_saque_arco(estado: Dictionary) -> void:
 	MotorEspacial._dar_pelota_al_arquero(estado, false, true)
+
+
+## Cadena cerrada para revisar la lectura de DOS rebotes aÃ©reos seguidos:
+## remate inicial, manotazo alto, duelo delantero-vs-DFC ganado de cabeza,
+## segundo manotazo alto y volea de otro delantero al gol.
+static func _montar_cadena_rebotes(estado: Dictionary) -> void:
+	var arco := MotorEspacial.arco_rival(true)
+	var hacia: float = -1.0 if arco.x > 0.0 else 1.0
+	var atacantes: Array = []
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		if not e["equipo_local"] or str(e["rol"]) == "ARQ":
+			continue
+		if str(e["rol"]) in ["DC", "EXT", "MCO"]:
+			atacantes.append(int(id))
+	if atacantes.size() < 3:
+		for id in estado["jugadores"]:
+			var e: Dictionary = estado["jugadores"][id]
+			if e["equipo_local"] and str(e["rol"]) != "ARQ" and int(id) not in atacantes:
+				atacantes.append(int(id))
+	if atacantes.size() < 3:
+		return
+
+	var defensor := -1
+	var arquero := -1
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		if not e["equipo_local"] and str(e["rol"]) == "DFC" and defensor == -1:
+			defensor = int(id)
+		if not e["equipo_local"] and str(e["rol"]) == "ARQ" and arquero == -1:
+			arquero = int(id)
+	if defensor == -1 or arquero == -1:
+		return
+
+	var rematador: int = int(atacantes[0])
+	var cabeceador: int = int(atacantes[1])
+	var voleador: int = int(atacantes[2])
+	var punto_remate := Vector2(arco.x + hacia * 16.0, 0.0)
+	var punto_rebote := Vector2(arco.x + hacia * 5.5, 0.0)
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		e["vel"] = Vector2.ZERO
+		e["rapidez"] = 0.0
+		if int(id) in [rematador, cabeceador, voleador, defensor, arquero]:
+			continue
+		# Saca al resto del corredor para que la escena tenga solo el duelo
+		# delantero-DFC que queremos mirar.
+		e["pos"] = Vector2(-2.0, 13.0 + float(posmod(int(id), 3)))
+
+	var e_rematador: Dictionary = estado["jugadores"][rematador]
+	var e_cabeceador: Dictionary = estado["jugadores"][cabeceador]
+	var e_voleador: Dictionary = estado["jugadores"][voleador]
+	var e_defensor: Dictionary = estado["jugadores"][defensor]
+	var e_arquero: Dictionary = estado["jugadores"][arquero]
+	e_rematador["pos"] = punto_remate
+	e_cabeceador["pos"] = punto_rebote + Vector2(-0.8, -1.1)
+	e_voleador["pos"] = punto_rebote + Vector2(0.8, 1.1)
+	e_defensor["pos"] = punto_rebote + Vector2(0.3, 0.0)
+	e_arquero["pos"] = Vector2(arco.x + hacia * 0.4, 0.0)
+
+	var eq_a: Team = MotorEspacial._equipo_de(estado, true)
+	var jugador_rematador := {}
+	for j in eq_a.jugadores_en_cancha():
+		if int(j["id"]) == int(e_rematador["jugador_id"]):
+			jugador_rematador = j
+			break
+	if jugador_rematador.is_empty():
+		return
+
+	estado["cadena_rebotes"] = {
+		"rebotes_pendientes": 2,
+		"punto": punto_rebote,
+		"atacantes": [cabeceador, voleador],
+		"defensor": defensor,
+		"paso": 0,
+		"remates": [
+			{"atributo": "cabezazo", "accion": MotorEspacial.ACCION_CABECEA, "resultado": "atajada"},
+			{"atributo": "volea", "accion": "volea", "resultado": "gol"},
+		],
+	}
+	estado["foco_laboratorio"] = punto_rebote
+	MotorEspacial._entregar_pelota(estado, rematador)
+	estado["pelota"]["pos"] = punto_remate
+	# El primer remate entra al arco y el arquero lo rechaza. Las dos
+	# atajadas siguientes las fuerza la cadena, no el azar.
+	estado["forzar_remate"] = "atajada"
+	estado["forzar_remate_attr"] = "tiro"
+	MotorEspacial._resolver_tiro(estado, e_rematador, jugador_rematador, "tiro", MotorEspacial.ACCION_PATEA)
 
 
 ## Un cambio de cada equipo a la vez: sale un titular y entra un suplente,

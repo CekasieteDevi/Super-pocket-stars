@@ -521,7 +521,9 @@ func _mostrar(idx: int, t: float) -> void:
 
 	var ents: Array = []
 	var pelota_anclada := false
+	var pelota_visible := true
 	var anclaje_pelota := Vector2.ZERO
+	var contacto_accion := {}
 	for j in a["jugadores"]:
 		var p := Vector2(j["x"], j["y"])
 		var avance := Vector2.ZERO
@@ -576,6 +578,17 @@ func _mostrar(idx: int, t: float) -> void:
 						ent["direccion"] = _direccion(Vector2(float(ejecutor.get("ox", 1.0)), float(ejecutor.get("oy", 0.0))))
 						break
 			var fase := float(idx - int(accion["desde"])) + t
+			if str(accion.get("accion", "")) in ACCIONES_CON_CONTACTO:
+				# El fotograma ya avanzó la pelota un paso. La dirección sigue
+				# siendo la del contacto original.
+				var direccion_contacto := ProyeccionPartido.direccion_pantalla(balon - Vector2(j["x"], j["y"]))
+				if direccion_contacto.length_squared() < 0.001:
+					direccion_contacto = ProyeccionPartido.direccion_pantalla(
+						Vector2(float(j.get("ox", 1.0)), float(j.get("oy", 0.0))))
+				contacto_accion = {
+					"pos": p, "accion": str(accion["accion"]), "fase": fase,
+					"direccion": direccion_contacto.normalized(),
+				}
 			if pose in [SpritesPartido.CABECEA, SpritesPartido.CHILENA, SpritesPartido.VOLEA, SpritesPartido.PALOMITA]:
 				ent["z"] = sin(clampf(fase / 3.0, 0.0, 1.0) * PI) * 0.65
 			elif pose == SpritesPartido.FESTEJA:
@@ -602,10 +615,14 @@ func _mostrar(idx: int, t: float) -> void:
 			if int(ent["direccion"]) in [5, 6, 7]:
 				anclaje_pelota.x *= -1.0
 			pelota_anclada = true
-		if str(ent["accion"]) == "pecho" and int(pa.get("poseedor_id", -1)) == int(j["id"]):
+		if str(ent["accion"]) in ["pecho", MotorEspacial.ACCION_AGARRA] and int(pa.get("poseedor_id", -1)) == int(j["id"]):
 			pos_pelota = p
-			z = lerpf(1.25, 0.0, clampf(float(ent["fase_animacion"]), 0.0, 1.0))
-			anclaje_pelota = Vector2(4, lerpf(-26.0, 0.0, clampf(float(ent["fase_animacion"]), 0.0, 1.0)))
+			var fase_manos := clampf(float(ent["fase_animacion"]), 0.0, 1.0)
+			z = lerpf(1.25, 0.0, fase_manos) if ent["accion"] == "pecho" else 0.0
+			anclaje_pelota = Vector2(7, lerpf(-25.0, -19.0, fase_manos))
+			if ent["accion"] == MotorEspacial.ACCION_AGARRA and fase_manos >= 0.5:
+				# Los cuadros finales ya traen la pelota entre los guantes.
+				pelota_visible = false
 			if int(ent["direccion"]) in [5, 6, 7]:
 				anclaje_pelota.x *= -1.0
 			pelota_anclada = true
@@ -621,9 +638,20 @@ func _mostrar(idx: int, t: float) -> void:
 			_aplicar_festejo(ent, int(j["id"]))
 		ents.append(ent)
 
-	ents.append({"tipo": "pelota", "color": Color.WHITE, "z": z, "pos": pos_pelota,
-		"giro": int((pos_pelota.x + pos_pelota.y * 0.73 + z) * 3.0),
-		"anclada": pelota_anclada, "anclaje_px": anclaje_pelota})
+	# El motor ya resolvió el resultado y la pelota ya viaja. Visualmente,
+	# mostramos primero el contacto y luego soltamos hacia su posición real.
+	if not contacto_accion.is_empty():
+		var liberacion := clampf(float(contacto_accion["fase"]), 0.0, 1.0)
+		var posicion_contacto: Vector2 = contacto_accion["pos"]
+		pos_pelota = posicion_contacto.lerp(pos_pelota, liberacion)
+		anclaje_pelota = _anclaje_de_contacto(
+			str(contacto_accion["accion"]), contacto_accion["direccion"]) * (1.0 - liberacion)
+		pelota_anclada = liberacion < 1.0
+
+	if pelota_visible:
+		ents.append({"tipo": "pelota", "color": Color.WHITE, "z": z, "pos": pos_pelota,
+			"giro": int((pos_pelota.x + pos_pelota.y * 0.73 + z) * 3.0),
+			"anclada": pelota_anclada, "anclaje_px": anclaje_pelota})
 
 	# Las tarjetas siguen al infractor: se guardan por clave, no por
 	# posición, así el cartelito acompaña al que la vio mientras camina.
@@ -675,6 +703,7 @@ const DURACION_ACCION := {
 	"amague_centro": 3,
 	"control_pie": 2, "taco": 2,
 	"pecho": 3, "lateral_manos": 2,
+	MotorEspacial.ACCION_AGARRA: 4, MotorEspacial.ACCION_SAQUE_ARCO: 4,
 	"bloquea": 3, "cae": 5, "chilena": 4, "volea": 3, "palomita": 4,
 	MotorEspacial.ACCION_PATEA: 2,
 	MotorEspacial.ACCION_CABECEA: 2,
@@ -690,6 +719,8 @@ const POSE_DE_ACCION := {
 	"amague_centro": "amague_centro",
 	"control_pie": "control_pie", "taco": "taco",
 	"pecho": "pecho", "lateral_manos": "lateral_manos",
+	MotorEspacial.ACCION_AGARRA: MotorEspacial.ACCION_AGARRA,
+	MotorEspacial.ACCION_SAQUE_ARCO: MotorEspacial.ACCION_SAQUE_ARCO,
 	"bloquea": SpritesPartido.BLOQUEA, "cae": SpritesPartido.CAE,
 	"chilena": SpritesPartido.CHILENA, "volea": SpritesPartido.VOLEA,
 	MotorEspacial.ACCION_PALOMITA: SpritesPartido.PALOMITA,
@@ -706,6 +737,13 @@ const POSE_DE_ACCION := {
 const POSE_INICIAL_DE_ACCION := {
 	MotorEspacial.ACCION_PATEA: SpritesPartido.PATEA_ARMA,
 }
+
+## La pelota sale en el mismo tick que nace el gesto. La vista conserva
+## ese primer instante junto al cuerpo y la libera durante el armado.
+const ACCIONES_CON_CONTACTO := [
+	MotorEspacial.ACCION_PATEA, "taco", MotorEspacial.ACCION_SAQUE_ARCO,
+	MotorEspacial.ACCION_CABECEA, "volea", "chilena", MotorEspacial.ACCION_PALOMITA,
+]
 
 
 ## clave -> {"pose": String, "desde": int}, para las acciones que siguen
@@ -737,6 +775,26 @@ func _acciones_activas(idx: int) -> Dictionary:
 					pose = SpritesPartido.CABECEA
 				activas[a["clave"]] = {"pose": pose, "desde": i, "accion": accion}
 	return activas
+
+
+## Punto de contacto en píxeles respecto de los pies del jugador. El arte es
+## un billboard: usar este offset mantiene la pelota pegada al dibujo aunque
+## la cámara cambie de zoom.
+static func _anclaje_de_contacto(accion: String, direccion: Vector2) -> Vector2:
+	var d := direccion.normalized() if direccion.length_squared() > 0.001 else Vector2.RIGHT
+	match accion:
+		MotorEspacial.ACCION_CABECEA:
+			return Vector2(d.x * 5.0, -51.0 + clampf(d.y * 3.0, -4.0, 4.0))
+		"volea":
+			return Vector2(d.x * 18.0, -18.0 + clampf(d.y * 5.0, -5.0, 5.0))
+		"chilena":
+			return Vector2(d.x * 18.0, -40.0 + clampf(d.y * 4.0, -4.0, 4.0))
+		MotorEspacial.ACCION_PALOMITA:
+			return Vector2(d.x * 12.0, -29.0 + clampf(d.y * 4.0, -4.0, 4.0))
+		"taco":
+			return -d * 13.0
+		_:
+			return Vector2(d.x * 18.0, -2.0 + clampf(d.y * 5.0, -5.0, 5.0))
 
 
 ## A qué costado se tiró el arquero, EN PANTALLA. Se mide en el fotograma
