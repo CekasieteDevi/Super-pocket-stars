@@ -189,6 +189,14 @@ func _probar_carrera() -> void:
 		MotorEspacial._conducir(s, e)
 		distancias.append(e.pos.distance_to(inicio))
 	_comprobar(distancias[1] > distancias[0], "en una recuperacion libre, contragolpe acelera mas con el mismo jugador")
+	var s := _estado()
+	s.home.estilo = "Contragolpe"
+	var mco := _jugador(s, "MCO")
+	mco.pos = Vector2(0, 0)
+	s.transicion_local = true
+	s.transicion_hasta = s.tick + int(MotorEspacial.SEGUNDOS_TRANSICION / MotorEspacial.TICK_SEG)
+	var apoyo := MotorEspacial._buscar_apoyo(s, mco, s.home, mco.pos)
+	_comprobar(apoyo.x > mco.pos.x + 4.0, "tras recuperar, el MCO tambien rompe hacia adelante")
 
 func _probar_reproduccion() -> void:
 	var resultados := []

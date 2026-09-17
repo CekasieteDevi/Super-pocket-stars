@@ -2734,9 +2734,12 @@ static func _ponderar_plan(estado: Dictionary, opciones: Array, poseedor: Dictio
 		jugador: Dictionary, presion: float, camino: float) -> void:
 	var local: bool = poseedor["equipo_local"]
 	var equipo := _equipo_de(estado, local)
+	var rival := _equipo_de(estado, not local)
 	var plan := Estilos.plan(equipo.estilo)
 	var pos: Vector2 = poseedor["pos"]
 	var transicion := _transicion(estado, local) * float(plan["transicion"])
+	var contragolpe_vs_presion := equipo.estilo == "Contragolpe" \
+			and rival.estilo == "Presión alta" and transicion > 0.0
 	var grupos := {}
 	for o in opciones:
 		grupos[o["tipo"]] = int(grupos.get(o["tipo"], 0)) + 1
@@ -2770,6 +2773,9 @@ static func _ponderar_plan(estado: Dictionary, opciones: Array, poseedor: Dictio
 		if tipo == "conducir":
 			ajuste += 0.45 * camino * (1.0 - presion) * (1.0 - float(plan["asociacion"]))
 			ajuste += transicion * camino * 0.6
+			if contragolpe_vs_presion:
+				# Tras recuperar contra línea alta, atacar el espacio rápido.
+				ajuste += 0.50 * transicion * camino
 			ajuste -= float(plan["asociacion"]) * 0.2
 			ajuste += _ajuste_de_ritmo(fase, tipo, 0.0, 0.0, 0.0, false, camino)
 			ajuste += _ajuste_de_perfil(perfil, {}, tipo, 0.0, 0.0, 0.0, presion, camino)
@@ -2792,9 +2798,14 @@ static func _ponderar_plan(estado: Dictionary, opciones: Array, poseedor: Dictio
 					ajuste -= camino * (1.0 - presion) * (0.45 + transicion)
 			elif tipo == "pase_hueco":
 				ajuste += (float(plan["verticalidad"]) * 0.35 + transicion * 0.8) * libertad * clampf(adelante / 15.0, 0.0, 1.0)
+				if contragolpe_vs_presion:
+					# El receptor corre detrás de la línea alta, no al pie.
+					ajuste += 0.65 * transicion * libertad * clampf(adelante / 15.0, 0.0, 1.0)
 			else:
 				ajuste += float(plan["verticalidad"]) * 0.3 + transicion * 0.45
 				ajuste -= float(plan["asociacion"]) * 0.6
+				if contragolpe_vs_presion:
+					ajuste += 0.40 * transicion * libertad
 				if adelante < -2.0:
 					ajuste -= 0.6 + camino * (1.0 - presion)
 				if cambio_de_frente:
@@ -2853,8 +2864,9 @@ static func _buscar_apoyo(estado: Dictionary, e: Dictionary, equipo: Team, base:
 			if poseedor["rol"] == "EXT" and pelota.y * lado > 0.0 and presion_normalizada(estado, pelota, local) < 0.55:
 				objetivo.x = pelota.x + signo * 10.0
 				objetivo.y = lado * (MEDIO_ANCHO - 4.0)
-	if transicion > 0.0 and rol in ["EXT", "DC"]:
-		objetivo.x += signo * 14.0 * transicion
+	if transicion > 0.0 and rol in ["EXT", "DC", "MCO"]:
+		var metros_carrera := 14.0 if rol in ["EXT", "DC"] else 9.0
+		objetivo.x += signo * metros_carrera * transicion
 		if rol == "EXT":
 			objetivo.y = lado * (MEDIO_ANCHO - 7.0)
 	# Al llegar por una banda, el extremo opuesto ocupa el segundo palo.
@@ -7435,14 +7447,20 @@ static func _planificar_defensa(estado: Dictionary, equipo_con_pelota_local: boo
 	var punto_cierre := Vector2.INF
 	if presionante != -1 and cobertura != -1:
 		var estilo: String = _equipo_de(estado, defiende_local).estilo
+		var rival_estilo: String = _equipo_de(estado, not defiende_local).estilo
 		# Etapa 7: el que necesita la pelota sale a cerrar con menos
 		# excusa; el que cuida el resultado no manda un tercero ni con los
-		# disparadores activos. El estilo Presion alta sigue cerrando
-		# siempre salvo que este guardando el partido.
+		# disparadores activos. Presion alta manda el tercero cuando no esta
+		# guardando el partido; el balance se regula por la linea alta y el
+		# riesgo de quedar expuesto.
 		var urg_def := urgencia(estado, defiende_local)
 		var umbral: float = float(w["intensidad_para_cierre"]) - urg_def * float(w_m["cierre"])
 		var guardando: bool = urg_def <= -float(w_m["urgencia_para_guardar"])
 		var permite: bool = not guardando and (estilo == "Presión alta" or intensidad >= umbral)
+		if estilo == "Presión alta" and rival_estilo == "Contragolpe":
+			# La presión alta queda con dos hombres si enfrenta al contra:
+			# mandar un tercero regala justamente el espacio que busca.
+			permite = false
 		if permite and not _presion_superada(estado, defiende_local, plan):
 			punto_cierre = _punto_de_cierre(estado, defiende_local,
 				_punto_de_cobertura(estado, estado["jugadores"][presionante], intensidad))

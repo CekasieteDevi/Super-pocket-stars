@@ -10,6 +10,9 @@ extends RefCounted
 const LISTA := ["Tiki taka", "Contragolpe", "Juego directo", "Presión alta", "Defensivo", "Físico"]
 
 const BONUS := 3.0
+## El contra necesita una ventaja apenas mayor contra presión alta: si no,
+## la presión del motor espacial tapa el riesgo de jugar tan arriba.
+const BONUS_CONTRA_PRESION := 4.0
 
 ## Intencion espacial, separada del bonus de calidad del duelo. Cambiar
 ## de estilo cambia las opciones que busca el equipo, no sus atributos.
@@ -32,7 +35,7 @@ static func plan(estilo: String) -> Dictionary:
 const MATRIZ := {
 	"Tiki taka": {"gana_a": ["Presión alta"], "pierde_contra": ["Defensivo"]},
 	"Contragolpe": {"gana_a": ["Presión alta"], "pierde_contra": ["Defensivo"]},
-	"Juego directo": {"gana_a": ["Tiki taka"], "pierde_contra": ["Físico"]},
+	"Juego directo": {"gana_a": ["Tiki taka", "Físico"], "pierde_contra": []},
 	"Presión alta": {"gana_a": ["Juego directo"], "pierde_contra": ["Contragolpe"]},
 	"Defensivo": {"gana_a": ["Tiki taka", "Contragolpe"], "pierde_contra": ["Presión alta"]},
 	"Físico": {"gana_a": ["Tiki taka"], "pierde_contra": ["Juego directo"]},
@@ -50,6 +53,10 @@ static func generar(rng: RandomNumberGenerator) -> String:
 static func modificador(mio: String, rival: String) -> float:
 	if mio == "" or rival == "" or not MATRIZ.has(mio):
 		return 0.0
+	if mio == "Contragolpe" and rival == "Presión alta":
+		return BONUS_CONTRA_PRESION
+	if mio == "Presión alta" and rival == "Contragolpe":
+		return -BONUS_CONTRA_PRESION
 	var entrada: Dictionary = MATRIZ[mio]
 	if entrada["gana_a"].has(rival):
 		return BONUS
@@ -58,14 +65,11 @@ static func modificador(mio: String, rival: String) -> float:
 	return 0.0
 
 
-## Solo visual (ui/cancha.gd) — cuánto retrocede el bloque de un equipo
-## cuando NO tiene la pelota, como fracción del empuje que hace el rival
-## que ataca. 0.5 es el comportamiento "neutro" (retrocede a la mitad de
-## lo que el rival avanza). Negativo significa que en vez de retroceder
-## empuja hacia adelante — Presión alta va a buscar la pelota en vez de
-## replegarse. No afecta al resultado del partido, solo a cómo se ve.
+## Cuánto retrocede el bloque de un equipo cuando NO tiene la pelota, como
+## fracción del empuje rival. Lo usan la cancha y el motor espacial: 0.5 es
+## "neutro"; negativo empuja hacia adelante y expone la espalda.
 const RETROCESO_SIN_PELOTA := {
-	"Presión alta": -0.5, "Tiki taka": 0.35, "Juego directo": 0.5,
+	"Presión alta": 0.0, "Tiki taka": 0.35, "Juego directo": 0.5,
 	"Físico": 0.5, "Contragolpe": 0.65, "Defensivo": 0.8,
 }
 const RETROCESO_DEFAULT := 0.5

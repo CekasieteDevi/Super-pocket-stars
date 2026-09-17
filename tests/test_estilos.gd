@@ -37,6 +37,9 @@ func _test_modificador_gana_y_pierde(rng: RandomNumberGenerator) -> void:
 	ok = ok and is_equal_approx(Estilos.modificador("Tiki taka", "Presión alta"), Estilos.BONUS)
 	ok = ok and is_equal_approx(Estilos.modificador("Tiki taka", "Defensivo"), -Estilos.BONUS)
 	ok = ok and is_equal_approx(Estilos.modificador("Defensivo", "Contragolpe"), Estilos.BONUS)
+	ok = ok and is_equal_approx(Estilos.modificador("Contragolpe", "Presión alta"), Estilos.BONUS_CONTRA_PRESION)
+	ok = ok and is_equal_approx(Estilos.modificador("Presión alta", "Contragolpe"), -Estilos.BONUS_CONTRA_PRESION)
+	ok = ok and is_equal_approx(Estilos.modificador("Juego directo", "Físico"), Estilos.BONUS)
 	ok = ok and is_equal_approx(Estilos.modificador("Físico", "Juego directo"), -Estilos.BONUS)
 	ok = ok and is_equal_approx(Estilos.modificador("Físico", "Defensivo"), 0.0)  # matchup no declarado -> neutro
 	if ok:

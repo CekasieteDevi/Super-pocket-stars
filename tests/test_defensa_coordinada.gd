@@ -124,6 +124,9 @@ func _test_el_cierre_tapa_un_carril_separado() -> void:
 	print("\n=== El cierre tapa una linea de pase distinta ===")
 	var estado := _escena(SEED + 7, false, Vector2(-6.0, 0.0))
 	estado["home"].estilo = "Presión alta"
+	# Este test mide el cierre normal de presión alta. El caso específico
+	# contra Contragolpe se prueba en partido: ahí el tercero se retiene.
+	estado["away"].estilo = "Tiki taka"
 	var plan := MotorEspacial._planificar_defensa(estado, false)
 	var cierre: int = int(plan["cierre"])
 	if cierre == -1:
@@ -208,6 +211,7 @@ func _test_la_presion_superada_repliega() -> void:
 	print("\n=== Si lo pasan, no sale un tercero ===")
 	var estado := _escena(SEED + 23, true, Vector2(0.0, 0.0))
 	estado["away"].estilo = "Presión alta"
+	estado["home"].estilo = "Tiki taka"
 	var plan := MotorEspacial._planificar_defensa(estado, true)
 	# Primero se engancha: llega a disputarla. Sin eso, "lo pasaron" no
 	# quiere decir nada — un delantero que presiona de frente siempre
