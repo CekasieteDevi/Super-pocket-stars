@@ -792,7 +792,7 @@ static func _montar_regate(estado: Dictionary, tipo: String) -> void:
 	# plano entre el rival y el espacio libre evita que el jugador se vaya del
 	# encuadre justo cuando acelera.
 	estado["foco_laboratorio"] = origen + Vector2(2.2, -1.0) if tipo == "croqueta" \
-		else (origen + Vector2(2.5, 0.0) if tipo == "bicicleta" else origen + Vector2(1.0, 0.0))
+		else (origen + Vector2(2.5, 0.0) if tipo in ["bicicleta", "globito", "ruleta"] else origen + Vector2(1.0, 0.0))
 	estado["detenido"] = 0
 	estado["quietos"] = 0
 	estado["fotogramas"].clear()
@@ -818,7 +818,14 @@ static func _montar_regate(estado: Dictionary, tipo: String) -> void:
 		var fase_salida := clampf(float(i - 11) / 6.0, 0.0, 1.0)
 		var desplazamiento := _desplazamiento_regate(tipo, fase_gesto, fase_salida)
 		atacante["pos"] = origen + desplazamiento
-		if tipo == "croqueta" and fase_gesto < 0.28:
+		if tipo == "bicicleta":
+			defensor["pos"] = origen + _defensor_bicicleta(fase_gesto)
+		elif tipo in ["globito", "ruleta"]:
+			# Queda clavado: en el globito la pelota le pasa por arriba y en
+			# la ruleta el jugador gira a su lado. Correrlo taparia justo lo
+			# que se quiere ver.
+			defensor["pos"] = origen + Vector2(2.4, 0.0)
+		elif tipo == "croqueta" and fase_gesto < 0.28:
 			# El defensor queda de frente: primero hay entrada recta, sin
 			# reaccionar antes del traslado real.
 			defensor["pos"] = origen + Vector2(2.4, 0.0)
@@ -853,18 +860,38 @@ static func _desplazamiento_regate(tipo: String, fase: float,
 			var salida := smoothstep(0.0, 1.0, (fase - 0.66) / 0.34)
 			return Vector2(1.28 + salida * 2.10, -1.80)
 		"bicicleta":
-			if fase < 0.25:
-				return Vector2.RIGHT * lerpf(0.0, 0.95, fase / 0.25)
-			if fase < 0.75:
-				var amague := (fase - 0.25) / 0.50
-				return Vector2(0.95 + sin(amague * PI) * 0.10,
-					sin(amague * TAU * 2.0) * 0.48)
-			var salida_bici := smoothstep(0.0, 1.0, (fase - 0.75) / 0.25)
-			return Vector2(1.05 + salida_bici * 3.10, 0.0)
+			# El cuerpo casi no se mueve mientras amaga: las piernas pasan
+			# por encima de la pelota. Antes zigzagueaba medio metro a cada
+			# lado y parecía que el jugador se teletransportaba.
+			var amagues := SpritesPartido.BICICLETA_INICIO_AMAGUES
+			var salida := SpritesPartido.BICICLETA_INICIO_SALIDA
+			if fase < amagues:
+				return Vector2.RIGHT * lerpf(0.0, 0.90, fase / amagues)
+			if fase < salida:
+				return Vector2.RIGHT * lerpf(0.90, 1.05, (fase - amagues) / (salida - amagues))
+			# Los amagues venden el lado del rival: la salida corta al otro
+			# lado en diagonal y, pasado el gesto, sigue derecho por al lado
+			# del defensor, que quedo clavado (ver _defensor_bicicleta).
+			var corte := smoothstep(0.0, 1.0, (fase - salida) / (1.0 - salida))
+			return Vector2(1.05 + corte * 0.85 + fase_salida * 3.0,
+				-1.1 * corte - 0.1 * fase_salida)
 		"globito":
-			return Vector2.RIGHT * (3.8 * fase) + Vector2(0.0, sin(fase * PI) * -0.8)
+			# Pasado el gesto sigue derecho hasta la pelota, que ya pico.
+			return SpritesPartido.globito(fase)["cuerpo"] + Vector2.RIGHT * (2.2 * fase_salida)
 		"elastica":
 			return Vector2.RIGHT * (2.6 * fase) + Vector2(0.0, sin(fase * TAU) * -1.4)
 		"ruleta":
-			return Vector2.RIGHT * (2.4 * fase) + Vector2(cos(fase * TAU), sin(fase * TAU)) * 0.75
+			return SpritesPartido.ruleta(fase)["cuerpo"] + Vector2.RIGHT * (2.2 * fase_salida)
 	return avance
+
+
+## Donde queda el defensor de la bicicleta, relativo al origen del clip.
+## Se come los dos amagues: se inclina medio metro hacia el lado que le
+## vendieron y ahi queda plantado. El atacante sale por el otro lado.
+## Antes el defensor se corria solo hacia un costado y parecia que le
+## abria el paso en vez de haber sido engañado.
+static func _defensor_bicicleta(fase: float) -> Vector2:
+	var amagues := SpritesPartido.BICICLETA_INICIO_AMAGUES
+	var salida := SpritesPartido.BICICLETA_INICIO_SALIDA
+	var engano := smoothstep(amagues, salida, fase)
+	return Vector2(2.4, 0.45 * engano)

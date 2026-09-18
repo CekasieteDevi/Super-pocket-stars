@@ -708,8 +708,86 @@ static func pelota(fase: int = 0) -> ImageTexture:
 ## Cuadros de cada hoja de regate. Croqueta y bicicleta se redibujaron a 12
 ## cuadros (4x3) porque con 6 el traslado entre pies no se leía; las demás
 ## siguen en 6 (3x2). Única fuente: la vista y los tests leen de acá.
-const CUADROS_REGATE := {"croqueta": 12, "bicicleta": 12, "globito": 6,
-	"elastica": 6, "ruleta": 6}
+const CUADROS_REGATE := {"croqueta": 12, "bicicleta": 12, "globito": 12,
+	"elastica": 6, "ruleta": 12}
+
+
+## Tramos de la ruleta en fase 0..1, tomados de la hoja: los cuadros 0 y 1
+## son la entrada; del 2 al 8 gira de perfil a espaldas, al otro perfil, de
+## frente y vuelve; del 9 al 11 sale.
+const RULETA_GIRO := 2.0 / 12.0
+const RULETA_SALIDA := 9.0 / 12.0
+## A cuánto de los pies va la pelota mientras gira: la lleva con la suela.
+const RULETA_RADIO_PELOTA := 0.32
+
+
+## Cuerpo y pelota de la ruleta, en el mismo marco que globito(). El
+## jugador gira mientras se corre al costado del rival, y la pelota da la
+## vuelta con él: queda siempre del lado hacia donde mira el dibujo. Así la
+## espalda tapa la pelota justo cuando pasa junto al rival.
+static func ruleta(fase: float) -> Dictionary:
+	var f := clampf(fase, 0.0, 1.0)
+	if f < RULETA_GIRO:
+		var cuerpo := Vector2(lerpf(0.0, 1.0, f / RULETA_GIRO), 0.0)
+		return {"cuerpo": cuerpo, "pelota": cuerpo + Vector2(lerpf(0.25, RULETA_RADIO_PELOTA, f / RULETA_GIRO), 0.0),
+			"altura": 0.0}
+	if f < RULETA_SALIDA:
+		var g := (f - RULETA_GIRO) / (RULETA_SALIDA - RULETA_GIRO)
+		var corrimiento := smoothstep(0.0, 1.0, g)
+		var cuerpo := Vector2(1.0 + corrimiento, -1.3 * corrimiento)
+		# El dibujo mira a la derecha, arriba, izquierda y abajo, en ese
+		# orden: el ángulo baja de 0 a -TAU.
+		var angulo := -TAU * g
+		return {"cuerpo": cuerpo, "pelota": cuerpo + Vector2(cos(angulo), sin(angulo)) * RULETA_RADIO_PELOTA,
+			"altura": 0.0}
+	var e := (f - RULETA_SALIDA) / (1.0 - RULETA_SALIDA)
+	var cuerpo := Vector2(2.0 + 1.8 * smoothstep(0.0, 1.0, e), -1.3 + 0.1 * e)
+	return {"cuerpo": cuerpo, "pelota": cuerpo + Vector2(RULETA_RADIO_PELOTA + 0.2 * e, 0.0), "altura": 0.0}
+
+
+## Tramos del globito en fase 0..1, tomados de la hoja: del 0 al 3 entra
+## corriendo, en el 4 mete la punta debajo de la pelota, hasta el 6 la
+## levanta y desde el 7 corre a buscarla por al lado del rival.
+const GLOBITO_TOQUE := 4.0 / 12.0
+const GLOBITO_CARRERA := 7.0 / 12.0
+## La pelota pasa por encima de la cabeza del rival (el sprite mide 1,8 m)
+## y pica antes de que llegue el que la tiró.
+const GLOBITO_ALTURA := 2.6
+const GLOBITO_PIQUE := 0.8
+
+
+## Cuerpo y pelota del globito en metros, relativos al punto de partida:
+## x hacia adelante, y hacia el costado. Lo leen el Laboratorio para mover
+## al jugador y la vista para ubicar la pelota, así los dos cuentan la
+## misma jugada: la pelota va por arriba del rival y el jugador lo rodea.
+static func globito(fase: float) -> Dictionary:
+	var f := clampf(fase, 0.0, 1.0)
+	var cuerpo := Vector2.ZERO
+	if f < GLOBITO_TOQUE:
+		cuerpo.x = lerpf(0.0, 0.9, f / GLOBITO_TOQUE)
+	elif f < GLOBITO_CARRERA:
+		cuerpo.x = lerpf(0.9, 1.0, (f - GLOBITO_TOQUE) / (GLOBITO_CARRERA - GLOBITO_TOQUE))
+	else:
+		var c := (f - GLOBITO_CARRERA) / (1.0 - GLOBITO_CARRERA)
+		cuerpo = Vector2(1.0 + 2.4 * smoothstep(0.0, 1.0, c), -sin(c * PI) - 0.2 * c)
+	if f < GLOBITO_TOQUE:
+		return {"cuerpo": cuerpo, "pelota": cuerpo + Vector2(lerpf(0.25, 0.35, f / GLOBITO_TOQUE), 0.0),
+			"altura": 0.0}
+	var s := (f - GLOBITO_TOQUE) / (1.0 - GLOBITO_TOQUE)
+	if s < GLOBITO_PIQUE:
+		var vuelo := s / GLOBITO_PIQUE
+		return {"cuerpo": cuerpo, "pelota": Vector2(lerpf(1.25, 3.6, vuelo), 0.0),
+			"altura": GLOBITO_ALTURA * sin(vuelo * PI)}
+	var rueda := (s - GLOBITO_PIQUE) / (1.0 - GLOBITO_PIQUE)
+	return {"cuerpo": cuerpo, "pelota": Vector2(lerpf(3.6, 3.85, rueda), -0.2 * rueda), "altura": 0.0}
+
+
+## Tramos de la bicicleta en fase 0..1, tomados de la hoja: los cuadros 0
+## y 1 son la carrera de entrada, del 2 al 8 van los dos amagues sobre la
+## pelota y del 9 al 11 la salida. El cuerpo y la pelota cambian de tramo
+## en el mismo cuadro que el dibujo.
+const BICICLETA_INICIO_AMAGUES := 2.0 / 12.0
+const BICICLETA_INICIO_SALIDA := 9.0 / 12.0
 
 
 static func cuadros_regate(tipo: String) -> int:

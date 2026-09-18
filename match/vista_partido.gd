@@ -579,7 +579,15 @@ func _mostrar(idx: int, t: float) -> void:
 			var origen: Dictionary = fotogramas[int(accion["desde"])]
 			var balon := Vector2(origen["pelota"]["x"], origen["pelota"]["y"])
 			if MotorEspacial.es_accion_regate(ent["accion"]):
-				var hacia_rival := _direccion_al_rival(j, p, a["jugadores"])
+				# El rival se mide en el cuadro donde empezó el gesto. Medido
+				# en el cuadro actual, al pasarlo quedaba atrás y el sprite
+				# se daba vuelta en plena salida.
+				var p_origen := p
+				for ejecutor in origen["jugadores"]:
+					if int(ejecutor["id"]) == int(j["id"]):
+						p_origen = Vector2(float(ejecutor["x"]), float(ejecutor["y"]))
+						break
+				var hacia_rival := _direccion_al_rival(j, p_origen, origen["jugadores"])
 				ent["direccion"] = _direccion(hacia_rival)
 				ent["regate_espejo"] = ProyeccionPartido.direccion_pantalla(hacia_rival).x < 0.0
 			else:
@@ -730,8 +738,8 @@ const TICKS_POR_ZANCADA := 2
 const DURACION_ACCION := {
 	"amague_centro": 3,
 	"control_pie": 2, "taco": 2,
-	"regate_croqueta": 12, "regate_bicicleta": 12, "regate_globito": 6,
-	"regate_elastica": 6, "regate_ruleta": 6,
+	"regate_croqueta": 12, "regate_bicicleta": 12, "regate_globito": 12,
+	"regate_elastica": 6, "regate_ruleta": 12,
 	"pecho": 3, "lateral_manos": 2,
 	MotorEspacial.ACCION_AGARRA: 4, MotorEspacial.ACCION_SAQUE_ARCO: 4,
 	"bloquea": 3, "cae": 5, "chilena": 4, "volea": 3, "palomita": 4,
@@ -831,23 +839,36 @@ static func _trayectoria_regate(tipo: String, fase: float, orientacion: Vector2)
 				var salida := smoothstep(0.0, 1.0, (f - 0.66) / 0.34)
 				offset = hacia * (0.42 + salida * 0.10) - lateral * 0.28
 		"bicicleta":
-			if f < 0.25:
-				offset = hacia * lerpf(0.24, 0.34, f / 0.25)
-			elif f < 0.75:
-				var amague := (f - 0.25) / 0.50
-				offset = hacia * (0.34 + sin(amague * PI) * 0.04) + lateral * (sin(amague * TAU * 2.0) * 0.18)
+			# La pelota queda quieta delante del pie mientras las piernas
+			# pasan por encima. Recién en la salida la empuja el exterior
+			# hacia el costado y adelante.
+			var amagues := SpritesPartido.BICICLETA_INICIO_AMAGUES
+			var inicio_salida := SpritesPartido.BICICLETA_INICIO_SALIDA
+			if f < amagues:
+				offset = hacia * lerpf(0.24, 0.38, f / amagues)
+			elif f < inicio_salida:
+				offset = hacia * 0.38
 			else:
-				var salida := smoothstep(0.0, 1.0, (f - 0.75) / 0.25)
-				offset = hacia * (0.34 + salida * 0.92)
+				var salida := smoothstep(0.0, 1.0, (f - inicio_salida) / (1.0 - inicio_salida))
+				offset = hacia * (0.38 + salida * 0.55) - lateral * (0.30 * salida)
 		"elastica":
 			var lado := sin(f * PI * 2.0)
 			offset = hacia * lerpf(0.30, 0.95, f) + lateral * lado * 0.85
 		"globito":
-			offset = hacia * lerpf(0.25, 1.25, f) + lateral * sin(f * PI) * 0.18
-			altura = sin(f * PI) * 4.2
+			# Por arriba del rival mientras el jugador lo rodea: la pelota
+			# se ubica respecto del cuerpo con la misma jugada que usa el
+			# Laboratorio (SpritesPartido.globito).
+			var g := SpritesPartido.globito(f)
+			var rel: Vector2 = g["pelota"] - g["cuerpo"]
+			offset = hacia * rel.x + lateral * rel.y
+			altura = float(g["altura"])
 		"ruleta":
-			var angulo := f * TAU - PI * 0.25
-			offset = hacia * 0.55 + (hacia * cos(angulo) + lateral * sin(angulo)) * 0.58
+			# La pelota gira alrededor de los pies junto con el dibujo (ver
+			# SpritesPartido.ruleta). Antes daba una vuelta de 60 cm
+			# mientras el jugador miraba siempre para el mismo lado.
+			var r := SpritesPartido.ruleta(f)
+			var rel_r: Vector2 = r["pelota"] - r["cuerpo"]
+			offset = hacia * rel_r.x + lateral * rel_r.y
 	return {"offset": offset, "altura": altura}
 
 
