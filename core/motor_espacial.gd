@@ -503,18 +503,48 @@ const ACCION_PALOMITA := "palomita"
 ## todo lo que dura la pelota en la red (TICKS_DETENIDO["gol"]).
 const ACCION_FESTEJA := "festeja"
 
-## Regates concretos. La agilidad manda qué técnica puede ejecutar el
-## jugador; el duelo control-vs-quite sigue mandando si logra pasar.
-## Los cooldown están en segundos de partido y se convierten a ticks al
-## aplicarse. Bufon los reduce sin volverlos infinitos.
+## Regates concretos, del más fácil al más difícil. `requisitos` son los
+## mínimos de atributo para intentarlo: el que no llega en alguno no lo
+## tiene en el repertorio. El duelo control-vs-quite sigue decidiendo si
+## pasa; el regate es solo cómo pasa.
+##
+## La dificultad sigue a la jugada real:
+## - bicicleta: amagar sin tocar la pelota. Pide ritmo de piernas.
+## - croqueta: pasarla de un pie al otro en un paso. Pide agilidad y
+##   pelota pegada.
+## - ruleta: girar 360 grados pisándola. Pide equilibrio y suela.
+## - globito: levantarla justa por encima del rival. Pide toque fino
+##   (control y efecto).
+## - elastica: afuera y adentro con el mismo pie, sin apoyar. La más
+##   difícil.
+## Los más fáciles salen más seguido (`peso`).
 const REGATES := {
-	"croqueta": {"agilidad_min": 45.0, "cooldown": 2.4, "peso": 4.0},
-	"bicicleta": {"agilidad_min": 55.0, "cooldown": 3.2, "peso": 3.0},
-	"globito": {"agilidad_min": 65.0, "cooldown": 4.0, "peso": 2.0},
-	"elastica": {"agilidad_min": 72.0, "cooldown": 4.8, "peso": 1.7},
-	"ruleta": {"agilidad_min": 80.0, "cooldown": 5.6, "peso": 1.0},
+	"bicicleta": {"requisitos": {"agilidad": 65.0, "control": 60.0}, "peso": 4.0},
+	"croqueta": {"requisitos": {"agilidad": 70.0, "control": 70.0}, "peso": 3.0},
+	"ruleta": {"requisitos": {"agilidad": 75.0, "control": 75.0}, "peso": 2.0},
+	"globito": {"requisitos": {"control": 80.0, "efecto": 70.0, "agilidad": 65.0}, "peso": 1.7},
+	"elastica": {"requisitos": {"agilidad": 85.0, "control": 85.0}, "peso": 1.0},
 }
-const REGATE_ACCIONES := ["croqueta", "bicicleta", "globito", "elastica", "ruleta"]
+const REGATE_ACCIONES := ["bicicleta", "croqueta", "ruleta", "globito", "elastica"]
+## Después de cualquier regate, el mismo jugador espera esto para hacer
+## otro, sea cual sea. En segundos de partido. Bufon lo acorta (ver
+## Habilidades.factor_cooldown_regate).
+const SEGUNDOS_COOLDOWN_REGATE := 10.0
+
+
+## Cuánto le sobra al jugador sobre el requisito más justo del regate.
+## Negativo = no le alcanza.
+static func margen_regate(jugador: Dictionary, tipo: String) -> float:
+	var atributos: Dictionary = jugador.get("atributos", {})
+	var margen := INF
+	var requisitos: Dictionary = REGATES[tipo]["requisitos"]
+	for atributo in requisitos:
+		margen = minf(margen, float(atributos.get(atributo, 0.0)) - float(requisitos[atributo]))
+	return margen
+
+
+static func puede_regatear(jugador: Dictionary, tipo: String) -> bool:
+	return REGATES.has(tipo) and margen_regate(jugador, tipo) >= 0.0
 
 
 static func es_accion_regate(accion: String) -> bool:
@@ -1649,14 +1679,14 @@ static func _regate_disponible(estado: Dictionary, poseedor: Dictionary, jugador
 	var clave := int(poseedor["clave"])
 	if estado["tick"] < int(estado["regate_cooldown"].get(clave, -1)):
 		return ""
-	var agilidad := float(jugador.get("atributos", {}).get("agilidad", 0.0))
 	var candidatos: Array = []
 	var peso_total := 0.0
 	for nombre in REGATE_ACCIONES:
-		var datos: Dictionary = REGATES[nombre]
-		if agilidad < float(datos["agilidad_min"]):
+		var margen := margen_regate(jugador, nombre)
+		if margen < 0.0:
 			continue
-		var peso := float(datos["peso"]) + maxf(0.0, agilidad - float(datos["agilidad_min"])) * 0.025
+		# El que le sobra técnica lo elige un poco más seguido.
+		var peso := float(REGATES[nombre]["peso"]) + margen * 0.025
 		candidatos.append({"nombre": nombre, "peso": peso})
 		peso_total += peso
 	if candidatos.is_empty():
@@ -1669,13 +1699,9 @@ static func _regate_disponible(estado: Dictionary, poseedor: Dictionary, jugador
 	return str(candidatos.back()["nombre"])
 
 
-static func _activar_cooldown_regate(estado: Dictionary, poseedor: Dictionary, jugador: Dictionary, tipo: String) -> void:
-	var datos: Dictionary = REGATES.get(tipo, {})
-	if datos.is_empty():
-		return
-	var ticks := int(ceil(float(datos["cooldown"]) / TICK_SEG))
-	ticks = maxi(ticks, 1)
-	ticks = int(round(float(ticks) * Habilidades.factor_cooldown_regate(jugador)))
+static func _activar_cooldown_regate(estado: Dictionary, poseedor: Dictionary, jugador: Dictionary) -> void:
+	var segundos := SEGUNDOS_COOLDOWN_REGATE * Habilidades.factor_cooldown_regate(jugador)
+	var ticks := int(round(segundos / TICK_SEG))
 	estado["regate_cooldown"][int(poseedor["clave"])] = estado["tick"] + maxi(ticks, 1)
 
 
@@ -1728,7 +1754,7 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 			_accion(estado, int(poseedor["clave"]), "control_pie")
 		else:
 			_accion(estado, int(poseedor["clave"]), "regate_" + tipo_regate)
-			_activar_cooldown_regate(estado, poseedor, jugador, tipo_regate)
+			_activar_cooldown_regate(estado, poseedor, jugador)
 			var conteo_regates: Dictionary = estado["regates"][lado_g]
 			conteo_regates[tipo_regate] = int(conteo_regates.get(tipo_regate, 0)) + 1
 		if not enganche.is_empty():
@@ -8865,7 +8891,7 @@ static func _intentar_robo(estado: Dictionary) -> void:
 			_accion(estado, int(poseedor["clave"]), "control_pie")
 		else:
 			_accion(estado, int(poseedor["clave"]), "regate_" + tipo_regate)
-			_activar_cooldown_regate(estado, poseedor, jug_a, tipo_regate)
+			_activar_cooldown_regate(estado, poseedor, jug_a)
 			var conteo_regates: Dictionary = estado["regates"][lado_g]
 			conteo_regates[tipo_regate] = int(conteo_regates.get(tipo_regate, 0)) + 1
 		_penalizar(estado, mejor_id, jug_d)
