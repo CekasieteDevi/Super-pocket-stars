@@ -142,7 +142,7 @@ static func ordenar(fichas: Array, clave: String, ascendente: bool) -> Array:
 	return conocidas + tapadas
 
 
-## Que habilidad se le VE a un jugador. `ajeno` = es de otro club.
+## Que habilidades se le VEN a un jugador. `ajeno` = es de otro club.
 ##
 ## Una habilidad DORMIDA —la tiene, pero todavia no llego a la media que
 ## la manifiesta (Habilidades.MEDIA_MINIMA)— no se muestra de un ajeno:
@@ -151,10 +151,15 @@ static func ordenar(fichas: Array, clave: String, ascendente: bool) -> Array:
 ## arriesgarse con un juvenil, y verla de antemano la mataria.
 ##
 ## En tu propio plantel si se ve, dormida y todo: para eso lo tenes.
+static func habilidades_visibles(jugador: Dictionary, ajeno: bool) -> Array:
+	var salida := []
+	for h in Habilidades.lista_de(jugador):
+		if not ajeno or Habilidades.tiene_manifestada(jugador, str(h.get("nombre", ""))):
+			salida.append(h)
+	return salida
+
+
+## Compatibilidad para herramientas viejas que esperan una sola habilidad.
 static func habilidad_visible(jugador: Dictionary, ajeno: bool) -> Dictionary:
-	var h: Dictionary = jugador.get("habilidad", {})
-	if h.is_empty():
-		return {}
-	if not ajeno:
-		return h
-	return h if Habilidades.tiene_manifestada(jugador, str(h["nombre"])) else {}
+	var visibles := habilidades_visibles(jugador, ajeno)
+	return visibles[0] if not visibles.is_empty() else {}

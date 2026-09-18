@@ -1,12 +1,33 @@
 {
-  "campo": {
-    "pases": ["Pase rápido", "Teledirigido", "6to sentido"],
-    "control": ["Bailarín", "Cohete"],
-    "tiro": ["Cañón", "Chanfle", "Francotirador", "Tiro rápido"],
-    "quite": ["Ladrón", "Barredora", "Profeta", "Recuperación"]
-  },
-  "arquero": {
-    "reflejos": ["Reflejo felino", "Interceptor", "Súper golpe"],
+  "ARQ": {
+    "reflejos": ["Reflejo felino", "Interceptor", "S\u00faper golpe"],
     "atajapenales": ["Atajapenales"]
+  },
+  "DFC": {
+    "quite": ["Ladr\u00f3n", "Barredora", "Profeta", "Recuperaci\u00f3n"]
+  },
+  "LAT": {
+    "pases": ["Pase r\u00e1pido", "Teledirigido", "6to sentido"],
+    "control": ["Bailar\u00edn", "Cohete"],
+    "quite": ["Ladr\u00f3n", "Barredora", "Profeta", "Recuperaci\u00f3n"]
+  },
+  "MC": {
+    "pases": ["Pase r\u00e1pido", "Teledirigido", "6to sentido"],
+    "control": ["Bailar\u00edn", "Cohete"],
+    "quite": ["Ladr\u00f3n", "Barredora", "Profeta", "Recuperaci\u00f3n"]
+  },
+  "MCO": {
+    "pases": ["Pase r\u00e1pido", "Teledirigido", "6to sentido"],
+    "control": ["Bailar\u00edn", "Cohete"],
+    "tiro": ["Ca\u00f1\u00f3n", "Chanfle", "Francotirador", "Tiro r\u00e1pido"]
+  },
+  "EXT": {
+    "pases": ["Pase r\u00e1pido", "Teledirigido", "6to sentido"],
+    "control": ["Bailar\u00edn", "Cohete"],
+    "tiro": ["Ca\u00f1\u00f3n", "Chanfle", "Francotirador", "Tiro r\u00e1pido"]
+  },
+  "DC": {
+    "control": ["Bailar\u00edn", "Cohete"],
+    "tiro": ["Ca\u00f1\u00f3n", "Chanfle", "Francotirador", "Tiro r\u00e1pido"]
   }
 }

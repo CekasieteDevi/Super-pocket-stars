@@ -706,20 +706,21 @@ func _nombre_jugador(j: Dictionary) -> String:
 	return "%s %s" % [j.get("nombre", "?"), j.get("apellido", "")]
 
 
-## §5: si tiene una habilidad, la muestra con una estrella por nivel
-## (bronce=★, plata=★★, oro=★★★) — atenuada entre parentesis si todavia
-## no se manifesto (no llego a la media minima) para que se note que esta
-## "dormida", no activa.
-## `ajeno` = es un jugador de otro club, y ahi una habilidad DORMIDA no se
-## muestra — ver BusquedaMercado.habilidad_visible.
+## §5: muestra todas las habilidades con una estrella por nivel.
+## Las dormidas aparecen atenuadas en jugadores propios; en jugadores ajenos
+## directamente no se muestran.
 func _tag_habilidad(j: Dictionary, ajeno: bool = false) -> String:
-	var h: Dictionary = BusquedaMercado.habilidad_visible(j, ajeno)
-	if h.is_empty():
+	var habilidades: Array = BusquedaMercado.habilidades_visibles(j, ajeno)
+	if habilidades.is_empty():
 		return ""
-	var estrellas := "★".repeat(h.get("nivel", 1))
-	if Habilidades.tiene_manifestada(j, h["nombre"]):
-		return "  [%s %s]" % [h["nombre"], estrellas]
-	return "  (%s %s, dormida)" % [h["nombre"], estrellas]
+	var etiquetas := []
+	for h in habilidades:
+		var estrellas := "★".repeat(int(h.get("nivel", 1)))
+		if Habilidades.tiene_manifestada(j, str(h.get("nombre", ""))):
+			etiquetas.append("%s %s" % [h["nombre"], estrellas])
+		else:
+			etiquetas.append("%s %s, dormida" % [h["nombre"], estrellas])
+	return "  [%s]" % ", ".join(etiquetas)
 
 
 func _ocultar_todos() -> void:
@@ -1393,8 +1394,7 @@ func _cabecera_de_ficha(equipo: Team, j: Dictionary, ajeno: bool) -> Control:
 	sub.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
 	datos.add_child(sub)
 
-	# Rasgos y habilidad en la misma linea: son tres chips, no tres
-	# parrafos, y arriba de todo hay que ahorrar alto.
+	# Rasgos y habilidades en la misma linea para ahorrar alto.
 	var fila_tags := HBoxContainer.new()
 	datos.add_child(fila_tags)
 	var rasgos: Dictionary = j.get("personalidades", {})

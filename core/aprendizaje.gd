@@ -2,10 +2,8 @@ class_name Aprendizaje
 extends RefCounted
 
 ## Aprender una habilidad (§5, segunda vía además de nacer con una) —
-## siempre bronce, nunca plata/oro ("esas se generan o no existen"), y
-## máximo 1 en toda la carrera del jugador. Se resuelve reusando
-## jugador["habilidad"]: si ya tiene algo ahí (nacido con ella o
-## aprendida antes), no puede aprender otra — no hace falta un flag aparte.
+## siempre bronce, nunca plata/oro ("esas se generan o no existen"). Se
+## agrega a jugador["habilidades"] hasta el máximo permitido por Habilidades.
 ##
 ## Requisitos: 2 temporadas SEGUIDAS con el mismo atributo como el más
 ## usado en la cancha (§7.3, jugador["xp_uso"]) + ese atributo en 65+, y
@@ -41,11 +39,9 @@ static func _hay_mentor_con_habilidad_del_atributo(equipo: Team, atributo: Strin
 	for j in equipo.todos_los_jugadores() + equipo.cantera:
 		if not Mentores.es_mentor(j):
 			continue
-		var habilidad: Dictionary = j.get("habilidad", {})
-		if habilidad.is_empty():
-			continue
-		if Habilidades.atributo_de(habilidad["nombre"]) == atributo:
-			return true
+		for habilidad in Habilidades.lista_de(j):
+			if Habilidades.atributo_de(str(habilidad.get("nombre", ""))) == atributo:
+				return true
 	return false
 
 
@@ -64,16 +60,20 @@ static func _chance(jugador: Dictionary, equipo: Team, atributo: String) -> floa
 	return min(chance, CHANCE_MAXIMA)
 
 
-## Elige una habilidad de bronce del pool que corresponde al atributo (y a
-## si es arquero o jugador de campo) — mismos pools que Habilidades.gd
-## usa al generar, pero siempre nivel 1 (nunca plata/oro).
+## Elige una habilidad de bronce legal para el puesto, correspondiente al
+## atributo, que el jugador todavía no tenga.
 static func _elegir_habilidad(jugador: Dictionary, atributo: String, rng: RandomNumberGenerator) -> Dictionary:
-	var grupo := "arquero" if jugador["posicion"] == "ARQ" else "campo"
-	var datos: Dictionary = Habilidades._datos()
-	var pool: Array = datos.get(grupo, {}).get(atributo, [])
-	if pool.is_empty():
+	var pool: Array = Habilidades._pool_puesto(str(jugador["posicion"])).get(atributo, [])
+	var usadas := {}
+	for existente in Habilidades.lista_de(jugador):
+		usadas[str(existente.get("nombre", ""))] = true
+	var disponibles := []
+	for nombre in pool:
+		if not usadas.has(nombre):
+			disponibles.append(nombre)
+	if disponibles.is_empty():
 		return {}
-	return {"nombre": pool[rng.randi() % pool.size()], "nivel": 1}
+	return {"nombre": disponibles[rng.randi() % disponibles.size()], "nivel": 1}
 
 
 ## El atributo que más usó en la temporada, o "" si jugó menos de media
@@ -116,7 +116,8 @@ static func actualizar_racha(jugador: Dictionary) -> void:
 ## esta temporada) y de actualizar_racha (para que la racha ya cuente
 ## esta temporada). Devuelve la habilidad aprendida, o {} si no pasó nada.
 static func procesar_jugador(jugador: Dictionary, equipo: Team, temporada_actual: int, rng: RandomNumberGenerator) -> Dictionary:
-	if not jugador.get("habilidad", {}).is_empty():
+	Habilidades.normalizar(jugador)
+	if Habilidades.lista_de(jugador).size() >= Habilidades.MAX_HABILIDADES:
 		return {}
 	if temporada_actual < TEMPORADA_MINIMA:
 		return {}
@@ -132,5 +133,5 @@ static func procesar_jugador(jugador: Dictionary, equipo: Team, temporada_actual
 	var habilidad := _elegir_habilidad(jugador, atributo, rng)
 	if habilidad.is_empty():
 		return {}
-	jugador["habilidad"] = habilidad
+	jugador["habilidades"].append(habilidad)
 	return habilidad

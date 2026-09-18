@@ -71,7 +71,7 @@ func _test_racha_sobrevive_guardado(rng: RandomNumberGenerator) -> void:
 
 func _jugador_listo_para_aprender(rng: RandomNumberGenerator, atributo: String = "tiro") -> Dictionary:
 	var j := PlayerGenerator.generate(0, rng, "DC")
-	j["habilidad"] = {}
+	j["habilidades"] = []
 	j["atributos"][atributo] = 70
 	j["uso_atributo"] = atributo
 	j["uso_temporadas_consecutivas"] = 2
@@ -82,15 +82,20 @@ func _jugador_listo_para_aprender(rng: RandomNumberGenerator, atributo: String =
 
 
 func _test_no_aprende_si_ya_tiene_una_habilidad(rng: RandomNumberGenerator) -> void:
-	print("=== No aprende si ya tiene una habilidad (nacida o aprendida antes) ===")
+	print("=== Puede aprender una segunda habilidad legal ===")
 	var equipo := Team.generar("ClubA", rng, 0)
-	var j := _jugador_listo_para_aprender(rng)
-	j["habilidad"] = {"nombre": "Cañón", "nivel": 2}
-	var resultado := Aprendizaje.procesar_jugador(j, equipo, 5, rng)
-	if resultado.is_empty():
-		print("OK: no aprende una segunda.")
+	var aprendio := false
+	for intento in range(300):
+		var j := _jugador_listo_para_aprender(rng)
+		j["habilidades"] = [{"nombre": "Cañón", "nivel": 2}]
+		var resultado := Aprendizaje.procesar_jugador(j, equipo, 5, rng)
+		if not resultado.is_empty():
+			aprendio = j["habilidades"].size() == 2 and resultado["nombre"] != "Cañón"
+			break
+	if aprendio:
+		print("OK: aprende una segunda habilidad y conserva la primera.")
 	else:
-		print("FALLA: %s" % [resultado])
+		print("FALLA: no aprendió una segunda habilidad legal.")
 
 
 func _test_no_aprende_antes_de_temporada_3(rng: RandomNumberGenerator) -> void:
