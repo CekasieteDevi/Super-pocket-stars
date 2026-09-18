@@ -87,6 +87,9 @@ static func cargar(datos: Dictionary) -> Piramide:
 				continue
 			vistos[int(a["id"])] = true
 			p.agentes_libres.append(a)
+	# El pool no pasa por Team.cargar: normalizarlo aca aplica tambien la
+	# limpieza de habilidades imposibles en guardados viejos.
+	Team._normalizar_jugadores(p.agentes_libres)
 	p._compartir_pool()
 	p.resolver_prestamos()
 

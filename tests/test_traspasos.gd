@@ -94,7 +94,15 @@ func _test_no_disponible_no_recibe_ofertas() -> void:
 	var rng: RandomNumberGenerator = p["rng"]
 	# Todo el plantel cerrado menos uno: si el filtro no anduviera, las
 	# ofertas caerian repartidas por todos.
-	var abierto := int(mio.jugadores[0]["id"])
+	# El abierto es el de mejor media: generar_entrantes solo sortea a los
+	# que destacan en el club. Con jugadores[0] el test dependía de que el
+	# primero del plantel destacara, y con la semilla actual no destaca.
+	var abierto := -1
+	var mejor_media := -1.0
+	for j in mio.todos_los_jugadores():
+		if float(j["media"]) > mejor_media:
+			mejor_media = float(j["media"])
+			abierto = int(j["id"])
 	for j in mio.jugadores + mio.banco:
 		var id := int(j["id"])
 		if id != abierto:

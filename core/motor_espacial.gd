@@ -22,9 +22,12 @@ extends RefCounted
 const PESOS_PATH := "res://data/utility_pesos.json"
 
 ## Decisión 2 del doc: 0.25s por tick.
-## 0,4 s por tick: conserva los 120 s reales por mitad, pero evita hacer
-## 960 pasos antes de mostrar el partido en celulares.
-const TICK_SEG := 0.4
+## El 2026-09-16 se probó 0,4 s para que el celular no se trabara. No
+## servía: el partido espacial es el 15% de una fecha (0,34 de 2,2 s en
+## la PC) y el resto son los otros 99 partidos. Con 0,4 el remate de un
+## penal cruzaba 10 m en un solo tick y no se lo veía viajar. La espera
+## ahora corre en otro hilo (ver main.gd, _en_segundo_plano).
+const TICK_SEG := 0.25
 ## Cuantos ticks como maximo rueda la pelota sin dueno antes de que se la
 ## demos igual (ver _dirigir_pelota_a). Dos segundos: la pelota frena en
 ## medio metro y el que se la quedo corre siete metros por segundo, asi
@@ -46,8 +49,8 @@ const RADIO_TOMA_PELOTA := 0.35
 const VEL_ESCAPE_DUELO := 6.0
 
 ## Un partido dura 2 minutos REALES por tiempo, jugados a velocidad real
-## (la UI reproduce 2,5 fotogramas por segundo, o sea 1 seg de pantalla = 1
-## seg de simulación). Eso son 300 ticks por tiempo.
+## (la UI reproduce 4 fotogramas por segundo, o sea 1 seg de pantalla = 1
+## seg de simulación). Eso son 480 ticks por tiempo.
 ##
 ## No se puede mostrar 90 minutos en 4 sin acelerar 22 veces, y a 22x un
 ## jugador que corre a 7 m/s se ve corriendo a 157: ilegible. Tampoco sirve
@@ -60,7 +63,8 @@ const VEL_ESCAPE_DUELO := 6.0
 ##
 ## Costo asumido: al haber 4 minutos de juego en vez de 90, las llegadas
 ## son más seguidas que en un partido real. Se ve arcade, no televisado.
-const TICKS_POR_MITAD := 300
+const SEGUNDOS_POR_MITAD := 120.0
+const TICKS_POR_MITAD := int(SEGUNDOS_POR_MITAD / TICK_SEG)
 const MINUTOS_MOSTRADOS_POR_MITAD := 45.0
 
 ## Alargue (§8.7): dos tiempos de 15' que se juegan con el MISMO motor y a
@@ -499,6 +503,27 @@ const ACCION_PALOMITA := "palomita"
 ## todo lo que dura la pelota en la red (TICKS_DETENIDO["gol"]).
 const ACCION_FESTEJA := "festeja"
 
+## Regates concretos. La agilidad manda qué técnica puede ejecutar el
+## jugador; el duelo control-vs-quite sigue mandando si logra pasar.
+## Los cooldown están en segundos de partido y se convierten a ticks al
+## aplicarse. Bufon los reduce sin volverlos infinitos.
+const REGATES := {
+	"croqueta": {"agilidad_min": 45.0, "cooldown": 2.4, "peso": 4.0},
+	"bicicleta": {"agilidad_min": 55.0, "cooldown": 3.2, "peso": 3.0},
+	"globito": {"agilidad_min": 65.0, "cooldown": 4.0, "peso": 2.0},
+	"elastica": {"agilidad_min": 72.0, "cooldown": 4.8, "peso": 1.7},
+	"ruleta": {"agilidad_min": 80.0, "cooldown": 5.6, "peso": 1.0},
+}
+const REGATE_ACCIONES := ["croqueta", "bicicleta", "globito", "elastica", "ruleta"]
+
+
+static func es_accion_regate(accion: String) -> bool:
+	return accion.begins_with("regate_") and accion.trim_prefix("regate_") in REGATE_ACCIONES
+
+
+static func tipo_regate_de_accion(accion: String) -> String:
+	return accion.trim_prefix("regate_") if es_accion_regate(accion) else ""
+
 
 ## §7.3: suma uso de un atributo. Se guarda por jugador_id porque es lo
 ## que persiste entre partidos; la clave espacial no le sirve a nadie
@@ -811,6 +836,7 @@ static func crear_estado(home: Team, away: Team, rng: RandomNumberGenerator) -> 
 		"robo_cooldown": {},
 		"robos": {"intentos": 0, "ganados": 0},
 		"gambetas": {"home": {"intentos": 0, "ganadas": 0}, "away": {"intentos": 0, "ganadas": 0}},
+		"regates": {"home": {}, "away": {}},
 		"paredes": {},
 		"centros": {},
 		"reinicios": {},
@@ -820,6 +846,7 @@ static func crear_estado(home: Team, away: Team, rng: RandomNumberGenerator) -> 
 		# cobrado sobre la hora no se llego a patear.
 		"cortadas": {},
 		"cooldown": {},
+		"regate_cooldown": {},
 		"pase_detalle": {"intentos": 0, "interceptado_vuelo": 0, "rival_llego_antes": 0, "fuera": 0},
 		"linea_offside": {"local": LIMITE_X, "away": -LIMITE_X},
 		"dist_tiros": [],
@@ -1618,6 +1645,40 @@ static func _opcion_enganche(estado: Dictionary, poseedor: Dictionary, jugador: 
 	return mejor
 
 
+static func _regate_disponible(estado: Dictionary, poseedor: Dictionary, jugador: Dictionary) -> String:
+	var clave := int(poseedor["clave"])
+	if estado["tick"] < int(estado["regate_cooldown"].get(clave, -1)):
+		return ""
+	var agilidad := float(jugador.get("atributos", {}).get("agilidad", 0.0))
+	var candidatos: Array = []
+	var peso_total := 0.0
+	for nombre in REGATE_ACCIONES:
+		var datos: Dictionary = REGATES[nombre]
+		if agilidad < float(datos["agilidad_min"]):
+			continue
+		var peso := float(datos["peso"]) + maxf(0.0, agilidad - float(datos["agilidad_min"])) * 0.025
+		candidatos.append({"nombre": nombre, "peso": peso})
+		peso_total += peso
+	if candidatos.is_empty():
+		return ""
+	var tiro: float = estado["rng"].randf() * peso_total
+	for candidato in candidatos:
+		tiro -= float(candidato["peso"])
+		if tiro <= 0.0:
+			return str(candidato["nombre"])
+	return str(candidatos.back()["nombre"])
+
+
+static func _activar_cooldown_regate(estado: Dictionary, poseedor: Dictionary, jugador: Dictionary, tipo: String) -> void:
+	var datos: Dictionary = REGATES.get(tipo, {})
+	if datos.is_empty():
+		return
+	var ticks := int(ceil(float(datos["cooldown"]) / TICK_SEG))
+	ticks = maxi(ticks, 1)
+	ticks = int(round(float(ticks) * Habilidades.factor_cooldown_regate(jugador)))
+	estado["regate_cooldown"][int(poseedor["clave"])] = estado["tick"] + maxi(ticks, 1)
+
+
 static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador: Dictionary, clave_rival: int, enganche: Dictionary = {}) -> void:
 	var f: Dictionary = pesos()["fisica"]
 	var es_local: bool = poseedor["equipo_local"]
@@ -1633,13 +1694,7 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 	estado["gambetas"][lado_g]["intentos"] += 1
 	if not enganche.is_empty():
 		_accion(estado, int(poseedor["clave"]), "amague_centro")
-	# El que va a ser encarado se tira a cortarla.
-	# La gambeta puede empezar antes, pero la barrida y la falta necesitan
-	# contacto real. Antes el defensor se tiraba y podia cometer falta a los
-	# ocho metros, que en pantalla se ve como una falta por bluetooth.
 	var hay_contacto: bool = e_rival["pos"].distance_to(poseedor["pos"]) <= float(f["radio_tackle"])
-	if hay_contacto:
-		_accion(estado, clave_rival, ACCION_BARRIDA)
 	_xp_e(estado, poseedor, "control")
 	_xp_e(estado, e_rival, "quite")
 
@@ -1662,11 +1717,20 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 	# es lo que hace el que no llega. La falta se COBRA —con su tarjeta,
 	# su parada de juego y su tiro libre— en vez de amonestar suelto.
 	if hay_contacto and estado["rng"].randf() < float(f["prob_falta_por_duelo"]):
+		_accion(estado, clave_rival, ACCION_BARRIDA)
 		_cobrar_falta(estado, poseedor["pos"], es_local, defensor, eq_d, eq_a, minuto)
 		return
 
 	if pasa:
 		estado["gambetas"][lado_g]["ganadas"] += 1
+		var tipo_regate := _regate_disponible(estado, poseedor, jugador)
+		if tipo_regate.is_empty():
+			_accion(estado, int(poseedor["clave"]), "control_pie")
+		else:
+			_accion(estado, int(poseedor["clave"]), "regate_" + tipo_regate)
+			_activar_cooldown_regate(estado, poseedor, jugador, tipo_regate)
+			var conteo_regates: Dictionary = estado["regates"][lado_g]
+			conteo_regates[tipo_regate] = int(conteo_regates.get(tipo_regate, 0)) + 1
 		if not enganche.is_empty():
 			poseedor["corredor"] = enganche["destino"]
 			poseedor["corredor_hasta"] = int(estado["tick"]) + TICKS_PLAN
@@ -1685,9 +1749,10 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 		_penalizar(estado, clave_rival, defensor)
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "gambeta", "equipo": eq_a.nombre, "rival": eq_d.nombre,
-			"jugador_posicion": poseedor["rol"], "resultado": "pasa",
+			"jugador_posicion": poseedor["rol"], "resultado": "pasa", "regate": tipo_regate,
 		})
 	else:
+		_accion(estado, clave_rival, ACCION_BARRIDA)
 		_entregar_rodando(estado, clave_rival)
 		_penalizar(estado, poseedor["clave"], jugador)
 		estado["eventos"].append({
@@ -8695,6 +8760,7 @@ static func _intentar_robo(estado: Dictionary) -> void:
 	var pelota: Dictionary = estado["pelota"]
 	var poseedor: Dictionary = estado["jugadores"][pelota["poseedor_id"]]
 	var es_local: bool = poseedor["equipo_local"]
+	var lado_g := "home" if es_local else "away"
 	var radio: float = f["radio_tackle"]
 
 	# Al que acaba de ganar la pelota no se la disputan en el mismo
@@ -8728,8 +8794,6 @@ static func _intentar_robo(estado: Dictionary) -> void:
 		return
 
 	var minuto := _minuto_int(estado)
-	# Se tira al piso a quitarla, le salga o no.
-	_accion(estado, mejor_id, ACCION_BARRIDA)
 	# §7.3: el que va al quite entrena `quite`; al que se la disputan,
 	# `control`. Es literalmente el ejemplo del GDD ("un lateral al que le
 	# hacen 20 gambetas gana XP de quite").
@@ -8749,6 +8813,7 @@ static func _intentar_robo(estado: Dictionary) -> void:
 	# el partido todo el tiempo: 14,9 faltas por partido, cada una con
 	# 3,5 s de juego parado, y jugando se siente insoportable.
 	if estado["rng"].randf() < float(f["prob_falta_por_duelo"]):
+		_accion(estado, mejor_id, ACCION_BARRIDA)
 		# Sin cooldown al que hizo la falta: la infracción YA frenó la
 		# jugada y devolvió la pelota. Dejarlo además fuera de juego
 		# unos segundos era premiar dos veces al que la recibió, y
@@ -8780,11 +8845,13 @@ static func _intentar_robo(estado: Dictionary) -> void:
 	# Un quite no siempre queda limpio: a veces la pelota sale desviada al
 	# lateral o al córner. Es lo que hace que existan esos reinicios.
 	if estado["rng"].randf() < float(f["prob_desvio_al_lateral"]):
+		_accion(estado, mejor_id, ACCION_BARRIDA)
 		_penalizar(estado, poseedor["clave"], jug_a)
 		_desviar_afuera(estado, poseedor["pos"], es_local)
 		return
 
 	if not aguanta:
+		_accion(estado, mejor_id, ACCION_BARRIDA)
 		estado["robos"]["ganados"] += 1
 		_entregar_rodando(estado, mejor_id)
 		_penalizar(estado, poseedor["clave"], jug_a)
@@ -8793,7 +8860,19 @@ static func _intentar_robo(estado: Dictionary) -> void:
 			"jugador_posicion": poseedor["rol"], "resultado": "pierde",
 		})
 	else:
+		var tipo_regate := _regate_disponible(estado, poseedor, jug_a)
+		if tipo_regate.is_empty():
+			_accion(estado, int(poseedor["clave"]), "control_pie")
+		else:
+			_accion(estado, int(poseedor["clave"]), "regate_" + tipo_regate)
+			_activar_cooldown_regate(estado, poseedor, jug_a, tipo_regate)
+			var conteo_regates: Dictionary = estado["regates"][lado_g]
+			conteo_regates[tipo_regate] = int(conteo_regates.get(tipo_regate, 0)) + 1
 		_penalizar(estado, mejor_id, jug_d)
+		estado["eventos"].append({
+			"minuto": minuto, "tipo": "gambeta", "equipo": eq_a.nombre, "rival": eq_d.nombre,
+			"jugador_posicion": poseedor["rol"], "resultado": "pasa", "regate": tipo_regate,
+		})
 
 
 static func _serializar_trayectoria(trayectoria: Dictionary, giro: float, progreso: float) -> Dictionary:
@@ -9301,6 +9380,7 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator,
 			"registro_remates": estado.get("registro_remates", []),
 			"robos": estado["robos"],
 			"gambetas": estado["gambetas"],
+			"regates": estado["regates"],
 			"paredes": estado["paredes"],
 			"jugadas_colectivas": estado.get("jugadas_colectivas", {}),
 			"metros_conduccion": float(estado.get("metros_conduccion", 0.0)),

@@ -117,7 +117,13 @@ const PREMIO_COPA_INTERNACIONAL := {1: 1000000.0, 2: 400000.0}
 ## PRECIO_ENTRADA para que "una temporada de ahorro te compre un par de
 ## refuerzos reales", y eso es justamente lo contrario del objetivo
 ## nuevo: ahora el refuerzo tope hay que ganarselo vendiendo.
-const MULTIPLICADOR_DIVISION := [88.2, 32.3, 9.67, 3.31, 2.00, 1.18, 0.89, 0.69, 0.543, 0.43]
+##
+## Cuarta subio de 3.31 a 4.5 el 2026-09-18. Medido con
+## tests/test_economia_divisiones.gd sobre las semillas 1 a 8 y 777: con
+## 3.31 el mejor jugador costaba 3.8 temporadas de media (de 2.8 a 4.8),
+## fuera de la banda en 8 de 9 semillas. El test pasaba solo con la 777.
+## Con 4.5 cuesta 2.4 de media (de 2.1 a 3.0), entre tercera y quinta.
+const MULTIPLICADOR_DIVISION := [88.2, 32.3, 9.67, 4.5, 2.00, 1.18, 0.89, 0.69, 0.543, 0.43]
 
 
 ## -1 (liga suelta, sin escalon en la piramide) = sin multiplicador.

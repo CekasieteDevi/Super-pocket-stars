@@ -45,6 +45,22 @@ func _init() -> void:
 			print("FALLA: %s no engancha ningun evento a los primeros fotogramas." % s["clave"])
 			fallas += 1
 			continue
+		if str(s["clave"]).begins_with("regate_"):
+			var accion_esperada := str(s["clave"])
+			var accion_visible := false
+			for accion in fotogramas[0].get("acciones", []):
+				if str(accion.get("accion", "")) == accion_esperada:
+					accion_visible = true
+					break
+			var pelota_inicio: Vector2 = Vector2(float(fotogramas[0]["pelota"]["x"]),
+				float(fotogramas[0]["pelota"]["y"]))
+			var pelota_fin: Vector2 = Vector2(float(fotogramas[5]["pelota"]["x"]),
+				float(fotogramas[5]["pelota"]["y"]))
+			if not accion_visible or pelota_inicio.distance_to(pelota_fin) < 0.1:
+				print("FALLA: %s no muestra accion y movimiento de pelota." % s["clave"])
+				fallas += 1
+				continue
+			print("OK: %-12s accion visible y pelota en movimiento" % s["clave"])
 		# Que los 22 (o 21 tras la roja) esten y que la pelota exista.
 		var ultimo: Dictionary = fotogramas[fotogramas.size() - 1]
 		if ultimo["jugadores"].size() < 20:

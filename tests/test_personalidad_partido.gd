@@ -516,6 +516,10 @@ func _test_enfocado_afina_el_desmarque(rng: RandomNumberGenerator) -> void:
 	visita.reset_partido()
 	for j in local.jugadores_en_cancha():
 		j["personalidades"] = {"positiva": "Enfocado", "negativa": ""}
+	# El generador también reparte Enfocado: con esta semilla dos rivales
+	# lo traían de fábrica y el conteo daba 13 y 9.
+	for j in visita.jugadores_en_cancha():
+		j["personalidades"] = {"positiva": "", "negativa": ""}
 	var estado := MotorEspacial.crear_estado(local, visita, rng)
 	MotorEspacial._armar_jugadores(local, true, estado)
 	MotorEspacial._armar_jugadores(visita, false, estado)

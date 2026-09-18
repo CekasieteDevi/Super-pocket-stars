@@ -132,11 +132,24 @@ static func banco_para(nombre: String) -> Array:
 
 
 ## Solo los roles, que es lo que necesita la UI para etiquetar cada slot.
+## Devuelve una copia: quien la reciba puede modificarla.
 static func roles(nombre: String) -> Array:
-	var out := []
-	for s in slots(nombre):
-		out.append(s["rol"])
-	return out
+	return roles_compartidos(nombre).duplicate()
+
+
+## Los roles sin copiar, para leer y nunca modificar. Los pide
+## Team.penalizacion_puesto en cada duelo de cada partido: armar la lista
+## de nuevo cada vez era el 10% del costo de MatchEngine.
+static var _roles_cache := {}
+
+
+static func roles_compartidos(nombre: String) -> Array:
+	if not _roles_cache.has(nombre):
+		var out := []
+		for s in slots(nombre):
+			out.append(s["rol"])
+		_roles_cache[nombre] = out
+	return _roles_cache[nombre]
 
 
 ## Cuántos de cada puesto pide la formación, para mostrarlo como "4-4-2"

@@ -96,11 +96,17 @@ func _test_joven_crece_mas_rapido_con_mentor(rng: RandomNumberGenerator) -> void
 
 	# Potencial bien por encima de los atributos actuales, para que haya
 	# margen de crecimiento real que un mentor pueda acelerar.
-	joven_solo["potencial"] = 95
-	joven_con_mentor["potencial"] = 95
-	for attr in joven_solo["atributos"]:
-		joven_solo["atributos"][attr] = 40
-		joven_con_mentor["atributos"][attr] = 40
+	# El techo es por atributo (§7.2): con solo `potencial` en 95, los
+	# `potenciales` del generador seguían mandando y a veces quedaban
+	# cerca de 40, así que no había crecimiento que acelerar.
+	# Una temporada entera de titular: sin partidos crece al 25% y el
+	# redondeo a entero se come la diferencia del mentor.
+	for joven in [joven_solo, joven_con_mentor]:
+		joven["potencial"] = 95
+		joven["rendimiento"] = {"partidos": Progresion.PARTIDOS_PLENOS}
+		for attr in joven["atributos"]:
+			joven["atributos"][attr] = 40
+			joven["potenciales"][attr] = 95
 
 	var rng2 := RandomNumberGenerator.new()
 	rng2.seed = 777

@@ -69,6 +69,16 @@ const SITUACIONES := [
 		"que": "Remate, rebote aéreo, duelo de cabeza ganado por otro delantero, segundo rebote aéreo y gol de volea."},
 	{"clave": "cambio", "nombre": "Cambio",
 		"que": "Se detiene el juego, el que sale camina hasta el lateral y el suplente entra por ahí mismo a ocupar su lugar."},
+	{"clave": "regate_croqueta", "nombre": "Regate: Croqueta",
+		"que": "Cambia la pelota de un pie al otro, protege con el cuerpo y sale por el costado."},
+	{"clave": "regate_bicicleta", "nombre": "Regate: Bicicleta",
+		"que": "Amagues alternados alrededor de la pelota y salida con el exterior."},
+	{"clave": "regate_globito", "nombre": "Regate: Globito",
+		"que": "Levanta la pelota sobre el rival, gira y acelera para recuperarla."},
+	{"clave": "regate_elastica", "nombre": "Regate: Elastica",
+		"que": "Empuja hacia afuera y vuelve de inmediato con el interior del mismo pie."},
+	{"clave": "regate_ruleta", "nombre": "Regate: Ruleta",
+		"que": "Pisa, arrastra y gira 360 grados cambiando la pelota de pie."},
 ]
 
 
@@ -116,6 +126,17 @@ static func generar(clave: String, local: Team, visitante: Team,
 	# nadie. Por eso se anota cuantos habia antes y se empuja un fotograma
 	# con los nuevos.
 	var eventos_antes: int = estado["eventos"].size()
+
+	if clave.begins_with("regate_"):
+		_montar_regate(estado, clave.trim_prefix("regate_"))
+		return {
+			"goles_local": local.goles,
+			"goles_visitante": visitante.goles,
+			"log": estado["log"],
+			"goles_log": estado["goles_log"],
+			"eventos": estado["eventos"],
+			"fotogramas": estado["fotogramas"],
+		}
 
 	match clave:
 		"expulsion":
@@ -713,3 +734,137 @@ static func _montar_cambio(estado: Dictionary) -> void:
 			"jugador_posicion": str(sale["posicion"]), "resultado": "entra",
 		})
 	MotorEspacial._sincronizar_cambios(estado)
+
+
+## Clip corto y determinista para ver cada regate sin esperar a que el motor
+## lo elija por azar. La accion sigue siendo la misma que en un duelo real:
+## el atacante conserva la pelota, el defensor queda superado y la camara
+## queda centrada en el contacto.
+static func _montar_regate(estado: Dictionary, tipo: String) -> void:
+	if tipo not in MotorEspacial.REGATE_ACCIONES:
+		return
+	var equipo_a: Team = MotorEspacial._equipo_de(estado, true)
+	var equipo_d: Team = MotorEspacial._equipo_de(estado, false)
+	var elegido := {}
+	for jugador in equipo_a.jugadores_en_cancha():
+		if str(jugador.get("posicion", "")) == "ARQ":
+			continue
+		var agilidad := float(jugador.get("atributos", {}).get("agilidad", 0.0))
+		if elegido.is_empty() or agilidad > float(elegido.get("atributos", {}).get("agilidad", -1.0)):
+			elegido = jugador.duplicate(true)
+	if elegido.is_empty():
+		return
+
+	var atacante_clave := MotorEspacial.clave_de(int(elegido["id"]), true)
+	var defensor_clave := -1
+	for id in estado["jugadores"]:
+		var candidato: Dictionary = estado["jugadores"][id]
+		if not bool(candidato["equipo_local"]) and str(candidato["rol"]) != "ARQ":
+			defensor_clave = int(id)
+			break
+	if defensor_clave == -1 or not estado["jugadores"].has(atacante_clave):
+		return
+
+	var origen := Vector2(0.0, 0.0)
+	var atacante: Dictionary = estado["jugadores"][atacante_clave]
+	var defensor: Dictionary = estado["jugadores"][defensor_clave]
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		if int(id) == atacante_clave or int(id) == defensor_clave:
+			continue
+		# Los demás quedan fuera del corredor para que el gesto se lea.
+		e["pos"] = Vector2(32.0 + float(posmod(int(id), 4)) * 2.0,
+			18.0 + float(posmod(int(id), 5)) * 2.5)
+		e["vel"] = Vector2.ZERO
+		e["rapidez"] = 0.0
+	atacante["pos"] = origen
+	atacante["vel"] = Vector2.ZERO
+	atacante["rapidez"] = 0.0
+	atacante["orientacion"] = Vector2.RIGHT
+	defensor["pos"] = origen + Vector2(2.4, 0.0)
+	defensor["vel"] = Vector2.ZERO
+	defensor["rapidez"] = 0.0
+	defensor["orientacion"] = Vector2.LEFT
+	MotorEspacial._entregar_pelota(estado, atacante_clave)
+	estado["pelota"]["pos"] = origen
+	estado["pelota"]["ticks_con_pelota"] = 5
+	# La salida de la croqueta ocupa mas cancha que el contacto: centrar el
+	# plano entre el rival y el espacio libre evita que el jugador se vaya del
+	# encuadre justo cuando acelera.
+	estado["foco_laboratorio"] = origen + Vector2(2.2, -1.0) if tipo == "croqueta" \
+		else (origen + Vector2(2.5, 0.0) if tipo == "bicicleta" else origen + Vector2(1.0, 0.0))
+	estado["detenido"] = 0
+	estado["quietos"] = 0
+	estado["fotogramas"].clear()
+
+	var evento := {
+		"minuto": 12,
+		"tipo": "gambeta",
+		"equipo": equipo_a.nombre,
+		"rival": equipo_d.nombre,
+		"jugador_posicion": atacante["rol"],
+		"resultado": "pasa",
+		"regate": tipo,
+	}
+	estado["eventos"].append(evento)
+	estado["regates"]["home"][tipo] = 1
+
+	# Doce cuadros de gesto y seis de salida: el usuario ve el regate entero
+	# y también la aceleración posterior, sin convertirlo en un partido.
+	# La fase del sprite termina en el cuadro 11; la salida sigue moviendo al
+	# atacante para que el ultimo cuadro no quede congelado.
+	for i in range(18):
+		var fase_gesto := clampf(float(i) / 11.0, 0.0, 1.0)
+		var fase_salida := clampf(float(i - 11) / 6.0, 0.0, 1.0)
+		var desplazamiento := _desplazamiento_regate(tipo, fase_gesto, fase_salida)
+		atacante["pos"] = origen + desplazamiento
+		if tipo == "croqueta" and fase_gesto < 0.28:
+			# El defensor queda de frente: primero hay entrada recta, sin
+			# reaccionar antes del traslado real.
+			defensor["pos"] = origen + Vector2(2.4, 0.0)
+		elif fase_gesto < 0.55:
+			defensor["pos"] = origen + Vector2(2.4, 0.0)
+		else:
+			var inicio_reaccion := 0.70 if tipo == "bicicleta" else (0.55 if tipo != "croqueta" else 0.58)
+			var reaccion := clampf((fase_gesto - inicio_reaccion) / (1.0 - inicio_reaccion), 0.0, 1.0)
+			defensor["pos"] = origen + Vector2(2.4 + reaccion * 0.35,
+				1.0 + reaccion * 2.2)
+		estado["pelota"]["pos"] = atacante["pos"]
+		estado["tick"] = i
+		estado["minuto"] = 12.0 + float(i) * 0.25
+		estado["acciones_tick"] = []
+		if i == 0:
+			MotorEspacial._accion(estado, atacante_clave, "regate_" + tipo)
+		MotorEspacial._push_fotograma(estado, [evento] if i == 0 else [])
+
+
+static func _desplazamiento_regate(tipo: String, fase: float,
+		fase_salida: float = 0.0) -> Vector2:
+	var avance := Vector2.RIGHT * (2.8 * fase)
+	match tipo:
+		"croqueta":
+			# Croqueta limpia: entra recto, arrastra de un pie al otro hacia
+			# el costado y recién después sale recto. Tres tramos visibles.
+			if fase < 0.30:
+				return Vector2.RIGHT * lerpf(0.0, 1.10, fase / 0.30)
+			if fase < 0.66:
+				var traslado := smoothstep(0.0, 1.0, (fase - 0.30) / 0.36)
+				return Vector2(1.10 + traslado * 0.18, -1.80 * traslado)
+			var salida := smoothstep(0.0, 1.0, (fase - 0.66) / 0.34)
+			return Vector2(1.28 + salida * 2.10, -1.80)
+		"bicicleta":
+			if fase < 0.25:
+				return Vector2.RIGHT * lerpf(0.0, 0.95, fase / 0.25)
+			if fase < 0.75:
+				var amague := (fase - 0.25) / 0.50
+				return Vector2(0.95 + sin(amague * PI) * 0.10,
+					sin(amague * TAU * 2.0) * 0.48)
+			var salida_bici := smoothstep(0.0, 1.0, (fase - 0.75) / 0.25)
+			return Vector2(1.05 + salida_bici * 3.10, 0.0)
+		"globito":
+			return Vector2.RIGHT * (3.8 * fase) + Vector2(0.0, sin(fase * PI) * -0.8)
+		"elastica":
+			return Vector2.RIGHT * (2.6 * fase) + Vector2(0.0, sin(fase * TAU) * -1.4)
+		"ruleta":
+			return Vector2.RIGHT * (2.4 * fase) + Vector2(cos(fase * TAU), sin(fase * TAU)) * 0.75
+	return avance

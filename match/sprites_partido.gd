@@ -705,6 +705,79 @@ static func pelota(fase: int = 0) -> ImageTexture:
 	return tex
 
 
+## Cuadros de cada hoja de regate. Croqueta y bicicleta se redibujaron a 12
+## cuadros (4x3) porque con 6 el traslado entre pies no se leía; las demás
+## siguen en 6 (3x2). Única fuente: la vista y los tests leen de acá.
+const CUADROS_REGATE := {"croqueta": 12, "bicicleta": 12, "globito": 6,
+	"elastica": 6, "ruleta": 6}
+
+
+static func cuadros_regate(tipo: String) -> int:
+	return int(CUADROS_REGATE.get(tipo, 6))
+
+
+## Hoja de regate con celdas de 64 px, tomada del atlas oficial del partido.
+## El PNG trae un jugador base azul; la pelota se dibuja aparte siguiendo la
+## trayectoria física del regate.
+static func regate_png(tipo: String, fase: int = 0, espejo: bool = false,
+		camiseta: Color = Color("2d70e8"), pantalon: Color = Color.TRANSPARENT) -> ImageTexture:
+	if not CUADROS_REGATE.has(tipo):
+		return jugador(Color("2d70e8"), DERECHA, QUIETO)
+	var cuadros := cuadros_regate(tipo)
+	var columnas := 4 if cuadros == 12 else 3
+	var cuadro := posmod(fase, cuadros)
+	var clave := "regate_%s_%d_%s_%s_%s" % [tipo, cuadro, espejo,
+		camiseta.to_html(true), pantalon.to_html(true)]
+	if _cache.has(clave):
+		return _cache[clave]
+	var fuente := load("res://assets/partido/regates/%s.png" % tipo) as Texture2D
+	if fuente == null:
+		return jugador(Color("2d70e8"), DERECHA, QUIETO)
+	var img := fuente.get_image()
+	img.decompress()
+	img.convert(Image.FORMAT_RGBA8)
+	var region := img.get_region(Rect2i((cuadro % columnas) * 64,
+		(cuadro / columnas) * 64, 64, 64))
+	# El fallback sigue cubriendo hojas viejas de 6 cuadros y también evita
+	# parpadeos si una celda nueva queda vacía.
+	if not _region_tiene_pintura(region):
+		for paso in range(1, cuadros + 1):
+			var candidato := posmod(cuadro - paso, cuadros)
+			var respaldo := img.get_region(Rect2i((candidato % columnas) * 64,
+				(candidato / columnas) * 64, 64, 64))
+			if _region_tiene_pintura(respaldo):
+				region = respaldo
+				break
+	if not _region_tiene_pintura(region):
+		return jugador(camiseta, IZQUIERDA if espejo else DERECHA, QUIETO, pantalon)
+	for y in range(64):
+		for x in range(64):
+			var pixel := region.get_pixel(x, y)
+			if pixel.a < 0.1:
+				continue
+			if pixel.b > pixel.r * 1.25 and pixel.b > pixel.g * 1.05:
+				var tinta := camiseta * clampf(pixel.v / 0.85, 0.25, 1.2)
+				tinta.a = pixel.a
+				region.set_pixel(x, y, tinta)
+			elif pantalon.a > 0.0 and pixel.s < 0.18 and pixel.v > 0.72 and y > 34:
+				var tinta_short := pantalon * pixel.v
+				tinta_short.a = pixel.a
+				region.set_pixel(x, y, tinta_short)
+	if espejo:
+		region.flip_x()
+	var tex := ImageTexture.create_from_image(region)
+	_cache[clave] = tex
+	return tex
+
+
+static func _region_tiene_pintura(region: Image) -> bool:
+	for y in range(region.get_height()):
+		for x in range(region.get_width()):
+			if region.get_pixel(x, y).a > 0.1:
+				return true
+	return false
+
+
 ## Sombra elíptica con bordes suaves. Es lo que ancla al jugador al piso
 ## y, en la pelota, lo que comunica que está en el aire.
 static func sombra() -> ImageTexture:

@@ -374,6 +374,12 @@ func _test_vuelve_de_a_poco(arquero_local: bool) -> void:
 		"origen": Vector2.ZERO, "fin": Vector2.ZERO}}
 	var rival: int = d["atacantes"][0]
 	estado["jugadores"][rival]["pos"] = _punto(arquero_local, 70.0, 0.0)
+	# Los compañeros del rival quedan detrás de la pelota. Adelantados, el
+	# rival los habilitaba en offside al tick 9 y el juego se detenía con
+	# el arquero todavía volviendo. Con ticks de 0,4 s llegaba antes del
+	# corte y el test pasaba de casualidad.
+	for i in range(1, d["atacantes"].size()):
+		estado["jugadores"][d["atacantes"][i]]["pos"] = _punto(arquero_local, 78.0, -20.0 + 8.0 * i)
 	estado["pelota"]["en_vuelo"] = false
 	estado["pelota"]["poseedor_id"] = rival
 	estado["pelota"]["pos"] = estado["jugadores"][rival]["pos"]

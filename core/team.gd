@@ -793,6 +793,9 @@ static func _normalizar_jugadores(lista: Array) -> Array:
 		else:
 			for attr in j["potenciales"]:
 				j["potenciales"][attr] = int(j["potenciales"][attr])
+		# Una habilidad solo sirve si el techo por atributos permite alcanzar
+		# la media minima de su nivel. Se limpian/downgradean guardados viejos.
+		Habilidades.corregir_habilidad_por_techo(j)
 	return lista
 
 
@@ -1362,11 +1365,14 @@ func reset_partido() -> void:
 ## Los 11 (o menos, si hubo rojas) que están efectivamente jugando ahora
 ## mismo, después de aplicar los cambios que se hayan hecho en el partido.
 func jugadores_en_cancha() -> Array:
-	var todos := todos_los_jugadores()
+	# Recorre las tres listas sin concatenarlas: MatchEngine llama esto
+	# tres veces por duelo, y armar el plantel entero cada vez costaba mas
+	# que el filtro. El orden es el mismo que el de todos_los_jugadores.
 	var out := []
-	for j in todos:
-		if en_cancha.has(j["id"]):
-			out.append(j)
+	for lista in [jugadores, banco, reservas]:
+		for j in lista:
+			if en_cancha.has(j["id"]):
+				out.append(j)
 	return out
 
 
@@ -1584,7 +1590,7 @@ func avanzar_dias(dias: int) -> Array:
 ## con su formacion, asi que ahi da 0 casi siempre — como corresponde:
 ## el que mueve gente de lugar es el jugador humano.
 func penalizacion_puesto(jugador_id: int) -> float:
-	var roles: Array = Formaciones.roles(formacion)
+	var roles: Array = Formaciones.roles_compartidos(formacion)
 	for i in range(mini(roles.size(), jugadores.size())):
 		if int(jugadores[i]["id"]) == jugador_id:
 			return Puestos.modificador_de(jugadores[i], str(roles[i]))

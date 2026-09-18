@@ -16,6 +16,27 @@ func _init() -> void:
 		var izquierda := SpritesPartido.jugador(Color.RED, SpritesPartido.IZQUIERDA, pose).get_image()
 		derecha.flip_x()
 		assert(derecha.get_data() == izquierda.get_data(), "Espejo incorrecto: " + pose)
+	for tipo in MotorEspacial.REGATE_ACCIONES:
+		var cuadros_regate := SpritesPartido.cuadros_regate(tipo)
+		for fase in range(cuadros_regate):
+			var cuadro_fase := SpritesPartido.regate_png(tipo, fase, false, Color("d94141")).get_image()
+			assert(cuadro_fase.get_used_rect().size != Vector2i.ZERO,
+				"Cuadro de regate transparente: %s/%d" % [tipo, fase])
+		var cuadro_base := SpritesPartido.regate_png(tipo, 0, false, Color("d94141")).get_image()
+		var espejo := SpritesPartido.regate_png(tipo, 0, true, Color("d94141")).get_image()
+		assert(cuadro_base.get_width() == 64 and cuadro_base.get_height() == 64, "Tamaño de regate: " + tipo)
+		assert(cuadro_base.get_data() != espejo.get_data(), "Espejo de regate vacío: " + tipo)
+	var inicio_croqueta := VistaPartido._trayectoria_regate("croqueta", 0.0, Vector2.RIGHT)
+	var cruce_croqueta := VistaPartido._trayectoria_regate("croqueta", 0.5, Vector2.RIGHT)
+	var salida_croqueta := VistaPartido._trayectoria_regate("croqueta", 1.0, Vector2.RIGHT)
+	assert(float(inicio_croqueta["offset"].y) > 0.0,
+		"La pelota de croqueta no arranca en el primer pie")
+	assert(float(cruce_croqueta["offset"].y) < float(inicio_croqueta["offset"].y),
+		"La pelota de croqueta no cruza el cuerpo")
+	assert(float(salida_croqueta["offset"].y) < 0.0,
+		"La pelota de croqueta no llega al segundo pie")
+	assert(float(salida_croqueta["offset"].x) > float(cruce_croqueta["offset"].x),
+		"La pelota de croqueta no acompana la salida")
 	vista.free()
 	print("OK: duraci?n, recuperaci?n y espejos de animaciones pixel")
 	quit()

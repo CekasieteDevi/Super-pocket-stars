@@ -331,6 +331,11 @@ func _test_ganando_no_sale_el_cierre() -> void:
 		var defiende_local: bool = not lado
 		var equipo_def: Team = estado["home"] if defiende_local else estado["away"]
 		equipo_def.estilo = "Presión alta"
+		# Presion alta contra Contragolpe nunca manda el tercero (ver
+		# _planificar_defensa). El rival sorteado era Contragolpe en la
+		# visita, y el test medía ese cruce en vez del marcador.
+		var equipo_ata: Team = estado["away"] if defiende_local else estado["home"]
+		equipo_ata.estilo = "Tiki taka"
 		_situacion(estado, 10.0, 0, 0)
 		var plan_temprano := MotorEspacial._planificar_defensa(estado, lado)
 		var cierre_temprano: int = int(plan_temprano.get("cierre", -1))

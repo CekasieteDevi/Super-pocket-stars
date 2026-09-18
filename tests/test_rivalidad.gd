@@ -113,10 +113,15 @@ func _test_integracion_piramide_hornea_clasicos_para_los_200(rng: RandomNumberGe
 
 func _test_integracion_publico_favorece_al_local_con_mas_fans(rng: RandomNumberGenerator) -> void:
 	print("\n=== Integracion: mas fans de local se nota en el resultado (promedio de goles) ===")
-	var home := Team.generar("HomeFans", rng, 0)
-	var away := Team.generar("AwayFans", rng, 100)
-
+	# Los dos lados arrancan con planteles identicos y sanos. Con un solo
+	# par de equipos para las dos tandas, las lesiones y suspensiones de
+	# los primeros 300 partidos seguian en la segunda tanda: con fans el
+	# local jugaba con el plantel roto y hacia menos goles (144 contra 101).
+	var semilla_planteles := rng.randi()
 	var muestras := 300
+	var planteles := _planteles_fans(semilla_planteles)
+	var home: Team = planteles[0]
+	var away: Team = planteles[1]
 	home.fans = 0.0
 	var goles_sin_fans := 0
 	for i in range(muestras):
@@ -124,7 +129,13 @@ func _test_integracion_publico_favorece_al_local_con_mas_fans(rng: RandomNumberG
 		r.seed = 8000 + i
 		goles_sin_fans += MatchEngine.simular(home, away, r, false)["goles_local"]
 
-	home.fans = 100.0
+	planteles = _planteles_fans(semilla_planteles)
+	home = planteles[0]
+	away = planteles[1]
+	# Los fans son personas, no una escala de 0 a 100: con 100 en decima
+	# division el apoyo daba 0 y el test comparaba dos veces lo mismo.
+	# Cuatro veces la referencia de su division es el apoyo maximo.
+	home.fans = Fans.referencia(home.division_actual) * 4.0
 	var goles_con_fans := 0
 	for i in range(muestras):
 		var r := RandomNumberGenerator.new()
@@ -132,6 +143,12 @@ func _test_integracion_publico_favorece_al_local_con_mas_fans(rng: RandomNumberG
 		goles_con_fans += MatchEngine.simular(home, away, r, false)["goles_local"]
 
 	if goles_con_fans > goles_sin_fans:
-		print("OK: con 100 fans de local, %d goles en %d partidos vs %d con 0 fans." % [goles_con_fans, muestras, goles_sin_fans])
+		print("OK: con la hinchada llena, %d goles en %d partidos vs %d con 0 fans." % [goles_con_fans, muestras, goles_sin_fans])
 	else:
 		print("FALLA: sin_fans=%d con_fans=%d" % [goles_sin_fans, goles_con_fans])
+
+
+func _planteles_fans(semilla: int) -> Array:
+	var r := RandomNumberGenerator.new()
+	r.seed = semilla
+	return [Team.generar("HomeFans", r, 0), Team.generar("AwayFans", r, 100)]

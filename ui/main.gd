@@ -6377,6 +6377,9 @@ func _reproducir_laboratorio(clave: String) -> void:
 				laboratorio_estado.text = "Tiro con efecto listo: curva %.1f m · calidad %.0f%%." % [
 					float(ev.get("curva_m", 0.0)), float(ev.get("calidad_tiro", 0.0)) * 100.0]
 				break
+	elif clave.begins_with("regate_"):
+		laboratorio_estado.text = "%s: gesto completo y salida con la pelota." % [
+			Laboratorio.nombre_de(clave)]
 
 	# Al terminar (o al tocar Menu) se vuelve ACA, no al club: se esta
 	# probando animaciones y lo normal es querer ver la siguiente.
@@ -7911,10 +7914,8 @@ func _on_saltar_a_resultado() -> void:
 ## mientras haya un cruce de copa esperando (GameState.avanzar_un_dia).
 ## Existe para que el modal de alineacion no tenga que saber cual es.
 func _jugar_el_partido_de_hoy(mostrar_partido: bool = true) -> void:
-	# Simular el partido bloquea el hilo. Los dos await dejan que Godot
-	# dibuje el aviso ANTES de empezar a laburar: sin ellos la pantalla
-	# se congela sin explicacion y parece colgada. Mismo truco que
-	# _on_simular_temporada.
+	# Los dos await dejan que Godot dibuje el aviso antes de lanzar la
+	# simulacion. La simulacion corre en otro hilo: ver _en_segundo_plano.
 	var texto_previo := ""
 	var hay_boton := is_instance_valid(boton_jugar_partido)
 	if hay_boton:
@@ -7924,13 +7925,13 @@ func _jugar_el_partido_de_hoy(mostrar_partido: bool = true) -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	if GameState.hay_partido_de_copa_hoy():
-		_jugar_copa_ya(mostrar_partido)
+		await _jugar_copa_ya(mostrar_partido)
 	elif GameState.hay_partido_internacional_hoy():
-		_jugar_internacional_ya(mostrar_partido)
+		await _jugar_internacional_ya(mostrar_partido)
 	elif GameState.hay_partido_de_playoff_hoy():
-		_jugar_playoff_ya(mostrar_partido)
+		await _jugar_playoff_ya(mostrar_partido)
 	else:
-		_jugar_fecha_ya(mostrar_partido)
+		await _jugar_fecha_ya(mostrar_partido)
 	# El boton puede haber muerto durante el partido: _refrescar_portada
 	# reconstruye la caja entera. Por eso se revalida antes de tocarlo.
 	if hay_boton and is_instance_valid(boton_jugar_partido):
@@ -7938,12 +7939,40 @@ func _jugar_el_partido_de_hoy(mostrar_partido: bool = true) -> void:
 		boton_jugar_partido.disabled = false
 
 
+## Corre `trabajo` en otro hilo y espera a que termine sin congelar la
+## pantalla. Una fecha simula 100 partidos: en la PC tarda 2,2 s y en el
+## celular varias veces más. En el hilo principal la app quedaba trabada
+## todo ese tiempo, y Android la marca como "no responde" a los 5 s.
+##
+## Mientras corre, un velo toma todos los toques. GameState no está
+## protegido contra dos hilos a la vez: si el usuario abre otra pantalla
+## y la UI lee el plantel mientras la simulación lo modifica, la lectura
+## puede ver datos a medio escribir.
+func _en_segundo_plano(trabajo: Callable) -> void:
+	var velo := ColorRect.new()
+	velo.color = Color(0.0, 0.0, 0.0, 0.35)
+	velo.mouse_filter = Control.MOUSE_FILTER_STOP
+	velo.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var aviso := Label.new()
+	aviso.text = TEXTO_CARGANDO_PARTIDO
+	aviso.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	aviso.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	aviso.grow_vertical = Control.GROW_DIRECTION_BOTH
+	velo.add_child(aviso)
+	add_child(velo)
+	var tarea := WorkerThreadPool.add_task(trabajo, true, "Simular fecha")
+	while not WorkerThreadPool.is_task_completed(tarea):
+		await get_tree().process_frame
+	WorkerThreadPool.wait_for_task_completion(tarea)
+	velo.queue_free()
+
+
 ## El cruce de copa, ya con el once en orden. Mismo recorrido que el de
 ## liga: se juega, se refresca todo y se abre la pantalla del partido.
 func _jugar_copa_ya(mostrar_partido: bool = true) -> void:
 	if GameState.juego_terminado or not GameState.hay_partido_de_copa_hoy():
 		return
-	GameState.jugar_partido_de_copa()
+	await _en_segundo_plano(GameState.jugar_partido_de_copa)
 	_despues_del_partido_de_torneo(mostrar_partido)
 
 
@@ -7953,7 +7982,7 @@ func _jugar_copa_ya(mostrar_partido: bool = true) -> void:
 func _jugar_internacional_ya(mostrar_partido: bool = true) -> void:
 	if GameState.juego_terminado or not GameState.hay_partido_internacional_hoy():
 		return
-	GameState.jugar_partido_internacional()
+	await _en_segundo_plano(GameState.jugar_partido_internacional)
 	_despues_del_partido_de_torneo(mostrar_partido)
 
 
@@ -7962,7 +7991,7 @@ func _jugar_internacional_ya(mostrar_partido: bool = true) -> void:
 func _jugar_playoff_ya(mostrar_partido: bool = true) -> void:
 	if GameState.juego_terminado or not GameState.hay_partido_de_playoff_hoy():
 		return
-	GameState.jugar_partido_de_playoff()
+	await _en_segundo_plano(GameState.jugar_partido_de_playoff)
 	_despues_del_partido_de_torneo(mostrar_partido)
 
 
@@ -7981,7 +8010,7 @@ func _jugar_fecha_ya(mostrar_partido: bool = true) -> void:
 		return
 
 	var temporada_antes := GameState.temporada_actual
-	GameState.jugar_siguiente_fecha()
+	await _en_segundo_plano(GameState.jugar_siguiente_fecha)
 
 	_refrescar_historial_partidos()
 	var cerro_temporada: bool = GameState.temporada_actual != temporada_antes

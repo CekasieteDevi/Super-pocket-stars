@@ -18,6 +18,9 @@ const MEDIA_MINIMA := {1: 55.0, 2: 70.0, 3: 80.0}
 const BONUS_DUELO := {1: 2.0, 2: 4.0, 3: 6.0}
 const BONUS_ATAJAPENALES := {1: 0.05, 2: 0.09, 3: 0.13}
 const FACTOR_RECUPERACION := {1: 0.75, 2: 0.55, 3: 0.35}
+## Bufon deja que un jugador tecnico encadene regates antes. No elimina el
+## enfriamiento: solo lo reduce por nivel para que siga habiendo ritmo.
+const FACTOR_BUFON := {1: 0.85, 2: 0.70, 3: 0.55}
 
 static var _datos_cache: Dictionary = {}
 static var _atributo_por_nombre_cache: Dictionary = {}
@@ -202,6 +205,17 @@ static func factor_cooldown_recuperacion(jugador: Dictionary) -> float:
 		var nivel := int(habilidad.get("nivel", 1))
 		if jugador.get("media", 0.0) >= MEDIA_MINIMA.get(nivel, 999.0):
 			factor = minf(factor, FACTOR_RECUPERACION.get(nivel, 1.0))
+	return factor
+
+
+static func factor_cooldown_regate(jugador: Dictionary) -> float:
+	var factor := 1.0
+	for habilidad in lista_de(jugador):
+		if habilidad.get("nombre", "") != "Bufon":
+			continue
+		var nivel := int(habilidad.get("nivel", 1))
+		if jugador.get("media", 0.0) >= MEDIA_MINIMA.get(nivel, 999.0):
+			factor = minf(factor, FACTOR_BUFON.get(nivel, 1.0))
 	return factor
 
 

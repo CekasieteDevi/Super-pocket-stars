@@ -578,7 +578,12 @@ func _mostrar(idx: int, t: float) -> void:
 			# La orientaci?n del contacto sigue la pelota, aunque el jugador est? quieto.
 			var origen: Dictionary = fotogramas[int(accion["desde"])]
 			var balon := Vector2(origen["pelota"]["x"], origen["pelota"]["y"])
-			ent["direccion"] = _direccion(balon - p)
+			if MotorEspacial.es_accion_regate(ent["accion"]):
+				var hacia_rival := _direccion_al_rival(j, p, a["jugadores"])
+				ent["direccion"] = _direccion(hacia_rival)
+				ent["regate_espejo"] = ProyeccionPartido.direccion_pantalla(hacia_rival).x < 0.0
+			else:
+				ent["direccion"] = _direccion(balon - p)
 			if ent["accion"] in ["control_pie", "taco"]:
 				# El taco conserva la orientacion corporal; la pelota sale por detras.
 				for ejecutor in origen["jugadores"]:
@@ -648,6 +653,15 @@ func _mostrar(idx: int, t: float) -> void:
 			if int(ent["direccion"]) in [5, 6, 7]:
 				anclaje_pelota.x *= -1.0
 			pelota_anclada = true
+		if MotorEspacial.es_accion_regate(str(ent["accion"])) \
+				and int(pa.get("poseedor_id", -1)) == int(j["id"]):
+			var trayectoria := _trayectoria_regate(
+				MotorEspacial.tipo_regate_de_accion(str(ent["accion"])),
+				float(ent["fase_animacion"]),
+				Vector2(float(j.get("ox", 1.0)), float(j.get("oy", 0.0))))
+			pos_pelota = p + trayectoria["offset"]
+			z = float(trayectoria["altura"])
+			pelota_anclada = false
 		if _festejo_restante > 0.0 and _festejo_grupo.has(int(j["id"])):
 			_aplicar_festejo(ent, int(j["id"]))
 		ents.append(ent)
@@ -716,6 +730,8 @@ const TICKS_POR_ZANCADA := 2
 const DURACION_ACCION := {
 	"amague_centro": 3,
 	"control_pie": 2, "taco": 2,
+	"regate_croqueta": 12, "regate_bicicleta": 12, "regate_globito": 6,
+	"regate_elastica": 6, "regate_ruleta": 6,
 	"pecho": 3, "lateral_manos": 2,
 	MotorEspacial.ACCION_AGARRA: 4, MotorEspacial.ACCION_SAQUE_ARCO: 4,
 	"bloquea": 3, "cae": 5, "chilena": 4, "volea": 3, "palomita": 4,
@@ -732,6 +748,9 @@ const DURACION_ACCION := {
 const POSE_DE_ACCION := {
 	"amague_centro": "amague_centro",
 	"control_pie": "control_pie", "taco": "taco",
+	"regate_croqueta": "regate_croqueta", "regate_bicicleta": "regate_bicicleta",
+	"regate_globito": "regate_globito", "regate_elastica": "regate_elastica",
+	"regate_ruleta": "regate_ruleta",
 	"pecho": "pecho", "lateral_manos": "lateral_manos",
 	MotorEspacial.ACCION_AGARRA: MotorEspacial.ACCION_AGARRA,
 	MotorEspacial.ACCION_SAQUE_ARCO: MotorEspacial.ACCION_SAQUE_ARCO,
@@ -791,6 +810,47 @@ func _acciones_activas(idx: int) -> Dictionary:
 	return activas
 
 
+## Trayectoria corta de la pelota durante una técnica. El motor mantiene la
+## posesión, pero la vista la separa de los pies para que cada toque se lea.
+static func _trayectoria_regate(tipo: String, fase: float, orientacion: Vector2) -> Dictionary:
+	var hacia := orientacion.normalized() if orientacion.length_squared() > 0.001 else Vector2.RIGHT
+	var lateral := Vector2(-hacia.y, hacia.x)
+	var f := clampf(fase, 0.0, 1.0)
+	var offset := hacia * 0.35
+	var altura := 0.0
+	match tipo:
+		"croqueta":
+			# Misma curva que el cuerpo: entrada recta, toque lateral entre
+			# pies y salida recta. La pelota queda siempre cerca del apoyo.
+			if f < 0.30:
+				offset = hacia * lerpf(0.22, 0.34, f / 0.30) + lateral * 0.28
+			elif f < 0.66:
+				var traslado := smoothstep(0.0, 1.0, (f - 0.30) / 0.36)
+				offset = hacia * (0.34 + traslado * 0.08) + lateral * lerpf(0.28, -0.28, traslado)
+			else:
+				var salida := smoothstep(0.0, 1.0, (f - 0.66) / 0.34)
+				offset = hacia * (0.42 + salida * 0.10) - lateral * 0.28
+		"bicicleta":
+			if f < 0.25:
+				offset = hacia * lerpf(0.24, 0.34, f / 0.25)
+			elif f < 0.75:
+				var amague := (f - 0.25) / 0.50
+				offset = hacia * (0.34 + sin(amague * PI) * 0.04) + lateral * (sin(amague * TAU * 2.0) * 0.18)
+			else:
+				var salida := smoothstep(0.0, 1.0, (f - 0.75) / 0.25)
+				offset = hacia * (0.34 + salida * 0.92)
+		"elastica":
+			var lado := sin(f * PI * 2.0)
+			offset = hacia * lerpf(0.30, 0.95, f) + lateral * lado * 0.85
+		"globito":
+			offset = hacia * lerpf(0.25, 1.25, f) + lateral * sin(f * PI) * 0.18
+			altura = sin(f * PI) * 4.2
+		"ruleta":
+			var angulo := f * TAU - PI * 0.25
+			offset = hacia * 0.55 + (hacia * cos(angulo) + lateral * sin(angulo)) * 0.58
+	return {"offset": offset, "altura": altura}
+
+
 ## Punto de contacto en píxeles respecto de los pies del jugador. El arte es
 ## un billboard: usar este offset mantiene la pelota pegada al dibujo aunque
 ## la cámara cambie de zoom.
@@ -830,6 +890,21 @@ func _color_de(j: Dictionary) -> Color:
 		return color_arquero_local if j["equipo_local"] else color_arquero_visitante
 	return color_local if j["equipo_local"] else color_visitante
 
+
+static func _direccion_al_rival(jugador: Dictionary, p: Vector2, jugadores: Array) -> Vector2:
+	var objetivo := Vector2.ZERO
+	var mejor_distancia := INF
+	for candidato in jugadores:
+		if bool(candidato.get("equipo_local", false)) == bool(jugador.get("equipo_local", false)):
+			continue
+		var delta := Vector2(float(candidato["x"]), float(candidato["y"])) - p
+		var distancia := delta.length_squared()
+		if distancia < mejor_distancia:
+			mejor_distancia = distancia
+			objetivo = delta
+	if mejor_distancia == INF:
+		return Vector2(float(jugador.get("ox", 1.0)), float(jugador.get("oy", 0.0)))
+	return objetivo
 
 static func _direccion(avance: Vector2) -> int:
 	if avance.length_squared() < 0.0004:

@@ -12,6 +12,7 @@ func _init() -> void:
 	_test_pools_por_puesto(rng)
 	_test_se_generan_varias(rng)
 	_test_bonus_acumulados()
+	_test_bufon()
 	_test_atajapenales()
 	_test_migracion_y_limpieza(rng)
 	quit()
@@ -76,6 +77,14 @@ func _test_atajapenales() -> void:
 		print("OK: Atajapenales oro resta 13%")
 	else:
 		print("FALLA: Atajapenales no aplica")
+
+
+func _test_bufon() -> void:
+	var jugador := {"media": 85.0, "habilidades": [{"nombre": "Bufon", "nivel": 3}]}
+	if is_equal_approx(Habilidades.factor_cooldown_regate(jugador), 0.55):
+		print("OK: Bufon oro reduce cooldown de regates")
+	else:
+		print("FALLA: Bufon no reduce cooldown")
 
 
 func _test_migracion_y_limpieza(rng: RandomNumberGenerator) -> void:
