@@ -1431,6 +1431,21 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 	# Ver `acorralado` arriba: con la pelota en tu propia zona y gente
 	# encima, se descartan las opciones de seguir jugandola. Se filtra al
 	# final y no en cada bloque para que la regla se lea de una sola vez.
+	# Solo frente al arco no se la toca atras ni al costado: se sigue
+	# corriendo. El pase hacia adelante queda, y si alguien lo corre
+	# (presion) vuelve la pared y el pase al medio para empujarla.
+	if _solo_frente_al_arco(estado, poseedor):
+		var sin_retroceso := []
+		for o in opciones:
+			if o["tipo"] in ["pase", "pase_largo", "pase_hueco", "pared"]:
+				# En la pared `punto` es adonde corre el; la pelota va al companero.
+				var destino: Vector2 = estado["jugadores"][o["objetivo_id"]]["pos"]
+				if o["tipo"] != "pared":
+					destino = o.get("punto", destino)
+				if (destino.x - pos.x) * (1.0 if es_local else -1.0) < 3.0:
+					continue
+			sin_retroceso.append(o)
+		opciones = sin_retroceso
 	if acorralado or arquero_encerrado:
 		var salidas := []
 		for o in opciones:
@@ -1600,10 +1615,56 @@ static func _riesgo_de_salida(estado: Dictionary, desde: Vector2, hasta: Vector2
 	return peor
 
 
+## Presion por debajo de la cual nadie lo esta corriendo. Es el mismo
+## corte con el que _premiar_descarga_util decide que un receptor esta libre.
+const PRESION_SIN_PERSECUCION := 0.35
+
+## Largo del cono que tiene que estar vacio para ir solo. Mira lo que
+## alcanza en unos 3 s de carrera: el rival que esta mas lejos todavia no
+## llega, y la decision se vuelve a tomar en cada toque.
+const CONO_SOLO_M := 15.0
+
+## ¿Tiene el arco adelante y nadie encima? Ningun jugador de campo rival en
+## el cono de CONO_SOLO_M metros hacia el arco, y nadie corriendolo. El
+## arquero no cuenta: salirle es otra jugada.
+##
+## El cono y no la linea entera hasta el arco: con la linea entera siempre
+## habia un defensor a 30 m sobre ella y la regla no se activaba nunca.
+##
+## Viene de verlo jugar: el delantero se iba solo y en vez de seguir
+## corriendo la tocaba atras o al costado. Medido con
+## tests/_diag_contra_decisiones.gd: en la contra, con el camino libre,
+## los de arriba pasaban en el 54% de sus decisiones y conducian en el 36%.
+static func _solo_frente_al_arco(estado: Dictionary, poseedor: Dictionary) -> bool:
+	if poseedor["rol"] == "ARQ":
+		return false
+	var local: bool = poseedor["equipo_local"]
+	var pos: Vector2 = poseedor["pos"]
+	# Pegado a la linea de fondo y abierto ya no tiene arco adelante: ahi
+	# la jugada es el pase atras al que llega (ver _zona_de_desborde).
+	if _zona_de_desborde(pos, local):
+		return false
+	# De espaldas no esta corriendo al arco: primero tiene que girar, y
+	# mientras tanto la descarga atras es la jugada (test_control_orientacion).
+	var signo := 1.0 if local else -1.0
+	if orientacion_de(poseedor).x * signo < 0.5:
+		return false
+	if presion_normalizada(estado, pos, local) >= PRESION_SIN_PERSECUCION:
+		return false
+	for e in estado["jugadores"].values():
+		if e["equipo_local"] == local or e["rol"] == "ARQ":
+			continue
+		var dx: float = (e["pos"].x - pos.x) * signo
+		if dx > 0.0 and dx < CONO_SOLO_M and absf(e["pos"].y - pos.y) < 3.0 + dx * 0.5:
+			return false
+	return true
+
+
 ## Soltar despues de conducir si hay un companero libre que mejora el ataque.
 ## Se aplica a las opciones ejecutables, despues del filtro de orientacion.
+## Solo frente al arco no hay descarga: la jugada es seguir corriendo.
 static func _premiar_descarga_util(estado: Dictionary, poseedor: Dictionary, opciones: Array) -> void:
-	if poseedor["rol"] == "ARQ":
+	if poseedor["rol"] == "ARQ" or _solo_frente_al_arco(estado, poseedor):
 		return
 	var ticks := int(estado["pelota"].get("ticks_con_pelota", 0))
 	var espera := clampf(float(ticks - 3) / 6.0, 0.0, 1.0)
@@ -1626,7 +1687,7 @@ static func _premiar_descarga_util(estado: Dictionary, poseedor: Dictionary, opc
 		var apertura := absf(destino.y) - absf(pos.y) > 8.0 and avance >= -1.0
 		if avance < 3.0 and not apertura:
 			continue
-		if _riesgo_de_salida(estado, pos, destino, local) >= 0.45 or presion_normalizada(estado, destino, local) >= 0.35:
+		if _riesgo_de_salida(estado, pos, destino, local) >= 0.45 or presion_normalizada(estado, destino, local) >= PRESION_SIN_PERSECUCION:
 			continue
 		if float(o["utilidad"]) > valor_mejor:
 			mejor = i
@@ -3731,7 +3792,12 @@ static func _ancla_de_rol(estado: Dictionary, e: Dictionary, equipo: Team, tiene
 		# y los extremos, que es como se reparte de verdad. Bajando los
 		# tres por igual, el equipo se quedaba sin nadie en el area y los
 		# remates caian a la mitad.
-		if avance < float(f["avance_para_jugar_en_el_hombro"]):
+		# En la contra no baja: el rival esta desarmado y el espacio esta a
+		# la espalda de su linea. Bajando a ofrecerse, el pelotazo del
+		# arquero caia entre los defensores (tests/_diag_contra_arquero.gd).
+		# Pesa el plan: el Tiki taka sale corto igual, el Contragolpe no.
+		var contra: float = _transicion(estado, e["equipo_local"]) * float(Estilos.plan(equipo.estilo)["transicion"])
+		if avance < float(f["avance_para_jugar_en_el_hombro"]) and contra < 0.5:
 			# Baja a ofrecerse: se acerca a la pelota en vez de esperarla.
 			var apoyo: float = float(f["apoyo_del_delantero"])
 			if rol == "DC":
@@ -3748,7 +3814,7 @@ static func _ancla_de_rol(estado: Dictionary, e: Dictionary, equipo: Team, tiene
 		# nunca y la infracción no ocurría jamás.
 		var intel: float = clampf(float(e.get("inteligencia", 50.0)) / 100.0, 0.0, 1.0)
 		var offset: float = lerpf(float(f["offside_margen_torpe"]), -1.5, intel) * float(e.get("margen_offside", 1.0))
-		var subida: float = smoothstep(float(f["avance_para_jugar_en_el_hombro"]), float(f["avance_para_centrar"]), avance)
+		var subida: float = maxf(contra, smoothstep(float(f["avance_para_jugar_en_el_hombro"]), float(f["avance_para_centrar"]), avance))
 		if e["equipo_local"]:
 			objetivo_x = lerpf(objetivo_x, maxf(objetivo_x, float(linea_ataque["local"]) + offset), subida)
 		else:

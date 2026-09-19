@@ -20,7 +20,10 @@ func _probar(local: bool, lado: float) -> void:
 	for e in estado["jugadores"].values():
 		if e["equipo_local"] != local and e["rol"] != "ARQ":
 			rivales.append(e)
-			e["pos"] = Vector2(12.0, 15.0 * lado)
+			# Adelante del poseedor para los dos equipos: con x fija, al
+			# visitante le quedaban atras y corria solo al arco, donde el
+			# pase al costado ya no corresponde (_solo_frente_al_arco).
+			e["pos"] = Vector2(12.0 * (1.0 if local else -1.0), 15.0 * lado)
 		elif e["equipo_local"] == local and e["clave"] != a["clave"] and e["rol"] != "ARQ":
 			b = e
 	b["rol"] = "EXT"

@@ -29,6 +29,13 @@ func _probar(local: bool) -> void:
 	MotorEspacial._premiar_descarga_util(estado, a, primera)
 	_comprobar(primera == opciones, "primer toque no obliga a soltar")
 	estado["pelota"]["ticks_con_pelota"] = 12
+	# Solo frente al arco no hay descarga: la jugada es seguir corriendo.
+	var solo: Array = opciones.duplicate(true)
+	MotorEspacial._premiar_descarga_util(estado, a, solo)
+	_comprobar(solo == opciones, "solo frente al arco no premia soltarla")
+	# Un rival en el cono de carrera, lejos de la linea del pase: ya no va
+	# solo, y la descarga vuelve.
+	rival["pos"] = Vector2(14.0 * signo, -6.0)
 	var descarga: Array = opciones.duplicate(true)
 	var azar: int = estado["rng"].state
 	MotorEspacial._premiar_descarga_util(estado, a, descarga)
@@ -38,7 +45,7 @@ func _probar(local: bool) -> void:
 	var tapada: Array = opciones.duplicate(true)
 	MotorEspacial._premiar_descarga_util(estado, a, tapada)
 	_comprobar(tapada == opciones, "no castiga conduccion si pase esta tapado")
-	rival["pos"] = Vector2(45.0 * signo, -28.0)
+	rival["pos"] = Vector2(14.0 * signo, -6.0)
 	b["pos"] = Vector2(-12.0 * signo, 0.0)
 	var atras: Array = opciones.duplicate(true)
 	MotorEspacial._premiar_descarga_util(estado, a, atras)
