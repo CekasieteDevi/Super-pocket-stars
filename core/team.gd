@@ -339,6 +339,8 @@ var traspasos: Dictionary = {}
 var cesiones: Dictionary = {}
 ## Las que terminaron, para la pestaña Historial.
 var historial_mercado: Array = []
+## Division y puesto de cada temporada cerrada, ver core/historial.gd.
+var historial_temporadas: Array = []
 
 var cantera: Array = []  # dicts de PlayerGenerator.generate, juveniles sin promover
 var siguiente_id_cantera: int = 0
@@ -508,6 +510,7 @@ func guardar() -> Dictionary:
 		"traspasos": _claves_a_texto(traspasos),
 		"cesiones": _claves_a_texto(cesiones),
 		"historial_mercado": historial_mercado,
+		"historial_temporadas": historial_temporadas,
 		"fatiga_acumulada": _claves_a_texto(fatiga_acumulada),
 		"animo": _claves_a_texto(animo),
 		"lesiones": _claves_a_texto(lesiones),
@@ -629,6 +632,9 @@ static func cargar(datos: Dictionary) -> Team:
 	t.traspasos = _claves_a_entero(datos.get("traspasos", {}))
 	t.cesiones = _claves_a_entero(datos.get("cesiones", {}))
 	t.historial_mercado = datos.get("historial_mercado", [])
+	# Las partidas anteriores al historial arrancan sin temporadas: el
+	# pasado no se puede reconstruir.
+	t.historial_temporadas = datos.get("historial_temporadas", [])
 	t.capitan_id = int(datos["capitan_id"])
 	# Partidas anteriores a los roles no traen la clave: quedan todas en
 	# automatico, que es exactamente como se comportaban.

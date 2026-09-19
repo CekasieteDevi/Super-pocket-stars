@@ -129,6 +129,8 @@ static func jugar_partido(home: Team, away: Team, rng: RandomNumberGenerator,
 		r = MatchEngine.simular(home, away, rng, false)
 	home.en_copa = false
 	away.en_copa = false
+	# Los partidos de copa tambien van a la carrera: la liga no los ve.
+	Historial.registrar_partido(home, away, r)
 	return r
 
 
@@ -170,6 +172,8 @@ static func resolver_cruce(home: Team, away: Team, rng: RandomNumberGenerator,
 		gv = r_alargue["goles_visitante"]
 		definicion = "alargue"
 		goles_log.append_array(r_alargue.get("goles_log", []))
+		# Los goles del alargue cuentan; el partido ya se conto.
+		Historial.registrar_partido(home, away, r_alargue, false)
 		eventos.append_array(r_alargue.get("eventos", []))
 		if gl != gv:
 			ganador = home if gl > gv else away

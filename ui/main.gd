@@ -27,6 +27,8 @@ var ficha_origen: String = "plantel"
 var ficha_club: Team = null
 var boton_volver_ficha: Button
 var boton_investigar_ficha: Button
+var boton_carrera_ficha: Button
+var ficha_ver_carrera := false
 var option_formacion: OptionButton
 var barra_familiaridad: ProgressBar
 var label_familiaridad: Label
@@ -94,6 +96,13 @@ var contenedor_copa: VBoxContainer
 var label_copa_titulo: Label
 var label_copa_camino: Label
 var copa_elegida: String = "copa_interna"
+var option_historia_division: OptionButton
+var option_historia_club: OptionButton
+var contenedor_historia_club: VBoxContainer
+var historia_club_elegido: String = ""
+var option_palmares: OptionButton
+var contenedor_palmares: VBoxContainer
+var palmares_elegido: String = ""
 var noticias_solapa: String = "todas"
 var botones_solapa_noticias: Dictionary = {}
 var capa_modal_jugador: CanvasLayer
@@ -219,6 +228,8 @@ func _ready() -> void:
 	_construir_panel_historial(contenedor)
 	_construir_panel_copas(contenedor)
 	_construir_panel_vitrina(contenedor)
+	_construir_panel_historia_clubes(contenedor)
+	_construir_panel_palmares(contenedor)
 	_construir_panel_laboratorio(contenedor)
 	_construir_panel_sponsors(contenedor)
 	_construir_panel_roles(contenedor)
@@ -1196,6 +1207,12 @@ func _construir_panel_ficha(padre: Control) -> void:
 	boton_investigar_ficha.pressed.connect(_investigar_desde_ficha)
 	panel.add_child(boton_investigar_ficha)
 
+	boton_carrera_ficha = Button.new()
+	boton_carrera_ficha.pressed.connect(func():
+		ficha_ver_carrera = not ficha_ver_carrera
+		_refrescar_ficha())
+	panel.add_child(boton_carrera_ficha)
+
 	# El dorsal se cambia desde la ficha y no desde la lista del plantel:
 	# es una decision por jugador y aca esta el jugador entero a la vista.
 	boton_dorsal_ficha = Button.new()
@@ -1220,6 +1237,7 @@ func _mostrar_ficha(jugador_id: int, club: Team = null,
 	ficha_jugador_id = jugador_id
 	ficha_club = club
 	ficha_publica_liga = publica_liga
+	ficha_ver_carrera = false
 	if publica_liga:
 		ficha_origen = "jugadores_liga"
 	elif club != null:
@@ -1274,6 +1292,12 @@ func _refrescar_ficha() -> void:
 	if j.is_empty():
 		contenedor_ficha.add_child(_texto_suave(
 			"Ese jugador ya no esta en %s." % (equipo.nombre if ajeno else "el plantel")))
+		return
+
+	boton_carrera_ficha.text = "Ver atributos" if ficha_ver_carrera else "Ver carrera"
+	if ficha_ver_carrera:
+		boton_investigar_ficha.visible = false
+		_carrera_en_ficha(equipo, j)
 		return
 
 	var conocido := not ajeno or Investigadores.conoce(GameState.equipo_jugador, ficha_jugador_id)
@@ -6504,6 +6528,369 @@ func _fila_de_vitrina(t: Dictionary) -> Control:
 	return tarjeta
 
 
+## HISTORIA DE LOS CLUBES: en que division estuvo cada uno, año a año, y
+## que gano. Sale de Team.historial_temporadas y GameState.historial_copas
+## (ver core/historial.gd). Se puede mirar cualquier club de la piramide,
+## no solo el propio: el rival de la fecha tambien tiene historia.
+const COL_ANIO := 64
+const COL_DIVISION := 70
+const COL_PUESTO := 96
+const COL_MOVIMIENTO := 120
+
+
+func _construir_panel_historia_clubes(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	panel.add_theme_constant_override("separation", 8)
+	padre.add_child(panel)
+	paneles["historia_clubes"] = panel
+
+	# Division primero y club despues: los 200 clubes en un solo
+	# desplegable eran una lista que no se terminaba nunca.
+	var filtros := HBoxContainer.new()
+	filtros.add_theme_constant_override("separation", 12)
+	panel.add_child(filtros)
+	option_historia_division = OptionButton.new()
+	option_historia_division.custom_minimum_size = Vector2(160, Tema.ALTO_TACTIL)
+	option_historia_division.item_selected.connect(func(i):
+		# Al cambiar de division se muestra el primero de la tabla.
+		var equipos: Array = GameState.piramide.divisiones[i].equipos
+		if not equipos.is_empty():
+			historia_club_elegido = equipos[0].nombre
+		_refrescar_historia_club())
+	filtros.add_child(_grupo_filtro("División", option_historia_division))
+	option_historia_club = OptionButton.new()
+	option_historia_club.custom_minimum_size = Vector2(360, Tema.ALTO_TACTIL)
+	option_historia_club.item_selected.connect(func(i):
+		historia_club_elegido = str(option_historia_club.get_item_metadata(i))
+		_refrescar_historia_club())
+	filtros.add_child(_grupo_filtro("Club", option_historia_club))
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+	contenedor_historia_club = VBoxContainer.new()
+	contenedor_historia_club.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	contenedor_historia_club.add_theme_constant_override("separation", 0)
+	scroll.add_child(contenedor_historia_club)
+
+
+func _mostrar_historia_clubes() -> void:
+	_ocultar_todos()
+	paneles["historia_clubes"].visible = true
+	if _club_de_la_piramide(historia_club_elegido) == null:
+		historia_club_elegido = GameState.equipo_jugador.nombre
+	_refrescar_historia_club()
+
+
+## Desde un nombre de club tocado en otra pantalla (la carrera de un
+## jugador, el palmares). Va por la seccion para que la subsolapa quede
+## marcada.
+func _abrir_historia_de_club(nombre: String) -> void:
+	historia_club_elegido = nombre
+	_mostrar_seccion("partido", "historia_clubes")
+
+
+func _club_de_la_piramide(nombre: String) -> Team:
+	for liga in GameState.piramide.divisiones:
+		for e in liga.equipos:
+			if e.nombre == nombre:
+				return e
+	return null
+
+
+func _refrescar_historia_club() -> void:
+	# Los desplegables se rearman cada vez: entre temporada y temporada
+	# los clubes cambian de division.
+	var division := 0
+	var elegido := _club_de_la_piramide(historia_club_elegido)
+	if elegido != null:
+		division = maxi(elegido.division_actual, 0)
+	option_historia_division.clear()
+	for d in range(GameState.piramide.divisiones.size()):
+		option_historia_division.add_item("División %d" % (d + 1))
+	option_historia_division.select(division)
+	option_historia_club.clear()
+	var nombres := []
+	for e in GameState.piramide.divisiones[division].equipos:
+		nombres.append(e.nombre)
+	nombres.sort()
+	for nombre in nombres:
+		option_historia_club.add_item(nombre)
+		var i := option_historia_club.item_count - 1
+		option_historia_club.set_item_metadata(i, nombre)
+		if nombre == historia_club_elegido:
+			option_historia_club.select(i)
+
+	for hijo in contenedor_historia_club.get_children():
+		hijo.queue_free()
+	var club := _club_de_la_piramide(historia_club_elegido)
+	if club == null:
+		return
+	var temporadas: Array = club.historial_temporadas
+	var titulos := Historial.titulos_de_club(GameState.historial_copas, club.nombre)
+
+	var ascensos := 0
+	var descensos := 0
+	for i in range(temporadas.size()):
+		var mov := _movimiento_de_temporada(club, i)
+		if mov < 0:
+			ascensos += 1
+		elif mov > 0:
+			descensos += 1
+	var cajas := HBoxContainer.new()
+	cajas.add_theme_constant_override("separation", 10)
+	contenedor_historia_club.add_child(cajas)
+	cajas.add_child(_caja_numero("Temporadas", str(temporadas.size()), Tema.TEXTO))
+	cajas.add_child(_caja_numero("Títulos", str(titulos.size()), Tema.AMBAR))
+	cajas.add_child(_caja_numero("Ascensos", str(ascensos), Tema.VERDE))
+	cajas.add_child(_caja_numero("Descensos", str(descensos), Tema.ROJO))
+
+	if temporadas.is_empty():
+		contenedor_historia_club.add_child(_texto_suave(
+			"Todavía no terminó ninguna temporada con el historial activo. Se llena solo al cerrar cada una."))
+		return
+
+	if not titulos.is_empty():
+		contenedor_historia_club.add_child(Tema.etiqueta_seccion("Títulos"))
+		for i in range(titulos.size()):
+			var t: Dictionary = titulos[i]
+			var fila := Componentes.fila(i % 2 == 0)
+			var dentro := Componentes.contenido(fila)
+			dentro.add_child(Componentes.celda_numero(
+				str(Historial.anio_de(int(t["temporada"]))), COL_ANIO, Tema.SUAVE))
+			dentro.add_child(Componentes.celda(str(t["competencia"]), Componentes.COL_EQUIPO + 120, Tema.AMBAR))
+			contenedor_historia_club.add_child(fila)
+
+	contenedor_historia_club.add_child(Tema.etiqueta_seccion("Temporada por temporada"))
+	contenedor_historia_club.add_child(_encabezado_de_columnas([
+		["Año", COL_ANIO], ["División", COL_DIVISION], ["Puesto", COL_PUESTO],
+		["Pts", Componentes.COL_PUNTOS], ["", COL_MOVIMIENTO]]))
+	# Del mas nuevo al mas viejo: la pregunta es "¿como nos fue el año
+	# pasado?", no "¿como arrancamos?".
+	for i in range(temporadas.size() - 1, -1, -1):
+		var t: Dictionary = temporadas[i]
+		var fila := Componentes.fila(i % 2 == 0)
+		var dentro := Componentes.contenido(fila)
+		var campeon := int(t["posicion"]) == 1
+		dentro.add_child(Componentes.celda_numero(
+			str(Historial.anio_de(int(t["temporada"]))), COL_ANIO, Tema.SUAVE))
+		dentro.add_child(Componentes.celda("Div %d" % int(t["division"]), COL_DIVISION))
+		dentro.add_child(Componentes.celda_numero(
+			"%d° de %d" % [int(t["posicion"]), int(t["total"])], COL_PUESTO,
+			Tema.AMBAR if campeon else Tema.TEXTO))
+		dentro.add_child(Componentes.celda_numero(
+			str(int(t.get("pts", 0))), Componentes.COL_PUNTOS, Tema.SUAVE, HORIZONTAL_ALIGNMENT_RIGHT))
+		var mov := _movimiento_de_temporada(club, i)
+		var texto_mov := "Campeón" if campeon else ""
+		var color_mov := Tema.AMBAR
+		if mov < 0:
+			texto_mov = "Campeón · ascenso" if campeon else "Ascenso"
+			color_mov = Tema.VERDE
+		elif mov > 0:
+			texto_mov = "Descenso"
+			color_mov = Tema.ROJO
+		dentro.add_child(Componentes.celda(texto_mov, COL_MOVIMIENTO, color_mov))
+		contenedor_historia_club.add_child(fila)
+
+
+## Cuantas divisiones se movio el club DESPUES de la temporada `i`:
+## negativo sube, positivo baja. La ultima se compara con la division
+## actual, porque la siguiente temporada todavia no cerro.
+func _movimiento_de_temporada(club: Team, i: int) -> int:
+	var temporadas: Array = club.historial_temporadas
+	var desde := int(temporadas[i]["division"])
+	var hasta := club.division_actual + 1
+	if i + 1 < temporadas.size():
+		hasta = int(temporadas[i + 1]["division"])
+	return hasta - desde
+
+
+func _encabezado_de_columnas(cols: Array) -> PanelContainer:
+	var fila := Componentes.fila(false)
+	var dentro := Componentes.contenido(fila)
+	for c in cols:
+		var l := Componentes.celda(str(c[0]), int(c[1]), Tema.SUAVE,
+			int(c[2]) if c.size() > 2 else HORIZONTAL_ALIGNMENT_LEFT)
+		l.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+		dentro.add_child(l)
+	return fila
+
+
+## Un nombre de club que lleva a su historia. Si el club no esta en la
+## piramide (uno del exterior) queda como texto: no tiene historia que
+## mostrar.
+func _celda_de_club(nombre: String, ancho: int, color: Color) -> Control:
+	if _club_de_la_piramide(nombre) == null:
+		return Componentes.celda(nombre, ancho, color)
+	var b := Componentes.boton_de_celda(nombre, ancho, HORIZONTAL_ALIGNMENT_LEFT, color)
+	b.pressed.connect(func(): _abrir_historia_de_club(nombre))
+	return b
+
+
+## PALMARES: quien gano cada competencia y quien la gano mas veces.
+## Todas las competencias y todos los clubes, no solo el propio (eso es
+## la vitrina).
+func _competencias_del_palmares() -> Array:
+	var lista := ["Copa de Campeones", "Copa de Guerreros", "Copa de Emergentes", "Copa del Rey"]
+	for d in range(GameState.piramide.divisiones.size()):
+		lista.append("Liga · División %d" % (d + 1))
+	for d in range(GameState.piramide.divisiones.size()):
+		lista.append("Copa de la División %d" % (d + 1))
+	return lista
+
+
+func _construir_panel_palmares(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	panel.add_theme_constant_override("separation", 8)
+	padre.add_child(panel)
+	paneles["palmares"] = panel
+
+	option_palmares = OptionButton.new()
+	option_palmares.custom_minimum_size = Vector2(360, Tema.ALTO_TACTIL)
+	option_palmares.item_selected.connect(func(i):
+		palmares_elegido = option_palmares.get_item_text(i)
+		_refrescar_palmares())
+	panel.add_child(_grupo_filtro("Competencia", option_palmares))
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+	contenedor_palmares = VBoxContainer.new()
+	contenedor_palmares.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	contenedor_palmares.add_theme_constant_override("separation", 0)
+	scroll.add_child(contenedor_palmares)
+
+
+func _mostrar_palmares() -> void:
+	_ocultar_todos()
+	paneles["palmares"].visible = true
+	# Arranca en la liga propia: es la que el jugador conoce.
+	if palmares_elegido == "":
+		palmares_elegido = "Liga · División %d" % (GameState.division_jugador + 1)
+	_refrescar_palmares()
+
+
+func _refrescar_palmares() -> void:
+	option_palmares.clear()
+	for nombre in _competencias_del_palmares():
+		option_palmares.add_item(nombre)
+		if nombre == palmares_elegido:
+			option_palmares.select(option_palmares.item_count - 1)
+
+	for hijo in contenedor_palmares.get_children():
+		hijo.queue_free()
+	var lista: Array = GameState.historial_copas.get(palmares_elegido, [])
+	if lista.is_empty():
+		contenedor_palmares.add_child(_texto_suave(
+			"Todavía no hay campeones anotados. Se anota cada uno al cerrar la temporada."))
+		return
+	var mio: String = GameState.equipo_jugador.nombre
+
+	contenedor_palmares.add_child(Tema.etiqueta_seccion("Más ganadores"))
+	contenedor_palmares.add_child(_encabezado_de_columnas([
+		["#", Componentes.COL_POSICION, HORIZONTAL_ALIGNMENT_RIGHT],
+		["Club", Componentes.COL_EQUIPO],
+		["Títulos", Componentes.COL_PUNTOS, HORIZONTAL_ALIGNMENT_RIGHT],
+		["Subcamp.", Componentes.COL_PUNTOS + 20, HORIZONTAL_ALIGNMENT_RIGHT]]))
+	var ranking := Historial.ranking_de_titulos(lista)
+	for i in range(ranking.size()):
+		var r: Dictionary = ranking[i]
+		var color: Color = Tema.AMBAR if str(r["club"]) == mio else Tema.TEXTO
+		var fila := Componentes.fila(i % 2 == 0)
+		var dentro := Componentes.contenido(fila)
+		dentro.add_child(Componentes.celda_numero(
+			str(i + 1), Componentes.COL_POSICION, Tema.SUAVE, HORIZONTAL_ALIGNMENT_RIGHT))
+		dentro.add_child(_celda_de_club(str(r["club"]), Componentes.COL_EQUIPO, color))
+		dentro.add_child(Componentes.celda_numero(
+			str(int(r["titulos"])), Componentes.COL_PUNTOS, color, HORIZONTAL_ALIGNMENT_RIGHT))
+		dentro.add_child(Componentes.celda_numero(
+			str(int(r["subcampeonatos"])), Componentes.COL_PUNTOS + 20, Tema.SUAVE, HORIZONTAL_ALIGNMENT_RIGHT))
+		contenedor_palmares.add_child(fila)
+
+	contenedor_palmares.add_child(Tema.etiqueta_seccion("Año por año"))
+	contenedor_palmares.add_child(_encabezado_de_columnas([
+		["Año", COL_ANIO], ["Campeón", Componentes.COL_EQUIPO],
+		["Subcampeón", Componentes.COL_EQUIPO]]))
+	for i in range(lista.size() - 1, -1, -1):
+		var t: Dictionary = lista[i]
+		var fila := Componentes.fila(i % 2 == 0)
+		var dentro := Componentes.contenido(fila)
+		dentro.add_child(Componentes.celda_numero(
+			str(Historial.anio_de(int(t["temporada"]))), COL_ANIO, Tema.SUAVE))
+		var campeon := str(t["campeon"])
+		dentro.add_child(_celda_de_club(campeon, Componentes.COL_EQUIPO,
+			Tema.AMBAR if campeon == mio else Tema.TEXTO))
+		dentro.add_child(_celda_de_club(str(t.get("subcampeon", "")), Componentes.COL_EQUIPO, Tema.SUAVE))
+		contenedor_palmares.add_child(fila)
+
+
+## LA CARRERA de un jugador, dentro de la ficha: por que clubes paso y que
+## hizo en cada uno. Es publica —los goles los vio todo el mundo—, asi que
+## no espera al informe del investigador.
+func _carrera_en_ficha(equipo: Team, j: Dictionary) -> void:
+	var tarjeta := Componentes.tarjeta()
+	var caja := VBoxContainer.new()
+	caja.add_theme_constant_override("separation", 4)
+	tarjeta.add_child(caja)
+	var nombre := Label.new()
+	nombre.text = "%s   %s" % [_nombre_jugador(j), equipo.nombre]
+	Tema.numero(nombre, 26)
+	caja.add_child(nombre)
+	var tot := Historial.totales(j)
+	var datos := Label.new()
+	datos.text = "%s  ·  %d años  ·  %d partidos, %d goles, %d asistencias en %d club%s" % [
+		str(j["posicion"]), int(j["edad"]), int(tot["pj"]), int(tot["goles"]),
+		int(tot["asistencias"]), int(tot["clubes"]), "" if int(tot["clubes"]) == 1 else "es"]
+	datos.add_theme_color_override("font_color", Tema.SUAVE)
+	caja.add_child(datos)
+	contenedor_ficha.add_child(tarjeta)
+
+	var carrera: Array = j.get("carrera", [])
+	if carrera.is_empty():
+		contenedor_ficha.add_child(_texto_suave(
+			"Todavía no jugó ningún partido desde que se lleva el historial."))
+		return
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	contenedor_ficha.add_child(scroll)
+	var lista := VBoxContainer.new()
+	lista.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lista.add_theme_constant_override("separation", 0)
+	scroll.add_child(lista)
+	lista.add_child(_encabezado_de_columnas([
+		["Año", COL_ANIO], ["Club", Componentes.COL_EQUIPO], ["División", COL_DIVISION],
+		["PJ", Componentes.COL_JUGADOS, HORIZONTAL_ALIGNMENT_RIGHT],
+		["Goles", Componentes.COL_GOLES, HORIZONTAL_ALIGNMENT_RIGHT],
+		["Asist.", Componentes.COL_GOLES, HORIZONTAL_ALIGNMENT_RIGHT]]))
+	for i in range(carrera.size() - 1, -1, -1):
+		var f: Dictionary = carrera[i]
+		var en_curso := int(f["temporada"]) == Historial.temporada
+		var fila := Componentes.fila(i % 2 == 0)
+		var dentro := Componentes.contenido(fila)
+		dentro.add_child(Componentes.celda_numero(
+			str(Historial.anio_de(int(f["temporada"]))), COL_ANIO,
+			Tema.AMBAR if en_curso else Tema.SUAVE))
+		dentro.add_child(_celda_de_club(str(f["club"]), Componentes.COL_EQUIPO, Tema.TEXTO))
+		var div := int(f.get("division", 0))
+		dentro.add_child(Componentes.celda(
+			"Div %d" % div if div > 0 else "Exterior", COL_DIVISION, Tema.SUAVE))
+		for clave in ["pj", "goles", "asistencias"]:
+			var ancho := Componentes.COL_JUGADOS if clave == "pj" else Componentes.COL_GOLES
+			dentro.add_child(Componentes.celda_numero(
+				str(int(f[clave])), ancho, Tema.TEXTO, HORIZONTAL_ALIGNMENT_RIGHT))
+		lista.add_child(fila)
+
+
 ## La pantalla de COPAS: el cuadro de cada una, como en un cuadro de
 ## verdad — cada cruce alineado entre los dos de los que sale.
 ##
@@ -8541,11 +8928,11 @@ const SECCIONES := [
 		["economia", "Presupuesto"], ["sponsors", "Sponsors"]]},
 	{"clave": "partido", "nombre": "Liga", "paneles": [
 		["tabla", "Tabla"], ["jugadores_liga", "Jugadores"],
-		["historial", "Historial"]]},
+		["historial", "Historial"], ["historia_clubes", "Clubes"]]},
 	{"clave": "copas", "nombre": "Copas", "paneles": [
 		["copa_interna", "Interna"], ["copa_rey", "Rey"],
 		["copa_campeones", "Campeones"], ["copa_guerreros", "Guerreros"],
-		["copa_emergentes", "Emergentes"]]},
+		["copa_emergentes", "Emergentes"], ["palmares", "Palmarés"]]},
 	{"clave": "mercado", "nombre": "Mercado", "paneles": [
 		["mercado", "Mercado"], ["libres", "Libres"], ["traspaso", "Traspaso"],
 		["prestamos", "Cesion"]]},
@@ -8704,6 +9091,7 @@ func _mostrar_panel_de_seccion(clave: String) -> void:
 		"traspaso": "_mostrar_traspaso",
 		"prestamos": "_mostrar_prestamos", "economia": "_mostrar_economia",
 		"noticias": "_mostrar_noticias", "vitrina": "_mostrar_vitrina",
+		"historia_clubes": "_mostrar_historia_clubes", "palmares": "_mostrar_palmares",
 		"laboratorio": "_mostrar_laboratorio",
 		"sponsors": "_mostrar_sponsors", "seleccion": "_mostrar_seleccion",
 		"partida": "_mostrar_partida_panel",

@@ -120,6 +120,10 @@ var copas_pasadas: Dictionary = {}
 ## Todo lo que gano el club del jugador, en orden: [{temporada, titulo,
 ## detalle, anio}]. Ver _anotar_en_la_vitrina.
 var vitrina: Array = []
+## El palmares de TODAS las competencias, no solo lo que gano el club del
+## jugador: competencia -> [{temporada, campeon, subcampeon}]. Ver
+## _anotar_palmares y core/historial.gd.
+var historial_copas: Dictionary = {}
 ## La foto de la ultima temporada cerrada, para la pantalla de resumen.
 ## Ver _guardar_resumen_de_temporada.
 var resumen_temporada: Dictionary = {}
@@ -230,6 +234,7 @@ func partida_nueva(semilla: int = -1, nombre_club: String = "",
 	# anterior: el calendario, el ultimo partido, las noticias, el balance.
 	fecha_actual = 0
 	temporada_actual = 1
+	Historial.temporada = temporada_actual
 	# La partida arranca en receso, el dia en que abre el libro de pases
 	# previo a la temporada 1. Mismo mecanismo que el receso entre
 	# temporadas: `dia_temporada` negativo hasta el arranque de marzo.
@@ -243,6 +248,7 @@ func partida_nueva(semilla: int = -1, nombre_club: String = "",
 	copas_internacionales = {}
 	copas_pasadas = {}
 	vitrina = []
+	historial_copas = {}
 	resumen_temporada = {}
 	ultimo_resultado = {}
 	ultimo_log = []
@@ -579,6 +585,33 @@ func _guardar_resumen_de_temporada(tabla_final: Array, posicion_final: int,
 		"vallas": EstadisticasLiga.ranking(liga.estadisticas, "vallas", 3),
 		"campeones": campeones,
 	}
+
+
+## Quien gano cada competencia de la temporada, TODAS y no solo las del
+## club del jugador. Los nombres de competencia son los que muestra la
+## pantalla de palmares: la liga y la copa van por division.
+func _anotar_palmares(internacional: Dictionary) -> void:
+	for d in range(piramide.divisiones.size()):
+		var orden: Array = piramide.divisiones[d].tabla_ordenada()
+		if orden.size() >= 2:
+			Historial.anotar_titulo(historial_copas, "Liga · División %d" % (d + 1),
+				str(orden[0]), str(orden[1]))
+	for d in range(copas_division.size()):
+		var interna: Copa = copas_division[d]
+		if interna != null and interna.campeon != null:
+			Historial.anotar_titulo(historial_copas, "Copa de la División %d" % (d + 1),
+				interna.campeon.nombre, interna.finalista())
+	if copa_nacional != null and copa_nacional.campeon != null:
+		Historial.anotar_titulo(historial_copas, "Copa del Rey",
+			copa_nacional.campeon.nombre, copa_nacional.finalista())
+	for clave in ["campeones", "guerreros", "emergentes"]:
+		if not internacional.has(clave):
+			continue
+		var campeon = internacional[clave].get("campeon")
+		var knockout = internacional[clave].get("knockout")
+		if campeon is Team:
+			Historial.anotar_titulo(historial_copas, "Copa de %s" % clave.capitalize(),
+				campeon.nombre, knockout.finalista() if knockout is Copa else "")
 
 
 ## Los titulos que ganaste esta temporada. Va al cerrarla, con las copas
@@ -1430,6 +1463,9 @@ func _cerrar_temporada() -> void:
 	# estadisticas individuales para la temporada nueva, asi que despues
 	# de esa linea ya no hay tabla final ni goleador que mostrar.
 	_guardar_resumen_de_temporada(tabla_final, posicion_final, resultado_internacional)
+	# Mismo momento y por lo mismo: tablas enteras y copas terminadas.
+	Historial.cerrar_temporada(piramide)
+	_anotar_palmares(resultado_internacional)
 
 	for copa_nombre in ["campeones", "guerreros", "emergentes"]:
 		var campeon: Team = resultado_internacional[copa_nombre]["campeon"]
@@ -1535,6 +1571,7 @@ func _cerrar_temporada() -> void:
 			break
 
 	temporada_actual += 1
+	Historial.temporada = temporada_actual
 	fecha_actual = 0
 	# Entre temporada y temporada hay RECESO: la nueva arranca siempre el
 	# mismo dia de marzo, no al dia siguiente de terminar la anterior. Sin
@@ -2227,6 +2264,7 @@ func guardar_partida() -> void:
 		"copas_internacionales": copas_internacionales,
 		"copas_pasadas": copas_pasadas,
 		"vitrina": vitrina, "resumen_temporada": resumen_temporada,
+		"historial_copas": historial_copas,
 		"noticias": noticias,
 		"ultimo_informe_economico": ultimo_informe_economico,
 		"ultima_posicion_final": ultima_posicion_final,
@@ -2301,6 +2339,7 @@ func cargar_partida() -> bool:
 	equipo_jugador = nuevo_equipo_jugador
 	fecha_actual = datos["fecha_actual"]
 	temporada_actual = datos["temporada_actual"]
+	Historial.temporada = temporada_actual
 	restaurar_calendario(datos, liga_jugador().fixture.size())
 	# Las de una partida vieja son Strings pelados: se envuelven y se les
 	# adivina la categoria por el texto en vez de tirarlas.
@@ -2312,6 +2351,7 @@ func cargar_partida() -> bool:
 	copas_internacionales = datos.get("copas_internacionales", {})
 	copas_pasadas = datos.get("copas_pasadas", {})
 	vitrina = datos.get("vitrina", [])
+	historial_copas = datos.get("historial_copas", {})
 	resumen_temporada = datos.get("resumen_temporada", {})
 	ultimo_informe_economico = datos["ultimo_informe_economico"]
 	ultima_posicion_final = datos["ultima_posicion_final"]

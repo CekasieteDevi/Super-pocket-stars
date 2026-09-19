@@ -368,6 +368,8 @@ func _actualizar_estado_jugadores(home: Team, away: Team, r: Dictionary) -> void
 	# ritmo por jugar con el motor espacial.
 	_acumular_rendimiento(home, xp.get("home", {}), r, true)
 	_acumular_rendimiento(away, xp.get("away", {}), r, false)
+	# La carrera de cada uno: sobrevive al cierre, que `rendimiento` no.
+	Historial.registrar_partido(home, away, r)
 	# Lo que hace el cedido en el club que lo pidio, para poder contarselo
 	# al dueño cuando vuelve (ver Prestamos.procesar_retornos). Los goles
 	# ya los cuenta EstadisticasLiga, pero por LIGA: el prestado juega en
