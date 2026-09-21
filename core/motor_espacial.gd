@@ -499,6 +499,16 @@ const ACCION_AGARRA := "agarra"
 const ACCION_SAQUE_ARCO := "saque_arco"
 ## Cabezazo en vuelo horizontal, normalmente tras un centro bajo.
 const ACCION_PALOMITA := "palomita"
+const TIPO_CENTRO_ALTO := "alto"
+const TIPO_CENTRO_MEDIO := "medio"
+
+static func _sumar_estadistica_centro(estado: Dictionary, tipo: String, accion: String) -> void:
+	var centros: Dictionary = estado["centros"]
+	var por_tipo: Dictionary = centros.get("por_tipo", {})
+	var fila: Dictionary = por_tipo.get(tipo, {})
+	fila[accion] = int(fila.get(accion, 0)) + 1
+	por_tipo[tipo] = fila
+	centros["por_tipo"] = por_tipo
 ## El gol. Es la unica accion que no dura un instante: el goleador festeja
 ## todo lo que dura la pelota en la red (TICKS_DETENIDO["gol"]).
 const ACCION_FESTEJA := "festeja"
@@ -1836,7 +1846,8 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 		_penalizar(estado, clave_rival, defensor)
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "gambeta", "equipo": eq_a.nombre, "rival": eq_d.nombre,
-			"jugador_posicion": poseedor["rol"], "resultado": "pasa", "regate": tipo_regate,
+			"jugador_posicion": poseedor["rol"], "clave": poseedor["clave"],
+			"defensor_clave": clave_rival, "resultado": "pasa", "regate": tipo_regate,
 		})
 	else:
 		_accion(estado, clave_rival, ACCION_BARRIDA)
@@ -1844,7 +1855,8 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 		_penalizar(estado, poseedor["clave"], jugador)
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "gambeta", "equipo": eq_a.nombre, "rival": eq_d.nombre,
-			"jugador_posicion": poseedor["rol"], "resultado": "pierde",
+			"jugador_posicion": poseedor["rol"], "clave": poseedor["clave"],
+			"defensor_clave": clave_rival, "resultado": "pierde",
 		})
 
 
@@ -1904,6 +1916,8 @@ static func remata_de_palomita(jugador: Dictionary, punto: Vector2,
 static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bool, minuto: int) -> void:
 	var f: Dictionary = pesos()["fisica"]
 	var rng: RandomNumberGenerator = estado["rng"]
+	var tipo_centro := str(estado["pelota"].get("tipo_centro", TIPO_CENTRO_ALTO))
+	estado["pelota"].erase("tipo_centro")
 	var eq_a := _equipo_de(estado, ataca_local)
 	var eq_d := _equipo_de(estado, not ataca_local)
 	estado["centros"]["caidos"] = int(estado["centros"].get("caidos", 0)) + 1
@@ -1942,6 +1956,7 @@ static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bo
 			var arq := eq_d.arquero()
 			var chance: float = float(arq["atributos"]["achique"]) / 100.0 * float(f["achique_eficacia"])
 			if rng.randf() < chance:
+				_sumar_estadistica_centro(estado, tipo_centro, "descuelga")
 				estado["centros"]["descolgado"] = int(estado["centros"].get("descolgado", 0)) + 1
 				_entregar_rodando(estado, arq_clave)
 				estado["eventos"].append({
@@ -1953,6 +1968,7 @@ static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bo
 	var atacante := _mas_cercano_del_equipo(estado, punto, ataca_local)
 	var defensor := _mas_cercano_del_equipo(estado, punto, not ataca_local)
 	if atacante == -1:
+		_sumar_estadistica_centro(estado, tipo_centro, "sin_receptor")
 		_pelota_fuera(estado, punto, ataca_local)
 		return
 	if defensor == -1:
@@ -1977,6 +1993,7 @@ static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bo
 	_xp_e(estado, estado["jugadores"][atacante], "cabezazo")
 	_xp_e(estado, estado["jugadores"][defensor], "salto")
 	if forzado == "gana" or Duel.gana_atacante(res, rng):
+		_sumar_estadistica_centro(estado, tipo_centro, "gana")
 		estado["centros"]["ganados"] = int(estado["centros"].get("ganados", 0)) + 1
 		_entregar_rodando(estado, atacante)
 		estado["eventos"].append({
@@ -2007,8 +2024,21 @@ static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bo
 			else:
 				estado["centros"]["cabezazos"] = int(estado["centros"].get("cabezazos", 0)) + 1
 			var attr_remate := "volea" if accion in ["volea", "chilena"] else "cabezazo"
-			_resolver_tiro(estado, estado["jugadores"][atacante], j_a, attr_remate, accion)
+			# Un cabezazo alto también puede ser descarga para un compañero.
+			# Los clips del laboratorio fuerzan remate: ahí se conserva el tiro.
+			var pase_cabeza := -1
+			if accion == ACCION_CABECEA and not estado.has("forzar_remate"):
+				var candidato_cabeza := _mejor_en_el_area(estado, ataca_local, atacante)
+				if candidato_cabeza != -1 and rng.randf() < clampf(float(j_a["atributos"].get("pases", 50.0)) / 100.0 * 0.22, 0.0, 0.22):
+					pase_cabeza = candidato_cabeza
+			if pase_cabeza != -1:
+				_sumar_estadistica_centro(estado, tipo_centro, "pase_cabeza")
+				_lanzar_pase(estado, estado["jugadores"][atacante], pase_cabeza, j_a, null, false, ACCION_CABECEA)
+			else:
+				_sumar_estadistica_centro(estado, tipo_centro, accion)
+				_resolver_tiro(estado, estado["jugadores"][atacante], j_a, attr_remate, accion)
 	else:
+		_sumar_estadistica_centro(estado, tipo_centro, "despeja")
 		_entregar_rodando(estado, defensor)
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "centro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
@@ -4754,7 +4784,8 @@ static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Di
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "tiro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 			"jugador_posicion": poseedor["rol"], "clave": poseedor["clave"], "resultado": "bloqueado",
-			"remate_id": remate_id,
+			"remate_id": remate_id, "bloqueador_clave": bloqueador,
+			"tecnica": accion_animacion,
 		})
 		_resolver_rebote(estado, estado["jugadores"][bloqueador]["pos"], not es_local)
 		return
@@ -5078,7 +5109,7 @@ static func _aplicar_remate(estado: Dictionary, datos: Dictionary) -> void:
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "tiro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 			"jugador_posicion": datos["rol"], "clave": datos["clave"], "resultado": tipo,
-			"remate_id": remate_id,
+			"remate_id": remate_id, "tecnica": datos.get("accion", ""),
 		})
 		if tipo == "afuera":
 			_dar_pelota_al_arquero(estado, not es_local, true)
@@ -5104,6 +5135,8 @@ static func _aplicar_remate(estado: Dictionary, datos: Dictionary) -> void:
 		"equipo": eq_a.nombre, "rival": eq_d.nombre,
 		"jugador_posicion": datos["rol"], "clave": datos["clave"],
 		"resultado": ("gol" if gol else ("atajado" if es_penal else "atajada")),
+		"tecnica": datos.get("accion", ""),
+		"asistencia_clave": MotorEspacial.clave_de(_asistente_de(estado, es_local, int(datos["clave"])), es_local) if not es_penal else -1,
 		"con_efecto": float(datos.get("curva_m", 0.0)) > 0.0,
 		"curva_m": float(datos.get("curva_m", 0.0)),
 		"calidad_tiro": float(datos.get("calidad_tiro", 0.0)),
@@ -5749,7 +5782,7 @@ static func _despejar_area(estado: Dictionary, arquero_local: bool) -> void:
 ## que manda pasa a ser `fuerza`. Es lo que le permite a un jugador
 ## limitado mandarla lejos igual, a costa de que llegue mucho más
 ## interceptable.
-static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: int, jugador: Dictionary, punto = null, es_pelotazo: bool = false) -> void:
+static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: int, jugador: Dictionary, punto = null, es_pelotazo: bool = false, accion_override: String = "") -> void:
 	var f: Dictionary = pesos()["fisica"]
 	var destino: Dictionary = estado["jugadores"][destino_id]
 	var objetivo: Vector2 = punto if punto != null else destino["pos"]
@@ -5766,7 +5799,7 @@ static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: i
 		estado["dist_pases"].append(_d)
 	# Gesto visual determinista: un pase corto hacia atras sale de taco.
 	var de_taco: bool = not es_pelotazo and poseedor["rol"] != "ARQ" and _d <= 8.0 and orientacion_de(poseedor).dot(dir) < -0.55
-	_accion(estado, int(poseedor["clave"]), "taco" if de_taco else ACCION_PATEA)
+	_accion(estado, int(poseedor["clave"]), accion_override if accion_override != "" else ("taco" if de_taco else ACCION_PATEA))
 	# §7.3: pasar entrena `pases`; reventarla, `fuerza`. El centro suma
 	# `centros` cuando se marca como tal, un tick después de esto.
 	_xp_e(estado, poseedor, "fuerza" if es_pelotazo else "pases")
@@ -6242,12 +6275,24 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 	# un defensor llegó antes, se la queda él).
 	# Un centro no lo "recibe" nadie de una: se disputa por arriba.
 	if bool(pelota.get("es_centro", false)):
+		var tipo_centro := str(pelota.get("tipo_centro", TIPO_CENTRO_ALTO))
 		pelota["es_centro"] = false
-		pelota["altura_max"] = 0.0
-		pelota["z"] = 0.0
-		estado["recibiendo_centro"] = true
-		_resolver_centro(estado, hasta, bool(pelota.get("centro_de", pasador_local)), minuto)
-		estado.erase("recibiendo_centro")
+		if tipo_centro == TIPO_CENTRO_MEDIO:
+			# Centro medio: recepción técnica. Puede volear o bajarla.
+			var receptor_medio := _mas_cercano_a(estado, hasta)
+			pelota["llegada"] = {"vel": pelota["vel"], "altura": float(pelota.get("altura_max", 0.0))}
+			pelota["altura_max"] = 0.0
+			pelota["z"] = 0.0
+			if receptor_medio != -1:
+				_resolver_recepcion(estado, receptor_medio, hasta, minuto)
+			else:
+				_pelota_fuera(estado, hasta, bool(pelota.get("centro_de", pasador_local)))
+		else:
+			pelota["altura_max"] = 0.0
+			pelota["z"] = 0.0
+			estado["recibiendo_centro"] = true
+			_resolver_centro(estado, hasta, bool(pelota.get("centro_de", pasador_local)), minuto)
+			estado.erase("recibiendo_centro")
 		return
 
 	# Un rechazo del arquero puede caer dividido, quedar para un companero
@@ -6410,6 +6455,8 @@ static func _resolver_intercepcion(estado: Dictionary, mejor_id: int, minuto: in
 ## El pase termino: quien la toma, la pared, el offside y el evento.
 static func _resolver_recepcion(estado: Dictionary, receptor: int, hasta: Vector2, minuto: int) -> void:
 	var pelota: Dictionary = estado["pelota"]
+	var tipo_centro := str(pelota.get("tipo_centro", ""))
+	pelota.erase("tipo_centro")
 	var es_atras_coordinado: bool = bool(pelota.get("pase_atras_coordinado", false)) and receptor == int(pelota.get("destino_id", -1))
 	pelota.erase("pase_atras_coordinado")
 	var pasador_local: bool = pelota.get("pasador_local", true)
@@ -6451,6 +6498,9 @@ static func _resolver_recepcion(estado: Dictionary, receptor: int, hasta: Vector
 		estado["paredes"]["abortadas"] = int(estado["paredes"].get("abortadas", 0)) + 1
 
 	_entregar_pelota(estado, receptor)
+	if tipo_centro == TIPO_CENTRO_MEDIO:
+		_sumar_estadistica_centro(estado, tipo_centro,
+			"recibe" if e_receptor["equipo_local"] == pasador_local else "rival_recibe")
 	# Estaba adelantado cuando le pegaron y la recibió: offside. Tiro libre
 	# para el que defiende, desde donde estaba.
 	if bool(pelota.get("offside", false)) and receptor == int(pelota.get("destino_id", -1)) \
@@ -6486,6 +6536,25 @@ static func _resolver_recepcion(estado: Dictionary, receptor: int, hasta: Vector
 	# tirar, asi que la misma pelota no se juega dos veces.
 	if bool(pelota.get("es_pase", false)):
 		_controlar_recepcion(estado, receptor, llegada)
+		if tipo_centro == TIPO_CENTRO_MEDIO and e_receptor["equipo_local"] == pasador_local \
+				and int(pelota.get("poseedor_id", -1)) == receptor:
+			var jugador_receptor := _dict_jugador(estado,
+				_equipo_de(estado, bool(e_receptor["equipo_local"])), e_receptor["jugador_id"])
+			var dificultad_media := dificultad_de_recepcion(estado, e_receptor,
+				llegada.get("vel", Vector2.ZERO), float(llegada.get("altura", 0.0)))
+			var chance_volea := clampf(0.08 + float(jugador_receptor["atributos"].get("volea", 50.0)) / 100.0 * 0.34 \
+				- float(dificultad_media["dificultad"]) * 0.12, 0.04, 0.38)
+			if estado["rng"].randf() < chance_volea:
+				_sumar_estadistica_centro(estado, tipo_centro, "volea")
+				pelota.erase("control")
+				pelota.erase("tipo_centro")
+				_resolver_tiro(estado, e_receptor, jugador_receptor, "volea", "volea")
+				return
+			_sumar_estadistica_centro(estado, tipo_centro, "control")
+			_accion(estado, receptor, "control_pie")
+		elif tipo_centro == TIPO_CENTRO_MEDIO:
+			_sumar_estadistica_centro(estado, tipo_centro, "toque_largo")
+		pelota.erase("tipo_centro")
 		if es_atras_coordinado and e_receptor["equipo_local"] == pasador_local and int(pelota["poseedor_id"]) == receptor:
 			_contar_jugada(estado, "pase_atras_controlado")
 
@@ -7812,7 +7881,10 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 			_xp_e(estado, poseedor, "pases", -1.0)
 			_xp_e(estado, poseedor, "centros")
 			# Va por arriba: no se corta en el camino, se define al caer.
-			estado["pelota"]["altura_max"] = float(f["altura_centro"])
+			var tipo_centro := TIPO_CENTRO_ALTO if estado["rng"].randf() < 0.55 else TIPO_CENTRO_MEDIO
+			estado["pelota"]["tipo_centro"] = tipo_centro
+			_sumar_estadistica_centro(estado, tipo_centro, "intentos")
+			estado["pelota"]["altura_max"] = float(f["altura_centro"] if tipo_centro == TIPO_CENTRO_ALTO else f.get("altura_centro_medio", 1.15))
 			estado["pelota"]["es_centro"] = true
 			estado["pelota"]["centro_de"] = es_local
 			estado["centros"]["intentos"] = int(estado["centros"].get("intentos", 0)) + 1
@@ -8757,7 +8829,10 @@ static func _ejecutar_balon_parado(estado: Dictionary) -> void:
 				_tocar_corto(estado, ataca_local)
 				return
 			_lanzar_pase(estado, e_ej, objetivo, jugador)
-			estado["pelota"]["altura_max"] = float(pesos()["fisica"]["altura_centro"])
+			var tipo_centro := TIPO_CENTRO_ALTO if estado["rng"].randf() < 0.55 else TIPO_CENTRO_MEDIO
+			estado["pelota"]["tipo_centro"] = tipo_centro
+			_sumar_estadistica_centro(estado, tipo_centro, "intentos")
+			estado["pelota"]["altura_max"] = float(pesos()["fisica"]["altura_centro"] if tipo_centro == TIPO_CENTRO_ALTO else pesos()["fisica"].get("altura_centro_medio", 1.15))
 			estado["pelota"]["es_centro"] = true
 			estado["pelota"]["centro_de"] = ataca_local
 			estado["centros"]["intentos"] = int(estado["centros"].get("intentos", 0)) + 1
@@ -8949,7 +9024,8 @@ static func _intentar_robo(estado: Dictionary) -> void:
 		_penalizar(estado, poseedor["clave"], jug_a)
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "gambeta", "equipo": eq_a.nombre, "rival": eq_d.nombre,
-			"jugador_posicion": poseedor["rol"], "resultado": "pierde",
+			"jugador_posicion": poseedor["rol"], "clave": poseedor["clave"],
+			"defensor_clave": mejor_id, "resultado": "pierde",
 		})
 	else:
 		var tipo_regate := _regate_disponible(estado, poseedor, jug_a)
@@ -8963,7 +9039,8 @@ static func _intentar_robo(estado: Dictionary) -> void:
 		_penalizar(estado, mejor_id, jug_d)
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "gambeta", "equipo": eq_a.nombre, "rival": eq_d.nombre,
-			"jugador_posicion": poseedor["rol"], "resultado": "pasa", "regate": tipo_regate,
+			"jugador_posicion": poseedor["rol"], "clave": poseedor["clave"],
+			"defensor_clave": mejor_id, "resultado": "pasa", "regate": tipo_regate,
 		})
 
 

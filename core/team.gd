@@ -799,6 +799,7 @@ static func _normalizar_jugadores(lista: Array) -> Array:
 		else:
 			for attr in j["potenciales"]:
 				j["potenciales"][attr] = int(j["potenciales"][attr])
+		PlayerGenerator.recortar_ajenos_al_arquero(j)
 		# Una habilidad solo sirve si el techo por atributos permite alcanzar
 		# la media minima de su nivel. Se limpian/downgradean guardados viejos.
 		Habilidades.corregir_habilidad_por_techo(j)

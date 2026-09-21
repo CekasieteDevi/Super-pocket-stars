@@ -1036,11 +1036,29 @@ func _avanzar_dias_todos(dias: int) -> void:
 		if not pedido.is_empty():
 			_agregar_noticia("CESION: %s" % pedido["log"][-1],
 				"fichajes", _mencion_de_oferta(pedido))
+		_avanzar_cesiones_ia(dias)
 	Ofertas.archivar(equipo_jugador)
 	# El mercado de libres corre todos los dias, con la ventana abierta o
 	# cerrada: no es una transferencia entre clubes.
 	_avanzar_agentes_libres(dias)
 	_procesar_retornos_de_medio_ano()
+
+
+## Los clubes de la IA se ceden jugadores entre ellos (Cesiones.ronda_ia).
+## Igual que con los libres, solo se avisan las que tocan a un club de TU
+## division: son unas 160 por ventana en toda la piramide.
+func _avanzar_cesiones_ia(dias: int) -> void:
+	var momento: float = float(temporada_actual) + _fraccion_de_temporada()
+	for c in Cesiones.ronda_ia(piramide, rng, dias, equipo_jugador, momento):
+		var dueno: Team = c["dueno"]
+		var pide: Team = c["pide"]
+		if dueno.division_actual != division_jugador and pide.division_actual != division_jugador:
+			continue
+		var j: Dictionary = c["jugador"]
+		_agregar_noticia("CESIONES: %s cede a %s (%s, media %d) a %s por %s." % [
+			dueno.nombre, _nombre_completo(j), str(j["posicion"]), int(j["media"]),
+			pide.nombre, Prestamos.ETIQUETAS_DURACION.get(str(c["duracion"]), "1 temporada").to_lower()],
+			"fichajes", [Noticias.mencion(j, pide.nombre)])
 
 
 ## Los clubes de la IA salen a buscar al pool de libres. Solo se avisan

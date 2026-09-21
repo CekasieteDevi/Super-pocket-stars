@@ -64,6 +64,9 @@ static func celda(texto: String, ancho: int, color: Color = Tema.TEXTO,
 	l.text = texto
 	l.custom_minimum_size = Vector2(ancho, 0)
 	l.horizontal_alignment = alineacion
+	# Centrada en alto: en una fila con celdas de dos tamaños de letra, la
+	# mas chica quedaba pegada arriba y se veia desalineada.
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	l.clip_text = true
 	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	l.tooltip_text = texto

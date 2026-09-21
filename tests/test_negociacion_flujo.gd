@@ -40,6 +40,17 @@ func _partida() -> Dictionary:
 	return {"piramide": piramide, "vendedor": piramide.divisiones[4].equipos[0], "rng": rng}
 
 
+## Los jugadores que son del club, esten donde esten. Mientras pasan los
+## dias de la negociacion la IA cede y recibe a prestamo (Cesiones.ronda_ia):
+## el cedido sigue siendo suyo y el que recibio no.
+func _plantel_propio(equipo: Team) -> int:
+	var n := equipo.prestados_afuera.size()
+	for j in equipo.todos_los_jugadores():
+		if not equipo.prestados_propios.has(int(j["id"])):
+			n += 1
+	return n
+
+
 ## Manda la oferta y deja pasar los dias hasta que el club conteste.
 func _acordar(vendedor: Team, id: int, monto: float) -> Dictionary:
 	var r: Dictionary = gs.enviar_oferta(vendedor, id, monto)
@@ -55,7 +66,7 @@ func _test_pase_completo() -> void:
 	var vendedor: Team = p["vendedor"]
 	var jugador: Dictionary = vendedor.jugadores[6]
 	var id := int(jugador["id"])
-	var plantel_antes := vendedor.jugadores.size() + vendedor.banco.size()
+	var plantel_antes := _plantel_propio(vendedor)
 
 	var pedido := Negociacion.precio_pedido(vendedor, jugador)
 	var r := _acordar(vendedor, id, pedido)
@@ -73,7 +84,7 @@ func _test_pase_completo() -> void:
 	var lo_perdio := Mercado.ubicar(vendedor, id).is_empty()
 	var sueldo_ok: bool = is_equal_approx(float(gs.equipo_jugador.sueldos[id]), sueldo)
 	var anios_ok: bool = int(gs.equipo_jugador.contratos[id]) == 4
-	var plantel_ok: bool = vendedor.jugadores.size() + vendedor.banco.size() == plantel_antes
+	var plantel_ok: bool = _plantel_propio(vendedor) == plantel_antes
 	if lo_tengo and lo_perdio and sueldo_ok and anios_ok and plantel_ok:
 		print("OK: cerrado por %s, 4 anios a %s, vendedor sigue con %d." % [
 			Economia.formato_dinero(pedido), Economia.formato_dinero(sueldo), plantel_antes])

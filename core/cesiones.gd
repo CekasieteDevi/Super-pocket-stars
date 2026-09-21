@@ -256,9 +256,141 @@ static func generar_pedido(equipo: Team, piramide, rng: RandomNumberGenerator,
 	return {}
 
 
+## Cada cuantos dias de mercado, en promedio, un club de la IA sale a ceder
+## a alguien. Con ~90 dias de mercado por año son dos intentos por club.
+const DIAS_ENTRE_CESIONES_IA := 45.0
+
+## Cuantos cedidos a la vez tiene como mucho un club de la IA. Sin tope,
+## un grande vaciaba las reservas en una ventana.
+const CEDIDOS_IA_MAX := 3
+
+## Hasta que edad cede la IA. Se cede al pibe para que juegue y crezca
+## (el que no juega crece al 25%, ver core/progresion.gd); al veterano de
+## reserva no hay nada que hacerle crecer.
+const EDAD_MAX_CEDIBLE_IA := 23
+
+
+## Cesiones entre clubes de la IA. Corre con el mercado abierto, igual que
+## los pedidos que te llegan a vos, y con el mismo criterio: el que pide
+## esta en la division del dueño o hasta DIVISIONES_ABAJO_MAX mas abajo, y
+## el cedido lo mejora por VENTAJA_MINIMA. La IA cede solo reservas y
+## cantera jovenes, sin tocar el once (Prestamos.evaluar_pedido lo prohibe).
+##
+## Antes no existia: los clubes de la IA no se prestaban nunca entre ellos,
+## y un juvenil sin lugar en un grande se quedaba sin jugar ni crecer.
+##
+## `protegido` es tu club: no cede ni recibe por aca, eso lo decidis vos.
+## Devuelve las cesiones hechas: {dueno, pide, jugador, fee, duracion}.
+static func ronda_ia(piramide, rng: RandomNumberGenerator, dias: int,
+		protegido: Team, momento: float) -> Array:
+	var hechas := []
+	for d in range(piramide.divisiones.size()):
+		for dueno in piramide.divisiones[d].equipos:
+			if dueno == protegido or dueno.quebrado:
+				continue
+			if rng.randf() > float(dias) / DIAS_ENTRE_CESIONES_IA:
+				continue
+			if dueno.prestados_afuera.size() >= CEDIDOS_IA_MAX:
+				continue
+			var hecha := _ceder_ia(dueno, d, piramide, rng, protegido, momento)
+			if not hecha.is_empty():
+				hechas.append(hecha)
+	return hechas
+
+
+static func _ceder_ia(dueno: Team, division_dueno: int, piramide, rng: RandomNumberGenerator,
+		protegido: Team, momento: float) -> Dictionary:
+	# El plantel de la IA es el once y siete suplentes, sin reservas ni
+	# cantera: mirando solo reservas no habia a quien ceder. Cede suplentes
+	# mientras le queden los que necesita para presentarse con margen para
+	# un lesionado (Liga.MINIMO_DISPONIBLES).
+	var plantel: Array = dueno.todos_los_jugadores()
+	var sobran: bool = plantel.size() - 1 >= Liga.MINIMO_DISPONIBLES + 1
+	var arqueros := 0
+	for j in plantel:
+		if str(j["posicion"]) == "ARQ":
+			arqueros += 1
+	var candidatos := []
+	for j in (dueno.banco + dueno.reservas if sobran else []) + dueno.cantera:
+		var id := int(j["id"])
+		# Al que tiene prestado no lo puede ceder: no es suyo.
+		if dueno.prestados_propios.has(id) or int(j.get("edad", 99)) > EDAD_MAX_CEDIBLE_IA:
+			continue
+		# El arquero suplente no se va si es el unico.
+		if str(j["posicion"]) == "ARQ" and arqueros <= 2 and not dueno.cantera.has(j):
+			continue
+		candidatos.append(j)
+	if candidatos.is_empty():
+		return {}
+
+	var pares := []
+	var ultima: int = mini(division_dueno + DIVISIONES_ABAJO_MAX, piramide.divisiones.size() - 1)
+	for d in range(division_dueno, ultima + 1):
+		for pide in piramide.divisiones[d].equipos:
+			if pide == dueno or pide == protegido or pide.quebrado:
+				continue
+			if pide.todos_los_jugadores().size() >= Team.PLANTEL_MAXIMO:
+				continue
+			var media_pide: float = pide.media_equipo()
+			for j in candidatos:
+				var ventaja: float = float(j["media"]) - media_pide
+				if ventaja >= VENTAJA_MINIMA:
+					pares.append({"pide": pide, "division": d, "jugador": j, "peso": ventaja})
+
+	while not pares.is_empty():
+		var suma := 0.0
+		for par in pares:
+			suma += float(par["peso"])
+		var tiro := rng.randf() * suma
+		var i := 0
+		while i < pares.size() - 1:
+			tiro -= float(pares[i]["peso"])
+			if tiro <= 0.0:
+				break
+			i += 1
+		var par: Dictionary = pares[i]
+		pares.remove_at(i)
+		var pide: Team = par["pide"]
+		var jugador: Dictionary = par["jugador"]
+		var t := _terminos(dueno, pide, int(par["division"]), jugador, rng, division_dueno)
+		if t.is_empty():
+			continue
+		var temporadas: float = float(Prestamos.DURACIONES[str(t["duracion"])])
+		# Sin opcion de compra: es una negociacion aparte que entre dos
+		# clubes de la IA no tiene quien la discuta.
+		var r := Prestamos.ceder(dueno, pide, int(jugador["id"]), momento, temporadas,
+			float(t["porcentaje_sueldo"]), 0.0, float(t["plus_sueldo"]), float(t["fee"]))
+		if bool(r["exito"]):
+			return {"dueno": dueno, "pide": pide, "jugador": jugador, "fee": float(r["fee"]),
+				"duracion": str(t["duracion"])}
+	return {}
+
+
 ## Los terminos iniciales del pedido de `pide` por `jugador`, o {} si ese
 ## club no puede pedirlo.
 static func _armar_pedido(equipo: Team, pide: Team, d: int, jugador: Dictionary,
+		rng: RandomNumberGenerator, division_propia: int) -> Dictionary:
+	var t := _terminos(equipo, pide, d, jugador, rng, division_propia)
+	if t.is_empty():
+		return {}
+	var oferta := Ofertas.nueva(equipo.siguiente_id_oferta, pide.nombre, jugador, float(t["fee"]), true, rng)
+	equipo.siguiente_id_oferta += 1
+	oferta["tipo"] = "cesion"
+	oferta["duracion"] = t["duracion"]
+	oferta["porcentaje_sueldo"] = t["porcentaje_sueldo"]
+	oferta["opcion_compra"] = t["opcion_compra"]
+	oferta["plus_sueldo"] = t["plus_sueldo"]
+	oferta["log"].append("%s pide a %s a prestamo: %s" % [
+		pide.nombre, oferta["jugador"], resumen(oferta)])
+	equipo.ofertas.append(oferta)
+	return oferta
+
+
+## Lo que `pide` ofrece de arranque por `jugador` de `dueno`, o {} si no le
+## alcanza la caja o el jugador no iria ni con el plus. Es el mismo criterio
+## para el pedido que te llega a vos y para la cesion entre clubes de la IA
+## (ronda_ia). `division_propia` es la division del dueño y `d` la del que pide.
+static func _terminos(equipo: Team, pide: Team, d: int, jugador: Dictionary,
 		rng: RandomNumberGenerator, division_propia: int) -> Dictionary:
 	var id_j := int(jugador["id"])
 	var duracion: String = ["medio", "una", "una", "dos"][rng.randi() % 4]
@@ -297,18 +429,8 @@ static func _armar_pedido(equipo: Team, pide: Team, d: int, jugador: Dictionary,
 				return {}
 			if float(t["sueldo"]) * pct + plus > float(pide.caja.get("contratos", 0.0)):
 				return {}
-
-	var oferta := Ofertas.nueva(equipo.siguiente_id_oferta, pide.nombre, jugador, fee, true, rng)
-	equipo.siguiente_id_oferta += 1
-	oferta["tipo"] = "cesion"
-	oferta["duracion"] = duracion
-	oferta["porcentaje_sueldo"] = pct
-	oferta["opcion_compra"] = opcion
-	oferta["plus_sueldo"] = plus
-	oferta["log"].append("%s pide a %s a prestamo: %s" % [
-		pide.nombre, oferta["jugador"], resumen(oferta)])
-	equipo.ofertas.append(oferta)
-	return oferta
+	return {"duracion": duracion, "fee": fee, "porcentaje_sueldo": pct,
+		"opcion_compra": opcion, "plus_sueldo": plus}
 
 
 ## Le contraofertamos: los terminos vuelven a la mesa del que pide.

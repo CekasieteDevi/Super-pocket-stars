@@ -40,6 +40,10 @@ static func importancia(evento) -> int:
 			return MENOR
 		"falta":
 			return MENOR
+		"gambeta":
+			return NOTABLE if res == "pierde" else NADA
+		"cambio":
+			return NOTABLE
 	return NADA
 
 
@@ -52,13 +56,16 @@ static func linea(evento: Dictionary, nombres: Dictionary) -> String:
 	var res := str(evento.get("resultado", ""))
 	match str(evento.get("tipo", "")):
 		"tiro_puerta":
+			var tecnica := str(evento.get("tecnica", ""))
+			var gesto := _nombre_tecnica(tecnica)
+			var asistencia := _asistencia(evento, nombres)
 			if res == "gol":
 				if bool(evento.get("con_efecto", false)):
-					return "¡GOL CON EFECTO de %s! %s" % [quien, equipo]
-				return "¡GOL de %s! %s" % [quien, equipo]
+					return "¡GOL CON EFECTO de %s%s%s! %s" % [gesto, quien, asistencia, equipo]
+				return "¡GOL%s de %s%s! %s" % [gesto, quien, asistencia, equipo]
 			if bool(evento.get("con_efecto", false)):
-				return "Remata con efecto %s y ataja el arquero" % quien
-			return "Remata %s y ataja el arquero" % quien
+				return "Remata con efecto %s%s y ataja el arquero" % [gesto, quien]
+			return "Remata %s%s y ataja el arquero" % [gesto, quien]
 		"penal":
 			if res == "gol":
 				return "¡PENAL! %s la cambia por gol" % quien
@@ -80,10 +87,19 @@ static func linea(evento: Dictionary, nombres: Dictionary) -> String:
 				return "¡Segunda amarilla! Expulsado %s (%s)" % [quien, equipo]
 			return "¡ROJA directa! Se va %s (%s)" % [quien, equipo]
 		"tiro":
+			var tecnica_tiro := _nombre_tecnica(str(evento.get("tecnica", "")))
 			match res:
-				"bloqueado": return "Se la bloquean a %s" % quien
-				"palo": return "¡Al palo el remate de %s!" % quien
-				_: return "Remata %s y se va afuera" % quien
+				"bloqueado": return "%s bloquea el remate%s de %s" % [_quien_clave(evento.get("bloqueador_clave", -1), nombres), tecnica_tiro, quien]
+				"palo": return "¡Al palo el remate%s de %s!" % [tecnica_tiro, quien]
+				_: return "Remata%s %s y se va afuera" % [tecnica_tiro, quien]
+		"gambeta":
+			if str(evento.get("resultado", "")) == "pierde":
+				return "%s se la saca a %s" % [_quien_clave(evento.get("defensor_clave", -1), nombres), quien]
+			return "%s deja atras a %s" % [quien, _quien_clave(evento.get("defensor_clave", -1), nombres)]
+		"cambio":
+			var sale := _quien_clave(evento.get("saliente_clave", -1), nombres)
+			var entra := _quien_clave(evento.get("entrante_clave", -1), nombres)
+			return "Cambio: sale %s, entra %s" % [sale, entra]
 		"saque_inicial":
 			match res:
 				"1": return "¡Arranca el partido!"
@@ -97,6 +113,26 @@ static func linea(evento: Dictionary, nombres: Dictionary) -> String:
 		"falta":
 			return "Falta de %s" % quien
 	return ""
+
+
+static func _nombre_tecnica(tecnica: String) -> String:
+	match tecnica:
+		"cabezazo": return " de cabezazo"
+		"volea": return " de volea"
+		"chilena": return " de chilena"
+		_: return ""
+
+
+static func _quien_clave(valor, nombres: Dictionary) -> String:
+	var clave := int(valor)
+	return str(nombres.get(clave, "el rival"))
+
+
+static func _asistencia(evento: Dictionary, nombres: Dictionary) -> String:
+	var clave := int(evento.get("asistencia_clave", -1))
+	if clave == -1 or not nombres.has(clave):
+		return ""
+	return " (asistencia de %s)" % str(nombres[clave])
 
 
 static func _quien(evento: Dictionary, nombres: Dictionary) -> String:

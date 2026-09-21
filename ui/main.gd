@@ -801,6 +801,9 @@ func _construir_panel_plantel(padre: Control) -> void:
 	scroll.add_child(contenedor_lista_plantel)
 
 	var lateral := ScrollContainer.new()
+	# Sin scroll de costado: con un valor de ocho cifras la ficha pedia mas
+	# de 388 px y quedaba cortada a la derecha. Asi la columna se ensancha.
+	lateral.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	lateral.custom_minimum_size = Vector2(388, 0)
 	lateral.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.add_child(lateral)
@@ -844,13 +847,22 @@ func _refrescar_plantel() -> void:
 	_refrescar_ficha_lateral()
 
 
+## Alto de una fila del plantel. Con Tema.ALTO_TACTIL (52) y el margen
+## de la fila cada jugador ocupaba 64 px: titulares, banco y reservas
+## juntos pasaban las cuatro pantallas de scroll. 36 px sigue siendo un
+## blanco comodo porque toda la fila es tocable, no solo el nombre.
+const ALTO_FILA_PLANTEL := 36
+
+
 ## Una fila del plantel. TODA la fila es tocable, no solo el nombre.
 func _fila_jugador(equipo: Team, j: Dictionary, par: bool, es_banco: bool) -> Control:
 	var id := int(j["id"])
 	var elegido := id == plantel_elegido
 	var fila := Componentes.fila(par or elegido)
+	var estilo: StyleBoxFlat = fila.get_theme_stylebox("panel")
+	estilo.content_margin_top = 1
+	estilo.content_margin_bottom = 1
 	if elegido:
-		var estilo: StyleBoxFlat = fila.get_theme_stylebox("panel")
 		estilo.bg_color = Tema.PANEL_ALTO
 		estilo.border_width_left = 4
 		estilo.border_color = Tema.AMBAR
@@ -870,7 +882,7 @@ func _fila_jugador(equipo: Team, j: Dictionary, par: bool, es_banco: bool) -> Co
 	btn.clip_text = true
 	btn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	btn.tooltip_text = btn.text
-	btn.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	_compactar_boton(btn)
 	btn.pressed.connect(func():
 		plantel_elegido = id
 		_refrescar_plantel()
@@ -895,26 +907,45 @@ func _fila_jugador(equipo: Team, j: Dictionary, par: bool, es_banco: bool) -> Co
 		Componentes.TAM_TABLA))
 
 	# Estado: lo unico que hace falta saber de un vistazo al armar el equipo.
-	var estado := "Listo"
-	var color := Tema.VERDE
+	# Vacio cuando esta disponible: "Listo" en once filas era ruido que
+	# tapaba a los pocos que de verdad no pueden jugar.
+	var estado := ""
+	var color := Tema.ROJO
 	if equipo.esta_lesionado(id):
 		var les: Dictionary = equipo.lesiones[id]
 		estado = "%d d" % int(les["dias_restantes"])
-		color = Tema.ROJO
 	elif int(equipo.suspendidos.get(id, 0)) > 0:
 		estado = "Susp."
-		color = Tema.ROJO
-	dentro.add_child(Componentes.celda(estado, 66, color))
+	dentro.add_child(Componentes.celda(estado, 54, color))
 
 	# Ficha y no "Subir": cambiar jugadores de lugar se hace arrastrando en
 	# Formacion, que es donde se ve la cancha. Tener las dos formas en dos
 	# pantallas distintas confundia mas de lo que ayudaba.
 	var btn_ficha := Button.new()
 	btn_ficha.text = "Ficha"
-	btn_ficha.custom_minimum_size = Vector2(84, 0)
+	btn_ficha.custom_minimum_size = Vector2(72, 0)
+	_compactar_boton(btn_ficha)
 	btn_ficha.pressed.connect(func(): _mostrar_ficha(id))
 	dentro.add_child(btn_ficha)
 	return fila
+
+
+## Baja el boton al alto de la fila. El margen de 12 px arriba y abajo que
+## pone el tema (Tema.PADDING_BOTON) es lo que estiraba la fila: el alto
+## minimo solo no alcanza, porque el boton nunca baja de su contenido.
+func _compactar_boton(boton: Button) -> void:
+	boton.custom_minimum_size.y = ALTO_FILA_PLANTEL
+	boton.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	# Del tema de la pantalla y no de boton.get_theme_stylebox: el boton
+	# todavia no esta en el arbol y devolveria el tema por defecto de Godot.
+	for estado in ["normal", "hover", "pressed", "focus", "disabled"]:
+		if not theme.has_stylebox(estado, "Button"):
+			continue
+		var caja: StyleBox = theme.get_stylebox(estado, "Button")
+		caja = caja.duplicate()
+		caja.content_margin_top = 2
+		caja.content_margin_bottom = 2
+		boton.add_theme_stylebox_override(estado, caja)
 
 
 func _on_promover_a_titular(jugador_id: int) -> void:
@@ -1018,22 +1049,32 @@ func _refrescar_ficha_lateral() -> void:
 	caja.add_child(btn)
 
 
-## Alto del retrato de la ficha lateral. 100 px deja el sprite grande sin
-## empujar el boton "Ficha completa" fuera de la pantalla en 1152x648.
+## Recorte del cuadro de frente y quieto (24) del atlas del partido. La
+## celda mide 64x64 y el jugador ocupa el centro: medido sobre los once
+## peinados, el cuerpo va de x 16 a 48 y de y 13 a 58. Un recorte fijo y
+## no el de cada peinado: asi todos los retratos salen a la misma escala.
+const RECORTE_RETRATO := Rect2(14, 12, 36, 47)
+## Escala entera: con nearest, una escala fraccionaria deja columnas de
+## pixeles de ancho desparejo y el sprite se ve deformado.
+const ESCALA_RETRATO := 2
+## Alto del retrato de la ficha lateral: el recorte a escala 2 (94 px) mas
+## un margen. Con 100 px el boton "Ficha completa" sigue entrando en 1152x648.
 const ALTO_RETRATO := 100
-## Ancho: el sprite es angosto (12x20 px), pero el marco tiene que dar
-## lugar al dorsal de dos digitos arriba a la derecha.
+## Ancho: el sprite a escala 2 mide 72 px y a su derecha va el dorsal de
+## dos digitos. Con el dorsal encima del sprite tapaba la cabeza. Mas de
+## 108 px y la ficha lateral se pasa de sus 388 px y aparece scroll de costado.
 const ANCHO_RETRATO := 108
 
 
 ## Retrato: el mismo sprite que sale a la cancha, de frente y quieto, con
 ## la camiseta del club. Es el sprite del partido y no un dibujo aparte:
 ## asi el jugador que el usuario elige en el plantel es el que reconoce
-## despues corriendo.
+## despues corriendo. Sale del atlas (AtlasJugadores) con el mismo peinado
+## y tono de pelo que le da VistaPartido; antes salia de los sprites
+## dibujados por codigo, que el partido ya no usa.
 ##
-## El dorsal va como etiqueta arriba a la derecha y no estampado en el
-## sprite: el numero solo se dibuja en la espalda (SpritesPartido
-## .DIRECCIONES_CON_NUMERO), y de frente no se veria.
+## El dorsal va como etiqueta a la derecha y no estampado en el sprite:
+## el atlas solo lo estampa en los cuadros de espalda.
 func _retrato_jugador(equipo: Team, j: Dictionary) -> Control:
 	var marco := PanelContainer.new()
 	var estilo := StyleBoxFlat.new()
@@ -1054,17 +1095,19 @@ func _retrato_jugador(equipo: Team, j: Dictionary) -> Control:
 	marco.add_child(pila)
 
 	var id := int(j["id"])
+	var recorte := AtlasTexture.new()
+	recorte.atlas = AtlasJugadores.textura(AtlasJugadores.cuadro("", 0.0, 0, false),
+		ColoresClub.de_equipo(equipo), equipo.color_short,
+		SpritesPartido.tono_pelo_de(id), false, 0, AtlasJugadores.estilo_de(id))
+	recorte.region = RECORTE_RETRATO
 	var lamina := TextureRect.new()
-	lamina.texture = SpritesPartido.jugador(
-		ColoresClub.de_equipo(equipo), SpritesPartido.ABAJO, SpritesPartido.QUIETO,
-		equipo.color_short, SpritesPartido.pelo_de(id), SpritesPartido.tono_pelo_de(id))
-	# Nearest: el sprite mide 12x20 px. Con el filtro suave por defecto
-	# ampliado a este tamaño se veia como una mancha borrosa.
+	lamina.texture = recorte
 	lamina.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	lamina.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	lamina.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	lamina.offset_top = 10.0
-	lamina.offset_bottom = -6.0
+	lamina.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	lamina.stretch_mode = TextureRect.STRETCH_SCALE
+	var lado := RECORTE_RETRATO.size * ESCALA_RETRATO
+	lamina.position = Vector2(2.0, ALTO_RETRATO - lado.y - 3.0)
+	lamina.size = lado
 	pila.add_child(lamina)
 
 	var dorsal := equipo.dorsal_de(id)
@@ -1074,9 +1117,9 @@ func _retrato_jugador(equipo: Team, j: Dictionary) -> Control:
 		Tema.numero(num, 22, Tema.AMBAR)
 		num.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		num.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-		num.offset_left = -40.0
+		num.offset_left = -32.0
 		num.offset_top = 2.0
-		num.offset_right = -6.0
+		num.offset_right = -4.0
 		pila.add_child(num)
 	return marco
 
@@ -1154,8 +1197,8 @@ func _caja_numero(etiqueta: String, valor: String, color: Color) -> Control:
 	estilo.corner_radius_top_right = Tema.RADIO
 	estilo.corner_radius_bottom_left = Tema.RADIO
 	estilo.corner_radius_bottom_right = Tema.RADIO
-	estilo.content_margin_left = 12
-	estilo.content_margin_right = 12
+	estilo.content_margin_left = 10
+	estilo.content_margin_right = 10
 	estilo.content_margin_top = 8
 	estilo.content_margin_bottom = 8
 	caja.add_theme_stylebox_override("panel", estilo)
@@ -1164,7 +1207,9 @@ func _caja_numero(etiqueta: String, valor: String, color: Color) -> Control:
 	dentro.add_child(Tema.etiqueta_seccion(etiqueta))
 	var l := Label.new()
 	l.text = valor
-	Tema.numero(l, 26, color)
+	# Un valor de ocho cifras ("$10,329,476") a 26 px ensanchaba la ficha
+	# lateral y le comia el ancho a los nombres de la lista.
+	Tema.numero(l, 26 if valor.length() <= 8 else 20, color)
 	dentro.add_child(l)
 	return caja
 

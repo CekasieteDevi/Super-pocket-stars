@@ -492,6 +492,10 @@ static func _procesar_cambios_equipo(equipo: Team, minuto: int, con_log: bool, l
 		eventos.append({
 			"minuto": minuto, "tipo": "cambio", "equipo": equipo.nombre, "rival": "",
 			"jugador_posicion": saliente["posicion"], "resultado": motivo,
+			"saliente_id": saliente["id"], "entrante_id": entrante["id"],
+			"equipo_local": equipo.local,
+			"saliente_clave": MotorEspacial.clave_de(saliente["id"], equipo.local),
+			"entrante_clave": MotorEspacial.clave_de(entrante["id"], equipo.local),
 		})
 
 

@@ -33,9 +33,9 @@
   },
   "_centro": "Colgarla al area desde la banda. Vuela por encima de todos (altura_centro) asi que no se corta en el camino: se define en el duelo aereo al caer. Usa `centros`, `cabezazo`, `salto` y `achique`, cuatro atributos del GDD que no leia nadie.",
   "centro": {
-    "base": 0.55,
-    "punteria": 1.3,
-    "progreso": 0.6
+    "base": 1.45,
+    "punteria": 1.35,
+    "progreso": 0.65
   },
   "_pared": "Se la da al companero y sale corriendo a recibirla del otro lado del marcador. Son DOS pases encadenados, o sea dos chances de que se la corten: por eso pide `pases` y es jugada de los que saben tocar.",
   "pared": {
@@ -109,12 +109,13 @@
     "_pared_geo": "El mismo `pases` que la habilita define su tamano: mejor pie, muro mas lejos y carrera mas larga.",
     "pases_minimo_pared": 40.0,
     "_centro_geo": "Hay que estar abierto (banda) y adelantado para centrar. z_inalcanzable es la altura por encima de la cual los de abajo no la alcanzan.",
-    "centros_minimo": 40.0,
-    "banda_para_centrar": 11.0,
+    "centros_minimo": 32.0,
+    "banda_para_centrar": 9.5,
     "_apego_a_la_banda": "Cuanto se pega a la banda el que conduce abierto: 0 = va derecho al arco (no hay juego de banda), 1 = va al vertice del area de su lado. Barrido con tests/_diag_banda.gd (30 partidos) y tests/_diag_goles_motores.gd (120): 0 dejaba 81% de las conducciones terminando abiertas y 1,9 m de desvio hacia el medio; 0,5 sube a 90% y 1,1 m y es gratis en goles; 1,0 llega a 91% y 0,8 m pero cuesta 0,25 goles por partido en quinta y BAJA los centros de 2,7 a 2,1, porque el que corre pegado a la cal se aleja de sus companeros.",
     "apego_a_la_banda": 0.5,
-    "avance_para_centrar": 0.55,
+    "avance_para_centrar": 0.48,
     "altura_centro": 6.0,
+    "altura_centro_medio": 1.15,
     "z_inalcanzable": 2.5,
     "_offside": "Margen de error al medir el desmarque: un delantero inteligente se queda al filo de la linea, uno limitado se pasa. Sin margen nadie se iria nunca en offside y la infraccion no existiria.",
     "offside_margen_torpe": 5.5,

@@ -70,6 +70,9 @@ static func generate(id: int, rng: RandomNumberGenerator, forced_position: Strin
 		tier = genetica["tier"]
 
 	var potenciales := techos_por_atributo(potencial, rng)
+	if position == "ARQ":
+		for attr in AJENOS_AL_ARQUERO:
+			potenciales[attr] = _techo_ajeno(potenciales[attr])
 	var atributos := {}
 	for attr in get_all_attributes():
 		atributos[attr] = _roll_attribute(potenciales[attr], rng, realizacion)
@@ -119,6 +122,36 @@ const TECHO_MIN := 15
 const TECHO_MAX := 99
 
 
+## El arquero no remata, no centra ni barre: un golero con centros 80
+## no tiene sentido. Estos atributos no pesan en su media ni los usa
+## ninguno de los dos motores cuando juega de arquero. Quedan afuera los
+## fisicos y mentales, y tambien pases y control: el arquero sale jugando.
+const AJENOS_AL_ARQUERO := ["centros", "tiro", "volea", "cabezazo",
+	"tiros_libres", "efecto", "quite", "barrida"]
+## Un arquero de potencial 80 queda con techo ~40 en esos atributos.
+const FACTOR_TECHO_AJENO := 0.5
+
+
+## Se escala el techo ya tirado en vez de tirar otro: una tirada extra
+## corre la secuencia del RNG y cambia todas las partidas generadas con
+## la misma semilla (con otra tirada fallaban tres tests que no miran arqueros).
+static func _techo_ajeno(techo: int) -> int:
+	return maxi(TECHO_MIN, int(round(float(techo) * FACTOR_TECHO_AJENO)))
+
+
+## Para guardados anteriores a AJENOS_AL_ARQUERO: baja techo y atributo
+## del arquero al tope nuevo. El tope sale del id, asi que aplicarlo en
+## cada carga da siempre lo mismo.
+static func recortar_ajenos_al_arquero(j: Dictionary) -> void:
+	if j["posicion"] != "ARQ":
+		return
+	for attr in AJENOS_AL_ARQUERO:
+		var tope := _techo_ajeno(int(clamp(round(float(j["potencial"]) + _desvio_derivado(int(j["id"]), attr)),
+			TECHO_MIN, TECHO_MAX)))
+		j["potenciales"][attr] = mini(int(j["potenciales"].get(attr, tope)), tope)
+		j["atributos"][attr] = mini(int(j["atributos"].get(attr, 0)), j["potenciales"][attr])
+
+
 static func techos_por_atributo(potencial: int, rng: RandomNumberGenerator) -> Dictionary:
 	var out := {}
 	for attr in get_all_attributes():
@@ -135,14 +168,18 @@ static func techos_por_atributo(potencial: int, rng: RandomNumberGenerator) -> D
 static func techos_derivados(potencial: int, jugador_id: int) -> Dictionary:
 	var out := {}
 	for attr in get_all_attributes():
-		var h: int = absi(hash("%d/%s" % [jugador_id, attr]))
-		# Dos muestras uniformes promediadas se acercan a una normal, que
-		# es lo que produce techos_por_atributo con randfn.
-		var u1: float = float(h % 1000) / 1000.0
-		var u2: float = float((h / 1000) % 1000) / 1000.0
-		var desvio: float = (u1 + u2 - 1.0) * DESVIO_TECHO * 1.7
-		out[attr] = int(clamp(round(float(potencial) + desvio), TECHO_MIN, TECHO_MAX))
+		out[attr] = int(clamp(round(float(potencial) + _desvio_derivado(jugador_id, attr)),
+			TECHO_MIN, TECHO_MAX))
 	return out
+
+
+static func _desvio_derivado(jugador_id: int, attr: String) -> float:
+	var h: int = absi(hash("%d/%s" % [jugador_id, attr]))
+	# Dos muestras uniformes promediadas se acercan a una normal, que
+	# es lo que produce techos_por_atributo con randfn.
+	var u1: float = float(h % 1000) / 1000.0
+	var u2: float = float((h / 1000) % 1000) / 1000.0
+	return (u1 + u2 - 1.0) * DESVIO_TECHO * 1.7
 
 
 ## Cada atributo se tira independiente, con techo blando en SU propio
