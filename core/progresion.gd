@@ -200,8 +200,8 @@ static func factor_rendimiento(jugador: Dictionary) -> float:
 ## joven — 1.0 si no aplica ninguna de las dos cosas. mult_entrenamiento
 ## (§9.5, Instalaciones.factor_entrenamiento): bonus de instalaciones y
 ## carga, sobre TODO el crecimiento. `mult_area` es el multiplicador por
-## atributo que deja el foco de equipo (§7.4.2, ver
-## FocoEquipo.multiplicadores). Vacio = sin enfasis.
+## atributo que dejan los ejercicios del equipo (§7.4.2, ver
+## Entrenamiento.multiplicadores). Vacio = sin enfasis.
 ##
 ## El foco individual (×2 sobre un atributo elegido) se sacó el
 ## 2026-09-14. Medido con semilla fija: un DC de 17 con foco en

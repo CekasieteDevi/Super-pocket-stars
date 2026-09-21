@@ -129,11 +129,11 @@ func _test_se_asimila_jugando_y_se_oxida_la_que_no_usas(rng: RandomNumberGenerat
 
 
 func _test_el_foco_tactico_acelera(rng: RandomNumberGenerator) -> void:
-	print("\n=== El foco de equipo tactico acelera la asimilacion ===")
+	print("\n=== Jugadas armadas acelera la asimilacion ===")
 	var sin_foco := Team.generar("SinFoco", rng, 0)
 	var con_foco := Team.generar("ConFoco", rng, 100)
-	sin_foco.foco_equipo = "general"
-	con_foco.foco_equipo = "tactico"
+	sin_foco.ejercicio_tactico = "libre"
+	con_foco.ejercicio_tactico = "jugadas_armadas"
 	# Los dos estrenan una tactica.
 	sin_foco.familiaridad = {}
 	con_foco.familiaridad = {}

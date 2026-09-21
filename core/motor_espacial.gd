@@ -8228,7 +8228,8 @@ static func _ejecutar_penal(estado: Dictionary, bp: Dictionary) -> void:
 		var res := Duel.resolver(
 			Duel.atributo_efectivo(float(pateador["atributos"]["tiro"]) + ventaja, "tecnico", eq_a.resistencia_pct(pateador["id"])),
 			Duel.atributo_efectivo(valor_arq, "tecnico", eq_d.resistencia_pct(arquero["id"])),
-			MatchEngine._bloques_equipo(eq_a, eq_d, pateador, "tiro", minuto, estado["rng"]),
+			MatchEngine._bloques_equipo(eq_a, eq_d, pateador, "tiro", minuto, estado["rng"], -1,
+				Entrenamiento.SITUACION_PENAL),
 			MatchEngine._bloques_equipo(eq_d, eq_a, arquero, "reflejos", minuto, estado["rng"]))
 		gol = Duel.gana_atacante(res, estado["rng"])
 

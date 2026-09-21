@@ -171,7 +171,8 @@ static func _asistente(equipo: Team, goleador_id: int, rng: RandomNumberGenerato
 ## `companero_id` es el otro jugador del MISMO equipo que participa de la
 ## accion —el receptor de un pase— o -1 si la accion es de uno solo. La
 ## quimica (§7.4.6) es de a pares y solo entra cuando hay par.
-static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atributo: String, minuto: int, rng: RandomNumberGenerator, companero_id: int = -1) -> Dictionary:
+static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atributo: String, minuto: int, rng: RandomNumberGenerator, companero_id: int = -1,
+		situacion: String = "") -> Dictionary:
 	var jugador_id: int = jugador["id"]
 	# §8.4 #4 y #25. Los dos son del JUGADOR, asi que van en bloque A, y
 	# los dos motores los ven porque los dos pasan por aca.
@@ -201,6 +202,10 @@ static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atri
 	# estrenada a +5 dominada. Va en bloque B porque es del EQUIPO, no de
 	# este jugador ni del entorno.
 	bloque_b += Familiaridad.modificador(equipo)
+	# §7.4.2: lo que el plantel practica esta semana. Tambien es del
+	# EQUIPO. `situacion` dice lo que el atributo solo no dice: que es un
+	# penal, o que el duelo es del MatchEngine (ver Entrenamiento.EQUIVALENCIA).
+	bloque_b += Entrenamiento.bonus_duelo(equipo, atributo, situacion)
 	# §8.4#10 / §7.4.6: lo que se entienden estos dos en particular.
 	if companero_id >= 0:
 		bloque_b += Quimica.bonus(equipo, jugador_id, companero_id)
@@ -315,8 +320,10 @@ static func _duelo(atacante: Dictionary, atacante_attr: String, equipo_atacante:
 		equipo_defensor.resistencia_pct(defensor["id"]))
 	var resultado := Duel.resolver(
 		ata_eff, def_eff,
-		_bloques_equipo(equipo_atacante, equipo_defensor, atacante, atacante_attr, minuto, rng, companero_id),
-		_bloques_equipo(equipo_defensor, equipo_atacante, defensor, defensor_attr, minuto, rng))
+		_bloques_equipo(equipo_atacante, equipo_defensor, atacante, atacante_attr, minuto, rng, companero_id,
+			Entrenamiento.SITUACION_ABSTRACTA),
+		_bloques_equipo(equipo_defensor, equipo_atacante, defensor, defensor_attr, minuto, rng, -1,
+			Entrenamiento.SITUACION_ABSTRACTA))
 	equipo_atacante.desgastar(atacante["id"], atacante["atributos"]["energia"])
 	equipo_defensor.desgastar(defensor["id"], defensor["atributos"]["energia"])
 	_chequear_lesion(atacante, equipo_atacante, rng)
@@ -725,8 +732,10 @@ static func _duelo_tiro(atacante: Dictionary, tiro_valor: float, equipo_atacante
 	var def_eff := Duel.atributo_efectivo(arquero_valor, "tecnico", equipo_defensor.resistencia_pct(arquero["id"]))
 	var resultado := Duel.resolver(
 		ata_eff, def_eff,
-		_bloques_equipo(equipo_atacante, equipo_defensor, atacante, "tiro", minuto, rng),
-		_bloques_equipo(equipo_defensor, equipo_atacante, arquero, "reflejos", minuto, rng))
+		_bloques_equipo(equipo_atacante, equipo_defensor, atacante, "tiro", minuto, rng, -1,
+			Entrenamiento.SITUACION_ABSTRACTA),
+		_bloques_equipo(equipo_defensor, equipo_atacante, arquero, "reflejos", minuto, rng, -1,
+			Entrenamiento.SITUACION_ABSTRACTA))
 	equipo_atacante.desgastar(atacante["id"], atacante["atributos"]["energia"])
 	equipo_defensor.desgastar(arquero["id"], arquero["atributos"]["energia"])
 	_chequear_lesion(atacante, equipo_atacante, rng)

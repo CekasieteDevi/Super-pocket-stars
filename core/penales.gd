@@ -27,17 +27,20 @@ const RONDA_REGULAR := 5
 ## no engancha en el bloque D genérico del duelo (Habilidades.gd), porque
 ## Penales no pasa por el motor de posesión/duelos normal. Mismo motivo
 ## para Pícaro/Clutch/Frágil mental del pateador (Personalidad.bonus_penal).
-static func _chance_gol(pateador: Dictionary, arquero: Dictionary) -> float:
+static func _chance_gol(pateador: Dictionary, arquero: Dictionary, bonus_entrenamiento: float = 0.0) -> float:
 	var tiro: float = pateador["atributos"]["tiro"]
 	var arquero_valor: float = arquero["atributos"]["reflejos"] * 0.6 + arquero["atributos"]["estirada"] * 0.4
 	var chance: float = 0.78 + (tiro - arquero_valor) / 250.0
 	chance -= Habilidades.bonus_atajapenales(arquero)
 	chance += Personalidad.bonus_penal(pateador)
+	# §7.4.2: el club que tiene puesto el ejercicio de penales.
+	chance += bonus_entrenamiento
 	return clamp(chance, 0.45, 0.95)
 
 
-static func patear(pateador: Dictionary, arquero: Dictionary, rng: RandomNumberGenerator) -> bool:
-	return rng.randf() < _chance_gol(pateador, arquero)
+static func patear(pateador: Dictionary, arquero: Dictionary, rng: RandomNumberGenerator,
+		bonus_entrenamiento: float = 0.0) -> bool:
+	return rng.randf() < _chance_gol(pateador, arquero, bonus_entrenamiento)
 
 
 ## Los mejores pateadores primero (mayor "tiro"). Nunca queda vacío: con
@@ -85,7 +88,7 @@ static func definir(home: Team, away: Team, rng: RandomNumberGenerator,
 	while pateos_home < RONDA_REGULAR or pateos_away < RONDA_REGULAR:
 		if pateos_home < RONDA_REGULAR:
 			var pateador: Dictionary = pateadores_home[pateos_home % pateadores_home.size()]
-			var gol := _resolver(al_patear, pateador, arquero_away, true, rng)
+			var gol := _resolver(al_patear, pateador, arquero_away, true, rng, Entrenamiento.bonus_tanda(home))
 			if gol:
 				goles_home += 1
 			pateos_home += 1
@@ -95,7 +98,7 @@ static func definir(home: Team, away: Team, rng: RandomNumberGenerator,
 
 		if pateos_away < RONDA_REGULAR:
 			var pateador_v: Dictionary = pateadores_away[pateos_away % pateadores_away.size()]
-			var gol_v := _resolver(al_patear, pateador_v, arquero_home, false, rng)
+			var gol_v := _resolver(al_patear, pateador_v, arquero_home, false, rng, Entrenamiento.bonus_tanda(away))
 			if gol_v:
 				goles_away += 1
 			pateos_away += 1
@@ -107,14 +110,14 @@ static func definir(home: Team, away: Team, rng: RandomNumberGenerator,
 	while goles_home == goles_away:
 		var idx_home := (pateos_home + ronda_extra) % pateadores_home.size()
 		var pateador_h: Dictionary = pateadores_home[idx_home]
-		var gol_h := _resolver(al_patear, pateador_h, arquero_away, true, rng)
+		var gol_h := _resolver(al_patear, pateador_h, arquero_away, true, rng, Entrenamiento.bonus_tanda(home))
 		if gol_h:
 			goles_home += 1
 		tandas.append(_anotar(home, pateador_h, gol_h))
 
 		var idx_away := (pateos_away + ronda_extra) % pateadores_away.size()
 		var pateador_a: Dictionary = pateadores_away[idx_away]
-		var gol_a := _resolver(al_patear, pateador_a, arquero_home, false, rng)
+		var gol_a := _resolver(al_patear, pateador_a, arquero_home, false, rng, Entrenamiento.bonus_tanda(away))
 		if gol_a:
 			goles_away += 1
 		tandas.append(_anotar(away, pateador_a, gol_a))
@@ -126,8 +129,8 @@ static func definir(home: Team, away: Team, rng: RandomNumberGenerator,
 
 
 static func _resolver(al_patear: Callable, pateador: Dictionary, arquero: Dictionary,
-		es_local: bool, rng: RandomNumberGenerator) -> bool:
-	var gol := patear(pateador, arquero, rng)
+		es_local: bool, rng: RandomNumberGenerator, bonus_entrenamiento: float = 0.0) -> bool:
+	var gol := patear(pateador, arquero, rng, bonus_entrenamiento)
 	if al_patear.is_valid():
 		al_patear.call(pateador, arquero, es_local, gol)
 	return gol

@@ -16,7 +16,7 @@ const DATA_PATH := "res://data/formaciones.json"
 const POR_DEFECTO := "4-2-3-1"
 
 ## Qué formación usa cada estilo de juego (§8.6.3). Mismo patrón que
-## FocoEquipo.POR_ESTILO: el estilo es la identidad del club y de ahí
+## Entrenamiento.POR_ESTILO: el estilo es la identidad del club y de ahí
 ## cuelga todo lo demás.
 ##
 ## Hasta ahora los 200 clubes jugaban 4-2-3-1 y las otras cuatro

@@ -141,12 +141,13 @@ var formacion: String = Formaciones.POR_DEFECTO
 var carga_entrenamiento: String = CargaEntrenamiento.POR_DEFECTO
 var carga_suma: float = 0.0
 var carga_semanas: float = 0.0
-## §7.4.2: que practica el plantel entero. A diferencia de la carga, no se
-## promedia a un numero: se acumula CUANTAS SEMANAS estuvo puesta cada
-## area, porque cambiar de area a mitad de temporada tiene que repartir y
-## no reiniciar. Ver FocoEquipo.
-var foco_equipo: String = FocoEquipo.POR_DEFECTO
-var foco_semanas: Dictionary = {}  # area -> semanas acumuladas esta temporada
+## §7.4.2: que practica el plantel entero, un ejercicio por ranura. A
+## diferencia de la carga, no se promedia a un numero: se acumula CUANTAS
+## SEMANAS estuvo puesto cada ejercicio, porque cambiar a mitad de
+## temporada tiene que repartir y no reiniciar. Ver Entrenamiento.
+var ejercicio_fisico: String = Entrenamiento.LIBRE
+var ejercicio_tactico: String = Entrenamiento.LIBRE
+var ejercicio_semanas: Dictionary = {}  # ejercicio -> semanas acumuladas esta temporada
 
 var calidad_cancha: float = 0.0  # -8..+3, ver core/estado_cancha.gd — rige cuando este club juega de local
 var clima_partido: String = ""  # transitorio, solo dentro de un partido — "" (normal) / Lluvia / Calor / Viento, ver core/clima.gd
@@ -391,7 +392,9 @@ static func generar(nombre: String, rng: RandomNumberGenerator, id_inicial: int 
 	t.armonia += rng.randf_range(-3.0, 5.0)
 	# §7.4.2: se entrena lo que se juega. Es el valor inicial y se puede
 	# cambiar; para los clubes de la IA queda asi toda la partida.
-	t.foco_equipo = FocoEquipo.para_estilo(t.estilo)
+	var par := Entrenamiento.para_estilo(t.estilo)
+	t.ejercicio_fisico = par[0]
+	t.ejercicio_tactico = par[1]
 	t.dt = DT.generar(rng)
 	t.config_cambios = DT.config_cambios_de(t.dt["nivel"])
 	t.reputacion = Economia.reputacion_inicial(t.media_equipo())
@@ -483,7 +486,8 @@ func guardar() -> Dictionary:
 		"formacion": formacion,
 		"carga_entrenamiento": carga_entrenamiento,
 		"carga_suma": carga_suma, "carga_semanas": carga_semanas,
-		"foco_equipo": foco_equipo, "foco_semanas": foco_semanas,
+		"ejercicio_fisico": ejercicio_fisico, "ejercicio_tactico": ejercicio_tactico,
+		"ejercicio_semanas": ejercicio_semanas,
 		"jugadores": jugadores, "banco": banco, "reservas": reservas,
 		"cantera": cantera,
 		"siguiente_id_cantera": siguiente_id_cantera, "capitan_id": capitan_id,
@@ -548,10 +552,18 @@ static func cargar(datos: Dictionary) -> Team:
 		t.carga_entrenamiento = CargaEntrenamiento.POR_DEFECTO
 	t.carga_suma = float(datos.get("carga_suma", 0.0))
 	t.carga_semanas = float(datos.get("carga_semanas", 0.0))
-	t.foco_equipo = str(datos.get("foco_equipo", FocoEquipo.POR_DEFECTO))
-	if not FocoEquipo.existe(t.foco_equipo):
-		t.foco_equipo = FocoEquipo.POR_DEFECTO
-	t.foco_semanas = datos.get("foco_semanas", {})
+	# Partidas de antes de las ranuras: el foco de un area pasa al par de
+	# ejercicios mas parecido. Las semanas del area vieja se pierden: no
+	# hay a que ejercicio atribuirlas.
+	var par_viejo: Array = Entrenamiento.DESDE_FOCO_VIEJO.get(
+		str(datos.get("foco_equipo", "general")), [Entrenamiento.LIBRE, Entrenamiento.LIBRE])
+	t.ejercicio_fisico = str(datos.get("ejercicio_fisico", par_viejo[0]))
+	if not Entrenamiento.existe(Entrenamiento.FISICO, t.ejercicio_fisico):
+		t.ejercicio_fisico = Entrenamiento.LIBRE
+	t.ejercicio_tactico = str(datos.get("ejercicio_tactico", par_viejo[1]))
+	if not Entrenamiento.existe(Entrenamiento.TACTICO, t.ejercicio_tactico):
+		t.ejercicio_tactico = Entrenamiento.LIBRE
+	t.ejercicio_semanas = datos.get("ejercicio_semanas", {})
 	t.formacion = str(datos.get("formacion", Formaciones.POR_DEFECTO))
 	if not Formaciones.existe(t.formacion):
 		t.formacion = Formaciones.POR_DEFECTO
@@ -791,21 +803,22 @@ func factor_carga_temporada() -> float:
 func reiniciar_carga() -> void:
 	carga_suma = 0.0
 	carga_semanas = 0.0
-	foco_semanas = {}
+	ejercicio_semanas = {}
 
 
-## §7.4.2: como se reparte la temporada entre areas, normalizado a 1. Si
-## no paso ninguna semana (temporada recien empezada) devuelve {}, y
-## FocoEquipo lo trata como "general".
-func reparto_foco() -> Dictionary:
-	var total := 0.0
-	for area in foco_semanas:
-		total += float(foco_semanas[area])
-	if total <= 0.0:
-		return {}
+## §7.4.2: como se reparte la temporada entre ejercicios, normalizado a 1
+## DENTRO de cada ranura. Si no paso ninguna semana (temporada recien
+## empezada) devuelve {}, y Entrenamiento lo trata como "libre".
+func reparto_ejercicios() -> Dictionary:
+	var total_ranura := {}
+	for ejercicio in ejercicio_semanas:
+		var ranura := Entrenamiento.ranura_de(ejercicio)
+		total_ranura[ranura] = float(total_ranura.get(ranura, 0.0)) + float(ejercicio_semanas[ejercicio])
 	var salida := {}
-	for area in foco_semanas:
-		salida[area] = float(foco_semanas[area]) / total
+	for ejercicio in ejercicio_semanas:
+		var ranura := Entrenamiento.ranura_de(ejercicio)
+		if ranura != "" and float(total_ranura[ranura]) > 0.0:
+			salida[ejercicio] = float(ejercicio_semanas[ejercicio]) / float(total_ranura[ranura])
 	return salida
 
 
@@ -1450,7 +1463,8 @@ func energia_proximo_partido(jugador_id: int) -> float:
 ## distinta y, con 1.0, dejaba a los 22 jugadores en el piso de
 ## resistencia antes del entretiempo.
 func desgastar(jugador_id: int, energia_attr: int, multiplicador: float = 1.0) -> void:
-	var decay: float = 0.006 * (1.3 - float(energia_attr) / 100.0) * Clima.factor_energia(clima_partido) * multiplicador
+	var decay: float = 0.006 * (1.3 - float(energia_attr) / 100.0) * Clima.factor_energia(clima_partido) * multiplicador \
+		* Entrenamiento.factor_desgaste(self)
 	resistencia[jugador_id] = max(0.55, resistencia_pct(jugador_id) - decay)
 
 
@@ -1520,8 +1534,13 @@ func avanzar_dias(dias: int) -> Array:
 	# pesa lo mismo que cualquier otra semana de la misma duración.
 	carga_suma += CargaEntrenamiento.factor_crecimiento(carga_entrenamiento) * (float(dias) / 7.0)
 	carga_semanas += float(dias) / 7.0
-	# §7.4.2: lo mismo para el area que se esta practicando.
-	foco_semanas[foco_equipo] = float(foco_semanas.get(foco_equipo, 0.0)) + float(dias) / 7.0
+	# §7.4.2: lo mismo para los ejercicios que se estan practicando.
+	for ranura in Entrenamiento.RANURAS:
+		var ejercicio := ejercicio_fisico if ranura == Entrenamiento.FISICO else ejercicio_tactico
+		# La ranura libre tambien se anota, con su propia clave: libre la
+		# mitad del año tiene que pesar la mitad.
+		var clave: String = ejercicio if ejercicio != Entrenamiento.LIBRE else "libre_" + ranura
+		ejercicio_semanas[clave] = float(ejercicio_semanas.get(clave, 0.0)) + float(dias) / 7.0
 	# §9.4: los informes corren con el calendario, no con las fechas
 	# jugadas — una semana de dos partidos no acelera un scouteo.
 	informes_terminados = Investigadores.avanzar(self, dias)

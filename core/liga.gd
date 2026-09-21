@@ -554,8 +554,8 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 		# semana a semana, entra acá junto con las instalaciones.
 		var mult_entrenamiento: float = Instalaciones.factor_entrenamiento(equipo) * equipo.factor_carga_temporada()
 		# §7.4.2: que practico el plantel entero esta temporada.
-		var mult_area := FocoEquipo.multiplicadores(
-			equipo.reparto_foco(), PlayerGenerator.get_all_attributes())
+		var mult_area := Entrenamiento.multiplicadores(
+			equipo.reparto_ejercicios(), PlayerGenerator.get_all_attributes())
 
 		for jugador in equipo.todos_los_jugadores():
 			Aprendizaje.actualizar_racha(jugador)
@@ -599,7 +599,7 @@ func _procesar_cantera(equipo: Team, rng: RandomNumberGenerator, es_protegido: b
 	for juvenil in equipo.cantera:
 		Aprendizaje.actualizar_racha(juvenil)
 		Progresion.aplicar_temporada(juvenil, rng, Mentores.multiplicador_para(juvenil, bonus_mentor), mult_entrenamiento,
-			FocoEquipo.multiplicadores(equipo.reparto_foco(), PlayerGenerator.get_all_attributes()), true)
+			Entrenamiento.multiplicadores(equipo.reparto_ejercicios(), PlayerGenerator.get_all_attributes()), true)
 		var aprendida := Aprendizaje.procesar_jugador(juvenil, equipo, temporada_actual, rng)
 		if not aprendida.is_empty():
 			aprendizajes.append({"jugador": juvenil, "habilidad": aprendida})

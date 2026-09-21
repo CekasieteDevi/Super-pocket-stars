@@ -1693,11 +1693,23 @@ func _on_carga_elegida(idx: int) -> void:
 
 
 ## §7.4.2: se puede cambiar cuando quieras. Lo que pesa al cierre de
-## temporada es cuantas SEMANAS estuvo puesta cada area, asi que cambiar a
-## mitad de año reparte en vez de reiniciar.
-func _on_foco_equipo_elegido(idx: int) -> void:
-	GameState.equipo_jugador.foco_equipo = FocoEquipo.AREAS[idx]
+## temporada es cuantas SEMANAS estuvo puesto cada ejercicio, asi que
+## cambiar a mitad de año reparte en vez de reiniciar. El bonus del
+## partido, en cambio, es del ejercicio puesto HOY.
+func _on_ejercicio_elegido(ranura: String, idx: int) -> void:
+	var ejercicio: String = Entrenamiento.EJERCICIOS[ranura][idx]
+	if ranura == Entrenamiento.FISICO:
+		GameState.equipo_jugador.ejercicio_fisico = ejercicio
+	else:
+		GameState.equipo_jugador.ejercicio_tactico = ejercicio
 	_refrescar_formacion()
+
+
+## "Correr + Penales", para las lineas de resumen.
+func _texto_ejercicios(equipo: Team) -> String:
+	return "%s + %s" % [
+		Entrenamiento.ETIQUETAS.get(equipo.ejercicio_fisico, "?"),
+		Entrenamiento.ETIQUETAS.get(equipo.ejercicio_tactico, "?")]
 
 
 func _on_formacion_elegida(idx: int) -> void:
@@ -1716,19 +1728,6 @@ func _texto_slot(rol: String, j: Dictionary) -> String:
 		aviso = "   [%s de puesto natural]" % j["posicion"]
 	return "%-4s  %-22s  media %5.1f%s%s" % [
 		rol, _nombre_jugador(j), j["media"], aviso, _tag_habilidad(j)]
-
-
-## Cuanto pesa cada area en lo que va de la temporada. Sin esto, cambiar
-## de foco a mitad de año no se ve por ningun lado.
-func _reparto_foco_texto(equipo: Team) -> String:
-	var reparto := equipo.reparto_foco()
-	if reparto.size() <= 1:
-		return ""
-	var partes := []
-	for area in reparto:
-		partes.append("%s %d%%" % [FocoEquipo.ETIQUETAS.get(area, area), int(round(float(reparto[area]) * 100.0))])
-	return "
-   Temporada hasta ahora: %s" % ", ".join(partes)
 
 
 ## Lo que hace la carga elegida, en la fila misma.
@@ -1761,7 +1760,7 @@ func _refrescar_familiaridad(equipo: Team) -> void:
 		texto += "  ·  sigue subiendo si no cambias de plan"
 	label_familiaridad.text = texto
 	label_familiaridad.add_theme_color_override("font_color", color)
-	label_familiaridad.tooltip_text = "Cada formacion + estilo se entrena por separado. Un plan nuevo arranca en frio y resta hasta que el equipo lo asimila; el foco de equipo tactico lo acelera. Cambiar solo una de las dos mitades arrastra parte de lo que ya sabias."
+	label_familiaridad.tooltip_text = "Cada formacion + estilo se entrena por separado. Un plan nuevo arranca en frio y resta hasta que el equipo lo asimila; el ejercicio de jugadas armadas lo acelera. Cambiar solo una de las dos mitades arrastra parte de lo que ya sabias."
 
 
 func _texto_carga(equipo: Team) -> String:
@@ -1785,10 +1784,10 @@ func _refrescar_formacion() -> void:
 		option_formacion.selected = idx
 	# El pie de la formacion recuerda como viene el entrenamiento, aunque
 	# se elija en su propia solapa: la familiaridad tactica de abajo
-	# depende del foco, asi que el dato tiene que estar a mano.
-	label_carga_efecto.text = "Carga %s  ·  foco %s" % [
+	# depende del ejercicio tactico, asi que el dato tiene que estar a mano.
+	label_carga_efecto.text = "Carga %s  ·  %s" % [
 		CargaEntrenamiento.ETIQUETAS.get(equipo.carga_entrenamiento, "?"),
-		FocoEquipo.ETIQUETAS.get(equipo.foco_equipo, "?")]
+		_texto_ejercicios(equipo)]
 	label_carga_efecto.tooltip_text = _texto_carga(equipo)
 
 	_refrescar_familiaridad(equipo)
@@ -9346,11 +9345,11 @@ func _refrescar_portada() -> void:
 	contenedor_portada.add_child(Tema.etiqueta_seccion("El club"))
 	var estado := _tarjeta(contenedor_portada)
 	var linea := Label.new()
-	linea.text = "Media del once %.1f   ·   disponibles %d de %d   ·   carga %s   ·   foco %s" % [
+	linea.text = "Media del once %.1f   ·   disponibles %d de %d   ·   carga %s   ·   %s" % [
 		equipo.media_equipo(), equipo.jugadores_sanos_count(),
 		equipo.todos_los_jugadores().size(),
 		CargaEntrenamiento.ETIQUETAS.get(equipo.carga_entrenamiento, "?"),
-		FocoEquipo.ETIQUETAS.get(equipo.foco_equipo, "?")]
+		_texto_ejercicios(equipo)]
 	linea.add_theme_color_override("font_color", Tema.SUAVE)
 	estado.add_child(linea)
 
@@ -9438,16 +9437,14 @@ func _ir_a_oferta(oferta_id: int, entrante: bool) -> void:
 # Entrenamiento
 # ---------------------------------------------------------------------------
 
-## Foco y carga viven ACA y no en Formacion. Estaban metidos en la fila de
-## la formacion, al lado del desplegable tactico, como si fueran parte de
-## armar el equipo: eran dos combos sin explicacion en una pantalla que
-## habla de otra cosa. Son las dos decisiones que gobiernan como crece el
+## Ejercicios y carga viven ACA y no en Formacion. Estaban metidos en la
+## fila de la formacion, al lado del desplegable tactico, como si fueran
+## parte de armar el equipo: eran combos sin explicacion en una pantalla
+## que habla de otra cosa. Son las decisiones que gobiernan como crece el
 ## plantel y merecen su propia seccion, con lo que hace cada opcion a la
 ## vista y no escondido en un tooltip.
 var contenedor_entrenamiento: VBoxContainer
 var option_carga_entr: OptionButton
-var option_foco_entr: OptionButton
-var label_reparto_foco: Label
 
 
 func _construir_panel_entrenamiento(padre: Control) -> void:
@@ -9521,49 +9518,52 @@ func _refrescar_entrenamiento() -> void:
 		caja_carga.add_child(_texto_suave(
 			"Esta temporada venis en x%.2f de crecimiento acumulado." % equipo.factor_carga_temporada()))
 
-	# --- Foco: que se entrena ------------------------------------------
-	var caja_foco := _tarjeta(contenedor_entrenamiento, Tema.BORDE)
-	caja_foco.add_child(Tema.etiqueta_seccion("Foco  ·  que se entrena"))
-	var fila_foco := HBoxContainer.new()
-	fila_foco.add_theme_constant_override("separation", 10)
-	caja_foco.add_child(fila_foco)
-	option_foco_entr = OptionButton.new()
-	option_foco_entr.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
-	for area in FocoEquipo.AREAS:
-		option_foco_entr.add_item(FocoEquipo.ETIQUETAS[area])
-	var idx_foco := FocoEquipo.AREAS.find(equipo.foco_equipo)
-	if idx_foco >= 0:
-		option_foco_entr.selected = idx_foco
-	option_foco_entr.item_selected.connect(func(i):
-		_on_foco_equipo_elegido(i)
-		_refrescar_entrenamiento())
-	fila_foco.add_child(option_foco_entr)
-	caja_foco.add_child(_texto_suave(
-		"El presupuesto es FIJO: lo que ganan los atributos del area se lo sacas al resto. " \
-		+ "Y se reparte entre los atributos del area, asi que un area chica da un empujon grande " \
-		+ "a pocos y una grande da un empujon chico a muchos. Nadie retrocede: lo desatendido " \
-		+ "crece mas despacio."))
+	# --- Ejercicios: que se entrena -------------------------------------
+	for ranura in Entrenamiento.RANURAS:
+		_caja_ranura(ranura, equipo)
 
-	for area in FocoEquipo.AREAS:
-		caja_foco.add_child(_fila_area_de_foco(area, equipo))
-
-	# Cuanto pesa cada area en la temporada: cambiar a mitad de ano
+	# Cuanto pesa cada ejercicio en la temporada: cambiar a mitad de ano
 	# reparte, no reinicia, y eso hay que poder verlo.
-	var reparto := equipo.reparto_foco()
+	var reparto := equipo.reparto_ejercicios()
 	if not reparto.is_empty():
 		var partes := []
-		for area in reparto:
+		for ejercicio in reparto:
 			partes.append("%s %d%%" % [
-				FocoEquipo.ETIQUETAS.get(area, area),
-				int(round(float(reparto[area]) * 100.0))])
-		caja_foco.add_child(_texto_suave(
+				Entrenamiento.ETIQUETAS.get(ejercicio, "Libre"),
+				int(round(float(reparto[ejercicio]) * 100.0))])
+		contenedor_entrenamiento.add_child(_texto_suave(
 			"Lo que va pesando esta temporada: %s." % ", ".join(partes)))
 
 
-## Una fila por area, con sus atributos y cuanto multiplica cada cosa.
-func _fila_area_de_foco(area: String, equipo: Team) -> Control:
-	var actual: bool = area == equipo.foco_equipo
-	var fila := Componentes.fila(FocoEquipo.AREAS.find(area) % 2 == 0)
+## Una tarjeta por ranura: el desplegable y la tabla de sus ejercicios.
+func _caja_ranura(ranura: String, equipo: Team) -> void:
+	var puesto: String = equipo.ejercicio_fisico if ranura == Entrenamiento.FISICO else equipo.ejercicio_tactico
+	var ejercicios: Array = Entrenamiento.EJERCICIOS[ranura]
+	var caja := _tarjeta(contenedor_entrenamiento, Tema.BORDE)
+	caja.add_child(Tema.etiqueta_seccion(
+		"Físico  ·  cómo se prepara" if ranura == Entrenamiento.FISICO else "Táctico  ·  qué se practica"))
+	var opcion := OptionButton.new()
+	opcion.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
+	for ejercicio in ejercicios:
+		opcion.add_item(Entrenamiento.ETIQUETAS[ejercicio])
+	opcion.selected = maxi(0, ejercicios.find(puesto))
+	opcion.item_selected.connect(func(i):
+		_on_ejercicio_elegido(ranura, i)
+		_refrescar_entrenamiento())
+	caja.add_child(opcion)
+	if ranura == Entrenamiento.FISICO:
+		caja.add_child(_texto_suave(
+			"El ejercicio queda puesto hasta que lo cambies. Da un bonus en los partidos mientras " \
+			+ "esta puesto, y al cierre de temporada hace crecer mas sus atributos. El crecimiento " \
+			+ "tiene presupuesto FIJO: lo que ganan esos atributos se lo sacas al resto, que crece " \
+			+ "mas despacio. Los arqueros crecen parejo."))
+	for ejercicio in ejercicios:
+		caja.add_child(_fila_ejercicio(ejercicio, ejercicio == puesto, ejercicios.find(ejercicio)))
+
+
+## Una fila por ejercicio, con lo que da en el partido y cuanto multiplica.
+func _fila_ejercicio(ejercicio: String, actual: bool, indice: int) -> Control:
+	var fila := Componentes.fila(indice % 2 == 0)
 	if actual:
 		var e: StyleBoxFlat = fila.get_theme_stylebox("panel").duplicate()
 		e.bg_color = Tema.PANEL_ALTO
@@ -9572,29 +9572,30 @@ func _fila_area_de_foco(area: String, equipo: Team) -> Control:
 		fila.add_theme_stylebox_override("panel", e)
 	var dentro := Componentes.contenido(fila)
 	dentro.add_child(Componentes.celda(
-		str(FocoEquipo.ETIQUETAS[area]), 130, Tema.AMBAR if actual else Tema.TEXTO))
+		str(Entrenamiento.ETIQUETAS[ejercicio]), 150, Tema.AMBAR if actual else Tema.TEXTO))
 
-	var atributos: Array = FocoEquipo.atributos_de(area)
+	var atributos: Array = Entrenamiento.atributos_de(ejercicio)
 	# Los multiplicadores reales, con la cuenta del propio sistema y no a
-	# ojo: 19 atributos tiene un jugador de campo.
-	var n_campo := 19
+	# ojo: la ranura sola, toda la temporada.
 	var texto_mult := "todo parejo"
 	if not atributos.is_empty():
-		var n: int = atributos.size()
-		texto_mult = "x%.2f   resto x%.2f" % [
-			1.0 + FocoEquipo.PRESUPUESTO / float(n),
-			maxf(FocoEquipo.MULTIPLICADOR_MINIMO,
-				1.0 - FocoEquipo.PRESUPUESTO / float(n_campo - n))]
+		var mult := Entrenamiento.multiplicadores({ejercicio: 1.0}, PlayerGenerator.get_all_attributes())
+		var resto := ""
+		for attr in mult:
+			if not atributos.has(attr):
+				resto = attr
+				break
+		texto_mult = "x%.2f   resto x%.2f" % [float(mult[atributos[0]]), float(mult.get(resto, 1.0))]
 	# 250 y no 190: con menos, "el resto x0.79" se cortaba justo en el
 	# numero, que es el dato por el que se elige.
 	dentro.add_child(Componentes.celda_numero(texto_mult, 250, Tema.SUAVE))
 
 	var detalle := Label.new()
 	detalle.text = "%s %s" % [
-		FocoEquipo.DESCRIPCIONES.get(area, ""),
+		Entrenamiento.DESCRIPCIONES.get(ejercicio, ""),
 		"" if atributos.is_empty() else "(%s)" % ", ".join(atributos)]
 	detalle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	detalle.clip_text = true
+	detalle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	detalle.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
 	detalle.add_theme_color_override("font_color", Tema.SUAVE)
 	dentro.add_child(detalle)

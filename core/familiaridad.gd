@@ -41,9 +41,9 @@ const INICIAL := 70.0
 ## nunca, que es lo contrario de lo que se buscaba.
 const GANANCIA_PARTIDO := 7.5
 
-## Extra si el foco de equipo de la semana es el táctico (§7.4.2). Es la
-## forma de comprar familiaridad más rápido, a costa de no entrenar otra
-## cosa.
+## Extra si el ejercicio táctico de la semana es jugadas armadas (§7.4.2).
+## Es la forma de comprar familiaridad más rápido, a costa de no entrenar
+## otra cosa en la ranura táctica.
 const GANANCIA_FOCO_TACTICO := 3.0
 
 ## Lo que queda de la ganancia una vez pasado NEUTRO.
@@ -153,7 +153,7 @@ static func etiqueta(equipo: Team) -> String:
 ## NEUTRO y frenado por encima — ver FRENO_SOBRE_NEUTRO.
 static func _ganancia(equipo: Team, n: float) -> float:
 	var g := GANANCIA_PARTIDO
-	if equipo.foco_equipo == "tactico":
+	if Entrenamiento.tiene(equipo, "jugadas_armadas"):
 		g += GANANCIA_FOCO_TACTICO
 	return g if n < NEUTRO else g * FRENO_SOBRE_NEUTRO
 
