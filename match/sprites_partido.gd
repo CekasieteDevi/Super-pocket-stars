@@ -453,19 +453,34 @@ const DIRECCIONES_CON_NUMERO := [ARRIBA, ARRIBA_DER]
 static var _cache: Dictionary = {}
 static var _palomita_png: Image = null
 static var _palomita_cache: Dictionary = {}
+static var _palomita_hair_masks: Dictionary = {}
+
+## Los nombres coinciden con AtlasJugadores.PEINADOS. La palomita tiene una
+## hoja propia para el cuerpo, pero reutiliza la máscara de pelo de cada
+## peinado del atlas para no convertir a todos los jugadores en el mismo.
+const PALOMITA_PEINADOS := ["puntas", "afro", "rapado", "atado", "mohicano",
+	"rastas", "degrade", "vincha", "rodete", "raya", "trenzas"]
+const PALOMITA_DORSAL_CENTROS := [Vector2i(31, 44), Vector2i(29, 44),
+	Vector2i(25, 47), Vector2i(24, 49)]
 
 
 ## Cuadros PNG de la palomita. Van fuera del atlas principal para que una
 ## pose horizontal nunca pueda desplazar ni contaminar otro cuadro.
 static func palomita_png(color_camiseta: Color, color_short: Color,
-		frame: int, espejo: bool = false) -> ImageTexture:
+		frame: int, espejo: bool = false, color_pelo: Color = PELO,
+		estilo_pelo: int = 0, numero: int = 0) -> ImageTexture:
 	var pantalon := color_short if color_short.a > 0.0 else SHORT
-	var clave := "%s_%s_%d_%s" % [color_camiseta.to_html(), pantalon.to_html(), frame, espejo]
+	var peinado := posmod(estilo_pelo, PALOMITA_PEINADOS.size())
+	var clave := "%s_%s_%s_%d_%d_%s" % [color_camiseta.to_html(), pantalon.to_html(),
+		color_pelo.to_html(), frame, peinado, espejo]
+	clave += "_%d" % clampi(numero, 0, 99)
 	if _palomita_cache.has(clave):
 		return _palomita_cache[clave]
 	if _palomita_png == null:
 		_palomita_png = (load("res://assets/partido/palomita_frames.png") as Texture2D).get_image()
 	var img: Image = _palomita_png.get_region(Rect2i(clampi(frame, 0, 3) * 64, 0, 64, 64))
+	var mascara_camiseta := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+	mascara_camiseta.fill(TRANSPARENTE)
 	for y in range(img.get_height()):
 		for x in range(img.get_width()):
 			var p := img.get_pixel(x, y)
@@ -475,15 +490,139 @@ static func palomita_png(color_camiseta: Color, color_short: Color,
 			# El azul fuerte es la mascara de camiseta. El negro queda intacto
 			# para conservar el contorno pixel-art.
 			if p.b > 0.25 and p.b > p.r * 1.35 and p.b > p.g * 1.05:
+				mascara_camiseta.set_pixel(x, y, Color.WHITE)
 				p = Color(color_camiseta.r * brillo, color_camiseta.g * brillo, color_camiseta.b * brillo, p.a)
 			elif p.r > 0.82 and p.g > 0.82 and p.b > 0.82:
 				p = Color(pantalon.r * brillo, pantalon.g * brillo, pantalon.b * brillo, p.a)
 			img.set_pixel(x, y, p)
+	_aplicar_pelo_palomita(img, peinado, color_pelo)
 	if espejo:
 		img.flip_x()
+		mascara_camiseta.flip_x()
+	_estampar_numero_palomita(img, mascara_camiseta, clampi(frame, 0, 3), color_camiseta, numero, espejo)
 	var tex := ImageTexture.create_from_image(img)
 	_palomita_cache[clave] = tex
 	return tex
+
+
+static func _es_pelo_palomita(c: Color) -> bool:
+	return c.a >= 0.1 and c.r > c.g * 1.12 and c.g > c.b * 1.12 and c.v < 0.55
+
+
+static func _caja_pelo_palomita(img: Image) -> Rect2i:
+	var visitados := {}
+	var mejor := Rect2i()
+	var mejor_cantidad := 0
+	for y in range(img.get_height()):
+		for x in range(img.get_width()):
+			var inicio := Vector2i(x, y)
+			if not _es_pelo_palomita(img.get_pixel(x, y)) or visitados.has(inicio):
+				continue
+			var pendientes := [inicio]
+			visitados[inicio] = true
+			var min_x := x
+			var min_y := y
+			var max_x := x
+			var max_y := y
+			var cantidad := 0
+			while not pendientes.is_empty():
+				var p: Vector2i = pendientes.pop_back()
+				cantidad += 1
+				min_x = mini(min_x, p.x)
+				min_y = mini(min_y, p.y)
+				max_x = maxi(max_x, p.x)
+				max_y = maxi(max_y, p.y)
+				for direccion in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+					var vecino: Vector2i = p + direccion
+					if vecino.x < 0 or vecino.x >= img.get_width() or vecino.y < 0 or vecino.y >= img.get_height():
+						continue
+					if visitados.has(vecino) or not _es_pelo_palomita(img.get_pixelv(vecino)):
+						continue
+					visitados[vecino] = true
+					pendientes.append(vecino)
+			if cantidad > mejor_cantidad:
+				mejor_cantidad = cantidad
+				mejor = Rect2i(min_x, min_y, max_x - min_x + 1, max_y - min_y + 1)
+	return mejor
+
+
+static func _mascara_pelo_palomita(estilo_pelo: int) -> Dictionary:
+	if _palomita_hair_masks.has(estilo_pelo):
+		return _palomita_hair_masks[estilo_pelo]
+	var ruta := "res://assets/partido/preparados/%s.png" % PALOMITA_PEINADOS[estilo_pelo]
+	var hoja := (load(ruta) as Texture2D).get_image()
+	hoja.decompress()
+	hoja.convert(Image.FORMAT_RGBA8)
+	var img := hoja.get_region(Rect2i(0, 0, 64, 64))
+	var caja := _caja_pelo_palomita(img)
+	var mascara := {"img": img, "caja": caja}
+	_palomita_hair_masks[estilo_pelo] = mascara
+	return mascara
+
+
+## Sustituye el pelo fijo de la hoja de palomita por el peinado real del
+## jugador. El cuerpo conserva sus cuatro cuadros y solo se deforma la
+## máscara del pelo para encajar en la cabeza de cada cuadro.
+static func _aplicar_pelo_palomita(img: Image, estilo_pelo: int, color_pelo: Color) -> void:
+	var destino := _caja_pelo_palomita(img)
+	if destino.size.x <= 0 or destino.size.y <= 0:
+		return
+	var mascara: Dictionary = _mascara_pelo_palomita(estilo_pelo)
+	var origen: Image = mascara["img"]
+	var caja: Rect2i = mascara["caja"]
+	if caja.size.x <= 0 or caja.size.y <= 0:
+		return
+	# Borra el centro del pelo original. El contorno negro queda como línea
+	# de dibujo y la nueva máscara trae su propia silueta de color.
+	for y in range(destino.position.y, destino.end.y):
+		for x in range(destino.position.x, destino.end.x):
+			if _es_pelo_palomita(img.get_pixel(x, y)):
+				img.set_pixel(x, y, TRANSPARENTE)
+	for y in range(destino.size.y):
+		var sy := caja.position.y + mini(caja.size.y - 1,
+				int(float(y) * caja.size.y / destino.size.y))
+		for x in range(destino.size.x):
+			var sx := caja.position.x + mini(caja.size.x - 1,
+				int(float(x) * caja.size.x / destino.size.x))
+			var p := origen.get_pixel(sx, sy)
+			if not _es_pelo_palomita(p):
+				continue
+			var brillo := clampf(p.get_luminance() / 0.32, 0.55, 1.25)
+			img.set_pixel(destino.position.x + x, destino.position.y + y,
+				Color(color_pelo.r * brillo, color_pelo.g * brillo,
+					color_pelo.b * brillo, p.a))
+
+
+## El dorsal solo aparece si el cuadro deja ver la espalda/camiseta. Se
+## estampa sobre el PNG final para conservar el mismo color de tinta que el
+## resto del atlas y no inventar un número cuando el jugador no tiene dorsal.
+static func _estampar_numero_palomita(img: Image, mascara_camiseta: Image, frame: int,
+		color_camiseta: Color, numero: int, espejo: bool) -> void:
+	if numero <= 0:
+		return
+	var texto := str(clampi(numero, 0, 99))
+	var escala := 2
+	var ancho := texto.length() * 3 * escala + (texto.length() - 1) * escala
+	var centro: Vector2i = PALOMITA_DORSAL_CENTROS[frame]
+	if espejo:
+		centro.x = 63 - centro.x
+	var x0: int = centro.x - int(ancho / 2.0)
+	var y0: int = centro.y - 5
+	var tinta := Color(0.08, 0.08, 0.10) if color_camiseta.get_luminance() > 0.55 else Color(0.97, 0.97, 0.98)
+	for i in range(texto.length()):
+		var digito: Array = DIGITOS[int(texto[i])]
+		for y in range(digito.size()):
+			for x in range(3):
+				if digito[y][x] != "#":
+					continue
+				for dy in range(escala):
+					for dx in range(escala):
+						var px: int = x0 + i * 4 * escala + x * escala + dx
+						var py: int = y0 + y * escala + dy
+						if px < 0 or px >= img.get_width() or py < 0 or py >= img.get_height():
+							continue
+						if mascara_camiseta.get_pixel(px, py).a > 0.0:
+							img.set_pixel(px, py, tinta)
 
 
 ## Qué peinado le toca a un jugador. Sale de su id y no de un sorteo, así

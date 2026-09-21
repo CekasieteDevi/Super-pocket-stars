@@ -554,7 +554,8 @@ func _dibujar_cuerpo(ent: Dictionary) -> void:
 	var tex: Texture2D
 	if accion == MotorEspacial.ACCION_PALOMITA:
 		var frame := mini(3, int(clampf(float(ent.get("fase_animacion", 0.0)), 0.0, 0.999) * 4.0))
-		tex = SpritesPartido.palomita_png(ent["color"], ent.get("color_short", Color.WHITE), frame, espejo)
+		tex = SpritesPartido.palomita_png(ent["color"], ent.get("color_short", Color.WHITE), frame, espejo,
+			ent.get("color_pelo", SpritesPartido.PELO), int(ent.get("pelo", 0)), int(ent.get("numero", 0)))
 	elif MotorEspacial.es_accion_regate(accion):
 		var tipo_regate := MotorEspacial.tipo_regate_de_accion(accion)
 		var cuadros_regate := SpritesPartido.cuadros_regate(tipo_regate)
