@@ -26,8 +26,19 @@ const PLANES := {
 	"Físico": {"asociacion": 0.25, "verticalidad": 0.7, "amplitud": 0.8, "transicion": 0.5},
 }
 
+## Cuanto busca el equipo la pelota al area desde la banda. No reemplaza la
+## posicion ni la calidad del jugador: solo inclina la eleccion entre centro,
+## pase y conduccion cuando el centro esta disponible.
+const INTENCION_CENTRO := {
+	"Tiki taka": 0.35, "Contragolpe": 0.95, "Juego directo": 1.30,
+	"Presión alta": 0.80, "Defensivo": 0.30, "Físico": 1.40,
+}
+
 static func plan(estilo: String) -> Dictionary:
 	return PLANES.get(estilo, PLANES["Juego directo"])
+
+static func intencion_centro(estilo: String) -> float:
+	return float(INTENCION_CENTRO.get(estilo, 1.0))
 
 ## GDD §8.6.3, tabla de matchups. No es una matriz simétrica (ganarle a X no
 ## implica que X te pierda a vos): es un grafo dirigido tal cual está en el

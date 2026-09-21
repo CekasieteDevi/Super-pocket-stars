@@ -509,6 +509,15 @@ static func _sumar_estadistica_centro(estado: Dictionary, tipo: String, accion: 
 	fila[accion] = int(fila.get(accion, 0)) + 1
 	por_tipo[tipo] = fila
 	centros["por_tipo"] = por_tipo
+
+
+static func _pase_lateral_cruza_area(desde: Vector2, hasta: Vector2, es_local: bool) -> bool:
+	if desde.y * hasta.y >= 0.0 or minf(absf(desde.y), absf(hasta.y)) < 5.5:
+		return false
+	for i in range(21):
+		if _en_el_area(desde.lerp(hasta, float(i) / 20.0), es_local):
+			return true
+	return false
 ## El gol. Es la unica accion que no dura un instante: el goleador festeja
 ## todo lo que dura la pelota en la red (TICKS_DETENIDO["gol"]).
 const ACCION_FESTEJA := "festeja"
@@ -879,6 +888,7 @@ static func crear_estado(home: Team, away: Team, rng: RandomNumberGenerator) -> 
 		"regates": {"home": {}, "away": {}},
 		"paredes": {},
 		"centros": {},
+		"pases_laterales_area": {},
 		"reinicios": {},
 		"cortes": 0,
 		# Mitades que se cortaron con la jugada SIN TERMINAR, por tipo. Es
@@ -1041,6 +1051,20 @@ static func _dist_a_segmento(punto: Vector2, a: Vector2, b: Vector2) -> float:
 ## poder mostrar por qué se eligió lo que se eligió (§7 del doc: si algo
 ## se ve raro hay que poder distinguir "arquitectura mal" de "T mal
 ## calibrada" mirando números, no adivinando).
+static func _objetivo_fallback_centro(estado: Dictionary, es_local: bool, excluir: int) -> int:
+	var mejor := -1
+	var mejor_val := -INF
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		if e["equipo_local"] != es_local or id == excluir or e["rol"] == "ARQ":
+			continue
+		var val := valor_posicion(e["pos"], es_local)
+		if val > mejor_val:
+			mejor_val = val
+			mejor = id
+	return mejor
+
+
 static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: Dictionary) -> Array:
 	var w: Dictionary = pesos()
 	var f: Dictionary = w["fisica"]
@@ -1214,6 +1238,7 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 	var puede_centrar: bool = float(jugador["atributos"]["centros"]) >= float(f["centros_minimo"]) \
 		and absf(pos.y) >= float(f["banda_para_centrar"]) \
 		and valor_posicion(pos, es_local) >= float(f["avance_para_centrar"])
+	var fallback_centro_id := _objetivo_fallback_centro(estado, es_local, int(poseedor["clave"]))
 	var wpa: Dictionary = w["pared"]
 	var pases_jugador: float = float(jugador["atributos"]["pases"])
 	var sabe_pared: bool = pases_jugador >= float(f["pases_minimo_pared"])
@@ -1308,11 +1333,24 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 			var tiempo_centro := pos.distance_to(destino_centro) / maxf(velocidad_centro, 1.0)
 			if comp["pos"].distance_to(destino_centro) <= float(comp["vel_max"]) * tiempo_centro * 0.75 + 1.5:
 				punto_centro = destino_centro
-		if punto_centro != null and pos.distance_to(punto_centro) <= max_largo:
+		elif puede_centrar and id == fallback_centro_id:
+			# Intento real aunque no haya un compañero perfectamente ubicado:
+			# el centro puede ser malo, pero cuenta como centro y cae disputable.
+			var arco_centro := arco_rival(es_local)
+			var hacia_arco := 1.0 if es_local else -1.0
+			punto_centro = Vector2(arco_centro.x - hacia_arco * 10.0,
+				clampf(comp["pos"].y, -AREA_MEDIO_ANCHO, AREA_MEDIO_ANCHO))
+		var alcance_centro := max_largo
+		if id == fallback_centro_id:
+			# Un centro intentado puede salir desde más lejos que un pase
+			# normal: la precisión baja, pero la opción existe.
+			alcance_centro = maxf(alcance_centro, 45.0)
+		if punto_centro != null and pos.distance_to(punto_centro) <= alcance_centro:
 			var wce: Dictionary = w["centro"]
 			var u_centro: float = wce["base"] \
 				+ wce["punteria"] * (float(jugador["atributos"]["centros"]) / 100.0) \
-				+ wce["progreso"] * (valor_posicion(punto_centro, es_local) - mi_valor)
+				+ wce["progreso"] * (valor_posicion(punto_centro, es_local) - mi_valor) \
+				+ 5.5 * Estilos.intencion_centro(_equipo_de(estado, es_local).estilo)
 			opciones.append({
 				"tipo": "centro", "utilidad": u_centro, "objetivo_id": id, "punto": punto_centro,
 				"detalle": {"centros": jugador["atributos"]["centros"]},
@@ -5782,7 +5820,7 @@ static func _despejar_area(estado: Dictionary, arquero_local: bool) -> void:
 ## que manda pasa a ser `fuerza`. Es lo que le permite a un jugador
 ## limitado mandarla lejos igual, a costa de que llegue mucho más
 ## interceptable.
-static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: int, jugador: Dictionary, punto = null, es_pelotazo: bool = false, accion_override: String = "") -> void:
+static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: int, jugador: Dictionary, punto = null, es_pelotazo: bool = false, accion_override: String = "", medir_pase_lateral: bool = true) -> void:
 	var f: Dictionary = pesos()["fisica"]
 	var destino: Dictionary = estado["jugadores"][destino_id]
 	var objetivo: Vector2 = punto if punto != null else destino["pos"]
@@ -5824,6 +5862,12 @@ static func _lanzar_pase(estado: Dictionary, poseedor: Dictionary, destino_id: i
 	pelota["pasador_local"] = poseedor["equipo_local"]
 	pelota["es_pase"] = true
 	pelota["origen_pos"] = poseedor["pos"]
+	pelota.erase("pase_lateral_area")
+	if medir_pase_lateral and _pase_lateral_cruza_area(poseedor["pos"], objetivo, bool(poseedor["equipo_local"])):
+		pelota["pase_lateral_area"] = true
+		var laterales: Dictionary = estado.get("pases_laterales_area", {})
+		laterales["intentos"] = int(laterales.get("intentos", 0)) + 1
+		estado["pases_laterales_area"] = laterales
 
 	# Offside: se juzga la posición del receptor EN EL MOMENTO DEL PASE, no
 	# cuando la recibe — por eso se marca acá y se cobra al llegar. La
@@ -6444,6 +6488,10 @@ static func _limpiar_dirigida(pelota: Dictionary) -> void:
 static func _resolver_intercepcion(estado: Dictionary, mejor_id: int, minuto: int) -> void:
 	var pelota: Dictionary = estado["pelota"]
 	var pasador_local: bool = pelota.get("pasador_local", true)
+	if bool(pelota.get("pase_lateral_area", false)):
+		var laterales: Dictionary = estado.get("pases_laterales_area", {})
+		laterales["interceptados"] = int(laterales.get("interceptados", 0)) + 1
+		estado["pases_laterales_area"] = laterales
 	_entregar_pelota(estado, mejor_id)
 	estado["eventos"].append({
 		"minuto": minuto, "tipo": "pase", "equipo": _equipo_de(estado, pasador_local).nombre,
@@ -6456,6 +6504,7 @@ static func _resolver_intercepcion(estado: Dictionary, mejor_id: int, minuto: in
 static func _resolver_recepcion(estado: Dictionary, receptor: int, hasta: Vector2, minuto: int) -> void:
 	var pelota: Dictionary = estado["pelota"]
 	var tipo_centro := str(pelota.get("tipo_centro", ""))
+	var pase_lateral_area: bool = bool(pelota.get("pase_lateral_area", false))
 	pelota.erase("tipo_centro")
 	var es_atras_coordinado: bool = bool(pelota.get("pase_atras_coordinado", false)) and receptor == int(pelota.get("destino_id", -1))
 	pelota.erase("pase_atras_coordinado")
@@ -6498,6 +6547,11 @@ static func _resolver_recepcion(estado: Dictionary, receptor: int, hasta: Vector
 		estado["paredes"]["abortadas"] = int(estado["paredes"].get("abortadas", 0)) + 1
 
 	_entregar_pelota(estado, receptor)
+	if pase_lateral_area:
+		var laterales: Dictionary = estado.get("pases_laterales_area", {})
+		var resultado_lateral := "completados" if e_receptor["equipo_local"] == pasador_local else "rival_recibe"
+		laterales[resultado_lateral] = int(laterales.get(resultado_lateral, 0)) + 1
+		estado["pases_laterales_area"] = laterales
 	if tipo_centro == TIPO_CENTRO_MEDIO:
 		_sumar_estadistica_centro(estado, tipo_centro,
 			"recibe" if e_receptor["equipo_local"] == pasador_local else "rival_recibe")
@@ -7875,7 +7929,7 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 			# altura conserva sus controles e intercepciones reales al caer.
 			estado["pelota"]["altura_max"] = float(f["z_inalcanzable"]) * 1.4
 		"centro":
-			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador, elegida.get("punto", null))
+			_lanzar_pase(estado, poseedor, elegida["objetivo_id"], jugador, elegida.get("punto", null), false, "", false)
 			# El centro se lanza como pase, así que el XP de `pases` ya se
 			# sumó; se corrige acá, que es donde se sabe que era centro.
 			_xp_e(estado, poseedor, "pases", -1.0)
@@ -8828,7 +8882,7 @@ static func _ejecutar_balon_parado(estado: Dictionary) -> void:
 				# pelota, que no es reanudar un centro ni un corner.
 				_tocar_corto(estado, ataca_local)
 				return
-			_lanzar_pase(estado, e_ej, objetivo, jugador)
+			_lanzar_pase(estado, e_ej, objetivo, jugador, null, false, "", false)
 			var tipo_centro := TIPO_CENTRO_ALTO if estado["rng"].randf() < 0.55 else TIPO_CENTRO_MEDIO
 			estado["pelota"]["tipo_centro"] = tipo_centro
 			_sumar_estadistica_centro(estado, tipo_centro, "intentos")
@@ -9566,6 +9620,7 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator,
 			"cortadas": estado["cortadas"],
 			"cooldown_activos": estado["cooldown"].size(),
 			"pase_detalle": estado["pase_detalle"],
+			"pases_laterales_area": estado.get("pases_laterales_area", {}),
 			"pases": estado["pases"],
 			"decisiones": estado["decisiones"],
 			# Etapa 4: ticks por fase de ritmo y pases atras separados por
