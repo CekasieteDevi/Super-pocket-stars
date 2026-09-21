@@ -213,7 +213,6 @@ static func _reemplazo_para(equipo: Team, posicion: String,
 			equipo._registrar_fichaje(
 				juvenil, ValorJugador.calcular(juvenil, 50.0, ANIOS_CANTERANO),
 				ANIOS_CANTERANO)
-			equipo.promociones_temporada += 1
 			return {"jugador": juvenil, "de_cantera": true}
 
 	if desde_cantera:

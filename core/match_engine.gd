@@ -215,13 +215,6 @@ static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atri
 		bloque_c += Publico.modificador(Fans.apoyo(equipo, equipo.division_actual))
 	bloque_c += Rivalidad.variacion(Rivalidad.es_clasico(equipo, rival), rng)
 	var bloque_d := Personalidad.modificador_partido(jugador, equipo, rival, atributo, minuto) + Habilidades.modificador_partido(jugador, atributo)
-	# §8.4#30, objetivo de directiva en riesgo. Estaba sumado al bloque C
-	# y el GDD lo pone en el D: los modificadores 26 a 30 son los de
-	# MOTIVACION. No es cosmetico —cada bloque tiene su propio tope, asi
-	# que estar en el bloque equivocado cambia con quien compite por
-	# entrar— y ademas el D estaba practicamente vacio.
-	if equipo.objetivo_en_riesgo:
-		bloque_d += Objetivos.MALUS_EN_RIESGO
 	bloque_d += Motivacion.modificador(jugador, equipo, rival)
 	return {"A": bloque_a, "B": bloque_b, "C": bloque_c, "D": bloque_d}
 

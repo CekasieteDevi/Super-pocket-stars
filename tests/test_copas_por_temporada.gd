@@ -145,15 +145,6 @@ func _test_cierre(gs) -> void:
 		var dice_adentro: bool = aviso.contains("clasifica (")
 		_ok(dice_adentro == clasificaste, "el aviso dice lo mismo que el cuadro.")
 
-	# Sin cupo, el objetivo de directiva no puede pedir rondas de copa.
-	var categoria := str(gs.equipo_jugador.objetivo_temporada.get("categoria", ""))
-	print("Objetivo nuevo: %s (%s)" % [
-		categoria, gs.equipo_jugador.objetivo_temporada.get("descripcion", "")])
-	if not clasificaste:
-		_ok(categoria != "copa", "sin cupo en el Rey, el objetivo no es de copa.")
-	else:
-		_ok(true, "con cupo en el Rey el objetivo puede ser de copa (no se fuerza).")
-
 
 func _clubes_del_cuadro(copa: Copa) -> Array:
 	var salida := []

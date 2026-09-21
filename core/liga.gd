@@ -175,7 +175,7 @@ const MINIMO_DISPONIBLES := 15
 ## detallado de su partido para mostrarlo en la UI.
 func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = null) -> Dictionary:
 	# §8.4#27: quien se esta jugando algo de verdad en esta fecha. Se
-	# recalcula para los veinte antes de jugar, como objetivo_en_riesgo.
+	# recalcula para los veinte antes de jugar.
 	Motivacion.marcar_recta_final(self, idx)
 	var fecha: Array = fixture[idx]
 	var resultados_texto := []

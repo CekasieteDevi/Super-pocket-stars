@@ -139,10 +139,6 @@ var ultima_posicion_final: Dictionary = {}  # {"posicion","total","division"} de
 ## reputacion.
 var posiciones_temporada_anterior: Dictionary = {}
 
-## §10.5/§15: fin de partida real. Una vez true, jugar_siguiente_fecha() no
-## avanza mas — la unica salida es borrar la partida y empezar una nueva.
-var juego_terminado: bool = false
-var motivo_fin_partida: String = ""
 
 
 ## Si hay una partida guardada, arranca retomándola — si no, "guardar la
@@ -222,13 +218,8 @@ func partida_nueva(semilla: int = -1, nombre_club: String = "",
 	seleccion = Seleccion.new()
 	division_jugador = DIVISION_INICIAL
 	equipo_jugador = piramide.divisiones[DIVISION_INICIAL].equipos[0]
-	# Las copas se arman ANTES del objetivo: sin cupo en el Rey no se
-	# puede sortear un objetivo de copa (Objetivos.generar).
 	posiciones_temporada_anterior = {}
 	_armar_copas()
-	equipo_jugador.objetivo_temporada = Objetivos.generar(
-		equipo_jugador, _es_ultima_division(DIVISION_INICIAL), liga_jugador().equipos.size(),
-		rng, _clasificado_al_rey())
 
 	# Todo lo que no vive en la piramide y quedaria colgado de la partida
 	# anterior: el calendario, el ultimo partido, las noticias, el balance.
@@ -257,8 +248,6 @@ func partida_nueva(semilla: int = -1, nombre_club: String = "",
 	noticias = []
 	ultimo_informe_economico = {}
 	ultima_posicion_final = {}
-	juego_terminado = false
-	motivo_fin_partida = ""
 	# El aviso de apertura sale de avanzar_un_dia, que compara ayer con hoy.
 	# El primer dia de la partida no tiene ayer, asi que se avisa aca.
 	_agregar_noticia("MERCADO: Se abrio el libro de pases: %d dias de mercado." % dias_de_mercado())
@@ -413,10 +402,6 @@ func liga_jugador() -> Liga:
 	return piramide.divisiones[division_jugador]
 
 
-func _es_ultima_division(division_idx: int) -> bool:
-	return division_idx == piramide.divisiones.size() - 1
-
-
 func hay_fecha_pendiente() -> bool:
 	return fecha_actual < liga_jugador().fixture.size()
 
@@ -427,16 +412,8 @@ func hay_fecha_pendiente() -> bool:
 ## con la tabla en cero para siempre y los ascensos/descensos y copas de
 ## fin de temporada no tendrían con qué trabajar.
 func jugar_siguiente_fecha() -> void:
-	if juego_terminado or not hay_fecha_pendiente():
+	if not hay_fecha_pendiente():
 		return
-
-	# §8.4 #30: se recalcula antes de jugar la fecha (no al cierre) para
-	# que el modificador de tensión pese en el partido de HOY si estás
-	# sobre la hora y todavía no cumplís.
-	var liga_del_jugador := liga_jugador()
-	var posicion_actual: int = liga_del_jugador.tabla_ordenada().find(equipo_jugador.nombre) + 1
-	equipo_jugador.objetivo_en_riesgo = Objetivos.esta_en_riesgo(
-		equipo_jugador.objetivo_temporada, posicion_actual, fecha_actual, liga_del_jugador.fixture.size())
 
 	for d in range(piramide.divisiones.size()):
 		var liga: Liga = piramide.divisiones[d]
@@ -740,7 +717,7 @@ func dias_hasta_el_partido() -> int:
 ##
 ## Si hoy hay partido no avanza nada: primero se juega.
 func avanzar_un_dia() -> Array:
-	if (juego_terminado or hay_partido_hoy() or hay_partido_de_copa_hoy()
+	if (hay_partido_hoy() or hay_partido_de_copa_hoy()
 			or hay_partido_internacional_hoy() or hay_partido_de_playoff_hoy()):
 		return []
 	var noticias_antes: int = noticias.size()
@@ -864,7 +841,7 @@ func avanzar_un_dia() -> Array:
 ## decision. Saltar a ciegas seria volver al problema de antes.
 func avanzar_hasta_el_partido() -> Array:
 	var todo := []
-	while not hay_partido_hoy() and not hay_partido_de_copa_hoy() 			and not hay_partido_internacional_hoy() and not hay_partido_de_playoff_hoy() 			and not juego_terminado:
+	while not hay_partido_hoy() and not hay_partido_de_copa_hoy() 			and not hay_partido_internacional_hoy() and not hay_partido_de_playoff_hoy():
 		var dia := avanzar_un_dia()
 		todo.append_array(dia)
 		if not dia.is_empty():
@@ -1137,7 +1114,7 @@ func _copas_de_la_ronda() -> Array:
 ## DERIVADO del cuadro y del calendario: no agrega nada al guardado, asi
 ## que un cruce pendiente sobrevive a guardar y cargar la partida.
 func copa_de_hoy() -> Copa:
-	if juego_terminado or dia_proxima_copa < 0 or dia_temporada < dia_proxima_copa:
+	if dia_proxima_copa < 0 or dia_temporada < dia_proxima_copa:
 		return null
 	for c in _copas_de_la_ronda():
 		if not c.cruce_de(equipo_jugador).is_empty():
@@ -1194,7 +1171,7 @@ func resolver_ronda_de_copa() -> void:
 ## contrato que copa_de_hoy(): es un dato DERIVADO del cuadro y del
 ## calendario, asi que sobrevive a guardar y cargar la partida.
 func cruce_internacional_de_hoy() -> Dictionary:
-	if juego_terminado or internacional == null:
+	if internacional == null:
 		return {}
 	if dia_proximo_internacional < 0 or dia_temporada < dia_proximo_internacional:
 		return {}
@@ -1256,7 +1233,7 @@ func _termino_la_liga() -> bool:
 ## Mismo contrato que copa_de_hoy(): sale de la tabla final y de lo que ya
 ## se jugó, así que sobrevive a guardar y cargar la partida.
 func cruce_de_playoff_de_hoy() -> Dictionary:
-	if juego_terminado or not _termino_la_liga():
+	if not _termino_la_liga():
 		return {}
 	for cruce in piramide.cruces_de_playoff():
 		if playoffs_ascenso.has(str(cruce["limite"])):
@@ -1534,41 +1511,6 @@ func _cerrar_temporada() -> void:
 			ultimo_informe_economico = informe
 			break
 
-	# Team.promociones_temporada (ver core/team.gd) cuenta tanto las
-	# promociones manuales del jugador humano como las automáticas de la
-	# IA (el incremento vive dentro de Team.promover_juvenil/
-	# promover_a_titular) — a diferencia del reporte de _procesar_cantera,
-	# que para el equipo del jugador siempre viene vacío (es_protegido
-	# salta el auto-promotor, la decisión es suya desde la UI).
-	var promociones_cantera: int = equipo_jugador.promociones_temporada
-	equipo_jugador.promociones_temporada = 0
-
-	# §10.5/§15: evalua el objetivo que la directiva pidio para la
-	# temporada que recien termino (se asigno la vez anterior que paso por
-	# aca, o al arrancar la partida) ANTES de sortear el de la temporada
-	# que viene. El contexto trae los tres datos posibles (posicion, copa,
-	# cantera) — evaluar() solo usa el que corresponde a la categoria real
-	# del objetivo.
-	var contexto_objetivo := {
-		"posicion_final": posicion_final,
-		"rondas_copa": copa_nacional.rondas_ganadas(equipo_jugador),
-		"promociones_cantera": promociones_cantera,
-	}
-	var objetivo_cumplido := Objetivos.evaluar(equipo_jugador.objetivo_temporada, contexto_objetivo)
-	if objetivo_cumplido:
-		equipo_jugador.objetivos_incumplidos_seguidos = 0
-		if not equipo_jugador.objetivo_temporada.is_empty():
-			_agregar_noticia("DIRECTIVA: cumpliste el objetivo de la temporada (%s)." % equipo_jugador.objetivo_temporada["descripcion"])
-	else:
-		equipo_jugador.objetivos_incumplidos_seguidos += 1
-		_agregar_noticia("DIRECTIVA: NO cumpliste el objetivo (%s). Van %d temporada(s) seguida(s) sin cumplir." % [
-			equipo_jugador.objetivo_temporada.get("descripcion", ""), equipo_jugador.objetivos_incumplidos_seguidos
-		])
-		if equipo_jugador.objetivos_incumplidos_seguidos >= Objetivos.MAX_INCUMPLIDOS_SEGUIDOS:
-			juego_terminado = true
-			motivo_fin_partida = "La directiva te destituyó: %d temporadas seguidas sin cumplir el objetivo." % equipo_jugador.objetivos_incumplidos_seguidos
-			_agregar_noticia("DIRECTIVA: te destituyen. Fin de la partida.")
-
 	for liga in piramide.divisiones:
 		# Liga manda casi todo como String pelado y alguna ya estructurada
 		# (los fichajes, que nombran al jugador): normalizar acepta las dos.
@@ -1631,11 +1573,6 @@ func _cerrar_temporada() -> void:
 	# Cuadros nuevos con los equipos YA movidos de división.
 	_armar_copas()
 	_avisar_clasificacion_a_copas()
-
-	if not juego_terminado:
-		equipo_jugador.objetivo_temporada = Objetivos.generar(
-			equipo_jugador, _es_ultima_division(division_jugador), liga_jugador().equipos.size(),
-			rng, _clasificado_al_rey())
 
 
 ## Clasificar a la Copa del Rey es un resultado de la temporada que
@@ -2287,8 +2224,6 @@ func guardar_partida() -> void:
 		"ultimo_informe_economico": ultimo_informe_economico,
 		"ultima_posicion_final": ultima_posicion_final,
 		"posiciones_temporada_anterior": posiciones_temporada_anterior,
-		"juego_terminado": juego_terminado,
-		"motivo_fin_partida": motivo_fin_partida,
 		# El último partido jugado se guarda (resultado, log y eventos, no
 		# los fotogramas: son 960 cuadros de 22 jugadores y harían pesar el
 		# archivo megabytes). Sin esto, al cargar la pantalla de Partido
@@ -2377,7 +2312,6 @@ func cargar_partida() -> bool:
 	# copas de esa temporada quedan armadas como estaban y la foto se
 	# llena sola en el próximo cierre.
 	posiciones_temporada_anterior = datos.get("posiciones_temporada_anterior", {})
-	juego_terminado = datos.get("juego_terminado", false)
 
 	# Una partida guardada ANTES del libro de pases puede traer
 	# negociaciones abiertas en un mes sin mercado: el cierre solo se
@@ -2389,7 +2323,6 @@ func cargar_partida() -> bool:
 		for aviso in Ofertas.cancelar_por_cierre_de_mercado(equipo_jugador):
 			_agregar_noticia("MERCADO: %s" % aviso)
 		Ofertas.archivar(equipo_jugador)
-	motivo_fin_partida = datos.get("motivo_fin_partida", "")
 
 	# Migración: un guardado hecho en la temporada 1 ANTES de que
 	# existiera la siembra tiene la caja de TODOS en cero y se quedaría

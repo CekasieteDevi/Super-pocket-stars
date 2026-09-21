@@ -218,9 +218,8 @@ static func detalle_seguido(cruce: Dictionary) -> Dictionary:
 ## Si el club está EN el cuadro: le queda un cruce, pasó sin jugar, ya
 ## jugó alguna ronda (aunque lo hayan eliminado) o salió campeón. Desde
 ## que la copa se juega por clasificación, "no aparece" ya no significa
-## "lo eliminaron": significa que no clasificó, y hay dos cosas que
-## dependen de saberlo — el objetivo de directiva de copa (imposible de
-## cumplir sin cupo, ver Objetivos.generar) y el aviso al jugador.
+## "lo eliminaron": significa que no clasificó, y el aviso al jugador
+## depende de saberlo.
 func participa(equipo: Team) -> bool:
 	if equipo == null:
 		return false
@@ -275,22 +274,6 @@ func finalista() -> String:
 	if str(partido["ganador"]) == str(partido["local"]):
 		return str(partido["visitante"])
 	return str(partido["local"])
-
-
-## §10.5/§15 (Objetivos de directiva, ver core/objetivos.gd): cuántas
-## rondas ganó este equipo en total en esta copa — 0 si perdió su primer
-## partido, historial.size() si salió campeón. Un bye (ronda en la que no
-## aparece en ningún partido porque le tocó pasar directo) no suma ni
-## resta, simplemente no cuenta esa ronda.
-func rondas_ganadas(equipo: Team) -> int:
-	var rondas := 0
-	for ronda in historial:
-		for partido in ronda:
-			if partido["local"] == equipo.nombre or partido["visitante"] == equipo.nombre:
-				if partido["ganador"] == equipo.nombre:
-					rondas += 1
-				break
-	return rondas
 
 
 ## El pool de la ronda que viene, en el ORDEN DEL CUADRO.

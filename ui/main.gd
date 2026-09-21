@@ -8307,9 +8307,6 @@ func _texto_cierre_temporada() -> String:
 
 
 func _on_jugar_fecha() -> void:
-	if GameState.juego_terminado:
-		_refrescar_objetivo()
-		return
 	if (not GameState.hay_fecha_pendiente() and not GameState.hay_partido_de_copa_hoy()
 			and not GameState.hay_partido_internacional_hoy()
 			and not GameState.hay_partido_de_playoff_hoy()):
@@ -8326,9 +8323,6 @@ func _on_jugar_fecha() -> void:
 ## Juega el partido y muestra directamente el resumen final, dejando la
 ## cancha congelada en el último fotograma detrás del cartel.
 func _on_saltar_a_resultado() -> void:
-	if GameState.juego_terminado:
-		_refrescar_objetivo()
-		return
 	if (not GameState.hay_fecha_pendiente() and not GameState.hay_partido_de_copa_hoy()
 			and not GameState.hay_partido_internacional_hoy()
 			and not GameState.hay_partido_de_playoff_hoy()):
@@ -8402,7 +8396,7 @@ func _en_segundo_plano(trabajo: Callable) -> void:
 ## El cruce de copa, ya con el once en orden. Mismo recorrido que el de
 ## liga: se juega, se refresca todo y se abre la pantalla del partido.
 func _jugar_copa_ya(mostrar_partido: bool = true) -> void:
-	if GameState.juego_terminado or not GameState.hay_partido_de_copa_hoy():
+	if GameState.hay_partido_de_copa_hoy():
 		return
 	await _en_segundo_plano(GameState.jugar_partido_de_copa)
 	_despues_del_partido_de_torneo(mostrar_partido)
@@ -8412,7 +8406,7 @@ func _jugar_copa_ya(mostrar_partido: bool = true) -> void:
 ## previa, el playoff o una ronda del knockout. Mismo recorrido que el
 ## cruce de copa.
 func _jugar_internacional_ya(mostrar_partido: bool = true) -> void:
-	if GameState.juego_terminado or not GameState.hay_partido_internacional_hoy():
+	if GameState.hay_partido_internacional_hoy():
 		return
 	await _en_segundo_plano(GameState.jugar_partido_internacional)
 	_despues_del_partido_de_torneo(mostrar_partido)
@@ -8421,7 +8415,7 @@ func _jugar_internacional_ya(mostrar_partido: bool = true) -> void:
 ## El playoff de ascenso, despues de la ultima fecha. Mismo recorrido que
 ## el cruce de copa.
 func _jugar_playoff_ya(mostrar_partido: bool = true) -> void:
-	if GameState.juego_terminado or not GameState.hay_partido_de_playoff_hoy():
+	if GameState.hay_partido_de_playoff_hoy():
 		return
 	await _en_segundo_plano(GameState.jugar_partido_de_playoff)
 	_despues_del_partido_de_torneo(mostrar_partido)
@@ -8430,7 +8424,7 @@ func _jugar_playoff_ya(mostrar_partido: bool = true) -> void:
 func _despues_del_partido_de_torneo(mostrar_partido: bool = true) -> void:
 	_refrescar_historial_partidos()
 	_refrescar_plantel()
-	_refrescar_objetivo()
+	_refrescar_portada_si_visible()
 	_refrescar_barra_contexto()
 	if mostrar_partido and not GameState.ultimos_fotogramas.is_empty():
 		_mostrar_partido_animado()
@@ -8438,7 +8432,7 @@ func _despues_del_partido_de_torneo(mostrar_partido: bool = true) -> void:
 
 ## El partido en si, ya con el once en orden.
 func _jugar_fecha_ya(mostrar_partido: bool = true) -> void:
-	if GameState.juego_terminado or not GameState.hay_fecha_pendiente():
+	if GameState.hay_fecha_pendiente():
 		return
 
 	var temporada_antes := GameState.temporada_actual
@@ -8449,8 +8443,7 @@ func _jugar_fecha_ya(mostrar_partido: bool = true) -> void:
 
 	_refrescar_tabla()
 	_refrescar_plantel()
-	_refrescar_objetivo()
-	_refrescar_objetivo()
+	_refrescar_portada_si_visible()
 	_refrescar_barra_contexto()
 
 	# El partido se VE. Antes se simulaba en silencio, te aparecia el
@@ -8467,9 +8460,6 @@ func _jugar_fecha_ya(mostrar_partido: bool = true) -> void:
 
 
 func _on_simular_temporada() -> void:
-	if GameState.juego_terminado:
-		_refrescar_objetivo()
-		return
 	if not GameState.hay_fecha_pendiente():
 		return
 
@@ -8497,8 +8487,7 @@ func _on_simular_temporada() -> void:
 
 	_refrescar_tabla()
 	_refrescar_plantel()
-	_refrescar_objetivo()
-	_refrescar_objetivo()
+	_refrescar_portada_si_visible()
 
 
 func _mostrar_plantel() -> void:
@@ -8538,37 +8527,14 @@ func _mostrar_partido() -> void:
 	option_estilo.select(max(idx_actual, 0))
 	var idx_cambios := OPCIONES_CAMBIOS.find(GameState.equipo_jugador.config_cambios)
 	option_cambios.select(max(idx_cambios, 0))
-	_refrescar_objetivo()
-	_refrescar_objetivo()
+	_refrescar_portada_si_visible()
 
 
-## §10.5/§15: objetivo de la directiva para esta temporada, y el estado de
-## game over si la directiva ya te destituyó (2 temporadas seguidas sin
-## cumplir). Cuando termina el juego se deshabilitan los botones que
-## avanzarían el calendario — la única salida es borrar la partida.
-## El objetivo y el game over se muestran en la PORTADA, que es la
-## pantalla desde la que se juega. Antes vivian en la pantalla "Partido",
-## que ademas apagaba ahi mismo sus dos botones — y esos botones ya no
-## existen: los de verdad estan en la portada y se apagan solos.
-func _refrescar_objetivo() -> void:
+## Despues de jugar, la portada muestra el estado nuevo del club. Si no
+## esta a la vista, se arma sola la proxima vez que se abre.
+func _refrescar_portada_si_visible() -> void:
 	if paneles.has("portada") and paneles["portada"].visible:
 		_refrescar_portada()
-
-
-## Texto del objetivo de la directiva, con la advertencia si vas camino a
-## que te echen.
-func _texto_objetivo() -> String:
-	if GameState.juego_terminado:
-		return "GAME OVER: %s" % GameState.motivo_fin_partida
-	var objetivo: Dictionary = GameState.equipo_jugador.objetivo_temporada
-	if objetivo.is_empty():
-		return ""
-	var incumplidos: int = GameState.equipo_jugador.objetivos_incumplidos_seguidos
-	var advertencia := ""
-	if incumplidos > 0:
-		advertencia = "  (⚠ %d/%d temporadas sin cumplir — te destituyen a la 2ª seguida)" % [
-			incumplidos, Objetivos.MAX_INCUMPLIDOS_SEGUIDOS]
-	return "Objetivo de la directiva: %s%s" % [objetivo["descripcion"], advertencia]
 
 
 ## §8.6.3/§8.6.5: le muestra al jugador con qué rival juega la próxima
@@ -8598,8 +8564,7 @@ func _avanzar_dias(hasta_el_partido: bool) -> void:
 	_refrescar_portada()
 	_refrescar_plantel()
 	_refrescar_mercado()
-	_refrescar_objetivo()
-	_refrescar_objetivo()
+	_refrescar_portada_si_visible()
 	_refrescar_barra_contexto()
 	# El cierre de temporada tiene su propia pantalla: el cartel de
 	# novedades con las 225 lineas del cierre adentro era justamente lo que
@@ -8707,7 +8672,7 @@ func _texto_informe_rival(rival: Team) -> String:
 
 func _on_estilo_seleccionado(idx: int) -> void:
 	GameState.equipo_jugador.estilo = Estilos.LISTA[idx]
-	_refrescar_objetivo()
+	_refrescar_portada_si_visible()
 
 
 func _on_config_cambios_seleccionado(idx: int) -> void:
@@ -9305,7 +9270,7 @@ func _refrescar_portada() -> void:
 			btn_jugar.text = "Jugar el playoff de ascenso"
 		btn_jugar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		Tema.primario(btn_jugar)
-		btn_jugar.disabled = rival == null or GameState.juego_terminado
+		btn_jugar.disabled = rival == null
 		boton_jugar_partido = btn_jugar
 		btn_jugar.pressed.connect(func():
 			await _on_jugar_fecha()
@@ -9317,21 +9282,19 @@ func _refrescar_portada() -> void:
 		btn_dia.text = "Avanzar un dia"
 		btn_dia.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		Tema.primario(btn_dia)
-		btn_dia.disabled = GameState.juego_terminado
 		btn_dia.pressed.connect(func(): _avanzar_dias(false))
 		fila_acciones.add_child(btn_dia)
 		var btn_salto := Button.new()
 		btn_salto.text = "Ir al proximo partido"
 		btn_salto.custom_minimum_size = Vector2(230, Tema.ALTO_TACTIL)
 		btn_salto.tooltip_text = "Pasa los dias de corrido, pero frena si pasa algo que necesita una decision."
-		btn_salto.disabled = GameState.juego_terminado
 		btn_salto.pressed.connect(func(): _avanzar_dias(true))
 		fila_acciones.add_child(btn_salto)
 	if hay_partido:
 		var btn_form := Button.new()
 		btn_form.text = "Saltar a resultado"
 		btn_form.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
-		btn_form.disabled = rival == null or GameState.juego_terminado
+		btn_form.disabled = rival == null
 		btn_form.pressed.connect(_on_saltar_a_resultado)
 		fila_acciones.add_child(btn_form)
 
@@ -9342,7 +9305,7 @@ func _refrescar_portada() -> void:
 	btn_simular.text = TEXTO_SIMULAR_TEMPORADA
 	btn_simular.custom_minimum_size = Vector2(280, Tema.ALTO_TACTIL)
 	btn_simular.tooltip_text = "Juega de una todas las fechas que quedan, las tuyas incluidas: no vas a poder tocar nada hasta el final."
-	btn_simular.disabled = rival == null or GameState.juego_terminado
+	btn_simular.disabled = rival == null
 	btn_simular.pressed.connect(func():
 		_on_simular_temporada()
 		_refrescar_portada()
@@ -9382,16 +9345,6 @@ func _refrescar_portada() -> void:
 	# --- Estado del club ---------------------------------------------------
 	contenedor_portada.add_child(Tema.etiqueta_seccion("El club"))
 	var estado := _tarjeta(contenedor_portada)
-	# El objetivo con su advertencia de destitucion, que antes vivia en la
-	# pantalla "Partido": es informacion para decidir, y se decide aca.
-	var texto_objetivo := _texto_objetivo()
-	if texto_objetivo != "":
-		var l := Label.new()
-		l.text = texto_objetivo
-		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		if GameState.juego_terminado:
-			l.add_theme_color_override("font_color", Tema.ROJO)
-		estado.add_child(l)
 	var linea := Label.new()
 	linea.text = "Media del once %.1f   ·   disponibles %d de %d   ·   carga %s   ·   foco %s" % [
 		equipo.media_equipo(), equipo.jugadores_sanos_count(),

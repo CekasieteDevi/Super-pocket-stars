@@ -151,7 +151,6 @@ var foco_semanas: Dictionary = {}  # area -> semanas acumuladas esta temporada
 var calidad_cancha: float = 0.0  # -8..+3, ver core/estado_cancha.gd — rige cuando este club juega de local
 var clima_partido: String = ""  # transitorio, solo dentro de un partido — "" (normal) / Lluvia / Calor / Viento, ver core/clima.gd
 var arbitro_partido: String = ""  # transitorio, solo dentro de un partido — Estricto/Permisivo/Casero, ver core/arbitro.gd
-var objetivo_en_riesgo: bool = false  # transitorio, lo recalcula GameState antes de cada fecha — ver core/objetivos.gd
 ## §8.4#27: te estas jugando el titulo o el descenso y quedan 5 fechas o
 ## menos. Transitorio como el de arriba: lo recalcula Liga antes de cada
 ## fecha para los veinte equipos — ver core/motivacion.gd.
@@ -188,14 +187,6 @@ var en_copa: bool = false
 var fans: float = 0.0
 var racha_sin_ganar: int = 0
 var rival_directo: String = ""  # nombre del clásico horneado (§8.4 #14) — ver core/rivalidad.gd
-## §10.5/§15 (objetivo de directiva categoría "cantera", ver core/
-## objetivos.gd): cuántas veces se promovió a un canterano (cantera->banco
-## o banco->titular, ver promover_juvenil/promover_a_titular más abajo)
-## en la temporada en curso — cuenta tanto las manuales del jugador humano
-## como las automáticas de la IA, porque el incremento vive DENTRO de esas
-## dos funciones, no en el llamador. Se resetea a 0 en GameState al cerrar
-## cada temporada, después de leerlo para evaluar el objetivo.
-var promociones_temporada: int = 0
 var armonia: float = 0.0  # placeholder hasta que exista §3 completo (vestuario real)
 ## §8.4 modificador 2 ("Forma, de -5 a +5 según los últimos 5 partidos"),
 ## bloque A. Sin historial de partidos recientes todavía, se aproxima con
@@ -301,12 +292,6 @@ var vencimientos_del_cierre: Array = []
 ## no cambia mientras esté en el club.
 var reputacion: float = 50.0  # 0-100, afecta entradas/sponsors (§10.5)
 var quebrado: bool = false
-## Objetivos de directiva (§10.5/§15): la directiva te pide un resultado
-## concreto cada temporada, ver core/objetivos.gd. Solo tiene sentido para
-## el equipo del jugador humano (Objetivos.evaluar/GameState._cerrar_temporada
-## deciden si se cumplió); los clubes de la IA lo dejan siempre vacío.
-var objetivo_temporada: Dictionary = {}  # {"tipo","descripcion","posicion_maxima"}
-var objetivos_incumplidos_seguidos: int = 0
 var scouts: Array = []  # [{"nivel":int}], §9.4 — empieza con 1 al mínimo (§15 decisión 9)
 var instalaciones: Dictionary = {}  # categoria -> nivel 1-5 (§9.5), ver core/instalaciones.gd
 
@@ -532,9 +517,7 @@ func guardar() -> Dictionary:
 		"escudo_forma": escudo_forma, "logo_forma": logo_forma,
 		"color_escudo": color_escudo.to_html(), "color_logo": color_logo.to_html(),
 		"config_cambios": config_cambios,
-		"objetivo_temporada": objetivo_temporada, "objetivos_incumplidos_seguidos": objetivos_incumplidos_seguidos,
 		"fans": fans, "racha_sin_ganar": racha_sin_ganar, "rival_directo": rival_directo,
-		"promociones_temporada": promociones_temporada,
 		"prestados_afuera": prestados_afuera_datos, "prestados_propios": prestados_propios_datos,
 	}
 
@@ -701,14 +684,6 @@ static func cargar(datos: Dictionary) -> Team:
 	for k in t.quimica:
 		t.quimica[k] = float(t.quimica[k])
 	t.config_cambios = datos.get("config_cambios", "equilibrado")
-	# JSON.parse() vuelve todos los numeros como float -- "posicion_maxima"
-	# despues se compara con un int (posicion_final) via <=, que en GDScript
-	# anda bien entre int/float, pero se normaliza igual por consistencia
-	# con el resto de los campos numericos del guardado.
-	t.objetivo_temporada = datos.get("objetivo_temporada", {}).duplicate()
-	if t.objetivo_temporada.has("posicion_maxima"):
-		t.objetivo_temporada["posicion_maxima"] = int(t.objetivo_temporada["posicion_maxima"])
-	t.objetivos_incumplidos_seguidos = int(datos.get("objetivos_incumplidos_seguidos", 0))
 	# Ojo: hasta la v1.5 esto era un puntaje de 0 a 100 y ahora es la
 	# cantidad real de hinchas. La migracion NO va aca: necesita saber en
 	# que division juega el club y eso no se guarda —lo reconstruye la
@@ -717,7 +692,6 @@ static func cargar(datos: Dictionary) -> Team:
 	t.fans = float(datos.get("fans", 0.0))
 	t.racha_sin_ganar = int(datos.get("racha_sin_ganar", 0))
 	t.rival_directo = datos.get("rival_directo", "")
-	t.promociones_temporada = int(datos.get("promociones_temporada", 0))
 
 	# Quedan con el NOMBRE del club (String) en la clave "club"/"club_dueno"
 	# en vez de la referencia real -- Piramide.resolver_prestamos() los
@@ -1179,7 +1153,6 @@ func promover_a_titular(jugador_banco_id: int) -> Dictionary:
 	# El que baja ocupa el lugar del que subio, sea el banco o reservas.
 	origen[idx_banco] = saliente
 	recalcular_capitan()
-	promociones_temporada += 1
 	return {"entra": entrante, "sale": saliente}
 
 
@@ -1306,7 +1279,6 @@ func _relevo_para(posicion: String, rng: RandomNumberGenerator) -> Dictionary:
 		juvenil["es_canterano"] = true
 		cantera.remove_at(mejor)
 		_registrar_fichaje(juvenil, ValorJugador.calcular(juvenil, 50.0, 3))
-		promociones_temporada += 1
 		return juvenil
 	var nuevo := PlayerGenerator.generate(siguiente_id_cantera, rng, posicion, nivel_potencial())
 	siguiente_id_cantera += 1
@@ -1819,7 +1791,6 @@ func promover_juvenil(jugador_id: int) -> Dictionary:
 	# Con lugar en el plantel no sale nadie: mover_a_banco devuelve {}.
 	if not liberado.is_empty():
 		_limpiar_registro(liberado["id"])
-	promociones_temporada += 1
 
 	return {"promovido": juvenil, "saliente": liberado}
 

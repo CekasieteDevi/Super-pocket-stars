@@ -9458,7 +9458,7 @@ static func xp_normalizada(estado: Dictionary) -> Dictionary:
 
 ## Mismo shape de salida que MatchEngine.simular (goles_local,
 ## goles_visitante, log, goles_log, eventos) para que Liga/GameState/
-## EstadisticasPartido/Objetivos/Fans no se enteren de que ahora hay
+## EstadisticasPartido/Fans no se enteren de que ahora hay
 ## coordenadas — más "fotogramas" y "stats", que solo consume la
 ## animación y el debug (decisión 4: arrays separados).
 ##
