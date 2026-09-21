@@ -1064,6 +1064,10 @@ const ALTO_RETRATO := 100
 ## dos digitos. Con el dorsal encima del sprite tapaba la cabeza. Mas de
 ## 108 px y la ficha lateral se pasa de sus 388 px y aparece scroll de costado.
 const ANCHO_RETRATO := 108
+## Las variantes nuevas del atlas sirven para el partido, pero algunas
+## tienen peinados demasiado cargados al verse ampliadas en la ficha.
+## La ficha usa las cuatro hojas base, ya probadas a esta escala.
+const ESTILOS_RETRATO_ESTABLES := [0, 1, 2, 3]
 
 
 ## Retrato: el mismo sprite que sale a la cancha, de frente y quieto, con
@@ -1092,20 +1096,26 @@ func _retrato_jugador(equipo: Team, j: Dictionary) -> Control:
 
 	var pila := Control.new()
 	pila.custom_minimum_size = Vector2(ANCHO_RETRATO, ALTO_RETRATO)
+	pila.clip_contents = true
 	marco.add_child(pila)
 
 	var id := int(j["id"])
-	var recorte := AtlasTexture.new()
-	recorte.atlas = AtlasJugadores.textura(AtlasJugadores.cuadro("", 0.0, 0, false),
+	var estilo_atlas := AtlasJugadores.estilo_de(id)
+	var estilo_retrato: int = ESTILOS_RETRATO_ESTABLES[
+		posmod(estilo_atlas, ESTILOS_RETRATO_ESTABLES.size())]
+	var atlas := AtlasJugadores.textura(AtlasJugadores.cuadro("", 0.0, 0, false),
 		ColoresClub.de_equipo(equipo), equipo.color_short,
-		SpritesPartido.tono_pelo_de(id), false, 0, AtlasJugadores.estilo_de(id))
-	recorte.region = RECORTE_RETRATO
-	var lamina := TextureRect.new()
-	lamina.texture = recorte
-	lamina.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	lamina.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	lamina.stretch_mode = TextureRect.STRETCH_SCALE
+		SpritesPartido.tono_pelo_de(id), false, 0, estilo_retrato)
+	# Copiar el recorte a una textura propia evita que el escalado del atlas
+	# filtre píxeles de otra celda y los mezcle con el pelo o los hombros.
+	var retrato := atlas.get_image().get_region(Rect2i(RECORTE_RETRATO))
 	var lado := RECORTE_RETRATO.size * ESCALA_RETRATO
+	retrato.resize(int(lado.x), int(lado.y), Image.INTERPOLATE_NEAREST)
+	var lamina := TextureRect.new()
+	lamina.texture = ImageTexture.create_from_image(retrato)
+	lamina.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	lamina.expand_mode = TextureRect.EXPAND_KEEP_SIZE
+	lamina.stretch_mode = TextureRect.STRETCH_KEEP
 	lamina.position = Vector2(2.0, ALTO_RETRATO - lado.y - 3.0)
 	lamina.size = lado
 	pila.add_child(lamina)
