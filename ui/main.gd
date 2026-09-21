@@ -27,6 +27,9 @@ var ficha_origen: String = "plantel"
 var ficha_club: Team = null
 var boton_volver_ficha: Button
 var boton_investigar_ficha: Button
+var fila_fichar_ficha: HBoxContainer
+var boton_comprar_ficha: Button
+var boton_prestamo_ficha: Button
 var boton_carrera_ficha: Button
 var ficha_ver_carrera := false
 var option_formacion: OptionButton
@@ -1262,6 +1265,24 @@ func _construir_panel_ficha(padre: Control) -> void:
 	boton_investigar_ficha.pressed.connect(_investigar_desde_ficha)
 	panel.add_child(boton_investigar_ficha)
 
+	# Con el informe terminado la ficha es donde se decide la compra: mandar
+	# al jugador de vuelta a buscarlo en la lista del mercado era un paso de mas.
+	fila_fichar_ficha = HBoxContainer.new()
+	fila_fichar_ficha.add_theme_constant_override("separation", 8)
+	panel.add_child(fila_fichar_ficha)
+	boton_comprar_ficha = Button.new()
+	boton_comprar_ficha.text = "Comprar"
+	boton_comprar_ficha.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	boton_comprar_ficha.pressed.connect(func():
+		_abrir_negociacion(ficha_club, ficha_jugador_id))
+	fila_fichar_ficha.add_child(boton_comprar_ficha)
+	boton_prestamo_ficha = Button.new()
+	boton_prestamo_ficha.text = "Pedir a préstamo"
+	boton_prestamo_ficha.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	boton_prestamo_ficha.pressed.connect(func():
+		_abrir_prestamo(ficha_club, ficha_jugador_id))
+	fila_fichar_ficha.add_child(boton_prestamo_ficha)
+
 	boton_carrera_ficha = Button.new()
 	boton_carrera_ficha.pressed.connect(func():
 		ficha_ver_carrera = not ficha_ver_carrera
@@ -1311,6 +1332,13 @@ func _volver_desde_ficha() -> void:
 		_: _mostrar_plantel()
 
 
+## Al cerrar la compra o el préstamo abiertos desde la ficha: sin esto los
+## botones seguian activos con la negociacion ya en curso.
+func _refrescar_ficha_si_visible() -> void:
+	if paneles.has("ficha") and paneles["ficha"].visible:
+		_refrescar_ficha()
+
+
 func _investigar_desde_ficha() -> void:
 	if ficha_club == null:
 		return
@@ -1344,6 +1372,16 @@ func _refrescar_ficha() -> void:
 
 	# _buscar_jugador_por_id mira todo el plantel, incluidas las reservas.
 	var j := _buscar_jugador_por_id(equipo, ficha_jugador_id)
+	# Desde las estadisticas de la liga tambien llegan jugadores tuyos.
+	fila_fichar_ficha.visible = (ajeno and not j.is_empty()
+		and ficha_club != GameState.equipo_jugador
+		and Investigadores.conoce(GameState.equipo_jugador, ficha_jugador_id))
+	if fila_fichar_ficha.visible:
+		var traba := _traba_para_fichar(ficha_club, ficha_jugador_id)
+		var ayuda: String = "" if traba.is_empty() else traba[1]
+		for b in [boton_comprar_ficha, boton_prestamo_ficha]:
+			b.disabled = not traba.is_empty()
+			b.tooltip_text = ayuda
 	if j.is_empty():
 		contenedor_ficha.add_child(_texto_suave(
 			"Ese jugador ya no esta en %s." % (equipo.nombre if ajeno else "el plantel")))
@@ -3211,17 +3249,9 @@ func _fila_mercado(f: Dictionary, par: bool) -> Control:
 		btn_inv.pressed.connect(func(): _on_investigar(vendedor, jugador_id))
 	dentro.add_child(btn_inv)
 
-	var negociando := false
-	for o in equipo.ofertas:
-		if int(o["jugador_id"]) == jugador_id and Ofertas.abierta(o):
-			negociando = true
-
-	if Negociacion.bloqueado(vendedor, jugador_id, GameState.temporada_actual):
-		dentro.add_child(_boton_fichar_apagado("Vetado",
-			"Te ofendieron con la ultima oferta. Vuelven a escucharte la temporada que viene."))
-	elif negociando:
-		dentro.add_child(_boton_fichar_apagado("En curso",
-			"Ya tenes una negociacion abierta por el. Miralo en Ofertas enviadas."))
+	var traba := _traba_para_fichar(vendedor, jugador_id)
+	if not traba.is_empty():
+		dentro.add_child(_boton_fichar_apagado(traba[0], traba[1]))
 	else:
 		var menu := MenuButton.new()
 		menu.text = "Fichar"
@@ -3240,6 +3270,19 @@ func _fila_mercado(f: Dictionary, par: bool) -> Control:
 		)
 		dentro.add_child(menu)
 	return fila
+
+
+## [texto, ayuda] de lo que impide ofertar por el jugador; vacio si nada.
+## La usan la fila del mercado y la ficha, para que las dos digan lo mismo.
+func _traba_para_fichar(vendedor: Team, jugador_id: int) -> Array:
+	if Negociacion.bloqueado(vendedor, jugador_id, GameState.temporada_actual):
+		return ["Vetado",
+			"Te ofendieron con la ultima oferta. Vuelven a escucharte la temporada que viene."]
+	for o in GameState.equipo_jugador.ofertas:
+		if int(o["jugador_id"]) == jugador_id and Ofertas.abierta(o):
+			return ["En curso",
+				"Ya tenes una negociacion abierta por el. Miralo en Ofertas enviadas."]
+	return []
 
 
 ## El lugar del boton Fichar cuando no se puede fichar. Ocupa el MISMO
@@ -3741,6 +3784,7 @@ func _construir_dialogo_prestamo() -> void:
 	dialogo_prestamo.ok_button_text = "Cerrar"
 	dialogo_prestamo.min_size = Vector2(640, 440)
 	add_child(dialogo_prestamo)
+	dialogo_prestamo.visibility_changed.connect(_refrescar_ficha_si_visible)
 
 	var caja := VBoxContainer.new()
 	caja.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -3942,6 +3986,7 @@ func _construir_dialogo_negociacion() -> void:
 	dialogo_negociacion.ok_button_text = "Cerrar"
 	dialogo_negociacion.min_size = Vector2(820, 560)
 	add_child(dialogo_negociacion)
+	dialogo_negociacion.visibility_changed.connect(_refrescar_ficha_si_visible)
 
 	var caja := VBoxContainer.new()
 	caja.size_flags_horizontal = Control.SIZE_EXPAND_FILL
