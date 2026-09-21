@@ -11,6 +11,7 @@ func _init() -> void:
 	rng.seed = SEED
 	_test_el_sobrante_se_pierde(rng)
 	_test_la_deuda_se_arrastra(rng)
+	_test_el_sobrante_tapa_el_rojo_de_otra_categoria(rng)
 	_test_el_sueldo_no_lleva_el_escalon_de_elite(rng)
 	_test_se_le_puede_comprar_a_cualquier_division(rng)
 	_test_arranca_la_temporada_sin_nada_gastado(rng)
@@ -38,23 +39,58 @@ func _test_el_sobrante_se_pierde(rng: RandomNumberGenerator) -> void:
 
 
 func _test_la_deuda_se_arrastra(rng: RandomNumberGenerator) -> void:
-	print("\n=== Pero la deuda si se arrastra ===")
+	print("
+=== Pero la deuda si se arrastra ===")
 	# Si no, la quiebra se limpiaria sola cada temporada y
 	# Economia._recalcular_quiebra no volveria a dispararse nunca.
+	# La deuda es del club: se mide la caja TOTAL, porque el rojo se
+	# reparte entre las categorias (ver Economia.procesar_temporada).
 	var liga := Liga.new()
 	liga.inicializar(["C", "D"], rng, 0, 5)
 	var e: Team = liga.equipos[0]
 	Economia.procesar_temporada(e, 1, 20, liga.division)
-	var limpio: float = e.caja["fichajes"]
+	var limpio := _caja_total(e)
 	e.caja["fichajes"] = -500000.0
+	e.caja["contratos"] = 0.0
+	e.caja["mejoras"] = 0.0
 	Economia.procesar_temporada(e, 1, 20, liga.division)
-	var con_deuda: float = e.caja["fichajes"]
+	var con_deuda := _caja_total(e)
 	if con_deuda < limpio - 400000.0:
 		print("OK: arrancar debiendo $500.000 deja %s en vez de %s." % [
 			Economia.formato_dinero(con_deuda), Economia.formato_dinero(limpio)])
 	else:
 		print("FALLA: la deuda se evaporo (%s contra %s)." % [
 			Economia.formato_dinero(con_deuda), Economia.formato_dinero(limpio)])
+
+
+func _test_el_sobrante_tapa_el_rojo_de_otra_categoria(rng: RandomNumberGenerator) -> void:
+	print("
+=== El sobrante de una categoria tapa el rojo de otra ===")
+	# Antes Contratos arrastraba su rojo aunque Fichajes sobrara, y en las
+	# divisiones bajas quedaba negativo para siempre.
+	var liga := Liga.new()
+	liga.inicializar(["E", "F"], rng, 0, 5)
+	var e: Team = liga.equipos[0]
+	Economia.procesar_temporada(e, 1, 20, liga.division)
+	e.caja["contratos"] = -100000.0
+	e.caja["fichajes"] = 200000.0
+	Economia.procesar_temporada(e, 1, 20, liga.division)
+	# Contra lo asignado en ESTE cierre: la reputacion se movio en el
+	# anterior y el neto no es el mismo.
+	var limpio: float = e.presupuesto_temporada["contratos"]
+	if absf(float(e.caja["contratos"]) - limpio) < 1.0:
+		print("OK: con $200.000 de sobrante en Fichajes, Contratos arranca limpio (%s)." %
+			Economia.formato_dinero(e.caja["contratos"]))
+	else:
+		print("FALLA: Contratos arranco en %s en vez de %s." % [
+			Economia.formato_dinero(e.caja["contratos"]), Economia.formato_dinero(limpio)])
+
+
+func _caja_total(e: Team) -> float:
+	var total := 0.0
+	for categoria in e.caja:
+		total += float(e.caja[categoria])
+	return total
 
 
 func _test_el_sueldo_no_lleva_el_escalon_de_elite(rng: RandomNumberGenerator) -> void:

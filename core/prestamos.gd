@@ -66,6 +66,28 @@ const ANIOS_CONTRATO_OPCION := 3
 ## que el prestamo lo rechazara siempre: el jugador comparaba su sueldo
 ## contra cero y la cuenta le daba que le bajaban el sueldo. La tabla es
 ## la misma que usa `ceder` para repartir el pago.
+## La division que el jugador SIENTE como destino al evaluar un prestamo.
+##
+## Un suplente o una reserva no pierde nada por bajar de categoria: en su
+## club no juega, y a prestamo va a sumar minutos. Para el, bajar no pesa.
+## El titular si resigna vitrina, y para el el salto pesa la MITAD que en
+## un pase, porque es temporal. Subir pesa la mitad para todos.
+##
+## Antes bajar pesaba igual para el titular y para el suplente. Medido sobre
+## una partida real en 3a: de 11 cedibles, 10 rechazaban cualquier pedido
+## de 9a o 10a con "No quiere bajar de categoria".
+static func division_percibida(dueno: Team, jugador_id: int, division_origen: int,
+		division_destino: int) -> int:
+	var salto: int = division_destino - division_origen
+	if salto > 0 and not _es_titular(dueno, jugador_id):
+		return division_origen
+	return division_origen + int(round(salto / 2.0))
+
+
+static func _es_titular(equipo: Team, jugador_id: int) -> bool:
+	return _indice_en(equipo.jugadores, jugador_id) >= 0
+
+
 static func sueldo_de_referencia(dueno: Team, jugador: Dictionary) -> float:
 	var id := int(jugador["id"])
 	return float(dueno.sueldos.get(id, Economia.sueldo_sugerido(

@@ -46,7 +46,9 @@ const TEMPORADAS_SIN_CLUB := 3
 ## Con cuantos años firma el juvenil que sube a tapar un puesto. El mismo
 ## contrato que cualquier promocion de cantera (ver Team.promover_juvenil):
 ## subir por un vencimiento ajeno no es un debut distinto de los otros.
-const ANIOS_CANTERANO := 3
+## Dos años: le da tiempo de crecer con el sueldo de canterano
+## (Economia.SUELDO_CANTERANO) antes de renovar por lo que vale.
+const ANIOS_CANTERANO := 2
 
 
 ## Saca a "jugador" del plantel de equipo (venció contrato, no se lo
@@ -210,9 +212,7 @@ static func _reemplazo_para(equipo: Team, posicion: String,
 			var juvenil: Dictionary = equipo.cantera[mejor]
 			juvenil["es_canterano"] = true
 			equipo.cantera.remove_at(mejor)
-			equipo._registrar_fichaje(
-				juvenil, ValorJugador.calcular(juvenil, 50.0, ANIOS_CANTERANO),
-				ANIOS_CANTERANO)
+			equipo._registrar_canterano(juvenil)
 			return {"jugador": juvenil, "de_cantera": true}
 
 	if desde_cantera:
@@ -224,9 +224,7 @@ static func _reemplazo_para(equipo: Team, posicion: String,
 
 	# Del nivel del club: un club de decima no genera un refuerzo de
 	# primera (ver Team.nivel_potencial).
-	var nuevo := PlayerGenerator.generate(
-		equipo.siguiente_id_cantera, rng, posicion, equipo.nivel_potencial())
-	equipo.siguiente_id_cantera += 1
+	var nuevo := equipo.generar_relevo(posicion, rng, CONTRATO_LIBRE_ANIOS)
 	equipo._registrar_fichaje(
 		nuevo, ValorJugador.calcular(nuevo, 50.0, CONTRATO_LIBRE_ANIOS),
 		CONTRATO_LIBRE_ANIOS)

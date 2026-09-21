@@ -15,6 +15,7 @@ func _init() -> void:
 	_test_la_opcion_barata_no_pasa()
 	_test_medio_ano_vuelve_a_mitad_de_temporada()
 	_test_un_canterano_se_puede_pedir()
+	_test_el_suplente_baja_sin_plus()
 	_test_el_plus_compra_el_no()
 	if gs != null:
 		gs.free()
@@ -158,20 +159,39 @@ func _test_un_canterano_se_puede_pedir() -> void:
 		print("FALLA: %s" % [r])
 
 
+func _test_el_suplente_baja_sin_plus() -> void:
+	print("
+=== El suplente baja de categoria sin pedir nada ===")
+	# En su club no juega: a prestamo va a sumar minutos, y bajar no le
+	# pesa (ver Prestamos.division_percibida).
+	var p := _partida(1)
+	var dueno: Team = p["dueno"]
+	var id := int(dueno.banco[0]["id"])
+	var r: Dictionary = gs.pedir_prestamo(dueno, id, "una", 1.0, 0.0, 0.0)
+	if r["exito"]:
+		print("OK: el suplente acepta bajar cuatro divisiones sin plus.")
+	else:
+		print("FALLA: el suplente rechazo bajar: %s" % r["motivo"])
+
+
 func _test_el_plus_compra_el_no() -> void:
 	print("
-=== El plus compra el no del que baja de categoria ===")
+=== El plus compra el no del hincha ===")
 	# El reparto del sueldo es plata entre CLUBES: al jugador no le cambia
-	# nada. Sin el plus, un jugador de division 1 rechazaba bajar a la 4 y
-	# no habia ninguna palanca para darlo vuelta.
+	# nada. Al hincha del club no lo mueve la categoria sino la camiseta,
+	# y la unica palanca para darlo vuelta es el plus.
 	var p := _partida(1)
 	var dueno: Team = p["dueno"]
 	var suplente: Dictionary = dueno.banco[0]
+	suplente["personalidades"] = {"positiva": "Hincha del club", "negativa": ""}
+	dueno.animo[int(suplente["id"])] = 50.0
 	var id := int(suplente["id"])
+	# El plus sale de Contratos: aca se mide si convence, no si alcanza.
+	gs.equipo_jugador.caja["contratos"] = 500000000.0
 
 	var sin_plus: Dictionary = gs.pedir_prestamo(dueno, id, "una", 1.0, 0.0, 0.0)
 	if sin_plus["exito"]:
-		print("FALLA: acepto bajar cuatro divisiones sin plus.")
+		print("FALLA: el hincha acepto irse sin plus.")
 		return
 	var sugerido: float = float(sin_plus.get("plus_sugerido", 0.0))
 	if sugerido <= 0.0:

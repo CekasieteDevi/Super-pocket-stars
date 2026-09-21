@@ -1952,17 +1952,16 @@ func pedir_prestamo(dueno: Team, jugador_id: int, duracion: String,
 		return {"exito": false, "motivo": r["motivo"], "minimo": r.get("minimo", 0.0)}
 
 	# El jugador tambien decide. En un prestamo el salto de categoria pesa
-	# la MITAD: es temporal y lo que busca es jugar, no mudarse.
+	# menos que en un pase (ver Prestamos.division_percibida).
 	# Un canterano no tiene ficha registrada. Leerle un sueldo 0 lo hacia
 	# comparar contra cero y rechazar siempre; la referencia es la misma
 	# tabla con la que Prestamos.ceder reparte el pago.
 	var sueldo_actual := Prestamos.sueldo_de_referencia(dueno, jugador)
 	var plus: float = maxf(0.0, plus_sueldo)
 	var div_origen := division_de(dueno)
-	var salto: int = division_jugador - div_origen
 	var detalle := Negociacion.interes_jugador(
 		jugador, dueno.animo.get(jugador_id, 50.0), sueldo_actual, sueldo_actual + plus,
-		div_origen, div_origen + int(round(salto / 2.0)))
+		div_origen, Prestamos.division_percibida(dueno, jugador_id, div_origen, division_jugador))
 	if not detalle["acepta"]:
 		return {"exito": false, "motivo": Negociacion.motivo_rechazo(detalle),
 			"detalle": detalle, "plus_sugerido": _plus_para_convencer(detalle, sueldo_actual)}

@@ -181,7 +181,11 @@ func _test_llegan_ofertas_por_los_mios() -> void:
 
 
 func _test_el_crack_de_abajo_lo_buscan_los_de_arriba() -> void:
-	print("\n=== El crack de una division baja recibe ofertas; el suplente flojo no ===")
+	print("
+=== El crack de una division baja lo buscan los de arriba; al suplente flojo, los de abajo ===")
+	# El suplente flojo SI puede recibir ofertas: le sirve a un club de mas
+	# abajo. Antes el test pedia cero ofertas por el, y era justo lo que
+	# hacia que las ofertas se juntaran en uno o dos jugadores del plantel.
 	var p := _partida(6)
 	var mio: Team = p["mio"]
 	var rng: RandomNumberGenerator = p["rng"]
@@ -196,21 +200,29 @@ func _test_el_crack_de_abajo_lo_buscan_los_de_arriba() -> void:
 	var por_crack := 0
 	var de_arriba := 0
 	var por_flojo := 0
+	var flojo_de_arriba := 0
 	for _i in range(400):
 		for o in Ofertas.generar_entrantes(mio, p["piramide"], rng, 2, 6):
+			var es_de_arriba := false
+			for d in range(6):
+				for e in p["piramide"].divisiones[d].equipos:
+					if e.nombre == str(o["club"]):
+						es_de_arriba = true
 			if int(o["jugador_id"]) == int(crack["id"]):
 				por_crack += 1
-				for d in range(6):
-					for e in p["piramide"].divisiones[d].equipos:
-						if e.nombre == str(o["club"]):
-							de_arriba += 1
+				if es_de_arriba:
+					de_arriba += 1
 			elif int(o["jugador_id"]) == int(flojo["id"]):
 				por_flojo += 1
+				if es_de_arriba:
+					flojo_de_arriba += 1
 		mio.ofertas.clear()
-	if por_crack >= 10 and de_arriba == por_crack and por_flojo == 0:
-		print("OK: %d ofertas por el crack, todas de divisiones de arriba; ninguna por el flojo." % por_crack)
+	if por_crack >= 10 and de_arriba == por_crack and por_crack > por_flojo and flojo_de_arriba == 0:
+		print("OK: %d ofertas por el crack, todas de arriba; %d por el flojo, ninguna de arriba." % [
+			por_crack, por_flojo])
 	else:
-		print("FALLA: crack=%d (de arriba %d) flojo=%d" % [por_crack, de_arriba, por_flojo])
+		print("FALLA: crack=%d (de arriba %d) flojo=%d (de arriba %d)" % [
+			por_crack, de_arriba, por_flojo, flojo_de_arriba])
 
 
 func _test_aceptar_no_garantiza_la_venta() -> void:

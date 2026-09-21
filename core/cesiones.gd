@@ -83,8 +83,10 @@ const PLUS_TOPE := 0.60
 ## tiene.
 const VENTAJA_MINIMA := 2.0
 
-## Que tanto mas abajo miran. Un club pide prestado a uno de arriba, no al
-## reves: el sesgo de division va hacia las categorias inferiores.
+## Que tanto mas abajo miran en las cesiones entre clubes de la IA. Un
+## club pide prestado a uno de arriba, no al reves: el sesgo de division va
+## hacia las categorias inferiores. Los pedidos que te llegan a VOS no usan
+## este tope (ver generar_pedido).
 const DIVISIONES_ABAJO_MAX := 3
 
 
@@ -190,7 +192,7 @@ static func evaluar_contraoferta(pide: Team, dueno: Team, jugador: Dictionary,
 ## Un club viene a pedirte prestado a alguien de tu lista de cedibles.
 ##
 ## Mira solo a los que marcaste DISPONIBLE. Recorre los clubes de tu
-## division y de hasta DIVISIONES_ABAJO_MAX mas abajo, y junta los pares
+## division y de todas las de abajo, y junta los pares
 ## club-jugador donde el jugador mejora al club. Sortea con peso por esa
 ## mejora y arma el pedido tirando de todos los numeros para su lado. Si
 ## el par sorteado no cierra (no le entra en la caja, el jugador no iria),
@@ -222,10 +224,12 @@ static func generar_pedido(equipo: Team, piramide, rng: RandomNumberGenerator,
 		return {}
 
 	# Piden de tu division para abajo: el que pide prestado es el que no
-	# puede comprar, y ese esta abajo.
+	# puede comprar, y ese esta abajo. Sin tope de profundidad: con el tope
+	# de DIVISIONES_ABAJO_MAX, un club de 3a en la temporada 13 con el
+	# banco cedible (medias 43-58) recibia 0 pedidos en 90 dias, porque de
+	# 3a a 6a no hay club con media tan baja. El que lo necesita esta en 9a.
 	var pares := []
-	var ultima: int = mini(division_propia + DIVISIONES_ABAJO_MAX, piramide.divisiones.size() - 1)
-	for d in range(division_propia, ultima + 1):
+	for d in range(division_propia, piramide.divisiones.size()):
 		for pide in piramide.divisiones[d].equipos:
 			if pide == equipo or pide.quebrado:
 				continue
@@ -416,11 +420,10 @@ static func _terminos(equipo: Team, pide: Team, d: int, jugador: Dictionary,
 	# reparto del sueldo es plata entre clubes que a el no le mueve nada
 	# (ver Prestamos.ceder). Todos los pedidos terminaban en SIN_ACUERDO.
 	var plus := 0.0
-	var salto: int = d - division_propia
-	if salto != 0:
+	if d != division_propia:
 		var detalle := Negociacion.interes_jugador(
 			jugador, equipo.animo.get(id_j, 50.0), float(t["sueldo"]), float(t["sueldo"]),
-			division_propia, division_propia + int(round(salto / 2.0)))
+			division_propia, Prestamos.division_percibida(equipo, id_j, division_propia, d))
 		if not detalle["acepta"]:
 			plus = Negociacion.plus_para_convencer(detalle, float(t["sueldo"]))
 			# Ni con el tope de plus lo convence: no lo pide. Pedir a
@@ -492,8 +495,9 @@ static func responder(equipo: Team, oferta: Dictionary, piramide,
 
 
 ## Los clubes arreglaron: ahora habla el jugador, que tiene la ultima
-## palabra. En una cesion el salto de categoria pesa la MITAD que en una
-## venta —es temporal y lo que busca es jugar—, y lo unico que lo puede
+## palabra. En una cesion bajar de categoria pesa la mitad para el titular
+## y nada para el suplente (ver Prestamos.division_percibida), y lo unico
+## que lo puede
 ## dar vuelta es el plus que le pongan encima del sueldo: el reparto del
 ## sueldo es plata entre clubes y a el no le cambia nada.
 static func cerrar(equipo: Team, oferta: Dictionary, piramide, rng: RandomNumberGenerator,
@@ -515,10 +519,9 @@ static func cerrar(equipo: Team, oferta: Dictionary, piramide, rng: RandomNumber
 
 	var sueldo_actual := Prestamos.sueldo_de_referencia(equipo, jugador)
 	var plus: float = maxf(0.0, float(oferta.get("plus_sueldo", 0.0)))
-	var salto: int = division_pide - division_propia
 	var detalle := Negociacion.interes_jugador(
 		jugador, equipo.animo.get(id, 50.0), sueldo_actual, sueldo_actual + plus,
-		division_propia, division_propia + int(round(salto / 2.0)))
+		division_propia, Prestamos.division_percibida(equipo, id, division_propia, division_pide))
 	if not detalle["acepta"]:
 		oferta["estado"] = Ofertas.SIN_ACUERDO
 		oferta["log"].append("%s no quiere ir a %s: %s Se queda." % [

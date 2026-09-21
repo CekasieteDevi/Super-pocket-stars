@@ -987,6 +987,41 @@ func _registrar_fichaje(jugador: Dictionary, valor: float, contrato_anios: int =
 	fatiga_acumulada[id] = 1.0
 
 
+## Da de alta a un pibe que sube de la cantera: firma con el sueldo fijo de
+## canterano (Economia.SUELDO_CANTERANO), no con el de su media. Contratos
+## paga solo eso.
+func _registrar_canterano(juvenil: Dictionary,
+		anios: int = AgentesLibres.ANIOS_CANTERANO) -> void:
+	_registrar_fichaje(juvenil, ValorJugador.calcular(juvenil, 50.0, anios), anios)
+	var id: int = juvenil["id"]
+	if caja.has("contratos"):
+		caja["contratos"] += float(sueldos[id]) - Economia.SUELDO_CANTERANO
+	sueldos[id] = Economia.SUELDO_CANTERANO
+
+
+## Genera a alguien nuevo para tapar un hueco que no se puede dejar vacio.
+## No lo da de alta: eso lo hace quien lo llama, con sus años de contrato.
+##
+## Arranca en el nivel del club y baja de a POTENCIAL_PASO hasta que el
+## sueldo entre en Contratos. El club no elige esta alta, asi que no puede
+## costarle mas de lo que tiene: el club pobre tapa el hueco con alguien
+## mas flojo. Antes se generaba siempre del nivel del club y se cobraba
+## entero, y en 10a eso dejaba a los clubes con Contratos en rojo.
+const POTENCIAL_PASO := 3
+const POTENCIAL_MINIMO_RELEVO := 20
+
+func generar_relevo(posicion: String, rng: RandomNumberGenerator, anios: int) -> Dictionary:
+	var disponible: float = float(caja.get("contratos", INF))
+	var nivel := nivel_potencial()
+	var nuevo := PlayerGenerator.generate(siguiente_id_cantera, rng, posicion, nivel)
+	while Economia.sueldo_de_ficha(nuevo, anios, division_actual) > disponible \
+			and nivel - POTENCIAL_PASO >= POTENCIAL_MINIMO_RELEVO:
+		nivel -= POTENCIAL_PASO
+		nuevo = PlayerGenerator.generate(siguiente_id_cantera, rng, posicion, nivel)
+	siguiente_id_cantera += 1
+	return nuevo
+
+
 ## Da de baja a un jugador que se va del club (vendido, liberado).
 func _limpiar_registro(id: int) -> void:
 	# El que se va deja de cobrar: su sueldo vuelve a Contratos. Es la
@@ -1291,10 +1326,9 @@ func _relevo_para(posicion: String, rng: RandomNumberGenerator) -> Dictionary:
 		var juvenil: Dictionary = cantera[mejor]
 		juvenil["es_canterano"] = true
 		cantera.remove_at(mejor)
-		_registrar_fichaje(juvenil, ValorJugador.calcular(juvenil, 50.0, 3))
+		_registrar_canterano(juvenil)
 		return juvenil
-	var nuevo := PlayerGenerator.generate(siguiente_id_cantera, rng, posicion, nivel_potencial())
-	siguiente_id_cantera += 1
+	var nuevo := generar_relevo(posicion, rng, 3)
 	_registrar_fichaje(nuevo, ValorJugador.calcular(nuevo, 50.0, 3))
 	return nuevo
 
@@ -1746,7 +1780,7 @@ func ajustar_convocatorias_de_emergencia(minimo: int) -> Dictionary:
 		# el plantel tiene sueldo, contrato y ánimo (lo verifica
 		# test_phase6): un jugador sin alta rompe economía y mercado. Se
 		# le da de baja al devolverlo a la cantera, más arriba.
-		_registrar_fichaje(juvenil, ValorJugador.calcular(juvenil, 50.0, 1), 1)
+		_registrar_canterano(juvenil, 1)
 		banco.append(juvenil)
 		subidos.append(juvenil)
 
@@ -1806,7 +1840,7 @@ func promover_juvenil(jugador_id: int) -> Dictionary:
 	var liberado := mover_a_banco(juvenil)
 	cantera.remove_at(idx_cantera)
 
-	_registrar_fichaje(juvenil, ValorJugador.calcular(juvenil, 50.0, 3))
+	_registrar_canterano(juvenil)
 	# Con lugar en el plantel no sale nadie: mover_a_banco devuelve {}.
 	if not liberado.is_empty():
 		_limpiar_registro(liberado["id"])

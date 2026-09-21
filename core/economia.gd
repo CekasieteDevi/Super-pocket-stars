@@ -220,9 +220,23 @@ static func procesar_temporada(equipo: Team, posicion_tabla: int, total_equipos:
 	# La DEUDA si se arrastra: si cerraste en rojo, arrancas el año
 	# debiendo. Si no, la quiebra desapareceria sola cada temporada y
 	# _recalcular_quiebra no volveria a dispararse nunca.
+	#
+	# La deuda es del CLUB, no de una categoria: el sobrante de una tapa el
+	# rojo de otra antes de arrastrar nada. Antes cada categoria arrastraba
+	# su propio rojo y el sobrante de las demas se perdia. Contratos recibe
+	# el 22% del neto y paga sueldos enteros de altas forzadas (cantera,
+	# emergencias, cesiones), asi que en las divisiones bajas quedaba en
+	# rojo aunque Fichajes sobrara. Medido en una partida real en la
+	# temporada 13: en 10a los 20 clubes tenian Contratos en negativo
+	# (-$32.428 de promedio) con $5.865 de promedio en Fichajes, y nadie de
+	# 5a para abajo podia pedir un prestamo ni fichar a un libre.
+	var deuda: float = 0.0
+	for categoria in PRESUPUESTO_PORCENTAJES:
+		deuda += float(equipo.caja.get(categoria, 0.0))
+	deuda = minf(0.0, deuda)
 	for categoria in PRESUPUESTO_PORCENTAJES:
 		var asignado: float = neto * PRESUPUESTO_PORCENTAJES[categoria]
-		equipo.caja[categoria] = asignado + minf(0.0, equipo.caja[categoria])
+		equipo.caja[categoria] = asignado + deuda * PRESUPUESTO_PORCENTAJES[categoria]
 		equipo.presupuesto_temporada[categoria] = asignado
 	# Foto provisoria. La definitiva la saca fotografiar_caja() cuando
 	# termina toda la intertemporada — ver ahi por que.
@@ -341,9 +355,7 @@ static func procesar_quiebra(equipo: Team, rng: RandomNumberGenerator) -> Array:
 		var ingreso: float = valor * FRACCION_VENTA_DE_URGENCIA
 
 		# Del nivel del club, no de la tabla global (ver Team.nivel_potencial).
-		var reemplazo := PlayerGenerator.generate(
-			equipo.siguiente_id_cantera, rng, saliente["posicion"], equipo.nivel_potencial())
-		equipo.siguiente_id_cantera += 1
+		var reemplazo := equipo.generar_relevo(saliente["posicion"], rng, 2)
 		# Al que sale del once o del banco hay que reponerlo (el club no
 		# puede quedar con un agujero en la formacion). A una RESERVA no:
 		# nadie la extraña, se vende y listo.
@@ -372,6 +384,15 @@ static func procesar_quiebra(equipo: Team, rng: RandomNumberGenerator) -> Array:
 ## con la progresión, empujando a cada vez más clubes a números rojos
 ## temporada tras temporada. Con 0.10 el neto promedio de la pirámide se
 ## mantiene sano varias temporadas seguidas en vez de derrumbarse.
+## Lo que cobra un pibe en su primer contrato al subir de la cantera. Es
+## fijo y no sale de su media: el club lo formo y el pibe firma para
+## tener minutos, no por plata. Al renovar cobra lo que vale (ver
+## Renovaciones). Antes firmaba como un fichaje de afuera: en 10a le
+## costaba al club $540, el 21% de los $2.539 que recibe Contratos por
+## temporada, y cada alta forzada lo dejaba en rojo.
+const SUELDO_CANTERANO := 100.0
+
+
 static func sueldo_sugerido(valor: float) -> float:
 	return valor * 0.10
 

@@ -377,9 +377,11 @@ const OFERTA_INICIAL_MAX := 1.05
 
 ## Los otros clubes vienen a buscar a los tuyos.
 ##
-## Miran solo a los que se destacan en TU plantel: media de club para
-## arriba, o un pibe con techo por encima del club. El que esta por debajo
-## de tu propia media no llama la atencion de nadie.
+## Miran a todo tu plantel. Antes miraban solo a los que se destacaban en
+## TU club (media de club para arriba, o un pibe con techo), y el suplente
+## que le sirve a un club de abajo no recibia nunca una oferta: medido
+## sobre una partida real en 3a, las ofertas se repartian entre 7 de 27
+## jugadores y ninguna era por un suplente.
 ##
 ## Mira toda la piramide. Un club oferta solo por alguien que LE SIRVE
 ## (Mercado.puntaje_interes) y que puede pagar. Con un club al azar, el
@@ -388,23 +390,17 @@ const OFERTA_INICIAL_MAX := 1.05
 ## No ofertan por alguien que ya tiene una negociacion abierta, que seria
 ## una encerrona.
 static func generar_entrantes(equipo: Team, piramide, rng: RandomNumberGenerator,
-		dias: int, _division_propia: int) -> Array:
+		dias: int, division_propia: int) -> Array:
 	var nuevas := []
 	if rng.randf() > float(dias) / DIAS_ENTRE_INTERESES:
 		return nuevas
 
-	var media_club := equipo.media_equipo()
-	var nivel_club := equipo.nivel_potencial()
 	# Los que marcaste "no disponible" no entran ni al sorteo: por ellos
 	# no llega ninguna oferta (ver core/traspasos.gd).
 	var candidatos := []
 	for j in equipo.todos_los_jugadores():
 		var id_c := int(j["id"])
 		if not Traspasos.acepta_ofertas(equipo, id_c):
-			continue
-		var destaca: bool = float(j["media"]) >= media_club or (
-			int(j["edad"]) <= Mercado.EDAD_JOYA and float(j["potencial"]) >= nivel_club + Mercado.MEJORA_MINIMA_ENTRE_DIVISIONES)
-		if not destaca:
 			continue
 		var ocupado := false
 		for o in equipo.ofertas:
@@ -417,11 +413,11 @@ static func generar_entrantes(equipo: Team, piramide, rng: RandomNumberGenerator
 		return nuevas
 
 	var opciones := []
-	for liga in piramide.divisiones:
-		for mira in liga.equipos:
+	for d in range(piramide.divisiones.size()):
+		for mira in piramide.divisiones[d].equipos:
 			if mira == equipo or mira.quebrado:
 				continue
-			opciones.append_array(_los_que_le_sirven(mira, equipo, candidatos))
+			opciones.append_array(_los_que_le_sirven(mira, d, equipo, division_propia, candidatos))
 	var elegida := _sortear(opciones, rng)
 	if elegida.is_empty():
 		return nuevas
@@ -450,11 +446,21 @@ static func generar_entrantes(equipo: Team, piramide, rng: RandomNumberGenerator
 ## Los candidatos que le sirven a `comprador` y le entran en la caja, cada
 ## uno como {comprador, jugador, valor, tope, peso}.
 ##
-## El peso es el puntaje de interes por el valor: la plata que hay en
-## juego. Solo con el puntaje, el suplente que refuerza a un club de
-## decima pesaba lo mismo que el crack, y la bandeja se llenaba de ofertas
-## por jugadores que no juegan.
-static func _los_que_le_sirven(comprador: Team, dueno: Team, candidatos: Array) -> Array:
+## El peso es el puntaje de interes por la RAIZ del valor. Solo con el
+## puntaje, el suplente que refuerza a un club de decima pesaba lo mismo
+## que el crack, y la bandeja se llenaba de ofertas por jugadores que no
+## juegan. Con el valor entero pasaba al reves: el valor crece mucho mas
+## rapido que la media, y el mas caro del plantel se llevaba casi todas.
+##
+## Tampoco miran al que no se iria: el comprador le ofrece lo que
+## Negociacion.sueldo_pretendido dice que pide, y si ni asi acepta, la
+## oferta nace muerta. Medido sobre una partida real, el 36% de las
+## ofertas eran por jugadores que despues no querian irse (el hincha del
+## club recibio 35 en una partida).
+const EXPONENTE_VALOR := 0.75
+
+static func _los_que_le_sirven(comprador: Team, division_comprador: int, dueno: Team,
+		division_dueno: int, candidatos: Array) -> Array:
 	var opciones := []
 	var tope: float = float(comprador.caja["fichajes"]) * Mercado.FRACCION_MAXIMA_POR_FICHAJE
 	if tope <= 0.0:
@@ -473,8 +479,14 @@ static func _los_que_le_sirven(comprador: Team, dueno: Team, candidatos: Array) 
 		# Ni tirando abajo le alcanza: no lo mira.
 		if valor <= 0.0 or valor * OFERTA_INICIAL_MIN > tope:
 			continue
+		var sueldo_actual: float = float(dueno.sueldos.get(id, 0.0))
+		var ofrecido := Negociacion.sueldo_pretendido(
+			j, sueldo_actual, division_dueno, division_comprador)
+		if not Negociacion.interes_jugador(j, dueno.animo.get(id, 50.0), sueldo_actual,
+				ofrecido, division_dueno, division_comprador)["acepta"]:
+			continue
 		opciones.append({"comprador": comprador, "jugador": j, "valor": valor,
-			"tope": tope, "peso": puntaje * valor})
+			"tope": tope, "peso": puntaje * pow(valor, EXPONENTE_VALOR)})
 	return opciones
 
 
