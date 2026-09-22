@@ -6277,8 +6277,17 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 				# ubicar por ella los mandaria a todos al area equivocada.
 				var bp_pos: Dictionary = estado.get("balon_parado", {})
 				if bp_pos.has("pos"):
+					var salto_pelota: float = pelota["pos"].distance_to(bp_pos["pos"])
 					pelota["pos"] = bp_pos["pos"]
 					_ubicar_para_el_balon_parado(estado)
+					# Este tick es un salto, no un movimiento: marcarlo como
+					# corte para que la vista no lo interpole. Sin esto, en el
+					# corner la pelota cruzaba 21 m sola en un cuarto de segundo
+					# y los 22 se deslizaban hasta 65 m (medido con
+					# tests/_diag_teletransporte_pelota.gd sobre el guardado).
+					if salto_pelota > 1.0 \
+							or TIPOS_QUE_SE_UBICAN.has(str(bp_pos.get("tipo", ""))):
+						estado["corte_este_tick"] = true
 		else:
 			var ejecutor_bp: int = int(estado.get("balon_parado", {}).get("ejecutor", -1))
 			# El expulsado no se acomoda para el saque: se esta yendo. Sin

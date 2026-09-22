@@ -1,4 +1,6 @@
 [
+	{"version": "0.4.11", "fecha": "2026-09-22", "cambio": "En los corners y tiros libres, la pelota y los jugadores ya no se deslizan por la cancha al acomodarse para el saque."},
+	{"version": "0.4.10", "fecha": "2026-09-22", "cambio": "Las atajadas y los saques muestran el peinado propio de cada arquero."},
 	{"version": "0.4.09", "fecha": "2026-09-22", "cambio": "El lesionado termina de caer y levantarse antes de caminar hacia la sustitucion."},
 	{"version": "0.4.08", "fecha": "2026-09-22", "cambio": "El partido traduce correctamente la lesion del jugador a su entidad espacial, mostrando la caida y la sustitucion."},
 	{"version": "0.4.07", "fecha": "2026-09-22", "cambio": "Los delanteros que reciben en el area de frente al arco rematan enseguida, sin esperar a que los alcancen."},

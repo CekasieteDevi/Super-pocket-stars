@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Todo commit que cambia algo tiene que agregar una entrada nueva arriba
+# de data/changelog.json. Las reglas del texto están en CLAUDE.md,
+# sección "Changelog". Se activa con:
+#   git config core.hooksPath .githooks
+
+set -u
+RUTA="data/changelog.json"
+
+if [ -z "$(git diff --cached --name-only)" ]; then
+	exit 0
+fi
+
+primera_version() {
+	grep -m1 -o '"version": *"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/'
+}
+
+actual="$(git show ":$RUTA" 2>/dev/null | primera_version)"
+anterior="$(git show "HEAD:$RUTA" 2>/dev/null | primera_version)"
+
+if [ -z "$actual" ]; then
+	echo "COMMIT RECHAZADO: falta $RUTA en el commit."
+	exit 1
+fi
+if ! echo "$actual" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]{2}$'; then
+	echo "COMMIT RECHAZADO: la versión '$actual' no tiene formato x.x.xx."
+	exit 1
+fi
+if [ "$actual" = "$anterior" ]; then
+	echo "COMMIT RECHAZADO: no hay versión nueva en $RUTA."
+	echo "Agregá arriba una entrada con la versión siguiente a $anterior"
+	echo "y una frase simple que diga qué cambió (ver CLAUDE.md, \"Changelog\")."
+	exit 1
+fi
+if [ -n "$anterior" ]; then
+	mayor="$(printf '%s\n%s\n' "$anterior" "$actual" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)"
+	if [ "$mayor" != "$actual" ]; then
+		echo "COMMIT RECHAZADO: la versión $actual no es mayor que $anterior."
+		exit 1
+	fi
+fi
+exit 0

@@ -77,6 +77,7 @@ var _parpadeo_restante := 0.0
 ## fotograma tiene la pelota adentro del arco, a los 22 donde estaban y el
 ## marcador ya actualizado.
 var _idx_congelado := -1
+var _idx_corte_camara := -1
 
 ## Cuántos van al banderín, goleador incluido. Con dos parece un abrazo
 ## casual; con cuatro ya se lee como el grupo que sale a festejar.
@@ -511,6 +512,11 @@ func _finalizar() -> void:
 func _mostrar(idx: int, t: float) -> void:
 	var a: Dictionary = fotogramas[idx]
 	var b = fotogramas[idx + 1] if idx + 1 < fotogramas.size() else null
+	# El motor marca como corte el tick que reubica a todos para el balón
+	# parado. Interpolar hacia él deslizaba a la gente y a la pelota por la
+	# cancha; con el corte el salto queda tapado por el parpadeo.
+	if b != null and bool(b.get("corte", false)):
+		b = null
 	var destino := {}
 	if b != null and t > 0.0:
 		for j in b["jugadores"]:
@@ -1007,4 +1013,10 @@ func _seguir_camara(idx: int, delta: float) -> void:
 			vel = d / MotorEspacial.TICK_SEG
 	var en_area: bool = absf(actual.x) > ProyeccionPartido.MEDIO_LARGO - 16.5
 	vista.camara.fijar_encuadre(en_area, _festejo_restante > 0.0)
+	# En el corte la cancha cambia de golpe: la cámara salta con ella en vez
+	# de barrer la cancha detrás de la pelota ya reubicada.
+	if bool(fotogramas[idx].get("corte", false)) and _idx_corte_camara != idx:
+		_idx_corte_camara = idx
+		vista.camara.saltar_a(actual, size)
+		return
 	vista.camara.seguir(actual, vel, size, delta)
