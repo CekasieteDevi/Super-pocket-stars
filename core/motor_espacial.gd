@@ -4068,6 +4068,7 @@ static func pesos_control() -> Dictionary:
 		"toque_largo_min": float(d.get("toque_largo_min", 2.0)),
 		"toque_largo_max": float(d.get("toque_largo_max", 6.0)),
 		"toque_desvio": float(d.get("toque_desvio", 0.9)),
+		"fraccion_para_definir": float(d.get("fraccion_para_definir", 0.4)),
 	}
 	return _pesos_control_cache
 
@@ -4187,6 +4188,24 @@ static func demora_de_control(jugador: Dictionary, equipo: Team, dificultad: flo
 	return maxi(int(round(base * factor)), 1)
 
 
+## Recibe en el area rival y de frente al arco: ahi la pelota se define, no
+## se acomoda. Con la demora entera el delantero conducia uno o dos segundos
+## antes de poder rematar y lo alcanzaban: parecia esperar a perderla.
+static func recibe_para_definir(e: Dictionary) -> bool:
+	if str(e["rol"]) == "ARQ":
+		return false
+	var es_local: bool = bool(e["equipo_local"])
+	if not _en_el_area(e["pos"], es_local):
+		return false
+	return ticks_para_girar(e, arco_rival(es_local) - e["pos"]) == 0
+
+
+## La demora de control de quien recibe para definir. Nunca menos de un
+## tick: la pelota igual tiene que llegarle al pie.
+static func demora_para_definir(demora: int) -> int:
+	return maxi(int(round(float(demora) * float(pesos_control()["fraccion_para_definir"]))), 1)
+
+
 ## Chance de que la recepcion termine en toque largo. Crece con la dificultad
 ## y baja con `control`: con dificultad cero nadie la pierde.
 static func prob_toque_largo(jugador: Dictionary, dificultad: float) -> float:
@@ -4227,6 +4246,9 @@ static func _controlar_recepcion(estado: Dictionary, clave: int, llegada: Dictio
 		_toque_largo(estado, e, vel, dificultad)
 		return
 	var demora := demora_de_control(jugador, equipo, dificultad)
+	if recibe_para_definir(e):
+		demora = demora_para_definir(demora)
+		stats["para_definir"] = int(stats.get("para_definir", 0)) + 1
 	stats["demora"] = int(stats["demora"]) + demora
 	stats["cadencia"] = int(stats["cadencia"]) + cadencia_de_decision(jugador, equipo)
 	estado["pelota"]["control"] = {"clave": clave, "demora": demora}

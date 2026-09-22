@@ -392,6 +392,8 @@
     "_demora": "La demora de control es la espera vieja (fisica.ticks_control segun `control` y estilo) multiplicada por demora_facil con dificultad 0 y demora_dificil con dificultad 1. La dificultad media de una recepcion da 0.24 (tests/_diag_control.gd): con 0.6/1.6 la primera decision salia al 80% de la espera vieja y los remates subian; con 0.8/1.8 sale al 98%, o sea que el control limpio es mas rapido y el dificil mas lento, pero el ritmo medio no cambia.",
     "demora_facil": 0.8,
     "demora_dificil": 1.8,
+    "_para_definir": "El que recibe dentro del area rival y de frente al arco decide a fraccion_para_definir de su demora de control. La demora frena la circulacion; en el area frenaba la definicion. Medido con tests/_diag_demora_remate.gd (12 partidos por division): con la demora entera la primera decision en el area salia al tick 5-6 y el 15-20% de esas tenencias se perdia sin haber decidido nada.",
+    "fraccion_para_definir": 0.4,
     "_toque": "Chance de toque largo: malo_max por dificultad por (1 - alivio_control x control). `control` se lee mezclado (mezcla_absoluta) entre relativo al nivel y absoluto. El toque sale en la direccion en que venia la pelota, desviado hasta toque_desvio radianes, entre toque_largo_min y toque_largo_max metros segun la dificultad. Barrido con 200 partidos: malo_max 0.3 da 1.8 toques largos por partido (4% de las recepciones) y 0.5 da 2.9 (7%), con los mismos goles (2.39 y 2.35).",
     "malo_max": 0.5,
     "alivio_control": 0.8,

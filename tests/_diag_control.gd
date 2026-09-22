@@ -40,6 +40,9 @@ const CONFIGS := {
 	"f08_c25": {"demora_facil": 0.8, "demora_dificil": 1.8, "cono_sin_giro": 2.5},
 	"f08_c25_m05": {"demora_facil": 0.8, "demora_dificil": 1.8, "cono_sin_giro": 2.5, "malo_max": 0.5},
 	"f08_sin_cono": {"demora_facil": 0.8, "demora_dificil": 1.8, "cono_sin_giro": 4.0},
+	"sin_definir": {"fraccion_para_definir": 1.0},
+	"definir06": {"fraccion_para_definir": 0.6},
+	"definir025": {"fraccion_para_definir": 0.25},
 }
 
 var partidos := 6
