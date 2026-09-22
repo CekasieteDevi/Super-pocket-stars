@@ -4739,7 +4739,10 @@ static func _duelo_simple(atacante: Dictionary, attr_a: String, eq_a: Team,
 ## aparecía sin causa visible.
 static func _registrar_lesion_visual(estado: Dictionary, jugador: Dictionary,
 		equipo: Team, minuto: int) -> void:
-	if estado.is_empty() or not bool(estado.get("con_fotogramas", false)):
+	# Solo el evento y la pose dependen de los fotogramas. El lesionado
+	# frena y queda quieto en los dos modos: si no, la liga sin animación
+	# jugaba otro partido que el que ve el usuario con el mismo azar.
+	if estado.is_empty():
 		return
 	# `jugador` es el diccionario persistente de Team y no conoce la clave
 	# espacial. Resolverla por jugador_id evita perder la animacion justo en
@@ -4760,6 +4763,8 @@ static func _registrar_lesion_visual(estado: Dictionary, jugador: Dictionary,
 		# Frenada limpia: la pose de caída no debe deslizarse varios metros.
 		estado["jugadores"][clave]["vel"] = Vector2.ZERO
 		estado["jugadores"][clave]["rapidez"] = 0.0
+	if not bool(estado.get("con_fotogramas", false)):
+		return
 	estado["eventos"].append({
 		"minuto": minuto, "tipo": "lesion", "equipo": equipo.nombre,
 		"rival": "", "jugador_posicion": str(jugador["posicion"]),
