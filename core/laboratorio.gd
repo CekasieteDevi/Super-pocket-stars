@@ -55,6 +55,8 @@ const SITUACIONES := [
 		"que": "El centro sale desde la banda, cruza el área por arriba, el delantero le gana de arriba al defensor y la cabecea al gol."},
 	{"clave": "volea", "nombre": "Centro y gol de volea",
 		"que": "Centro desde la banda, control del vuelo y volea de primera. Se ve el golpe completo y el balon termina en gol."},
+	{"clave": "chilena", "nombre": "Centro y gol de chilena",
+		"que": "Demostracion: centro alto, tijera, caida y recuperacion. En partidos requiere volea 75, agilidad 70 y salto 60, a menos de 9 metros del arco."},
 	{"clave": "palomita", "nombre": "Centro y gol de palomita",
 		"que": "Centro bajo al area, vuelo horizontal, cabezazo de palomita y gol. El clip termina al acabar el festejo."},
 	{"clave": "gol", "nombre": "Gol y festejo",
@@ -69,6 +71,8 @@ const SITUACIONES := [
 		"que": "Remate, rebote aéreo, duelo de cabeza ganado por otro delantero, segundo rebote aéreo y gol de volea."},
 	{"clave": "cambio", "nombre": "Cambio",
 		"que": "Se detiene el juego, el que sale camina hasta el lateral y el suplente entra por ahí mismo a ocupar su lugar."},
+	{"clave": "lesion", "nombre": "Lesión y sustitución",
+		"que": "El jugador cae con una pose de lesión, se anuncia el problema y sale por el lateral; el suplente entra a ocupar su lugar."},
 	{"clave": "regate_croqueta", "nombre": "Regate: Croqueta",
 		"que": "Cambia la pelota de un pie al otro, protege con el cuerpo y sale por el costado."},
 	{"clave": "regate_bicicleta", "nombre": "Regate: Bicicleta",
@@ -153,6 +157,8 @@ static func generar(clave: String, local: Team, visitante: Team,
 			_montar_cabezazo(estado)
 		"volea":
 			_montar_volea(estado)
+		"chilena":
+			_montar_chilena(estado)
 		"palomita":
 			_montar_palomita(estado)
 		"gol":
@@ -167,6 +173,8 @@ static func generar(clave: String, local: Team, visitante: Team,
 			_montar_cadena_rebotes(estado)
 		"cambio":
 			_montar_cambio(estado)
+		"lesion":
+			_montar_lesion(estado)
 
 	# El clip EMPIEZA en la jugada ya montada. Montarla es TELETRANSPORTAR
 	# a los 22 —el que cabecea al area chica, el que centra a la banda, el
@@ -441,6 +449,10 @@ static func _montar_tiro_efecto(estado: Dictionary) -> void:
 	estado["forzar_remate"] = "gol"
 	estado["forzar_remate_attr"] = "tiro"
 	var arquero := eq_d.arquero()
+	# El remate sale directo, sin pasar por _resolver_tiro, que es el que
+	# registra el gesto. Sin el gesto la reproduccion no tiene contacto y
+	# la pelota sale del pie sin que nadie le pegue.
+	MotorEspacial._accion(estado, clave, MotorEspacial.ACCION_PATEA)
 	MotorEspacial._lanzar_remate(estado, poseedor, {
 		"tipo": "gol", "es_local": true, "clave": clave,
 		"rol": poseedor["rol"], "jugador": jugador,
@@ -599,6 +611,13 @@ static func _montar_volea(estado: Dictionary) -> void:
 	estado["forzar_remate_attr"] = "volea"
 
 
+## Demostracion visual forzada, igual que volea; no modifica el plantel.
+static func _montar_chilena(estado: Dictionary) -> void:
+	_montar_cabezazo(estado)
+	estado["forzar_centro_accion"] = "chilena"
+	estado["forzar_remate_attr"] = "volea"
+
+
 static func _montar_saque_arco(estado: Dictionary) -> void:
 	MotorEspacial._dar_pelota_al_arquero(estado, false, true)
 
@@ -740,6 +759,64 @@ static func _montar_cambio(estado: Dictionary) -> void:
 ## lo elija por azar. La accion sigue siendo la misma que en un duelo real:
 ## el atacante conserva la pelota, el defensor queda superado y la camara
 ## queda centrada en el contacto.
+## Lesión forzada para revisar el recorrido completo con una semilla fija:
+## pose PNG -> relato -> salida por el lateral -> entrada del reemplazo.
+## La UI ejecuta esto sobre copias del plantel.
+static func _montar_lesion(estado: Dictionary) -> void:
+	var equipo: Team = MotorEspacial._equipo_de(estado, true)
+	var sale := {}
+	var entra := {}
+	for j in equipo.jugadores_en_cancha():
+		if str(j["posicion"]) == "ARQ":
+			continue
+		for suplente in equipo.banco:
+			if str(suplente["posicion"]) == str(j["posicion"]) \
+					and equipo.puede_jugar(int(suplente["id"])):
+				sale = j
+				entra = suplente
+				break
+		if not sale.is_empty():
+			break
+	if sale.is_empty() or entra.is_empty():
+		return
+
+	var clave_sale := MotorEspacial.clave_de(int(sale["id"]), true)
+	if not estado["jugadores"].has(clave_sale):
+		return
+	var punto: Vector2 = estado["jugadores"][clave_sale]["pos"]
+	var tipo := "Golpe / contusion"
+	var dias := 4
+	equipo.lesionar(int(sale["id"]), tipo, dias)
+	equipo.sustituir(int(sale["id"]), int(entra["id"]))
+	var poseedor := MotorEspacial._mas_cercano_del_equipo(estado, estado["pelota"]["pos"], true)
+	if poseedor != -1:
+		MotorEspacial._entregar_pelota(estado, poseedor)
+	estado["pelota"]["en_vuelo"] = false
+	estado["pelota"]["vel"] = Vector2.ZERO
+	estado["detenido"] = 2
+	estado["detenido_previo"] = 2
+	estado["quietos"] = 0
+	estado["foco_laboratorio"] = punto
+	estado["acciones_tick"] = []
+	estado["jugadores"][clave_sale]["lesionado"] = true
+	MotorEspacial._accion(estado, clave_sale, "lesionado")
+	estado["eventos"].append({
+		"minuto": MotorEspacial._minuto_int(estado), "tipo": "lesion",
+		"equipo": equipo.nombre, "rival": "",
+		"jugador_posicion": str(sale["posicion"]), "jugador_id": int(sale["id"]),
+		"clave": clave_sale, "resultado": "lesion", "lesion": tipo, "dias": dias,
+	})
+	estado["eventos"].append({
+		"minuto": MotorEspacial._minuto_int(estado), "tipo": "cambio",
+		"equipo": equipo.nombre, "rival": "",
+		"jugador_posicion": str(sale["posicion"]), "resultado": "lesion",
+		"saliente_id": int(sale["id"]), "entrante_id": int(entra["id"]),
+		"equipo_local": true, "saliente_clave": clave_sale,
+		"entrante_clave": MotorEspacial.clave_de(int(entra["id"]), true),
+	})
+	MotorEspacial._sincronizar_cambios(estado)
+
+
 static func _montar_regate(estado: Dictionary, tipo: String) -> void:
 	if tipo not in MotorEspacial.REGATE_ACCIONES:
 		return
@@ -809,13 +886,14 @@ static func _montar_regate(estado: Dictionary, tipo: String) -> void:
 	estado["eventos"].append(evento)
 	estado["regates"]["home"][tipo] = 1
 
-	# Doce cuadros de gesto y seis de salida: el usuario ve el regate entero
+	# Duracion del partido y seis ticks de salida: se ve el regate entero
 	# y también la aceleración posterior, sin convertirlo en un partido.
 	# La fase del sprite termina en el cuadro 11; la salida sigue moviendo al
 	# atacante para que el ultimo cuadro no quede congelado.
-	for i in range(18):
-		var fase_gesto := clampf(float(i) / 11.0, 0.0, 1.0)
-		var fase_salida := clampf(float(i - 11) / 6.0, 0.0, 1.0)
+	var duracion_regate := MotorEspacial.duracion_regate(tipo)
+	for i in range(duracion_regate + 6):
+		var fase_gesto := MotorEspacial.fase_regate(tipo, float(i))
+		var fase_salida := clampf(float(i - (duracion_regate - 1)) / 6.0, 0.0, 1.0)
 		var desplazamiento := _desplazamiento_regate(tipo, fase_gesto, fase_salida)
 		atacante["pos"] = origen + desplazamiento
 		if tipo == "bicicleta":

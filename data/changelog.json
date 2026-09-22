@@ -1,3 +1,12 @@
 [
-	{"version": "0.4.07", "fecha": "2026-09-22", "cambio": "Los delanteros que reciben en el area de frente al arco rematan enseguida, sin esperar a que los alcancen."}
+	{"version": "0.4.09", "fecha": "2026-09-22", "cambio": "El lesionado termina de caer y levantarse antes de caminar hacia la sustitucion."},
+	{"version": "0.4.08", "fecha": "2026-09-22", "cambio": "El partido traduce correctamente la lesion del jugador a su entidad espacial, mostrando la caida y la sustitucion."},
+	{"version": "0.4.07", "fecha": "2026-09-22", "cambio": "Los delanteros que reciben en el area de frente al arco rematan enseguida, sin esperar a que los alcancen."},
+	{"version": "0.4.06", "fecha": "2026-09-22", "cambio": "En el laboratorio, el tiro con efecto muestra al jugador pateando la pelota."},
+	{"version": "0.4.05", "fecha": "2026-09-22", "cambio": "El lesionado deja de jugar y espera quieto hasta la sustitucion."},
+	{"version": "0.4.04", "fecha": "2026-09-22", "cambio": "Las lesiones se ven en la cancha y activan una sustitucion con animacion."},
+	{"version": "0.4.03", "fecha": "2026-09-22", "cambio": "Los regates se ejecutan con un ritmo mas fluido durante el partido y la elastica muestra su secuencia completa."},
+	{"version": "0.4.02", "fecha": "2026-09-22", "cambio": "Los cinco regates del partido coordinan el movimiento del jugador y la pelota sin saltos de posicion."},
+	{"version": "0.4.01", "fecha": "2026-09-21", "cambio": "Nueva solapa Jugadas: el plantel ensaya jugadas preparadas de a una, las aprende para siempre y se ven en el partido."},
+	{"version": "0.4.00", "fecha": "2026-09-21", "cambio": "La pantalla de inicio muestra la version y un boton con el registro de cambios."}
 ]

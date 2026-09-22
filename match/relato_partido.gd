@@ -44,6 +44,12 @@ static func importancia(evento) -> int:
 			return NOTABLE if res == "pierde" else NADA
 		"cambio":
 			return NOTABLE
+		"lesion":
+			return NOTABLE
+		"jugada":
+			# Las de pelota parada se anuncian; la presion tras perdida y la
+			# trampa del offside pasan seguido y quedan como detalle.
+			return MENOR if str(evento.get("jugada", "")) in [Jugadas.CONTRAPRESION, Jugadas.DEFENSA_ADELANTADA] 				else NOTABLE
 	return NADA
 
 
@@ -60,6 +66,8 @@ static func linea(evento: Dictionary, nombres: Dictionary) -> String:
 			var gesto := _nombre_tecnica(tecnica)
 			var asistencia := _asistencia(evento, nombres)
 			if res == "gol":
+				if bool(evento.get("palo", false)):
+					return "¡GOL%s de %s%s! Pega en el palo y entra. %s" % [gesto, quien, asistencia, equipo]
 				if bool(evento.get("con_efecto", false)):
 					return "¡GOL CON EFECTO de %s%s%s! %s" % [gesto, quien, asistencia, equipo]
 				return "¡GOL%s de %s%s! %s" % [gesto, quien, asistencia, equipo]
@@ -90,7 +98,10 @@ static func linea(evento: Dictionary, nombres: Dictionary) -> String:
 			var tecnica_tiro := _nombre_tecnica(str(evento.get("tecnica", "")))
 			match res:
 				"bloqueado": return "%s bloquea el remate%s de %s" % [_quien_clave(evento.get("bloqueador_clave", -1), nombres), tecnica_tiro, quien]
-				"palo": return "¡Al palo el remate%s de %s!" % [tecnica_tiro, quien]
+				"palo":
+					if bool(evento.get("travesano", false)):
+						return "¡Al travesaño el remate%s de %s!" % [tecnica_tiro, quien]
+					return "¡Al palo el remate%s de %s!" % [tecnica_tiro, quien]
 				_: return "Remata%s %s y se va afuera" % [tecnica_tiro, quien]
 		"gambeta":
 			if str(evento.get("resultado", "")) == "pierde":
@@ -100,6 +111,8 @@ static func linea(evento: Dictionary, nombres: Dictionary) -> String:
 			var sale := _quien_clave(evento.get("saliente_clave", -1), nombres)
 			var entra := _quien_clave(evento.get("entrante_clave", -1), nombres)
 			return "Cambio: sale %s, entra %s" % [sale, entra]
+		"lesion":
+			return "¡Lesión! %s no puede seguir (%s)" % [quien, str(evento.get("lesion", "lesión"))]
 		"saque_inicial":
 			match res:
 				"1": return "¡Arranca el partido!"
@@ -112,6 +125,9 @@ static func linea(evento: Dictionary, nombres: Dictionary) -> String:
 			return "Córner para %s" % equipo
 		"falta":
 			return "Falta de %s" % quien
+		"jugada":
+			var texto := Jugadas.relato(str(evento.get("jugada", "")))
+			return "" if texto == "" else "%s (%s)" % [texto, equipo]
 	return ""
 
 

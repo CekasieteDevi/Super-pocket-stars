@@ -23,9 +23,16 @@ func _init() -> void:
 		# jugada de 1 a 5.
 		# El piso bajo de 20 a 15: el clip ya no muestra los ticks previos
 		# al montaje, y el del gol dura 21 fotogramas.
-		if fotogramas.size() < 15 or fotogramas.size() > 120:
-			print("FALLA: %s genero %d fotogramas (se esperan entre 15 y 120)." % [
-				s["clave"], fotogramas.size()])
+		# Los regates son la excepcion: el clip dura lo que el gesto en el
+		# partido (MotorEspacial.duracion_regate, 3 a 8 ticks) mas seis de
+		# salida, porque la vista interpola y no necesita un tick por dibujo.
+		var clave_clip := str(s["clave"])
+		var piso := 15
+		if clave_clip.begins_with("regate_"):
+			piso = MotorEspacial.duracion_regate(clave_clip.trim_prefix("regate_")) + 6
+		if fotogramas.size() < piso or fotogramas.size() > 120:
+			print("FALLA: %s genero %d fotogramas (se esperan entre %d y 120)." % [
+				s["clave"], fotogramas.size(), piso])
 			fallas += 1
 			continue
 		# El evento que le da nombre a la jugada tiene que estar PEGADO a
@@ -71,6 +78,7 @@ func _init() -> void:
 		print("OK: %-12s %d fotogramas, %d en cancha al final, eventos %s" % [
 			s["clave"], fotogramas.size(), ultimo["jugadores"].size(), tipos])
 	fallas += _test_no_toca_al_equipo()
+	fallas += _test_lesion_y_cambio()
 	fallas += _test_siempre_da_lo_mismo()
 	fallas += _test_el_gol_es_gol()
 	fallas += _test_el_cabezazo_es_de_cabeza()
@@ -107,6 +115,82 @@ func _test_no_toca_al_equipo() -> int:
 		print("OK: reproducir las %d jugadas no deja lesiones, suspensiones ni goles en los equipos reales." % [
 			Laboratorio.SITUACIONES.size()])
 	return fallas
+
+
+## La lesion no alcanza con existir en Team: tiene que llegar al fotograma,
+## usar la pose PNG y terminar en una sustitucion visible.
+func _test_lesion_y_cambio() -> int:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = SEED
+	var casa := Team.generar("Casa", rng, 0)
+	var visita := Team.generar("Visita", rng, 400)
+	var propio := RandomNumberGenerator.new()
+	propio.seed = Laboratorio.SEMILLA
+	var r := Laboratorio.generar("lesion", casa, visita, propio)
+	var lesion := {}
+	var cambio := {}
+	for ev in r["eventos"]:
+		if str(ev.get("tipo", "")) == "lesion":
+			lesion = ev
+		elif str(ev.get("tipo", "")) == "cambio":
+			cambio = ev
+	if lesion.is_empty() or cambio.is_empty() or r["fotogramas"].is_empty():
+		print("FALLA: el laboratorio de lesion no emite lesion y cambio.")
+		return 1
+	var accion_visible := false
+	for accion in r["fotogramas"][0].get("acciones", []):
+		if str(accion.get("accion", "")) == "lesionado":
+			accion_visible = true
+			break
+	if not accion_visible:
+		print("FALLA: la lesion no llega como accion al primer fotograma.")
+		return 1
+	var sale_id := int(lesion.get("jugador_id", -1))
+	var sale_clave := int(lesion.get("clave", -1))
+	var posicion_inicial := Vector2.ZERO
+	var encontro_posicion := false
+	for jugador in r["fotogramas"][0]["jugadores"]:
+		if int(jugador.get("id", -1)) == sale_clave:
+			posicion_inicial = Vector2(float(jugador["x"]), float(jugador["y"]))
+			encontro_posicion = true
+			break
+	if not encontro_posicion:
+		print("FALLA: no se encontro al lesionado en el primer fotograma.")
+		return 1
+	var lesion_se_mueve_antes_de_levantarse := false
+	for i in range(mini(8, r["fotogramas"].size())):
+		for jugador in r["fotogramas"][i]["jugadores"]:
+			if int(jugador.get("id", -1)) == sale_clave:
+				var posicion := Vector2(float(jugador["x"]), float(jugador["y"]))
+				if posicion.distance_to(posicion_inicial) > 0.01:
+					lesion_se_mueve_antes_de_levantarse = true
+	if lesion_se_mueve_antes_de_levantarse:
+		print("FALLA: el lesionado camina mientras todavia cae o se levanta.")
+		return 1
+	var lesion_camino_al_lateral := false
+	for i in range(9, r["fotogramas"].size()):
+		for jugador in r["fotogramas"][i]["jugadores"]:
+			if int(jugador.get("id", -1)) == sale_clave:
+				var posicion := Vector2(float(jugador["x"]), float(jugador["y"]))
+				if posicion.distance_to(posicion_inicial) > 0.01:
+					lesion_camino_al_lateral = true
+					break
+		if lesion_camino_al_lateral:
+			break
+	if not lesion_camino_al_lateral:
+		print("FALLA: el lesionado nunca empieza a caminar al lateral.")
+		return 1
+	var entra_id := int(cambio.get("entrante_id", -1))
+	var sigue_sale := false
+	var entro := false
+	for j in r["fotogramas"].back()["jugadores"]:
+		sigue_sale = sigue_sale or int(j.get("jugador_id", -1)) == sale_id
+		entro = entro or int(j.get("jugador_id", -1)) == entra_id
+	if sigue_sale or not entro:
+		print("FALLA: la sustitucion no completo la salida/entrada.")
+		return 1
+	print("OK: el laboratorio muestra pose de lesion y reemplazo completo.")
+	return 0
 
 
 ## Una jugada del laboratorio tiene que dar SIEMPRE lo mismo: se viene a

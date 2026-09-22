@@ -2,7 +2,7 @@ extends SceneTree
 
 func _init() -> void:
 	var vista := VistaPartido.new()
-	for accion in ["bloquea", "cae", "chilena", "volea", "barrida", "festeja"]:
+	for accion in ["bloquea", "cae", "lesionado", "chilena", "volea", "barrida", "festeja"]:
 		vista.fotogramas = []
 		var duracion: int = VistaPartido.DURACION_ACCION[accion]
 		for i in range(duracion + 1):
@@ -16,12 +16,25 @@ func _init() -> void:
 		var izquierda := SpritesPartido.jugador(Color.RED, SpritesPartido.IZQUIERDA, pose).get_image()
 		derecha.flip_x()
 		assert(derecha.get_data() == izquierda.get_data(), "Espejo incorrecto: " + pose)
+	vista.fotogramas = []
+	for i in range(12):
+		vista.fotogramas.append({"acciones": []})
+	vista.fotogramas[0] = {"acciones": [{"clave": 7, "accion": "regate_croqueta"}]}
+	vista.fotogramas[2] = {"acciones": [{"clave": 7, "accion": "control_pie"}]}
+	var gesto_viejo := vista._acciones_activas(2)
+	assert(str(gesto_viejo[7]["accion"]) == "regate_croqueta",
+		"Un control viejo no debe pisar un regate activo")
 	for tipo in MotorEspacial.REGATE_ACCIONES:
 		var cuadros_regate := SpritesPartido.cuadros_regate(tipo)
+		assert(VistaPartido.DURACION_ACCION["regate_" + tipo] == MotorEspacial.duracion_regate(tipo),
+			"Motor y vista terminan el regate en momentos distintos: " + tipo)
+		var distintos := {}
 		for fase in range(cuadros_regate):
 			var cuadro_fase := SpritesPartido.regate_png(tipo, fase, false, Color("d94141")).get_image()
+			distintos[hash(cuadro_fase.get_data())] = true
 			assert(cuadro_fase.get_used_rect().size != Vector2i.ZERO,
 				"Cuadro de regate transparente: %s/%d" % [tipo, fase])
+		assert(distintos.size() >= 4, "Regate repite un dibujo de respaldo: " + tipo)
 		var cuadro_base := SpritesPartido.regate_png(tipo, 0, false, Color("d94141")).get_image()
 		var espejo := SpritesPartido.regate_png(tipo, 0, true, Color("d94141")).get_image()
 		assert(cuadro_base.get_width() == 64 and cuadro_base.get_height() == 64, "Tamaño de regate: " + tipo)

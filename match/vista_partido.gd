@@ -29,6 +29,7 @@ var hud: HudPartido
 var nombres: Dictionary = {}
 
 var fotogramas: Array = []
+var _coreografia := CoreografiaPartido.new()
 var posicion := 0.0
 var velocidad := 1.0
 var pausado := false
@@ -150,6 +151,7 @@ func iniciar(lista: Array, c_local: Color, c_visitante: Color,
 		abreviacion_local: String = "", abreviacion_visitante: String = "",
 		identidad_local: Dictionary = {}, identidad_visitante: Dictionary = {}) -> void:
 	fotogramas = lista
+	_coreografia.configurar(lista, DURACION_ACCION)
 	color_local = c_local
 	color_visitante = c_visitante
 	# TRANSPARENT = pantalon por defecto, que es lo que usan los clubes que
@@ -514,24 +516,18 @@ func _mostrar(idx: int, t: float) -> void:
 		for j in b["jugadores"]:
 			destino[j["id"]] = j
 
-	var acciones := _acciones_activas(idx)
+	var acciones := _coreografia.gestos(float(idx) + t, _acciones_activas(idx))
 	var pa: Dictionary = a["pelota"]
-	var pos_pelota := Vector2(pa["x"], pa["y"])
-	var z: float = float(pa.get("z", 0.0))
-	if b != null and t > 0.0:
-		var pb: Dictionary = b["pelota"]
-		# Al cruzar la linea, el siguiente fotograma ya puede tener la pelota
-		# puesta para el lateral/corner. No interpolar ese salto por toda la
-		# cancha: sostener afuera hace legible el rebote y la salida.
-		if bool(pa.get("saliendo", false)) == bool(pb.get("saliendo", false)):
-			pos_pelota = _mezclar(pos_pelota, Vector2(pb["x"], pb["y"]), t)
-			z = lerpf(z, float(pb.get("z", 0.0)), t)
+	var balon_visual := _coreografia.pelota(idx, t)
+	var pos_pelota: Vector2 = balon_visual["pos"]
+	var z: float = float(balon_visual["z"])
+	var offset_pelota: Vector2 = balon_visual["offset_px"]
+	var contacto_planificado := bool(balon_visual["corregida"])
 
 	var ents: Array = []
 	var pelota_anclada := false
 	var pelota_visible := true
 	var anclaje_pelota := Vector2.ZERO
-	var contacto_accion := {}
 	for j in a["jugadores"]:
 		var p := Vector2(j["x"], j["y"])
 		var avance := Vector2.ZERO
@@ -548,6 +544,10 @@ func _mostrar(idx: int, t: float) -> void:
 		# pateando o tirándose, esa pose gana a la de correr.
 		var accion: Dictionary = acciones.get(j["id"], {})
 		var pose: String = str(accion.get("pose", ""))
+		if bool(accion.get("coreografiada", false)):
+			pose = str(POSE_DE_ACCION.get(str(accion["accion"]), SpritesPartido.QUIETO))
+		# Las posiciones grabadas por el motor son la trayectoria del partido.
+		# Reconstruirla con otra fase provocaba saltos al superar un umbral.
 		if pose.is_empty():
 			var recorrido: float = float(j.get("recorrido", -1.0))
 			if recorrido >= 0.0 and destino.has(j["id"]):
@@ -575,23 +575,41 @@ func _mostrar(idx: int, t: float) -> void:
 		ent["fase_animacion"] = metros * 2.5 + posmod(jugador_id, 8) if metros >= 0.0 else (idx + t) * 2.0
 		if not accion.is_empty():
 			ent["fase_animacion"] = (float(idx - int(accion["desde"])) + t) / float(DURACION_ACCION.get(ent["accion"], 1))
+			if accion.has("fase"):
+				ent["fase_animacion"] = float(accion["fase"])
 			# La orientaci?n del contacto sigue la pelota, aunque el jugador est? quieto.
 			var origen: Dictionary = fotogramas[int(accion["desde"])]
 			var balon := Vector2(origen["pelota"]["x"], origen["pelota"]["y"])
 			if MotorEspacial.es_accion_regate(ent["accion"]):
-				# El rival se mide en el cuadro donde empezó el gesto. Medido
-				# en el cuadro actual, al pasarlo quedaba atrás y el sprite
-				# se daba vuelta en plena salida.
-				var p_origen := p
+				var ejecutor := _jugador_en(origen, int(j["id"]))
+				var rumbo := Vector2(float(ejecutor.get("regate_ox", ejecutor.get("ox", 1.0))),
+					float(ejecutor.get("regate_oy", ejecutor.get("oy", 0.0))))
+				if rumbo.length_squared() < 0.001:
+					rumbo = Vector2.RIGHT
+				ent["regate_orientacion"] = rumbo.normalized()
+				ent["direccion"] = _direccion(rumbo)
+				ent["regate_espejo"] = ProyeccionPartido.direccion_pantalla(rumbo).x < 0.0
+				ent["fase_animacion"] = MotorEspacial.fase_regate(
+					MotorEspacial.tipo_regate_de_accion(ent["accion"]), float(idx - int(accion["desde"])) + t)
+			elif ent["accion"] == "chilena":
+				# Fijar el remate al arco desde el inicio del gesto. Seguir la
+				# pelota entrante o la posicion actual puede invertir la tijera.
 				for ejecutor in origen["jugadores"]:
 					if int(ejecutor["id"]) == int(j["id"]):
-						p_origen = Vector2(float(ejecutor["x"]), float(ejecutor["y"]))
+						var hacia_arco := MotorEspacial.arco_rival(bool(ejecutor["equipo_local"])) \
+							- Vector2(float(ejecutor["x"]), float(ejecutor["y"]))
+						ent["direccion"] = _direccion(hacia_arco)
+						# El arte de chilena golpea hacia atras: espejo contrario
+						# al de una patada frontal, para todos los peinados.
+						ent["espejo"] = ProyeccionPartido.direccion_pantalla(hacia_arco).x > 0.0
 						break
-				var hacia_rival := _direccion_al_rival(j, p_origen, origen["jugadores"])
-				ent["direccion"] = _direccion(hacia_rival)
-				ent["regate_espejo"] = ProyeccionPartido.direccion_pantalla(hacia_rival).x < 0.0
 			else:
 				ent["direccion"] = _direccion(balon - p)
+			if accion.has("direccion_contacto"):
+				var dir_contacto: Vector2 = accion["direccion_contacto"]
+				ent["direccion"] = _direccion(dir_contacto)
+				if ent["accion"] == "chilena":
+					ent["espejo"] = ProyeccionPartido.direccion_pantalla(dir_contacto).x > 0.0
 			if ent["accion"] in ["control_pie", "taco"]:
 				# El taco conserva la orientacion corporal; la pelota sale por detras.
 				for ejecutor in origen["jugadores"]:
@@ -599,29 +617,14 @@ func _mostrar(idx: int, t: float) -> void:
 						ent["direccion"] = _direccion(Vector2(float(ejecutor.get("ox", 1.0)), float(ejecutor.get("oy", 0.0))))
 						break
 			var fase := float(idx - int(accion["desde"])) + t
-			# El fotograma de patea ya se guarda DESPUES de avanzar el remate.
-			# Si la pelota ya se alejo, anclarla al pie la hacia retroceder y
-			# parecia que el tiro se trababa. Solo anclar el contacto si sigue
-			# realmente junto al jugador.
-			if str(accion.get("accion", "")) in ACCIONES_CON_CONTACTO \
-					and bool(pa.get("es_remate", false)) \
-					and pos_pelota.distance_to(p) <= 0.75:
-				# El fotograma ya avanzó la pelota un paso. La dirección sigue
-				# siendo la del contacto original.
-				var direccion_contacto := ProyeccionPartido.direccion_pantalla(balon - Vector2(j["x"], j["y"]))
-				if direccion_contacto.length_squared() < 0.001:
-					direccion_contacto = ProyeccionPartido.direccion_pantalla(
-						Vector2(float(j.get("ox", 1.0)), float(j.get("oy", 0.0))))
-				contacto_accion = {
-					"pos": p, "accion": str(accion["accion"]), "fase": fase,
-					"direccion": direccion_contacto.normalized(),
-				}
 			if pose in [SpritesPartido.CABECEA, SpritesPartido.CHILENA, SpritesPartido.VOLEA, SpritesPartido.PALOMITA]:
 				ent["z"] = sin(clampf(fase / 3.0, 0.0, 1.0) * PI) * 0.65
 			elif pose == SpritesPartido.FESTEJA:
 				ent["z"] = absf(sin(fase * PI)) * 0.45
 			elif pose == SpritesPartido.VUELA:
 				ent["z"] = sin(clampf(fase / 4.0, 0.0, 1.0) * PI) * 0.55
+			if bool(accion.get("coreografiada", false)):
+				ent["z"] = CoreografiaPartido.salto(str(ent["accion"]), float(ent["fase_animacion"]))
 		if pose == SpritesPartido.VUELA:
 			# Se tira hacia donde estaba la pelota cuando arrancó el
 			# vuelo, medido EN PANTALLA: el sprite del arquero volando es
@@ -629,7 +632,8 @@ func _mostrar(idx: int, t: float) -> void:
 			# costado se estiró.
 			ent["espejo"] = _lado_del_vuelo(int(j["id"]), int(accion["desde"]))
 		var lateral: Dictionary = a.get("lateral_preparacion", {})
-		if int(lateral.get("clave", -1)) == int(j["id"]) and int(lateral.get("restante", 99)) <= 3:
+		if int(lateral.get("clave", -1)) == int(j["id"]) and int(lateral.get("restante", 99)) <= 3 \
+			and not bool(accion.get("coreografiada", false)):
 			ent["accion"] = "lateral_prepara"
 			ent["pose"] = "lateral_prepara"
 			ent["fase_animacion"] = clampf((3.0 - float(lateral["restante"]) + t) / 3.0, 0.0, 0.999)
@@ -642,7 +646,12 @@ func _mostrar(idx: int, t: float) -> void:
 			if int(ent["direccion"]) in [5, 6, 7]:
 				anclaje_pelota.x *= -1.0
 			pelota_anclada = true
-		if str(ent["accion"]) in ["pecho", MotorEspacial.ACCION_AGARRA] and int(pa.get("poseedor_id", -1)) == int(j["id"]):
+			if contacto_planificado:
+				pos_pelota = balon_visual["pos"]
+				z = float(balon_visual["z"])
+				pelota_anclada = false
+		if str(ent["accion"]) in ["pecho", MotorEspacial.ACCION_AGARRA] and int(pa.get("poseedor_id", -1)) == int(j["id"]) \
+			and not contacto_planificado:
 			pos_pelota = p
 			var fase_manos := clampf(float(ent["fase_animacion"]), 0.0, 1.0)
 			z = lerpf(1.25, 0.0, fase_manos) if ent["accion"] == "pecho" else 0.0
@@ -653,7 +662,8 @@ func _mostrar(idx: int, t: float) -> void:
 			if int(ent["direccion"]) in [5, 6, 7]:
 				anclaje_pelota.x *= -1.0
 			pelota_anclada = true
-		if str(ent["accion"]) == "control_pie" and int(pa.get("poseedor_id", -1)) == int(j["id"]):
+		if str(ent["accion"]) == "control_pie" and int(pa.get("poseedor_id", -1)) == int(j["id"]) \
+			and not contacto_planificado:
 			var fase_control := clampf(float(ent["fase_animacion"]), 0.0, 1.0)
 			pos_pelota = p
 			z = lerpf(0.65, 0.0, fase_control)
@@ -661,33 +671,32 @@ func _mostrar(idx: int, t: float) -> void:
 			if int(ent["direccion"]) in [5, 6, 7]:
 				anclaje_pelota.x *= -1.0
 			pelota_anclada = true
+		if str(ent["accion"]) == MotorEspacial.ACCION_AGARRA \
+			and int(pa.get("poseedor_id", -1)) == int(j["id"]) and float(ent["fase_animacion"]) >= 0.5:
+			pelota_visible = false
 		if MotorEspacial.es_accion_regate(str(ent["accion"])) \
 				and int(pa.get("poseedor_id", -1)) == int(j["id"]):
 			var trayectoria := _trayectoria_regate(
 				MotorEspacial.tipo_regate_de_accion(str(ent["accion"])),
 				float(ent["fase_animacion"]),
-				Vector2(float(j.get("ox", 1.0)), float(j.get("oy", 0.0))))
-			pos_pelota = p + trayectoria["offset"]
-			z = float(trayectoria["altura"])
+				ent["regate_orientacion"])
+			# El ultimo intervalo enlaza con la pelota normal del siguiente tick.
+			# Evita que vuelva de golpe al centro del cuerpo al terminar el gesto.
+			var edad := float(idx - int(accion["desde"])) + t
+			var duracion := float(DURACION_ACCION[ent["accion"]])
+			var enlace := smoothstep(0.0, 1.0, clampf(edad - (duracion - 1.0), 0.0, 1.0))
+			pos_pelota = (p + Vector2(trayectoria["offset"])).lerp(balon_visual["pos"], enlace)
+			z = lerpf(float(trayectoria["altura"]), float(balon_visual["z"]), enlace)
+			offset_pelota = Vector2(balon_visual["offset_px"]) * enlace
 			pelota_anclada = false
 		if _festejo_restante > 0.0 and _festejo_grupo.has(int(j["id"])):
 			_aplicar_festejo(ent, int(j["id"]))
 		ents.append(ent)
 
-	# El motor ya resolvió el resultado y la pelota ya viaja. Visualmente,
-	# mostramos primero el contacto y luego soltamos hacia su posición real.
-	if not contacto_accion.is_empty():
-		var liberacion := clampf(float(contacto_accion["fase"]), 0.0, 1.0)
-		var posicion_contacto: Vector2 = contacto_accion["pos"]
-		pos_pelota = posicion_contacto.lerp(pos_pelota, liberacion)
-		anclaje_pelota = _anclaje_de_contacto(
-			str(contacto_accion["accion"]), contacto_accion["direccion"]) * (1.0 - liberacion)
-		pelota_anclada = liberacion < 1.0
-
 	if pelota_visible:
 		ents.append({"tipo": "pelota", "color": Color.WHITE, "z": z, "pos": pos_pelota,
 			"giro": int((pos_pelota.x + pos_pelota.y * 0.73 + z) * 3.0),
-			"anclada": pelota_anclada, "anclaje_px": anclaje_pelota})
+			"anclada": pelota_anclada, "anclaje_px": anclaje_pelota, "offset_px": offset_pelota})
 
 	# Las tarjetas siguen al infractor: se guardan por clave, no por
 	# posición, así el cartelito acompaña al que la vio mientras camina.
@@ -738,11 +747,14 @@ const TICKS_POR_ZANCADA := 2
 const DURACION_ACCION := {
 	"amague_centro": 3,
 	"control_pie": 2, "taco": 2,
-	"regate_croqueta": 12, "regate_bicicleta": 12, "regate_globito": 12,
-	"regate_elastica": 6, "regate_ruleta": 12,
+	"regate_croqueta": MotorEspacial.DURACION_REGATE_TICKS["croqueta"],
+	"regate_bicicleta": MotorEspacial.DURACION_REGATE_TICKS["bicicleta"],
+	"regate_globito": MotorEspacial.DURACION_REGATE_TICKS["globito"],
+	"regate_elastica": MotorEspacial.DURACION_REGATE_TICKS["elastica"],
+	"regate_ruleta": MotorEspacial.DURACION_REGATE_TICKS["ruleta"],
 	"pecho": 3, "lateral_manos": 2,
 	MotorEspacial.ACCION_AGARRA: 4, MotorEspacial.ACCION_SAQUE_ARCO: 4,
-	"bloquea": 3, "cae": 5, "chilena": 4, "volea": 3, "palomita": 4,
+	"bloquea": 3, "cae": 5, "lesionado": 8, "chilena": 5, "volea": 3, "palomita": 4,
 	MotorEspacial.ACCION_PATEA: 2,
 	MotorEspacial.ACCION_CABECEA: 2,
 	MotorEspacial.ACCION_BARRIDA: 3,
@@ -763,6 +775,7 @@ const POSE_DE_ACCION := {
 	MotorEspacial.ACCION_AGARRA: MotorEspacial.ACCION_AGARRA,
 	MotorEspacial.ACCION_SAQUE_ARCO: MotorEspacial.ACCION_SAQUE_ARCO,
 	"bloquea": SpritesPartido.BLOQUEA, "cae": SpritesPartido.CAE,
+	"lesionado": SpritesPartido.CAE,
 	"chilena": SpritesPartido.CHILENA, "volea": SpritesPartido.VOLEA,
 	MotorEspacial.ACCION_PALOMITA: SpritesPartido.PALOMITA,
 	MotorEspacial.ACCION_PATEA: SpritesPartido.PATEA,
@@ -778,14 +791,6 @@ const POSE_DE_ACCION := {
 const POSE_INICIAL_DE_ACCION := {
 	MotorEspacial.ACCION_PATEA: SpritesPartido.PATEA_ARMA,
 }
-
-## La pelota sale en el mismo tick que nace el gesto. La vista conserva
-## ese primer instante junto al cuerpo y la libera durante el armado.
-const ACCIONES_CON_CONTACTO := [
-	MotorEspacial.ACCION_PATEA, "taco", MotorEspacial.ACCION_SAQUE_ARCO,
-	MotorEspacial.ACCION_CABECEA, "volea", "chilena", MotorEspacial.ACCION_PALOMITA,
-]
-
 
 ## clave -> {"pose": String, "desde": int}, para las acciones que siguen
 ## vigentes en el fotograma `idx`. Se calcula mirando hacia atrás en vez
@@ -804,6 +809,19 @@ func _acciones_activas(idx: int) -> Dictionary:
 		for a in fotogramas[i].get("acciones", []):
 			var accion := str(a["accion"])
 			if idx - i < int(DURACION_ACCION.get(accion, 1)):
+				# Un replay viejo puede traer otro duelo dentro del regate.
+				# Ese control no debe pisar los cuadros que todavía faltan.
+				var anterior: Dictionary = activas.get(a["clave"], {})
+				# Una lesión recién ocurrida manda sobre barrida o contacto del
+				# mismo tick: el jugador tiene que verse caer, no desaparecer
+				# dentro de otra pose.
+				if not anterior.is_empty() and str(anterior.get("accion", "")) == "lesionado":
+					continue
+				if not anterior.is_empty() and MotorEspacial.es_accion_regate(str(anterior.get("accion", ""))):
+					var edad_regate := idx - int(anterior["desde"])
+					var fin_regate := int(DURACION_ACCION.get(str(anterior["accion"]), 1))
+					if edad_regate < fin_regate:
+						continue
 				var pose: String = POSE_DE_ACCION.get(accion, SpritesPartido.QUIETO)
 				if idx == i and POSE_INICIAL_DE_ACCION.has(accion):
 					pose = POSE_INICIAL_DE_ACCION[accion]
@@ -872,26 +890,6 @@ static func _trayectoria_regate(tipo: String, fase: float, orientacion: Vector2)
 	return {"offset": offset, "altura": altura}
 
 
-## Punto de contacto en píxeles respecto de los pies del jugador. El arte es
-## un billboard: usar este offset mantiene la pelota pegada al dibujo aunque
-## la cámara cambie de zoom.
-static func _anclaje_de_contacto(accion: String, direccion: Vector2) -> Vector2:
-	var d := direccion.normalized() if direccion.length_squared() > 0.001 else Vector2.RIGHT
-	match accion:
-		MotorEspacial.ACCION_CABECEA:
-			return Vector2(d.x * 5.0, -51.0 + clampf(d.y * 3.0, -4.0, 4.0))
-		"volea":
-			return Vector2(d.x * 18.0, -18.0 + clampf(d.y * 5.0, -5.0, 5.0))
-		"chilena":
-			return Vector2(d.x * 18.0, -40.0 + clampf(d.y * 4.0, -4.0, 4.0))
-		MotorEspacial.ACCION_PALOMITA:
-			return Vector2(d.x * 12.0, -29.0 + clampf(d.y * 4.0, -4.0, 4.0))
-		"taco":
-			return -d * 13.0
-		_:
-			return Vector2(d.x * 18.0, -2.0 + clampf(d.y * 5.0, -5.0, 5.0))
-
-
 ## A qué costado se tiró el arquero, EN PANTALLA. Se mide en el fotograma
 ## en que arrancó el vuelo y queda fijo mientras dura la pose. Antes se
 ## recalculaba en cada fotograma contra la pelota: cuando la pelota le
@@ -926,6 +924,30 @@ static func _direccion_al_rival(jugador: Dictionary, p: Vector2, jugadores: Arra
 	if mejor_distancia == INF:
 		return Vector2(float(jugador.get("ox", 1.0)), float(jugador.get("oy", 0.0)))
 	return objetivo
+
+
+static func _jugador_en(fotograma: Dictionary, clave: int) -> Dictionary:
+	for jugador in fotograma.get("jugadores", []):
+		if int(jugador["id"]) == clave:
+			return jugador
+	return {}
+
+
+static func _defensor_del_regate(fotograma: Dictionary, clave_ejecutor: int) -> int:
+	var ejecutor := _jugador_en(fotograma, clave_ejecutor)
+	if ejecutor.is_empty():
+		return -1
+	var mejor := -1
+	var distancia := INF
+	for candidato in fotograma.get("jugadores", []):
+		if bool(candidato.get("equipo_local", false)) == bool(ejecutor.get("equipo_local", false)):
+			continue
+		var d := Vector2(float(candidato["x"]), float(candidato["y"])) \
+			.distance_squared_to(Vector2(float(ejecutor["x"]), float(ejecutor["y"])))
+		if d < distancia:
+			distancia = d
+			mejor = int(candidato["id"])
+	return mejor
 
 static func _direccion(avance: Vector2) -> int:
 	if avance.length_squared() < 0.0004:

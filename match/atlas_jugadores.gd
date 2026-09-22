@@ -15,6 +15,9 @@ const CLIPS := {
 	# Arma el golpe, lo cancela y recoge el pie para salir conduciendo.
 	"amague_centro": [8, 9, 10, 9, 8, 68, 69, 71],
 	"barrida": [26, 26, 30, 31],
+	# Lesión: caída, apoyo torpe y recuperación. Reutiliza cuadros PNG del
+	# atlas ya probado para que el gesto mantenga escala, piel y peinados.
+	"lesionado": [28, 29, 30, 31, 31, 30, 29, 25],
 	"bloquea": [31, 27, 27, 30],
 	"cae": [28, 29, 29, 30, 31],
 	"cabecea": [32, 33, 34, 31],
@@ -23,7 +26,8 @@ const CLIPS := {
 	"taco": [72, 73, 74, 75],
 	"agarra": [76, 77, 78, 79],
 	"saque_arco": [80, 81, 82, 83],
-	"chilena": [36, 37, 37, 38, 39],
+	# Impulso, tijera, contacto, caida y apoyo: poses propias en los 11 PNG.
+	"chilena": [36, 37, 37, 38, 29, 30, 39],
 	"vuela": [40, 41, 42, 42, 43],
 	"festeja": [44, 45, 46, 45],
 }
