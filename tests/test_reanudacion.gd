@@ -62,7 +62,8 @@ func _test_el_tiro_libre_lejano_sale_con_un_pase() -> void:
 		var punto := Vector2(arco.x + hacia * 75.0, rng.randf_range(-25.0, 25.0))
 		MotorEspacial._tiro_libre(estado, punto, true, 30)
 		if _se_reanudo_con_un_pase(estado, MotorEspacial.TICKS_CONGELADO_FALTA
-				+ int(MotorEspacial.TICKS_DETENIDO["falta"]) + 3):
+				+ int(MotorEspacial.TICKS_DETENIDO["falta"])
+				+ MotorEspacial.TICKS_ESPERA_EJECUTOR_MAX + 3):
 			con_pase += 1
 	if con_pase != INTENTOS:
 		print("FALLA: %d de %d tiros libres se reanudaron con un pase." % [con_pase, INTENTOS])
@@ -86,7 +87,10 @@ func _test_el_lateral_sale_con_un_pase() -> void:
 			continue
 		MotorEspacial._detener_juego(estado, pos, true, ejecutor, "corto",
 			int(MotorEspacial.TICKS_DETENIDO["lateral"]))
-		if _se_reanudo_con_un_pase(estado, int(MotorEspacial.TICKS_DETENIDO["lateral"]) + 3):
+		# El saque espera a que el ejecutor llegue a la pelota: el plazo
+		# incluye esa espera, no solo la pausa del reglamento.
+		if _se_reanudo_con_un_pase(estado, int(MotorEspacial.TICKS_DETENIDO["lateral"])
+				+ MotorEspacial.TICKS_ESPERA_EJECUTOR_MAX + 3):
 			con_pase += 1
 	if con_pase != INTENTOS:
 		print("FALLA: %d de %d laterales se reanudaron con un pase." % [con_pase, INTENTOS])

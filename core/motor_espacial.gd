@@ -284,6 +284,10 @@ const TICKS_REPUESTOS_TOPE := 400
 ## El que va a ejecutar el balon parado se mueve MAS RAPIDO que el resto:
 ## los demas se acomodan, el va a buscar la pelota.
 const FACTOR_CORRE_A_LA_PELOTA := 1.0
+## Cuántos ticks extra espera el saque a que el ejecutor llegue a la
+## pelota (ver _ejecutor_en_camino). Cuatro segundos: el salto más largo
+## medido fue 16,3 m, y arrancando de parado a 3 m/s² se cubre en ~3,5 s.
+const TICKS_ESPERA_EJECUTOR_MAX := 16
 
 ## Qué parte de la interrupción se pasa completamente quieto antes de que
 ## los jugadores empiecen a acomodarse. Es lo que hace que se LEA que el
@@ -6314,6 +6318,8 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 		# el saque espera a que terminen.
 		if not _avanzar_entradas_y_salidas(estado):
 			estado["detenido"] = maxi(int(estado["detenido"]), 1)
+		if int(estado["detenido"]) == 0 and _ejecutor_en_camino(estado):
+			estado["detenido"] = 1
 		if int(estado["detenido"]) == 0:
 			_ejecutar_balon_parado(estado)
 			# Mismo motivo que en el paso 2: si el reinicio fue un pase,
@@ -9333,6 +9339,37 @@ static func _tocar_corto(estado: Dictionary, saca_local: bool) -> void:
 		return
 	# Sin un solo compañero en cancha (once expulsado) no hay a quién
 	# tocarsela; ahi si se queda con ella y juega.
+
+
+## El saque espera a que el ejecutor llegue a la pelota. Antes la pausa
+## terminaba por reloj y _ejecutar_balon_parado lo ponía en el punto: en
+## el lateral el que sacaba arrancaba de parado, cubría 3 m de 11 y
+## aparecía encima de la pelota. Medido con tests/_diag_salto_ejecutor.gd
+## (72 partidos, semilla 4400): el 33% de los saques tenía un salto de más
+## de 2 m, p90 5,0 m y máximo 16,3 m.
+static func _ejecutor_en_camino(estado: Dictionary) -> bool:
+	var bp: Dictionary = estado.get("balon_parado", {})
+	if not bp.has("pos") or not bp.has("ejecutor") \
+			or str(bp.get("tipo", "")) in ["saque_medio", "saque_inicial", "penal"]:
+		return false
+	var ejecutor := int(bp["ejecutor"])
+	if not estado["jugadores"].has(ejecutor) or _en_transito(estado, ejecutor):
+		return false
+	# El lesionado no llega nunca. Se mira en el Team y no en la entidad:
+	# `lesionado` de la entidad solo existe con fotogramas, y esperarlo ahí
+	# hacía que el mismo partido diera otro resultado con y sin animación.
+	var e_ej: Dictionary = estado["jugadores"][ejecutor]
+	if _equipo_de(estado, bool(e_ej["equipo_local"])).esta_lesionado(int(e_ej["jugador_id"])):
+		return false
+	if estado["jugadores"][ejecutor]["pos"].distance_to(bp["pos"]) <= RADIO_TOMA_PELOTA:
+		return false
+	# El tope destraba al que no puede llegar (lesionado, trabado). Con él
+	# vuelve el salto de antes, pero solo en ese caso raro.
+	var espera := int(bp.get("espera_ejecutor", 0))
+	if espera >= TICKS_ESPERA_EJECUTOR_MAX:
+		return false
+	bp["espera_ejecutor"] = espera + 1
+	return true
 
 
 ## Se reanuda: el ejecutor toca la pelota y la jugada arranca.

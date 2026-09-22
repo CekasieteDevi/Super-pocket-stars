@@ -1,4 +1,5 @@
 [
+	{"version": "0.4.12", "fecha": "2026-09-22", "cambio": "En laterales y tiros libres, el que saca llega corriendo a la pelota en vez de aparecer encima de ella."},
 	{"version": "0.4.11", "fecha": "2026-09-22", "cambio": "En los corners y tiros libres, la pelota y los jugadores ya no se deslizan por la cancha al acomodarse para el saque."},
 	{"version": "0.4.10", "fecha": "2026-09-22", "cambio": "Las atajadas y los saques muestran el peinado propio de cada arquero."},
 	{"version": "0.4.09", "fecha": "2026-09-22", "cambio": "El lesionado termina de caer y levantarse antes de caminar hacia la sustitucion."},
