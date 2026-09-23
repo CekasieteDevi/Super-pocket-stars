@@ -1,0 +1,3 @@
+### tests/test_control_orientacion.gd
+FALLA: un pase que rueda 30 ticks hasta el receptor cuenta 0 recepcion
+ARCHIVOS_CON_FALLAS=1 de 154 en 499s con 8 en paralelo

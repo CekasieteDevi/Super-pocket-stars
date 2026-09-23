@@ -113,10 +113,12 @@ static func _generar_variante(indice: int, estilo: int) -> Image:
 
 static func _generar_accion(indice: int, estilo: int) -> Image:
 	var accion: int = (indice - 64) / 4
-	var rutas := ["volea", "control_pie", "taco", "palomita", "arquero_agarra", "arquero_saque_arco"]
+	# Palomita usa su tira horizontal propia: una pose acostada no debe
+	# compartir estas celdas ni desplazar los PNG del arquero.
+	var rutas := ["volea", "control_pie", "taco", "arquero_agarra", "arquero_saque_arco"]
 	var ruta := "res://assets/partido/acciones_%s.png" % rutas[accion]
 	var fila := estilo
-	var accion_arquero := accion >= 4
+	var accion_arquero := accion >= 3
 	if accion_arquero:
 		fila = 0
 	if estilo == 10 and not accion_arquero:
@@ -145,6 +147,8 @@ static func _generar_accion(indice: int, estilo: int) -> Image:
 	img.fill(Color.TRANSPARENT)
 	var apoyo := 58 - roundi((banda.y - (banda.x + limites.end.y)) * factor)
 	img.blit_rect(recorte, Rect2i(Vector2i.ZERO, recorte.get_size()), Vector2i((CELDA - recorte.get_width()) / 2, apoyo - recorte.get_height()))
+	if accion_arquero:
+		AtlasJugadores.aplicar_peinado_accion(img, estilo)
 	return img
 
 

@@ -68,10 +68,10 @@ static func linea(evento: Dictionary, nombres: Dictionary) -> String:
 			if res == "gol":
 				if bool(evento.get("palo", false)):
 					return "¡GOL%s de %s%s! Pega en el palo y entra. %s" % [gesto, quien, asistencia, equipo]
-				if bool(evento.get("con_efecto", false)):
+				if bool(evento.get("con_efecto", false)) and tecnica not in ["cabecea", "cabezazo", "palomita"]:
 					return "¡GOL CON EFECTO de %s%s%s! %s" % [gesto, quien, asistencia, equipo]
 				return "¡GOL%s de %s%s! %s" % [gesto, quien, asistencia, equipo]
-			if bool(evento.get("con_efecto", false)):
+			if bool(evento.get("con_efecto", false)) and tecnica not in ["cabecea", "cabezazo", "palomita"]:
 				return "Remata con efecto %s%s y ataja el arquero" % [gesto, quien]
 			return "Remata %s%s y ataja el arquero" % [gesto, quien]
 		"penal":
@@ -133,7 +133,8 @@ static func linea(evento: Dictionary, nombres: Dictionary) -> String:
 
 static func _nombre_tecnica(tecnica: String) -> String:
 	match tecnica:
-		"cabezazo": return " de cabezazo"
+		"cabecea", "cabezazo": return " de cabeza"
+		"palomita": return " de palomita"
 		"volea": return " de volea"
 		"chilena": return " de chilena"
 		_: return ""
@@ -145,6 +146,8 @@ static func _quien_clave(valor, nombres: Dictionary) -> String:
 
 
 static func _asistencia(evento: Dictionary, nombres: Dictionary) -> String:
+	if bool(evento.get("tiro_libre", false)):
+		return ""
 	var clave := int(evento.get("asistencia_clave", -1))
 	if clave == -1 or not nombres.has(clave):
 		return ""

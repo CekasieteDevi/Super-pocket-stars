@@ -135,6 +135,8 @@ func inicializar(nombres_equipos: Array, rng: RandomNumberGenerator, id_inicial:
 		# cruce de copa no puede saber que esta cruzando divisiones.
 		equipo.division_actual = division
 		equipo.fans = Fans.inicial(division)
+		# Los clubes de arriba nacen sabiendo jugadas preparadas.
+		Jugadas.completar_ia(equipo, division)
 		siguiente_id += Team.RANGO_IDS_RESERVADO
 		equipos.append(equipo)
 		tabla[nombre] = _fila_vacia()
@@ -198,6 +200,11 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 		# Al club del jugador se le avisa antes, en la pantalla, para que
 		# elija el reemplazo — cuando llega aca ya viene arreglado, y esto
 		# queda de red por si acaso.
+		# A la IA ademas se le reacomoda el once segun su formacion, que
+		# ya incluye tapar al que no puede jugar (ver Alineacion.acomodar).
+		for club in [home, away]:
+			if club != equipo_seguido:
+				Alineacion.acomodar(club)
 		Alineacion.arreglar(home)
 		Alineacion.arreglar(away)
 		var con_log: bool = equipo_seguido != null and (home == equipo_seguido or away == equipo_seguido)
@@ -565,6 +572,9 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 				noticias.append("APRENDIZAJE: un %s de %s aprende %s (bronce)." % [jugador["posicion"], equipo.nombre, aprendida["nombre"]])
 		# §7.4.1: la carga acumulada ya se consumió en mult_entrenamiento.
 		equipo.reiniciar_carga()
+		# La IA no ensaya: se pone al dia con lo que se sabe en su categoria.
+		if equipo != equipo_protegido:
+			Jugadas.completar_ia(equipo, division)
 
 		var reporte := _procesar_cantera(equipo, rng, equipo == equipo_protegido, bonus_mentor, temporada_actual)
 		reporte_cantera.append(reporte)
@@ -721,9 +731,14 @@ func _avanzar_contratos(equipo: Team, rng: RandomNumberGenerator, es_protegido: 
 			# String plano y no Noticias.crear: las noticias de contratos
 			# de esta funcion son todas strings y el array se lee mezclado.
 			noticias.append("CONTRATOS: se te fue libre un %s de %s. No le renovaste a tiempo (Club › Renovaciones)." % [jugador["posicion"], equipo.nombre])
-			if bool(salida.get("de_cantera", false)):
+			# Las reservas tapan antes que la cantera (ver
+			# AgentesLibres._reemplazo_para): sin esta rama, el puesto
+			# cubierto por una reserva se anunciaba como vacio.
+			if bool(salida.get("de_reservas", false)):
+				noticias.append("PLANTEL: una reserva (%s) ocupa ese puesto." % str(salida["jugador"]["posicion"]))
+			elif bool(salida.get("de_cantera", false)):
 				noticias.append("CANTERA: sube un juvenil (%s) a tapar ese puesto." % str(salida["jugador"]["posicion"]))
-			else:
+			elif bool(salida.get("hueco", false)):
 				noticias.append("PLANTEL: no quedaban juveniles en la cantera y el puesto de %s quedo sin cubrir. Resolvelo en Mercado o subiendo un juvenil." % jugador["posicion"])
 			# Para el cartel que el jugador lee al empezar la temporada:
 			# su plantel cambio sin que el decidiera nada, asi que tiene

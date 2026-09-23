@@ -21,18 +21,8 @@ GameState="*res://game/game_state.gd"
 
 [display]
 
-; Resolucion de referencia: es la que se uso para disenar y capturar toda
-; la UI. Con stretch canvas_items + expand, en un celular la pantalla se
-; escala a esto y se gana o pierde a los costados segun la relacion de
-; aspecto real del telefono.
-window/size/viewport_width=1152
-window/size/viewport_height=648
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
-; El juego es horizontal (GDD). 4 = SENSOR_LANDSCAPE: queda apaisado
-; siempre pero se puede girar entre las dos orientaciones horizontales.
-; OJO con el numero: en el enum de Godot 0 es landscape y 1 es PORTRAIT,
-; asi que un 1 aca deja el juego de costado en el telefono.
 window/handheld/orientation=4
 
 [physics]
@@ -41,7 +31,6 @@ window/handheld/orientation=4
 
 [rendering]
 
-# OpenGL evita el crash de acceso a memoria del editor Godot en este entorno.
 rendering_device/driver.windows="opengl3"
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"

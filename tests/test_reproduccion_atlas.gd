@@ -28,7 +28,7 @@ func _probar() -> void:
 			var indice := AtlasJugadores.cuadro(accion, ent["fase_animacion"], ent["direccion"],
 				ent["pose"] in [SpritesPartido.CORRE_A, SpritesPartido.CORRE_B], ent["arquero"])
 			assert(indice >= 0 and indice < AtlasJugadores.TOTAL_CUADROS)
-			var espejo := bool(ent.get("espejo", false)) if accion == "vuela" else int(ent["direccion"]) in [5, 6, 7]
+			var espejo := bool(ent.get("espejo", false)) if accion in ["vuela", "chilena"] else int(ent["direccion"]) in [5, 6, 7]
 			assert(AtlasJugadores.textura(indice, ent["color"], ent["color_short"], ent["color_pelo"], espejo, ent["numero"], ent["pelo"]) != null)
 		maximo_us = maxi(maximo_us, Time.get_ticks_usec() - inicio_frame)
 		assert(AtlasJugadores._cache.size() == texturas_preparadas, "Se crea textura durante la reproduccion")

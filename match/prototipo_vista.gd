@@ -31,9 +31,9 @@ func _ready() -> void:
 		r["fotogramas"], colores[0], colores[1],
 		local.nombre, visita.nombre,
 		VistaPartido.construir_nombres(local, visita),
-		VistaCancha.estado_desde_calidad(local.calidad_cancha))
+		VistaCancha.nivel_estadio_desde_calidad(local.calidad_cancha))
 	reproductor.hud.menu_pedido.connect(func(): print("[prototipo] menú (sin acción todavía)"))
 	print("[prototipo] %s %d-%d %s | %d fotogramas | cancha %.1f (%s)" % [
 		local.nombre, r["goles_local"], r["goles_visitante"], visita.nombre,
 		r["fotogramas"].size(), local.calidad_cancha,
-		VistaCancha.estado_desde_calidad(local.calidad_cancha)])
+		VistaCancha.nivel_estadio_desde_calidad(local.calidad_cancha)])

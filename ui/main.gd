@@ -155,6 +155,7 @@ var boton_comenzar: Button
 var boton_crear_club: Button
 var boton_cargar_inicio: Button
 var label_inicio_estado: Label
+var capa_changelog: Control
 var color_camiseta_elegido := 0
 var color_short_elegido := 8
 var color_camiseta_secundaria_elegido := 1
@@ -237,6 +238,7 @@ func _ready() -> void:
 	_construir_panel_sponsors(contenedor)
 	_construir_panel_roles(contenedor)
 	_construir_panel_entrenamiento(contenedor)
+	_construir_panel_jugadas(contenedor)
 	_construir_panel_partido_animado(contenedor)
 	_construir_panel_economia(contenedor)
 	_construir_panel_mercado(contenedor)
@@ -335,6 +337,22 @@ func _construir_pantalla_inicio() -> void:
 	label_inicio_estado.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
 	label_inicio_estado.add_theme_color_override("font_color", Tema.SUAVE)
 	caja.add_child(label_inicio_estado)
+
+	var label_version := Label.new()
+	label_version.text = "Actualización v%s" % Changelog.version_actual()
+	label_version.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label_version.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	label_version.add_theme_color_override("font_color", Tema.SUAVE)
+	caja.add_child(label_version)
+
+	var btn_changelog := Button.new()
+	btn_changelog.text = "Changelog"
+	btn_changelog.custom_minimum_size = Vector2(220, Tema.ALTO_TACTIL)
+	btn_changelog.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	btn_changelog.pressed.connect(func(): capa_changelog.visible = true)
+	caja.add_child(btn_changelog)
+
+	_construir_changelog()
 
 	# --- Formulario de club nuevo ----------------------------------------
 	formulario_inicio = VBoxContainer.new()
@@ -648,6 +666,54 @@ func _validar_club_nuevo() -> void:
 	if boton_crear_club != null:
 		boton_crear_club.disabled = motivo != ""
 	label_inicio_estado.text = motivo
+
+
+## Lista de data/changelog.json encima de la pantalla de inicio. Va
+## dentro de capa_inicio porque esa capa tapa a todas las demás.
+func _construir_changelog() -> void:
+	capa_changelog = PanelContainer.new()
+	capa_changelog.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	capa_changelog.visible = false
+	var estilo := StyleBoxFlat.new()
+	estilo.bg_color = Color(0, 0, 0, 0.65)
+	capa_changelog.add_theme_stylebox_override("panel", estilo)
+	capa_inicio.add_child(capa_changelog)
+
+	var centro := CenterContainer.new()
+	capa_changelog.add_child(centro)
+	var tarjeta := Componentes.tarjeta()
+	tarjeta.custom_minimum_size = Vector2(640, 560)
+	centro.add_child(tarjeta)
+	var caja := VBoxContainer.new()
+	caja.add_theme_constant_override("separation", 8)
+	tarjeta.add_child(caja)
+
+	var titulo := Label.new()
+	titulo.text = "Changelog"
+	Tema.numero(titulo, 26, Tema.TEXTO)
+	caja.add_child(titulo)
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	caja.add_child(scroll)
+	var lista := VBoxContainer.new()
+	lista.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lista.add_theme_constant_override("separation", 10)
+	scroll.add_child(lista)
+
+	for e in Changelog.cargar():
+		var version := Label.new()
+		version.text = "v%s · %s" % [str(e["version"]), str(e.get("fecha", ""))]
+		version.add_theme_color_override("font_color", Tema.AMBAR)
+		lista.add_child(version)
+		lista.add_child(_texto_suave(str(e["cambio"])))
+
+	var cerrar := Button.new()
+	cerrar.text = "Cerrar"
+	cerrar.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	cerrar.pressed.connect(func(): capa_changelog.visible = false)
+	caja.add_child(cerrar)
 
 
 func _mostrar_inicio() -> void:
@@ -3710,16 +3776,6 @@ func _on_vencimientos_aceptados() -> void:
 	_refrescar_renovaciones()
 
 
-## Si alguno de los vencimientos dejo el plantel mas corto. Cambia el
-## cierre del cartel: no es lo mismo avisar un cambio que avisar que hay
-## un puesto esperando una decision.
-func _hay_hueco_sin_cubrir(lista: Array) -> bool:
-	for v in lista:
-		if bool(v.get("hueco", false)):
-			return true
-	return false
-
-
 ## Abre el cartel si quedo algo por avisar. Devuelve si lo abrio.
 func _mostrar_vencimientos_si_hay() -> bool:
 	var equipo := GameState.equipo_jugador
@@ -3736,24 +3792,6 @@ func _mostrar_vencimientos_si_hay() -> bool:
 			str(v.get("sale", "")), str(v.get("sale_puesto", "")),
 			int(v.get("sale_edad", 0)), int(v.get("sale_media", 0)),
 			Economia.formato_dinero(float(v.get("sale_sueldo", 0.0)))])
-		if bool(v.get("de_cantera", false)):
-			lineas.append("SUBE    %s (%s, %d años, media %d) — de tu cantera, firma %d años a %s" % [
-				str(v.get("entra", "")), str(v.get("entra_puesto", "")),
-				int(v.get("entra_edad", 0)), int(v.get("entra_media", 0)),
-				int(v.get("entra_anios", 0)),
-				Economia.formato_dinero(float(v.get("entra_sueldo", 0.0)))])
-		elif str(v.get("tapa_banco", "")).is_empty():
-			lineas.append("HUECO   no quedaban juveniles y el puesto quedo VACIO. Tenes un jugador menos.")
-		else:
-			lineas.append("TAPA    %s (%s), que subio del banco. No quedaban juveniles, asi que ahora te falta uno en el banco." % [
-				str(v.get("tapa_banco", "")), str(v.get("tapa_banco_puesto", ""))])
-		lineas.append("")
-	if _hay_hueco_sin_cubrir(lista):
-		lineas.append("Los puestos sin cubrir NO se rellenan solos: el club no ficha por vos. Resolvelos en Mercado, en Agentes Libres o subiendo un juvenil.")
-		lineas.append("")
-	lineas.append("Los juveniles entran al puesto que quedo vacio, no al que mejor les queda. Revisá Equipo › Formación.")
-	lineas.append("Para que esto no vuelva a pasar, arreglá antes en Club › Renovaciones: te avisa un año antes.")
-
 	label_vencimientos.text = "
 ".join(lineas)
 	var scroll := label_vencimientos.get_parent() as ScrollContainer
@@ -4022,6 +4060,7 @@ func _construir_dialogo_negociacion() -> void:
 	spin_negociacion_monto.custom_minimum_size = Vector2(240, Tema.ALTO_TACTIL)
 	spin_negociacion_monto.value_changed.connect(func(_v): _refrescar_riesgo())
 	fila_monto.add_child(spin_negociacion_monto)
+	_hacer_spin_tactil(spin_negociacion_monto, fila_monto)
 
 	caja_negociacion_riesgo = VBoxContainer.new()
 	caja_negociacion_monto.add_child(caja_negociacion_riesgo)
@@ -4098,7 +4137,65 @@ func _fila_spin(padre: Control, etiqueta: String, minimo: float, maximo: float, 
 	sb.update_on_text_changed = true
 	sb.custom_minimum_size = Vector2(240, Tema.ALTO_TACTIL)
 	fila.add_child(sb)
+	_hacer_spin_tactil(sb, fila)
 	return sb
+
+
+## En el celular, tocar el campo levantaba el teclado en pantalla. Apaisado
+## tapa más de la mitad del modal: no se veía ni la respuesta ni el botón
+## de ofrecer. Los botones de ajuste cambian la cifra sin teclado, y el de
+## "Escribir" lo abre solo para quien quiere tipear un número exacto.
+func _hacer_spin_tactil(sb: SpinBox, fila: HBoxContainer) -> void:
+	var campo := sb.get_line_edit()
+	campo.virtual_keyboard_enabled = false
+	# Cuando sí se abre, el numérico ocupa menos que el alfabético.
+	campo.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER
+	campo.focus_exited.connect(func(): campo.virtual_keyboard_enabled = false)
+
+	# Plata: el ajuste es relativo, porque un sueldo de $300 y un pase de
+	# $30 millones no se mueven con el mismo paso. Años: de a uno.
+	var es_plata := sb.max_value > 100
+	var pasos: Array = [0.10, 0.01] if es_plata else [1.0]
+	var indice := sb.get_index()
+	for delta in pasos:
+		var menos := _boton_ajuste_spin(sb, -float(delta), es_plata)
+		fila.add_child(menos)
+		fila.move_child(menos, indice)
+		indice += 1
+	pasos.reverse()
+	for delta in pasos:
+		fila.add_child(_boton_ajuste_spin(sb, float(delta), es_plata))
+
+	var escribir := Button.new()
+	escribir.text = "Escribir"
+	escribir.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	escribir.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	escribir.pressed.connect(func():
+		campo.virtual_keyboard_enabled = true
+		campo.grab_focus()
+		campo.select_all()
+		DisplayServer.virtual_keyboard_show(campo.text, Rect2(),
+			DisplayServer.KEYBOARD_TYPE_NUMBER)
+	)
+	fila.add_child(escribir)
+
+
+func _boton_ajuste_spin(sb: SpinBox, delta: float, relativo: bool) -> Button:
+	var b := Button.new()
+	if relativo:
+		b.text = "%+d%%" % int(round(delta * 100))
+	else:
+		b.text = "%+d" % int(delta)
+	b.custom_minimum_size = Vector2(64, Tema.ALTO_TACTIL)
+	b.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	b.pressed.connect(func():
+		var cambio := delta
+		if relativo:
+			# Mínimo $1: con el 1% de una cifra chica el botón no movía nada.
+			cambio = signf(delta) * maxf(1.0, round(absf(sb.value * delta)))
+		sb.value = sb.value + cambio
+	)
+	return b
 
 
 ## Los dos tramos, dibujados desde el principio. `paso` 1 o 2.
@@ -6503,6 +6600,8 @@ func _reproducir_laboratorio(clave: String) -> void:
 	elif clave.begins_with("regate_"):
 		laboratorio_estado.text = "%s: gesto completo y salida con la pelota." % [
 			Laboratorio.nombre_de(clave)]
+	elif clave == "lesion":
+		laboratorio_estado.text = "Lesion: caída, salida por el lateral y entrada del reemplazo listas."
 
 	# Al terminar (o al tocar Menu) se vuelve ACA, no al club: se esta
 	# probando animaciones y lo normal es querer ver la siguiente.
@@ -6516,7 +6615,7 @@ func _reproducir_laboratorio(clave: String) -> void:
 		r["fotogramas"], colores[0], colores[1],
 		copia_local.nombre, copia_visitante.nombre,
 		VistaPartido.construir_nombres(copia_local, copia_visitante),
-		VistaCancha.estado_desde_calidad(copia_local.calidad_cancha),
+		VistaCancha.nivel_estadio_desde_calidad(copia_local.calidad_cancha),
 		copia_local.color_short, copia_visitante.color_short,
 		_nombre_marcador(copia_local), _nombre_marcador(copia_visitante),
 		copia_local.identidad_visual(), copia_visitante.identidad_visual())
@@ -8450,7 +8549,7 @@ func _en_segundo_plano(trabajo: Callable) -> void:
 ## El cruce de copa, ya con el once en orden. Mismo recorrido que el de
 ## liga: se juega, se refresca todo y se abre la pantalla del partido.
 func _jugar_copa_ya(mostrar_partido: bool = true) -> void:
-	if GameState.hay_partido_de_copa_hoy():
+	if not GameState.hay_partido_de_copa_hoy():
 		return
 	await _en_segundo_plano(GameState.jugar_partido_de_copa)
 	_despues_del_partido_de_torneo(mostrar_partido)
@@ -8460,7 +8559,7 @@ func _jugar_copa_ya(mostrar_partido: bool = true) -> void:
 ## previa, el playoff o una ronda del knockout. Mismo recorrido que el
 ## cruce de copa.
 func _jugar_internacional_ya(mostrar_partido: bool = true) -> void:
-	if GameState.hay_partido_internacional_hoy():
+	if not GameState.hay_partido_internacional_hoy():
 		return
 	await _en_segundo_plano(GameState.jugar_partido_internacional)
 	_despues_del_partido_de_torneo(mostrar_partido)
@@ -8469,7 +8568,7 @@ func _jugar_internacional_ya(mostrar_partido: bool = true) -> void:
 ## El playoff de ascenso, despues de la ultima fecha. Mismo recorrido que
 ## el cruce de copa.
 func _jugar_playoff_ya(mostrar_partido: bool = true) -> void:
-	if GameState.hay_partido_de_playoff_hoy():
+	if not GameState.hay_partido_de_playoff_hoy():
 		return
 	await _en_segundo_plano(GameState.jugar_partido_de_playoff)
 	_despues_del_partido_de_torneo(mostrar_partido)
@@ -8486,7 +8585,7 @@ func _despues_del_partido_de_torneo(mostrar_partido: bool = true) -> void:
 
 ## El partido en si, ya con el once en orden.
 func _jugar_fecha_ya(mostrar_partido: bool = true) -> void:
-	if GameState.hay_fecha_pendiente():
+	if not GameState.hay_fecha_pendiente():
 		return
 
 	var temporada_antes := GameState.temporada_actual
@@ -8759,7 +8858,7 @@ func _mostrar_partido_animado() -> void:
 		GameState.ultimos_fotogramas, colores[0], colores[1],
 		local.nombre, visitante.nombre,
 		VistaPartido.construir_nombres(local, visitante),
-		VistaCancha.estado_desde_calidad(local.calidad_cancha),
+		VistaCancha.nivel_estadio_desde_calidad(local.calidad_cancha),
 		local.color_short, visitante.color_short,
 		_nombre_marcador(local), _nombre_marcador(visitante),
 		local.identidad_visual(), visitante.identidad_visual())
@@ -8981,7 +9080,8 @@ const SECCIONES := [
 	{"clave": "jugar", "nombre": "Jugar", "paneles": []},
 	{"clave": "equipo", "nombre": "Equipo", "paneles": [
 		["plantel", "Plantel"], ["formacion", "Formacion"],
-		["roles", "Roles"], ["entrenamiento", "Entrenamiento"]]},
+		["roles", "Roles"], ["entrenamiento", "Entrenamiento"],
+		["jugadas", "Jugadas"]]},
 	# Lo que es del CLUB y no del plantel: el edificio y los pibes. Antes
 	# vivian de colados en Equipo, que ya tenia cinco subsolapas y era la
 	# unica seccion que mezclaba las dos cosas.
@@ -9142,6 +9242,7 @@ func _mostrar_panel_de_seccion(clave: String) -> void:
 	var metodos := {
 		"plantel": "_mostrar_plantel", "formacion": "_mostrar_formacion",
 		"entrenamiento": "_mostrar_entrenamiento",
+		"jugadas": "_mostrar_jugadas",
 		"cantera": "_mostrar_cantera", "instalaciones": "_mostrar_instalaciones",
 		"renovaciones": "_mostrar_renovaciones",
 		"roles": "_mostrar_roles",
@@ -9655,6 +9756,187 @@ func _fila_ejercicio(ejercicio: String, actual: bool, indice: int) -> Control:
 	detalle.add_theme_color_override("font_color", Tema.SUAVE)
 	dentro.add_child(detalle)
 	return fila
+
+
+## JUGADAS PREPARADAS (core/jugadas.gd) — lo que el plantel ensaya.
+##
+## Un cuadrado por jugada, como en Roles. Se toca uno libre y, con la
+## confirmacion, empieza a ensayarse. Mientras dura, los demas quedan
+## trabados: la regla es de a una y sin abandonar.
+var contenedor_jugadas: VBoxContainer
+var grilla_jugadas: GridContainer
+var dialogo_jugada: ConfirmationDialog
+var jugada_a_confirmar: String = ""
+
+
+func _construir_panel_jugadas(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	padre.add_child(panel)
+	paneles["jugadas"] = panel
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+	contenedor_jugadas = VBoxContainer.new()
+	contenedor_jugadas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	contenedor_jugadas.add_theme_constant_override("separation", 10)
+	scroll.add_child(contenedor_jugadas)
+
+	dialogo_jugada = ConfirmationDialog.new()
+	dialogo_jugada.title = "Empezar a ensayar"
+	dialogo_jugada.ok_button_text = "Empezar"
+	dialogo_jugada.cancel_button_text = "Cancelar"
+	dialogo_jugada.confirmed.connect(func():
+		Jugadas.empezar(GameState.equipo_jugador, jugada_a_confirmar)
+		_refrescar_jugadas())
+	add_child(dialogo_jugada)
+
+
+func _mostrar_jugadas() -> void:
+	_ocultar_todos()
+	paneles["jugadas"].visible = true
+	_refrescar_jugadas()
+
+
+func _refrescar_jugadas() -> void:
+	if contenedor_jugadas == null:
+		return
+	for hijo in contenedor_jugadas.get_children():
+		hijo.queue_free()
+	var equipo := GameState.equipo_jugador
+
+	# --- Lo que se esta ensayando ----------------------------------------
+	var caja := _tarjeta(contenedor_jugadas, Tema.BORDE)
+	caja.add_child(Tema.etiqueta_seccion("En el entrenamiento"))
+	if equipo.jugada_en_curso == "":
+		caja.add_child(_texto_suave(
+			"No se ensaya ninguna jugada. Elegí una: tarda semanas en salir, " \
+			+ "no podés empezar otra hasta terminarla y, cuando sale, queda para siempre."))
+	else:
+		var nombre := Label.new()
+		nombre.text = str(Jugadas.NOMBRE[equipo.jugada_en_curso])
+		Tema.numero(nombre, Tema.TAM_BASE, Tema.AMBAR)
+		caja.add_child(nombre)
+		var barra := ProgressBar.new()
+		barra.min_value = 0.0
+		barra.max_value = 1.0
+		barra.value = Jugadas.progreso(equipo)
+		barra.show_percentage = false
+		barra.custom_minimum_size = Vector2(0, 10)
+		caja.add_child(barra)
+		caja.add_child(_texto_suave("%d%% aprendida. Faltan unas %d semanas al ritmo de hoy." % [
+			int(round(Jugadas.progreso(equipo) * 100.0)),
+			int(ceil(Jugadas.semanas_restantes(equipo)))]))
+	caja.add_child(_texto_suave(
+		"El ritmo sube con la carga de entrenamiento, y con el ejercicio táctico " \
+		+ "\"Jugadas armadas\" se aprende x%.1f. Ritmo de hoy: x%.2f." % [
+			Jugadas.RITMO_CON_JUGADAS_ARMADAS, Jugadas.ritmo(equipo)]))
+
+	grilla_jugadas = GridContainer.new()
+	grilla_jugadas.columns = 3
+	grilla_jugadas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grilla_jugadas.add_theme_constant_override("h_separation", 10)
+	grilla_jugadas.add_theme_constant_override("v_separation", 10)
+	contenedor_jugadas.add_child(grilla_jugadas)
+	var liga := GameState.liga_jugador()
+	for id in Jugadas.LISTA:
+		grilla_jugadas.add_child(_cuadrado_de_jugada(equipo, str(id), liga))
+
+
+## El cuadrado de una jugada. Mismo armado que el de Roles: la tarjeta
+## dibujada y un boton transparente encima que la hace tocable entera.
+func _cuadrado_de_jugada(equipo: Team, id: String, liga: Liga) -> Control:
+	var sabida := Jugadas.sabe(equipo, id)
+	var en_curso := equipo.jugada_en_curso == id
+	var libre := Jugadas.puede_empezar(equipo, id)
+
+	var acento := Color.TRANSPARENT
+	if sabida:
+		acento = Tema.VERDE
+	elif en_curso:
+		acento = Tema.AMBAR
+	var tarjeta := Componentes.tarjeta(acento)
+	tarjeta.custom_minimum_size = Vector2(0, 190)
+	tarjeta.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if not sabida and not en_curso and not libre:
+		tarjeta.modulate = Color(1, 1, 1, 0.55)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 3)
+	tarjeta.add_child(col)
+	col.add_child(Tema.etiqueta_seccion(str(Jugadas.NOMBRE[id])))
+
+	var fila := HBoxContainer.new()
+	fila.add_theme_constant_override("separation", 8)
+	col.add_child(fila)
+	var estado := "Disponible"
+	var color_estado := Tema.SUAVE
+	if sabida:
+		estado = "Aprendida"
+		color_estado = Tema.VERDE
+	elif en_curso:
+		estado = "Ensayando %d%%" % int(round(Jugadas.progreso(equipo) * 100.0))
+		color_estado = Tema.AMBAR
+	elif not libre:
+		estado = "Esperando"
+	fila.add_child(Componentes.chip(estado, Tema.PANEL_ALTO, color_estado))
+	# La dificultad en estrellas sale de las semanas: una cada seis.
+	var estrellas := clampi(int(ceil(Jugadas.semanas_de(id) / 6.0)), 1, 5)
+	var dificultad := Label.new()
+	dificultad.text = "%s  %d sem." % ["★".repeat(estrellas), int(Jugadas.semanas_de(id))]
+	dificultad.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	dificultad.add_theme_color_override("font_color", Tema.SUAVE)
+	fila.add_child(dificultad)
+
+	if en_curso:
+		var barra := ProgressBar.new()
+		barra.min_value = 0.0
+		barra.max_value = 1.0
+		barra.value = Jugadas.progreso(equipo)
+		barra.show_percentage = false
+		barra.custom_minimum_size = Vector2(0, 6)
+		col.add_child(barra)
+
+	# Cuantos rivales de la division la saben: si la saben, la leen y la
+	# ventaja se achica a la mitad (Jugadas.LECTURA_DEL_RIVAL).
+	if liga != null:
+		var cuantos := 0
+		for e in liga.equipos:
+			if e != equipo and Jugadas.sabe(e, id):
+				cuantos += 1
+		var rivales := Label.new()
+		rivales.text = "La saben %d rivales de tu división" % cuantos if cuantos > 0 \
+			else "Ningún rival de tu división la sabe"
+		rivales.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+		rivales.add_theme_color_override("font_color", Tema.SUAVE)
+		col.add_child(rivales)
+
+	var espacio := Control.new()
+	espacio.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(espacio)
+	col.add_child(_texto_suave(str(Jugadas.DESCRIPCION[id])))
+
+	if libre:
+		var tapa := Button.new()
+		tapa.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		tapa.flat = true
+		tapa.tooltip_text = "Empezar a ensayar esta jugada"
+		tapa.pressed.connect(func(): _pedir_jugada(id))
+		tarjeta.add_child(tapa)
+	return tarjeta
+
+
+func _pedir_jugada(id: String) -> void:
+	var equipo := GameState.equipo_jugador
+	jugada_a_confirmar = id
+	dialogo_jugada.dialog_text = "%s\n\n%s\n\nTarda unas %d semanas al ritmo de hoy. Hasta terminarla no podés ensayar otra ni abandonarla." % [
+		str(Jugadas.NOMBRE[id]), str(Jugadas.DESCRIPCION[id]),
+		int(ceil(Jugadas.semanas_de(id) / maxf(Jugadas.ritmo(equipo), 0.01)))]
+	dialogo_jugada.popup_centered()
 
 
 func _texto_suave(texto: String) -> Label:

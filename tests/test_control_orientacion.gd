@@ -321,8 +321,9 @@ func _test_una_tirada_por_recepcion() -> void:
 	_ok(rng.state == copia.state, "un control limpio consume exactamente una tirada del RNG del partido")
 	_restaurar_pesos()
 
-	# Un pase de verdad que llega lejos del receptor: rueda varios ticks hasta
-	# sus pies y la recepcion se resuelve una sola vez.
+	# Un pase de verdad que llega lejos del receptor: la pelota sigue su recta
+	# y el receptor va a buscarla, como en _tick. La recepcion se resuelve
+	# una sola vez.
 	var esc2 := _escena(SEED + 5, true)
 	var e2: Dictionary = esc2["estado"]
 	var pasador: int = esc2["clave"]
@@ -331,6 +332,9 @@ func _test_una_tirada_por_recepcion() -> void:
 	MotorEspacial._lanzar_pase(e2, e2["jugadores"][pasador], receptor, _jugador(e2, pasador), Vector2(14.0, 0.0))
 	var ticks := 0
 	while bool(e2["pelota"]["en_vuelo"]) and ticks < 30:
+		if e2["pelota"].has("dirigida_a"):
+			MotorEspacial._mover_hacia(e2["jugadores"][receptor],
+				e2["pelota"].get("destino_pos", e2["pelota"]["pos"]))
 		MotorEspacial._avanzar_pelota(e2)
 		ticks += 1
 	var st: Dictionary = e2.get("control_stats", {})

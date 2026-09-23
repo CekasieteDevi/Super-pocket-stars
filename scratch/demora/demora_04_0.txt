@@ -1,0 +1,22 @@
+## Tenencias de atacantes a menos de 22 m del arco: 60 (remates totales 77)
+ticks medios con la pelota: 4.93 (1.23 s)
+tick medio de la primera decision: 4.38
+finales: { "parado": 3, "pase": 16, "suelta": 10, "tiro": 28, "otro": 2, "robo": 1 }
+decisiones: { "centro": 17, "tiro": 35, "conducir": 2 }
+decisiones con tiro disponible: 54, de ellas conducir: 2
+tenencias de 8+ ticks que terminan en robo: 0
+    1 ticks: 3
+    2 ticks: 15
+    3 ticks: 6
+    4 ticks: 7
+    5 ticks: 9
+    6 ticks: 11
+    7 ticks: 3
+    8 ticks: 1
+   12 ticks: 2
+   13 ticks: 1
+  +20 ticks: 2
+ticks hasta el remate: { 2: 8, 7: 2, 6: 6, 3: 2, 4: 5, 5: 3, 20: 2 }
+tenencias que terminan sin ninguna decision: { "parado": 2, "suelta": 4, "otro": 2 }
+tick de la primera decision: 2:15 3:6 4:7 5:10 6:8 7:3 8:1 12:1 13:1 
+ERROR: 1 resources still in use at exit (run with --verbose for details).

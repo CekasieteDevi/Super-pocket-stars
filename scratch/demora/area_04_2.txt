@@ -1,0 +1,2 @@
+EN EL AREA finales: { "tiro": 1, "pase": 6, "suelta": 1 }
+EN EL AREA primera decision (-1 = ninguna): -1:1 2:3 4:1 5:3 

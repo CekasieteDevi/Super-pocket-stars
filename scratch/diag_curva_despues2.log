@@ -1,0 +1,36 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+FOTOGRAMAS 966
+GIROS_dib dentro_tick=4 borde_tick=63 borde_sin_accion=12
+GIRO_motor i=45 t=0.000 min=4.31 giro=21 v1=4.4 v2=2.3 pase=true acciones=[]
+GIRO_motor i=176 t=0.000 min=16.59 giro=29 v1=3.8 v2=5.8 pase=false acciones=[]
+GIRO_motor i=362 t=0.000 min=34.03 giro=136 v1=1.8 v2=5.2 pase=true acciones=[]
+GIRO_motor i=363 t=0.000 min=34.13 giro=76 v1=5.2 v2=1.4 pase=false acciones=[]
+GIRO_motor i=376 t=0.000 min=35.34 giro=28 v1=12.4 v2=5.8 pase=false acciones=[]
+GIRO_motor i=565 t=0.000 min=52.50 giro=32 v1=17.1 v2=5.6 pase=false acciones=[]
+GIRO_motor i=735 t=0.000 min=68.44 giro=22 v1=12.3 v2=3.9 pase=true acciones=[]
+GIRO_motor i=808 t=0.000 min=75.28 giro=33 v1=4.2 v2=5.8 pase=false acciones=[]
+GIRO_motor i=865 t=0.000 min=80.63 giro=30 v1=15.5 v2=5.8 pase=false acciones=[]
+GIROS_motor dentro_tick=0 borde_tick=56 borde_sin_accion=9
+PASES n=57 desvio_dib p50=3.2 p90=61.6 max=147.0 | desvio_motor p50=0.0 p90=62.6 max=147.0
+PASES_RASOS n=31 desvio_dib p50=0.0 p90=2.4 max=139.0
+PEOR_PASE dib=147.0 motor=147.0 suelo=81.6 z_max=5.94 ticks=679-692 min=63.19
+PEOR_PASE dib=139.0 motor=139.1 suelo=139.0 z_max=0.00 ticks=528-537 min=49.03
+PEOR_PASE dib=64.9 motor=64.9 suelo=0.0 z_max=3.48 ticks=725-738 min=67.50
+PEOR_PASE dib=63.5 motor=63.5 suelo=3.1 z_max=6.24 ticks=784-786 min=73.03
+PEOR_PASE dib=62.6 motor=62.6 suelo=0.0 z_max=3.47 ticks=942-956 min=87.84
+PEOR_PASE dib=62.4 motor=63.2 suelo=0.0 z_max=4.09 ticks=184-193 min=17.34
+PEOR_PASE dib=61.6 motor=64.0 suelo=0.0 z_max=4.11 ticks=332-342 min=31.22
+PEOR_PASE dib=57.7 motor=57.7 suelo=0.0 z_max=4.07 ticks=415-425 min=39.00
+PEOR_PASE dib=56.8 motor=61.4 suelo=0.0 z_max=4.00 ticks=387-395 min=36.38
+PEOR_PASE dib=55.2 motor=58.4 suelo=0.0 z_max=4.13 ticks=116-126 min=10.97
+PEOR_PASE dib=43.5 motor=43.5 suelo=0.0 z_max=3.47 ticks=598-609 min=55.59
+PEOR_PASE dib=39.2 motor=39.2 suelo=0.0 z_max=3.47 ticks=34-49 min=3.28
+PEOR_SUELO suelo=139.0 dib=139.0 z_max=0.00 ticks=528-537 min=49.03
+PEOR_SUELO suelo=81.6 dib=147.0 z_max=5.94 ticks=679-692 min=63.19
+PEOR_SUELO suelo=15.0 dib=15.0 z_max=0.00 ticks=910-937 min=84.84
+PEOR_SUELO suelo=12.0 dib=12.0 z_max=0.00 ticks=879-882 min=81.94
+PEOR_SUELO suelo=4.9 dib=15.2 z_max=1.52 ticks=215-217 min=20.25
+PEOR_SUELO suelo=3.1 dib=63.5 z_max=6.24 ticks=784-786 min=73.03
+PEOR_SUELO suelo=2.4 dib=2.4 z_max=0.00 ticks=434-435 min=40.78
+PEOR_SUELO suelo=0.0 dib=43.5 z_max=3.47 ticks=598-609 min=55.59

@@ -464,6 +464,16 @@ static func ronda_diaria(piramide, rng: RandomNumberGenerator, dias: int,
 			var club_limpia := _club_al_azar(piramide, rng, protegido)
 			if club_limpia != null:
 				_soltar_amargado(club_limpia, pool, rng)
+		# Antes que mirar gangas, el club al que le falta gente de un
+		# puesto sale a buscarla. Son todos los clubes y todos los dias: un
+		# club sin arquero no puede esperar 33 dias a que le toque mirar.
+		for liga in piramide.divisiones:
+			for club_corto in liga.equipos:
+				if club_corto == protegido:
+					continue
+				var cubre := cubrir_faltante(club_corto, pool)
+				if not cubre.is_empty():
+					hechos.append(cubre)
 		for _i in range(CLUBES_QUE_MIRAN_POR_DIA):
 			var club := _club_al_azar(piramide, rng, protegido)
 			if club == null:
@@ -473,6 +483,79 @@ static func ronda_diaria(piramide, rng: RandomNumberGenerator, dias: int,
 				hechos.append(ficha)
 		_retirar_sobrantes(pool)
 	return hechos
+
+
+## Cuantos jugadores de cada puesto quiere tener un club de la IA: los
+## del once de su formacion mas los de su banco (ver Formaciones.banco_para).
+static func plantel_ideal(equipo: Team) -> Dictionary:
+	var ideal := {}
+	for p in Puestos.TODOS:
+		ideal[p] = 0
+	for p in Formaciones.roles_compartidos(equipo.formacion) + Formaciones.banco_para(equipo.formacion):
+		ideal[p] = int(ideal.get(p, 0)) + 1
+	return ideal
+
+
+## Un club de la IA al que le falta gente de un puesto la sale a fichar al
+## pool, si la puede pagar. Devuelve {club, entra, sale} o {}.
+##
+## Sin esto el plantel de la IA se desarmaba: cada hueco que se tapaba
+## con alguien de otro puesto dejaba al club con un puesto de menos, y en
+## una partida de temporada 14 habia clubes con cinco arqueros y ninguno
+## de otro puesto. Jugar con gente fuera de puesto ya cuesta en la cancha
+## (Team.penalizacion_puesto); esto es lo que haria cualquier club: salir
+## a buscar al que le falta.
+##
+## Con el plantel lleno, para hacerle lugar se va el peor de un puesto que
+## le sobra. Nunca un titular: al titular fuera de puesto lo reacomoda
+## Alineacion.acomodar cuando llega el que falta.
+static func cubrir_faltante(equipo: Team, pool: Array) -> Dictionary:
+	var ideal := plantel_ideal(equipo)
+	var hay := {}
+	for j in equipo.todos_los_jugadores():
+		hay[str(j["posicion"])] = int(hay.get(str(j["posicion"]), 0)) + 1
+	var hay_lugar: bool = equipo.todos_los_jugadores().size() < Team.plantel_de_la_ia()
+
+	for p in Puestos.TODOS:
+		if int(hay.get(p, 0)) >= int(ideal[p]):
+			continue
+		var sale := {}
+		if not hay_lugar:
+			sale = _sobrante(equipo, ideal, hay)
+			if sale.is_empty():
+				return {}
+		var entra := fichar_ia(equipo, pool, p)
+		if entra.is_empty():
+			continue
+		var saliente := {}
+		if sale.is_empty():
+			equipo.mover_a_banco(entra)
+		else:
+			saliente = sale["lista"][int(sale["indice"])]
+			sale["lista"][int(sale["indice"])] = entra
+			equipo._limpiar_registro(int(saliente["id"]))
+			# Misma regla que `liberar`: quien lo largo no lo recupera gratis.
+			saliente["club_libero"] = equipo.nombre
+			pool.append(saliente)
+		equipo.recalcular_capitan()
+		return {"club": equipo, "entra": entra, "sale": saliente}
+	return {}
+
+
+## El peor suplente o reserva de un puesto que el club tiene de mas, o {}
+## si no le sobra nadie. Primero las reservas: no van al partido.
+static func _sobrante(equipo: Team, ideal: Dictionary, hay: Dictionary) -> Dictionary:
+	for lista in [equipo.reservas, equipo.banco]:
+		var peor := -1
+		for i in range(lista.size()):
+			var p := str(lista[i]["posicion"])
+			if int(hay.get(p, 0)) <= int(ideal.get(p, 0)):
+				continue
+			if peor == -1 or float(lista[i]["media"]) < float(lista[peor]["media"]):
+				peor = i
+		if peor != -1:
+			return {"lista": lista, "indice": peor}
+	return {}
 
 
 ## Los peores de la lista se retiran cuando el pool pasa el tope.

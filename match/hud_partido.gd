@@ -27,6 +27,11 @@ const SEPARACION_BOTONES := 6.0
 const COLOR_PANEL := Color(0.07, 0.08, 0.10, 0.78)
 const COLOR_TEXTO := Color(0.96, 0.96, 0.98)
 const COLOR_TENUE := Color(0.72, 0.74, 0.78)
+const COLOR_MARCADOR_FONDO := Color(0.045, 0.075, 0.12, 0.96)
+const COLOR_MARCADOR_BORDE := Color(0.32, 0.68, 0.78, 0.88)
+const COLOR_MARCADOR_SOMBRA := Color(0.01, 0.02, 0.04, 0.62)
+const COLOR_MARCADOR_RESULTADO := Color(1.0, 0.84, 0.30)
+const ALTO_MARCADOR := 58.0
 
 var nombre_local := ""
 var nombre_visitante := ""
@@ -164,7 +169,8 @@ func _draw() -> void:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, clampf(parpadeo, 0.0, 1.0) * 0.85))
 
 
-## Banner: camiseta, nombre, resultado, nombre, camiseta.
+## Tarjeta: escudos, nombres y resultado. La pastilla central hace que el
+## marcador se lea primero, sin el prisma negro de antes.
 func _dibujar_marcador(fuente: Font) -> void:
 	var resultado := "%d - %d" % [goles_local, goles_visitante]
 	if not tanda.is_empty():
@@ -173,19 +179,36 @@ func _dibujar_marcador(fuente: Font) -> void:
 	var tam_resultado := 26
 	var texto_local := nombre_local_marcador if nombre_local_marcador != "" else nombre_local
 	var texto_visitante := nombre_visitante_marcador if nombre_visitante_marcador != "" else nombre_visitante
-	var an_local := fuente.get_string_size(texto_local, HORIZONTAL_ALIGNMENT_LEFT, -1, tam_nombre).x
-	var an_visita := fuente.get_string_size(texto_visitante, HORIZONTAL_ALIGNMENT_LEFT, -1, tam_nombre).x
-	var an_res := fuente.get_string_size(resultado, HORIZONTAL_ALIGNMENT_LEFT, -1, tam_resultado).x
-	var chip := 24.0
-	var hueco := 12.0
-	var ancho := chip * 2 + an_local + an_visita + an_res + hueco * 5
-	var alto := 42.0
-	var x := (size.x - ancho) * 0.5
-	var y := MARGEN
+	var an_local: float = fuente.get_string_size(texto_local, HORIZONTAL_ALIGNMENT_LEFT, -1, tam_nombre).x
+	var an_visita: float = fuente.get_string_size(texto_visitante, HORIZONTAL_ALIGNMENT_LEFT, -1, tam_nombre).x
+	var an_res: float = fuente.get_string_size(resultado, HORIZONTAL_ALIGNMENT_LEFT, -1, tam_resultado).x
+	var chip := 30.0
+	var borde := 12.0
+	var hueco := 10.0
+	var ancho_resultado: float = an_res + 28.0
+	var ancho: float = borde * 2 + chip * 2 + an_local + an_visita + ancho_resultado + hueco * 4
+	var alto: float = ALTO_MARCADOR
+	var x: float = (size.x - ancho) * 0.5
+	var y: float = MARGEN
 
-	draw_rect(Rect2(Vector2(x, y), Vector2(ancho, alto)), COLOR_PANEL)
-	var cx := x + hueco * 0.5
-	var medio := y + alto * 0.5
+	var tarjeta := StyleBoxFlat.new()
+	tarjeta.bg_color = COLOR_MARCADOR_FONDO
+	tarjeta.border_color = COLOR_MARCADOR_BORDE
+	tarjeta.set_border_width_all(1)
+	tarjeta.set_corner_radius_all(17)
+	tarjeta.shadow_color = COLOR_MARCADOR_SOMBRA
+	tarjeta.shadow_size = 8
+	tarjeta.shadow_offset = Vector2(0, 3)
+	draw_style_box(tarjeta, Rect2(Vector2(x, y), Vector2(ancho, alto)))
+
+	# Dos acentos de club: color y separacion visual, sin ensuciar el centro.
+	draw_line(Vector2(x + 17, y + alto - 5), Vector2(x + ancho * 0.5 - 9, y + alto - 5),
+		Color(color_local.r, color_local.g, color_local.b, 0.9), 3.0, true)
+	draw_line(Vector2(x + ancho * 0.5 + 9, y + alto - 5), Vector2(x + ancho - 17, y + alto - 5),
+		Color(color_visitante.r, color_visitante.g, color_visitante.b, 0.9), 3.0, true)
+
+	var cx: float = x + borde
+	var medio: float = y + alto * 0.5
 	if _escudo_local == null:
 		draw_rect(Rect2(Vector2(cx, medio - chip * 0.5), Vector2(chip, chip)), color_local)
 	else:
@@ -193,8 +216,16 @@ func _dibujar_marcador(fuente: Font) -> void:
 	cx += chip + hueco
 	draw_string(fuente, Vector2(cx, medio + 6), texto_local, HORIZONTAL_ALIGNMENT_LEFT, -1, tam_nombre, COLOR_TEXTO)
 	cx += an_local + hueco
-	draw_string(fuente, Vector2(cx, medio + 9), resultado, HORIZONTAL_ALIGNMENT_LEFT, -1, tam_resultado, COLOR_TEXTO)
-	cx += an_res + hueco
+
+	var pastilla := StyleBoxFlat.new()
+	pastilla.bg_color = Color(0.12, 0.16, 0.20, 0.98)
+	pastilla.border_color = Color(1.0, 0.84, 0.30, 0.78)
+	pastilla.set_border_width_all(1)
+	pastilla.set_corner_radius_all(12)
+	draw_style_box(pastilla, Rect2(Vector2(cx, y + 9), Vector2(ancho_resultado, alto - 18)))
+	draw_string(fuente, Vector2(cx + 14, medio + 9), resultado, HORIZONTAL_ALIGNMENT_LEFT, -1,
+		tam_resultado, COLOR_MARCADOR_RESULTADO)
+	cx += ancho_resultado + hueco
 	draw_string(fuente, Vector2(cx, medio + 6), texto_visitante, HORIZONTAL_ALIGNMENT_LEFT, -1, tam_nombre, COLOR_TEXTO)
 	cx += an_visita + hueco
 	if _escudo_visitante == null:
@@ -250,7 +281,7 @@ func _dibujar_relato(fuente: Font) -> void:
 		return
 	var tam := 18
 	var an := fuente.get_string_size(relato, HORIZONTAL_ALIGNMENT_LEFT, -1, tam).x
-	var r := Rect2(Vector2((size.x - an - 26.0) * 0.5, MARGEN + 42.0 + 8.0),
+	var r := Rect2(Vector2((size.x - an - 26.0) * 0.5, MARGEN + ALTO_MARCADOR + 8.0),
 		Vector2(an + 26.0, 32.0))
 	draw_rect(r, Color(COLOR_PANEL.r, COLOR_PANEL.g, COLOR_PANEL.b, COLOR_PANEL.a * relato_alfa))
 	draw_string(fuente, r.position + Vector2(13, 22), relato, HORIZONTAL_ALIGNMENT_LEFT, -1, tam,

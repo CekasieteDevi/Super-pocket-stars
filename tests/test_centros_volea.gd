@@ -7,11 +7,15 @@ func _init() -> void:
 	for local in [true, false]:
 		for rol in ["EI", "ED", "MC", "LI", "LD"]:
 			_test_centro_banda(local, rol)
+		_test_centro_no_sale_del_medio(local)
+		_test_centro_no_se_lo_hace_a_si_mismo(local)
 		for semilla in range(80):
 			var escena := _escena(local, 7.0, 1.0)
 			var estado: Dictionary = escena["estado"]
 			var jugador: Dictionary = escena["jugador"]
 			jugador["atributos"]["volea"] = 95.0
+			jugador["atributos"]["agilidad"] = 90.0
+			jugador["atributos"]["salto"] = 85.0
 			jugador["atributos"]["cabezazo"] = 10.0
 			estado["rng"].seed = semilla
 			estado["registro_remates"] = []
@@ -60,3 +64,30 @@ func _test_centro_banda(local: bool, rol: String) -> void:
 		if opcion["tipo"] == "centro" and opcion["objetivo_id"] == receptor:
 			encontrado = true
 	_comprobar(encontrado, "centro desde banda: %s local=%s" % [rol, local])
+
+
+func _test_centro_no_sale_del_medio(local: bool) -> void:
+	var escena := _escena(local, 7.0, 50.0)
+	var estado: Dictionary = escena["estado"]
+	var poseedor: Dictionary = escena["poseedor"]
+	poseedor["pos"] = Vector2(0.0, 7.0)
+	escena["jugador"]["atributos"]["centros"] = 99.0
+	var hay_centro := false
+	for opcion in MotorEspacial.evaluar_opciones(estado, poseedor, escena["jugador"]):
+		if opcion["tipo"] == "centro":
+			hay_centro = true
+	_comprobar(not hay_centro, "mitad de cancha no se etiqueta como centro: local=%s" % local)
+
+
+func _test_centro_no_se_lo_hace_a_si_mismo(local: bool) -> void:
+	var escena := _escena(local, 7.0, 50.0)
+	var estado: Dictionary = escena["estado"]
+	var poseedor: Dictionary = escena["poseedor"]
+	var punto := MotorEspacial.arco_rival(local) - Vector2(8.0 if local else -8.0, 0.0)
+	for id in estado["jugadores"]:
+		var e: Dictionary = estado["jugadores"][id]
+		if e["equipo_local"] == local and e["rol"] != "ARQ":
+			e["pos"] = punto + Vector2(20.0, 0.0)
+	poseedor["pos"] = punto + Vector2(1.0, 0.0)
+	var elegido := MotorEspacial._mas_cercano_del_equipo(estado, punto, local, poseedor["clave"])
+	_comprobar(elegido != poseedor["clave"], "el centrador no recibe su propio centro: local=%s" % local)

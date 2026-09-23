@@ -1,0 +1,14 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+FOTOGRAMAS 966
+GIROS_dib dentro_tick=4 borde_tick=63 borde_sin_accion=12
+GIRO_motor i=45 t=0.000 min=4.31 giro=21 v1=4.4 v2=2.3 pase=true acciones=[]
+GIRO_motor i=176 t=0.000 min=16.59 giro=29 v1=3.8 v2=5.8 pase=false acciones=[]
+GIRO_motor i=362 t=0.000 min=34.03 giro=136 v1=1.8 v2=5.2 pase=true acciones=[]
+GIRO_motor i=363 t=0.000 min=34.13 giro=76 v1=5.2 v2=1.4 pase=false acciones=[]
+GIRO_motor i=376 t=0.000 min=35.34 giro=28 v1=12.4 v2=5.8 pase=false acciones=[]
+GIRO_motor i=565 t=0.000 min=52.50 giro=32 v1=17.1 v2=5.6 pase=false acciones=[]
+GIRO_motor i=735 t=0.000 min=68.44 giro=22 v1=12.3 v2=3.9 pase=true acciones=[]
+GIRO_motor i=808 t=0.000 min=75.28 giro=33 v1=4.2 v2=5.8 pase=false acciones=[]
+GIRO_motor i=865 t=0.000 min=80.63 giro=30 v1=15.5 v2=5.8 pase=false acciones=[]
+GIROS_motor dentro_tick=0 borde_tick=56 borde_sin_accion=9

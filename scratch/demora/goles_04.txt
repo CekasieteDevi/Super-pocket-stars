@@ -1,0 +1,5 @@
+div | espacial | abstracto
+ 10 |     1.13 |      2.65
+  5 |     2.20 |      2.60
+  1 |     2.00 |      2.60
+ERROR: 1 resources still in use at exit (run with --verbose for details).

@@ -30,6 +30,7 @@ var nombres: Dictionary = {}
 
 var fotogramas: Array = []
 var _coreografia := CoreografiaPartido.new()
+var _recorridas_oficiales: Dictionary = {}
 var posicion := 0.0
 var velocidad := 1.0
 var pausado := false
@@ -57,9 +58,6 @@ const SEG_RELATO := {
 ## instante y no interrumpe a quien está apurando el partido.
 const SEG_FESTEJO := 2.2
 
-## Cuánto flota una tarjeta sobre el infractor, en segundos reales.
-const SEG_TARJETA := 2.6
-
 ## Cuánto dura el parpadeo negro del corte de juego. Corto a propósito:
 ## es un golpe, no una transición.
 const SEG_PARPADEO := 0.35
@@ -68,7 +66,6 @@ var _relato_restante := 0.0
 var _relato_total := 1.0
 var _festejo_restante := 0.0
 var _festejo_total := 1.0
-var _tarjetas: Array = []          # [{"clave": int, "restante": float}]
 var _idx_narrado := 0
 var _parpadeo_restante := 0.0
 ## Fotograma que se sostiene durante el festejo, o -1. Es EL del gol: el
@@ -153,6 +150,7 @@ func iniciar(lista: Array, c_local: Color, c_visitante: Color,
 		identidad_local: Dictionary = {}, identidad_visitante: Dictionary = {}) -> void:
 	fotogramas = lista
 	_coreografia.configurar(lista, DURACION_ACCION)
+	_recorridas_oficiales = OficialesPartido.preparar(lista)
 	color_local = c_local
 	color_visitante = c_visitante
 	# TRANSPARENT = pantalon por defecto, que es lo que usan los clubes que
@@ -179,7 +177,6 @@ func iniciar(lista: Array, c_local: Color, c_visitante: Color,
 	_parpadeo_restante = 0.0
 	_idx_congelado = -1
 	_festejo_grupo.clear()
-	_tarjetas.clear()
 	_idx_narrado = 0
 	hud.relato = ""
 	hud.festejo = 0.0
@@ -217,6 +214,10 @@ func _preparar_sprites() -> void:
 				continue
 			for indice in AtlasJugadores.CLIPS.get(str(a["accion"]), []):
 				cuadros[id][indice] = true
+			if MotorEspacial.es_accion_regate(str(a["accion"])):
+				var tipo_regate := MotorEspacial.tipo_regate_de_accion(str(a["accion"]))
+				for indice in SpritesPartido.CLIPS_REGATE_ATLAS.get(tipo_regate, []):
+					cuadros[id][indice] = true
 		var lateral: Dictionary = f.get("lateral_preparacion", {})
 		var ejecutor := int(lateral.get("clave", -1))
 		if cuadros.has(ejecutor):
@@ -232,6 +233,18 @@ func _preparar_sprites() -> void:
 				AtlasJugadores.textura(indice, _color_de(j), pantalon,
 					SpritesPartido.tono_pelo_de(jugador_id), espejo, int(j.get("numero", 0)),
 					AtlasJugadores.estilo_de(jugador_id))
+	# Los oficiales usan exactamente el atlas PNG de los jugadores. Preparar
+	# sus carreras y poses quietas evita crear texturas dentro de _draw().
+	var cuadros_oficiales := [24, 25]
+	cuadros_oficiales.append_array(AtlasJugadores.CLIPS["lateral_prepara"])
+	for indice in range(8):
+		cuadros_oficiales.append(indice)
+		cuadros_oficiales.append(indice + 16)
+	for indice in cuadros_oficiales:
+		for espejo in [false, true]:
+			AtlasJugadores.textura(indice, OficialesPartido.COLOR_CAMISETA,
+				OficialesPartido.COLOR_PANTALON, OficialesPartido.COLOR_PELO,
+				espejo, 0, OficialesPartido.PEINADO)
 	for i in range(12):
 		SpritesPartido.pelota(i)
 
@@ -251,7 +264,6 @@ func saltar_al_final() -> void:
 	_parpadeo_restante = 0.0
 	_idx_congelado = -1
 	_festejo_grupo.clear()
-	_tarjetas.clear()
 	_mostrar(fotogramas.size() - 1, 0.0)
 	# El boton vive dentro del mismo evento de input que cambia la cancha.
 	# Emitir terminado en diferido deja que ese evento termine y evita que la
@@ -314,12 +326,6 @@ func _avanzar_efectos(delta: float) -> void:
 	if _parpadeo_restante > 0.0:
 		_parpadeo_restante = maxf(_parpadeo_restante - delta, 0.0)
 	hud.parpadeo = _parpadeo_restante / SEG_PARPADEO
-	var vivas: Array = []
-	for t in _tarjetas:
-		t["restante"] = float(t["restante"]) - delta
-		if t["restante"] > 0.0:
-			vivas.append(t)
-	_tarjetas = vivas
 
 
 ## Mira los eventos del fotograma `idx` y prende lo que corresponda. Un
@@ -338,8 +344,6 @@ func _narrar(idx: int) -> void:
 	var mejor = null
 	var mejor_peso := RelatoPartido.NADA
 	for ev in lista:
-		if str(ev.get("tipo", "")) == "tarjeta":
-			_encolar_tarjeta(ev)
 		var peso := RelatoPartido.importancia(ev)
 		if peso > mejor_peso:
 			mejor_peso = peso
@@ -477,16 +481,6 @@ static func _es_gol(ev: Dictionary) -> bool:
 	return str(ev.get("resultado", "")) == "gol" and str(ev.get("tipo", "")) in ["tiro_puerta", "penal"]
 
 
-func _encolar_tarjeta(ev: Dictionary) -> void:
-	var clave := int(_con_clave(ev).get("clave", -1))
-	if clave == -1:
-		return
-	_tarjetas.append({
-		"clave": clave, "restante": SEG_TARJETA,
-		"roja": str(ev.get("resultado", "")) != "amarilla",
-	})
-
-
 ## Las tarjetas las emite MatchEngine, que es compartido con el motor
 ## abstracto y no sabe de claves espaciales: trae `jugador_id` y el
 ## NOMBRE del equipo. Acá se traduce a la clave, que es lo que usan la
@@ -512,10 +506,9 @@ func _finalizar() -> void:
 func _mostrar(idx: int, t: float) -> void:
 	var a: Dictionary = fotogramas[idx]
 	var b = fotogramas[idx + 1] if idx + 1 < fotogramas.size() else null
-	# El motor marca como corte el tick que reubica a todos para el balón
-	# parado. Interpolar hacia él deslizaba a la gente y a la pelota por la
-	# cancha; con el corte el salto queda tapado por el parpadeo.
-	if b != null and bool(b.get("corte", false)):
+	# Solo la reubicación corta la interpolación. El silbato de una falta
+	# también marca `corte`, pero conserva el movimiento hasta el contacto.
+	if b != null and _es_reubicacion(b):
 		b = null
 	var destino := {}
 	if b != null and t > 0.0:
@@ -699,23 +692,14 @@ func _mostrar(idx: int, t: float) -> void:
 			_aplicar_festejo(ent, int(j["id"]))
 		ents.append(ent)
 
+	# Árbitro, dos asistentes y cuarto árbitro. Sus objetivos salen del mismo
+	# fotograma que los jugadores para que pausa y velocidades no los desfasen.
+	ents.append_array(OficialesPartido.entidades(fotogramas, idx, t, _recorridas_oficiales))
+
 	if pelota_visible:
 		ents.append({"tipo": "pelota", "color": Color.WHITE, "z": z, "pos": pos_pelota,
 			"giro": int((pos_pelota.x + pos_pelota.y * 0.73 + z) * 3.0),
 			"anclada": pelota_anclada, "anclaje_px": anclaje_pelota, "offset_px": offset_pelota})
-
-	# Las tarjetas siguen al infractor: se guardan por clave, no por
-	# posición, así el cartelito acompaña al que la vio mientras camina.
-	var flotando: Array = []
-	for tar in _tarjetas:
-		for j in a["jugadores"]:
-			if j["id"] == tar["clave"]:
-				flotando.append({
-					"pos": Vector2(j["x"], j["y"]), "roja": tar["roja"],
-					"avance": 1.0 - float(tar["restante"]) / SEG_TARJETA,
-				})
-				break
-	vista.tarjetas = flotando
 
 	vista.entidades = ents
 	vista.queue_redraw()
@@ -985,6 +969,12 @@ static func _mezclar(a: Vector2, b: Vector2, t: float) -> Vector2:
 	return a if a.distance_squared_to(b) > SALTO_MAXIMO_M * SALTO_MAXIMO_M else a.lerp(b, t)
 
 
+## Compatibilidad: los partidos grabados antes de separar ambos conceptos
+## solo traen `corte`, que siempre representaba también una reubicación.
+static func _es_reubicacion(fotograma: Dictionary) -> bool:
+	return bool(fotograma.get("reubicacion", fotograma.get("corte", false)))
+
+
 ## La cámara sigue la pelota. La velocidad se estima con el fotograma
 ## siguiente, que es lo que le permite anticipar hacia dónde va la jugada.
 func _seguir_camara(idx: int, delta: float) -> void:
@@ -1013,9 +1003,9 @@ func _seguir_camara(idx: int, delta: float) -> void:
 			vel = d / MotorEspacial.TICK_SEG
 	var en_area: bool = absf(actual.x) > ProyeccionPartido.MEDIO_LARGO - 16.5
 	vista.camara.fijar_encuadre(en_area, _festejo_restante > 0.0)
-	# En el corte la cancha cambia de golpe: la cámara salta con ella en vez
+	# En la reubicación la cancha cambia de golpe: la cámara salta con ella en vez
 	# de barrer la cancha detrás de la pelota ya reubicada.
-	if bool(fotogramas[idx].get("corte", false)) and _idx_corte_camara != idx:
+	if _es_reubicacion(fotogramas[idx]) and _idx_corte_camara != idx:
 		_idx_corte_camara = idx
 		vista.camara.saltar_a(actual, size)
 		return

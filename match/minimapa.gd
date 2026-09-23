@@ -61,7 +61,9 @@ func _draw() -> void:
 			draw_rect(r, COLOR_ENCUADRE, false, 1.5)
 
 	for ent in entidades:
-		if ent["tipo"] == "pelota":
+		# El minimapa táctico muestra a los 22, no a los oficiales: incluirlos
+		# haría leer al árbitro como un jugador libre de un tercer equipo.
+		if ent["tipo"] != "jugador":
 			continue
 		draw_circle(_m(ent["pos"].x, ent["pos"].y), RADIO_JUGADOR, ent["color"])
 	for ent in entidades:

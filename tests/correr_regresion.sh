@@ -16,6 +16,10 @@
 set -u
 cd "$(dirname "$0")/.."
 
+# El hook del changelog vive en el repo, pero git solo lo usa si esta
+# configurado. Como la regresion gatea el commit, lo activa aca.
+git config core.hooksPath .githooks 2>/dev/null
+
 GODOT="${GODOT:-E:/IntelliJ/Super Pocket Stars/Godot_v4.7.2-stable_win64_console.exe}"
 if [ ! -f "$GODOT" ]; then
 	echo "No encuentro Godot en: $GODOT"

@@ -297,7 +297,12 @@ func _test_el_tiempo_detenido_se_repone() -> int:
 	var casos := 0
 	var transitos := 0
 	var minimo := 2 * MotorEspacial.TICKS_POR_MITAD
-	for i in range(PARTIDOS):
+	# Sigue hasta ver entradas o salidas: en 12 partidos aparecian en uno
+	# solo (semilla 5153), y con los palos nuevos el azar las corrio y el
+	# test fallaba sin que el tiempo dejara de reponerse.
+	for i in range(PARTIDOS * 4):
+		if casos >= PARTIDOS and transitos > 0:
+			break
 		var rng := RandomNumberGenerator.new()
 		rng.seed = SEED + i
 		var casa := Team.generar("Casa", rng, 0)

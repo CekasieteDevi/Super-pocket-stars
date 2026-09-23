@@ -16,16 +16,59 @@ extends Control
 const PALETAS := {
 	"potrero": {
 		"claro": Color("a38a58"), "oscuro": Color("93794c"),
-		"linea": Color(0.88, 0.86, 0.80, 0.85), "aspereza": 0.055,
+		"linea": Color(0.82, 0.77, 0.66, 0.78), "aspereza": 0.055,
+		"franjas": 8, "desgaste": 0.32,
+	},
+	"barrial": {
+		"claro": Color("8f8550"), "oscuro": Color("777344"),
+		"linea": Color(0.86, 0.83, 0.75, 0.84), "aspereza": 0.048,
+		"franjas": 10, "desgaste": 0.26,
 	},
 	"regular": {
 		"claro": Color("4f914b"), "oscuro": Color("428344"),
 		"linea": Color(0.92, 0.94, 0.90, 0.9), "aspereza": 0.035,
+		"franjas": 12, "desgaste": 0.20,
+	},
+	"cuidado": {
+		"claro": Color("4b9854"), "oscuro": Color("3f8448"),
+		"linea": Color(0.95, 0.97, 0.92, 0.94), "aspereza": 0.026,
+		"franjas": 14, "desgaste": 0.14,
+	},
+	"profesional": {
+		"claro": Color("469d55"), "oscuro": Color("388649"),
+		"linea": Color(0.98, 0.99, 0.96, 0.98), "aspereza": 0.020,
+		"franjas": 16, "desgaste": 0.09,
 	},
 	"hibrido": {
 		"claro": Color("4d9e58"), "oscuro": Color("408c4d"),
 		"linea": Color.WHITE, "aspereza": 0.018,
+		"franjas": 18, "desgaste": 0.06,
 	},
+	"elite": {
+		"claro": Color("45a75a"), "oscuro": Color("368a49"),
+		"linea": Color(1.0, 1.0, 0.98, 1.0), "aspereza": 0.012,
+		"franjas": 18, "desgaste": 0.025,
+	},
+}
+
+## Infraestructura sincronizada con la calidad del campo: potrero de tierra
+## y público parado al inicio; estadio alto, profundo y lleno al final.
+const PERFILES_ESTADIO := {
+	"potrero": {"prof": 3.5, "alto": 2.5, "prof_cerca": 2.0, "alto_cerca": 1.3,
+		"filas": 2, "sectores": 2, "parado": true, "muro": 1.0, "pista": Color("60452f")},
+	"barrial": {"prof": 6.0, "alto": 5.0, "prof_cerca": 3.0, "alto_cerca": 1.8,
+		"filas": 4, "sectores": 3, "parado": true, "muro": 1.3, "pista": Color("72543d")},
+	"regular": {"prof": 9.0, "alto": 10.0, "prof_cerca": 5.0, "alto_cerca": 2.5,
+		"filas": 8, "sectores": 4, "parado": false, "muro": 1.6, "pista": Color("4c5948")},
+	"cuidado": {"prof": 12.0, "alto": 15.0, "prof_cerca": 7.0, "alto_cerca": 3.0,
+		"filas": 12, "sectores": 5, "parado": false, "muro": 1.8, "pista": Color("4d514b")},
+	"profesional": {"prof": 16.0, "alto": 22.0, "prof_cerca": 10.0, "alto_cerca": 3.6,
+		"filas": 16, "sectores": 6, "parado": false, "muro": 2.0, "pista": Color("555b61")},
+	"hibrido": {"prof": 17.0, "alto": 24.0, "prof_cerca": 11.0, "alto_cerca": 3.8,
+		"filas": 17, "sectores": 6, "parado": false, "muro": 2.0, "pista": Color("5a6065")},
+	"elite": {"prof": 21.0, "alto": 30.0, "prof_cerca": 14.0, "alto_cerca": 4.5,
+		"filas": 21, "sectores": 8, "parado": false, "muro": 2.3, "pista": Color("666c72"),
+		"techo": true},
 }
 
 const COLOR_CIELO := Color(0.09, 0.10, 0.13)
@@ -85,19 +128,19 @@ var estado_cancha := "regular"
 ## Tarjetas flotando sobre el infractor: [{"pos": Vector2 (metros),
 ## "roja": bool, "avance": float 0..1}]. Las arma VistaPartido, que es
 ## quien sabe qué jugador cometió la falta.
-var tarjetas: Array = []
 
 ## Euforia del festejo, 0 a 1. La consume el HUD; el decorado permanece
 ## cacheado para no regenerar cientos de polígonos durante el gol.
 var euforia := 0.0
 
-## Cada entidad: {"pos": Vector2 (metros), "z": float, "tipo": "jugador"/"pelota",
+## Cada entidad: {"pos": Vector2 (metros), "z": float, "tipo": "jugador"/"oficial"/"pelota",
 ## "color": Color}. La vista las ordena por profundidad y las dibuja.
 var entidades: Array = []
 
 var _tex_sombra: ImageTexture
 var _tex_pelota: ImageTexture
 var _tex_publico: ImageTexture
+var _tex_publico_parado: ImageTexture
 var _tex_red: ImageTexture
 static var _mallas_desgaste := {}
 
@@ -121,6 +164,7 @@ func _ready() -> void:
 	_tex_sombra = SpritesPartido.sombra()
 	_tex_pelota = SpritesPartido.pelota()
 	_tex_publico = TexturasEstadio.publico()
+	_tex_publico_parado = TexturasEstadio.publico_parado()
 	_tex_red = TexturasEstadio.red()
 
 
@@ -133,6 +177,24 @@ static func estado_desde_calidad(calidad: float) -> String:
 	if calidad <= 0.0:
 		return "regular"
 	return "hibrido"
+
+
+static func nivel_estadio_desde_calidad(calidad: float) -> String:
+	if calidad <= -6.0:
+		return "potrero"
+	if calidad <= -4.0:
+		return "barrial"
+	if calidad <= -2.0:
+		return "regular"
+	if calidad <= 0.0:
+		return "cuidado"
+	if calidad <= 1.5:
+		return "profesional"
+	return "elite"
+
+
+func _perfil_estadio() -> Dictionary:
+	return PERFILES_ESTADIO.get(estado_cancha, PERFILES_ESTADIO["regular"])
 
 
 func _p(x: float, y: float, z: float = 0.0) -> Vector2:
@@ -152,7 +214,6 @@ func _draw() -> void:
 	_ejecutar(_decorado("lineas_" + estado_cancha, func(): _dibujar_lineas(pal)))
 	_dibujar_banderines()
 	_dibujar_entidades()
-	_dibujar_tarjetas()
 
 
 ## Arma (una sola vez) los comandos de `clave` corriendo `dibujar` con el
@@ -233,7 +294,7 @@ func _plano(p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3, c: Color) -> voi
 	]), c)
 
 
-func _dibujar_estadio() -> void:
+func _dibujar_estadio_original() -> void:
 	var L := ProyeccionPartido.MEDIO_LARGO
 	var A := ProyeccionPartido.MEDIO_ANCHO
 	# Geometría estática: se construye una vez y se reutiliza en cada frame.
@@ -296,18 +357,99 @@ func _dibujar_estadio() -> void:
 		_tex_publico, METROS_TILE_PUBLICO, TINTE_TRIBUNA_CERCA * luz)
 
 
-func _detallar_grada(inicio: Vector3, fin: Vector3, subida: Vector3) -> void:
+func _dibujar_estadio() -> void:
+	var L := ProyeccionPartido.MEDIO_LARGO
+	var A := ProyeccionPartido.MEDIO_ANCHO
+	var perfil := _perfil_estadio()
+	var prof: float = float(perfil["prof"])
+	var alto: float = float(perfil["alto"])
+	var prof_cerca: float = float(perfil["prof_cerca"])
+	var alto_cerca: float = float(perfil["alto_cerca"])
+	var tex_publico: Texture2D = _tex_publico_parado if bool(perfil["parado"]) else _tex_publico
+	var tile_publico := METROS_TILE_PUBLICO if not bool(perfil["parado"]) else 3.0
+	var pal: Dictionary = PALETAS.get(estado_cancha, PALETAS["regular"])
+
+	# Pista: tierra en el potrero, superficie cuidada en la élite.
+	_plano(Vector3(-L - PISTA, -A - PISTA, 0), Vector3(L + PISTA, -A - PISTA, 0),
+		Vector3(L + PISTA, A + PISTA, 0), Vector3(-L - PISTA, A + PISTA, 0), perfil["pista"])
+	_plano(Vector3(-L - 2.0, -A - 2.0, 0), Vector3(L + 2.0, -A - 2.0, 0),
+		Vector3(L + 2.0, A + 2.0, 0), Vector3(-L - 2.0, A + 2.0, 0), pal["oscuro"].darkened(0.12))
+
+	var xa := -L - PISTA - prof
+	var xb := L + PISTA + prof
+	var ya := -A - PISTA - prof
+	var yb := A + PISTA + prof
+	var frente := Vector3(xa, -A - PISTA, 0)
+	var frente_fin := Vector3(xb, -A - PISTA, 0)
+
+	# Tribuna de enfrente: crece en profundidad, filas y altura.
+	_panel(frente, frente_fin, Vector3(xb, ya, alto), Vector3(xa, ya, alto),
+		tex_publico, tile_publico, TINTE_TRIBUNA)
+	_detallar_grada(frente, frente_fin, Vector3(0, -prof, alto), int(perfil["filas"]), int(perfil["sectores"]))
+	if bool(perfil.get("techo", false)):
+		_plano(Vector3(xa, ya, alto), Vector3(xb, ya, alto),
+			Vector3(xb, ya - 4.0, alto + 5.0), Vector3(xa, ya - 4.0, alto + 5.0), COLOR_TECHO)
+
+	# Cabeceras detrás de cada arco.
+	for lado in [-1.0, 1.0]:
+		var x0: float = lado * (L + PISTA)
+		var x1: float = lado * (L + PISTA + prof)
+		_panel(Vector3(x0, ya, 0), Vector3(x0, yb, 0),
+			Vector3(x1, yb, alto), Vector3(x1, ya, alto),
+			tex_publico, tile_publico, TINTE_TRIBUNA_LATERAL)
+		_detallar_grada(Vector3(x0, ya, 0), Vector3(x0, yb, 0),
+			Vector3(x1 - x0, 0, alto), int(perfil["filas"]), int(perfil["sectores"]))
+
+	# Muro perimetral y carteles.
+	var alto_muro: float = float(perfil["muro"])
+	_plano(Vector3(xa, -A - PISTA, 0), Vector3(xb, -A - PISTA, 0),
+		Vector3(xb, -A - PISTA, alto_muro), Vector3(xa, -A - PISTA, alto_muro), COLOR_MURO)
+	var carteles := [Color("d9bd77"), Color("567d91"), Color("ba6455"), Color("e1ddba")]
+	var cantidad_carteles := 8 if bool(perfil["parado"]) else 14
+	for i in range(cantidad_carteles):
+		var cx := -L + i * (2.0 * L / float(cantidad_carteles))
+		var ancho_cartel := 6.9 if cantidad_carteles > 8 else 10.0
+		var alto_cartel := minf(1.45, alto_muro - 0.1)
+		_plano(Vector3(cx + 0.25, -A - PISTA + 0.02, 0.2),
+			Vector3(cx + ancho_cartel, -A - PISTA + 0.02, 0.2),
+			Vector3(cx + ancho_cartel, -A - PISTA + 0.02, alto_cartel),
+			Vector3(cx + 0.25, -A - PISTA + 0.02, alto_cartel), carteles[i % carteles.size()])
+	for lado in [-1.0, 1.0]:
+		var x0: float = lado * (L + PISTA)
+		_plano(Vector3(x0, ya, 0), Vector3(x0, yb, 0),
+			Vector3(x0, yb, alto_muro), Vector3(x0, ya, alto_muro), COLOR_MURO)
+
+	# Tribuna cercana: siempre baja para no tapar la pelota.
+	_panel(Vector3(xa, A + PISTA, 0), Vector3(xb, A + PISTA, 0),
+		Vector3(xb, A + PISTA + prof_cerca, alto_cerca),
+		Vector3(xa, A + PISTA + prof_cerca, alto_cerca),
+		tex_publico, tile_publico, TINTE_TRIBUNA_CERCA)
+	if bool(perfil.get("techo", false)):
+		_dibujar_focos(L, A, prof, alto)
+
+
+func _dibujar_focos(L: float, A: float, prof: float, alto: float) -> void:
+	# Torres de iluminación: señal visual del estadio terminado.
+	for lado in [-1.0, 1.0]:
+		var x: float = lado * (L + PISTA + prof * 0.72)
+		var y := -A - PISTA - prof - 1.5
+		_linea(Vector3(x, y, 0), Vector3(x, y, alto + 10.0), Color("aeb5bd"), 2.0)
+		_linea(Vector3(x, y, alto + 10.0), Vector3(x - lado * 2.0, y + 1.0, alto + 9.2), Color("d8d5bd"), 2.0)
+
+
+func _detallar_grada(inicio: Vector3, fin: Vector3, subida: Vector3,
+		filas: int = 18, sectores_forzados: int = -1) -> void:
 	# Pasillos escalonados separan bloques; barandas siguen la perspectiva.
-	var sectores := maxi(2, roundi(inicio.distance_to(fin) / 19.0))
+	var sectores := sectores_forzados if sectores_forzados > 0 else maxi(2, roundi(inicio.distance_to(fin) / 19.0))
 	var eje := (fin - inicio).normalized()
 	# Todos los escalones y DESPUÉS todas las barandas: los sectores están a
 	# 19 m y no se pisan, así que el orden no cambia el dibujo, pero junta
 	# los polígonos en una sola malla y las líneas en un solo trazo.
 	for sector in range(1, sectores):
 		var centro := inicio.lerp(fin, float(sector) / sectores)
-		for escalon in range(18):
-			var a := centro + subida * (float(escalon) / 18.0)
-			var b := centro + subida * (float(escalon + 1) / 18.0)
+		for escalon in range(filas):
+			var a := centro + subida * (float(escalon) / float(filas))
+			var b := centro + subida * (float(escalon + 1) / float(filas))
 			_plano(a - eje * 0.8, a + eje * 0.8, b + eje * 0.8, b - eje * 0.8, Color("65666a") if escalon % 2 == 0 else Color("494d55"))
 	for sector in range(1, sectores):
 		var centro := inicio.lerp(fin, float(sector) / sectores)
@@ -315,7 +457,7 @@ func _detallar_grada(inicio: Vector3, fin: Vector3, subida: Vector3) -> void:
 			var base: Vector3 = centro + eje * lado * 0.95
 			var alto: Vector3 = base + subida
 			_linea(Vector3(base.x, base.y, 0.8), Vector3(alto.x, alto.y, alto.z + 0.8), Color("92999e"), 1.0)
-	for nivel in [0.48, 0.96]:
+	for nivel in [0.25, 0.5, 0.75, 1.0]:
 		var a: Vector3 = inicio + subida * nivel
 		var b: Vector3 = fin + subida * nivel
 		_linea(a, b, Color("222a36"), 3.0)
@@ -335,7 +477,8 @@ func _linea(a: Vector3, b: Vector3, c: Color, min_px: float, factor: float = 0.0
 ## verticales. Es lo que hace que la cancha se lea inclinada.
 func _dibujar_franjas(pal: Dictionary) -> void:
 	var tex := TexturasEstadio.cesped(pal["claro"], float(pal["aspereza"]))
-	var paso := ProyeccionPartido.LARGO / float(FRANJAS)
+	var cantidad_franjas: int = int(pal.get("franjas", FRANJAS))
+	var paso := ProyeccionPartido.LARGO / float(cantidad_franjas)
 	var y0 := -ProyeccionPartido.MEDIO_ANCHO
 	var y1 := ProyeccionPartido.MEDIO_ANCHO
 	# El corte de luz entre franja y franja se aplica como TINTE sobre la
@@ -346,7 +489,7 @@ func _dibujar_franjas(pal: Dictionary) -> void:
 	var tinte_oscuro := Color(
 		oscuro.r / maxf(claro.r, 0.001), oscuro.g / maxf(claro.g, 0.001),
 		oscuro.b / maxf(claro.b, 0.001))
-	for i in range(FRANJAS):
+	for i in range(cantidad_franjas):
 		var xa := -ProyeccionPartido.MEDIO_LARGO + i * paso
 		var xb := xa + paso
 		_panel(Vector3(xa, y0, 0), Vector3(xb, y0, 0), Vector3(xb, y1, 0), Vector3(xa, y1, 0),
@@ -358,8 +501,9 @@ func _dibujar_desgaste() -> void:
 	# Geometria fija, una sola orden de dibujo y sin azar por fotograma.
 	var origen := _p(0, 0)
 	var transformacion := Transform2D(_p(1, 0) - origen, _p(0, 1) - origen, origen)
+	var pal: Dictionary = PALETAS.get(estado_cancha, PALETAS["regular"])
 	draw_mesh(_malla_desgaste(estado_cancha), null, transformacion,
-		Color(0.48, 0.39, 0.23, 0.32 if estado_cancha != "hibrido" else 0.12))
+		Color(0.48, 0.39, 0.23, float(pal.get("desgaste", 0.20))))
 
 
 static func _malla_desgaste(estado: String) -> ArrayMesh:
@@ -369,7 +513,10 @@ static func _malla_desgaste(estado: String) -> ArrayMesh:
 	var indices := PackedInt32Array()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 1978
-	var cantidad := 180 if estado == "potrero" else (70 if estado == "regular" else 24)
+	var cantidad: int = int({
+		"potrero": 180, "barrial": 125, "regular": 70, "cuidado": 48,
+		"profesional": 30, "hibrido": 24, "elite": 14,
+	}.get(estado, 70))
 	for i in range(cantidad):
 		var centro := Vector2.ZERO
 		if i % 3 != 0:
@@ -505,7 +652,7 @@ func _dibujar_entidades() -> void:
 			"pos": Vector2(lado * ProyeccionPartido.MEDIO_LARGO, ARCO_MEDIO_ANCHO)})
 	orden.sort_custom(func(a, b): return a["pos"].y < b["pos"].y)
 	for ent in orden:
-		if ent["tipo"] == "jugador" or ent["tipo"] == "pelota":
+		if ent["tipo"] in ["jugador", "oficial", "pelota"]:
 			_dibujar_sombra(ent)
 	for ent in orden:
 		match ent["tipo"]:
@@ -527,7 +674,7 @@ func _dibujar_sombra(ent: Dictionary) -> void:
 	var alto_z: float = float(ent.get("z", 0.0))
 	# Más alto = sombra más chica y más tenue.
 	var reduccion: float = clampf(1.0 - alto_z * 0.05, 0.45, 1.0)
-	var ancho: float = (19.0 if ent["tipo"] == "jugador" else 10.0) * escala * reduccion
+	var ancho: float = (10.0 if ent["tipo"] == "pelota" else 19.0) * escala * reduccion
 	var alto := ancho * 0.5
 	draw_texture_rect(_tex_sombra,
 		Rect2(suelo - Vector2(ancho, alto) * 0.5, Vector2(ancho, alto)), false,
@@ -538,6 +685,7 @@ func _dibujar_cuerpo(ent: Dictionary) -> void:
 	var escala: float = camara.px_por_metro / CamaraPartido.PX_POR_METRO_BASE
 	var punto := _p(ent["pos"].x, ent["pos"].y, float(ent.get("z", 0.0)))
 	if ent["tipo"] == "pelota":
+		punto += Vector2(ent.get("offset_px", Vector2.ZERO)) * escala
 		if bool(ent.get("anclada", false)):
 			punto = _p(ent["pos"].x, ent["pos"].y) + Vector2(ent["anclaje_px"]) * escala
 		var d := 13.0 * escala
@@ -548,12 +696,14 @@ func _dibujar_cuerpo(ent: Dictionary) -> void:
 	var pose := str(ent.get("pose", SpritesPartido.QUIETO))
 	var dir := int(ent.get("direccion", SpritesPartido.ABAJO))
 	var accion := str(ent.get("accion", ""))
-	var espejo := bool(ent.get("espejo", false)) if accion == "vuela" else dir in [5, 6, 7]
+	var espejo := bool(ent.get("espejo", false)) if accion in ["vuela", "chilena"] else dir in [5, 6, 7]
 	if MotorEspacial.es_accion_regate(accion):
 		espejo = bool(ent.get("regate_espejo", false))
 	var tex: Texture2D
 	if accion == MotorEspacial.ACCION_PALOMITA:
-		var frame := mini(3, int(clampf(float(ent.get("fase_animacion", 0.0)), 0.0, 0.999) * 4.0))
+		var frame := mini(SpritesPartido.CUADROS_PALOMITA - 1,
+			int(clampf(float(ent.get("fase_animacion", 0.0)), 0.0, 0.999)
+				* SpritesPartido.CUADROS_PALOMITA))
 		tex = SpritesPartido.palomita_png(ent["color"], ent.get("color_short", Color.WHITE), frame, espejo,
 			ent.get("color_pelo", SpritesPartido.PELO), int(ent.get("pelo", 0)), int(ent.get("numero", 0)))
 	elif MotorEspacial.es_accion_regate(accion):
@@ -562,7 +712,9 @@ func _dibujar_cuerpo(ent: Dictionary) -> void:
 		var frame_regate := mini(cuadros_regate - 1,
 			int(clampf(float(ent.get("fase_animacion", 0.0)), 0.0, 0.999) * cuadros_regate))
 		tex = SpritesPartido.regate_png(tipo_regate, frame_regate, espejo,
-			ent["color"], ent.get("color_short", Color.TRANSPARENT))
+			ent["color"], ent.get("color_short", Color.TRANSPARENT),
+			ent.get("color_pelo", SpritesPartido.PELO), int(ent.get("pelo", 0)),
+			int(ent.get("numero", 0)))
 	else:
 		var indice := AtlasJugadores.cuadro(accion, float(ent.get("fase_animacion", 0.0)), dir,
 			pose in [SpritesPartido.CORRE_A, SpritesPartido.CORRE_B], bool(ent.get("arquero", false)))
@@ -570,31 +722,124 @@ func _dibujar_cuerpo(ent: Dictionary) -> void:
 			ent.get("color_pelo", SpritesPartido.PELO), espejo, int(ent.get("numero", 0)), int(ent.get("pelo", 0)))
 	var lado := 64.0 * escala
 	# Pivote com?n en los pies: no cambia con el ancho de una patada.
+	# La bandera baja va detrás del cuerpo; así el palo nace de la mano
+	# y no parece cruzado por delante del juez.
+	if ent["tipo"] == "oficial" and str(ent.get("senal", "")) == "bandera_baja":
+		_dibujar_utileria_oficial(ent, punto, escala, espejo)
 	draw_texture_rect(tex, Rect2((punto - Vector2(lado * 0.5, lado * 0.90625)).round(),
 		Vector2(lado, lado)), false)
+	if ent["tipo"] == "oficial" and str(ent.get("senal", "")) != "bandera_baja":
+		_dibujar_utileria_oficial(ent, punto, escala, espejo)
+
+
+## Banderas, tarjeta y tablero en el mismo lenguaje pixelado del atlas. El
+## cuerpo sigue siendo PNG; estas piezas informativas se dibujan nítidas para
+## poder cambiar de estado y dorsales sin multiplicar hojas de sprites.
+func _dibujar_utileria_oficial(ent: Dictionary, pie: Vector2, escala: float,
+		espejo: bool) -> void:
+	# La mano y la bandera cambian junto con la orientación del PNG.
+	var lado := -1.0 if espejo else 1.0
+	match str(ent.get("senal", "")):
+		"bandera_baja":
+			_dibujar_bandera(pie + Vector2(lado * 10, -32) * escala,
+				pie + Vector2(lado * 23, -18) * escala, escala, lado, true)
+		"bandera_arriba":
+			_dibujar_bandera(pie + Vector2(lado * 10, -32) * escala,
+				pie + Vector2(lado * 10, -66) * escala, escala, lado)
+		"bandera_horizontal":
+			_dibujar_bandera(pie + Vector2(lado * 10, -32) * escala,
+				pie + Vector2(lado * 40, -32) * escala, escala, lado)
+		"tarjeta_amarilla":
+			_dibujar_tarjeta_arbitro(pie, escala, COLOR_AMARILLA,
+				float(ent.get("fase_senal", 1.0)))
+		"tarjeta_roja":
+			_dibujar_tarjeta_arbitro(pie, escala, COLOR_ROJA,
+				float(ent.get("fase_senal", 1.0)))
+		"silbato":
+			var boca := pie + Vector2(8, -44) * escala
+			draw_line(boca, boca + Vector2(7, 2) * escala, Color("d8dde2"), maxf(1.0, 2.0 * escala))
+			draw_circle(boca + Vector2(8, 2) * escala, maxf(1.5, 2.4 * escala), Color("262d34"))
+		"tablero":
+			_dibujar_tablero(pie, escala, int(ent.get("numero_sale", 0)),
+				int(ent.get("numero_entra", 0)))
+
+
+func _dibujar_bandera(mano: Vector2, punta: Vector2, escala: float, lado: float,
+		colgando: bool = false) -> void:
+	var ancho_linea := maxf(1.0, 3.0 * escala)
+	draw_line(mano, punta, Color("181b20"), ancho_linea + maxf(1.0, escala))
+	draw_line(mano, punta, Color("d9c49a"), ancho_linea)
+	var direccion := (punta - mano).normalized()
+	var tela_ancho := 15.0 * escala
+	var tela_alto := 11.0 * escala
+	var origen := punta - direccion * (2.0 * escala)
+	var eje_a: Vector2
+	var eje_b: Vector2
+	if colgando:
+		# Con el palo hacia abajo, la tela queda sujeta a su tramo final y
+		# cae hacia el suelo. Antes usaba la perpendicular del palo y parecía
+		# ondear hacia arriba, contra la gravedad.
+		eje_a = -direccion * tela_alto
+		eje_b = Vector2.DOWN * tela_ancho
+	else:
+		var normal := Vector2(-direccion.y, direccion.x)
+		if absf(normal.x) < 0.01:
+			normal = Vector2.DOWN
+		elif signf(normal.x) != signf(lado):
+			normal = -normal
+		eje_a = normal * tela_ancho
+		eje_b = -direccion * tela_alto
+	var puntos := PackedVector2Array([origen, origen + eje_a,
+		origen + eje_a + eje_b, origen + eje_b])
+	draw_colored_polygon(puntos, Color("17191d"))
+	var margen := maxf(1.0, escala)
+	var a := eje_a - eje_a.normalized() * margen * 2.0
+	var b := eje_b - eje_b.normalized() * margen * 2.0
+	var o := origen + eje_a.normalized() * margen + eje_b.normalized() * margen
+	draw_colored_polygon(PackedVector2Array([o, o + a * 0.5, o + a * 0.5 + b * 0.5, o + b * 0.5]), Color("ffd326"))
+	draw_colored_polygon(PackedVector2Array([o + a * 0.5, o + a, o + a + b * 0.5, o + a * 0.5 + b * 0.5]), Color("f06b24"))
+	draw_colored_polygon(PackedVector2Array([o + b * 0.5, o + a * 0.5 + b * 0.5, o + a * 0.5 + b, o + b]), Color("f06b24"))
+	draw_colored_polygon(PackedVector2Array([o + a * 0.5 + b * 0.5, o + a + b * 0.5, o + a + b, o + a * 0.5 + b]), Color("ffd326"))
+
+
+func _dibujar_tarjeta_arbitro(pie: Vector2, escala: float, color: Color,
+		fase: float) -> void:
+	var tam := Vector2(9, 13) * escala
+	var subida := smoothstep(0.0, 1.0, clampf(fase, 0.0, 1.0))
+	var origen := Vector2(5.0, -43.0).lerp(Vector2(-4.5, -69.0), subida)
+	var rect := Rect2(pie + origen * escala, tam)
+	draw_rect(Rect2(rect.position + Vector2.ONE * maxf(1.0, escala), rect.size), Color(0, 0, 0, 0.55))
+	draw_rect(rect, color)
+
+
+func _dibujar_tablero(pie: Vector2, escala: float, numero_sale: int, numero_entra: int) -> void:
+	var centro := pie + Vector2(0, -70) * escala
+	var rect := Rect2(centro - Vector2(23, 12) * escala, Vector2(46, 24) * escala)
+	draw_rect(rect, Color("090c10"))
+	draw_rect(rect.grow(-maxf(2.0, 2.0 * escala)), Color("20262b"))
+	_dibujar_numero_tablero(Vector2(centro.x - 11.5 * escala, centro.y), numero_sale,
+		Color("ff3138"), escala)
+	_dibujar_numero_tablero(Vector2(centro.x + 11.5 * escala, centro.y), numero_entra,
+		Color("35e35a"), escala)
+
+
+func _dibujar_numero_tablero(centro: Vector2, numero: int, color: Color, escala: float) -> void:
+	var texto := str(clampi(numero, 0, 99))
+	var pixel := maxf(1.0, 1.45 * escala)
+	var ancho := float(texto.length() * 4 - 1) * pixel
+	var origen := centro - Vector2(ancho * 0.5, 2.5 * pixel)
+	for i in range(texto.length()):
+		var digito: Array = SpritesPartido.DIGITOS[int(texto[i])]
+		for y in range(5):
+			for x in range(3):
+				if digito[y][x] == "#":
+					draw_rect(Rect2(origen + Vector2(i * 4 + x, y) * pixel,
+						Vector2.ONE * pixel), color)
 
 
 
 const COLOR_AMARILLA := Color(0.98, 0.83, 0.16)
 const COLOR_ROJA := Color(0.84, 0.16, 0.16)
-
-## La tarjeta sube desde la cabeza del infractor y se desvanece arriba.
-## Va después de todo, sin Y-sort: es información, no un objeto de la
-## cancha, y taparla con un jugador que pasa por delante sería perderla.
-func _dibujar_tarjetas() -> void:
-	var escala: float = camara.px_por_metro / CamaraPartido.PX_POR_METRO_BASE
-	for t in tarjetas:
-		var avance: float = float(t["avance"])
-		var altura: float = 2.2 + avance * 1.6
-		var punto := _p(t["pos"].x, t["pos"].y, altura)
-		var an := 11.0 * escala
-		var al := 15.0 * escala
-		var alfa: float = clampf((1.0 - avance) * 3.0, 0.0, 1.0)
-		var r := Rect2(punto - Vector2(an, al) * 0.5, Vector2(an, al))
-		draw_rect(Rect2(r.position + Vector2(1.5, 1.5), r.size), Color(0, 0, 0, 0.45 * alfa))
-		var c: Color = COLOR_ROJA if bool(t["roja"]) else COLOR_AMARILLA
-		draw_rect(r, Color(c.r, c.g, c.b, alfa))
-
 
 func _dibujar_banderines() -> void:
 	for x in [-ProyeccionPartido.MEDIO_LARGO, ProyeccionPartido.MEDIO_LARGO]:

@@ -16,6 +16,43 @@ func _init() -> void:
 		var izquierda := SpritesPartido.jugador(Color.RED, SpritesPartido.IZQUIERDA, pose).get_image()
 		derecha.flip_x()
 		assert(derecha.get_data() == izquierda.get_data(), "Espejo incorrecto: " + pose)
+	for grupo in [
+		{"nombre": "Atajada", "indices": range(76, 80)},
+		{"nombre": "Saque de meta", "indices": range(80, 84)},
+	]:
+		for indice in grupo["indices"]:
+			var base := AtlasJugadores.textura(indice, Color("2b74d9"), Color("17202b"),
+				Color("6a3b1e"), false, 0, 0).get_image()
+			var peinados_distintos := 0
+			for estilo in range(1, AtlasJugadores.PEINADOS.size()):
+				var variante := AtlasJugadores.textura(indice, Color("2b74d9"), Color("17202b"),
+					Color("6a3b1e"), false, 0, estilo).get_image()
+				if variante.get_data() != base.get_data():
+					peinados_distintos += 1
+			assert(peinados_distintos >= 4,
+				"%s sin peinados suficientes: cuadro %d" % [grupo["nombre"], indice])
+	var peinados_palomita := {}
+	for estilo in range(SpritesPartido.PALOMITA_PEINADOS.size()):
+		var cuadros_palomita := {}
+		for frame in range(SpritesPartido.CUADROS_PALOMITA):
+			var palomita := SpritesPartido.palomita_png(Color("2b74d9"), Color.WHITE,
+				frame, false, Color("6a3b1e"), estilo, 9).get_image()
+			assert(palomita.get_size() == Vector2i(64, 64),
+				"Tamano de palomita: %d/%d" % [estilo, frame])
+			assert(palomita.get_used_rect().has_area(),
+				"PNG de palomita vacio: %d/%d" % [estilo, frame])
+			cuadros_palomita[hash(palomita.get_data())] = true
+			if frame == 0:
+				peinados_palomita[hash(palomita.get_data())] = true
+			var palomita_espejo := SpritesPartido.palomita_png(Color("2b74d9"), Color.WHITE,
+				frame, true, Color("6a3b1e"), estilo, 9).get_image()
+			palomita.flip_x()
+			assert(palomita.get_data() == palomita_espejo.get_data(),
+				"Espejo roto en palomita: %d/%d" % [estilo, frame])
+		assert(cuadros_palomita.size() == SpritesPartido.CUADROS_PALOMITA,
+			"Palomita repite o pierde PNG: %d" % estilo)
+	assert(peinados_palomita.size() == SpritesPartido.PALOMITA_PEINADOS.size(),
+		"Palomita repite peinados")
 	vista.fotogramas = []
 	for i in range(12):
 		vista.fotogramas.append({"acciones": []})
@@ -39,6 +76,24 @@ func _init() -> void:
 		var espejo := SpritesPartido.regate_png(tipo, 0, true, Color("d94141")).get_image()
 		assert(cuadro_base.get_width() == 64 and cuadro_base.get_height() == 64, "Tamaño de regate: " + tipo)
 		assert(cuadro_base.get_data() != espejo.get_data(), "Espejo de regate vacío: " + tipo)
+	# Todos los regates usan las poses exactas de cada atlas preparado.
+	# Comprobar el producto completo evita que una fase o un gesto vuelva
+	# silenciosamente al peinado base.
+	var color_camiseta := Color("d94141")
+	var color_short := Color("17202b")
+	var color_pelo := Color("6a3b1e")
+	for tipo in MotorEspacial.REGATE_ACCIONES:
+		var clip: Array = SpritesPartido.CLIPS_REGATE_ATLAS[tipo]
+		var espejos_locales: Array = SpritesPartido.ESPEJOS_REGATE_ATLAS.get(tipo, [])
+		for estilo in range(AtlasJugadores.PEINADOS.size()):
+			for fase in range(clip.size()):
+				var espejo_local := not espejos_locales.is_empty() and bool(espejos_locales[fase])
+				var esperado := AtlasJugadores.textura(int(clip[fase]), color_camiseta,
+					color_short, color_pelo, espejo_local, 9, estilo).get_image()
+				var recibido := SpritesPartido.regate_png(tipo, fase, false,
+					color_camiseta, color_short, color_pelo, estilo, 9).get_image()
+				assert(recibido.get_data() == esperado.get_data(),
+					"Regate cambia peinado: %s/%s/%d" % [tipo, AtlasJugadores.PEINADOS[estilo], fase])
 	var inicio_croqueta := VistaPartido._trayectoria_regate("croqueta", 0.0, Vector2.RIGHT)
 	var cruce_croqueta := VistaPartido._trayectoria_regate("croqueta", 0.5, Vector2.RIGHT)
 	var salida_croqueta := VistaPartido._trayectoria_regate("croqueta", 1.0, Vector2.RIGHT)

@@ -54,8 +54,9 @@ func _probar() -> void:
 				vista._mostrar(paso / 4, float(paso % 4) / 4.0)
 				var balon: Dictionary = vista.vista.entidades[-1]
 				if accion == "control_pie" and paso < 8:
-					assert(balon["anclada"])
-					assert(signf(balon["anclaje_px"].x) == signf(direccion.x))
+					assert((balon["pos"] as Vector2).distance_to(receptor["pos"]) < 0.001)
+					assert(signf(balon["offset_px"].x) == signf(direccion.x))
+					assert(float(balon["z"]) >= 0.0 and float(balon["z"]) <= 0.70)
 				else:
 					assert(not balon["anclada"])
 				assert(AtlasJugadores._cache.size() == cache_antes)

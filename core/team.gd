@@ -148,6 +148,14 @@ var carga_semanas: float = 0.0
 var ejercicio_fisico: String = Entrenamiento.LIBRE
 var ejercicio_tactico: String = Entrenamiento.LIBRE
 var ejercicio_semanas: Dictionary = {}  # ejercicio -> semanas acumuladas esta temporada
+## Jugadas preparadas (core/jugadas.gd). Las aprendidas quedan para
+## siempre; la que esta en curso acumula semanas hasta completarse.
+var jugadas_aprendidas: Array = []
+var jugada_en_curso: String = ""
+var jugada_semanas: float = 0.0
+## La jugada que se termino de aprender en el ultimo avanzar_dias(), o "".
+## La lee GameState para avisar, igual que informes_terminados.
+var jugada_terminada: String = ""
 
 var calidad_cancha: float = 0.0  # -8..+3, ver core/estado_cancha.gd — rige cuando este club juega de local
 var clima_partido: String = ""  # transitorio, solo dentro de un partido — "" (normal) / Lluvia / Calor / Viento, ver core/clima.gd
@@ -488,6 +496,8 @@ func guardar() -> Dictionary:
 		"carga_suma": carga_suma, "carga_semanas": carga_semanas,
 		"ejercicio_fisico": ejercicio_fisico, "ejercicio_tactico": ejercicio_tactico,
 		"ejercicio_semanas": ejercicio_semanas,
+		"jugadas_aprendidas": jugadas_aprendidas, "jugada_en_curso": jugada_en_curso,
+		"jugada_semanas": jugada_semanas,
 		"jugadores": jugadores, "banco": banco, "reservas": reservas,
 		"cantera": cantera,
 		"siguiente_id_cantera": siguiente_id_cantera, "capitan_id": capitan_id,
@@ -564,6 +574,15 @@ static func cargar(datos: Dictionary) -> Team:
 	if not Entrenamiento.existe(Entrenamiento.TACTICO, t.ejercicio_tactico):
 		t.ejercicio_tactico = Entrenamiento.LIBRE
 	t.ejercicio_semanas = datos.get("ejercicio_semanas", {})
+	# Un id que ya no existe se descarta en vez de romper la carga.
+	t.jugadas_aprendidas = []
+	for id in datos.get("jugadas_aprendidas", []):
+		if Jugadas.existe(str(id)) and not t.jugadas_aprendidas.has(str(id)):
+			t.jugadas_aprendidas.append(str(id))
+	t.jugada_en_curso = str(datos.get("jugada_en_curso", ""))
+	if not Jugadas.existe(t.jugada_en_curso) or Jugadas.sabe(t, t.jugada_en_curso):
+		t.jugada_en_curso = ""
+	t.jugada_semanas = float(datos.get("jugada_semanas", 0.0)) if t.jugada_en_curso != "" else 0.0
 	t.formacion = str(datos.get("formacion", Formaciones.POR_DEFECTO))
 	if not Formaciones.existe(t.formacion):
 		t.formacion = Formaciones.POR_DEFECTO
@@ -1578,6 +1597,7 @@ func avanzar_dias(dias: int) -> Array:
 	# §9.4: los informes corren con el calendario, no con las fechas
 	# jugadas — una semana de dos partidos no acelera un scouteo.
 	informes_terminados = Investigadores.avanzar(self, dias)
+	jugada_terminada = Jugadas.avanzar(self, dias)
 	Renovaciones.avanzar(self, dias)
 
 	var recuperados := []

@@ -1,0 +1,4 @@
+### tests/test_changelog.gd
+FALLA: la versión 0.4.13 no es menor que la de arriba
+FALLA: el changelog cumple el formato (15 entradas)
+ARCHIVOS_CON_FALLAS=1 de 154 en 625s con 8 en paralelo

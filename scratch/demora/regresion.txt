@@ -1,0 +1,1 @@
+ARCHIVOS_CON_FALLAS=0 de 154 en 419s con 8 en paralelo

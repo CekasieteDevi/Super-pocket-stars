@@ -34,11 +34,21 @@ const INTENCION_CENTRO := {
 	"Presión alta": 0.80, "Defensivo": 0.30, "Físico": 1.40,
 }
 
+## Multiplica la chance de elegir palomita DESPUÉS de que el centro común
+## ganó el duelo aéreo. Se deriva de la misma intención de centro: un estilo
+## que cuelga más pelotas también busca más la variante acrobática.
+const MULTIPLICADOR_PALOMITA_BASE := 2.8
+const MULTIPLICADOR_PALOMITA_POR_CENTRO := 2.8
+
 static func plan(estilo: String) -> Dictionary:
 	return PLANES.get(estilo, PLANES["Juego directo"])
 
 static func intencion_centro(estilo: String) -> float:
 	return float(INTENCION_CENTRO.get(estilo, 1.0))
+
+
+static func multiplicador_palomita(estilo: String) -> float:
+	return MULTIPLICADOR_PALOMITA_BASE + MULTIPLICADOR_PALOMITA_POR_CENTRO * intencion_centro(estilo)
 
 ## GDD §8.6.3, tabla de matchups. No es una matriz simétrica (ganarle a X no
 ## implica que X te pierda a vos): es un grafo dirigido tal cual está en el

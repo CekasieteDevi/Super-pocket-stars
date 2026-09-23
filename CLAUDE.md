@@ -6,6 +6,11 @@ Editalo cuando quieras: lo que esté acá lo sigo.
 
 ## Cómo escribo el código
 
+Para fallos de animación, leer primero
+[docs/diagnostico_animaciones_partido.md](docs/diagnostico_animaciones_partido.md)
+y las reglas de [AGENTS.md](AGENTS.md). El caso de Ocampo documenta por qué
+validar solo el laboratorio o posiciones físicas no alcanza.
+
 - **Todo en español**: nombres de variables, funciones, clases, archivos,
   comentarios y mensajes de commit.
 - Los comentarios explican **por qué**, no qué. Si un número está
@@ -13,6 +18,21 @@ Editalo cuando quieras: lo que esté acá lo sigo.
   valor anterior.
 - Antes de crear una constante nueva, buscar si el valor ya se deriva de
   otra cosa. Una sola fuente de verdad.
+
+## Changelog (obligatorio para toda IA y toda persona)
+
+Cada cambio a la aplicación es una versión nueva. La pantalla de inicio
+muestra "Actualización v x.x.xx" y un botón "Changelog" con la lista.
+
+- Registrá cada cambio en `data/changelog.json` (el registro de cambios).
+- Agregá la entrada nueva ARRIBA de todo. La primera entrada define la versión.
+- Subí el último tramo de a uno: `0.4.00` → `0.4.01`. Después de `.99`, subí el del medio y volvé a `.00`.
+- Escribí una sola frase simple, que entienda alguien que no programa. Ejemplo: "Los arqueros atajan mejor los remates de lejos."
+- Formato: `{"version": "0.4.01", "fecha": "AAAA-MM-DD", "cambio": "..."}`.
+- Un commit = una entrada. No juntes cambios distintos en una frase.
+- El hook `.githooks/pre-commit` (script que git corre antes de cada commit) rechaza el commit sin versión nueva. No lo saltees con `--no-verify`.
+- Si el hook no está activo, activalo: `git config core.hooksPath .githooks`.
+- `tests/test_changelog.gd` valida el formato dentro de la regresión.
 
 ## Godot
 

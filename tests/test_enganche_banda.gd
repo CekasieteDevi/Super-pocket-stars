@@ -34,7 +34,9 @@ func _probar(local: bool, lado: float) -> void:
 	if enganche.is_empty():
 		return
 	_comprobar(absf(enganche["destino"].y) < absf(a["pos"].y), "recorta hacia dentro")
-	rival["pos"] = a["pos"] + Vector2(5.0 * signo, 0.0)
+	# Encarar pide contacto: el rival tiene que estar dentro de
+	# radio_tackle (2 m), no a los 8 m del viejo radio_gambeta.
+	rival["pos"] = a["pos"] + Vector2(1.5 * signo, 0.0)
 	var disponible := false
 	for opcion in MotorEspacial.evaluar_opciones(estado, a, jugador):
 		if opcion["tipo"] == "gambeta" and not opcion.get("enganche", {}).is_empty():

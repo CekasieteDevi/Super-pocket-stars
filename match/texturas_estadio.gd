@@ -119,6 +119,46 @@ static func publico() -> ImageTexture:
 	return tex
 
 
+## Público de potrero: gente parada contra el alambrado, sin asientos ni
+## filas de butacas. Se usa en los primeros niveles de infraestructura.
+static func publico_parado() -> ImageTexture:
+	if _cache.has("publico_parado"):
+		return _cache["publico_parado"]
+	var ancho := 80
+	var alto := 32
+	var img := Image.create(ancho, alto, false, Image.FORMAT_RGBA8)
+	img.fill(Color("171b23"))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = SEMILLA + 17
+	for fila in range(2):
+		var y0 := fila * 15
+		for col in range(10):
+			var x0 := col * 8 + (4 if fila == 1 else 0)
+			if rng.randf() < 0.14:
+				continue
+			var camiseta: Color = TONOS_HINCHA[rng.randi() % TONOS_HINCHA.size()]
+			var piel: Color = PIEL_HINCHA[rng.randi() % PIEL_HINCHA.size()]
+			var pelo := Color("30231d") if rng.randf() < 0.72 else Color("957448")
+			# Cabeza y torso, más altos que el hincha sentado.
+			for dy in range(3):
+				for dx in range(3):
+					img.set_pixel((x0 + 2 + dx) % ancho, y0 + 1 + dy, pelo if dy == 0 else piel)
+			for dy in range(7):
+				for dx in range(4):
+					img.set_pixel((x0 + 1 + dx) % ancho, y0 + 4 + dy,
+						camiseta if dx < 3 else camiseta.darkened(0.18))
+			if rng.randf() < 0.45:
+				# Brazos levantados: gesto simple, legible a distancia.
+				for dy in range(4):
+					img.set_pixel((x0 + 0) % ancho, y0 + 3 + dy, piel)
+					img.set_pixel((x0 + 5) % ancho, y0 + 3 + dy, piel)
+			img.set_pixel((x0 + 2) % ancho, y0 + 11, Color("10141c"))
+			img.set_pixel((x0 + 4) % ancho, y0 + 11, Color("10141c"))
+	var tex := ImageTexture.create_from_image(img)
+	_cache["publico_parado"] = tex
+	return tex
+
+
 ## Red: rombos blancos translúcidos sobre transparente. Va sobre un panel
 ## proyectado, así que la trama se inclina con el arco.
 static func red() -> ImageTexture:

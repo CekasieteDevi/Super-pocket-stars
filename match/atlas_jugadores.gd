@@ -117,7 +117,23 @@ static func _mascara(indice: int, estilo: int) -> Dictionary:
 		preparada.convert(Image.FORMAT_RGBA8)
 		_fuentes[estilo] = preparada
 	var hoja: Image = _fuentes[estilo]
-	var img := hoja.get_region(Rect2i((indice % 8) * CELDA, (indice / 8) * CELDA, CELDA, CELDA))
+	var img: Image
+	# Esta secuencia viene de su PNG fuente corregido. Leerla directa evita
+	# volver a escalar las poses anchas del atlas preparado y deformarlas.
+	if indice >= 76 and indice <= 79:
+		if not _fuentes.has("agarra_corregido"):
+			var fuente_agarra := (load("res://assets/partido/acciones_arquero_agarra.png") as Texture2D).get_image()
+			fuente_agarra.decompress()
+			fuente_agarra.convert(Image.FORMAT_RGBA8)
+			_fuentes["agarra_corregido"] = fuente_agarra
+		var hoja_agarra: Image = _fuentes["agarra_corregido"]
+		img = hoja_agarra.get_region(Rect2i((indice - 76) * CELDA, 0, CELDA, CELDA))
+	else:
+		img = hoja.get_region(Rect2i((indice % 8) * CELDA, (indice / 8) * CELDA, CELDA, CELDA))
+	# Los saques del arquero nacen de una hoja común de cuatro cuadros. La
+	# hoja trae un solo peinado; se reemplaza antes de clasificar las máscaras.
+	if indice >= 80 and indice <= 83:
+		aplicar_peinado_accion(img, estilo)
 	# Van en variables sueltas y no dentro de un Array porque un
 	# Packed*Array se COPIA al sacarlo de un contenedor, y el append se
 	# perdería. Los factores van en 64 bits: en 32 el redondeo cambiaba un
@@ -170,6 +186,58 @@ static func _mascara(indice: int, estilo: int) -> Dictionary:
 	}
 	_bases[base_clave] = listas
 	return listas
+
+
+static func _es_pelo_pixel(c: Color) -> bool:
+	# La piel sombreada también es rojiza. El límite de valor y verde evita
+	# copiar brazos o piernas al buscar el pelo del cuadro de referencia.
+	return c.a >= 0.7 and c.r > c.g * 1.15 and c.g > c.b * 1.15 \
+		and c.v < 0.55 and c.g < 0.45
+
+
+static func _caja_pelo(img: Image) -> Rect2i:
+	var usado := Rect2i()
+	var encontrado := false
+	for y in range(img.get_height()):
+		for x in range(img.get_width()):
+			if not _es_pelo_pixel(img.get_pixel(x, y)):
+				continue
+			if not encontrado:
+				usado = Rect2i(x, y, 1, 1)
+				encontrado = true
+			else:
+				usado = usado.merge(Rect2i(x, y, 1, 1))
+	return usado
+
+
+## Copia la silueta de pelo del PNG de cada peinado sobre la cabeza del
+## arquero. Solo se copian píxeles de pelo: cara, guantes y pelota quedan
+## intactos. El contorno original queda debajo y mantiene el estilo del juego.
+static func aplicar_peinado_accion(img: Image, estilo: int) -> void:
+	if not _fuentes.has(estilo):
+		var ruta := "res://assets/partido/preparados/%s.png" % PEINADOS[estilo]
+		var preparada := (load(ruta) as Texture2D).get_image()
+		preparada.decompress()
+		preparada.convert(Image.FORMAT_RGBA8)
+		_fuentes[estilo] = preparada
+	var destino := _caja_pelo(img)
+	if not destino.has_area():
+		return
+	var hoja: Image = _fuentes[estilo]
+	var cabeza := hoja.get_region(Rect2i(0, 0, CELDA, CELDA))
+	var origen := _caja_pelo(cabeza)
+	if not origen.has_area():
+		return
+	# Un píxel de margen conserva los pelos laterales de estilos anchos sin
+	# cambiar el tamaño del cuerpo ni el pivote de la animación.
+	destino = Rect2i(0, 0, CELDA, CELDA).intersection(destino.grow(1))
+	var pelo := cabeza.get_region(origen)
+	pelo.resize(maxi(1, destino.size.x), maxi(1, destino.size.y), Image.INTERPOLATE_NEAREST)
+	for y in range(pelo.get_height()):
+		for x in range(pelo.get_width()):
+			var c := pelo.get_pixel(x, y)
+			if _es_pelo_pixel(c):
+				img.set_pixel(destino.position.x + x, destino.position.y + y, c)
 
 
 static func _tenir(img: Image, lista: Array, color: Color) -> void:

@@ -1,5 +1,58 @@
 # Sprites del partido
 
+## Oficiales del partido
+
+El partido muestra cuatro oficiales con el mismo atlas PNG, escala, pivote,
+contorno y animación que los jugadores: un árbitro, dos árbitros asistentes y
+un cuarto árbitro. Visten turquesa y negro para no confundirse con los equipos.
+
+- El árbitro recorre una diagonal por detrás de la pelota, se acerca a faltas y
+  offsides, usa el silbato y muestra la tarjeta decidida por el motor.
+- Cada asistente ocupa una mitad de una banda, sigue la pelota o al penúltimo
+  defensor y señala offsides, laterales, córners y saques de arco con bandera.
+- El cuarto árbitro espera fuera de la cancha, en la mitad, y levanta el tablero
+  con los dorsales mientras el saliente termina de salir y el suplente espera.
+
+La colocación vive en `match/oficiales_partido.gd`; las señales y utilería se
+dibujan en `match/vista_cancha.gd`. El motor solo exporta los dorsales del cambio:
+los oficiales no alteran resultados ni agregan azar a la simulación.
+
+Referencia reglamentaria: Laws of the Game 2026/27, leyes 5 y 6 y guía de
+posicionamiento de IFAB. Prueba: `tests/test_oficiales_partido.gd`.
+
+Chilena: los once PNG de jugadores y sus atlas preparados ya incluyen las
+poses originales 36–39. El clip usa 36, 37, 37, 38, 29, 30, 39 para enlazar
+impulso, tijera, contacto, caída y recuperación en cinco ticks, conservando
+el arte de cada peinado. No requiere regenerar imágenes.
+En partidos: centro alto, menos de 9 m del arco, volea >= 75,
+agilidad >= 70 y salto >= 60. Cumplirlos habilita el intento, no garantiza gol.
+El laboratorio «Centro y gol de chilena» fuerza la demostración visual
+sin cambiar atributos del plantel. Prueba: `tests/test_chilena.gd`.
+
+La reproducción prepara los contactos en `match/coreografia_partido.gd` antes
+de mostrar el partido. Cada gesto tiene anticipación, cuadro de impacto y
+punto de contacto: pie, cabeza, pecho o manos. El vuelo entrante llega a ese
+punto y el saliente parte de él; las alturas se enlazan conservando el arco
+original. Chilena, volea, cabezazo y palomita preparan el salto antes del toque.
+Pecho y control de pie amortiguan después. Los contactos consecutivos unen
+también los rebotes. Se conservan resultados, fotogramas y tiempos del motor.
+Pausa, retroceso y velocidades distintas consultan el mismo plan temporal.
+
+Prueba de regresión: `tests/test_coreografia_partido.gd` (ambos arcos,
+once tipos de contacto, continuidad, rebotes, cortes y laboratorios reales).
+Revisión visual en Godot 4.7.2: reproducir a x1 los laboratorios de chilena,
+volea, cabezazo, palomita, cadena de rebotes y tiro con efecto. Pausar antes
+del golpe: el balón debe seguir alto y el gesto estar preparado; al avanzar,
+el balón debe tocar el sprite y salir sin bajar primero a los pies ni volver
+hacia el jugador. Repetir a otra velocidad y comprobar controles de pecho,
+pie y laterales en un partido. Codex no ejecuta Godot, según `AGENTS.md`.
+
+Palomita usa `palomita/<peinado>.png`: once hojas de ocho PNG de 64 px para
+preparación, impulso, vuelo, contacto, descenso, caída y recuperación. Son los
+once peinados exactos del juego. `palomita_fuentes/` guarda las fuentes grandes
+y `palomita_frames.png` conserva la hoja de puntas por compatibilidad. Todo
+queda fuera del atlas general para no deformar la pose ni pisar al arquero.
+
 Estado actual: once peinados y 836 cuadros, con volea, control con el pie y
 taco propios. Fuentes, indices, prompts y pruebas en [VARIEDAD.md](VARIEDAD.md).
 Las secciones siguientes conservan el historial de las primeras cuatro hojas.

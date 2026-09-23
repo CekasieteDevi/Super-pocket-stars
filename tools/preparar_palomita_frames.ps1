@@ -1,45 +1,74 @@
 Add-Type -AssemblyName System.Drawing
-$rawPath = Join-Path $PSScriptRoot '..\assets\partido\acciones_palomita_raw.png'
-$srcPath = if (Test-Path $rawPath) { $rawPath } else { Join-Path $PSScriptRoot '..\assets\partido\acciones_palomita.png' }
-$dstPath = Join-Path $PSScriptRoot '..\assets\partido\palomita_frames.png'
-$src = [System.Drawing.Bitmap]::FromFile((Resolve-Path $srcPath))
-$cellH = if ($src.Width -gt 1000) { $src.Height } else { [int]($src.Height / 10) }
-$out = [System.Drawing.Bitmap]::new(256,64,[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-$g = [System.Drawing.Graphics]::FromImage($out); $g.Clear([System.Drawing.Color]::Transparent)
-$g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
-$occupied = New-Object bool[] $src.Width
-for ($x=0; $x -lt $src.Width; $x++) {
-    for ($y=0; $y -lt $cellH; $y++) { if ($src.GetPixel($x,$y).A -ge 32) { $occupied[$x]=$true; break } }
-}
-$runs=@(); $start=-1; $last=-1; $maxGap=50
-for ($x=0; $x -lt $src.Width; $x++) {
-    if ($occupied[$x]) {
-        if ($start -lt 0) { $start=$x }
-        elseif ($x-$last -gt $maxGap) { $runs += [System.Drawing.Rectangle]::new($start,0,$last-$start+1,$cellH); $start=$x }
-        $last=$x
+
+$sourceDir = Join-Path $PSScriptRoot '..\assets\partido\palomita_fuentes'
+$targetDir = Join-Path $PSScriptRoot '..\assets\partido\palomita'
+$legacyPath = Join-Path $PSScriptRoot '..\assets\partido\palomita_frames.png'
+$styles = @('puntas', 'afro', 'rapado', 'atado', 'mohicano', 'rastas',
+    'degrade', 'vincha', 'rodete', 'raya', 'trenzas')
+$frames = 8
+$cell = 64
+New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+
+function Convert-PalomitaSheet([string]$sourcePath, [string]$targetPath) {
+    $src = [System.Drawing.Bitmap]::FromFile((Resolve-Path $sourcePath))
+    $out = [System.Drawing.Bitmap]::new($frames * $cell, $cell,
+        [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $g = [System.Drawing.Graphics]::FromImage($out)
+    $g.Clear([System.Drawing.Color]::Transparent)
+    $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
+    $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::Half
+    $crops = @()
+    $usedRects = @()
+    $maxWidth = 1
+    $maxHeight = 1
+
+    for ($i = 0; $i -lt $frames; $i++) {
+        $x0 = [int][Math]::Floor($i * $src.Width / [double]$frames)
+        $x1 = [int][Math]::Floor(($i + 1) * $src.Width / [double]$frames)
+        $width = $x1 - $x0
+        $crop = [System.Drawing.Bitmap]::new($width, $src.Height,
+            [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        $cg = [System.Drawing.Graphics]::FromImage($crop)
+        $cg.DrawImage($src, [System.Drawing.Rectangle]::new(0, 0, $width, $src.Height),
+            $x0, 0, $width, $src.Height, [System.Drawing.GraphicsUnit]::Pixel)
+        $cg.Dispose()
+        $used = [System.Drawing.Rectangle]::Empty
+        for ($y = 0; $y -lt $crop.Height; $y++) {
+            for ($x = 0; $x -lt $crop.Width; $x++) {
+                if ($crop.GetPixel($x, $y).A -lt 96) { continue }
+                $pixel = [System.Drawing.Rectangle]::new($x, $y, 1, 1)
+                $used = if ($used.IsEmpty) { $pixel } else {
+                    [System.Drawing.Rectangle]::Union($used, $pixel)
+                }
+            }
+        }
+        if ($used.IsEmpty) { throw "Cuadro vacio: $sourcePath / $i" }
+        $crops += $crop
+        $usedRects += $used
+        $maxWidth = [Math]::Max($maxWidth, $used.Width)
+        $maxHeight = [Math]::Max($maxHeight, $used.Height)
     }
+
+    # Una escala comun por peinado: el cuerpo no crece entre fases.
+    $scale = [Math]::Min(60.0 / $maxWidth, 54.0 / $maxHeight)
+    for ($i = 0; $i -lt $frames; $i++) {
+        $used = $usedRects[$i]
+        $width = [Math]::Max(1, [int][Math]::Round($used.Width * $scale))
+        $height = [Math]::Max(1, [int][Math]::Round($used.Height * $scale))
+        $target = [System.Drawing.Rectangle]::new(
+            $i * $cell + [int](($cell - $width) / 2), 60 - $height, $width, $height)
+        $g.DrawImage($crops[$i], $target, $used.X, $used.Y, $used.Width, $used.Height,
+            [System.Drawing.GraphicsUnit]::Pixel)
+        $crops[$i].Dispose()
+    }
+    $g.Dispose()
+    $src.Dispose()
+    $out.Save($targetPath, [System.Drawing.Imaging.ImageFormat]::Png)
+    $out.Dispose()
 }
-if ($start -ge 0) { $runs += [System.Drawing.Rectangle]::new($start,0,$last-$start+1,$cellH) }
-if ($runs.Count -ne 4) { throw "Se esperaban 4 poses, se detectaron $($runs.Count)" }
-$crops=@(); $usados=@(); $maxW=1; $maxH=1
-for ($i=0; $i -lt 4; $i++) {
-    $run=$runs[$i]
-    $crop = [System.Drawing.Bitmap]::new($run.Width,$run.Height,[System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-    $cg = [System.Drawing.Graphics]::FromImage($crop)
-    $cg.DrawImage($src,[System.Drawing.Rectangle]::new(0,0,$run.Width,$run.Height),$run,[System.Drawing.GraphicsUnit]::Pixel); $cg.Dispose()
-    $used=[System.Drawing.Rectangle]::Empty
-    for($y=0;$y -lt $run.Height;$y++){for($x=0;$x -lt $run.Width;$x++){if($crop.GetPixel($x,$y).A -ge 32){$r=[System.Drawing.Rectangle]::new($x,$y,1,1);$used=if($used.IsEmpty){$r}else{[System.Drawing.Rectangle]::Union($used,$r)}}}}
-    $crops += $crop; $usados += $used
-    $maxW=[Math]::Max($maxW,$used.Width); $maxH=[Math]::Max($maxH,$used.Height)
+
+foreach ($style in $styles) {
+    Convert-PalomitaSheet (Join-Path $sourceDir "$style.png") (Join-Path $targetDir "$style.png")
 }
-# Una sola escala para las cuatro poses: evita que el jugador crezca o
-# encoja al cambiar de cuadro. La pose horizontal entra completa en 64 px.
-$escala=[Math]::Min(60.0/$maxW,46.0/$maxH)
-for ($i=0; $i -lt 4; $i++) {
-    $crop=$crops[$i]; $used=$usados[$i]
-    $w=[Math]::Max(1,[int]([Math]::Round($used.Width*$escala)))
-    $h=[Math]::Max(1,[int]([Math]::Round($used.Height*$escala)))
-    $g.DrawImage($crop,[System.Drawing.Rectangle]::new($i*64+[int]((64-$w)/2),58-$h,$w,$h),$used.X,$used.Y,$used.Width,$used.Height,[System.Drawing.GraphicsUnit]::Pixel)
-    $crop.Dispose()
-}
-$g.Dispose();$src.Dispose();$out.Save($dstPath,[System.Drawing.Imaging.ImageFormat]::Png);$out.Dispose();Write-Host 'OK: palomita_frames.png'
+Copy-Item -LiteralPath (Join-Path $targetDir 'puntas.png') -Destination $legacyPath -Force
+Write-Host "OK: $($styles.Count) peinados de palomita, 8 cuadros cada uno"

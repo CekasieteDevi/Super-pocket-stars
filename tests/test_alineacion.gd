@@ -20,6 +20,10 @@ func _init() -> void:
 	fallas += _test_no_toma_dos_veces_al_mismo()
 	fallas += _test_la_liga_arregla_sola()
 	fallas += _test_texto_corto_distingue_los_tres_motivos()
+	fallas += _test_acomodar_devuelve_cada_uno_a_su_puesto()
+	fallas += _test_acomodar_no_toca_un_once_sano()
+	fallas += _test_sin_del_puesto_elige_con_el_castigo()
+	fallas += _test_la_ia_ficha_el_puesto_que_le_falta()
 	print("FALLOS=%d" % fallas)
 	quit()
 
@@ -278,3 +282,89 @@ func _test_texto_corto_distingue_los_tres_motivos() -> int:
 	if fallas == 0:
 		print("OK: el texto corto distingue lesión, suspensión y expulsión.")
 	return fallas
+
+
+## Un once con el arquero de 9 y el 9 al arco: acomodar los devuelve.
+func _test_acomodar_devuelve_cada_uno_a_su_puesto() -> int:
+	var equipo := _equipo()
+	var roles: Array = Formaciones.roles_compartidos(equipo.formacion)
+	var ultimo := equipo.jugadores.size() - 1
+	var tmp: Dictionary = equipo.jugadores[0]
+	equipo.jugadores[0] = equipo.jugadores[ultimo]
+	equipo.jugadores[ultimo] = tmp
+	if not Alineacion.acomodar(equipo):
+		print("FALLA: acomodar no cambio un once con el arquero de delantero.")
+		return 1
+	for i in range(roles.size()):
+		if str(equipo.jugadores[i]["posicion"]) != str(roles[i]):
+			print("FALLA: el slot %d (%s) quedo con un %s." % [
+				i, roles[i], equipo.jugadores[i]["posicion"]])
+			return 1
+	print("OK: acomodar devuelve al arquero al arco y al 9 adelante.")
+	return 0
+
+
+func _test_acomodar_no_toca_un_once_sano() -> int:
+	var equipo := _equipo()
+	var antes := equipo.jugadores.map(func(j): return int(j["id"]))
+	var banco_antes := equipo.banco.map(func(j): return int(j["id"]))
+	if Alineacion.acomodar(equipo) 			or antes != equipo.jugadores.map(func(j): return int(j["id"])) 			or banco_antes != equipo.banco.map(func(j): return int(j["id"])):
+		print("FALLA: acomodar movio a alguien en un plantel recien generado.")
+		return 1
+	print("OK: acomodar deja igual un once que ya calza con su formacion.")
+	return 0
+
+
+## Sin arquero sano, el arco lo ocupa el que menos pierde. Un arquero de
+## campo cuesta el maximo (Puestos.MAXIMO), asi que ningun arquero
+## suplente puede ganarle un puesto de campo a uno de campo parecido.
+func _test_sin_del_puesto_elige_con_el_castigo() -> int:
+	var equipo := _equipo()
+	var arq: Dictionary = {}
+	var ext: Dictionary = {}
+	for s in equipo.banco:
+		if str(s["posicion"]) == "ARQ" and arq.is_empty():
+			arq = s
+		if str(s["posicion"]) == "EXT" and ext.is_empty():
+			ext = s
+	if arq.is_empty() or ext.is_empty():
+		print("FALLA: el banco generado no tiene arquero y extremo; la prueba no prueba nada.")
+		return 1
+	# Mismos atributos y sin Adaptable (cancela el castigo): solo el
+	# castigo los separa.
+	arq["atributos"] = ext["atributos"].duplicate()
+	arq["personalidades"] = {}
+	ext["personalidades"] = {}
+	var fuera := Alineacion.rinde_en(arq, "MC")
+	var cerca := Alineacion.rinde_en(ext, "MC")
+	if fuera >= cerca:
+		print("FALLA: con los mismos atributos, el arquero rinde de volante %.1f y el extremo %.1f." % [fuera, cerca])
+		return 1
+	print("OK: con los mismos atributos, el extremo rinde mas de volante (%.1f) que el arquero (%.1f)." % [cerca, fuera])
+	return 0
+
+
+## Un club sin arquero suplente lo sale a buscar al pool.
+func _test_la_ia_ficha_el_puesto_que_le_falta() -> int:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = SEED
+	var equipo := _equipo()
+	equipo.caja["contratos"] = 1.0e9
+	var libre := PlayerGenerator.generate(999001, rng, "ARQ")
+	var pool := [libre]
+	# El arquero suplente pasa a ser un DC: le sobra un DC y le falta un ARQ.
+	for i in range(equipo.banco.size()):
+		if str(equipo.banco[i]["posicion"]) == "ARQ":
+			equipo.banco[i]["posicion"] = "DC"
+	var ficha := AgentesLibres.cubrir_faltante(equipo, pool)
+	if ficha.is_empty() or int(ficha["entra"]["id"]) != 999001:
+		print("FALLA: el club sin arquero suplente no ficho al arquero libre.")
+		return 1
+	if ficha["sale"].is_empty() or str(ficha["sale"]["posicion"]) != "DC":
+		print("FALLA: para hacerle lugar tenia que irse el DC que sobra.")
+		return 1
+	if not AgentesLibres.cubrir_faltante(equipo, pool).is_empty():
+		print("FALLA: con el plantel ya completo, el club siguio fichando.")
+		return 1
+	print("OK: el club sin arquero suplente ficha uno y larga al DC que le sobra.")
+	return 0

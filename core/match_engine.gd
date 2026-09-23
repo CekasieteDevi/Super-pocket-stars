@@ -206,6 +206,10 @@ static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atri
 	# EQUIPO. `situacion` dice lo que el atributo solo no dice: que es un
 	# penal, o que el duelo es del MatchEngine (ver Entrenamiento.EQUIVALENCIA).
 	bloque_b += Entrenamiento.bonus_duelo(equipo, atributo, situacion)
+	# Jugadas preparadas: el MotorEspacial las juega en la cancha; aca, que
+	# no hay corners ni offsides, entra su equivalente (Jugadas.EQUIVALENCIA).
+	if situacion == Entrenamiento.SITUACION_ABSTRACTA:
+		bloque_b += Jugadas.bonus_abstracto(equipo, rival, atributo)
 	# §8.4#10 / §7.4.6: lo que se entienden estos dos en particular.
 	if companero_id >= 0:
 		bloque_b += Quimica.bonus(equipo, jugador_id, companero_id)
@@ -772,11 +776,19 @@ static func relativo_al_nivel(valor: float, nivel: float) -> float:
 ## §8.2 punto 1: a mayor tiro, más chance de ir a puerta; el palo escala con
 ## la precisión, "afuera" baja cuanto mejor es el rematador. `tiro` viene
 ## ya normalizado al nivel del partido (ver relativo_al_nivel).
+##
+## El palo sale de la franja de afuera, igual que en MotorEspacial: es un
+## remate que se iba por poco. Así subir los palos no cambia cuántos
+## remates van al arco. El coeficiente es el mismo "palo" del espacial;
+## allá multiplica la mezcla técnica+geometría y acá el tiro, que andan
+## los dos cerca de 0,5.
 static func _resolver_destino(tiro: int, rng: RandomNumberGenerator) -> String:
 	var t: float = clamp(tiro, 0, 100) / 100.0
-	var chance_palo: float = 0.05 * t
-	var chance_afuera: float = clamp(0.6 - 0.45 * t, 0.08, 0.6)
-	var chance_porteria: float = max(0.0, 1.0 - chance_palo - chance_afuera)
+	# La franja que no va al arco incluye el 0,05·t del palo viejo: la
+	# puntería está calibrada con ese valor y la paridad de goles con él.
+	var chance_afuera: float = clamp(0.6 - 0.45 * t, 0.08, 0.6) + 0.05 * t
+	var chance_palo: float = minf(float(MotorEspacial.pesos()["tiro_resolucion"]["palo"]) * t, chance_afuera)
+	var chance_porteria: float = 1.0 - chance_afuera
 
 	var roll := rng.randf()
 	if roll < chance_porteria:

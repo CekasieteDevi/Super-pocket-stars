@@ -60,7 +60,7 @@ const DESCRIPCIONES := {
 	"penales": "Suma en los penales, en el partido y en la tanda.",
 	"tiros_libres": "Suma en los tiros libres directos.",
 	"centros": "Suma en los centros y en los remates de cabeza y de volea.",
-	"jugadas_armadas": "La táctica nueva se asimila más rápido.",
+	"jugadas_armadas": "La táctica nueva se asimila más rápido y las jugadas preparadas se aprenden antes.",
 	"presion": "Suma en el quite y en la barrida.",
 }
 

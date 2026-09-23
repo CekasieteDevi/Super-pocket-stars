@@ -1,0 +1,7 @@
+## Barrido de control - semilla 33100, 25 partidos por celda, 8 celdas
+config          goles  tiros  pases intent   perd  pos/t  recep toques  dific  dem/c  giro%  t_vel t_pres  t_ang
+definir025       2.59   6.54   36.2   47.2   18.5  0.427   37.9   2.71  0.255  0.944   58.5  0.480  0.128  0.182
+
+real	1m47.575s
+user	0m0.000s
+sys	0m0.015s

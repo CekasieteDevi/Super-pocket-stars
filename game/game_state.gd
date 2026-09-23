@@ -218,6 +218,8 @@ func partida_nueva(semilla: int = -1, nombre_club: String = "",
 	seleccion = Seleccion.new()
 	division_jugador = DIVISION_INICIAL
 	equipo_jugador = piramide.divisiones[DIVISION_INICIAL].equipos[0]
+	# Las jugadas del club del jugador se ensayan: no vienen de regalo.
+	equipo_jugador.jugadas_aprendidas = []
 	posiciones_temporada_anterior = {}
 	_armar_copas()
 
@@ -728,6 +730,9 @@ func avanzar_un_dia() -> Array:
 	var lesionados_antes := equipo_jugador.lesiones.keys()
 	var habia_mercado := hay_mercado_abierto()
 	_avanzar_dias_todos(1)
+	if equipo_jugador.jugada_terminada != "":
+		_agregar_noticia("ENTRENAMIENTO: el plantel ya sabe la jugada %s. Elegí la próxima en Equipo > Jugadas." % str(
+			Jugadas.NOMBRE.get(equipo_jugador.jugada_terminada, "")), "club")
 	dia_temporada += 1
 	dia_absoluto += 1
 

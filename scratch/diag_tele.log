@@ -1,0 +1,288 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+FOTOGRAMAS 960
+MOTOR_IMAN i=15 min=1.50 giro=83 v1=1.79 v2=1.00 suelta=5
+MOTOR_IMAN i=41 min=3.94 giro=175 v1=2.36 v2=1.28 suelta=5
+MOTOR_POSESION suelta=7 i=60 min=5.72 clave=54038 dist_ant=2.32 dist_ahora=0.00 salto_pelota=2.32 salto_jugador=0.00 det=0 acciones=[{ "clave": 54038, "accion": "pecho" }]
+MOTOR_POSESION suelta=6 i=73 min=6.94 clave=54036 dist_ant=0.86 dist_ahora=0.00 salto_pelota=0.86 salto_jugador=0.00 det=0 acciones=[{ "clave": 54036, "accion": "pecho" }]
+MOTOR_POSESION suelta=1 i=92 min=8.72 clave=151010 dist_ant=4.38 dist_ahora=0.00 salto_pelota=4.38 salto_jugador=0.00 det=0 acciones=[]
+MOTOR_IMAN i=108 min=10.22 giro=136 v1=2.36 v2=1.00 suelta=6
+MOTOR_IMAN i=121 min=11.44 giro=57 v1=8.93 v2=26.00 suelta=6
+MOTOR_SALTO_JUGADOR i=127 min=12.00 clave=54035 d=8.17 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=127 min=12.00 clave=54041 d=6.13 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=127 min=12.00 clave=54034 d=29.93 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=127 min=12.00 clave=54024 d=19.63 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=127 min=12.00 clave=54033 d=7.84 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=127 min=12.00 clave=54019 d=8.00 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=127 min=12.00 clave=54038 d=32.06 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=127 min=12.00 clave=54036 d=32.34 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=127 min=12.00 clave=54018 d=48.47 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=127 min=12.00 clave=54039 d=45.21 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=127 min=12.00 clave=151000 d=8.11 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=127 min=12.00 clave=107212 d=54.54 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=127 min=12.00 clave=125514 d=47.34 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=127 min=12.00 clave=151030 d=45.59 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=127 min=12.00 clave=151015 d=41.93 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=127 min=12.00 clave=151003 d=28.47 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=127 min=12.00 clave=118009 d=28.06 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=127 min=12.00 clave=151033 d=15.10 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=127 min=12.00 clave=151008 d=30.21 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=127 min=12.00 clave=151037 d=4.82 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=127 min=12.00 clave=151010 d=9.00 dueno=-1 det=20
+MOTOR_IMAN i=170 min=16.03 giro=168 v1=1.03 v2=1.00 suelta=10
+MOTOR_IMAN i=183 min=17.25 giro=164 v1=2.09 v2=1.00 suelta=6
+MOTOR_POSESION suelta=1 i=190 min=17.91 clave=54033 dist_ant=2.99 dist_ahora=0.00 salto_pelota=2.99 salto_jugador=0.00 det=0 acciones=[{ "clave": 54033, "accion": "control_pie" }]
+MOTOR_IMAN i=210 min=19.78 giro=176 v1=2.33 v2=1.00 suelta=7
+MOTOR_IMAN i=222 min=20.91 giro=175 v1=1.35 v2=1.00 suelta=6
+MOTOR_IMAN i=229 min=21.56 giro=102 v1=17.04 v2=2.10 suelta=3
+MOTOR_IMAN i=259 min=24.38 giro=83 v1=1.79 v2=1.00 suelta=5
+MOTOR_IMAN i=271 min=25.50 giro=151 v1=2.33 v2=1.00 suelta=7
+MOTOR_POSESION suelta=3 i=281 min=26.44 clave=151033 dist_ant=3.06 dist_ahora=0.00 salto_pelota=3.06 salto_jugador=0.00 det=0 acciones=[]
+MOTOR_POSESION suelta=7 i=293 min=27.56 clave=151008 dist_ant=4.42 dist_ahora=0.00 salto_pelota=4.42 salto_jugador=0.00 det=0 acciones=[{ "clave": 151008, "accion": "pecho" }]
+MOTOR_SALTO_JUGADOR i=317 min=29.81 clave=54024 d=6.29 dueno=-1 det=0
+MOTOR_IMAN i=335 min=31.50 giro=77 v1=14.53 v2=11.00 suelta=4
+MOTOR_IMAN i=341 min=32.06 giro=41 v1=5.99 v2=2.10 suelta=10
+MOTOR_IMAN i=422 min=39.66 giro=133 v1=1.79 v2=1.00 suelta=6
+MOTOR_IMAN i=445 min=41.81 giro=162 v1=2.33 v2=1.00 suelta=8
+MOTOR_IMAN i=452 min=42.47 giro=180 v1=1.14 v2=1.00 suelta=15
+   k=448 pelota=(-36.34161, 1.96699) vel=9.27 dueno=-1 | clave=151037 pos=(-33.19132, 1.348497) dist=3.21 vel_j=2.85 acciones=[]
+   k=449 pelota=(-36.34162, 1.96699) vel=0.00 dueno=-1 | clave=151037 pos=(-34.12353, 1.531515) dist=2.26 vel_j=3.80 acciones=[]
+   k=450 pelota=(-37.13762, 2.123269) vel=3.24 dueno=-1 | clave=151037 pos=(-35.28878, 1.760288) dist=1.88 vel_j=4.75 acciones=[]
+   k=451 pelota=(-37.41623, 2.177967) vel=1.14 dueno=-1 | clave=151037 pos=(-36.68709, 2.034816) dist=0.74 vel_j=5.70 acciones=[]
+   k=452 pelota=(-37.17091, 2.129804) vel=1.00 dueno=-1 | clave=151037 pos=(-37.17091, 2.129804) dist=0.00 vel_j=1.97 acciones=[]
+   k=453 pelota=(-37.17091, 2.129804) vel=0.00 dueno=151037 | clave=151037 pos=(-37.17091, 2.129804) dist=0.00 vel_j=0.00 acciones=[]
+MOTOR_IMAN i=504 min=47.34 giro=156 v1=2.33 v2=1.00 suelta=7
+MOTOR_IMAN i=515 min=48.38 giro=175 v1=2.36 v2=1.00 suelta=5
+MOTOR_POSESION suelta=1 i=527 min=49.50 clave=151033 dist_ant=0.82 dist_ahora=0.00 salto_pelota=0.82 salto_jugador=0.00 det=0 acciones=[]
+MOTOR_IMAN i=539 min=50.63 giro=168 v1=2.68 v2=1.00 suelta=8
+MOTOR_IMAN i=545 min=51.19 giro=84 v1=3.73 v2=26.00 suelta=4
+MOTOR_SALTO_JUGADOR i=551 min=51.75 clave=54035 d=12.96 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=551 min=51.75 clave=54041 d=5.63 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=551 min=51.75 clave=54034 d=31.60 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=551 min=51.75 clave=54024 d=28.29 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=551 min=51.75 clave=54033 d=11.79 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=551 min=51.75 clave=54019 d=21.29 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=551 min=51.75 clave=54038 d=36.14 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=551 min=51.75 clave=54036 d=28.82 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=551 min=51.75 clave=54018 d=46.25 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=551 min=51.75 clave=54039 d=40.66 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=551 min=51.75 clave=151000 d=8.43 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=551 min=51.75 clave=107212 d=49.71 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=551 min=51.75 clave=125514 d=52.60 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=551 min=51.75 clave=151030 d=46.16 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=551 min=51.75 clave=151015 d=50.43 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=551 min=51.75 clave=151003 d=26.83 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=551 min=51.75 clave=118009 d=35.68 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=551 min=51.75 clave=151033 d=24.42 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=551 min=51.75 clave=151008 d=22.09 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=551 min=51.75 clave=151037 d=29.44 dueno=-1 det=20
+MOTOR_SALTO_JUGADOR i=551 min=51.75 clave=151010 d=12.03 dueno=-1 det=20
+MOTOR_IMAN i=608 min=57.09 giro=180 v1=1.83 v2=1.00 suelta=7
+MOTOR_SALTO_JUGADOR i=623 min=58.50 clave=54035 d=41.66 dueno=-1 det=14
+MOTOR_SALTO_JUGADOR i=623 min=58.50 clave=54034 d=37.11 dueno=-1 det=14
+MOTOR_SALTO_JUGADOR i=623 min=58.50 clave=54024 d=68.69 dueno=-1 det=14
+MOTOR_SALTO_JUGADOR i=623 min=58.50 clave=54033 d=14.57 dueno=-1 det=14
+MOTOR_SALTO_JUGADOR i=623 min=58.50 clave=54019 d=16.71 dueno=-1 det=14
+MOTOR_SALTO_JUGADOR i=623 min=58.50 clave=54038 d=49.98 dueno=-1 det=14
+MOTOR_SALTO_JUGADOR i=623 min=58.50 clave=54036 d=44.75 dueno=-1 det=14
+MOTOR_SALTO_JUGADOR i=623 min=58.50 clave=54018 d=32.79 dueno=-1 det=14
+MOTOR_SALTO_JUGADOR i=623 min=58.50 clave=54039 d=35.99 dueno=-1 det=14
+MOTOR_SALTO_JUGADOR i=623 min=58.50 clave=107212 d=9.01 dueno=-1 det=14
+MOTOR_SALTO_JUGADOR i=623 min=58.50 clave=125514 d=22.58 dueno=-1 det=14
+MOTOR_SALTO_JUGADOR i=623 min=58.50 clave=151030 d=15.76 dueno=-1 det=14
+MOTOR_SALTO_JUGADOR i=623 min=58.50 clave=151015 d=25.81 dueno=-1 det=14
+MOTOR_SALTO_JUGADOR i=623 min=58.50 clave=151003 d=25.36 dueno=-1 det=14
+MOTOR_SALTO_JUGADOR i=623 min=58.50 clave=118009 d=36.59 dueno=-1 det=14
+MOTOR_SALTO_JUGADOR i=623 min=58.50 clave=151033 d=45.22 dueno=-1 det=14
+MOTOR_SALTO_JUGADOR i=623 min=58.50 clave=151008 d=32.98 dueno=-1 det=14
+MOTOR_IMAN i=647 min=60.75 giro=158 v1=1.95 v2=1.00 suelta=32
+   k=643 pelota=(29.27872, 5.711336) vel=15.89 dueno=-1 | clave=151008 pos=(31.97042, 6.465315) dist=2.80 vel_j=5.62 acciones=[]
+   k=644 pelota=(33.13592, 4.759802) vel=15.89 dueno=-1 | clave=151008 pos=(32.61491, 6.124372) dist=1.46 vel_j=2.92 acciones=[]
+   k=645 pelota=(34.48594, 4.426765) vel=5.56 dueno=-1 | clave=151008 pos=(33.32237, 5.482482) dist=1.57 vel_j=3.82 acciones=[]
+   k=646 pelota=(34.95844, 4.310202) vel=1.95 dueno=-1 | clave=151008 pos=(34.28937, 4.789609) dist=0.82 vel_j=4.76 acciones=[]
+   k=647 pelota=(34.75523, 4.455812) vel=1.00 dueno=-1 | clave=151008 pos=(34.75523, 4.455812) dist=0.00 vel_j=2.29 acciones=[]
+   k=648 pelota=(34.75523, 4.455812) vel=0.00 dueno=151008 | clave=151008 pos=(34.75523, 4.455812) dist=0.00 vel_j=0.00 acciones=[]
+MOTOR_POSESION suelta=2 i=655 min=61.50 clave=151010 dist_ant=5.49 dist_ahora=0.00 salto_pelota=5.49 salto_jugador=0.00 det=0 acciones=[{ "clave": 151010, "accion": "control_pie" }]
+MOTOR_IMAN i=675 min=63.38 giro=142 v1=2.33 v2=1.00 suelta=6
+MOTOR_POSESION suelta=5 i=686 min=64.41 clave=54038 dist_ant=3.44 dist_ahora=0.00 salto_pelota=3.44 salto_jugador=0.00 det=0 acciones=[{ "clave": 54038, "accion": "pecho" }]
+MOTOR_POSESION suelta=2 i=706 min=66.28 clave=151003 dist_ant=2.02 dist_ahora=0.00 salto_pelota=2.02 salto_jugador=0.00 det=0 acciones=[]
+MOTOR_POSESION suelta=6 i=717 min=67.31 clave=151008 dist_ant=2.37 dist_ahora=0.00 salto_pelota=2.37 salto_jugador=0.00 det=0 acciones=[{ "clave": 151008, "accion": "pecho" }]
+MOTOR_IMAN i=739 min=69.38 giro=131 v1=2.33 v2=1.00 suelta=8
+MOTOR_IMAN i=792 min=74.34 giro=26 v1=18.64 v2=2.10 suelta=45
+   k=788 pelota=(-43.85737, 1.119926) vel=19.01 dueno=-1 | clave=54034 pos=(-40.90549, -14.91101) dist=16.30 vel_j=5.52 acciones=[]
+   k=789 pelota=(-42.76556, -3.505798) vel=19.01 dueno=-1 | clave=54034 pos=(-41.23728, -16.44074) dist=13.02 vel_j=6.26 acciones=[]
+   k=790 pelota=(-41.67376, -8.131523) vel=19.01 dueno=-1 | clave=54034 pos=(-41.27857, -15.65472) dist=7.53 vel_j=3.15 acciones=[]
+   k=791 pelota=(-40.60357, -12.66574) vel=18.64 dueno=-1 | clave=54034 pos=(-41.05573, -14.66796) dist=2.05 vel_j=4.05 acciones=[]
+   k=792 pelota=(-40.71922, -13.17784) vel=2.10 dueno=-1 | clave=54034 pos=(-40.78019, -13.44782) dist=0.28 vel_j=5.00 acciones=[]
+   k=793 pelota=(-40.78019, -13.44782) vel=1.11 dueno=54034 | clave=54034 pos=(-40.78019, -13.44782) dist=0.00 vel_j=0.00 acciones=[{ "clave": 54034, "accion": "pecho" }]
+MOTOR_POSESION suelta=5 i=803 min=75.38 clave=54039 dist_ant=2.77 dist_ahora=0.00 salto_pelota=2.77 salto_jugador=0.00 det=0 acciones=[{ "clave": 54039, "accion": "pecho" }]
+MOTOR_POSESION suelta=5 i=828 min=77.72 clave=54018 dist_ant=3.26 dist_ahora=0.00 salto_pelota=3.26 salto_jugador=0.00 det=0 acciones=[{ "clave": 54018, "accion": "pecho" }]
+MOTOR_POSESION suelta=6 i=846 min=79.41 clave=54039 dist_ant=1.17 dist_ahora=0.00 salto_pelota=1.17 salto_jugador=0.00 det=0 acciones=[{ "clave": 54039, "accion": "pecho" }]
+MOTOR_IMAN i=873 min=81.94 giro=169 v1=1.79 v2=1.00 suelta=8
+MOTOR_IMAN i=889 min=83.44 giro=158 v1=1.03 v2=1.00 suelta=12
+   k=885 pelota=(-22.23627, -4.333567) vel=24.00 dueno=-1 | clave=54035 pos=(-19.52647, -6.328424) dist=3.36 vel_j=1.70 acciones=[]
+   k=886 pelota=(-24.31667, -4.61984) vel=8.40 dueno=-1 | clave=54035 pos=(-20.11752, -6.11761) dist=4.46 vel_j=2.51 acciones=[]
+   k=887 pelota=(-25.04481, -4.720036) vel=2.94 dueno=-1 | clave=54035 pos=(-20.91873, -5.890353) dist=4.29 vel_j=3.33 acciones=[]
+   k=888 pelota=(-25.29966, -4.755105) vel=1.03 dueno=-1 | clave=54035 pos=(-21.92424, -5.629792) dist=3.49 vel_j=4.15 acciones=[]
+   k=889 pelota=(-25.05765, -4.817817) vel=1.00 dueno=-1 | clave=54035 pos=(-23.09361, -5.326766) dist=2.03 vel_j=4.83 acciones=[]
+   k=890 pelota=(-24.81564, -4.880529) vel=1.00 dueno=-1 | clave=54035 pos=(-24.26299, -5.02374) dist=0.57 vel_j=4.83 acciones=[]
+   k=891 pelota=(-24.26299, -5.02374) vel=2.28 dueno=54035 | clave=54035 pos=(-24.26299, -5.02374) dist=0.00 vel_j=0.00 acciones=[]
+MOTOR_POSESION suelta=2 i=921 min=86.44 clave=54038 dist_ant=2.64 dist_ahora=0.00 salto_pelota=2.64 salto_jugador=0.00 det=0 acciones=[{ "clave": 54038, "accion": "control_pie" }]
+MOTOR_POSESION suelta=5 i=928 min=87.09 clave=54039 dist_ant=1.21 dist_ahora=0.00 salto_pelota=1.21 salto_jugador=0.00 det=0 acciones=[{ "clave": 54039, "accion": "control_pie" }]
+MOTOR_IMAN i=935 min=87.75 giro=151 v1=1.80 v2=2.10 suelta=6
+MOTOR_POSESION suelta=7 i=949 min=89.06 clave=151010 dist_ant=4.31 dist_ahora=0.00 salto_pelota=4.31 salto_jugador=0.00 det=0 acciones=[{ "clave": 151010, "accion": "pecho" }]
+MOTOR_POSESION suelta=3 i=957 min=89.81 clave=151037 dist_ant=1.17 dist_ahora=0.00 salto_pelota=1.17 salto_jugador=0.00 det=0 acciones=[]
+MOTOR_POSESION_LEJANA=18 MOTOR_SALTOS_JUGADOR=60 MOTOR_IMAN=28
+VISTA_DESVIO i=10 t=0.625 min=1.03 desvio=2.28 dibujada=(0.0, 0.0) motor=(-0.310563, 2.258641) dueno=54018->-1 acciones=[{ "clave": 54018, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=10 t=0.750 min=1.03 desvio=2.74 dibujada=(0.0, 0.0) motor=(-0.372676, 2.710369) dueno=54018->-1 acciones=[{ "clave": 54018, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=10 t=0.875 min=1.03 desvio=3.19 dibujada=(0.0, 0.0) motor=(-0.434788, 3.162097) dueno=54018->-1 acciones=[{ "clave": 54018, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=11 t=0.000 min=1.13 desvio=3.65 dibujada=(0.0, 0.0) motor=(-0.496901, 3.613825) dueno=-1->-1 acciones=[{ "clave": 54018, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=11 t=0.125 min=1.13 desvio=3.19 dibujada=(-0.124225, 0.903456) motor=(-0.559014, 4.065554) dueno=-1->-1 acciones=[{ "clave": 54018, "accion": "patea" }] cerca=patea/patea d=0.92
+VISTA_DESVIO i=11 t=0.250 min=1.13 desvio=2.74 dibujada=(-0.24845, 1.806913) motor=(-0.621126, 4.517282) dueno=-1->-1 acciones=[{ "clave": 54018, "accion": "patea" }] cerca=patea/patea d=1.83
+VISTA_DESVIO i=11 t=0.375 min=1.13 desvio=2.28 dibujada=(-0.372676, 2.710369) motor=(-0.683239, 4.96901) dueno=-1->-1 acciones=[{ "clave": 54018, "accion": "patea" }] cerca=patea/patea d=2.75
+VISTA_DESVIO i=36 t=0.500 min=3.47 desvio=2.33 dibujada=(-5.701455, 8.477375) motor=(-6.874336, 10.49104) dueno=151037->-1 acciones=[{ "clave": 151037, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=36 t=0.625 min=3.47 desvio=2.91 dibujada=(-5.762733, 8.460793) motor=(-7.228835, 10.97788) dueno=151037->-1 acciones=[{ "clave": 151037, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=36 t=0.750 min=3.47 desvio=3.50 dibujada=(-5.824011, 8.444213) motor=(-7.583333, 11.46472) dueno=151037->-1 acciones=[{ "clave": 151037, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=36 t=0.875 min=3.47 desvio=4.08 dibujada=(-5.88529, 8.427632) motor=(-7.937831, 11.95156) dueno=151037->-1 acciones=[{ "clave": 151037, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=37 t=0.000 min=3.56 desvio=4.66 dibujada=(-5.946568, 8.411052) motor=(-8.29233, 12.43839) dueno=-1->-1 acciones=[{ "clave": 151037, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=37 t=0.125 min=3.56 desvio=4.08 dibujada=(-6.555529, 9.348081) motor=(-8.608071, 12.872) dueno=-1->-1 acciones=[{ "clave": 151037, "accion": "patea" }] cerca=/corre_b d=1.00
+VISTA_DESVIO i=37 t=0.250 min=3.56 desvio=3.50 dibujada=(-7.164491, 10.28511) motor=(-8.923813, 13.30561) dueno=-1->-1 acciones=[{ "clave": 151037, "accion": "patea" }] cerca=/corre_b d=1.99
+VISTA_DESVIO i=37 t=0.375 min=3.56 desvio=2.91 dibujada=(-7.773452, 11.22214) motor=(-9.239553, 13.73923) dueno=-1->-1 acciones=[{ "clave": 151037, "accion": "patea" }] cerca=/corre_b d=3.02
+VISTA_DESVIO i=37 t=0.500 min=3.56 desvio=2.33 dibujada=(-8.382414, 12.15917) motor=(-9.555295, 14.17284) dueno=-1->-1 acciones=[{ "clave": 151037, "accion": "patea" }] cerca=/corre_b d=3.90
+VISTA_DESVIO i=52 t=0.625 min=4.97 desvio=2.49 dibujada=(-8.846829, 17.77886) motor=(-7.704202, 15.56131) dueno=54019->-1 acciones=[{ "clave": 54019, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=52 t=0.750 min=4.97 desvio=2.99 dibujada=(-8.890242, 17.72671) motor=(-7.519088, 15.06564) dueno=54019->-1 acciones=[{ "clave": 54019, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=52 t=0.875 min=4.97 desvio=3.49 dibujada=(-8.933653, 17.67456) motor=(-7.333975, 14.56998) dueno=54019->-1 acciones=[{ "clave": 54019, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=53 t=0.000 min=5.06 desvio=3.99 dibujada=(-8.977065, 17.6224) motor=(-7.148861, 14.07431) dueno=-1->-1 acciones=[{ "clave": 54019, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=53 t=0.125 min=5.06 desvio=3.49 dibujada=(-8.563426, 16.68323) motor=(-6.963747, 13.57865) dueno=-1->-1 acciones=[{ "clave": 54019, "accion": "patea" }] cerca=/corre_b d=0.55
+VISTA_DESVIO i=53 t=0.250 min=5.06 desvio=2.99 dibujada=(-8.149787, 15.74405) motor=(-6.778634, 13.08298) dueno=-1->-1 acciones=[{ "clave": 54019, "accion": "patea" }] cerca=/corre_b d=0.58
+VISTA_DESVIO i=53 t=0.375 min=5.06 desvio=2.49 dibujada=(-7.736147, 14.80488) motor=(-6.59352, 12.58732) dueno=-1->-1 acciones=[{ "clave": 54019, "accion": "patea" }] cerca=/corre_b d=1.31
+VISTA_DESVIO i=66 t=0.625 min=6.28 desvio=2.50 dibujada=(6.014739, -12.12366) motor=(5.899833, -9.62718) dueno=54038->-1 acciones=[{ "clave": 54038, "accion": "control_pie" }, { "clave": 54038, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=66 t=0.750 min=6.28 desvio=3.00 dibujada=(6.099029, -12.17112) motor=(5.961142, -9.175342) dueno=54038->-1 acciones=[{ "clave": 54038, "accion": "control_pie" }, { "clave": 54038, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=66 t=0.875 min=6.28 desvio=3.50 dibujada=(6.183318, -12.21858) motor=(6.02245, -8.723503) dueno=54038->-1 acciones=[{ "clave": 54038, "accion": "control_pie" }, { "clave": 54038, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=67 t=0.000 min=6.38 desvio=4.00 dibujada=(6.267608, -12.26604) motor=(6.083758, -8.271666) dueno=-1->-1 acciones=[{ "clave": 54038, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=67 t=0.125 min=6.38 desvio=3.50 dibujada=(6.305935, -11.3149) motor=(6.145067, -7.819828) dueno=-1->-1 acciones=[{ "clave": 54038, "accion": "patea" }] cerca=patea/patea d=1.01
+VISTA_DESVIO i=67 t=0.250 min=6.38 desvio=3.00 dibujada=(6.344262, -10.36377) motor=(6.206375, -7.36799) dueno=-1->-1 acciones=[{ "clave": 54038, "accion": "patea" }] cerca=patea/patea d=2.03
+VISTA_DESVIO i=67 t=0.375 min=6.38 desvio=2.50 dibujada=(6.382589, -9.412633) motor=(6.267684, -6.916152) dueno=-1->-1 acciones=[{ "clave": 54038, "accion": "patea" }] cerca=patea/patea d=3.04
+VISTA_DESVIO i=90 t=0.625 min=8.53 desvio=2.35 dibujada=(3.754115, 10.53868) motor=(1.579413, 9.642348) dueno=151008->-1 acciones=[{ "clave": 151008, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=90 t=0.750 min=8.53 desvio=2.82 dibujada=(3.645042, 10.59588) motor=(1.035399, 9.52028) dueno=151008->-1 acciones=[{ "clave": 151008, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=90 t=0.875 min=8.53 desvio=3.29 dibujada=(3.535968, 10.65308) motor=(0.491385, 9.398211) dueno=151008->-1 acciones=[{ "clave": 151008, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=91 t=0.000 min=8.63 desvio=3.76 dibujada=(3.426895, 10.71028) motor=(-0.052629, 9.276143) dueno=-1->151010 acciones=[{ "clave": 151008, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=91 t=0.125 min=8.63 desvio=3.29 dibujada=(2.457622, 10.41112) motor=(-0.586961, 9.156247) dueno=-1->151010 acciones=[{ "clave": 151008, "accion": "patea" }] cerca=patea/patea d=1.02
+VISTA_DESVIO i=91 t=0.250 min=8.63 desvio=2.82 dibujada=(1.488349, 10.11195) motor=(-1.121293, 9.036351) dueno=-1->151010 acciones=[{ "clave": 151008, "accion": "patea" }] cerca=/corre_a d=1.54
+VISTA_DESVIO i=91 t=0.375 min=8.63 desvio=2.35 dibujada=(0.519077, 9.812791) motor=(-1.655625, 8.916455) dueno=-1->151010 acciones=[{ "clave": 151008, "accion": "patea" }] cerca=/corre_a d=1.11
+VISTA_DESVIO i=96 t=0.625 min=9.09 desvio=2.34 dibujada=(-6.908805, 6.952837) motor=(-9.22755, 6.605738) dueno=151010->-1 acciones=[{ "clave": 151010, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=96 t=0.750 min=9.09 desvio=2.81 dibujada=(-7.030617, 6.921874) motor=(-9.813111, 6.505354) dueno=151010->-1 acciones=[{ "clave": 151010, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=96 t=0.875 min=9.09 desvio=3.28 dibujada=(-7.15243, 6.890911) motor=(-10.39867, 6.404972) dueno=151010->-1 acciones=[{ "clave": 151010, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=97 t=0.000 min=9.19 desvio=3.75 dibujada=(-7.274242, 6.859947) motor=(-10.98423, 6.304588) dueno=-1->-1 acciones=[{ "clave": 151010, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=97 t=0.125 min=9.19 desvio=3.28 dibujada=(-8.323552, 6.690144) motor=(-11.5698, 6.204205) dueno=-1->-1 acciones=[{ "clave": 151010, "accion": "patea" }] cerca=patea/patea d=0.91
+VISTA_DESVIO i=97 t=0.250 min=9.19 desvio=2.81 dibujada=(-9.372862, 6.520341) motor=(-12.15536, 6.103822) dueno=-1->-1 acciones=[{ "clave": 151010, "accion": "patea" }] cerca=patea/patea d=1.81
+VISTA_DESVIO i=97 t=0.375 min=9.19 desvio=2.34 dibujada=(-10.42217, 6.350538) motor=(-12.74092, 6.003439) dueno=-1->-1 acciones=[{ "clave": 151010, "accion": "patea" }] cerca=patea/patea d=2.72
+VISTA_DESVIO i=102 t=0.500 min=9.66 desvio=2.06 dibujada=(-18.27547, 5.086034) motor=(-19.41883, 3.376033) dueno=151037->-1 acciones=[{ "clave": 151037, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=102 t=0.625 min=9.66 desvio=2.57 dibujada=(-18.39249, 5.06589) motor=(-19.82169, 2.928389) dueno=151037->-1 acciones=[{ "clave": 151037, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=102 t=0.750 min=9.66 desvio=3.09 dibujada=(-18.50951, 5.045747) motor=(-20.22454, 2.480745) dueno=151037->-1 acciones=[{ "clave": 151037, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=102 t=0.875 min=9.66 desvio=3.60 dibujada=(-18.62652, 5.025603) motor=(-20.6274, 2.033101) dueno=151037->-1 acciones=[{ "clave": 151037, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=103 t=0.000 min=9.75 desvio=4.11 dibujada=(-18.74354, 5.005459) motor=(-21.03026, 1.585457) dueno=-1->-1 acciones=[{ "clave": 151037, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=103 t=0.125 min=9.75 desvio=3.60 dibujada=(-19.43224, 4.130315) motor=(-21.43312, 1.137813) dueno=-1->-1 acciones=[{ "clave": 151037, "accion": "patea" }] cerca=patea/patea d=1.01
+VISTA_DESVIO i=103 t=0.250 min=9.75 desvio=3.09 dibujada=(-20.12094, 3.255171) motor=(-21.83598, 0.690169) dueno=-1->-1 acciones=[{ "clave": 151037, "accion": "patea" }] cerca=patea/patea d=2.02
+VISTA_DESVIO i=103 t=0.375 min=9.75 desvio=2.57 dibujada=(-20.80963, 2.380027) motor=(-22.23883, 0.242525) dueno=-1->-1 acciones=[{ "clave": 151037, "accion": "patea" }] cerca=patea/patea d=3.03
+VISTA_DESVIO i=103 t=0.500 min=9.75 desvio=2.06 dibujada=(-21.49833, 1.504882) motor=(-22.64169, -0.205119) dueno=-1->-1 acciones=[{ "clave": 151037, "accion": "patea" }] cerca=/corre_b d=4.03
+VISTA_DESVIO i=115 t=0.375 min=10.88 desvio=2.17 dibujada=(-30.33649, -6.470086) motor=(-31.68216, -4.770124) dueno=151033->-1 acciones=[{ "clave": 151033, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=115 t=0.500 min=10.88 desvio=2.89 dibujada=(-30.37509, -6.557343) motor=(-32.16932, -4.290728) dueno=151033->-1 acciones=[{ "clave": 151033, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=115 t=0.625 min=10.88 desvio=3.61 dibujada=(-30.41369, -6.644601) motor=(-32.65648, -3.811331) dueno=151033->-1 acciones=[{ "clave": 151033, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=115 t=0.750 min=10.88 desvio=4.34 dibujada=(-30.45229, -6.731859) motor=(-33.14363, -3.331935) dueno=151033->-1 acciones=[{ "clave": 151033, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=115 t=0.875 min=10.88 desvio=5.06 dibujada=(-30.49089, -6.819116) motor=(-33.63079, -2.852539) dueno=151033->-1 acciones=[{ "clave": 151033, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=116 t=0.000 min=10.97 desvio=5.78 dibujada=(-30.52949, -6.906374) motor=(-34.11795, -2.373143) dueno=-1->-1 acciones=[{ "clave": 151033, "accion": "patea" }, { "clave": 151037, "accion": "pecho" }, { "clave": 151037, "accion": "volea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=116 t=0.125 min=10.97 desvio=5.06 dibujada=(-31.25031, -6.113427) motor=(-34.36996, -2.125149) dueno=-1->-1 acciones=[{ "clave": 151033, "accion": "patea" }, { "clave": 151037, "accion": "pecho" }, { "clave": 151037, "accion": "volea" }] cerca=patea/patea d=1.13
+VISTA_DESVIO i=116 t=0.250 min=10.97 desvio=4.35 dibujada=(-31.97114, -5.320481) motor=(-34.62196, -1.877155) dueno=-1->-1 acciones=[{ "clave": 151033, "accion": "patea" }, { "clave": 151037, "accion": "pecho" }, { "clave": 151037, "accion": "volea" }] cerca=patea/patea d=2.26
+VISTA_DESVIO i=116 t=0.375 min=10.97 desvio=3.63 dibujada=(-32.69196, -4.527534) motor=(-34.87397, -1.629161) dueno=-1->-1 acciones=[{ "clave": 151033, "accion": "patea" }, { "clave": 151037, "accion": "pecho" }, { "clave": 151037, "accion": "volea" }] cerca=patea/patea d=3.39
+VISTA_DESVIO i=116 t=0.500 min=10.97 desvio=2.91 dibujada=(-33.41279, -3.734587) motor=(-35.12598, -1.381167) dueno=-1->-1 acciones=[{ "clave": 151033, "accion": "patea" }, { "clave": 151037, "accion": "pecho" }, { "clave": 151037, "accion": "volea" }] cerca=volea/volea d=4.30
+VISTA_DESVIO i=116 t=0.625 min=10.97 desvio=2.20 dibujada=(-34.13361, -2.941641) motor=(-35.37799, -1.133174) dueno=-1->-1 acciones=[{ "clave": 151033, "accion": "patea" }, { "clave": 151037, "accion": "pecho" }, { "clave": 151037, "accion": "volea" }] cerca=volea/volea d=3.22
+VISTA_SALTO_PELOTA i=120 t=0.000 min=11.34 vel=71.5 m/s de=(-48.95888, 1.737517) a=(-51.16167, 2.1028) dueno=-1->-1
+VISTA_DESVIO i=126 t=0.125 min=11.91 desvio=2.68 dibujada=(-55.70816, 12.48855) motor=(-55.18214, 15.11498) dueno=-1->-1 acciones=[] cerca=/corre_a d=12.29
+VISTA_DESVIO i=126 t=0.250 min=11.91 desvio=5.36 dibujada=(-55.70816, 12.48855) motor=(-54.65612, 17.74142) dueno=-1->-1 acciones=[] cerca=/corre_a d=12.46
+VISTA_DESVIO i=126 t=0.375 min=11.91 desvio=8.04 dibujada=(-55.70816, 12.48855) motor=(-54.1301, 20.36785) dueno=-1->-1 acciones=[] cerca=/corre_a d=12.64
+VISTA_DESVIO i=126 t=0.500 min=11.91 desvio=10.71 dibujada=(-55.70816, 12.48855) motor=(-53.60408, 22.99428) dueno=-1->-1 acciones=[] cerca=/corre_a d=12.81
+VISTA_DESVIO i=126 t=0.625 min=11.91 desvio=13.39 dibujada=(-55.70816, 12.48855) motor=(-53.07806, 25.62071) dueno=-1->-1 acciones=[] cerca=/corre_a d=12.99
+VISTA_DESVIO i=126 t=0.750 min=11.91 desvio=16.07 dibujada=(-55.70816, 12.48855) motor=(-52.55204, 28.24714) dueno=-1->-1 acciones=[] cerca=/corre_a d=13.17
+VISTA_DESVIO i=126 t=0.875 min=11.91 desvio=18.75 dibujada=(-55.70816, 12.48855) motor=(-52.02602, 30.87357) dueno=-1->-1 acciones=[] cerca=/corre_a d=13.35
+VISTA_SALTO_PELOTA i=127 t=0.000 min=12.00 vel=685.7 m/s de=(-55.70816, 12.48855) a=(-51.5, 33.5) dueno=-1->-1
+VISTA_DESVIO i=146 t=0.500 min=13.78 desvio=2.23 dibujada=(-51.5, 33.5) motor=(-51.03656, 31.31852) dueno=-1->-1 acciones=[{ "clave": 151008, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=146 t=0.625 min=13.78 desvio=2.79 dibujada=(-51.5, 33.5) motor=(-50.9207, 30.77315) dueno=-1->-1 acciones=[{ "clave": 151008, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=146 t=0.750 min=13.78 desvio=3.35 dibujada=(-51.5, 33.5) motor=(-50.80484, 30.22778) dueno=-1->-1 acciones=[{ "clave": 151008, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=146 t=0.875 min=13.78 desvio=3.90 dibujada=(-51.5, 33.5) motor=(-50.68898, 29.68241) dueno=-1->-1 acciones=[{ "clave": 151008, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=147 t=0.000 min=13.88 desvio=4.46 dibujada=(-51.5, 33.5) motor=(-50.57312, 29.13704) dueno=-1->-1 acciones=[{ "clave": 151008, "accion": "patea" }] cerca=patea/patea d=0.00
+VISTA_DESVIO i=147 t=0.125 min=13.88 desvio=3.90 dibujada=(-51.26828, 32.40926) motor=(-50.45726, 28.59167) dueno=-1->-1 acciones=[{ "clave": 151008, "accion": "patea" }] cerca=patea/patea d=1.09
+VISTA_DESVIO i=147 t=0.250 min=13.88 desvio=3.35 dibujada=(-51.03656, 31.31852) motor=(-50.3414, 28.0463) dueno=-1->-1 acciones=[{ "clave": 151008, "accion": "patea" }] cerca=patea/patea d=2.18
+VISTA_DESVIO i=147 t=0.375 min=13.88 desvio=2.79 dibujada=(-50.80484, 30.22778) motor=(-50.22554, 27.50093) dueno=-1->-1 acciones=[{ "clave": 151008, "accion": "patea" }] cerca=patea/patea d=3.27
+VISTA_DESVIO i=147 t=0.500 min=13.88 desvio=2.23 dibujada=(-50.57312, 29.13704) motor=(-50.10968, 26.95556) dueno=-1->-1 acciones=[{ "clave": 151008, "accion": "patea" }] cerca=/quieto d=4.37
+VISTA_SALTO_PELOTA i=161 t=0.125 min=15.19 vel=45.0 m/s de=(-41.78935, 6.920976) a=(-40.39616, 6.719695) dueno=-1->-1
+VISTA_SALTO_PELOTA i=161 t=0.250 min=15.19 vel=45.0 m/s de=(-40.39616, 6.719695) a=(-39.00298, 6.518414) dueno=-1->-1
+VISTA_SALTO_PELOTA i=161 t=0.375 min=15.19 vel=45.0 m/s de=(-39.00298, 6.518414) a=(-37.60979, 6.317134) dueno=-1->-1
+VISTA_SALTO_PELOTA i=161 t=0.500 min=15.19 vel=45.0 m/s de=(-37.60979, 6.317134) a=(-36.21661, 6.115853) dueno=-1->-1
+VISTA_SALTO_PELOTA i=161 t=0.625 min=15.19 vel=45.0 m/s de=(-36.21661, 6.115853) a=(-34.82342, 5.914573) dueno=-1->-1
+VISTA_SALTO_PELOTA i=161 t=0.750 min=15.19 vel=45.0 m/s de=(-34.82342, 5.914573) a=(-33.43023, 5.713292) dueno=-1->-1
+VISTA_SALTO_PELOTA i=161 t=0.875 min=15.19 vel=45.0 m/s de=(-33.43023, 5.713292) a=(-32.03705, 5.512012) dueno=-1->-1
+VISTA_SALTO_PELOTA i=162 t=0.000 min=15.28 vel=45.0 m/s de=(-32.03705, 5.512012) a=(-30.64386, 5.310731) dueno=-1->-1
+VISTA_SALTO_PELOTA i=332 t=0.125 min=31.22 vel=50.0 m/s de=(-36.70835, 11.23717) a=(-37.83398, 10.15279) dueno=-1->-1
+VISTA_SALTO_PELOTA i=332 t=0.250 min=31.22 vel=50.0 m/s de=(-37.83398, 10.15279) a=(-38.95961, 9.068412) dueno=-1->-1
+VISTA_SALTO_PELOTA i=332 t=0.375 min=31.22 vel=50.0 m/s de=(-38.95961, 9.068412) a=(-40.08524, 7.984033) dueno=-1->-1
+VISTA_SALTO_PELOTA i=332 t=0.500 min=31.22 vel=50.0 m/s de=(-40.08524, 7.984033) a=(-41.21088, 6.899654) dueno=-1->-1
+VISTA_SALTO_PELOTA i=332 t=0.625 min=31.22 vel=50.0 m/s de=(-41.21088, 6.899654) a=(-42.33651, 5.815275) dueno=-1->-1
+VISTA_SALTO_PELOTA i=332 t=0.750 min=31.22 vel=50.0 m/s de=(-42.33651, 5.815275) a=(-43.46214, 4.730896) dueno=-1->-1
+VISTA_SALTO_PELOTA i=332 t=0.875 min=31.22 vel=50.0 m/s de=(-43.46214, 4.730896) a=(-44.58776, 3.646517) dueno=-1->-1
+VISTA_SALTO_PELOTA i=333 t=0.000 min=31.31 vel=50.0 m/s de=(-44.58776, 3.646517) a=(-45.71339, 2.562139) dueno=-1->-1
+VISTA_SALTO_PELOTA i=393 t=0.125 min=36.94 vel=49.3 m/s de=(-36.74919, 4.721371) a=(-38.23744, 4.32356) dueno=-1->-1
+VISTA_SALTO_PELOTA i=393 t=0.250 min=36.94 vel=49.3 m/s de=(-38.23744, 4.32356) a=(-39.72569, 3.925749) dueno=-1->-1
+VISTA_SALTO_PELOTA i=393 t=0.375 min=36.94 vel=49.3 m/s de=(-39.72569, 3.925749) a=(-41.21395, 3.527938) dueno=-1->-1
+VISTA_SALTO_PELOTA i=393 t=0.500 min=36.94 vel=49.3 m/s de=(-41.21395, 3.527938) a=(-42.7022, 3.130128) dueno=-1->-1
+VISTA_SALTO_PELOTA i=393 t=0.625 min=36.94 vel=49.3 m/s de=(-42.7022, 3.130128) a=(-44.19045, 2.732317) dueno=-1->-1
+VISTA_SALTO_PELOTA i=393 t=0.750 min=36.94 vel=49.3 m/s de=(-44.19045, 2.732317) a=(-45.67871, 2.334506) dueno=-1->-1
+VISTA_SALTO_PELOTA i=393 t=0.875 min=36.94 vel=49.3 m/s de=(-45.67871, 2.334506) a=(-47.16696, 1.936695) dueno=-1->-1
+VISTA_SALTO_PELOTA i=394 t=0.000 min=37.03 vel=49.3 m/s de=(-47.16696, 1.936695) a=(-48.65521, 1.538885) dueno=-1->-1
+VISTA_SALTO_PELOTA i=457 t=0.125 min=42.94 vel=49.3 m/s de=(-39.09488, 1.188366) a=(-40.58617, 0.807181) dueno=-1->-1
+VISTA_SALTO_PELOTA i=457 t=0.250 min=42.94 vel=49.3 m/s de=(-40.58617, 0.807181) a=(-42.07745, 0.425996) dueno=-1->-1
+VISTA_SALTO_PELOTA i=457 t=0.375 min=42.94 vel=49.3 m/s de=(-42.07745, 0.425996) a=(-43.56873, 0.04481) dueno=-1->-1
+VISTA_SALTO_PELOTA i=457 t=0.500 min=42.94 vel=49.3 m/s de=(-43.56873, 0.04481) a=(-45.06002, -0.336375) dueno=-1->-1
+VISTA_SALTO_PELOTA i=457 t=0.625 min=42.94 vel=49.3 m/s de=(-45.06002, -0.336375) a=(-46.5513, -0.71756) dueno=-1->-1
+VISTA_SALTO_PELOTA i=457 t=0.750 min=42.94 vel=49.3 m/s de=(-46.5513, -0.71756) a=(-48.04258, -1.098746) dueno=-1->-1
+VISTA_SALTO_PELOTA i=457 t=0.875 min=42.94 vel=49.3 m/s de=(-48.04258, -1.098746) a=(-49.53387, -1.479931) dueno=-1->-1
+VISTA_SALTO_PELOTA i=458 t=0.000 min=43.03 vel=49.3 m/s de=(-49.53387, -1.479931) a=(-51.02515, -1.861116) dueno=-1->-1
+VISTA_SALTO_PELOTA i=542 t=0.125 min=50.91 vel=50.3 m/s de=(-37.94907, -5.177247) a=(-39.45285, -4.720075) dueno=-1->-1
+VISTA_SALTO_PELOTA i=542 t=0.250 min=50.91 vel=50.3 m/s de=(-39.45285, -4.720075) a=(-40.95663, -4.262903) dueno=-1->-1
+VISTA_SALTO_PELOTA i=542 t=0.375 min=50.91 vel=50.3 m/s de=(-40.95663, -4.262903) a=(-42.4604, -3.805731) dueno=-1->-1
+VISTA_SALTO_PELOTA i=542 t=0.500 min=50.91 vel=50.3 m/s de=(-42.4604, -3.805731) a=(-43.96418, -3.348559) dueno=-1->-1
+VISTA_SALTO_PELOTA i=542 t=0.625 min=50.91 vel=50.3 m/s de=(-43.96418, -3.348559) a=(-45.46796, -2.891387) dueno=-1->-1
+VISTA_SALTO_PELOTA i=542 t=0.750 min=50.91 vel=50.3 m/s de=(-45.46796, -2.891387) a=(-46.97173, -2.434216) dueno=-1->-1
+VISTA_SALTO_PELOTA i=542 t=0.875 min=50.91 vel=50.3 m/s de=(-46.97173, -2.434216) a=(-48.47551, -1.977044) dueno=-1->-1
+VISTA_SALTO_PELOTA i=543 t=0.000 min=51.00 vel=50.3 m/s de=(-48.47551, -1.977044) a=(-49.97929, -1.519872) dueno=-1->-1
+VISTA_SALTO_PELOTA i=551 t=0.000 min=51.75 vel=683.1 m/s de=(-55.57623, -12.5449) a=(-51.5, -33.5) dueno=-1->-1
+VISTA_SALTO_PELOTA i=704 t=0.125 min=66.09 vel=45.4 m/s de=(22.81985, 2.337166) a=(22.82752, 0.91825) dueno=-1->-1
+VISTA_SALTO_PELOTA i=704 t=0.250 min=66.09 vel=45.4 m/s de=(22.82752, 0.91825) a=(22.83519, -0.500665) dueno=-1->-1
+VISTA_SALTO_PELOTA i=704 t=0.375 min=66.09 vel=45.4 m/s de=(22.83519, -0.500665) a=(22.84286, -1.91958) dueno=-1->-1
+VISTA_SALTO_PELOTA i=704 t=0.500 min=66.09 vel=45.4 m/s de=(22.84286, -1.91958) a=(22.85054, -3.338496) dueno=-1->-1
+VISTA_SALTO_PELOTA i=704 t=0.625 min=66.09 vel=45.4 m/s de=(22.85054, -3.338496) a=(22.85821, -4.757412) dueno=-1->-1
+VISTA_SALTO_PELOTA i=704 t=0.750 min=66.09 vel=45.4 m/s de=(22.85821, -4.757412) a=(22.86588, -6.176327) dueno=-1->-1
+VISTA_SALTO_PELOTA i=704 t=0.875 min=66.09 vel=45.4 m/s de=(22.86588, -6.176327) a=(22.87355, -7.595243) dueno=-1->-1
+VISTA_SALTO_PELOTA i=705 t=0.000 min=66.19 vel=45.4 m/s de=(22.87355, -7.595243) a=(22.88122, -9.014158) dueno=-1->151003
+VISTA_SALTO_PELOTA i=762 t=0.000 min=71.53 vel=896.5 m/s de=(-56.5, 5.932926) a=(-51.5, 33.5) dueno=-1->-1
+VISTA_SALTO_PELOTA i=878 t=0.125 min=82.41 vel=46.7 m/s de=(24.86847, 2.929387) a=(23.43837, 2.634962) dueno=-1->-1
+VISTA_SALTO_PELOTA i=878 t=0.250 min=82.41 vel=46.7 m/s de=(23.43837, 2.634962) a=(22.00827, 2.340536) dueno=-1->-1
+VISTA_SALTO_PELOTA i=878 t=0.375 min=82.41 vel=46.7 m/s de=(22.00827, 2.340536) a=(20.57817, 2.046111) dueno=-1->-1
+VISTA_SALTO_PELOTA i=878 t=0.500 min=82.41 vel=46.7 m/s de=(20.57817, 2.046111) a=(19.14807, 1.751685) dueno=-1->-1
+VISTA_SALTO_PELOTA i=878 t=0.625 min=82.41 vel=46.7 m/s de=(19.14807, 1.751685) a=(17.71796, 1.457259) dueno=-1->-1
+VISTA_SALTO_PELOTA i=878 t=0.750 min=82.41 vel=46.7 m/s de=(17.71796, 1.457259) a=(16.28786, 1.162834) dueno=-1->-1
+VISTA_SALTO_PELOTA i=878 t=0.875 min=82.41 vel=46.7 m/s de=(16.28786, 1.162834) a=(14.85776, 0.868408) dueno=-1->-1
+VISTA_SALTO_PELOTA i=879 t=0.000 min=82.50 vel=46.7 m/s de=(14.85776, 0.868408) a=(13.42766, 0.573983) dueno=-1->-1
+VISTA_SALTO_PELOTA i=904 t=0.125 min=84.84 vel=48.4 m/s de=(-11.22957, -8.003478) a=(-9.719105, -7.921684) dueno=-1->-1
+VISTA_SALTO_PELOTA i=904 t=0.250 min=84.84 vel=48.4 m/s de=(-9.719105, -7.921684) a=(-8.208635, -7.83989) dueno=-1->-1
+VISTA_SALTO_PELOTA i=904 t=0.375 min=84.84 vel=48.4 m/s de=(-8.208635, -7.83989) a=(-6.698167, -7.758096) dueno=-1->-1
+VISTA_SALTO_PELOTA i=904 t=0.500 min=84.84 vel=48.4 m/s de=(-6.698167, -7.758096) a=(-5.187698, -7.676302) dueno=-1->-1
+VISTA_SALTO_PELOTA i=904 t=0.625 min=84.84 vel=48.4 m/s de=(-5.187698, -7.676302) a=(-3.67723, -7.594508) dueno=-1->-1
+VISTA_SALTO_PELOTA i=904 t=0.750 min=84.84 vel=48.4 m/s de=(-3.67723, -7.594508) a=(-2.16676, -7.512713) dueno=-1->-1
+VISTA_SALTO_PELOTA i=904 t=0.875 min=84.84 vel=48.4 m/s de=(-2.16676, -7.512713) a=(-0.656292, -7.43092) dueno=-1->-1
+VISTA_SALTO_PELOTA i=905 t=0.000 min=84.94 vel=48.4 m/s de=(-0.656292, -7.43092) a=(0.854177, -7.349125) dueno=-1->-1
+VISTA_DESVIOS=80 VISTA_SALTOS_PELOTA=68
+WARNING: 109 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 1 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)
