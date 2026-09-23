@@ -1,6 +1,10 @@
 extends SceneTree
 
 func _init() -> void:
+	assert(AtlasJugadores.PEINADOS.size() == 22, "Deben existir 22 peinados")
+	assert(SpritesPartido.PALOMITA_PEINADOS == AtlasJugadores.PEINADOS,
+		"La palomita debe cubrir todos los peinados")
+	assert(SpritesPartido.TONOS_PELO.size() == 7, "Deben existir 7 tonos de pelo")
 	var vista := VistaPartido.new()
 	for accion in ["bloquea", "cae", "lesionado", "chilena", "volea", "barrida", "festeja"]:
 		vista.fotogramas = []

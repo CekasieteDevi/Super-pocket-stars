@@ -35,6 +35,8 @@ func _init() -> void:
 	quit()
 
 static func _generar_base(indice: int, estilo: int) -> Image:
+	if estilo >= 11:
+		return _generar_atlas_generado(indice, estilo)
 	if indice >= 64:
 		return _generar_accion(indice, estilo)
 	if estilo >= 4:
@@ -79,6 +81,38 @@ static func _generar_base(indice: int, estilo: int) -> Image:
 	var img := Image.create(CELDA, CELDA, false, Image.FORMAT_RGBA8)
 	img.fill(Color.TRANSPARENT)
 	img.blit_rect(recorte, Rect2i(Vector2i.ZERO, recorte.get_size()), Vector2i((CELDA - recorte.get_width()) / 2, 58 - recorte.get_height()))
+	return img
+
+
+## Los peinados nuevos se guardan como atlas completos generados. Se cortan
+## de nuevo para que la fuente grande produzca los 84 cuadros finales.
+static func _generar_atlas_generado(indice: int, estilo: int) -> Image:
+	var nombre: String = PEINADOS[estilo]
+	var ruta := "res://assets/partido/generados/%s_atlas_ai.png" % nombre
+	if not _fuentes.has(ruta):
+		var cargada := Image.load_from_file(ruta)
+		cargada.convert(Image.FORMAT_RGBA8)
+		_fuentes[ruta] = cargada
+	var fuente: Image = _fuentes[ruta]
+	var columna := indice % 8
+	var fila: int = indice / 8
+	var x0 := floori(float(columna) * fuente.get_width() / 8.0)
+	var x1 := floori(float(columna + 1) * fuente.get_width() / 8.0)
+	var y0 := floori(float(fila) * fuente.get_height() / 11.0)
+	var y1 := floori(float(fila + 1) * fuente.get_height() / 11.0)
+	var recorte := fuente.get_region(Rect2i(x0, y0, x1 - x0, y1 - y0))
+	_quitar_fondo_exterior(recorte)
+	_aislar_personaje(recorte)
+	var limites := recorte.get_used_rect()
+	assert(limites.has_area(), "Cuadro generado vacio: %s / %d" % [nombre, indice])
+	recorte = recorte.get_region(limites)
+	var factor := minf(62.0 / limites.size.x, 58.0 / limites.size.y)
+	recorte.resize(maxi(1, roundi(limites.size.x * factor)),
+		maxi(1, roundi(limites.size.y * factor)), Image.INTERPOLATE_NEAREST)
+	var img := Image.create(CELDA, CELDA, false, Image.FORMAT_RGBA8)
+	img.fill(Color.TRANSPARENT)
+	img.blit_rect(recorte, Rect2i(Vector2i.ZERO, recorte.get_size()),
+		Vector2i((CELDA - recorte.get_width()) / 2, 58 - recorte.get_height()))
 	return img
 
 

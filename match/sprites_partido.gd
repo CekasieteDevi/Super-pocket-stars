@@ -92,7 +92,7 @@ const PELO_MOHICANO := 4
 const PELO_VINCHA := 5
 const ESTILOS_PELO := 6
 
-## Tonos de pelo. Son cinco y no un color libre para que el cache no
+## Tonos de pelo. Son siete y no un color libre para que el cache no
 ## explote: estilo x tono x dirección x pose ya son muchas texturas.
 const TONOS_PELO := [
 	Color(0.10, 0.08, 0.07),  # negro
@@ -100,6 +100,8 @@ const TONOS_PELO := [
 	Color(0.55, 0.34, 0.14),  # claro
 	Color(0.85, 0.72, 0.35),  # rubio
 	Color(0.68, 0.30, 0.12),  # pelirrojo
+	Color(0.92, 0.92, 0.90),  # blanco
+	Color(0.12, 0.35, 0.82),  # azul
 ]
 
 ## La vincha (cinta en la frente) va siempre blanca: es lo que la hace
@@ -458,7 +460,9 @@ const CUADROS_PALOMITA := 8
 ## Los nombres y el orden coinciden con AtlasJugadores.PEINADOS. Cada peinado
 ## tiene su hoja completa para conservar su silueta durante toda la palomita.
 const PALOMITA_PEINADOS := ["puntas", "afro", "rapado", "atado", "mohicano",
-	"rastas", "degrade", "vincha", "rodete", "raya", "trenzas"]
+	"rastas", "degrade", "vincha", "rodete", "raya", "trenzas",
+	"rulos_cortos", "rulos_largos", "melena", "mullet", "flequillo", "jopo",
+	"tupe", "hongo", "coleta", "cucurella", "doble_cresta"]
 const PALOMITA_DORSAL_CENTROS := [Vector2i(31, 38), Vector2i(31, 39),
 	Vector2i(31, 39), Vector2i(31, 39), Vector2i(31, 39), Vector2i(31, 43),
 	Vector2i(31, 47), Vector2i(31, 49)]

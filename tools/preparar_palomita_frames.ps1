@@ -4,7 +4,11 @@ $sourceDir = Join-Path $PSScriptRoot '..\assets\partido\palomita_fuentes'
 $targetDir = Join-Path $PSScriptRoot '..\assets\partido\palomita'
 $legacyPath = Join-Path $PSScriptRoot '..\assets\partido\palomita_frames.png'
 $styles = @('puntas', 'afro', 'rapado', 'atado', 'mohicano', 'rastas',
-    'degrade', 'vincha', 'rodete', 'raya', 'trenzas')
+    'degrade', 'vincha', 'rodete', 'raya', 'trenzas', 'rulos_cortos',
+    'rulos_largos', 'melena', 'mullet', 'flequillo', 'jopo', 'tupe', 'hongo',
+    'coleta', 'cucurella', 'doble_cresta')
+$generatedStyles = $styles[11..21]
+$generatedDir = Join-Path $PSScriptRoot '..\assets\partido\generados'
 $frames = 8
 $cell = 64
 New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
@@ -68,7 +72,12 @@ function Convert-PalomitaSheet([string]$sourcePath, [string]$targetPath) {
 }
 
 foreach ($style in $styles) {
-    Convert-PalomitaSheet (Join-Path $sourceDir "$style.png") (Join-Path $targetDir "$style.png")
+    $sourcePath = if ($generatedStyles -contains $style) {
+        Join-Path $generatedDir "${style}_palomita_ai.png"
+    } else {
+        Join-Path $sourceDir "$style.png"
+    }
+    Convert-PalomitaSheet $sourcePath (Join-Path $targetDir "$style.png")
 }
 Copy-Item -LiteralPath (Join-Path $targetDir 'puntas.png') -Destination $legacyPath -Force
 Write-Host "OK: $($styles.Count) peinados de palomita, 8 cuadros cada uno"

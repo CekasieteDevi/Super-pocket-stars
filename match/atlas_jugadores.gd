@@ -6,7 +6,9 @@ extends RefCounted
 const RUTA := "res://assets/partido/jugadores.png"
 const CELDA := 64
 const TOTAL_CUADROS := 84
-const PEINADOS := ["puntas", "afro", "rapado", "atado", "mohicano", "rastas", "degrade", "vincha", "rodete", "raya", "trenzas"]
+const PEINADOS := ["puntas", "afro", "rapado", "atado", "mohicano", "rastas", "degrade", "vincha", "rodete", "raya", "trenzas",
+	"rulos_cortos", "rulos_largos", "melena", "mullet", "flequillo", "jopo",
+	"tupe", "hongo", "coleta", "cucurella", "doble_cresta"]
 const CLIPS := {
 	"pecho": [48, 49, 50, 51, 52, 53, 54, 55],
 	"lateral_prepara": [56, 57, 58, 59],
@@ -117,23 +119,10 @@ static func _mascara(indice: int, estilo: int) -> Dictionary:
 		preparada.convert(Image.FORMAT_RGBA8)
 		_fuentes[estilo] = preparada
 	var hoja: Image = _fuentes[estilo]
-	var img: Image
-	# Esta secuencia viene de su PNG fuente corregido. Leerla directa evita
-	# volver a escalar las poses anchas del atlas preparado y deformarlas.
-	if indice >= 76 and indice <= 79:
-		if not _fuentes.has("agarra_corregido"):
-			var fuente_agarra := (load("res://assets/partido/acciones_arquero_agarra.png") as Texture2D).get_image()
-			fuente_agarra.decompress()
-			fuente_agarra.convert(Image.FORMAT_RGBA8)
-			_fuentes["agarra_corregido"] = fuente_agarra
-		var hoja_agarra: Image = _fuentes["agarra_corregido"]
-		img = hoja_agarra.get_region(Rect2i((indice - 76) * CELDA, 0, CELDA, CELDA))
-	else:
-		img = hoja.get_region(Rect2i((indice % 8) * CELDA, (indice / 8) * CELDA, CELDA, CELDA))
-	# Los saques del arquero nacen de una hoja común de cuatro cuadros. La
-	# hoja trae un solo peinado; se reemplaza antes de clasificar las máscaras.
-	if indice >= 80 and indice <= 83:
-		aplicar_peinado_accion(img, estilo)
+	# El atlas preparado ya contiene el peinado propio en todas las acciones,
+	# incluidas las atajadas y los saques del arquero.
+	var img := hoja.get_region(Rect2i((indice % 8) * CELDA,
+		(indice / 8) * CELDA, CELDA, CELDA))
 	# Van en variables sueltas y no dentro de un Array porque un
 	# Packed*Array se COPIA al sacarlo de un contenedor, y el append se
 	# perdería. Los factores van en 64 bits: en 32 el redondeo cambiaba un
