@@ -1354,10 +1354,19 @@ static func evaluar_opciones(estado: Dictionary, poseedor: Dictionary, jugador: 
 	# a recibirla más adelante.
 	# Centrar: hay que estar abierto y adelantado, y saber pegarle. Usa
 	# `centros`, que existía en el GDD y no lo leía nadie.
+	# Dentro del area y de frente al arco no se centra: se remata. La banda
+	# para centrar (5,5 m) cae adentro del area, y el centro, con el bono
+	# del estilo, le ganaba al remate. Medido con
+	# tests/_diag_definicion_area.gd (45 partidos, semilla 61300): el 34%
+	# de las decisiones frente al arco era un centro al costado o atras.
+	# "De frente" es el mismo angulo que habilita patear un tiro libre.
+	var frente_al_arco: bool = _en_el_area(pos, es_local) \
+		and factor_angulo(pos, es_local) >= float(f["angulo_minimo_tiro_libre"])
 	var puede_centrar: bool = float(jugador["atributos"]["centros"]) >= float(f["centros_minimo"]) \
 		and absf(pos.y) >= float(f["banda_para_centrar"]) \
 		and valor_posicion(pos, es_local) >= float(f["avance_para_centrar"]) \
-		and absf(arco_rival(es_local).x - pos.x) <= ULTIMO_TRAMO_BANDA
+		and absf(arco_rival(es_local).x - pos.x) <= ULTIMO_TRAMO_BANDA \
+		and not frente_al_arco
 	var fallback_centro_id := _objetivo_fallback_centro(estado, es_local, int(poseedor["clave"]))
 	var wpa: Dictionary = w["pared"]
 	# Jugadas.PAREDES: el equipo que las ensayo las busca mas.

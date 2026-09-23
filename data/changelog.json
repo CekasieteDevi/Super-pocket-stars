@@ -1,4 +1,5 @@
 [
+	{"version": "0.4.15", "fecha": "2026-09-22", "cambio": "Los jugadores frente al arco rematan en lugar de cruzar la pelota al otro lado del área."},
 	{"version": "0.4.14", "fecha": "2026-09-22", "cambio": "Cuando alguien se lesiona, el partido que ves y el que se simula sin animacion terminan igual."},
 	{"version": "0.4.12", "fecha": "2026-09-22", "cambio": "En laterales y tiros libres, el que saca llega corriendo a la pelota en vez de aparecer encima de ella."},
 	{"version": "0.4.11", "fecha": "2026-09-22", "cambio": "En los corners y tiros libres, la pelota y los jugadores ya no se deslizan por la cancha al acomodarse para el saque."},
