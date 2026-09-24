@@ -207,6 +207,7 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 				Alineacion.acomodar(club)
 		Alineacion.arreglar(home)
 		Alineacion.arreglar(away)
+		var rotados := Alineacion.rotar_partido(home, away, Cansancio.ALTA)
 		var con_log: bool = equipo_seguido != null and (home == equipo_seguido or away == equipo_seguido)
 
 		# §14 + §17: antes de dar por perdido el partido, el club echa mano
@@ -258,6 +259,8 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 		_actualizar_tabla(home.nombre, away.nombre, r["goles_local"], r["goles_visitante"])
 		EstadisticasLiga.registrar_partido(estadisticas, home, away, r)
 		_actualizar_estado_jugadores(home, away, r)
+		Alineacion.deshacer_partido(rotados)
+		r["prioridad"] = Cansancio.ALTA
 		resultados_texto.append("%s %d-%d %s" % [home.nombre, r["goles_local"], r["goles_visitante"], away.nombre])
 		if con_log:
 			resultado_seguido = {"local": home.nombre, "visitante": away.nombre,

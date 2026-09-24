@@ -306,3 +306,102 @@ static func sin_cubrir(equipo: Team) -> int:
 		if paso["entra"].is_empty():
 			n += 1
 	return n
+
+
+## Rotación antes del partido, según la prioridad del partido y la energía
+## con la que cada titular llega (Cansancio.motivo_rotacion). Cambia el
+## once en el lugar y devuelve los pasos hechos, que después se deshacen
+## con `deshacer_rotacion`: el once del club no cambia, solo el de hoy.
+## Así el suplente que jugó la copa del miércoles vuelve al banco para la
+## liga del domingo, y el titular que descansó vuelve a su puesto.
+##
+## Devuelve [{"sale": id, "entra": id, "motivo": String}].
+static func rotar(equipo: Team, prioridad: int, rival: Team) -> Array:
+	var hechos := []
+	var rival_inferior := rival != null \
+		and rival.media_equipo() <= equipo.media_equipo() - Cansancio.DIFERENCIA_RIVAL_INFERIOR
+	var tomados := []
+	for titular in equipo.jugadores.duplicate():
+		var id := int(titular["id"])
+		if not equipo.puede_jugar(id):
+			continue
+		var energia := equipo.energia_proximo_partido(id)
+		var motivo_rot := Cansancio.motivo_rotacion(energia, prioridad, rival_inferior)
+		if motivo_rot.is_empty():
+			continue
+		# El titular fresco de una copa menor solo descansa si el que entra
+		# no desarma al equipo. Contra un rival muy inferior, entra igual.
+		var margen := INF
+		if Cansancio.franja(energia) == 0 and not rival_inferior:
+			margen = Cansancio.MARGEN_ROTACION_BAJA
+		var entra := _reemplazo_descansado(equipo, titular, energia, margen, tomados)
+		if entra.is_empty():
+			continue
+		if equipo.intercambiar(id, int(entra["id"])):
+			tomados.append(int(entra["id"]))
+			tomados.append(id)
+			hechos.append({"sale": id, "entra": int(entra["id"]), "motivo": motivo_rot})
+	if not hechos.is_empty():
+		equipo.recalcular_capitan()
+	return hechos
+
+
+## Rota a los dos clubes que tienen la rotación en automático y deja
+## anotada la prioridad del partido. Devuelve lo que hay que deshacer.
+static func rotar_partido(home: Team, away: Team, prioridad: int) -> Dictionary:
+	var rotados := {}
+	for club in [home, away]:
+		club.prioridad_partido = prioridad
+		if club.rotacion_automatica:
+			rotados[club] = rotar(club, prioridad, away if club == home else home)
+	return rotados
+
+
+static func deshacer_partido(rotados: Dictionary) -> void:
+	for club in rotados:
+		deshacer_rotacion(club, rotados[club])
+
+
+static func deshacer_rotacion(equipo: Team, hechos: Array) -> void:
+	if hechos.is_empty():
+		return
+	for i in range(hechos.size() - 1, -1, -1):
+		equipo.intercambiar(int(hechos[i]["entra"]), int(hechos[i]["sale"]))
+	equipo.recalcular_capitan()
+
+
+## El mejor reemplazo que llega más descansado que el titular: primero el
+## del puesto del slot, del banco o de las reservas; si no hay, el que
+## mejor rinde en ese puesto. Al arco solo va un arquero. `margen` es
+## cuánto menos puede rendir que el titular.
+static func _reemplazo_descansado(equipo: Team, titular: Dictionary, energia: float,
+		margen: float, tomados: Array) -> Dictionary:
+	var rol := rol_del_slot(equipo, int(titular["id"]), str(titular["posicion"]))
+	var piso: float = float(titular["media"]) - margen
+	var mejor := {}
+	var clave_mejor := []
+	for lista in [equipo.banco, equipo.reservas]:
+		for s in lista:
+			var id := int(s["id"])
+			if tomados.has(id) or not equipo.puede_jugar(id):
+				continue
+			# Descansar a alguien para poner a uno más cansado no sirve. Al
+			# titular fresco solo lo reemplaza otro fresco.
+			var energia_s := equipo.energia_proximo_partido(id)
+			var franja_s := Cansancio.franja(energia_s)
+			if Cansancio.franja(energia) == 0:
+				if franja_s != 0:
+					continue
+			elif franja_s >= Cansancio.franja(energia) and energia_s <= energia:
+				continue
+			var del_puesto: bool = str(s["posicion"]) == rol
+			if rol == "ARQ" and not del_puesto:
+				continue
+			var valor: float = float(s["media"]) if del_puesto else rinde_en(s, rol)
+			if valor < piso:
+				continue
+			var clave := [1 if del_puesto else 0, valor]
+			if mejor.is_empty() or clave > clave_mejor:
+				mejor = s
+				clave_mejor = clave
+	return mejor

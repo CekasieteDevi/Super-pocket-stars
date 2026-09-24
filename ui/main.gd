@@ -82,6 +82,7 @@ const TEXTO_CARGANDO_PARTIDO := "Cargando..."
 var boton_jugar_partido: Button
 var option_estilo: OptionButton
 var option_cambios: OptionButton
+var check_rotacion: CheckBox
 
 const OPCIONES_CAMBIOS := ["equilibrado", "descanso", "rendimiento"]
 const ETIQUETAS_CAMBIOS := {"equilibrado": "Equilibrado", "descanso": "Priorizar descanso", "rendimiento": "Priorizar rendimiento"}
@@ -856,6 +857,15 @@ func _construir_panel_plantel(padre: Control) -> void:
 	option_cambios.custom_minimum_size = Vector2(230, Tema.ALTO_TACTIL)
 	option_cambios.item_selected.connect(_on_config_cambios_seleccionado)
 	barra.add_child(_grupo_filtro("Cambios automaticos", option_cambios))
+
+	# Delegar la rotación: antes de cada partido descansan los cansados, y
+	# en las copas menores juegan los suplentes (Alineacion.rotar).
+	check_rotacion = CheckBox.new()
+	check_rotacion.text = "Rotar el once solo"
+	check_rotacion.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	check_rotacion.toggled.connect(func(activo: bool):
+		GameState.equipo_jugador.rotacion_automatica = activo)
+	barra.add_child(_grupo_filtro("Rotación", check_rotacion))
 
 	var panel := HBoxContainer.new()
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -8826,6 +8836,8 @@ func _mostrar_plantel() -> void:
 	if option_cambios != null:
 		option_cambios.select(maxi(
 			OPCIONES_CAMBIOS.find(GameState.equipo_jugador.config_cambios), 0))
+	if check_rotacion != null:
+		check_rotacion.set_pressed_no_signal(GameState.equipo_jugador.rotacion_automatica)
 	_refrescar_plantel()
 
 
@@ -8853,6 +8865,7 @@ func _mostrar_partido() -> void:
 	option_estilo.select(max(idx_actual, 0))
 	var idx_cambios := OPCIONES_CAMBIOS.find(GameState.equipo_jugador.config_cambios)
 	option_cambios.select(max(idx_cambios, 0))
+	check_rotacion.set_pressed_no_signal(GameState.equipo_jugador.rotacion_automatica)
 	_refrescar_portada_si_visible()
 
 

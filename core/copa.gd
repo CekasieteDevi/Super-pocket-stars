@@ -78,7 +78,8 @@ func jugar_siguiente_ronda(rng: RandomNumberGenerator, equipo_seguido: Team = nu
 		var home: Team = partido[0]
 		var away: Team = partido[1]
 		var es_el_del_jugador: bool = home == equipo_seguido or away == equipo_seguido
-		var cruce := resolver_cruce(home, away, rng, es_el_del_jugador)
+		var cruce := resolver_cruce(home, away, rng, es_el_del_jugador,
+			Cansancio.prioridad_de_torneo(nombre))
 		resultados.append(fila_de_historial(cruce))
 		if es_el_del_jugador:
 			seguido = detalle_seguido(cruce)
@@ -110,11 +111,13 @@ func jugar_siguiente_ronda(rng: RandomNumberGenerator, equipo_seguido: Team = nu
 ## Lo usan los cruces de copa y las fechas de la fase de liga
 ## internacional (ver FaseLiga.jugar_fecha).
 static func jugar_partido(home: Team, away: Team, rng: RandomNumberGenerator,
-		es_el_del_jugador: bool, es_eliminatoria: bool) -> Dictionary:
+		es_el_del_jugador: bool, es_eliminatoria: bool,
+		prioridad: int = Cansancio.ALTA) -> Dictionary:
 	# El efecto copa se prende para el partido y se apaga al final, porque
 	# el mismo objeto Team juega la liga.
 	home.en_copa = es_eliminatoria
 	away.en_copa = es_eliminatoria
+	var rotados := Alineacion.rotar_partido(home, away, prioridad)
 	var r: Dictionary
 	if es_el_del_jugador:
 		# El motor espacial necesita el once COMPLETO: sin arreglar la
@@ -131,6 +134,10 @@ static func jugar_partido(home: Team, away: Team, rng: RandomNumberGenerator,
 	away.en_copa = false
 	# Los partidos de copa tambien van a la carrera: la liga no los ve.
 	Historial.registrar_partido(home, away, r)
+	home.registrar_desgaste_partido()
+	away.registrar_desgaste_partido()
+	Alineacion.deshacer_partido(rotados)
+	r["prioridad"] = prioridad
 	return r
 
 
@@ -147,8 +154,8 @@ static func jugar_partido(home: Team, away: Team, rng: RandomNumberGenerator,
 ## del resto por el resumen. Los cruces de la IA siguen igual: motor
 ## abstracto, alargue abstracto y tanda abstracta.
 static func resolver_cruce(home: Team, away: Team, rng: RandomNumberGenerator,
-		es_el_del_jugador: bool) -> Dictionary:
-	var r := jugar_partido(home, away, rng, es_el_del_jugador, true)
+		es_el_del_jugador: bool, prioridad: int = Cansancio.ALTA) -> Dictionary:
+	var r := jugar_partido(home, away, rng, es_el_del_jugador, true, prioridad)
 	var gl: int = r["goles_local"]
 	var gv: int = r["goles_visitante"]
 	var definicion := str(r.get("definicion", "90 minutos"))
@@ -174,6 +181,9 @@ static func resolver_cruce(home: Team, away: Team, rng: RandomNumberGenerator,
 		goles_log.append_array(r_alargue.get("goles_log", []))
 		# Los goles del alargue cuentan; el partido ya se conto.
 		Historial.registrar_partido(home, away, r_alargue, false)
+		# Los 30' de más también cansan.
+		home.registrar_desgaste_partido()
+		away.registrar_desgaste_partido()
 		eventos.append_array(r_alargue.get("eventos", []))
 		if gl != gv:
 			ganador = home if gl > gv else away

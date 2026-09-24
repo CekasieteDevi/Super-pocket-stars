@@ -44,6 +44,9 @@ trap 'rm -rf "$SALIDA"' EXIT
 LENTOS="test_gradiente_persiste test_libro_de_pases test_calendario"
 LENTOS="$LENTOS test_gamestate_flujo test_noticias test_phase2"
 LENTOS="$LENTOS test_phase7_internacional test_copas_por_temporada"
+# Medidos el 2026-09-23 con 12 en paralelo: copa_jugable 215s,
+# playoff_ascenso 203s, fin_de_mitad 142s.
+LENTOS="$LENTOS test_copa_jugable test_playoff_ascenso test_fin_de_mitad"
 ORDEN=""
 for n in $LENTOS; do
 	[ -f "tests/$n.gd" ] && ORDEN="$ORDEN tests/$n.gd"
@@ -53,15 +56,64 @@ for f in tests/test_*.gd; do
 	ORDEN="$ORDEN $f"
 done
 
+# Un test que tira SCRIPT ERROR antes de su quit() no termina nunca:
+# Godot queda con el SceneTree vivo. Sin tope, la regresion esperaba
+# para siempre — el 2026-09-23 nueve tests colgados por texturas sin
+# importar la estiraron de ~5 a 40 minutos. Dos topes:
+# - con SCRIPT ERROR en el log y el log quieto CUELGUE_TRAS_ERROR
+#   segundos, se da por colgado (un test sano sigue imprimiendo o sale);
+# - ninguno pasa de TOPE_TEST segundos. El mas lento medido en serie
+#   tarda 245s (ver LENTOS), asi que 900 deja margen con 8 en paralelo.
+CUELGUE_TRAS_ERROR="${CUELGUE_TRAS_ERROR:-30}"
+TOPE_TEST="${TOPE_TEST:-900}"
+
+# Mata el Godot de un test. El _console.exe lanza otro proceso Godot
+# hijo, y matar solo el de bash deja al hijo vivo; por eso se busca por
+# linea de comando en Windows.
+matar_test() {
+	powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name like 'Godot%'\" | Where-Object { \$_.CommandLine -like '*$1*' } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force }" >/dev/null 2>&1
+}
+
+correr_test() {
+	local f="$1" nombre log pid inicio tam_prev tam quieto
+	nombre="$(basename "$f" .gd)"
+	log="$SALIDA/$nombre.log"
+	inicio="$(date +%s)"
+	"$GODOT" --path . --headless --script "$f" >"$log" 2>&1 &
+	pid=$!
+	tam_prev=-1
+	quieto=0
+	while kill -0 "$pid" 2>/dev/null; do
+		sleep 2
+		if [ $(( $(date +%s) - inicio )) -ge "$TOPE_TEST" ]; then
+			echo "FALLA: colgado, supero ${TOPE_TEST}s" >>"$log"
+			matar_test "$f"
+			break
+		fi
+		grep -q "SCRIPT ERROR" "$log" || continue
+		tam="$(wc -c <"$log")"
+		if [ "$tam" = "$tam_prev" ]; then
+			quieto=$(( quieto + 2 ))
+		else
+			quieto=0
+			tam_prev="$tam"
+		fi
+		if [ "$quieto" -ge "$CUELGUE_TRAS_ERROR" ]; then
+			echo "FALLA: colgado tras SCRIPT ERROR" >>"$log"
+			matar_test "$f"
+			break
+		fi
+	done
+	wait "$pid" 2>/dev/null
+	echo "$(( $(date +%s) - inicio )) $nombre" >"$SALIDA/$nombre.tiempo"
+}
+
 INICIO="$(date +%s)"
 for f in $ORDEN; do
 	while [ "$(jobs -rp | wc -l)" -ge "$TRABAJOS" ]; do
 		wait -n 2>/dev/null || sleep 0.2
 	done
-	(
-		nombre="$(basename "$f" .gd)"
-		"$GODOT" --path . --headless --script "$f" >"$SALIDA/$nombre.log" 2>&1
-	) &
+	correr_test "$f" &
 done
 wait
 
@@ -76,6 +128,10 @@ for f in $ORDEN; do
 		FALLOS=$(( FALLOS + 1 ))
 	fi
 done
+
+# Los mas lentos de esta corrida, para mantener LENTOS al dia.
+echo "Mas lentos:"
+cat "$SALIDA"/*.tiempo 2>/dev/null | sort -rn | head -8 | sed 's/^/  /'
 
 TOTAL="$(ls tests/test_*.gd | wc -l)"
 echo "ARCHIVOS_CON_FALLAS=$FALLOS de $TOTAL en $(( $(date +%s) - INICIO ))s con $TRABAJOS en paralelo"

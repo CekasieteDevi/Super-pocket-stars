@@ -218,6 +218,8 @@ func partida_nueva(semilla: int = -1, nombre_club: String = "",
 	seleccion = Seleccion.new()
 	division_jugador = DIVISION_INICIAL
 	equipo_jugador = piramide.divisiones[DIVISION_INICIAL].equipos[0]
+	# El once del jugador lo arma el jugador, salvo que delegue la rotación.
+	equipo_jugador.rotacion_automatica = false
 	# Las jugadas del club del jugador se ensayan: no vienen de regalo.
 	equipo_jugador.jugadas_aprendidas = []
 	posiciones_temporada_anterior = {}
@@ -2214,6 +2216,7 @@ func guardar_partida() -> void:
 		"seleccion": seleccion.guardar(),
 		"division_jugador": division_jugador,
 		"equipo_jugador_nombre": equipo_jugador.nombre,
+		"rotacion_jugador": equipo_jugador.rotacion_automatica,
 		"fecha_actual": fecha_actual,
 		"temporada_actual": temporada_actual,
 		"dia_temporada": dia_temporada,
@@ -2297,6 +2300,9 @@ func cargar_partida() -> bool:
 	seleccion = Seleccion.cargar(datos["seleccion"])
 	division_jugador = nueva_division
 	equipo_jugador = nuevo_equipo_jugador
+	# Una partida de antes de la rotación trae al club del jugador con el
+	# valor por defecto de la IA: su once no se toca sin que lo pida.
+	equipo_jugador.rotacion_automatica = bool(datos.get("rotacion_jugador", false))
 	fecha_actual = datos["fecha_actual"]
 	temporada_actual = datos["temporada_actual"]
 	Historial.temporada = temporada_actual

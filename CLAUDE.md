@@ -53,8 +53,13 @@ muestra "Actualización v x.x.xx" y un botón "Changelog" con la lista.
 - Se corren con `<godot> --path . --headless --script tests/<archivo>.gd`
 - Los archivos con prefijo `_diag_` son mediciones, no tests: quedan
   fuera de la regresión.
-- **La regresión completa gatea el commit**: `bash tests/correr_regresion.sh 8`
-  (~5 min con 8 en paralelo). No commitear con fallas.
+- **La regresión completa gatea el commit**: `bash tests/correr_regresion.sh 12`
+  (~7 min con 12 en paralelo). No commitear con fallas.
+- Mientras se arregla un bug, corré solo los tests del área tocada. La
+  regresión completa va una vez, antes del commit.
+- Un test colgado (SCRIPT ERROR sin `quit()`) se corta solo a los 30 s
+  de log quieto. Si la regresión tarda mucho más de 7 min, buscá
+  procesos de Godot viejos colgados.
 
 ## Cómo trabajar los cambios de balance
 
