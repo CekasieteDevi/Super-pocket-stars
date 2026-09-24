@@ -65,15 +65,19 @@ static func linea(evento: Dictionary, nombres: Dictionary) -> String:
 			var tecnica := str(evento.get("tecnica", ""))
 			var gesto := _nombre_tecnica(tecnica)
 			var asistencia := _asistencia(evento, nombres)
+			# El efecto se narra solo en el remate de pie común. Con cabeza,
+			# volea o chilena el gesto ya describe el tiro, y "GOL CON EFECTO
+			# de volea" suena a dos remates distintos a la vez.
+			var con_efecto := bool(evento.get("con_efecto", false)) and gesto == ""
 			if res == "gol":
 				if bool(evento.get("palo", false)):
 					return "¡GOL%s de %s%s! Pega en el palo y entra. %s" % [gesto, quien, asistencia, equipo]
-				if bool(evento.get("con_efecto", false)) and tecnica not in ["cabecea", "cabezazo", "palomita"]:
-					return "¡GOL CON EFECTO de %s%s%s! %s" % [gesto, quien, asistencia, equipo]
+				if con_efecto:
+					return "¡GOL CON EFECTO de %s%s! %s" % [quien, asistencia, equipo]
 				return "¡GOL%s de %s%s! %s" % [gesto, quien, asistencia, equipo]
-			if bool(evento.get("con_efecto", false)) and tecnica not in ["cabecea", "cabezazo", "palomita"]:
-				return "Remata con efecto %s%s y ataja el arquero" % [gesto, quien]
-			return "Remata %s%s y ataja el arquero" % [gesto, quien]
+			if con_efecto:
+				return "Remata con efecto %s y ataja el arquero" % quien
+			return "Remata%s %s y ataja el arquero" % [gesto, quien]
 		"penal":
 			if res == "gol":
 				return "¡PENAL! %s la cambia por gol" % quien

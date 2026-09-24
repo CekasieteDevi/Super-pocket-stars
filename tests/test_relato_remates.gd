@@ -14,6 +14,20 @@ func _init() -> void:
 	assert(texto_cabeza.contains("de cabeza"))
 	assert(not texto_cabeza.contains("CON EFECTO"))
 
+	var volea := {
+		"tipo": "tiro_puerta", "resultado": "gol", "clave": 1,
+		"equipo": "Casa", "tecnica": "volea", "con_efecto": true,
+	}
+	var texto_volea := RelatoPartido.linea(volea, nombres)
+	assert(texto_volea == "¡GOL de volea de DC Pérez! Casa")
+	volea["resultado"] = "atajado"
+	assert(RelatoPartido.linea(volea, nombres) == "Remata de volea DC Pérez y ataja el arquero")
+	var comun := {
+		"tipo": "tiro_puerta", "resultado": "gol", "clave": 1,
+		"equipo": "Casa", "con_efecto": true,
+	}
+	assert(RelatoPartido.linea(comun, nombres) == "¡GOL CON EFECTO de DC Pérez! Casa")
+
 	var libre := {
 		"tipo": "tiro_puerta", "resultado": "gol", "clave": 1,
 		"asistencia_clave": 2, "tiro_libre": true, "equipo": "Casa",
