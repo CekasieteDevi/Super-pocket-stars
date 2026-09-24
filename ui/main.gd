@@ -9981,19 +9981,49 @@ func _refrescar_jugadas() -> void:
 	for hijo in contenedor_jugadas.get_children():
 		hijo.queue_free()
 	var equipo := GameState.equipo_jugador
+	var liga := GameState.liga_jugador()
+	var aprendidas: Array[String] = []
+	var pendientes: Array[String] = []
+	for jugada in Jugadas.LISTA:
+		var id := str(jugada)
+		if Jugadas.sabe(equipo, id):
+			aprendidas.append(id)
+		elif id != equipo.jugada_en_curso:
+			pendientes.append(id)
 
-	# --- Lo que se esta ensayando ----------------------------------------
-	var caja := _tarjeta(contenedor_jugadas, Tema.BORDE)
-	caja.add_child(Tema.etiqueta_seccion("En el entrenamiento"))
+	# Una sola cabecera concentra el estado. Antes había dos párrafos de
+	# instrucciones y la misma información volvía a aparecer en la grilla.
+	var caja := _tarjeta(contenedor_jugadas,
+		Tema.AMBAR if equipo.jugada_en_curso != "" else Tema.BORDE)
 	if equipo.jugada_en_curso == "":
+		caja.add_child(Tema.etiqueta_seccion("Próximo ensayo"))
+		var fila_vacia := HBoxContainer.new()
+		fila_vacia.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		caja.add_child(fila_vacia)
+		var titulo_vacio := Label.new()
+		titulo_vacio.text = "Repertorio completo" if pendientes.is_empty() else "Elegí una jugada"
+		titulo_vacio.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		Tema.numero(titulo_vacio, 24)
+		fila_vacia.add_child(titulo_vacio)
+		fila_vacia.add_child(Componentes.chip("%d de %d aprendidas" % [
+			aprendidas.size(), Jugadas.LISTA.size()], Tema.PANEL_ALTO, Tema.SUAVE))
 		caja.add_child(_texto_suave(
-			"No se ensaya ninguna jugada. Elegí una: tarda semanas en salir, " \
-			+ "no podés empezar otra hasta terminarla y, cuando sale, queda para siempre."))
+			"Tu equipo ya aprendió todas las jugadas disponibles." if pendientes.is_empty() \
+			else "Se ensayan de a una. Al completarla, queda en tu repertorio para siempre."))
 	else:
+		caja.add_child(Tema.etiqueta_seccion("Ensayando ahora"))
+		var fila_actual := HBoxContainer.new()
+		fila_actual.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		caja.add_child(fila_actual)
 		var nombre := Label.new()
 		nombre.text = str(Jugadas.NOMBRE[equipo.jugada_en_curso])
-		Tema.numero(nombre, Tema.TAM_BASE, Tema.AMBAR)
-		caja.add_child(nombre)
+		nombre.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		Tema.numero(nombre, 24, Tema.TEXTO)
+		fila_actual.add_child(nombre)
+		var porcentaje := Label.new()
+		porcentaje.text = "%d%%" % int(round(Jugadas.progreso(equipo) * 100.0))
+		Tema.numero(porcentaje, 24, Tema.AMBAR)
+		fila_actual.add_child(porcentaje)
 		var barra := ProgressBar.new()
 		barra.min_value = 0.0
 		barra.max_value = 1.0
@@ -10001,105 +10031,115 @@ func _refrescar_jugadas() -> void:
 		barra.show_percentage = false
 		barra.custom_minimum_size = Vector2(0, 10)
 		caja.add_child(barra)
-		caja.add_child(_texto_suave("%d%% aprendida. Faltan unas %d semanas al ritmo de hoy." % [
-			int(round(Jugadas.progreso(equipo) * 100.0)),
-			int(ceil(Jugadas.semanas_restantes(equipo)))]))
-	caja.add_child(_texto_suave(
-		"El ritmo sube con la carga de entrenamiento, y con el ejercicio táctico " \
-		+ "\"Jugadas armadas\" se aprende x%.1f. Ritmo de hoy: x%.2f." % [
-			Jugadas.RITMO_CON_JUGADAS_ARMADAS, Jugadas.ritmo(equipo)]))
+		var detalle := _texto_suave("Faltan unas %d semanas  ·  ritmo actual ×%.2f" % [
+			int(ceil(Jugadas.semanas_restantes(equipo))), Jugadas.ritmo(equipo)])
+		detalle.tooltip_text = "El ritmo mejora con la carga y con el ejercicio táctico Jugadas armadas."
+		caja.add_child(detalle)
 
 	grilla_jugadas = GridContainer.new()
-	grilla_jugadas.columns = 3
+	grilla_jugadas.columns = 2
 	grilla_jugadas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grilla_jugadas.add_theme_constant_override("h_separation", 10)
 	grilla_jugadas.add_theme_constant_override("v_separation", 10)
-	contenedor_jugadas.add_child(grilla_jugadas)
-	var liga := GameState.liga_jugador()
-	for id in Jugadas.LISTA:
-		grilla_jugadas.add_child(_cuadrado_de_jugada(equipo, str(id), liga))
+	if not pendientes.is_empty():
+		var encabezado := HBoxContainer.new()
+		encabezado.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		contenedor_jugadas.add_child(encabezado)
+		var titulo_pendientes := Tema.etiqueta_seccion(
+			"Para más adelante" if equipo.jugada_en_curso != "" else "Disponibles para ensayar")
+		titulo_pendientes.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		encabezado.add_child(titulo_pendientes)
+		encabezado.add_child(_texto_suave("%d pendientes" % pendientes.size()))
+		contenedor_jugadas.add_child(grilla_jugadas)
+		for id in pendientes:
+			grilla_jugadas.add_child(_cuadrado_de_jugada(equipo, id, liga))
+
+	if not aprendidas.is_empty():
+		contenedor_jugadas.add_child(Tema.etiqueta_seccion("Repertorio aprendido"))
+		var repertorio := GridContainer.new()
+		repertorio.columns = 2
+		repertorio.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		repertorio.add_theme_constant_override("h_separation", 10)
+		repertorio.add_theme_constant_override("v_separation", 8)
+		contenedor_jugadas.add_child(repertorio)
+		for id in aprendidas:
+			repertorio.add_child(_jugada_aprendida_compacta(id))
 
 
-## El cuadrado de una jugada. Mismo armado que el de Roles: la tarjeta
-## dibujada y un boton transparente encima que la hace tocable entera.
+func _jugada_aprendida_compacta(id: String) -> Control:
+	var tarjeta := Componentes.tarjeta(Tema.VERDE)
+	var fila := HBoxContainer.new()
+	fila.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tarjeta.add_child(fila)
+	var nombre := Label.new()
+	nombre.text = str(Jugadas.NOMBRE[id])
+	nombre.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	nombre.tooltip_text = str(Jugadas.DESCRIPCION[id])
+	fila.add_child(nombre)
+	fila.add_child(Componentes.chip("Aprendida", Tema.PANEL_ALTO, Tema.VERDE))
+	return tarjeta
+
+
+## Opción pendiente: descripción breve y una acción visible, sin convertir
+## toda la tarjeta en un botón invisible.
 func _cuadrado_de_jugada(equipo: Team, id: String, liga: Liga) -> Control:
-	var sabida := Jugadas.sabe(equipo, id)
-	var en_curso := equipo.jugada_en_curso == id
 	var libre := Jugadas.puede_empezar(equipo, id)
 
-	var acento := Color.TRANSPARENT
-	if sabida:
-		acento = Tema.VERDE
-	elif en_curso:
-		acento = Tema.AMBAR
-	var tarjeta := Componentes.tarjeta(acento)
-	tarjeta.custom_minimum_size = Vector2(0, 190)
+	var tarjeta := Componentes.tarjeta(Tema.CELESTE if libre else Color.TRANSPARENT)
+	tarjeta.custom_minimum_size = Vector2(0, 164)
 	tarjeta.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	if not sabida and not en_curso and not libre:
-		tarjeta.modulate = Color(1, 1, 1, 0.55)
+	if not libre:
+		tarjeta.modulate = Color(1, 1, 1, 0.68)
 
 	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 3)
+	col.add_theme_constant_override("separation", 6)
 	tarjeta.add_child(col)
-	col.add_child(Tema.etiqueta_seccion(str(Jugadas.NOMBRE[id])))
 
 	var fila := HBoxContainer.new()
 	fila.add_theme_constant_override("separation", 8)
 	col.add_child(fila)
-	var estado := "Disponible"
-	var color_estado := Tema.SUAVE
-	if sabida:
-		estado = "Aprendida"
-		color_estado = Tema.VERDE
-	elif en_curso:
-		estado = "Ensayando %d%%" % int(round(Jugadas.progreso(equipo) * 100.0))
-		color_estado = Tema.AMBAR
-	elif not libre:
-		estado = "Esperando"
-	fila.add_child(Componentes.chip(estado, Tema.PANEL_ALTO, color_estado))
-	# La dificultad en estrellas sale de las semanas: una cada seis.
-	var estrellas := clampi(int(ceil(Jugadas.semanas_de(id) / 6.0)), 1, 5)
-	var dificultad := Label.new()
-	dificultad.text = "%s  %d sem." % ["★".repeat(estrellas), int(Jugadas.semanas_de(id))]
-	dificultad.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
-	dificultad.add_theme_color_override("font_color", Tema.SUAVE)
-	fila.add_child(dificultad)
+	var nombre := Label.new()
+	nombre.text = str(Jugadas.NOMBRE[id])
+	nombre.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	Tema.numero(nombre, Tema.TAM_BASE)
+	fila.add_child(nombre)
+	fila.add_child(Componentes.chip("%d sem." % int(Jugadas.semanas_de(id)),
+		Tema.PANEL_ALTO, Tema.SUAVE))
 
-	if en_curso:
-		var barra := ProgressBar.new()
-		barra.min_value = 0.0
-		barra.max_value = 1.0
-		barra.value = Jugadas.progreso(equipo)
-		barra.show_percentage = false
-		barra.custom_minimum_size = Vector2(0, 6)
-		col.add_child(barra)
+	col.add_child(_texto_suave(str(Jugadas.DESCRIPCION[id])))
+	var espacio := Control.new()
+	espacio.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(espacio)
+	var pie := HBoxContainer.new()
+	pie.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_child(pie)
 
 	# Cuantos rivales de la division la saben: si la saben, la leen y la
 	# ventaja se achica a la mitad (Jugadas.LECTURA_DEL_RIVAL).
+	var texto_rivales := ""
 	if liga != null:
 		var cuantos := 0
 		for e in liga.equipos:
 			if e != equipo and Jugadas.sabe(e, id):
 				cuantos += 1
-		var rivales := Label.new()
-		rivales.text = "La saben %d rivales de tu división" % cuantos if cuantos > 0 \
-			else "Ningún rival de tu división la sabe"
-		rivales.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
-		rivales.add_theme_color_override("font_color", Tema.SUAVE)
-		col.add_child(rivales)
-
-	var espacio := Control.new()
-	espacio.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	col.add_child(espacio)
-	col.add_child(_texto_suave(str(Jugadas.DESCRIPCION[id])))
+		texto_rivales = "%d rivales la conocen" % cuantos if cuantos > 0 else "Ningún rival la conoce"
+	var rivales := Label.new()
+	rivales.text = texto_rivales
+	rivales.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rivales.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
+	rivales.add_theme_color_override("font_color", Tema.SUAVE)
+	rivales.tooltip_text = "Si el rival también la conoce, la ventaja de la jugada se reduce."
+	pie.add_child(rivales)
 
 	if libre:
-		var tapa := Button.new()
-		tapa.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		tapa.flat = true
-		tapa.tooltip_text = "Empezar a ensayar esta jugada"
-		tapa.pressed.connect(func(): _pedir_jugada(id))
-		tarjeta.add_child(tapa)
+		var boton := Button.new()
+		boton.text = "Ensayar"
+		boton.custom_minimum_size.x = 104
+		boton.tooltip_text = "Empezar a ensayar esta jugada"
+		boton.pressed.connect(func(): _pedir_jugada(id))
+		pie.add_child(boton)
+	else:
+		pie.add_child(Componentes.chip("Después", Tema.PANEL_ALTO, Tema.SUAVE))
 	return tarjeta
 
 
