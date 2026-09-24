@@ -103,9 +103,12 @@ static func linea(evento: Dictionary, nombres: Dictionary) -> String:
 			match res:
 				"bloqueado": return "%s bloquea el remate%s de %s" % [_quien_clave(evento.get("bloqueador_clave", -1), nombres), tecnica_tiro, quien]
 				"palo":
-					if bool(evento.get("travesano", false)):
-						return "¡Al travesaño el remate%s de %s!" % [tecnica_tiro, quien]
-					return "¡Al palo el remate%s de %s!" % [tecnica_tiro, quien]
+					var golpe := "travesaño" if bool(evento.get("travesano", false)) else "palo"
+					match str(evento.get("destino_palo", "")):
+						"afuera": return "¡El remate%s de %s pega en el %s y se va afuera!" % [tecnica_tiro, quien, golpe]
+						"corner": return "¡El remate%s de %s pega en el %s, roza al arquero y se va al córner!" % [tecnica_tiro, quien, golpe]
+						"en_juego": return "¡El remate%s de %s pega en el %s! La pelota sigue en juego" % [tecnica_tiro, quien, golpe]
+						_: return "¡Al %s el remate%s de %s!" % [golpe, tecnica_tiro, quien]
 				_: return "Remata%s %s y se va afuera" % [tecnica_tiro, quien]
 		"gambeta":
 			if str(evento.get("resultado", "")) == "pierde":
