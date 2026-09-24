@@ -1,4 +1,5 @@
 [
+	{"version": "0.6.07", "fecha": "2026-09-23", "cambio": "Los jueces de línea ahora sostienen el banderín en la mano al estar quietos y al correr."},
 	{"version": "0.6.06", "fecha": "2026-09-23", "cambio": "El relato ya no dice \"gol con efecto de volea\" y los remates se leen sin espacios de más ni palabras pegadas."},
 	{"version": "0.6.05", "fecha": "2026-09-23", "cambio": "La pestaña Jugadas ahora ordena mejor el ensayo, las opciones pendientes y el repertorio aprendido."},
 	{"version": "0.6.04", "fecha": "2026-09-23", "cambio": "Las ofertas se reparten entre más jugadores, pueden competir varios clubes y vuelven a llegar pedidos de préstamo."},

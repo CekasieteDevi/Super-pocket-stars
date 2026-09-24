@@ -8,6 +8,7 @@ func _init() -> void:
 	_test_cuatro_oficiales_y_diagonal_del_arbitro()
 	_test_arbitro_no_se_teletransporta()
 	_test_asistentes_siguen_penultimo_defensor_o_pelota()
+	_test_bandera_nace_en_la_mano()
 	_test_bandera_de_offside()
 	_test_tarjeta_la_muestra_el_arbitro()
 	_test_cuarto_arbitro_muestra_cambio()
@@ -71,6 +72,21 @@ func _test_asistentes_siguen_penultimo_defensor_o_pelota() -> void:
 	print("OK: asistentes alineados con penúltimo defensor o pelota.")
 
 
+func _test_bandera_nace_en_la_mano() -> void:
+	# El pivote queda en los pies. Estos puntos recorren la mano visible del
+	# atlas; el anclaje viejo (10, -32) quedaba a la altura de la cara.
+	var indices := range(8)
+	indices.append_array(range(16, 26))
+	for indice in indices:
+		var mano := VistaCancha.anclaje_bandera_px(indice, false)
+		assert(mano.x >= 10.0 and mano.x <= 14.0)
+		assert(mano.y >= -24.0 and mano.y <= -16.0)
+		var espejo := VistaCancha.anclaje_bandera_px(indice, true)
+		assert(is_equal_approx(espejo.x, -mano.x) and is_equal_approx(espejo.y, mano.y))
+	assert(VistaCancha.anclaje_bandera_px(24, false) == Vector2(10, -16))
+	print("OK: la bandera acompaña la mano en quietud y en todos los cuadros de carrera.")
+
+
 func _test_bandera_de_offside() -> void:
 	var offside := _fotograma(44.0)
 	offside["eventos"] = [{"tipo": "offside", "clave": 110, "resultado": "offside"}]
@@ -90,11 +106,16 @@ func _test_tarjeta_la_muestra_el_arbitro() -> void:
 		OficialesPartido.ARBITRO)
 	var subida := _por_rol(OficialesPartido.entidades([tarjeta, despues], 1, 0.0),
 		OficialesPartido.ARBITRO)
+	var final := _por_rol(OficialesPartido.entidades([tarjeta, despues, despues], 2, 0.0),
+		OficialesPartido.ARBITRO)
 	assert(inicio["senal"] == "tarjeta_amarilla")
 	assert(float(inicio["fase_senal"]) < float(subida["fase_senal"]))
-	assert(inicio["accion"] == "lateral_prepara")
+	assert(inicio["accion"] == "tarjeta")
 	assert(float(inicio["fase_animacion"]) < float(subida["fase_animacion"]))
-	print("OK: el árbitro anima brazos y tarjeta; no se asigna al jugador.")
+	assert(AtlasJugadores.cuadro(final["accion"], final["fase_animacion"],
+		final["direccion"], false) == 58)
+	assert(VistaCancha.origen_tarjeta_px(1.0) == Vector2(-9.0, -58.0))
+	print("OK: el árbitro levanta un brazo y sostiene la tarjeta en esa mano.")
 
 
 func _test_cuarto_arbitro_muestra_cambio() -> void:

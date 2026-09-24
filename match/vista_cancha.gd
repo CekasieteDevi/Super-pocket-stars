@@ -88,6 +88,17 @@ const COLOR_ARCO := Color(0.97, 0.97, 0.98)
 const FRANJAS := 12
 const ANCHO_SPRITE_PX := 26.0
 
+## Punto de agarre de la mano derecha en cada cuadro normal del atlas,
+## medido desde el pivote de los pies. La mano sube y baja al correr: usar
+## siempre (10, -32) dejaba el palo naciendo a la altura de la cara.
+const MANO_BANDERA_PX := {
+	0: Vector2(12, -21), 1: Vector2(13, -23), 2: Vector2(11, -24), 3: Vector2(14, -23),
+	4: Vector2(13, -22), 5: Vector2(10, -19), 6: Vector2(13, -23), 7: Vector2(14, -22),
+	16: Vector2(11, -19), 17: Vector2(11, -19), 18: Vector2(10, -21), 19: Vector2(10, -21),
+	20: Vector2(12, -22), 21: Vector2(10, -22), 22: Vector2(11, -21), 23: Vector2(12, -21),
+	24: Vector2(10, -16), 25: Vector2(10, -16),
+}
+
 ## Metros que ocupa un tile de cada textura. El césped chico para que la
 ## veta no se lea como manchones; el público más chico todavía, que es lo
 ## que hace que las cabezas se vean como cabezas.
@@ -697,6 +708,7 @@ func _dibujar_cuerpo(ent: Dictionary) -> void:
 	var dir := int(ent.get("direccion", SpritesPartido.ABAJO))
 	var accion := str(ent.get("accion", ""))
 	var espejo := bool(ent.get("espejo", false)) if accion in ["vuela", "chilena"] else dir in [5, 6, 7]
+	var indice_atlas := 24
 	if MotorEspacial.es_accion_regate(accion):
 		espejo = bool(ent.get("regate_espejo", false))
 	var tex: Texture2D
@@ -718,6 +730,7 @@ func _dibujar_cuerpo(ent: Dictionary) -> void:
 	else:
 		var indice := AtlasJugadores.cuadro(accion, float(ent.get("fase_animacion", 0.0)), dir,
 			pose in [SpritesPartido.CORRE_A, SpritesPartido.CORRE_B], bool(ent.get("arquero", false)))
+		indice_atlas = indice
 		tex = AtlasJugadores.textura(indice, ent["color"], ent.get("color_short", Color.WHITE),
 			ent.get("color_pelo", SpritesPartido.PELO), espejo, int(ent.get("numero", 0)), int(ent.get("pelo", 0)))
 	var lado := 64.0 * escala
@@ -725,30 +738,29 @@ func _dibujar_cuerpo(ent: Dictionary) -> void:
 	# La bandera baja va detrás del cuerpo; así el palo nace de la mano
 	# y no parece cruzado por delante del juez.
 	if ent["tipo"] == "oficial" and str(ent.get("senal", "")) == "bandera_baja":
-		_dibujar_utileria_oficial(ent, punto, escala, espejo)
+		_dibujar_utileria_oficial(ent, punto, escala, espejo, indice_atlas)
 	draw_texture_rect(tex, Rect2((punto - Vector2(lado * 0.5, lado * 0.90625)).round(),
 		Vector2(lado, lado)), false)
 	if ent["tipo"] == "oficial" and str(ent.get("senal", "")) != "bandera_baja":
-		_dibujar_utileria_oficial(ent, punto, escala, espejo)
+		_dibujar_utileria_oficial(ent, punto, escala, espejo, indice_atlas)
 
 
 ## Banderas, tarjeta y tablero en el mismo lenguaje pixelado del atlas. El
 ## cuerpo sigue siendo PNG; estas piezas informativas se dibujan nítidas para
 ## poder cambiar de estado y dorsales sin multiplicar hojas de sprites.
 func _dibujar_utileria_oficial(ent: Dictionary, pie: Vector2, escala: float,
-		espejo: bool) -> void:
+		espejo: bool, indice_atlas: int) -> void:
 	# La mano y la bandera cambian junto con la orientación del PNG.
 	var lado := -1.0 if espejo else 1.0
+	var mano := pie + anclaje_bandera_px(indice_atlas, espejo) * escala
 	match str(ent.get("senal", "")):
 		"bandera_baja":
-			_dibujar_bandera(pie + Vector2(lado * 10, -32) * escala,
-				pie + Vector2(lado * 23, -18) * escala, escala, lado, true)
+			_dibujar_bandera(mano, mano + Vector2(lado * 13, 14) * escala,
+				escala, lado, true)
 		"bandera_arriba":
-			_dibujar_bandera(pie + Vector2(lado * 10, -32) * escala,
-				pie + Vector2(lado * 10, -66) * escala, escala, lado)
+			_dibujar_bandera(mano, mano + Vector2(0, -34) * escala, escala, lado)
 		"bandera_horizontal":
-			_dibujar_bandera(pie + Vector2(lado * 10, -32) * escala,
-				pie + Vector2(lado * 40, -32) * escala, escala, lado)
+			_dibujar_bandera(mano, mano + Vector2(lado * 30, 0) * escala, escala, lado)
 		"tarjeta_amarilla":
 			_dibujar_tarjeta_arbitro(pie, escala, COLOR_AMARILLA,
 				float(ent.get("fase_senal", 1.0)))
@@ -762,6 +774,13 @@ func _dibujar_utileria_oficial(ent: Dictionary, pie: Vector2, escala: float,
 		"tablero":
 			_dibujar_tablero(pie, escala, int(ent.get("numero_sale", 0)),
 				int(ent.get("numero_entra", 0)))
+
+
+static func anclaje_bandera_px(indice: int, espejo: bool) -> Vector2:
+	var anclaje: Vector2 = MANO_BANDERA_PX.get(indice, MANO_BANDERA_PX[24])
+	if espejo:
+		anclaje.x = -anclaje.x
+	return anclaje
 
 
 func _dibujar_bandera(mano: Vector2, punta: Vector2, escala: float, lado: float,
@@ -805,11 +824,17 @@ func _dibujar_bandera(mano: Vector2, punta: Vector2, escala: float, lado: float,
 func _dibujar_tarjeta_arbitro(pie: Vector2, escala: float, color: Color,
 		fase: float) -> void:
 	var tam := Vector2(9, 13) * escala
-	var subida := smoothstep(0.0, 1.0, clampf(fase, 0.0, 1.0))
-	var origen := Vector2(5.0, -43.0).lerp(Vector2(-4.5, -69.0), subida)
+	var origen := origen_tarjeta_px(fase)
 	var rect := Rect2(pie + origen * escala, tam)
 	draw_rect(Rect2(rect.position + Vector2.ONE * maxf(1.0, escala), rect.size), Color(0, 0, 0, 0.55))
 	draw_rect(rect, color)
+
+
+static func origen_tarjeta_px(fase: float) -> Vector2:
+	var subida := smoothstep(0.0, 1.0, clampf(fase, 0.0, 1.0))
+	# Arriba, el borde inferior de la tarjeta se superpone con el puño del
+	# cuadro 58. La posición vieja quedaba flotando sobre la mano.
+	return Vector2(5.0, -43.0).lerp(Vector2(-9.0, -58.0), subida)
 
 
 func _dibujar_tablero(pie: Vector2, escala: float, numero_sale: int, numero_entra: int) -> void:
