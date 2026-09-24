@@ -5,6 +5,7 @@ func _init() -> void:
 	var resultados := {}
 	var animaciones := {}
 	for local in [true, false]:
+		_test_volea_tiene_limite(local)
 		for rol in ["EI", "ED", "MC", "LI", "LD"]:
 			_test_centro_banda(local, rol)
 		_test_centro_no_sale_del_medio(local)
@@ -43,6 +44,33 @@ func _init() -> void:
 	_comprobar(alta["probabilidad_modelo_porteria_sin_bloqueo"] > baja["probabilidad_modelo_porteria_sin_bloqueo"], "mayor volea mejora punteria")
 	print("FALLOS=%d" % fallos)
 	quit(1 if fallos else 0)
+
+
+func _test_volea_tiene_limite(local: bool) -> void:
+	var lejos := _escena(local, MotorEspacial.DISTANCIA_MAX_VOLEA + 8.0, 70.0)
+	lejos["jugador"]["atributos"]["volea"] = 95.0
+	lejos["estado"]["registro_remates"] = []
+	lejos["estado"]["con_fotogramas"] = true
+	lejos["estado"]["acciones_tick"] = []
+	lejos["estado"]["forzar_remate"] = "atajada"
+	MotorEspacial._resolver_tiro(lejos["estado"], lejos["poseedor"], lejos["jugador"], "volea", "volea")
+	var gesto_lejano := false
+	for accion in lejos["estado"]["acciones_tick"]:
+		if str(accion.get("accion", "")) in ["volea", "chilena"]:
+			gesto_lejano = true
+	_comprobar(lejos["estado"]["registro_remates"].is_empty()
+			and not bool(lejos["estado"]["pelota"].get("es_remate", false)) and not gesto_lejano,
+		"desde lejos no remata, anima ni relata una volea: local=%s" % local)
+
+	var cerca := _escena(local, MotorEspacial.DISTANCIA_MAX_VOLEA - 1.0, 70.0)
+	cerca["jugador"]["atributos"]["volea"] = 95.0
+	cerca["estado"]["registro_remates"] = []
+	cerca["estado"]["forzar_remate"] = "atajada"
+	MotorEspacial._resolver_tiro(cerca["estado"], cerca["poseedor"], cerca["jugador"], "volea", "volea")
+	var registro_cerca: Dictionary = cerca["estado"]["registro_remates"][0]
+	var datos_cerca: Dictionary = cerca["estado"]["pelota"]["remate"]
+	_comprobar(registro_cerca["atributo"] == "volea" and datos_cerca["accion"] == "volea",
+		"la volea conserva su tecnica dentro del limite: local=%s" % local)
 
 
 func _test_centro_banda(local: bool, rol: String) -> void:
