@@ -213,12 +213,8 @@ static func generar_pedido(equipo: Team, piramide, rng: RandomNumberGenerator,
 		# Al que ya cediste no te lo pueden volver a pedir: no esta.
 		if equipo.prestados_afuera.has(id):
 			continue
-		var ocupado := false
-		for o in equipo.ofertas:
-			if int(o["jugador_id"]) == id and Ofertas.abierta(o):
-				ocupado = true
-				break
-		if not ocupado:
+		if Ofertas.cantidad_abiertas_entrantes(equipo, id, "cesion") \
+				< Ofertas.MAX_OFERTAS_ENTRANTES_POR_JUGADOR:
 			candidatos.append(j)
 	if candidatos.is_empty():
 		return {}
@@ -233,12 +229,20 @@ static func generar_pedido(equipo: Team, piramide, rng: RandomNumberGenerator,
 		for pide in piramide.divisiones[d].equipos:
 			if pide == equipo or pide.quebrado:
 				continue
-			var media_pide: float = pide.media_equipo()
+			var a_mejorar := Mercado.medias_a_mejorar(pide)
 			for j in candidatos:
-				# Nadie pide prestado a alguien peor que lo que ya tiene.
-				var ventaja: float = float(j["media"]) - media_pide
+				var posicion := str(j["posicion"])
+				if not a_mejorar.has(posicion) or Ofertas.comprador_ya_oferto(
+						equipo, int(j["id"]), pide.nombre, "cesion"):
+					continue
+				# Importa el puesto que viene a cubrir, no el promedio entero
+				# del plantel. Ese promedio dejo sin pedidos a 22 cedibles de
+				# una partida real, aunque decenas de clubes tenian un hueco.
+				var ventaja: float = float(j["media"]) - float(a_mejorar[posicion])
 				if ventaja >= VENTAJA_MINIMA:
-					pares.append({"pide": pide, "division": d, "jugador": j, "peso": ventaja})
+					pares.append({"pide": pide, "division": d, "jugador": j,
+						"peso": ventaja * Ofertas.factor_reparto(
+							equipo, int(j["id"]), "cesion")})
 
 	while not pares.is_empty():
 		var suma := 0.0

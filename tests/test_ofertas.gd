@@ -13,6 +13,7 @@ func _init() -> void:
 	_test_la_miseria_corta_la_negociacion()
 	_test_el_veto_se_avisa_una_sola_vez()
 	_test_llegan_ofertas_por_los_mios()
+	_test_pueden_competir_tres_clubes_por_el_mismo()
 	_test_el_crack_de_abajo_lo_buscan_los_de_arriba()
 	_test_aceptar_no_garantiza_la_venta()
 	_test_lo_terminado_va_al_historial()
@@ -178,6 +179,36 @@ func _test_llegan_ofertas_por_los_mios() -> void:
 		print("OK: %d ofertas en 60 semanas, todas por jugadores del plantel." % recibidas.size())
 	else:
 		print("FALLA: %d ofertas, coherentes=%s" % [recibidas.size(), todas_por_los_mios])
+
+
+func _test_pueden_competir_tres_clubes_por_el_mismo() -> void:
+	print("\n=== Tres clubes pueden ofertar a la vez por el mismo jugador ===")
+	var p := _partida()
+	var mio: Team = p["mio"]
+	var jugador: Dictionary = mio.jugadores[8]
+	var id := int(jugador["id"])
+	jugador["media"] = 80.0
+	jugador["potencial"] = 80.0
+	jugador["edad"] = 25
+	jugador["personalidades"] = {}
+	mio.animo[id] = 0.0
+	for j in mio.todos_los_jugadores():
+		Traspasos.fijar(mio, int(j["id"]), Traspasos.NO_DISPONIBLE)
+	Traspasos.fijar(mio, id, Traspasos.DISPONIBLE)
+	for liga in p["piramide"].divisiones:
+		for club in liga.equipos:
+			if club != mio:
+				club.caja["fichajes"] = 500000000.0
+	for _i in range(20):
+		Ofertas.generar_entrantes(mio, p["piramide"], p["rng"], 2, 4)
+	var clubes := {}
+	for o in mio.ofertas:
+		clubes[str(o["club"])] = true
+	if Ofertas.cantidad_abiertas_entrantes(mio, id, "compra") == 3 and clubes.size() == 3:
+		print("OK: hay tres ofertas simultaneas de tres clubes distintos.")
+	else:
+		print("FALLA: ofertas=%d clubes=%d" % [
+			Ofertas.cantidad_abiertas_entrantes(mio, id, "compra"), clubes.size()])
 
 
 func _test_el_crack_de_abajo_lo_buscan_los_de_arriba() -> void:

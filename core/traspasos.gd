@@ -46,6 +46,11 @@ const FACTOR_VENTA_RAPIDA_MAX := 0.60
 ## lo queres vender, asi que regatear casi no paga.
 const TOPE_SOBREPRECIO_VENTA_RAPIDA := 1.03
 
+## Una venta rapida no solo baja el precio: tambien se muestra primero a
+## los compradores. Antes regalaba entre 40% y 50% del monto pero tenia
+## exactamente la misma chance de recibir una oferta que "Disponible".
+const PRIORIDAD_VENTA_RAPIDA := 4.0
+
 
 static func estado(equipo, id: int) -> String:
 	var e := str(equipo.traspasos.get(id, DISPONIBLE))
@@ -75,6 +80,17 @@ static func factor_oferta(equipo, id: int, rng: RandomNumberGenerator) -> float:
 	if estado(equipo, id) != VENTA_RAPIDA:
 		return 1.0
 	return rng.randf_range(FACTOR_VENTA_RAPIDA_MIN, FACTOR_VENTA_RAPIDA_MAX)
+
+
+## Piso determinista para saber si un comprador llega al precio antes de
+## sortear el descuento exacto.
+static func factor_minimo_oferta(equipo, id: int) -> float:
+	return FACTOR_VENTA_RAPIDA_MIN if estado(equipo, id) == VENTA_RAPIDA else 1.0
+
+
+## Peso extra al elegir por quien llega la proxima oferta.
+static func prioridad(equipo, id: int) -> float:
+	return PRIORIDAD_VENTA_RAPIDA if estado(equipo, id) == VENTA_RAPIDA else 1.0
 
 
 ## Hasta cuanto por encima de su tasacion paga el comprador cuando le

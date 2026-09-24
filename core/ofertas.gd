@@ -374,6 +374,17 @@ const DIAS_ENTRE_INTERESES := 2.0
 const OFERTA_INICIAL_MIN := 0.65
 const OFERTA_INICIAL_MAX := 1.05
 
+## Puede haber competencia real por un jugador. Antes cualquier oferta
+## abierta lo sacaba entero del mercado: hasta rechazarla ningun otro club
+## podia aparecer, aunque hubiera varios interesados.
+const MAX_OFERTAS_ENTRANTES_POR_JUGADOR := 3
+
+## Las ultimas ofertas bajan el peso del jugador que ya viene recibiendo.
+## No lo bloquean: solo evitan que una figura absorba toda la bandeja.
+const OFERTAS_RECIENTES_PARA_REPARTIR := 16
+const CASTIGO_POR_OFERTA_RECIENTE := 3.0
+const CASTIGO_POR_OFERTA_ABIERTA := 1.5
+
 
 ## Los otros clubes vienen a buscar a los tuyos.
 ##
@@ -387,8 +398,9 @@ const OFERTA_INICIAL_MAX := 1.05
 ## (Mercado.puntaje_interes) y que puede pagar. Con un club al azar, el
 ## crack de una division baja casi nunca lo veia uno de arriba con caja.
 ##
-## No ofertan por alguien que ya tiene una negociacion abierta, que seria
-## una encerrona.
+## Hasta tres clubes pueden ofertar a la vez por el mismo jugador. No se
+## repite el mismo comprador y los que recibieron ofertas hace poco pesan
+## menos, para repartir el mercado sin impedir una puja real.
 static func generar_entrantes(equipo: Team, piramide, rng: RandomNumberGenerator,
 		dias: int, division_propia: int) -> Array:
 	var nuevas := []
@@ -402,12 +414,8 @@ static func generar_entrantes(equipo: Team, piramide, rng: RandomNumberGenerator
 		var id_c := int(j["id"])
 		if not Traspasos.acepta_ofertas(equipo, id_c):
 			continue
-		var ocupado := false
-		for o in equipo.ofertas:
-			if int(o["jugador_id"]) == id_c and abierta(o):
-				ocupado = true
-				break
-		if not ocupado:
+		if cantidad_abiertas_entrantes(equipo, id_c, "compra") \
+				< MAX_OFERTAS_ENTRANTES_POR_JUGADOR:
 			candidatos.append(j)
 	if candidatos.is_empty():
 		return nuevas
@@ -418,7 +426,7 @@ static func generar_entrantes(equipo: Team, piramide, rng: RandomNumberGenerator
 			if mira == equipo or mira.quebrado:
 				continue
 			opciones.append_array(_los_que_le_sirven(mira, d, equipo, division_propia, candidatos))
-	var elegida := _sortear(opciones, rng)
+	var elegida := _sortear_repartida(equipo, opciones, rng, "compra")
 	if elegida.is_empty():
 		return nuevas
 	var comprador: Team = elegida["comprador"]
@@ -427,12 +435,13 @@ static func generar_entrantes(equipo: Team, piramide, rng: RandomNumberGenerator
 	var tope := float(elegida["tope"])
 	var id := int(jugador["id"])
 
-	# Nunca ofrece mas de lo que se anima a gastar en un fichaje: el club
-	# que llega justo tira abajo, el rico elige en todo el rango.
-	var techo_oferta: float = minf(OFERTA_INICIAL_MAX, tope / valor)
-	var monto: float = valor * rng.randf_range(OFERTA_INICIAL_MIN, techo_oferta)
-	# En venta rapida ofrecen entre 40% y 50% menos que eso.
-	monto *= Traspasos.factor_oferta(equipo, id, rng)
+	# Nunca ofrece mas de lo que se anima a gastar en un fichaje. En venta
+	# rapida el descuento tambien abre compradores que no llegaban al precio
+	# normal; antes solo se aplicaba DESPUES del filtro de caja.
+	var factor_rapida := Traspasos.factor_oferta(equipo, id, rng)
+	factor_rapida = minf(factor_rapida, tope / (valor * OFERTA_INICIAL_MIN))
+	var techo_oferta: float = minf(OFERTA_INICIAL_MAX, tope / (valor * factor_rapida))
+	var monto: float = valor * rng.randf_range(OFERTA_INICIAL_MIN, techo_oferta) * factor_rapida
 
 	var oferta := nueva(equipo.siguiente_id_oferta, comprador.nombre, jugador, monto, true, rng)
 	equipo.siguiente_id_oferta += 1
@@ -475,9 +484,13 @@ static func _los_que_le_sirven(comprador: Team, division_comprador: int, dueno: 
 		if puntaje <= 0.0:
 			continue
 		var id := int(j["id"])
+		if comprador_ya_oferto(dueno, id, comprador.nombre, "compra"):
+			continue
 		var valor := ValorJugador.calcular(j, dueno.animo.get(id, 50.0), dueno.contratos.get(id, 3))
-		# Ni tirando abajo le alcanza: no lo mira.
-		if valor <= 0.0 or valor * OFERTA_INICIAL_MIN > tope:
+		# Ni tirando abajo le alcanza: no lo mira. Venta rapida usa su
+		# descuento desde este filtro, no recien al armar el monto.
+		if valor <= 0.0 or valor * OFERTA_INICIAL_MIN \
+				* Traspasos.factor_minimo_oferta(dueno, id) > tope:
 			continue
 		var sueldo_actual: float = float(dueno.sueldos.get(id, 0.0))
 		var ofrecido := Negociacion.sueldo_pretendido(
@@ -488,6 +501,84 @@ static func _los_que_le_sirven(comprador: Team, division_comprador: int, dueno: 
 		opciones.append({"comprador": comprador, "jugador": j, "valor": valor,
 			"tope": tope, "peso": puntaje * pow(valor, EXPONENTE_VALOR)})
 	return opciones
+
+
+## Elige primero al jugador y despues al comprador. Antes todos los pares
+## club-jugador competian juntos: el mas caro y compatible con mas clubes
+## multiplicaba sus boletos y podia llevarse media temporada de ofertas.
+static func _sortear_repartida(equipo: Team, opciones: Array, rng: RandomNumberGenerator,
+		tipo: String) -> Dictionary:
+	if opciones.is_empty():
+		return {}
+	var por_jugador := {}
+	for o in opciones:
+		var id := int(o["jugador"]["id"])
+		if not por_jugador.has(id):
+			por_jugador[id] = []
+		por_jugador[id].append(o)
+
+	var grupos := []
+	for id in por_jugador:
+		var grupo: Array = por_jugador[id]
+		# El jugador pesa lo que su mejor comprador, con el valor adentro.
+		# Con solo el interes, el suplente flojo de 30 años recibia tantas
+		# ofertas como el crack (23 contra 22 en test_ofertas); con el
+		# peso completo son 21 contra 54. El reparto lo sigue haciendo
+		# factor_reparto, y un solo boleto por jugador evita que se
+		# multipliquen los clubes compatibles.
+		var peso_mejor := 0.0
+		for o in grupo:
+			peso_mejor = maxf(peso_mejor, float(o["peso"]))
+		grupos.append({
+			"id": id,
+			"opciones": grupo,
+			"peso": peso_mejor * factor_reparto(equipo, int(id), tipo)
+				* Traspasos.prioridad(equipo, int(id)),
+		})
+	var grupo_elegido := _sortear(grupos, rng)
+	if grupo_elegido.is_empty():
+		return {}
+	return _sortear(grupo_elegido["opciones"], rng)
+
+
+## Cuenta solo ofertas entrantes del mismo tipo. Una compra abierta ya no
+## impide un pedido de cesion, ni viceversa.
+static func cantidad_abiertas_entrantes(equipo: Team, jugador_id: int, tipo: String) -> int:
+	var cantidad := 0
+	for o in equipo.ofertas:
+		if bool(o.get("entrante", false)) and int(o["jugador_id"]) == jugador_id \
+				and str(o.get("tipo", "compra")) == tipo and abierta(o):
+			cantidad += 1
+	return cantidad
+
+
+static func comprador_ya_oferto(equipo: Team, jugador_id: int, club: String,
+		tipo: String) -> bool:
+	for o in equipo.ofertas:
+		if bool(o.get("entrante", false)) and int(o["jugador_id"]) == jugador_id \
+				and str(o.get("club", "")) == club \
+				and str(o.get("tipo", "compra")) == tipo and abierta(o):
+			return true
+	return false
+
+
+## Memoria corta y compatible con guardados viejos: usa el historial que
+## ya existe, sin agregar campos. Las ofertas antiguas dejan de pesar.
+static func factor_reparto(equipo: Team, jugador_id: int, tipo: String) -> float:
+	var recientes := 0
+	var miradas := 0
+	for i in range(equipo.historial_mercado.size() - 1, -1, -1):
+		var o: Dictionary = equipo.historial_mercado[i]
+		if not bool(o.get("entrante", false)) or str(o.get("tipo", "compra")) != tipo:
+			continue
+		miradas += 1
+		if int(o["jugador_id"]) == jugador_id:
+			recientes += 1
+		if miradas >= OFERTAS_RECIENTES_PARA_REPARTIR:
+			break
+	var abiertas := cantidad_abiertas_entrantes(equipo, jugador_id, tipo)
+	return 1.0 / (1.0 + float(recientes) * CASTIGO_POR_OFERTA_RECIENTE
+		+ float(abiertas) * CASTIGO_POR_OFERTA_ABIERTA)
 
 
 static func _sortear(opciones: Array, rng: RandomNumberGenerator) -> Dictionary:

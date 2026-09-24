@@ -11,6 +11,7 @@ var gs = null
 
 func _init() -> void:
 	_test_solo_piden_por_los_cedibles()
+	_test_piden_por_el_hueco_del_puesto()
 	_test_el_pedido_nace_negociable()
 	_test_el_club_aguanta_hasta_su_tope()
 	_test_pedir_de_mas_los_hace_contraofertar()
@@ -80,6 +81,45 @@ func _test_solo_piden_por_los_cedibles() -> void:
 		print("FALLA: llego un pedido por alguien que no marcaste cedible.")
 	else:
 		print("OK: la lista vacia no genera pedidos.")
+
+
+func _test_piden_por_el_hueco_del_puesto() -> void:
+	print("\n=== Piden al cedible que mejora un puesto aunque no supere el promedio ===")
+	var p := _partida()
+	var equipo: Team = gs.equipo_jugador
+	var jugador: Dictionary = equipo.banco[0]
+	var id := int(jugador["id"])
+	jugador["media"] = 60.0
+	jugador["potencial"] = 60.0
+	jugador["personalidades"] = {}
+	equipo.animo[id] = 0.0
+	Cesiones.fijar(equipo, id, Cesiones.DISPONIBLE)
+
+	# Todos tienen media general muy superior a 60, pero un titular flojo
+	# justo en este puesto. El criterio viejo no encontraba ningun pedido.
+	for d in range(gs.division_jugador, gs.piramide.divisiones.size()):
+		for club in gs.piramide.divisiones[d].equipos:
+			if club == equipo:
+				continue
+			club.caja["fichajes"] = 500000000.0
+			club.caja["contratos"] = 500000000.0
+			var abrio_hueco := false
+			for titular in club.jugadores:
+				titular["media"] = 90.0
+				if not abrio_hueco and str(titular["posicion"]) == str(jugador["posicion"]):
+					titular["media"] = 50.0
+					abrio_hueco = true
+
+	var pedido := {}
+	for _i in range(20):
+		pedido = Cesiones.generar_pedido(equipo, p["piramide"], p["rng"], 2,
+			gs.division_jugador)
+		if not pedido.is_empty():
+			break
+	if not pedido.is_empty() and int(pedido["jugador_id"]) == id:
+		print("OK: llego un pedido por el hueco de %s." % str(jugador["posicion"]))
+	else:
+		print("FALLA: el promedio general volvio a tapar la necesidad del puesto.")
 
 
 func _test_el_pedido_nace_negociable() -> void:

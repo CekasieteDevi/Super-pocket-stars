@@ -15,6 +15,7 @@ func _init() -> void:
 	_test_el_boton_cicla()
 	_test_no_disponible_no_recibe_ofertas()
 	_test_venta_rapida_llega_mas_barata()
+	_test_venta_rapida_tiene_prioridad()
 	_test_venta_rapida_no_aguanta_contraoferta()
 	_test_el_estado_sobrevive_al_guardado()
 	_test_el_que_se_va_no_deja_estado()
@@ -31,6 +32,21 @@ func _ok(texto: String) -> void:
 func _falla(texto: String) -> void:
 	fallos += 1
 	print("FALLA: %s" % texto)
+
+
+func _test_venta_rapida_tiene_prioridad() -> void:
+	var p := _partida()
+	var mio: Team = p["mio"]
+	var id := int(mio.banco[0]["id"])
+	var normal := Traspasos.prioridad(mio, id)
+	var piso_normal := Traspasos.factor_minimo_oferta(mio, id)
+	Traspasos.fijar(mio, id, Traspasos.VENTA_RAPIDA)
+	var rapida := Traspasos.prioridad(mio, id)
+	var piso_rapida := Traspasos.factor_minimo_oferta(mio, id)
+	if rapida > normal and piso_rapida < piso_normal:
+		_ok("venta rapida aparece %.1fx mas en el radar de compradores." % (rapida / normal))
+	else:
+		_falla("venta rapida baja el precio pero no aumenta la prioridad.")
 
 
 ## GameState es autoload y en un --script no existe: se instancia a mano,
