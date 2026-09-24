@@ -1488,6 +1488,9 @@ func _cerrar_temporada() -> void:
 
 	var resultado_piramide := piramide.fin_de_temporada(rng, equipo_jugador, temporada_actual, playoffs_ascenso)
 	playoffs_ascenso = {}
+	# Los retiros pasan en este cierre y en ningun otro lado: es el unico
+	# momento en que un informe puede quedar apuntando a nadie.
+	Investigadores.olvidar_ausentes(equipo_jugador, piramide.ids_presentes())
 	# Los que colgaron los botines sin club: es por donde se vacia el pool
 	# de libres (ver AgentesLibres.envejecer_pool). Se nombra al de mejor
 	# media, que es el unico que alguien podria estar esperando fichar.

@@ -227,3 +227,31 @@ static func vigencia(equipo: Team, jugador_id: int) -> int:
 	if not equipo.conocimiento.has(jugador_id):
 		return -1
 	return int(ceil(float(equipo.conocimiento[jugador_id])))
+
+
+## Menos de esto y el informe "vence pronto": menos de un cuarto de
+## temporada para decidir si vale la pena volver a mirarlo. El mercado
+## decia 120 y la solapa de investigaciones 60; ahora dicen lo mismo.
+const DIAS_VENCE_PRONTO := 60
+
+
+## Olvida a los jugadores que ya no estan en ningun lado: se retiraron o
+## desaparecieron de la piramide. `presentes` es un diccionario id -> lo
+## que sea; solo importan las claves.
+##
+## Sin esto, un retirado seguia en Conocidos hasta vencer su informe (dos
+## temporadas y media como "ya no esta en la piramide"), y un informe en
+## curso sobre un retirado tenia al investigador trabajando para nada.
+## Devuelve cuantos informes olvido, entre terminados y en curso.
+static func olvidar_ausentes(equipo: Team, presentes: Dictionary) -> int:
+	var olvidados := 0
+	for id in equipo.conocimiento.keys():
+		if not presentes.has(int(id)):
+			equipo.conocimiento.erase(id)
+			olvidados += 1
+	for inv in equipo.investigadores:
+		var objetivo: int = int(inv["objetivo"])
+		if objetivo != -1 and not presentes.has(objetivo):
+			cancelar(equipo, int(inv["id"]))
+			olvidados += 1
+	return olvidados

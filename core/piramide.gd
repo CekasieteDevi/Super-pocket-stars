@@ -221,6 +221,20 @@ func fin_de_temporada(rng: RandomNumberGenerator, equipo_protegido: Team = null,
 		"retirados": retirados}
 
 
+## id -> true de todo jugador que sigue en el juego: en un club (con
+## banco, reservas y cantera) o en el pool de libres. El que no esta aca
+## se retiro. Lo usa Investigadores.olvidar_ausentes.
+func ids_presentes() -> Dictionary:
+	var ids := {}
+	for liga in divisiones:
+		for club in liga.equipos:
+			for j in club.jugadores + club.banco + club.reservas + club.cantera:
+				ids[int(j["id"])] = true
+	for j in agentes_libres:
+		ids[int(j["id"])] = true
+	return ids
+
+
 ## ¿Ya hay un club con ese nombre? Importa porque el nombre es la CLAVE
 ## de la tabla de posiciones y de media docena de indices mas: dos clubes
 ## con el mismo nombre se pisarian los puntos.

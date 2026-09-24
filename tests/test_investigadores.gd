@@ -14,6 +14,7 @@ func _init() -> void:
 	_test_uno_por_jugador_y_slots_limitados(rng)
 	_test_despedir_libera_el_slot(rng)
 	_test_guardado(rng)
+	_test_olvida_a_los_retirados(rng)
 	quit()
 
 
@@ -109,3 +110,21 @@ func _test_guardado(rng: RandomNumberGenerator) -> void:
 		print("OK: conocimiento intacto y el informe en curso va %.0f%%." % (sigue * 100.0))
 	else:
 		print("FALLA: sabe=%s progreso=%.2f" % [sabe, sigue])
+
+
+func _test_olvida_a_los_retirados(rng: RandomNumberGenerator) -> void:
+	print("
+=== El que se retira sale de Conocidos y de los informes en curso ===")
+	var e := Team.generar("Espia6", rng, 0)
+	var ajeno := Team.generar("Rival6", rng, 4000)
+	var sigue: int = int(ajeno.jugadores[0]["id"])
+	var retirado: int = int(ajeno.jugadores[1]["id"])
+	var mirado: int = int(ajeno.jugadores[2]["id"])
+	Investigadores.marcar_conocido(e, sigue)
+	Investigadores.marcar_conocido(e, retirado)
+	Investigadores.investigar(e, mirado, ajeno.nombre)
+	var olvidados := Investigadores.olvidar_ausentes(e, {sigue: true})
+	if olvidados == 2 and Investigadores.conoce(e, sigue) 			and not Investigadores.conoce(e, retirado) 			and Investigadores.progreso(e, mirado) < 0.0 			and Investigadores.libres(e).size() == e.investigadores.size():
+		print("OK: queda el que sigue jugando; el retirado y su informe en curso se van.")
+	else:
+		print("FALLA: olvidados=%d conocimiento=%s" % [olvidados, e.conocimiento])

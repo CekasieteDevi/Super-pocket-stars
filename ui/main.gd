@@ -3192,33 +3192,46 @@ func _refrescar_mercado() -> void:
 		fichas.append(f)
 	fichas = BusquedaMercado.ordenar(fichas, orden_mercado, orden_mercado_asc)
 
-	contenedor_mercado_tabla.add_child(_encabezado_mercado())
+	contenedor_mercado_tabla.add_child(_encabezado_mercado(
+		orden_mercado, orden_mercado_asc, _on_ordenar_mercado))
 	# Un tope: la piramide tiene ~3.600 jugadores y dibujarlos a todos cuelga
 	# la pantalla. Con los filtros y el orden, 60 alcanzan.
 	for i in range(min(60, fichas.size())):
 		contenedor_mercado_tabla.add_child(_fila_mercado(fichas[i], i % 2 == 0))
 
 
-## El encabezado. Cada columna visible es un boton que ordena; las tapadas
-## no, porque ordenar por algo que no conoces no significa nada.
-func _encabezado_mercado() -> Control:
+## El encabezado. Cada columna es un boton que ordena: lo desconocido va
+## al final (ver BusquedaMercado.ordenar). Lo comparten la tabla de
+## Jugadores y las dos de Investigaciones, que usan la misma fila.
+## `al_ordenar` vacio = titulos quietos, para una lista que no se ordena.
+## `con_informe` agrega el titulo que ordena por dias de informe, sobre la
+## columna del boton Investigar.
+func _encabezado_mercado(orden: String, ascendente: bool, al_ordenar: Callable,
+		con_informe: bool = false) -> Control:
 	var fila := Componentes.fila(false)
 	var dentro := Componentes.contenido(fila)
+	var columnas := []
 	for col in BusquedaMercado.COLUMNAS:
-		var clave := str(col["clave"])
-		var titulo := str(col["titulo"])
-		if orden_mercado == clave:
-			titulo += " ↑" if orden_mercado_asc else " ↓"
+		columnas.append([str(col["clave"]), str(col["titulo"])])
+	columnas.append(["club", "Club"])
+	if con_informe:
+		columnas.append(["vigencia", "Informe"])
+	for par in columnas:
+		var clave: String = par[0]
+		var titulo: String = par[1]
+		if orden == clave:
+			titulo += " ↑" if ascendente else " ↓"
 		# El titulo se alinea como la celda que encabeza, o la columna se
 		# lee torcida: los numeros van pegados a la derecha y el titulo
 		# quedaba pegado a la izquierda, a 60 px de sus propias cifras.
 		var btn := Componentes.boton_de_celda(titulo, _ancho_de_columna(clave),
 			_alineacion_de_columna(clave),
-			Tema.AMBAR if orden_mercado == clave else Tema.SUAVE)
-		btn.pressed.connect(func(): _on_ordenar_mercado(clave))
+			Tema.AMBAR if orden == clave else Tema.SUAVE)
+		if al_ordenar.is_valid():
+			btn.pressed.connect(func(): al_ordenar.call(clave))
+		else:
+			btn.disabled = true
 		dentro.add_child(btn)
-	dentro.add_child(Componentes.celda("Club", Componentes.COL_CLUB, Tema.SUAVE,
-		HORIZONTAL_ALIGNMENT_LEFT, Componentes.TAM_TABLA))
 	return fila
 
 
@@ -3232,6 +3245,8 @@ func _ancho_de_columna(clave: String) -> int:
 		"salario": return Componentes.COL_SALARIO
 		"contrato": return Componentes.COL_CONTRATO
 		"animo": return Componentes.COL_ANIMO
+		"club": return Componentes.COL_CLUB
+		"vigencia": return Componentes.COL_ACCION
 	return 90
 
 
@@ -3240,8 +3255,8 @@ func _ancho_de_columna(clave: String) -> int:
 ## como la misma columna.
 func _alineacion_de_columna(clave: String) -> int:
 	match clave:
-		"nombre": return HORIZONTAL_ALIGNMENT_LEFT
-		"posicion": return HORIZONTAL_ALIGNMENT_CENTER
+		"nombre", "club": return HORIZONTAL_ALIGNMENT_LEFT
+		"posicion", "vigencia": return HORIZONTAL_ALIGNMENT_CENTER
 	return HORIZONTAL_ALIGNMENT_RIGHT
 
 
@@ -3304,17 +3319,28 @@ func _fila_mercado(f: Dictionary, par: bool) -> Control:
 	# pantalla: el ultimo boton quedaba fuera del viewport. Son las dos
 	# formas de quedarse con el MISMO jugador, asi que van juntas bajo
 	# "Fichar" y se elige adentro.
-	var btn_inv := Componentes.boton_de_accion("", Componentes.COL_ACCION)
+	var btn_inv: Button
 	if conocido:
+		# Los dias a la vista y no solo "Conocido": en Investigaciones la
+		# lista se ordena por esto, y un numero sin mostrar no se entiende.
 		var quedan := Investigadores.vigencia(equipo, jugador_id)
-		btn_inv.text = "Vence pronto" if quedan < 120 else "Conocido"
+		var pronto := quedan < Investigadores.DIAS_VENCE_PRONTO
+		# "Conocido · 540 días" no entra en COL_ACCION: con el relleno del
+		# boton pasa los 140 px y se recorta. El tooltip dice el resto.
+		btn_inv = Componentes.boton_de_accion("%d días" % quedan, Componentes.COL_ACCION)
 		btn_inv.tooltip_text = "El informe vence en %d días." % quedan
 		btn_inv.disabled = true
+		btn_inv.add_theme_color_override("font_disabled_color",
+			Tema.ROJO if pronto else Tema.SUAVE)
 	elif float(f["progreso"]) >= 0.0:
-		btn_inv.text = "En curso"
-		btn_inv.disabled = true
+		# Cancelar desde la fila misma: antes habia que ir a otra solapa.
+		var id_inv := -1
+		for inv in equipo.investigadores:
+			if int(inv["objetivo"]) == jugador_id:
+				id_inv = int(inv["id"])
+		btn_inv = _boton_cancelar_informe(id_inv)
 	else:
-		btn_inv.text = "Investigar"
+		btn_inv = Componentes.boton_de_accion("Investigar", Componentes.COL_ACCION)
 		btn_inv.disabled = Investigadores.libres(equipo).is_empty()
 		if btn_inv.disabled:
 			btn_inv.tooltip_text = "No tenes investigadores libres. Se contratan en Equipo › Instalaciones."
@@ -3377,13 +3403,23 @@ func _dias_que_faltan(equipo: Team, jugador_id: int) -> int:
 	return -1
 
 
-## §9.4: la solapa de INVESTIGACIONES — a quien estas mirando y a quien
-## ya conoces. Contratar y despedir investigadores no vive aca sino en
-## Instalaciones, que es donde se decide en que gasta el club.
-##
-## Los conocidos van ordenados por lo que les queda de vigencia, del que
-## esta por vencer al que recien empieza: lo accionable primero.
+## Filtros de Conocidos. Viven fuera de los controles porque la solapa se
+## rearma entera en cada refresco: si el estado viviera en el OptionButton,
+## se perderia al tocar cualquier cosa.
+var filtro_conocidos_posicion: String = ""
+var filtro_conocidos_division: int = -1
+var filtro_conocidos_pronto: bool = false
+var orden_conocidos: String = "vigencia"
+var orden_conocidos_asc: bool = true
+
+
 ## Mercado › Investigaciones: a quien estas mirando y a quien ya conoces.
+## Contratar y despedir investigadores no vive aca sino en Instalaciones,
+## que es donde se decide en que gasta el club.
+##
+## Las dos listas usan la MISMA fila que la tabla de Jugadores. Antes eran
+## tarjetas y celdas de anchos propios: la solapa parecia de otro juego, y
+## desde un conocido no se podia fichar sin volver a buscarlo.
 ##
 ## Arriba de todo va cuantos investigadores tenes y un boton que lleva
 ## derecho a contratarlos. Es la pregunta que aparece sola al entrar acá
@@ -3394,15 +3430,75 @@ func _refrescar_investigaciones() -> void:
 		hijo.queue_free()
 	var equipo := GameState.equipo_jugador
 	var indice := _indice_de_jugadores()
+	contenedor_investigaciones.add_child(_cabecera_investigaciones(equipo))
 
-	var libres := 0
+	# --- En curso ----------------------------------------------------------
+	var en_curso := []
 	for inv in equipo.investigadores:
-		if int(inv["objetivo"]) == -1:
-			libres += 1
+		if int(inv["objetivo"]) != -1:
+			en_curso.append(inv)
+	contenedor_investigaciones.add_child(Tema.etiqueta_seccion(
+		"Informes en curso (%d)" % en_curso.size()))
+	if en_curso.is_empty():
+		contenedor_investigaciones.add_child(_tarjeta_vacia(
+			"Nadie bajo la lupa. Los investigadores libres estan esperando orden: elegi a quien mirar desde la solapa Jugadores."))
+	else:
+		contenedor_investigaciones.add_child(_encabezado_mercado("", true, Callable()))
+		for i in range(en_curso.size()):
+			var inv: Dictionary = en_curso[i]
+			var id := int(inv["objetivo"])
+			if indice.has(id):
+				contenedor_investigaciones.add_child(
+					_fila_mercado(_ficha_de_indice(indice[id]), i % 2 == 0))
+			else:
+				contenedor_investigaciones.add_child(_fila_objetivo_perdido(inv, i % 2 == 0))
 
+	# --- Conocidos ---------------------------------------------------------
+	# Solo los que siguen en un club ajeno: el retirado ya no se puede
+	# fichar, y el que ficharon para tu club ya lo ves entero en el plantel.
+	var todos := []
+	for id in equipo.conocimiento:
+		var dato: Dictionary = indice.get(int(id), {})
+		if dato.is_empty() or dato["club"] == equipo:
+			continue
+		todos.append(_ficha_de_indice(dato))
+	var fichas := []
+	for f in todos:
+		if filtro_conocidos_posicion != "" and str(f["posicion"]) != filtro_conocidos_posicion:
+			continue
+		if filtro_conocidos_division != -1 and int(f["division"]) != filtro_conocidos_division + 1:
+			continue
+		if filtro_conocidos_pronto and int(f["vigencia"]) >= Investigadores.DIAS_VENCE_PRONTO:
+			continue
+		fichas.append(f)
+
+	var cuantos := str(todos.size())
+	if fichas.size() != todos.size():
+		cuantos = "%d de %d" % [fichas.size(), todos.size()]
+	contenedor_investigaciones.add_child(Tema.etiqueta_seccion(
+		"Conocidos (%s)  ·  un informe dura %d dias y despues el jugador vuelve a quedar tapado" % [
+			cuantos, Investigadores.DIAS_VIGENCIA]))
+	if todos.is_empty():
+		contenedor_investigaciones.add_child(_tarjeta_vacia(
+			"Todavia no terminaste ningun informe."))
+		return
+	contenedor_investigaciones.add_child(_filtros_conocidos())
+	if fichas.is_empty():
+		contenedor_investigaciones.add_child(_tarjeta_vacia(
+			"Ningun conocido pasa estos filtros."))
+		return
+
+	fichas = BusquedaMercado.ordenar(fichas, orden_conocidos, orden_conocidos_asc)
+	contenedor_investigaciones.add_child(_encabezado_mercado(
+		orden_conocidos, orden_conocidos_asc, _on_ordenar_conocidos, true))
+	for i in range(fichas.size()):
+		contenedor_investigaciones.add_child(_fila_mercado(fichas[i], i % 2 == 0))
+
+
+func _cabecera_investigaciones(equipo: Team) -> Control:
+	var libres: int = Investigadores.libres(equipo).size()
 	var cabecera := Componentes.tarjeta(
 		Tema.ROJO if equipo.investigadores.is_empty() else Color.TRANSPARENT)
-	contenedor_investigaciones.add_child(cabecera)
 	var fila_cab := HBoxContainer.new()
 	cabecera.add_child(fila_cab)
 	var izq := VBoxContainer.new()
@@ -3434,147 +3530,137 @@ func _refrescar_investigaciones() -> void:
 		_mostrar_seccion("club", "instalaciones")
 	)
 	fila_cab.add_child(btn_contratar)
-
-	# --- En curso ----------------------------------------------------------
-	contenedor_investigaciones.add_child(Tema.etiqueta_seccion("Informes en curso"))
-	var en_curso := 0
-	for inv in equipo.investigadores:
-		if int(inv["objetivo"]) == -1:
-			continue
-		en_curso += 1
-		var total := Investigadores.dias_de_informe(int(inv["estrellas"]))
-		var pct: float = float(inv["dias"]) / total if total > 0.0 else 0.0
-		var faltan: int = int(ceil(total - float(inv["dias"])))
-		var quien := str(inv.get("nombre_objetivo", ""))
-		if quien == "":
-			quien = "un jugador"
-
-		var tarjeta := Componentes.tarjeta(Tema.AMBAR)
-		contenedor_investigaciones.add_child(tarjeta)
-		var fila := HBoxContainer.new()
-		tarjeta.add_child(fila)
-
-		var datos := VBoxContainer.new()
-		datos.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		datos.add_theme_constant_override("separation", 3)
-		fila.add_child(datos)
-		var l_nombre := Label.new()
-		l_nombre.text = quien
-		l_nombre.clip_text = true
-		l_nombre.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-		datos.add_child(l_nombre)
-		var l_club := Label.new()
-		l_club.text = "%s   ·   investigador de %d★" % [
-			str(inv.get("club_objetivo", "")), int(inv["estrellas"])]
-		l_club.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
-		l_club.add_theme_color_override("font_color", Tema.SUAVE)
-		datos.add_child(l_club)
-		datos.add_child(Componentes.bloque_investigando(0, pct, faltan))
-
-		var id_inv := int(inv["id"])
-		var btn := Button.new()
-		btn.text = "Cancelar"
-		btn.custom_minimum_size = Vector2(150, Tema.ALTO_TACTIL)
-		btn.tooltip_text = "Se pierde lo avanzado: el investigador vuelve a quedar libre."
-		btn.pressed.connect(func():
-			Investigadores.cancelar(equipo, id_inv)
-			_refrescar_investigaciones()
-		)
-		fila.add_child(btn)
-
-	if en_curso == 0:
-		contenedor_investigaciones.add_child(_tarjeta_vacia(
-			"Nadie bajo la lupa. Los investigadores libres estan esperando orden: elegi a quien mirar desde la solapa Jugadores."))
-
-	# --- Conocidos ---------------------------------------------------------
-	contenedor_investigaciones.add_child(Tema.etiqueta_seccion(
-		"Conocidos (%d)  ·  un informe dura %d dias y despues el jugador vuelve a quedar tapado" % [
-			equipo.conocimiento.size(), Investigadores.DIAS_VIGENCIA]))
-
-	if equipo.conocimiento.is_empty():
-		contenedor_investigaciones.add_child(_tarjeta_vacia(
-			"Todavia no terminaste ningun informe."))
-		return
-
-	# Ordenados por lo que les queda: el que esta por vencer primero, que es
-	# el unico que pide una decision.
-	var conocidos := []
-	for id in equipo.conocimiento:
-		conocidos.append({"id": int(id), "dias": float(equipo.conocimiento[id])})
-	conocidos.sort_custom(func(a, b): return float(a["dias"]) < float(b["dias"]))
-
-	contenedor_investigaciones.add_child(_encabezado_conocidos())
-	for i in range(conocidos.size()):
-		var c: Dictionary = conocidos[i]
-		var id: int = int(c["id"])
-		var dato: Dictionary = indice.get(id, {})
-		var dias: int = int(ceil(float(c["dias"])))
-		var fila := Componentes.fila(i % 2 == 0)
-		var dentro := Componentes.contenido(fila)
-
-		if dato.is_empty():
-			dentro.add_child(Componentes.celda(
-				"(ya no esta en la piramide)", 260, Tema.SUAVE))
-			dentro.add_child(Componentes.celda("", 210))
-			dentro.add_child(Componentes.celda("", 250))
-		else:
-			var j: Dictionary = dato["jugador"]
-			# El nombre entra a la ficha, igual que en la tabla del mercado:
-			# si ya terminaste el informe, la ficha esta desbloqueada y no
-			# hay motivo para obligarte a volver a buscarlo en el mercado.
-			dentro.add_child(_boton_nombre_conocido(
-				_nombre_jugador(j), id, dato["club"]))
-			dentro.add_child(Componentes.celda("%s  ·  D%d" % [
-				dato["club"].nombre, int(dato["division"])], 210, Tema.SUAVE))
-			dentro.add_child(Componentes.celda("%s  ·  media %.1f  ·  %d años" % [
-				j["posicion"], float(j["media"]), int(j["edad"])], 250, Tema.SUAVE))
-
-		# Menos de 60 dias es menos de un cuarto de temporada: conviene
-		# decidir si vale la pena volver a mirarlo antes de que se tape.
-		var pronto: bool = dias < 60
-		dentro.add_child(Componentes.celda(
-			("VENCE PRONTO · %d dias" % dias) if pronto else ("vence en %d dias" % dias),
-			220, Tema.ROJO if pronto else Tema.SUAVE))
-		contenedor_investigaciones.add_child(fila)
+	return cabecera
 
 
-## El nombre de un conocido, como boton a la ficha. Mismo aspecto que el
-## boton de la tabla del mercado: plano, celeste y recortado con puntos
-## suspensivos si no entra.
-func _boton_nombre_conocido(nombre: String, jugador_id: int, club: Team) -> Button:
-	var btn := Button.new()
-	btn.text = nombre
-	btn.tooltip_text = nombre
-	btn.custom_minimum_size = Vector2(260, 0)
-	btn.add_theme_font_size_override("font_size", Componentes.TAM_TABLA)
-	btn.add_theme_color_override("font_color", Tema.CELESTE)
-	btn.flat = true
-	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	btn.clip_text = true
-	btn.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	btn.pressed.connect(func(): _mostrar_ficha(jugador_id, club))
-	return btn
+## La misma barra que la de Jugadores: titulo arriba de cada filtro y un
+## contenedor que envuelve en pantallas angostas. Sin boton Buscar: la
+## lista es corta y filtra al tocar.
+func _filtros_conocidos() -> Control:
+	var filtros := HFlowContainer.new()
+	filtros.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	filtros.add_theme_constant_override("h_separation", 12)
+	filtros.add_theme_constant_override("v_separation", 8)
+
+	var op_pos := OptionButton.new()
+	op_pos.add_item("Cualquiera")
+	for pos in BusquedaMercado.POSICIONES:
+		op_pos.add_item(pos)
+	op_pos.selected = BusquedaMercado.POSICIONES.find(filtro_conocidos_posicion) + 1
+	op_pos.custom_minimum_size = Vector2(150, Tema.ALTO_TACTIL)
+	op_pos.item_selected.connect(func(i: int):
+		filtro_conocidos_posicion = "" if i <= 0 else op_pos.get_item_text(i)
+		_refrescar_investigaciones.call_deferred()
+	)
+	filtros.add_child(_grupo_filtro("Puesto", op_pos))
+
+	var op_div := OptionButton.new()
+	op_div.add_item("Cualquiera")
+	for d in range(GameState.piramide.divisiones.size()):
+		op_div.add_item("D%d" % (d + 1))
+	op_div.selected = filtro_conocidos_division + 1
+	op_div.custom_minimum_size = Vector2(150, Tema.ALTO_TACTIL)
+	op_div.item_selected.connect(func(i: int):
+		filtro_conocidos_division = i - 1
+		_refrescar_investigaciones.call_deferred()
+	)
+	filtros.add_child(_grupo_filtro("Division", op_div))
+
+	var op_informe := OptionButton.new()
+	op_informe.add_item("Todos")
+	op_informe.add_item("Vence pronto")
+	op_informe.selected = 1 if filtro_conocidos_pronto else 0
+	op_informe.custom_minimum_size = Vector2(180, Tema.ALTO_TACTIL)
+	op_informe.tooltip_text = "Vence pronto = le quedan menos de %d dias." % Investigadores.DIAS_VENCE_PRONTO
+	op_informe.item_selected.connect(func(i: int):
+		filtro_conocidos_pronto = i == 1
+		_refrescar_investigaciones.call_deferred()
+	)
+	filtros.add_child(_grupo_filtro("Informe", op_informe))
+
+	var btn_limpiar := Button.new()
+	btn_limpiar.text = "Limpiar"
+	btn_limpiar.custom_minimum_size = Vector2(120, Tema.ALTO_TACTIL)
+	btn_limpiar.tooltip_text = "Deja todos los filtros en cualquiera."
+	btn_limpiar.pressed.connect(func():
+		filtro_conocidos_posicion = ""
+		filtro_conocidos_division = -1
+		filtro_conocidos_pronto = false
+		_refrescar_investigaciones.call_deferred()
+	)
+	filtros.add_child(_grupo_filtro(" ", btn_limpiar))
+	return filtros
 
 
-func _encabezado_conocidos() -> Control:
-	var fila := Componentes.fila(false)
+func _on_ordenar_conocidos(clave: String) -> void:
+	if orden_conocidos == clave:
+		orden_conocidos_asc = not orden_conocidos_asc
+	else:
+		orden_conocidos = clave
+		orden_conocidos_asc = true
+	_refrescar_investigaciones()
+
+
+## La ficha del mercado armada desde el indice, con los dias de informe
+## que le quedan para poder ordenar y filtrar por eso.
+func _ficha_de_indice(dato: Dictionary) -> Dictionary:
+	var f := BusquedaMercado.ficha(GameState.equipo_jugador, {
+		"equipo": dato["club"], "jugador": dato["jugador"],
+		"division": dato["division"], "origen": dato["origen"]})
+	f["equipo"] = dato["club"]
+	var quedan := Investigadores.vigencia(GameState.equipo_jugador, int(f["id"]))
+	f["vigencia"] = quedan if quedan >= 0 else null
+	return f
+
+
+## Un informe en curso sobre alguien que ya no esta en la piramide: se
+## retiro en una partida guardada antes de que el cierre de temporada
+## cancelara esos informes solo. Queda el nombre y el boton para liberar
+## al investigador.
+func _fila_objetivo_perdido(inv: Dictionary, par: bool) -> Control:
+	var fila := Componentes.fila(par)
 	var dentro := Componentes.contenido(fila)
-	for par in [["Jugador", 260], ["Club", 210], ["Datos", 250], ["Informe", 220]]:
-		var l := Componentes.celda(str(par[0]), int(par[1]), Tema.SUAVE)
-		l.add_theme_font_size_override("font_size", Tema.TAM_ETIQUETA)
-		dentro.add_child(l)
+	var quien := str(inv.get("nombre_objetivo", ""))
+	dentro.add_child(Componentes.celda(quien if quien != "" else "un jugador",
+		Componentes.COL_NOMBRE, Tema.SUAVE, HORIZONTAL_ALIGNMENT_LEFT, Componentes.TAM_TABLA))
+	var aviso := Componentes.celda("Ya no esta en la piramide", 0,
+		Tema.ROJO, HORIZONTAL_ALIGNMENT_LEFT, Componentes.TAM_TABLA)
+	aviso.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dentro.add_child(aviso)
+	dentro.add_child(_boton_cancelar_informe(int(inv["id"])))
 	return fila
 
 
-## id -> {jugador, club, division} de toda la piramide. Se arma una vez
-## por refresco: el conocimiento guarda solo el id, y buscar cada uno por
-## separado seria recorrer 3.600 jugadores por fila.
+## Cancela un informe desde cualquier tabla y refresca la que este abierta.
+func _boton_cancelar_informe(id_inv: int) -> Button:
+	var btn := Componentes.boton_de_accion("Cancelar", Componentes.COL_ACCION)
+	btn.tooltip_text = "Se pierde lo avanzado: el investigador vuelve a quedar libre."
+	btn.pressed.connect(func():
+		Investigadores.cancelar(GameState.equipo_jugador, id_inv)
+		if solapa_mercado_actual == "investigaciones":
+			_refrescar_investigaciones()
+		else:
+			_refrescar_mercado()
+	)
+	return btn
+
+
+## id -> {jugador, club, division, origen} de toda la piramide. Se arma
+## una vez por refresco: el conocimiento guarda solo el id, y buscar cada
+## uno por separado seria recorrer 3.600 jugadores por fila.
+##
+## Recorre los mismos grupos que BusquedaMercado.buscar. Antes se salteaba
+## las reservas, y un conocido de reserva figuraba como "ya no esta en la
+## piramide".
 func _indice_de_jugadores() -> Dictionary:
 	var indice := {}
 	for d in range(GameState.piramide.divisiones.size()):
 		for club in GameState.piramide.divisiones[d].equipos:
-			for j in club.jugadores + club.banco + club.cantera:
-				indice[int(j["id"])] = {"jugador": j, "club": club, "division": d + 1}
+			for grupo in [[club.jugadores, "titular"], [club.banco, "banco"],
+					[club.reservas, "reserva"], [club.cantera, "cantera"]]:
+				for j in grupo[0]:
+					indice[int(j["id"])] = {"jugador": j, "club": club,
+						"division": d + 1, "origen": grupo[1]}
 	return indice
 
 
