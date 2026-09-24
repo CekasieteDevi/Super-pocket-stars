@@ -1,4 +1,5 @@
 [
+	{"version": "0.6.02", "fecha": "2026-09-23", "cambio": "Las ofertas dicen si son compra o préstamo, si el jugador es titular, suplente o reserva, y tienen un botón para ver su ficha."},
 	{"version": "0.6.01", "fecha": "2026-09-23", "cambio": "Los jugadores ahora tienen once peinados nuevos y pueden usar pelo blanco o azul."},
 	{"version": "0.5.15", "fecha": "2026-09-22", "cambio": "La palomita conserva los once peinados disponibles durante toda la jugada."},
 	{"version": "0.5.14", "fecha": "2026-09-22", "cambio": "La palomita ahora tiene ocho dibujos completos y una caída fluida."},

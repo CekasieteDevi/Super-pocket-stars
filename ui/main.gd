@@ -32,6 +32,9 @@ var boton_comprar_ficha: Button
 var boton_prestamo_ficha: Button
 var boton_carrera_ficha: Button
 var ficha_ver_carrera := false
+## La oferta desde la que se abrio la ficha. Al volver se reabre esa oferta:
+## la ficha es para decidir, y la decision se toma en el modal.
+var ficha_oferta_id := -1
 var option_formacion: OptionButton
 var barra_familiaridad: ProgressBar
 var label_familiaridad: Label
@@ -1394,6 +1397,9 @@ func _mostrar_ficha(jugador_id: int, club: Team = null,
 func _volver_desde_ficha() -> void:
 	match ficha_origen:
 		"jugadores_liga": _mostrar_jugadores_liga()
+		"oferta":
+			_mostrar_mercado()
+			_abrir_oferta(ficha_oferta_id)
 		"mercado": _mostrar_mercado()
 		_: _mostrar_plantel()
 
@@ -1430,6 +1436,7 @@ func _refrescar_ficha() -> void:
 	match ficha_origen:
 		"jugadores_liga": boton_volver_ficha.text = "< Volver a estadísticas"
 		"mercado": boton_volver_ficha.text = "< Volver al mercado"
+		"oferta": boton_volver_ficha.text = "< Volver a la oferta"
 		_: boton_volver_ficha.text = "< Volver al plantel"
 	# El numero de un jugador ajeno no se toca: es el club del rival.
 	# La cantera tampoco lleva dorsal — el plantel de partido son 18.
@@ -3618,18 +3625,93 @@ func _fila_oferta(o: Dictionary) -> Control:
 	# Una cesion no se resume con un monto: lo que importa son los
 	# terminos (cuanto dura, cuanto del sueldo cubren, si hay opcion).
 	var plata: String = Cesiones.resumen(o) if str(o.get("tipo", "compra")) == "cesion" 		else Economia.formato_dinero(o["monto"])
-	var texto := "%s (%s) — %s — %s — %s" % [
-		str(o["jugador"]), str(o["posicion"]), str(o["club"]),
-		plata, _estado_legible(o)]
+	var rol := _rol_en_su_club(o)
+	var texto := "%s: %s (%s%s) — %s — %s — %s" % [
+		_tipo_de_oferta(o).to_upper(), str(o["jugador"]), str(o["posicion"]),
+		"" if rol == "" else ", " + rol, str(o["club"]), plata, _estado_legible(o)]
 	var l := _etiqueta(texto)
 	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Los terminos de un prestamo son largos: sin cortar la linea, los
+	# botones Ficha y Ver oferta quedaban fuera de la pantalla.
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	fila.add_child(l)
+	var btn_ficha := Button.new()
+	btn_ficha.text = "Ficha"
+	btn_ficha.custom_minimum_size = Vector2(90, 44)
+	var oferta_id := int(o["id"])
+	btn_ficha.pressed.connect(func(): _ficha_desde_oferta(oferta_id))
+	fila.add_child(btn_ficha)
 	var btn := Button.new()
 	btn.text = "Ver oferta"
 	btn.custom_minimum_size = Vector2(130, 44)
 	var id := int(o["id"])
 	btn.pressed.connect(func(): _abrir_oferta(id))
 	fila.add_child(btn)
+	return fila
+
+
+## Una compra se lleva al jugador para siempre; un prestamo lo devuelve.
+## Son decisiones distintas y la lista las mezclaba sin decir cual era.
+func _tipo_de_oferta(o: Dictionary) -> String:
+	return "Préstamo" if str(o.get("tipo", "compra")) == "cesion" else "Compra"
+
+
+## El club dueño del jugador de la oferta: nosotros si la oferta es
+## entrante, el otro club si la mandamos nosotros.
+func _dueno_de_oferta(o: Dictionary) -> Team:
+	if bool(o["entrante"]):
+		return GameState.equipo_jugador
+	return GameState._club_por_nombre(str(o["club"]))
+
+
+## Que lugar ocupa en su club: vender a un titular no es lo mismo que
+## vender a una reserva. Vacio si ya no esta en el club.
+func _rol_en_su_club(o: Dictionary) -> String:
+	var dueno := _dueno_de_oferta(o)
+	if dueno == null:
+		return ""
+	match str(Mercado.ubicar(dueno, int(o["jugador_id"])).get("origen", "")):
+		"titular": return "titular"
+		"banco": return "suplente"
+		"reserva": return "reserva"
+		"cantera": return "cantera"
+	return ""
+
+
+## Abre la ficha del jugador de la oferta. El modal se cierra para que la
+## ficha quede a la vista; al volver se reabre la misma oferta.
+func _ficha_desde_oferta(oferta_id: int) -> void:
+	var o := GameState._oferta_por_id(oferta_id)
+	if o.is_empty():
+		return
+	dialogo_negociacion.hide()
+	dialogo_cesion.hide()
+	var entrante: bool = bool(o["entrante"])
+	_mostrar_ficha(int(o["jugador_id"]), null if entrante else _dueno_de_oferta(o))
+	ficha_oferta_id = oferta_id
+	ficha_origen = "oferta"
+	_refrescar_ficha()
+
+
+## "COMPRA · titular": lo primero que hay que saber antes de mirar montos.
+func _subtitulo_jugador_de_oferta(o: Dictionary) -> String:
+	var rol := _rol_en_su_club(o)
+	return _tipo_de_oferta(o).to_upper() + ("" if rol == "" else "  ·  " + rol)
+
+
+func _boton_ficha_de_oferta(al_tocar: Callable) -> Button:
+	var b := Button.new()
+	b.text = "Ficha"
+	b.custom_minimum_size = Vector2(110, Tema.ALTO_TACTIL)
+	b.pressed.connect(al_tocar)
+	return b
+
+
+func _fila_titulo_oferta(titulo: Label, boton: Button) -> HBoxContainer:
+	var fila := HBoxContainer.new()
+	titulo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	fila.add_child(titulo)
+	fila.add_child(boton)
 	return fila
 
 
@@ -4003,6 +4085,7 @@ var negociacion_jugador_id: int = -1
 var negociacion_oferta_id: int = -1
 var label_negociacion_titulo: Label
 var label_negociacion_sub: Label
+var boton_negociacion_ficha: Button
 var caja_negociacion_datos: HBoxContainer
 var caja_negociacion_pasos: HBoxContainer
 var label_negociacion_estado: RichTextLabel
@@ -4032,7 +4115,8 @@ func _construir_dialogo_negociacion() -> void:
 
 	label_negociacion_titulo = Label.new()
 	Tema.numero(label_negociacion_titulo, 24)
-	caja.add_child(label_negociacion_titulo)
+	boton_negociacion_ficha = _boton_ficha_de_oferta(func(): _ficha_desde_oferta(negociacion_oferta_id))
+	caja.add_child(_fila_titulo_oferta(label_negociacion_titulo, boton_negociacion_ficha))
 
 	label_negociacion_sub = Label.new()
 	label_negociacion_sub.add_theme_color_override("font_color", Tema.SUAVE)
@@ -4301,6 +4385,7 @@ func _abrir_negociacion(vendedor: Team, jugador_id: int) -> void:
 	negociacion_vendedor = vendedor
 	negociacion_jugador_id = jugador_id
 	negociacion_oferta_id = -1
+	boton_negociacion_ficha.visible = false
 
 	var donde := Mercado.ubicar(vendedor, jugador_id)
 	if donde.is_empty():
@@ -4367,7 +4452,9 @@ func _abrir_oferta(oferta_id: int) -> void:
 	negociacion_vendedor = GameState._club_por_nombre(str(o["club"]))
 
 	label_negociacion_titulo.text = str(o["jugador"])
-	label_negociacion_sub.text = "%s %s  ·  sobre la mesa %s  ·  ronda %d  ·  %s" % [
+	boton_negociacion_ficha.visible = true
+	label_negociacion_sub.text = "%s  ·  %s %s  ·  sobre la mesa %s  ·  ronda %d  ·  %s" % [
+		_subtitulo_jugador_de_oferta(o),
 		"Oferta de" if bool(o["entrante"]) else "Tu oferta a", str(o["club"]),
 		Economia.formato_dinero(o["monto"]), int(o["ronda"]), _estado_legible(o)]
 
@@ -10432,6 +10519,7 @@ var dialogo_cesion: AcceptDialog
 var cesion_oferta_id: int = -1
 var label_cesion_titulo: Label
 var label_cesion_sub: Label
+var boton_cesion_ficha: Button
 var option_cesion_duracion: OptionButton
 var spin_cesion_fee: SpinBox
 var label_cesion_fee: Label
@@ -10463,7 +10551,8 @@ func _construir_dialogo_cesion() -> void:
 
 	label_cesion_titulo = Label.new()
 	Tema.numero(label_cesion_titulo, 24)
-	caja.add_child(label_cesion_titulo)
+	boton_cesion_ficha = _boton_ficha_de_oferta(func(): _ficha_desde_oferta(cesion_oferta_id))
+	caja.add_child(_fila_titulo_oferta(label_cesion_titulo, boton_cesion_ficha))
 
 	label_cesion_sub = Label.new()
 	label_cesion_sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -10583,8 +10672,8 @@ func _abrir_cesion(o: Dictionary) -> void:
 	cesion_topes = GameState.topes_de_cesion(o)
 
 	label_cesion_titulo.text = "%s (%s)" % [str(o["jugador"]), str(o["posicion"])]
-	label_cesion_sub.text = "%s lo pide a prestamo  ·  ronda %d  ·  %s" % [
-		str(o["club"]), int(o["ronda"]), _estado_legible(o)]
+	label_cesion_sub.text = "%s  ·  %s lo pide a prestamo  ·  ronda %d  ·  %s" % [
+		_subtitulo_jugador_de_oferta(o), str(o["club"]), int(o["ronda"]), _estado_legible(o)]
 
 	for i in range(option_cesion_duracion.item_count):
 		if str(option_cesion_duracion.get_item_metadata(i)) == str(o["duracion"]):
