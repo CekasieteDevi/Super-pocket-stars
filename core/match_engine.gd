@@ -347,6 +347,7 @@ static func _jugar_periodo(equipo_inicial: Team, home: Team, away: Team, ticks: 
 		minuto_offset: int, minutos_reales: float, rng: RandomNumberGenerator, con_log: bool,
 		log: Array, goles_log: Array, eventos: Array) -> bool:
 	var posesion: Team = equipo_inicial
+	var minutos_por_tick: float = minutos_reales / float(ticks)
 	## Duelos jugados y ganados en el ataque en curso.
 	var duelos := 0
 	var aciertos := 0
@@ -429,6 +430,9 @@ static func _jugar_periodo(equipo_inicial: Team, home: Team, away: Team, ticks: 
 			posesion.racha = 0
 			posesion = rival
 
+		home.desgastar_en_cancha(minutos_por_tick)
+		away.desgastar_en_cancha(minutos_por_tick)
+
 		# Se chequea DESPUES del duelo: la tarjeta sale ahi adentro, y el
 		# partido se corta en el momento, no al final del periodo.
 		if cancelar_si_falta_gente(home, away, minuto, log, eventos):
@@ -438,13 +442,12 @@ static func _jugar_periodo(equipo_inicial: Team, home: Team, away: Team, ticks: 
 
 ## §8.7: hasta 5 cambios entre los dos equipos, sacando primero a los
 ## lesionados y después al más cansado por debajo del umbral que cada club
-## eligió (config_cambios). No reemplaza a los expulsados (roja) — eso no
+## eligió (config_cambios, ver Cansancio.UMBRAL_CAMBIO). No reemplaza a los expulsados (roja) — eso no
 ## existe en el fútbol real, el equipo sigue con uno menos. Al arquero solo
 ## lo saca una lesión, nunca el cansancio. El reemplazo es siempre de la
 ## MISMA posición desde el banco (7 suplentes, uno por
 ## puesto): es una simplificación deliberada, no busca "el mejor disponible
 ## en cualquier puesto".
-const UMBRAL_CAMBIO := {"descanso": 0.85, "equilibrado": 0.75, "rendimiento": 0.65}
 
 
 static func _mejor_suplente_para(equipo: Team, posicion: String):
@@ -460,7 +463,7 @@ static func _mejor_suplente_para(equipo: Team, posicion: String):
 static func _procesar_cambios_equipo(equipo: Team, minuto: int, con_log: bool, log: Array, eventos: Array) -> void:
 	if equipo.cambios_realizados >= Team.MAX_CAMBIOS:
 		return
-	var umbral: float = UMBRAL_CAMBIO.get(equipo.config_cambios, UMBRAL_CAMBIO["equilibrado"])
+	var umbral_pct: int = Cansancio.porcentaje(Cansancio.umbral_cambio(equipo.config_cambios))
 
 	var candidatos := []
 	for j in equipo.jugadores_en_cancha():
@@ -472,7 +475,8 @@ static func _procesar_cambios_equipo(equipo: Team, minuto: int, con_log: bool, l
 		# por cansancio en 3 de 200 partidos con config "descanso".
 		if j["posicion"] == "ARQ" and not equipo.esta_lesionado(j["id"]):
 			continue
-		if equipo.esta_lesionado(j["id"]) or equipo.resistencia_pct(j["id"]) < umbral:
+		var energia_pct := Cansancio.porcentaje(equipo.resistencia_pct(j["id"]))
+		if equipo.esta_lesionado(j["id"]) or energia_pct <= umbral_pct:
 			candidatos.append(j)
 	candidatos.sort_custom(func(a, b):
 		var a_les := equipo.esta_lesionado(a["id"])
@@ -486,6 +490,11 @@ static func _procesar_cambios_equipo(equipo: Team, minuto: int, con_log: bool, l
 			break
 		var entrante = _mejor_suplente_para(equipo, saliente["posicion"])
 		if entrante == null:
+			continue
+		# Un suplente que está igual de cansado no mejora nada. Pasa cuando
+		# el banco jugó la copa del miércoles.
+		var fresco_entra: bool = equipo.resistencia_pct(entrante["id"]) > equipo.resistencia_pct(saliente["id"])
+		if not equipo.esta_lesionado(saliente["id"]) and not fresco_entra:
 			continue
 		equipo.sustituir(saliente["id"], entrante["id"])
 		var motivo := "lesion" if equipo.esta_lesionado(saliente["id"]) else "cansancio"

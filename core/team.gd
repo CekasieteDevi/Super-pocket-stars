@@ -97,13 +97,6 @@ static func max_suplentes() -> int:
 ## muchas temporadas sin arriesgar colisión con el equipo vecino.
 const RANGO_IDS_RESERVADO := 300
 
-## §3: cuánto recupera la fatiga acumulada por día de descanso entre fechas.
-## §3/§7.4.7. Estaba en 0,1: con eso, TRES días alcanzaban para recuperar
-## todo lo que cuesta un partido, así que jugar entre semana no tenía
-## consecuencia y el calendario apretado era decorativo. Con 0,055, una
-## semana completa recupera casi todo y media semana deja al plantel a
-## ~80%, que es donde la carga de entrenamiento pasa a ser una decisión.
-const RECUPERACION_FATIGA_POR_DIA := 0.055
 ## §3: velocidad de la deriva natural del ánimo hacia 50 (por semana).
 const DERIVA_ANIMO_POR_SEMANA := 1.0
 ## Dorsal mas alto que se puede elegir. Son dos digitos porque el sprite
@@ -231,6 +224,15 @@ const MAX_CAMBIOS := 5
 ## fecha siguiente, "rendimiento" solo cambia por lesión o agotamiento
 ## real, "equilibrado" es el punto medio (default para la IA).
 var config_cambios: String = "equilibrado"
+
+## Si el club rota el once solo antes de cada partido, según la prioridad
+## del partido y la energía de cada titular (Alineacion.rotar). Los clubes
+## de la IA rotan siempre; el del jugador, solo si lo delega (lo fija
+## GameState, que es el que sabe cuál es).
+var rotacion_automatica: bool = true
+## Prioridad del partido que se está jugando (Cansancio.ALTA o BAJA). La
+## fija quien arma el partido; dentro del partido es solo informativa.
+var prioridad_partido: int = Cansancio.ALTA
 
 ## Fase 5: estado que persiste entre partidos (a diferencia de resistencia,
 ## que es solo dentro de un partido y siempre arranca desde fatiga_acumulada).
@@ -531,6 +533,7 @@ func guardar() -> Dictionary:
 		"escudo_forma": escudo_forma, "logo_forma": logo_forma,
 		"color_escudo": color_escudo.to_html(), "color_logo": color_logo.to_html(),
 		"config_cambios": config_cambios,
+		"rotacion_automatica": rotacion_automatica,
 		"fans": fans, "racha_sin_ganar": racha_sin_ganar, "rival_directo": rival_directo,
 		"prestados_afuera": prestados_afuera_datos, "prestados_propios": prestados_propios_datos,
 	}
@@ -715,6 +718,7 @@ static func cargar(datos: Dictionary) -> Team:
 	for k in t.quimica:
 		t.quimica[k] = float(t.quimica[k])
 	t.config_cambios = datos.get("config_cambios", "equilibrado")
+	t.rotacion_automatica = bool(datos.get("rotacion_automatica", true))
 	# Ojo: hasta la v1.5 esto era un puntaje de 0 a 100 y ahora es la
 	# cantidad real de hinchas. La migracion NO va aca: necesita saber en
 	# que division juega el club y eso no se guarda —lo reconstruye la
@@ -1508,17 +1512,38 @@ func energia_proximo_partido(jugador_id: int) -> float:
 	return fatiga_acumulada.get(jugador_id, 1.0)
 
 
-## Desgaste simple por participación en un duelo. La resistencia nunca baja
-## de 0.55 dentro de un partido. §8.4 #19: con Calor, un 30% más rápido.
+## Desgaste por intensidad: un duelo, o en el espacial también una corrida.
+## La resistencia nunca baja de Cansancio.ENERGIA_MINIMA dentro de un
+## partido. §8.4 #19: con Calor, un 30% más rápido.
 ## multiplicador: cuánto pesa ESTE duelo en el desgaste. MatchEngine usa
 ## 1.0 (está calibrado sobre sus ~180 duelos por partido); MotorEspacial
 ## pasa otro valor porque resuelve una cantidad de duelos completamente
 ## distinta y, con 1.0, dejaba a los 22 jugadores en el piso de
 ## resistencia antes del entretiempo.
 func desgastar(jugador_id: int, energia_attr: int, multiplicador: float = 1.0) -> void:
-	var decay: float = 0.006 * (1.3 - float(energia_attr) / 100.0) * Clima.factor_energia(clima_partido) * multiplicador \
-		* Entrenamiento.factor_desgaste(self)
-	resistencia[jugador_id] = max(0.55, resistencia_pct(jugador_id) - decay)
+	var decay: float = 0.006 * Cansancio.factor_atributo_energia(energia_attr) \
+		* Clima.factor_energia(clima_partido) * multiplicador * Entrenamiento.factor_desgaste(self)
+	resistencia[jugador_id] = maxf(Cansancio.ENERGIA_MINIMA, resistencia_pct(jugador_id) - decay)
+
+
+## El desgaste por minutos jugados, que es la base del cansancio. Lo cobran
+## los dos motores con el reloj del partido, así que un titular de los 90'
+## paga lo mismo en tu liga que en la de la IA.
+func desgastar_minutos(jugador: Dictionary, minutos: float) -> void:
+	var id: int = int(jugador["id"])
+	var decay: float = Cansancio.desgaste_por_minuto(str(jugador["posicion"])) * minutos \
+		* Cansancio.factor_atributo_energia(float(jugador["atributos"]["energia"])) \
+		* Clima.factor_energia(clima_partido) * Entrenamiento.factor_desgaste(self)
+	resistencia[id] = maxf(Cansancio.ENERGIA_MINIMA, resistencia_pct(id) - decay)
+
+
+## Cobra los minutos a los que están en cancha ahora. Lo llaman los dos
+## motores a medida que corre el reloj, para que la franja baje en vivo.
+func desgastar_en_cancha(minutos: float) -> void:
+	for j in jugadores_en_cancha():
+		if expulsados_partido.has(j["id"]):
+			continue
+		desgastar_minutos(j, minutos)
 
 
 ## La contracara de `desgastar`, para el entretiempo del MotorEspacial
@@ -1549,10 +1574,9 @@ func lesionar(jugador_id: int, tipo: String, dias: int) -> void:
 ## simplificado — todavía no hay xG ni stats de pases/duelos por jugador
 ## para el criterio completo por puesto.
 func actualizar_post_partido(goles_propios: int, goles_rival: int, goleadores_ids: Array) -> void:
+	registrar_desgaste_partido()
 	for j in todos_los_jugadores():
 		var id: int = j["id"]
-		fatiga_acumulada[id] = resistencia_pct(id)
-
 		var delta := 0.0
 		if goles_propios > goles_rival:
 			delta = 3.0
@@ -1563,6 +1587,16 @@ func actualizar_post_partido(goles_propios: int, goles_rival: int, goleadores_id
 		delta = Personalidad.ajustar_delta_animo(j, delta, id == capitan_id)
 		delta = clamp(delta, -8.0, 8.0)  # tope un poco mas ancho que el base (±6): Bajon/Egolatra pueden empujarlo mas
 		animo[id] = clamp(animo.get(id, 50.0) + delta, 0.0, 100.0)
+
+
+## La energía con la que se terminó el partido pasa a ser la de la semana.
+## Va aparte del ánimo porque la copa también cansa: antes solo la liga
+## llamaba a esto, y un plantel podía jugar tres cruces de copa en una
+## semana sin gastar nada.
+func registrar_desgaste_partido() -> void:
+	for j in todos_los_jugadores():
+		var id: int = j["id"]
+		fatiga_acumulada[id] = resistencia_pct(id)
 
 
 ## Avanza el calendario entre fechas: recupera fatiga, hace derivar el ánimo
@@ -1576,7 +1610,7 @@ var informes_terminados: Array = []
 func avanzar_dias(dias: int) -> Array:
 	for j in todos_los_jugadores():
 		var id: int = j["id"]
-		var recuperacion: float = RECUPERACION_FATIGA_POR_DIA 			* Personalidad.factor_recuperacion_fatiga(j) 			* Instalaciones.factor_recuperacion_fatiga(self) 			* CargaEntrenamiento.factor_recuperacion(carga_entrenamiento)
+		var recuperacion: float = Cansancio.RECUPERACION_POR_DIA * Cansancio.factor_recuperacion(j) 			* Personalidad.factor_recuperacion_fatiga(j) 			* Instalaciones.factor_recuperacion_fatiga(self) 			* CargaEntrenamiento.factor_recuperacion(carga_entrenamiento)
 		fatiga_acumulada[id] = min(1.0, fatiga_acumulada.get(id, 1.0) + recuperacion * dias)
 		var actual: float = animo.get(id, 50.0)
 		var deriva: float = clamp(50.0 - actual, -DERIVA_ANIMO_POR_SEMANA, DERIVA_ANIMO_POR_SEMANA) * (dias / 7.0)

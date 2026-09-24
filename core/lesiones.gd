@@ -50,7 +50,7 @@ static func evaluar_riesgo(jugador: Dictionary, resistencia_pct: float,
 	var factor_fatiga: float = 1.0 + (1.0 - clamp(resistencia_pct, 0.0, 1.0))
 	var factor_edad: float = 1.3 if jugador["edad"] > 32 else 1.0
 	var factor_personalidad: float = Personalidad.factor_lesion(jugador)
-	return RIESGO_BASE * factor_fatiga * propension * carga_entrenamiento * factor_edad * instalaciones_medicas * factor_personalidad
+	return RIESGO_BASE * factor_fatiga * Cansancio.riesgo_lesion(resistencia_pct) * propension * carga_entrenamiento * factor_edad * instalaciones_medicas * factor_personalidad
 
 
 ## Devuelve {} si no hay lesión, o {"tipo":String, "dias":int} si hubo.

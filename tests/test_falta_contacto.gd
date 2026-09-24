@@ -57,14 +57,24 @@ func _probar_partido_completo() -> void:
 				barrida = barrida or str(accion.get("accion", "")) == "barrida"
 				caida = caida or str(accion.get("accion", "")) == "cae"
 			assert(barrida and caida, "El contacto debe verse antes del acomodo")
+			# No toda falta tiene salto: si la pelota quedó donde fue la
+			# infracción, los jugadores trotan a sus marcas y no hay acomodo
+			# (ver TIPOS_QUE_SE_UBICAN). Lo que no puede pasar es que la
+			# pelota salte sin que el fotograma lo marque. Antes el test
+			# exigía un acomodo en la primera falta y pasaba porque en esa
+			# semilla la pelota había rodado lejos.
 			var acomodo := false
 			for k in range(i + 1, mini(fotogramas.size(), i + MotorEspacial.TICKS_CONGELADO_FALTA + 2)):
+				var p0: Dictionary = fotogramas[k - 1]["pelota"]
+				var p1: Dictionary = fotogramas[k]["pelota"]
+				var salto := Vector2(p0["x"], p0["y"]).distance_to(Vector2(p1["x"], p1["y"]))
 				if VistaPartido._es_reubicacion(fotogramas[k]):
 					acomodo = true
 					break
-			assert(acomodo, "El tiro libre debe acomodarse despues del contacto")
-			return
-	assert(false, "No aparecio una falta comun en doce partidos completos")
+				assert(salto <= 1.0, "La pelota salta al tiro libre sin marcar el acomodo")
+			if acomodo:
+				return
+	assert(false, "No aparecio una falta con acomodo en doce partidos completos")
 
 
 func _fotogramas(reubicacion: bool) -> Array:

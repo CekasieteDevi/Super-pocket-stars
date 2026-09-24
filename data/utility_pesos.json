@@ -216,7 +216,7 @@
     "_prob_evento_fisico": "Fraccion de los duelos que se chequean por tarjeta y lesion. Este motor disputa la pelota ~2600 veces por partido; el motor abstracto resuelve ~180 duelos y es sobre ESE numero que estan calibradas CHANCE_AMARILLA y las lesiones. Sin este factor salian ~50 amarillas por partido.",
     "prob_evento_fisico": 0.55,
     "_multiplicador_desgaste": "Cuanto pesa cada duelo en la resistencia. Team.desgastar esta calibrado sobre los ~180 duelos del motor abstracto; este motor resuelve otra cantidad, y con 1.0 los 22 jugadores terminaban en el piso de resistencia antes del entretiempo. Etapa 5: bajo de 12 a 5 porque el duelo ya no paga el partido entero, solo el contacto; correr lo cobra la seccion esfuerzo. Con 12 y sin esfuerzo la resistencia final media daba 88,3%; con 5 y esfuerzo 0,15, 88,1% (tests/_diag_cansancio.gd, 60 partidos).",
-    "multiplicador_desgaste": 5.0,
+    "multiplicador_desgaste": 2.5,
     "dist_libre_al_area": 38.0,
     "_dist_para_colgar_lejos": "Hasta que distancia del arco rival un estilo que cree en la pelota al area (Estilos.cuelga_de_lejos) cuelga una falta en vez de jugarla corta. Arranca donde termina dist_libre_al_area. Medido con tests/_diag_falta_lejana.gd: entre 38 y 50 m caen 1,4 faltas por partido y por equipo; mas alla de 60 m ya es campo propio y colgarla no es una jugada, es regalarla.",
     "dist_para_colgar_lejos": 52.0,
@@ -378,7 +378,7 @@
     "reserva_para_frenar": 0.5,
     "piso_sprint": 0.85,
     "_resistencia": "desgaste_por_segundo: multiplicador de Team.desgastar por segundo de carga. Calibrado para que la resistencia final media del espacial no se mueva (88,3% en la linea de base, con multiplicador_desgaste 12) ahora que los duelos cobran 5. recuperacion_entretiempo: fraccion de lo perdido en el primer tiempo que devuelve el descanso; tope_entretiempo: maximo absoluto.",
-    "desgaste_por_segundo": 0.15,
+    "desgaste_por_segundo": 0.075,
     "recuperacion_entretiempo": 0.25,
     "tope_entretiempo": 0.03
   },

@@ -10,18 +10,13 @@ const MOD_NETO_CAP := 25.0
 const P_MIN := 3.0
 const P_MAX := 97.0
 
-## Cuánto castiga la energía baja a cada grupo de atributos (§8.1: los físicos
-## se resienten fuerte, los técnicos poco, los mentales casi nada).
-const ENERGIA_K := {"fisico": 0.35, "tecnico": 0.15, "defensivo": 0.20, "mental": 0.05}
-
-
-static func factor_energia(grupo: String, energia_pct: float) -> float:
-	var k: float = ENERGIA_K.get(grupo, 0.15)
-	return 1.0 - (1.0 - clamp(energia_pct, 0.0, 1.0)) * k
-
-
-static func atributo_efectivo(valor: float, grupo: String, energia_pct: float) -> float:
-	return valor * factor_energia(grupo, energia_pct)
+## El castigo por cansancio sale de la franja de energía (Cansancio), igual
+## para todos los grupos de atributos. Antes cada grupo tenía su pendiente
+## continua (físico 0,35, técnico 0,15, defensivo 0,20, mental 0,05), y
+## con la energía casi siempre arriba de 85% el castigo no se notaba.
+## `grupo` queda en la firma porque lo pasan todos los llamadores.
+static func atributo_efectivo(valor: float, _grupo: String, energia_pct: float) -> float:
+	return valor * Cansancio.factor_stats(energia_pct)
 
 
 static func p_base(atacante_efectivo: float, defensor_efectivo: float) -> float:

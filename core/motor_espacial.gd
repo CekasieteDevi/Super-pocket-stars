@@ -338,6 +338,13 @@ const DESPEJE_RED := 0.5
 const AREA_LARGO := 16.5
 const AREA_MEDIO_ANCHO := 20.16
 
+## Una volea es un recurso de zona de definicion, no un remate desde
+## cualquier punto al que llegue una pelota alta. El radio cubre incluso
+## el vertice lejano del area grande (26,1 m) y corta los intentos absurdos
+## desde la mitad de la cancha. Mas lejos no hay remate automatico: conserva
+## la posesion para controlar la pelota y decidir la jugada siguiente.
+const DISTANCIA_MAX_VOLEA := 27.0
+
 ## Metros hasta la linea de fondo desde los que la banda ya es el ultimo
 ## tramo: de ahi para adentro el extremo engancha y la segunda linea llega
 ## al pase atras. Estaba escrito a mano en _opcion_enganche y en la llegada
@@ -1718,10 +1725,10 @@ static func _rival_a_encarar(estado: Dictionary, pos: Vector2, es_local: bool) -
 	var f: Dictionary = pesos()["fisica"]
 	var arco := arco_rival(es_local)
 	var dir_ataque := (arco - pos).normalized()
-	# Gambetear es ganar el duelo que ya llego al cuerpo, no anunciarlo
-	# cuando el marcador todavia esta a varios metros. `radio_gambeta` se
-	# usa tambien para recibir pases; aca manda el contacto del quite.
-	var radio: float = RADIO_TOMA_PELOTA
+	# Se encara al que esta a distancia de quite; el duelo despues cierra
+	# esa distancia hasta el contacto (ver _cerrar_al_contacto).
+	# `radio_gambeta` se usa tambien para recibir pases; aca manda el quite.
+	var radio: float = f["radio_tackle"]
 	var mejor := -1
 	var mejor_d: float = radio
 	for id in estado["jugadores"]:
@@ -1965,7 +1972,7 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 	estado["gambetas"][lado_g]["intentos"] += 1
 	if not enganche.is_empty():
 		_accion(estado, int(poseedor["clave"]), "amague_centro")
-	var hay_contacto: bool = e_rival["pos"].distance_to(poseedor["pos"]) <= RADIO_TOMA_PELOTA
+	_cerrar_al_contacto(estado, clave_rival, poseedor["pos"])
 	_xp_e(estado, poseedor, "control")
 	_xp_e(estado, e_rival, "quite")
 
@@ -1987,7 +1994,7 @@ static func _resolver_gambeta(estado: Dictionary, poseedor: Dictionary, jugador:
 	# pasaba; ahora el defensor puede bajarlo también cuando le gana, que
 	# es lo que hace el que no llega. La falta se COBRA —con su tarjeta,
 	# su parada de juego y su tiro libre— en vez de amonestar suelto.
-	if hay_contacto and estado["rng"].randf() < float(f["prob_falta_por_duelo"]):
+	if estado["rng"].randf() < float(f["prob_falta_por_duelo"]):
 		_accion(estado, clave_rival, ACCION_BARRIDA)
 		_cobrar_falta(estado, poseedor["pos"], es_local, defensor, eq_d, eq_a, minuto)
 		return
@@ -4816,8 +4823,9 @@ static func _registrar_lesion_visual(estado: Dictionary, jugador: Dictionary,
 		# Frenada limpia: la pose de caída no debe deslizarse varios metros.
 		estado["jugadores"][clave]["vel"] = Vector2.ZERO
 		estado["jugadores"][clave]["rapidez"] = 0.0
-	if not bool(estado.get("con_fotogramas", false)):
-		return
+	# El evento va en los dos modos: es un dato del partido, no un dibujo.
+	# Antes solo salía con fotogramas y los eventos de un mismo partido
+	# cambiaban según se mirara o no (tests/test_tiro_lejano.gd).
 	estado["eventos"].append({
 		"minuto": minuto, "tipo": "lesion", "equipo": equipo.nombre,
 		"rival": "", "jugador_posicion": str(jugador["posicion"]),
@@ -5055,6 +5063,16 @@ static func _nuevo_id_remate(estado: Dictionary) -> int:
 ## `attr_remate` conserva las rutas específicas de cabezazo y tiro libre.
 static func _resolver_tiro(estado: Dictionary, poseedor: Dictionary, jugador: Dictionary, attr_remate: String = "tiro", accion_remate: String = "") -> void:
 	var es_local: bool = poseedor["equipo_local"]
+	# Defensa central: cualquier camino presente o futuro que intente marcar
+	# una volea/chilena desde lejos conserva la pelota y no genera un remate.
+	# Antes el tope dependia implicitamente de que todos los llamadores vinieran
+	# del area; una etiqueta aerea equivocada alcanzaba para relatar una volea
+	# desde mitad de cancha.
+	if attr_remate == "volea" \
+			and poseedor["pos"].distance_to(arco_rival(es_local)) > DISTANCIA_MAX_VOLEA:
+		if int(estado["pelota"].get("poseedor_id", -1)) != int(poseedor["clave"]):
+			_entregar_pelota(estado, int(poseedor["clave"]))
+		return
 	var eq_a := _equipo_de(estado, es_local)
 	var eq_d := _equipo_de(estado, not es_local)
 	var rng: RandomNumberGenerator = estado["rng"]
@@ -5496,16 +5514,17 @@ static func _aplicar_remate(estado: Dictionary, datos: Dictionary) -> void:
 	estado["pelota"].erase("progreso_trayectoria")
 
 	if tipo == "afuera" or tipo == "palo":
-		estado["eventos"].append({
+		var evento_tiro := {
 			"minuto": minuto, "tipo": "tiro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 			"jugador_posicion": datos["rol"], "clave": datos["clave"], "resultado": tipo,
 			"remate_id": remate_id, "tecnica": datos.get("accion", ""),
 			"travesano": bool(datos.get("travesano", false)),
-		})
+		}
+		estado["eventos"].append(evento_tiro)
 		if tipo == "afuera":
 			_dar_pelota_al_arquero(estado, not es_local, true)
 		else:
-			_rebotar_en_el_palo(estado, datos)
+			evento_tiro["destino_palo"] = _rebotar_en_el_palo(estado, datos)
 		return
 
 	var gol: bool = tipo == "gol"
@@ -6103,7 +6122,7 @@ static func _manotear_al_corner(estado: Dictionary, es_local_ataca: bool) -> voi
 ## en córner, y eso no pasa en la cancha: el córner pide que la toque un
 ## defensor. Ahora la pelota vuelve a la cancha y la pelea el que llegue,
 ## sale por el fondo (saque de arco) o roza al arquero (córner).
-static func _rebotar_en_el_palo(estado: Dictionary, datos: Dictionary) -> void:
+static func _rebotar_en_el_palo(estado: Dictionary, datos: Dictionary) -> String:
 	var r: Dictionary = pesos()["tiro_resolucion"]
 	var rng: RandomNumberGenerator = estado["rng"]
 	var es_local: bool = bool(datos["es_local"])
@@ -6119,11 +6138,12 @@ static func _rebotar_en_el_palo(estado: Dictionary, datos: Dictionary) -> void:
 			clampf(desde.y * rng.randf_range(-0.6, 0.6), -MEDIO_ANCHO + 1.0, MEDIO_ANCHO - 1.0))
 		estado["ultimo_palo_tick"] = int(estado["tick"])
 		_soltar_pelota(estado, desde, destino, es_local)
-		return
+		return "en_juego"
 	if roll < float(r["palo_en_juego"]) + float(r["palo_saque_de_arco"]):
 		_dar_pelota_al_arquero(estado, not es_local, true)
-		return
+		return "afuera"
 	_manotear_al_corner(estado, es_local)
+	return "corner"
 
 
 static func _desviar_afuera(estado: Dictionary, desde: Vector2, toco_local: bool) -> void:
@@ -6578,7 +6598,12 @@ static func _cerrar_tick(estado: Dictionary, con_fotogramas: bool, eventos_antes
 	# cartel tiene que quedarse ahi. Sin esto la tanda seguia sumando
 	# minutos y el reloj marcaba 130' con los 22 parados en el circulo.
 	if not bool(estado.get("en_tanda", false)):
-		estado["minuto"] += MINUTOS_MOSTRADOS_POR_MITAD / float(TICKS_POR_MITAD)
+		var minutos_tick: float = MINUTOS_MOSTRADOS_POR_MITAD / float(TICKS_POR_MITAD)
+		estado["minuto"] += minutos_tick
+		# El desgaste por minutos jugados, con el mismo reloj que ve el
+		# jugador: el mismo que cobra MatchEngine (Team.desgastar_en_cancha).
+		(estado["home"] as Team).desgastar_en_cancha(minutos_tick)
+		(estado["away"] as Team).desgastar_en_cancha(minutos_tick)
 	# Se pone la cancha al dia CON EL JUEGO DETENIDO: es la condicion que
 	# pide _sincronizar_cambios, y un corte es justo cuando se hace un
 	# cambio de verdad. Se prueba en cada tick detenido y no cada 20 para
@@ -8075,12 +8100,19 @@ static func _tiempo_de_llegada(estado: Dictionary, e: Dictionary, destino: Vecto
 	var w := pesos_defensa()
 	var equipo := _equipo_de(estado, bool(e["equipo_local"]))
 	var resistencia: float = equipo.resistencia_pct(int(e["jugador_id"]))
-	var vel: float = maxf(float(e["vel_max"]) * clampf(resistencia, 0.3, 1.0), 0.5)
+	# La velocidad paga la misma franja que los atributos (Cansancio). Antes
+	# multiplicaba por la resistencia cruda, y con el cansancio nuevo un
+	# jugador al 60% corria al 60%: el espacial castigaba el doble que
+	# el abstracto.
+	var vel: float = maxf(float(e["vel_max"]) * Cansancio.factor_stats(resistencia), 0.5)
 	var t: float = (e["pos"] as Vector2).distance_to(destino) / vel
 	# Abandonar la zona: lo que el destino se pasa del radio de su rol.
 	var radio: float = float(w[str(ZONA_POR_ROL.get(str(e["rol"]), "radio_medio"))])
 	var fuera: float = maxf(0.0, (e["base"] as Vector2).distance_to(destino) - radio)
 	t += fuera * float(w["zona"])
+	# Este término no es un atributo sino las ganas de ir: el cansado se
+	# guarda aunque todavía corra rápido. Por eso sigue la energía cruda y
+	# no la franja.
 	t += (1.0 - clampf(resistencia, 0.0, 1.0)) * float(w["cansancio"])
 	return t
 
@@ -9602,6 +9634,26 @@ static func _conducir(estado: Dictionary, poseedor: Dictionary) -> void:
 		estado["metros_conduccion"] = float(estado.get("metros_conduccion", 0.0)) + inicio.distance_to(poseedor["pos"])
 
 
+## El quite y la gambeta se deciden a `radio_tackle` (2 m), pero se
+## resuelven con los cuerpos en contacto: el defensor cierra la distancia
+## en el tick del duelo. Son como mucho 1,65 m, menos de lo que corre un
+## jugador en un tick (vel_max 9,2 m/s x 0,25 s = 2,3 m), asi que la
+## vista lo muestra como una embestida y no como un salto.
+## La v0.5.09 bajo el radio de decision a RADIO_TOMA_PELOTA para no
+## resolver duelos a distancia, pero los cuerpos casi nunca llegan a
+## tocarse solos: en 16 partidos quedaron 4 gambetas y 0 faltas, contra
+## 362 y 44 con 2 m. Sin duelos no habia desgaste, lesiones ni cambios.
+static func _cerrar_al_contacto(estado: Dictionary, clave_defensor: int, hacia: Vector2) -> void:
+	var defensor: Dictionary = estado["jugadores"][clave_defensor]
+	var desde: Vector2 = defensor["pos"]
+	var distancia := desde.distance_to(hacia)
+	if distancia <= RADIO_TOMA_PELOTA:
+		return
+	defensor["pos"] = hacia + (desde - hacia) / distancia * RADIO_TOMA_PELOTA
+	defensor["vel"] = (defensor["pos"] - desde) / TICK_SEG
+	defensor["rapidez"] = defensor["vel"].length()
+
+
 static func _intentar_robo(estado: Dictionary) -> void:
 	var f: Dictionary = pesos()["fisica"]
 	var pelota: Dictionary = estado["pelota"]
@@ -9614,9 +9666,9 @@ static func _intentar_robo(estado: Dictionary) -> void:
 	# cuadros del regate en la reproducción.
 	if int(poseedor.get("regate_hasta", -1)) >= int(estado["tick"]):
 		return
-	# El duelo solo se resuelve cuando ambos cuerpos llegaron. La distancia
-	# tactica sirve para perseguir, nunca para quitar una pelota a distancia.
-	var radio: float = RADIO_TOMA_PELOTA
+	# Se va al quite desde `radio_tackle`, pero el duelo se resuelve con
+	# los cuerpos en contacto (ver _cerrar_al_contacto).
+	var radio: float = f["radio_tackle"]
 	# Jugadas.CONTRAPRESION: en los segundos despues de perderla, el que
 	# la perdio llega con mas ganas, pero igualmente debe alcanzar al rival.
 	var contrapresion := 0.0
@@ -9647,6 +9699,7 @@ static func _intentar_robo(estado: Dictionary) -> void:
 	if mejor_id == -1:
 		return
 	estado["robos"]["intentos"] += 1
+	_cerrar_al_contacto(estado, mejor_id, poseedor["pos"])
 
 	var eq_a := _equipo_de(estado, es_local)
 	var eq_d := _equipo_de(estado, not es_local)
