@@ -7,6 +7,7 @@ func _init() -> void:
 			for y in [-3.0, 0.0, 3.0]:
 				for manotazo in [false, true]:
 					_test_salida(local, distancia, y, manotazo)
+	_test_continuidad_visual()
 	print("FALLOS=%d" % fallos)
 	quit(1 if fallos else 0)
 
@@ -37,3 +38,22 @@ func _test_salida(local: bool, distancia: float, y: float, manotazo: bool) -> vo
 	_comprobar(estado["reinicios"].get("corner", 0) == 1
 		and escena["casa"].goles == 0 and escena["visita"].goles == 0,
 		"salida mantiene corner sin gol")
+
+
+func _test_continuidad_visual() -> void:
+	var base := {"periodo": 1, "acciones": [], "jugadores": [], "lateral_preparacion": {}}
+	var antes := base.duplicate(true)
+	antes["pelota"] = {"x": 0.0, "y": 0.0, "z": 0.4, "poseedor_id": -1,
+		"es_pase": false, "es_remate": true, "saliendo": false}
+	var desviada := base.duplicate(true)
+	desviada["pelota"] = {"x": 2.0, "y": 0.0, "z": 0.3, "poseedor_id": -1,
+		"es_pase": false, "es_remate": false, "saliendo": true}
+	var corner := base.duplicate(true)
+	corner["pelota"] = {"x": 4.0, "y": 0.0, "z": 0.0, "poseedor_id": -1,
+		"es_pase": false, "es_remate": false, "saliendo": false}
+	var coreografia := CoreografiaPartido.new()
+	coreografia.configurar([antes, desviada, corner], {})
+	_comprobar((coreografia.pelota(0, 0.5)["pos"] as Vector2).is_equal_approx(Vector2(1.0, 0.0)),
+		"la pelota se ve entre el remate y el manotazo")
+	_comprobar((coreografia.pelota(1, 0.5)["pos"] as Vector2).is_equal_approx(Vector2(2.0, 0.0)),
+		"la colocacion del corner conserva el corte")

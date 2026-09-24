@@ -344,8 +344,14 @@ func _hay_corte(a: int, b: int) -> bool:
 	# En partidos nuevos `corte` puede ser solo el silbato. Ese instante
 	# conserva la trayectoria hasta el contacto; `reubicacion` es el salto.
 	var salto: bool = bool(fb.get("reubicacion", fb.get("corte", false)))
+	# Empezar a salir no es un corte: es el tramo visible desde la mano del
+	# arquero hasta afuera. Cortar aca congelaba el remate antes de la atajada
+	# y hacia que la pelota reapareciera ya desviada. El corte corresponde
+	# recien cuando termina la salida y se coloca el corner o el lateral.
+	var termina_salida := bool(fa["pelota"].get("saliendo", false)) \
+		and not bool(fb["pelota"].get("saliendo", false))
 	return salto or int(fa.get("periodo", 1)) != int(fb.get("periodo", 1)) \
-		or bool(fa["pelota"].get("saliendo", false)) != bool(fb["pelota"].get("saliendo", false)) \
+		or termina_salida \
 		or _pos(fa["pelota"]).distance_to(_pos(fb["pelota"])) > 12.0
 
 
