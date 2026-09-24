@@ -236,7 +236,7 @@ func _preparar_sprites() -> void:
 	# Los oficiales usan exactamente el atlas PNG de los jugadores. Preparar
 	# sus carreras y poses quietas evita crear texturas dentro de _draw().
 	var cuadros_oficiales := [24, 25]
-	cuadros_oficiales.append_array(AtlasJugadores.CLIPS["lateral_prepara"])
+	cuadros_oficiales.append_array(AtlasJugadores.CLIPS["tarjeta"])
 	for indice in range(8):
 		cuadros_oficiales.append(indice)
 		cuadros_oficiales.append(indice + 16)

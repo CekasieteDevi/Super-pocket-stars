@@ -12,6 +12,9 @@ const PEINADOS := ["puntas", "afro", "rapado", "atado", "mohicano", "rastas", "d
 const CLIPS := {
 	"pecho": [48, 49, 50, 51, 52, 53, 54, 55],
 	"lateral_prepara": [56, 57, 58, 59],
+	# Saca la tarjeta con un solo brazo recto. El cuadro 59 levanta ambos
+	# brazos porque pertenece al lateral y no sirve para este gesto.
+	"tarjeta": [56, 57, 58],
 	"lateral_manos": [60, 61, 62, 63],
 	"patea": [8, 9, 10, 11, 12, 13, 14, 15],
 	# Arma el golpe, lo cancela y recoge el pie para salir conduciendo.

@@ -87,9 +87,9 @@ static func entidades(fotogramas: Array, idx: int, t: float,
 	var arbitro := _entidad(ARBITRO, pos_arbitro, avance_arbitro, idx, t, senal_arbitro)
 	arbitro["fase_senal"] = fase_tarjeta
 	if senal_arbitro.begins_with("tarjeta_"):
-		# Cuatro cuadros PNG: lleva las manos desde el pecho hasta arriba.
+		# Tres cuadros PNG: saca la tarjeta y estira un solo brazo hacia arriba.
 		# La tarjeta acompaña esa misma fase en VistaCancha.
-		arbitro["accion"] = "lateral_prepara"
+		arbitro["accion"] = "tarjeta"
 		arbitro["fase_animacion"] = fase_tarjeta
 	var entidades_oficiales: Array = [arbitro]
 

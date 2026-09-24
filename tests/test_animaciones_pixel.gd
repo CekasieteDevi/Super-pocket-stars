@@ -48,10 +48,14 @@ func _init() -> void:
 			cuadros_palomita[hash(palomita.get_data())] = true
 			if frame == 0:
 				peinados_palomita[hash(palomita.get_data())] = true
+			# El espejo se compara sin dorsal: el numero se estampa despues de
+			# espejar para que se lea derecho, asi que con dorsal nunca da igual.
+			var sin_dorsal := SpritesPartido.palomita_png(Color("2b74d9"), Color.WHITE,
+				frame, false, Color("6a3b1e"), estilo, 0).get_image()
 			var palomita_espejo := SpritesPartido.palomita_png(Color("2b74d9"), Color.WHITE,
-				frame, true, Color("6a3b1e"), estilo, 9).get_image()
-			palomita.flip_x()
-			assert(palomita.get_data() == palomita_espejo.get_data(),
+				frame, true, Color("6a3b1e"), estilo, 0).get_image()
+			sin_dorsal.flip_x()
+			assert(sin_dorsal.get_data() == palomita_espejo.get_data(),
 				"Espejo roto en palomita: %d/%d" % [estilo, frame])
 		assert(cuadros_palomita.size() == SpritesPartido.CUADROS_PALOMITA,
 			"Palomita repite o pierde PNG: %d" % estilo)
