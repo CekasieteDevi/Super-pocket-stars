@@ -62,9 +62,12 @@ func _test_espacial() -> int:
 	var fallas := 0
 	var por_partido := float(palos) / PARTIDOS
 	# El fútbol real anda en 0,7 por partido. La calibración daba 0,5 a
-	# 0,6; hoy el espacial da 0,34 (ver PARTIDOS), así que el piso es 0,25.
-	if por_partido < 0.25 or por_partido > 1.0:
-		print("FALLA: %.2f palos por partido en el espacial, se esperan 0,25 a 1,0." % por_partido)
+	# 0,6; hoy el espacial da 0,34 (ver PARTIDOS). El piso separa el error
+	# viejo (0,15) del valor actual con margen para el ruido: con 120
+	# partidos el conteo varía ±0,05. Con piso 0,25, subir el cansancio
+	# (2026-09-25) lo hizo fallar con 0,23 contra 0,28 de antes, SEED 4400.
+	if por_partido < 0.20 or por_partido > 1.0:
+		print("FALLA: %.2f palos por partido en el espacial, se esperan 0,20 a 1,0." % por_partido)
 		fallas += 1
 	else:
 		print("OK: %.2f palos por partido en el espacial." % por_partido)

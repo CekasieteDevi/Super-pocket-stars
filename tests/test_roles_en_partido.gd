@@ -192,8 +192,13 @@ func _test_el_corner_lo_patea_el_designado() -> int:
 		Roles.asignar(local, Roles.CORNERS, designado)
 
 		var r := MotorEspacial.simular(local, visita, rng, false)
+		# Si al designado lo cambian por cansancio, los corners que siguen
+		# los patea otro, y está bien. Solo cuentan los de antes del cambio.
+		var en_cancha := true
 		for ev in r.get("eventos", []):
-			if str(ev.get("tipo", "")) != "corner":
+			if str(ev.get("tipo", "")) == "cambio" and int(ev.get("saliente_id", -1)) == designado:
+				en_cancha = false
+			if not en_cancha or str(ev.get("tipo", "")) != "corner":
 				continue
 			if str(ev.get("equipo", "")) != local.nombre:
 				continue

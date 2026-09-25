@@ -71,10 +71,10 @@ const ENERGIA_MINIMA := 0.10
 ## Lo que pierde por minuto un jugador de campo de energía 50, en fracción
 ## de energía. Es la base del desgaste: minutos jugados. Encima se suma
 ## la intensidad que ya cobra cada motor (duelos, y en el espacial
-## también las corridas). Calibrado para que un titular que arranca al
-## 100% termine el partido cerca de 65%: cruza a la franja de −10% entre
-## el 60' y el 75', que es cuando en el fútbol entran los cambios.
-const DESGASTE_POR_MINUTO := 0.0035
+## también las corridas). Con 0,0035 el titular terminaba en 71% de
+## media (77% en división 1, SEED 55100): casi nadie cruzaba el umbral
+## de cambio y el plantel volvía al 100% en cinco días.
+const DESGASTE_POR_MINUTO := 0.0055
 
 ## Esfuerzo relativo de cada puesto. Sale de las distancias típicas que
 ## recorre cada puesto en un partido (volantes y laterales ~11–12 km,
@@ -102,11 +102,15 @@ static func desgaste_por_minuto(posicion: String) -> float:
 
 # --- Recuperación entre partidos ---------------------------------------
 
-## Lo que recupera por día de descanso un jugador de 24 a 29 años con
-## energía 50. Con 0,055, una semana devuelve casi todo lo que cuesta un
-## partido y media semana deja al plantel lejos del 100%: jugar dos
-## veces por semana acumula cansancio (§3/§7.4.7).
-const RECUPERACION_POR_DIA := 0.055
+## Días que tarda en volver al 100% un jugador de referencia (24 a 29
+## años, energía 50, puesto de esfuerzo 1,0) que jugó los 90 minutos.
+## Con una semana, la copa de mitad de semana lo agarra cansado y el
+## club tiene que rotar o hacer cambios (§3/§7.4.7).
+const DIAS_RECUPERACION_COMPLETA := 7.0
+
+## Lo que recupera por día ese jugador de referencia. Sale del desgaste
+## de sus 90 minutos: si se toca uno, el otro lo acompaña.
+const RECUPERACION_POR_DIA := DESGASTE_POR_MINUTO * 90.0 / DIAS_RECUPERACION_COMPLETA
 
 ## Por edad: el joven se recupera antes y el veterano tarda más.
 ## [edad hasta, factor]; el último tramo cubre al resto.

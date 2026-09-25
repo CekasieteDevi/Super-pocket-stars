@@ -99,12 +99,25 @@ func _test_diez_partidos() -> void:
 		var prioridad: int = prioridades[i]
 		var rival: Team = rival_liga if prioridad == Cansancio.ALTA else rival_copa
 		var energia_antes := {}
+		# Con dos partidos por semana el plantel entero se funde, y a veces
+		# no queda nadie más descansado para el puesto. Ese titular juega
+		# igual: no cuenta como una rotación que faltó.
+		var sin_reemplazo := {}
 		for t in titulares:
 			energia_antes[int(t["id"])] = club.energia_proximo_partido(int(t["id"]))
 		var rotados := Alineacion.rotar_partido(club, rival, prioridad)
 		var once := {}
 		for j in club.jugadores:
 			once[int(j["id"])] = true
+		# El titular que ya descansó hoy tampoco sirve de reemplazo.
+		var ocupados: Array = once.keys()
+		for paso in rotados.get(club, []):
+			ocupados.append(int(paso["sale"]))
+		for t in titulares:
+			var id_t := int(t["id"])
+			if once.has(id_t) and Alineacion._reemplazo_descansado(club, t,
+					energia_antes[id_t], INF, ocupados).is_empty():
+				sin_reemplazo[id_t] = true
 		MatchEngine.simular(club, rival, rng)
 		club.registrar_desgaste_partido()
 		rival.registrar_desgaste_partido()
@@ -120,7 +133,9 @@ func _test_diez_partidos() -> void:
 			if jugo and club.energia_proximo_partido(id) >= e:
 				bajo_en_el_partido = false
 			if prioridad == Cansancio.ALTA:
-				if Cansancio.franja(e) >= 2:
+				if Cansancio.franja(e) >= 2 and sin_reemplazo.has(id):
+					pass
+				elif Cansancio.franja(e) >= 2:
 					alta_cansados += 1
 					if not jugo:
 						alta_cansados_afuera += 1
