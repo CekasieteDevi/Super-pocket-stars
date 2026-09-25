@@ -315,6 +315,9 @@ var siguiente_id_investigador: int = 0
 ## jugador_id -> true de los jugadores AJENOS que ya investigamos. Los
 ## propios se conocen siempre, no hace falta anotarlos.
 var conocimiento: Dictionary = {}
+## Informes terminados que el usuario todavia no abrio desde la portada.
+## Es una cola: al ver uno se quita solo ese y aparece el siguiente.
+var informes_sin_ver: Array = []
 ## §9.3: a quien le cerre la puerta y hasta cuando. jugador_id ->
 ## ultima temporada del veto. Vive en el club VENDEDOR: es el que se
 ## ofendio con la oferta miserable (ver Negociacion.bloquear).
@@ -506,6 +509,7 @@ func guardar() -> Dictionary:
 		"roles": _claves_a_texto_roles(roles),
 		"investigadores": investigadores, "siguiente_id_investigador": siguiente_id_investigador,
 		"conocimiento": _claves_a_texto(conocimiento),
+		"informes_sin_ver": informes_sin_ver,
 		"bloqueos_mercado": _claves_a_texto(bloqueos_mercado),
 		"ofertas": ofertas, "siguiente_id_oferta": siguiente_id_oferta,
 		"traspasos": _claves_a_texto(traspasos),
@@ -628,6 +632,9 @@ static func cargar(datos: Dictionary) -> Team:
 		inv["dias"] = float(inv["dias"])
 	t.siguiente_id_investigador = maxi(1, int(datos.get("siguiente_id_investigador", 0)))
 	t.conocimiento = _claves_a_entero(datos.get("conocimiento", {}))
+	t.informes_sin_ver = []
+	for id_informe in datos.get("informes_sin_ver", []):
+		t.informes_sin_ver.append(int(id_informe))
 	# Migracion: antes el valor era `true` (el informe no caducaba). Ahora
 	# es cuantos dias le quedan de vigencia; a los viejos se les da el
 	# plazo entero.
@@ -1631,6 +1638,9 @@ func avanzar_dias(dias: int) -> Array:
 	# §9.4: los informes corren con el calendario, no con las fechas
 	# jugadas — una semana de dos partidos no acelera un scouteo.
 	informes_terminados = Investigadores.avanzar(self, dias)
+	for id_informe in informes_terminados:
+		if not informes_sin_ver.has(id_informe):
+			informes_sin_ver.append(id_informe)
 	jugada_terminada = Jugadas.avanzar(self, dias)
 	Renovaciones.avanzar(self, dias)
 

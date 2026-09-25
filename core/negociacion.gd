@@ -47,6 +47,12 @@ const PESO_SUELDO := 0.35
 const TOPE_SUELDO_ARRIBA := 0.85
 const TOPE_SUELDO_ABAJO := -0.5
 
+## Ser claramente mejor que el plantel de destino tambien tiene precio:
+## no es lo mismo sumarse a pares que llegar para cargar al equipo.
+const MARGEN_NIVEL_EQUIPO := 2.0
+const PESO_NIVEL_EQUIPO := 0.025
+const TOPE_NIVEL_EQUIPO := 0.35
+
 ## A partir de acá el jugador acepta.
 const UMBRAL_ACEPTA := 0.5
 
@@ -110,7 +116,8 @@ static func sueldo_pretendido(jugador: Dictionary, sueldo_actual: float,
 ## `exceso_clausula` = cuantas veces la clausula ofrecida supera a la
 ## normal. 1.0 = la de siempre, 3.0 = el triple.
 static func interes_jugador(jugador: Dictionary, animo: float, sueldo_actual: float,
-		sueldo_ofrecido: float, division_origen: int, division_destino: int) -> Dictionary:
+		sueldo_ofrecido: float, division_origen: int, division_destino: int,
+		media_equipo_destino: float = -1.0) -> Dictionary:
 	var peso_division := PESO_DIVISION
 	var peso_sueldo := PESO_SUELDO
 	if Personalidad.tiene(jugador, "Mercenario"):
@@ -120,11 +127,19 @@ static func interes_jugador(jugador: Dictionary, animo: float, sueldo_actual: fl
 	var por_division: float = float(division_destino - division_origen) * -peso_division
 	var por_animo: float = (50.0 - clampf(animo, 0.0, 100.0)) / 100.0 * PESO_ANIMO
 	var mejora: float = sueldo_ofrecido / maxf(1.0, sueldo_actual)
-	var por_sueldo: float = clampf((mejora - 1.0) * peso_sueldo, TOPE_SUELDO_ABAJO, TOPE_SUELDO_ARRIBA)
+	# Cero es el estado inicial del formulario, nunca un contrato valido.
+	var por_sueldo: float = -1.0 if sueldo_ofrecido <= 0.0 else clampf(
+		(mejora - 1.0) * peso_sueldo, TOPE_SUELDO_ABAJO, TOPE_SUELDO_ARRIBA)
 	var por_rasgo: float = -PENALIZACION_HINCHA if Personalidad.tiene(jugador, "Hincha del club") else 0.0
+	var por_nivel_equipo := 0.0
+	if media_equipo_destino >= 0.0:
+		var diferencia: float = maxf(0.0,
+			float(jugador.get("media", 0.0)) - media_equipo_destino - MARGEN_NIVEL_EQUIPO)
+		por_nivel_equipo = -minf(TOPE_NIVEL_EQUIPO, diferencia * PESO_NIVEL_EQUIPO)
 
 	var total: float = clampf(
-		0.5 + por_division + por_animo + por_sueldo + por_rasgo, 0.0, 1.0)
+		0.5 + por_division + por_animo + por_sueldo + por_rasgo + por_nivel_equipo,
+		0.0, 1.0)
 	return {
 		"interes": total,
 		"acepta": total >= UMBRAL_ACEPTA,
@@ -132,6 +147,7 @@ static func interes_jugador(jugador: Dictionary, animo: float, sueldo_actual: fl
 		"por_animo": por_animo,
 		"por_sueldo": por_sueldo,
 		"por_rasgo": por_rasgo,
+		"por_nivel_equipo": por_nivel_equipo,
 	}
 
 
@@ -141,7 +157,7 @@ static func interes_jugador(jugador: Dictionary, animo: float, sueldo_actual: fl
 static func motivo_rechazo(detalle: Dictionary) -> String:
 	var peor := ""
 	var valor := 0.0
-	for clave in ["por_division", "por_animo", "por_sueldo", "por_rasgo"]:
+	for clave in ["por_division", "por_animo", "por_sueldo", "por_rasgo", "por_nivel_equipo"]:
 		var v: float = float(detalle[clave])
 		if v < valor:
 			valor = v
@@ -153,6 +169,8 @@ static func motivo_rechazo(detalle: Dictionary) -> String:
 			return "El sueldo que le ofrecés es peor que el que tiene."
 		"por_rasgo":
 			return "Es hincha del club y no se quiere ir."
+		"por_nivel_equipo":
+			return "Siente que tendría que cargar con el equipo."
 		_:
 			return "Está cómodo donde está: no le movés el amperímetro."
 

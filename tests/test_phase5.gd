@@ -76,15 +76,14 @@ func _test_lesiones_y_energia(liga: Liga, rng: RandomNumberGenerator) -> void:
 	print("Menor resistencia vista en un jugador seguido durante un partido: %.2f" % resistencia_minima_vista)
 
 
-## §7.1: 15-35 sigue creciendo (aunque despacito de 33 a 35), 36-37 es meseta,
-## recien 38+ declina. "Joven"/"veterano" se clasifica por la edad DESPUES de
+## §7.1: 15-32 sigue creciendo, 33-34 es meseta y 35+ declina.
+## "Joven"/"veterano" se clasifica por la edad DESPUES de
 ## envejecer un año (la que decide si ese jugador creció o declinó), y se
 ## compara jugador por jugador para no mezclar generaciones distintas.
 func _test_progresion(liga: Liga, rng: RandomNumberGenerator) -> void:
 	print("\n=== Progresion: antes/despues de nueva_temporada() ===")
 
-	# Todos arrancaron con edad 18-35, asi que nadie entra en declive (38+)
-	# en una sola temporada. Envejecemos 4 temporadas de mas (sin jugar
+	# Envejecemos 4 temporadas de mas (sin jugar
 	# partidos, la progresion no depende del resultado) para que algunos
 	# veteranos lleguen a la zona de declive y se pueda medir de verdad.
 	for i in range(4):
@@ -102,16 +101,16 @@ func _test_progresion(liga: Liga, rng: RandomNumberGenerator) -> void:
 	for entry in snapshot:
 		var j: Dictionary = entry["jugador"]
 		var delta: float = j["media"] - entry["media_antes"]
-		if j["edad"] <= 35:
+		if j["edad"] <= 32:
 			deltas_jovenes.append(delta)
-		elif j["edad"] >= 38:
+		elif j["edad"] >= 35:
 			deltas_declive.append(delta)
-		# 36-37: meseta, no se mide (esperable ~0 de cambio neto)
+		# 33-34: meseta, no se mide (esperable ~0 de cambio neto)
 
 	var delta_prom_jovenes := _promedio(deltas_jovenes)
 	var delta_prom_declive := _promedio(deltas_declive)
-	print("Jugadores en crecimiento (edad final <=35): %d, delta de media promedio %+.2f" % [deltas_jovenes.size(), delta_prom_jovenes])
-	print("Jugadores en declive (edad final >=38): %d, delta de media promedio %+.2f" % [deltas_declive.size(), delta_prom_declive])
+	print("Jugadores en crecimiento (edad final <=32): %d, delta de media promedio %+.2f" % [deltas_jovenes.size(), delta_prom_jovenes])
+	print("Jugadores en declive (edad final >=35): %d, delta de media promedio %+.2f" % [deltas_declive.size(), delta_prom_declive])
 
 	if delta_prom_jovenes > 0.0:
 		print("OK: en crecimiento, la media promedio sube.")

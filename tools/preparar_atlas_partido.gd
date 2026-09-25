@@ -21,6 +21,8 @@ func _init() -> void:
 		hoja.fill(Color.TRANSPARENT)
 		for indice in range(TOTAL_CUADROS):
 			var img := _generar_base(indice, estilo)
+			if estilo > 0:
+				img = _igualar_tamano(img, _generar_base(indice, 0))
 			if img == null or not img.get_used_rect().has_area():
 				push_error("Cuadro invalido: %s / %d" % [PEINADOS[estilo], indice])
 				quit(1)
@@ -33,6 +35,23 @@ func _init() -> void:
 			return
 	print("OK: %d atlas preparados, %d cuadros" % [PEINADOS.size(), PEINADOS.size() * TOTAL_CUADROS])
 	quit()
+
+
+## Cada peinado conserva su silueta, pero ocupa la misma altura que el
+## jugador base en la pose equivalente. El apoyo de los pies tampoco cambia.
+static func _igualar_tamano(img: Image, referencia: Image) -> Image:
+	var limites := img.get_used_rect()
+	var limites_ref := referencia.get_used_rect()
+	assert(limites.has_area() and limites_ref.has_area())
+	var recorte := img.get_region(limites)
+	var factor := float(limites_ref.size.y) / float(limites.size.y)
+	recorte.resize(mini(CELDA - 2, maxi(1, roundi(limites.size.x * factor))), limites_ref.size.y,
+		Image.INTERPOLATE_NEAREST)
+	var normalizada := Image.create(CELDA, CELDA, false, Image.FORMAT_RGBA8)
+	normalizada.fill(Color.TRANSPARENT)
+	normalizada.blit_rect(recorte, Rect2i(Vector2i.ZERO, recorte.get_size()),
+		Vector2i((CELDA - recorte.get_width()) / 2, limites_ref.end.y - recorte.get_height()))
+	return normalizada
 
 static func _generar_base(indice: int, estilo: int) -> Image:
 	if estilo >= 11:

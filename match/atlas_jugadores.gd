@@ -27,10 +27,14 @@ const CLIPS := {
 	"cae": [28, 29, 29, 30, 31],
 	"cabecea": [32, 33, 34, 31],
 	"volea": [64, 65, 66, 67],
-	"control_pie": [68, 69, 70, 71],
+	# Control armado con el mismo atlas base de carrera y remate. Así conserva
+	# exactamente piel, pelo, proporciones y trazo del resto del jugador.
+	"control_pie": [10, 13, 14, 7],
 	"taco": [72, 73, 74, 75],
 	"agarra": [76, 77, 78, 79],
-	"saque_arco": [80, 81, 82, 83],
+	# El saque usa la patada del atlas base. Los cuadros dedicados 80-83
+	# pertenecen a otra fuente, con cuerpo y trazo mucho más grandes.
+	"saque_arco": [10, 11, 12, 15],
 	# Impulso, tijera, contacto, caida y apoyo: poses propias en los 11 PNG.
 	"chilena": [36, 37, 37, 38, 29, 30, 39],
 	"vuela": [40, 41, 42, 42, 43],
@@ -40,6 +44,15 @@ static var _fuentes := {}
 static var _cache := {}
 static var _bases := {}
 static var _tenidas := {}
+
+## Zonas de las manos en los cuadros del saque reutilizados del atlas base.
+## Solo se vuelve blanco el relleno de piel; el contorno negro queda intacto.
+const MANOS_SAQUE_ARCO := {
+	10: [Rect2i(14, 27, 11, 8), Rect2i(39, 32, 10, 8)],
+	11: [Rect2i(15, 27, 11, 8), Rect2i(41, 32, 10, 8)],
+	12: [Rect2i(14, 25, 10, 12), Rect2i(39, 29, 10, 10)],
+	15: [Rect2i(15, 24, 10, 14), Rect2i(40, 28, 10, 11)],
+}
 
 
 static func cuadro(accion: String, fase: float, direccion: int, corriendo: bool,
@@ -102,6 +115,45 @@ static func textura(indice: int, camiseta: Color, pantalon: Color, pelo: Color,
 	return tex
 
 
+## La patada sale del atlas normal para conservar el estilo. Esta variante
+## pinta sus manos como guantes sin cambiar cara, piel ni proporciones.
+static func textura_saque_arco(indice: int, camiseta: Color, pantalon: Color,
+		pelo: Color, espejo: bool = false, numero: int = 0,
+		peinado: int = 0) -> ImageTexture:
+	var clave := "saque_%d_%s_%s_%s_%s_%d_%d" % [indice, camiseta.to_html(),
+		pantalon.to_html(), pelo.to_html(), espejo, numero, peinado]
+	if _cache.has(clave):
+		return _cache[clave]
+	# Copia propia: sin renderer (headless) get_image devuelve la misma
+	# imagen de la textura base, y pintar los guantes la pisaba.
+	var img: Image = textura(indice, camiseta, pantalon, pelo, false, numero, peinado).get_image().duplicate()
+	for zona: Rect2i in MANOS_SAQUE_ARCO.get(indice, []):
+		for y in range(zona.position.y, zona.end.y):
+			for x in range(zona.position.x, zona.end.x):
+				var c := img.get_pixel(x, y)
+				var es_piel := c.a > 0.1 and c.r > 0.35 \
+					and c.r > c.g * 1.15 and c.g > c.b * 1.1
+				if not es_piel:
+					continue
+				var luz := clampf(c.get_luminance() * 1.35, 0.57, 0.98)
+				img.set_pixel(x, y, Color(luz, luz, minf(1.0, luz + 0.02), c.a))
+	if espejo:
+		img.flip_x()
+	var tex := ImageTexture.create_from_image(img)
+	_cache[clave] = tex
+	return tex
+
+
+## La misma curva de luz debe teñir el atlas y cualquier animación externa.
+## Si cada hoja normaliza distinto, el jugador cambia de color entre poses.
+static func factor_luz_camiseta(c: Color) -> float:
+	return clampf(c.v / 0.85, 0.25, 1.2)
+
+
+static func factor_luz_pelo(c: Color) -> float:
+	return clampf(c.v / 0.3, 0.45, 1.5)
+
+
 ## Qué píxeles del cuadro son camiseta, pantalón y pelo, con el factor de
 ## luz de cada uno. Se clasifica UNA vez por cuadro y peinado: antes se
 ## recorrían los 4096 píxeles con get_pixel en cada textura, y preparar los
@@ -155,7 +207,7 @@ static func _mascara(indice: int, estilo: int) -> Dictionary:
 			var es_pelo := c.r > c.g * 1.15 and c.g > c.b * 1.15 and c.v < 0.48
 			if c.b > c.r * 1.35 and c.b > c.g * 1.1 and c.b > 0.18:
 				pix_camiseta.append(pixel)
-				luz_camiseta.append(clampf(c.v / 0.85, 0.25, 1.2))
+				luz_camiseta.append(factor_luz_camiseta(c))
 				alfa_camiseta.append(c.a)
 			elif admite_pantalon and c.s < 0.18 and c.v > 0.72 and (y > 29 or indice in [37, 38]):
 				pix_pantalon.append(pixel)
@@ -163,11 +215,11 @@ static func _mascara(indice: int, estilo: int) -> Dictionary:
 				alfa_pantalon.append(c.a)
 				if es_pelo:
 					pix_pelo_sp.append(pixel)
-					luz_pelo_sp.append(clampf(c.v / 0.3, 0.45, 1.5))
+					luz_pelo_sp.append(factor_luz_pelo(c))
 					alfa_pelo_sp.append(c.a)
 			elif es_pelo:
 				pix_pelo.append(pixel)
-				luz_pelo.append(clampf(c.v / 0.3, 0.45, 1.5))
+				luz_pelo.append(factor_luz_pelo(c))
 				alfa_pelo.append(c.a)
 	var listas := {
 		"img": img,
@@ -242,5 +294,10 @@ static func _tenir(img: Image, lista: Array, color: Color) -> void:
 		img.set_pixel(pixeles[i] % CELDA, pixeles[i] / CELDA, tinte)
 
 
+## La rotacion desplaza a todos los jugadores cuando cambia el reparto, sin
+## guardar datos visuales en la partida.
+const ROTACION_PEINADOS := 1
+
+
 static func estilo_de(jugador_id: int) -> int:
-	return posmod(jugador_id, PEINADOS.size())
+	return posmod(jugador_id + ROTACION_PEINADOS, PEINADOS.size())

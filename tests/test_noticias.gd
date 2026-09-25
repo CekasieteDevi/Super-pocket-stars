@@ -1,8 +1,7 @@
 extends SceneTree
 
-## El feed de noticias: que cada solapa se llene, que los jugadores que se
-## nombran queden enganchados por id, y que el cierre de temporada no se
-## coma las categorias chicas.
+## El feed de noticias: que las solapas activas se llenen, que rumores y
+## lesiones no aparezcan, y que las menciones queden enganchadas por id.
 
 const SEED := 5150
 
@@ -12,10 +11,8 @@ func _init() -> void:
 
 	# --- Clasificacion de las que llegan como texto pelado ----------------
 	var casos := {
-		"Facundo Perez (DC, Rampla) se lesiona: rotura, 40 dias afuera.": "lesiones",
 		"COPA NACIONAL: campeón Racing Alborada.": "campeones",
 		"FICHAJES: Juan Lopez (MC) pasa de A a B por $10,000.": "fichajes",
-		"Rumor: X pregunto por Y.": "rumores",
 		"QUIEBRA: Deportivo X entró en números rojos.": "club",
 	}
 	for texto in casos:
@@ -60,12 +57,30 @@ func _init() -> void:
 		por_cat[c] = int(por_cat.get(c, 0)) + 1
 	print("noticias por categoria: %s" % [por_cat])
 
-	for cat in ["rumores", "fichajes", "lesiones", "campeones"]:
+	for cat in ["fichajes", "campeones"]:
 		if int(por_cat.get(cat, 0)) > 0:
 			print("OK: la solapa %s tiene %d noticias." % [cat, int(por_cat[cat])])
 		else:
 			print("FALLA: la solapa %s quedo vacia despues de una temporada entera." % cat)
 			fallas += 1
+
+	for cat in ["rumores", "lesiones"]:
+		if int(por_cat.get(cat, 0)) != 0:
+			print("FALLA: Noticias todavia guarda entradas de %s." % cat)
+			fallas += 1
+		else:
+			print("OK: Noticias no guarda entradas de %s." % cat)
+
+	var antiguas := [
+		{"texto": "Rumor viejo", "cat": "rumores", "jugadores": []},
+		{"texto": "Lesion vieja", "cat": "lesiones", "jugadores": []},
+		{"texto": "Fichaje vigente", "cat": "fichajes", "jugadores": []},
+	]
+	if Noticias.filtrar(antiguas, "todas").size() != 1:
+		print("FALLA: la vista Todas conserva rumores o lesiones antiguos.")
+		fallas += 1
+	else:
+		print("OK: la vista Todas oculta rumores y lesiones antiguos.")
 
 	# El tope por categoria: ninguna puede pasarse, y el cierre de
 	# temporada no puede vaciar a las demas.

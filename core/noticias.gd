@@ -4,7 +4,7 @@ extends RefCounted
 ## El feed de noticias, con categoria y con los jugadores que menciona.
 ##
 ## Hasta ahora una noticia era un String suelto y el feed una sola lista de
-## treinta lineas donde un fichaje, una lesion y un campeon se leian igual.
+## treinta lineas donde todos los hechos se leian igual.
 ## Con la categoria se puede separar en solapas, y con `jugadores` se puede
 ## hacer clickeable al que se nombra: de ahi se abre su ficha de mercado y
 ## se lo manda a investigar sin tener que ir a buscarlo a mano.
@@ -19,14 +19,12 @@ extends RefCounted
 ## guarde: es la vista sin filtrar.
 const SOLAPAS := [
 	["todas", "Todas"],
-	["rumores", "Rumores"],
 	["fichajes", "Fichajes"],
-	["lesiones", "Lesiones"],
 	["campeones", "Campeones"],
 	["club", "Club"],
 ]
 
-const CATEGORIAS := ["rumores", "fichajes", "lesiones", "campeones", "club"]
+const CATEGORIAS := ["fichajes", "campeones", "club"]
 
 
 ## `jugadores` es una lista de {id, nombre, club} — lo minimo para poder
@@ -90,12 +88,17 @@ static func mencion(jugador: Dictionary, club: String) -> Dictionary:
 	}
 
 
+## Rumores y lesiones de guardados anteriores quedan fuera del panel.
+static func es_visible(entrada: Dictionary) -> bool:
+	return CATEGORIAS.has(str(entrada.get("cat", "")))
+
+
 ## Las de una categoria, en el orden en que ya vienen (mas nueva primero).
 static func filtrar(lista: Array, categoria: String) -> Array:
-	if categoria == "todas":
-		return lista
 	var salida := []
 	for n in lista:
-		if str(n.get("cat", "")) == categoria:
+		if not es_visible(n):
+			continue
+		if categoria == "todas" or str(n.get("cat", "")) == categoria:
 			salida.append(n)
 	return salida

@@ -56,8 +56,10 @@ const COL_TAPADAS := COL_MEDIA + COL_VALOR + COL_SALARIO + COL_CONTRATO + COL_AN
 ## `tam` 0 = el del tema. La tabla del mercado pide TAM_CHICO: con once
 ## columnas, el cuerpo a 20 px obliga a anchos donde no entra ni un
 ## nombre ni un club, y un nombre recortado no sirve para nada.
-static func celda(texto: String, ancho: int, color: Color = Tema.TEXTO,
+static func celda(texto: String, ancho: int, color: Color = Color.TRANSPARENT,
 		alineacion: int = HORIZONTAL_ALIGNMENT_LEFT, tam: int = 0) -> Label:
+	if color == Color.TRANSPARENT:
+		color = Tema.TEXTO
 	var l := Label.new()
 	if tam > 0:
 		l.add_theme_font_size_override("font_size", tam)
@@ -81,7 +83,7 @@ static func celda(texto: String, ancho: int, color: Color = Tema.TEXTO,
 ## izquierda. La tabla de posiciones pide DERECHA a mano: en una columna
 ## de cifras de ancho distinto (9 y 32 puntos) alineadas a la izquierda
 ## las unidades no coinciden y hay que comparar digito por digito.
-static func celda_numero(texto: String, ancho: int, color: Color = Tema.TEXTO,
+static func celda_numero(texto: String, ancho: int, color: Color = Color.TRANSPARENT,
 		alineacion: int = HORIZONTAL_ALIGNMENT_LEFT, tam: int = 0) -> Label:
 	var l := celda(texto, ancho, color, alineacion, tam)
 	var f := Tema.archivo(700)
@@ -103,7 +105,9 @@ static func celda_numero(texto: String, ancho: int, color: Color = Tema.TEXTO,
 ## Se le sacan las dos causas: relleno horizontal 0 en los cinco estados y
 ## `clip_text`, que deja el texto fuera del cálculo del mínimo.
 static func boton_de_celda(texto: String, ancho: int,
-		alineacion: int = HORIZONTAL_ALIGNMENT_LEFT, color: Color = Tema.TEXTO) -> Button:
+		alineacion: int = HORIZONTAL_ALIGNMENT_LEFT, color: Color = Color.TRANSPARENT) -> Button:
+	if color == Color.TRANSPARENT:
+		color = Tema.TEXTO
 	var b := Button.new()
 	b.text = texto
 	b.tooltip_text = texto
@@ -144,7 +148,9 @@ static func boton_de_accion(texto: String, ancho: int) -> Button:
 
 
 ## Una etiqueta chica y sólida: puesto, rasgo, habilidad.
-static func chip(texto: String, fondo: Color, letra: Color = Tema.TEXTO) -> Label:
+static func chip(texto: String, fondo: Color, letra: Color = Color.TRANSPARENT) -> Label:
+	if letra == Color.TRANSPARENT:
+		letra = Tema.TEXTO
 	var l := Label.new()
 	l.text = texto
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -174,12 +180,12 @@ static func bloque_tapado(ancho: int) -> PanelContainer:
 	var caja := PanelContainer.new()
 	caja.custom_minimum_size = Vector2(ancho, 0)
 	var estilo := StyleBoxFlat.new()
-	estilo.bg_color = Color("#14201b")
+	estilo.bg_color = Tema.FONDO
 	estilo.border_width_top = 1
 	estilo.border_width_bottom = 1
 	estilo.border_width_left = 1
 	estilo.border_width_right = 1
-	estilo.border_color = Color("#35473e")
+	estilo.border_color = Tema.BORDE
 	estilo.corner_radius_top_left = 6
 	estilo.corner_radius_top_right = 6
 	estilo.corner_radius_bottom_left = 6
@@ -190,7 +196,7 @@ static func bloque_tapado(ancho: int) -> PanelContainer:
 	var l := Label.new()
 	l.text = "Sin investigar"
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	l.add_theme_color_override("font_color", Color("#55655c"))
+	l.add_theme_color_override("font_color", Tema.SUAVE.darkened(0.25))
 	l.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
 	caja.add_child(l)
 	return caja
@@ -201,7 +207,7 @@ static func bloque_tapado(ancho: int) -> PanelContainer:
 static func bloque_investigando(ancho: int, progreso: float, dias: int) -> PanelContainer:
 	var caja := bloque_tapado(ancho)
 	var estilo: StyleBoxFlat = caja.get_theme_stylebox("panel")
-	estilo.border_color = Color("#3d5340")
+	estilo.border_color = Tema.VERDE_TIBIO
 	caja.get_child(0).queue_free()
 
 	var fila := HBoxContainer.new()
@@ -215,7 +221,7 @@ static func bloque_investigando(ancho: int, progreso: float, dias: int) -> Panel
 	barra.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	barra.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var fondo := StyleBoxFlat.new()
-	fondo.bg_color = Color("#2a3a33")
+	fondo.bg_color = Tema.PANEL_ALTO
 	fondo.corner_radius_top_left = 3
 	fondo.corner_radius_top_right = 3
 	fondo.corner_radius_bottom_left = 3
@@ -260,7 +266,7 @@ static func barra_atributo(nombre: String, valor: int, techo: int,
 	barra.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	barra.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var fondo := StyleBoxFlat.new()
-	fondo.bg_color = Color("#2a3a33")
+	fondo.bg_color = Tema.PANEL_ALTO
 	fondo.corner_radius_top_left = 5
 	fondo.corner_radius_top_right = 5
 	fondo.corner_radius_bottom_left = 5
@@ -311,15 +317,43 @@ static func tarjeta(acento: Color = Color.TRANSPARENT) -> PanelContainer:
 	estilo.content_margin_right = 16
 	estilo.content_margin_top = 12
 	estilo.content_margin_bottom = 12
+	estilo.border_width_top = 2
+	estilo.border_width_bottom = 2
+	estilo.border_width_right = 2
+	estilo.border_color = Tema.BORDE
+	estilo.shadow_color = Color("#070907")
+	estilo.shadow_size = 2
+	estilo.shadow_offset = Vector2(3, 3)
 	if acento != Color.TRANSPARENT:
-		estilo.border_width_left = 4
+		estilo.border_width_left = 6
 		estilo.border_color = acento
 	else:
-		estilo.border_width_top = 1
-		estilo.border_width_bottom = 1
-		estilo.border_width_left = 1
-		estilo.border_width_right = 1
+		estilo.border_width_left = 2
 		estilo.border_color = Tema.BORDE
+	caja.add_theme_stylebox_override("panel", estilo)
+	return caja
+
+
+## Tarjeta elevada para ventanas propias hechas con CanvasLayer. Comparte
+## forma y profundidad con los dialogos nativos, pero conserva el acento
+## lateral que explica el tipo de decision.
+static func modal(acento: Color = Color.TRANSPARENT) -> PanelContainer:
+	if acento == Color.TRANSPARENT:
+		acento = Tema.AMBAR
+	var caja := tarjeta(acento)
+	var estilo: StyleBoxFlat = caja.get_theme_stylebox("panel").duplicate()
+	estilo.bg_color = Tema.PANEL_ALTO
+	estilo.corner_radius_top_left = Tema.RADIO_MODAL
+	estilo.corner_radius_top_right = Tema.RADIO_MODAL
+	estilo.corner_radius_bottom_left = Tema.RADIO_MODAL
+	estilo.corner_radius_bottom_right = Tema.RADIO_MODAL
+	estilo.content_margin_left = 24
+	estilo.content_margin_right = 24
+	estilo.content_margin_top = 22
+	estilo.content_margin_bottom = 22
+	estilo.shadow_color = Color(0, 0, 0, 0.55)
+	estilo.shadow_size = 18
+	estilo.shadow_offset = Vector2(0, 8)
 	caja.add_theme_stylebox_override("panel", estilo)
 	return caja
 

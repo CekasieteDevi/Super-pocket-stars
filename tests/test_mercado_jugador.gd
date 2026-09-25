@@ -13,6 +13,7 @@ func _init() -> void:
 	_test_comprar_de_otra_division(rng)
 	_test_comprar_una_joya_de_la_cantera(rng)
 	_test_sin_plata_no_hay_compra(rng)
+	_test_un_recien_comprado_espera_una_temporada(rng)
 	quit()
 
 
@@ -96,6 +97,25 @@ func _test_sin_plata_no_hay_compra(rng: RandomNumberGenerator) -> void:
 		print("OK: decima puede OFERTAR por un crack de primera, lo que no puede es pagarlo.")
 	else:
 		print("FALLA: %s" % r)
+
+
+func _test_un_recien_comprado_espera_una_temporada(rng: RandomNumberGenerator) -> void:
+	print("\n=== Un recién comprado no vuelve a venderse en la misma temporada ===")
+	var vendedor := Team.generar("Vendedor", rng, 4)
+	var comprador := Team.generar("Comprador", rng, 4)
+	comprador.caja["fichajes"] = 50000000.0
+	comprador.caja["contratos"] = 1000000.0
+	var jugador: Dictionary = vendedor.jugadores[0]
+	var id := int(jugador["id"])
+	Mercado.marcar_compra(jugador, 7)
+	Historial.temporada = 7
+	var bloqueada := Mercado.comprar_al_contado(comprador, vendedor, id, rng)
+	var habilitado_despues := Mercado.puede_comprarse(jugador, 8)
+	if not bloqueada["exito"] and bool(bloqueada.get("recien_comprado", false)) \
+			and habilitado_despues:
+		print("OK: queda bloqueado durante la temporada de compra y se libera en la siguiente.")
+	else:
+		print("FALLA: bloqueada=%s habilitado_t8=%s" % [bloqueada, habilitado_despues])
 
 
 func _test_la_clausula_no_se_puede_rechazar(rng: RandomNumberGenerator) -> void:

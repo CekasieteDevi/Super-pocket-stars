@@ -384,26 +384,28 @@ func _actualizar_estado_jugadores(home: Team, away: Team, r: Dictionary) -> void
 	# al dueño cuando vuelve (ver Prestamos.procesar_retornos). Los goles
 	# ya los cuenta EstadisticasLiga, pero por LIGA: el prestado juega en
 	# otra division y su linea vive en otra tabla que el dueño no mira.
-	_contar_prestamo(home, r.get("goles_log", []))
-	_contar_prestamo(away, r.get("goles_log", []))
+	_contar_prestamo(home, r.get("goles_log", []), xp.get("home", {}))
+	_contar_prestamo(away, r.get("goles_log", []), xp.get("away", {}))
 
 
-static func _contar_prestamo(equipo: Team, goles_log: Array) -> void:
+static func _contar_prestamo(equipo: Team, goles_log: Array, xp_equipo: Dictionary) -> void:
 	if equipo.prestados_propios.is_empty():
 		return
-	for j in equipo.jugadores:
-		if equipo.prestados_propios.has(int(j["id"])):
+	for j in equipo.todos_los_jugadores():
+		var id := int(j["id"])
+		if equipo.prestados_propios.has(id) and xp_equipo.has(id):
 			j["partidos_prestamo"] = int(j.get("partidos_prestamo", 0)) + 1
 	for gol in goles_log:
 		if str(gol.get("equipo", "")) != equipo.nombre:
 			continue
 		var id := int(gol.get("jugador_id", -1))
-		if not equipo.prestados_propios.has(id):
-			continue
+		var asistencia_id := int(gol.get("asistencia_id", -1))
 		for j in equipo.todos_los_jugadores():
-			if int(j["id"]) == id:
+			var jugador_id := int(j["id"])
+			if jugador_id == id and equipo.prestados_propios.has(id):
 				j["goles_prestamo"] = int(j.get("goles_prestamo", 0)) + 1
-				break
+			if jugador_id == asistencia_id and equipo.prestados_propios.has(asistencia_id):
+				j["asistencias_prestamo"] = int(j.get("asistencias_prestamo", 0)) + 1
 
 
 static func _acumular_xp(equipo: Team, por_jugador: Dictionary) -> void:
@@ -573,6 +575,7 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 			var aprendida := Aprendizaje.procesar_jugador(jugador, equipo, temporada_actual, rng)
 			if not aprendida.is_empty():
 				noticias.append("APRENDIZAJE: un %s de %s aprende %s (bronce)." % [jugador["posicion"], equipo.nombre, aprendida["nombre"]])
+		_retirar_por_edad(equipo, rng, equipo == equipo_protegido)
 		# §7.4.1: la carga acumulada ya se consumió en mult_entrenamiento.
 		equipo.reiniciar_carga()
 		# La IA no ensaya: se pone al dia con lo que se sabe en su categoria.
@@ -597,6 +600,27 @@ func procesar_economia_y_mercado_y_progresion(rng: RandomNumberGenerator, equipo
 		Economia.fotografiar_caja(equipo)
 
 	return [informes_economia, transferencias, reporte_cantera]
+
+
+## Retiro por edad y vitalidad, aun con contrato vigente. Antes solo se
+## retiraban los agentes libres. A los 45 es obligatorio.
+func _retirar_por_edad(equipo: Team, rng: RandomNumberGenerator,
+		es_protegido: bool) -> void:
+	var veteranos := equipo.todos_los_jugadores().duplicate()
+	for jugador in veteranos:
+		if not Progresion.debe_retirarse(jugador, rng):
+			continue
+		var id := int(jugador["id"])
+		AgentesLibres.liberar(equipo, jugador, agentes_libres, rng, es_protegido)
+		# Se reutiliza el reemplazo y la limpieza de una salida libre, pero el
+		# retirado se borra del pool para que ningún otro club pueda ficharlo.
+		for i in range(agentes_libres.size() - 1, -1, -1):
+			if int(agentes_libres[i]["id"]) == id:
+				agentes_libres.remove_at(i)
+				break
+		noticias.append("SE RETIRA: %s %s (%s, %d años) cuelga los botines en %s." % [
+			str(jugador.get("nombre", "")), str(jugador.get("apellido", "")),
+			str(jugador["posicion"]), int(jugador["edad"]), equipo.nombre])
 
 
 ## §17: envejece a los juveniles (crecen igual que cualquiera, §7.1),

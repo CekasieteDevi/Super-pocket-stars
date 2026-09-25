@@ -103,6 +103,9 @@ const TONOS_PELO := [
 	Color(0.92, 0.92, 0.90),  # blanco
 	Color(0.12, 0.35, 0.82),  # azul
 ]
+const INDICE_PELO_BLANCO := 5
+const INDICE_PELO_AZUL := 6
+const UNO_CADA_TONO_RARO := 300
 
 ## La vincha (cinta en la frente) va siempre blanca: es lo que la hace
 ## visible contra cualquier tono de pelo.
@@ -489,6 +492,7 @@ static func palomita_png(color_camiseta: Color, color_short: Color,
 	var cuadro := clampi(frame, 0, CUADROS_PALOMITA - 1)
 	var hoja: Image = _palomita_pngs[peinado]
 	var img: Image = hoja.get_region(Rect2i(cuadro * 64, 0, 64, 64))
+	_conservar_componente_principal(img)
 	var mascara_camiseta := Image.create(64, 64, false, Image.FORMAT_RGBA8)
 	mascara_camiseta.fill(TRANSPARENTE)
 	for y in range(img.get_height()):
@@ -496,16 +500,17 @@ static func palomita_png(color_camiseta: Color, color_short: Color,
 			var p := img.get_pixel(x, y)
 			if p.a <= 0.0:
 				continue
-			var brillo := clampf(p.get_luminance() / 0.55, 0.65, 1.15)
 			# El azul fuerte es la mascara de camiseta. El negro queda intacto
 			# para conservar el contorno pixel-art.
 			if p.b > 0.25 and p.b > p.r * 1.35 and p.b > p.g * 1.05:
 				mascara_camiseta.set_pixel(x, y, Color.WHITE)
-				p = Color(color_camiseta.r * brillo, color_camiseta.g * brillo, color_camiseta.b * brillo, p.a)
+				var luz_camiseta := AtlasJugadores.factor_luz_camiseta(p)
+				p = Color(color_camiseta.r * luz_camiseta, color_camiseta.g * luz_camiseta,
+					color_camiseta.b * luz_camiseta, p.a)
 			elif p.r > 0.82 and p.g > 0.82 and p.b > 0.82:
-				p = Color(pantalon.r * brillo, pantalon.g * brillo, pantalon.b * brillo, p.a)
+				p = Color(pantalon.r * p.v, pantalon.g * p.v, pantalon.b * p.v, p.a)
 			elif _es_pelo_palomita(p):
-				var brillo_pelo := clampf(p.get_luminance() / 0.32, 0.55, 1.25)
+				var brillo_pelo := AtlasJugadores.factor_luz_pelo(p)
 				p = Color(color_pelo.r * brillo_pelo, color_pelo.g * brillo_pelo,
 					color_pelo.b * brillo_pelo, p.a)
 			img.set_pixel(x, y, p)
@@ -516,6 +521,53 @@ static func palomita_png(color_camiseta: Color, color_short: Color,
 	var tex := ImageTexture.create_from_image(img)
 	_palomita_cache[clave] = tex
 	return tex
+
+
+## Algunas hojas traen puntos negros aislados lejos del jugador. No son
+## pelota ni sombra: ambas se dibujan por separado. Conservar la figura
+## conectada más grande elimina esos restos sin retocar cuerpo o peinado.
+static func _conservar_componente_principal(img: Image) -> void:
+	var visitado := PackedByteArray()
+	visitado.resize(img.get_width() * img.get_height())
+	var principal := PackedInt32Array()
+	for y in range(img.get_height()):
+		for x in range(img.get_width()):
+			var inicio := y * img.get_width() + x
+			if visitado[inicio] != 0 or img.get_pixel(x, y).a <= 0.0:
+				continue
+			var componente := PackedInt32Array([inicio])
+			var cola := [inicio]
+			visitado[inicio] = 1
+			var cursor := 0
+			while cursor < cola.size():
+				var actual: int = cola[cursor]
+				cursor += 1
+				var ax := actual % img.get_width()
+				var ay := actual / img.get_width()
+				for dy in range(-1, 2):
+					for dx in range(-1, 2):
+						if dx == 0 and dy == 0:
+							continue
+						var nx := ax + dx
+						var ny := ay + dy
+						if nx < 0 or nx >= img.get_width() or ny < 0 or ny >= img.get_height():
+							continue
+						var vecino := ny * img.get_width() + nx
+						if visitado[vecino] != 0 or img.get_pixel(nx, ny).a <= 0.0:
+							continue
+						visitado[vecino] = 1
+						cola.append(vecino)
+						componente.append(vecino)
+			if componente.size() > principal.size():
+				principal = componente
+	var conservar := PackedByteArray()
+	conservar.resize(img.get_width() * img.get_height())
+	for pixel in principal:
+		conservar[pixel] = 1
+	for y in range(img.get_height()):
+		for x in range(img.get_width()):
+			if img.get_pixel(x, y).a > 0.0 and conservar[y * img.get_width() + x] == 0:
+				img.set_pixel(x, y, Color.TRANSPARENT)
 
 
 static func _es_pelo_palomita(c: Color) -> bool:
@@ -564,7 +616,13 @@ static func pelo_de(jugador_id: int) -> int:
 
 
 static func tono_pelo_de(jugador_id: int) -> Color:
-	return TONOS_PELO[absi(jugador_id * 104729) % TONOS_PELO.size()]
+	var huella := absi(jugador_id * 104729)
+	var rareza := huella % UNO_CADA_TONO_RARO
+	if rareza == 0:
+		return TONOS_PELO[INDICE_PELO_AZUL]
+	if rareza == 1:
+		return TONOS_PELO[INDICE_PELO_BLANCO]
+	return TONOS_PELO[huella % INDICE_PELO_BLANCO]
 
 
 ## De qué lado mira, según hacia dónde se mueve EN PANTALLA (no en la

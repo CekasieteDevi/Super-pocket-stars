@@ -41,6 +41,22 @@ const FRACCION_MAXIMA_POR_FICHAJE := 0.85
 const INTENTOS_POR_CLUB := 4
 const POSICIONES := ["ARQ", "DFC", "LAT", "MC", "MCO", "EXT", "DC"]
 
+## Un jugador comprado no puede encadenar dos pases en la misma
+## temporada. La marca vive en el propio jugador, asi viaja con el entre
+## clubes y tambien queda guardada sin agregar estado paralelo.
+const CLAVE_ULTIMA_COMPRA := "temporada_ultima_compra"
+const MOTIVO_RECIEN_COMPRADO := "Ese jugador fue comprado esta temporada. Hay que esperar a la próxima."
+
+
+static func puede_comprarse(jugador: Dictionary,
+		temporada_actual: int = Historial.temporada) -> bool:
+	return int(jugador.get(CLAVE_ULTIMA_COMPRA, -1)) < temporada_actual
+
+
+static func marcar_compra(jugador: Dictionary,
+		temporada_actual: int = Historial.temporada) -> void:
+	jugador[CLAVE_ULTIMA_COMPRA] = temporada_actual
+
 
 ## equipo_protegido: si se pasa (el club del jugador humano), nunca
 ## participa de estos intercambios automáticos — el mercado de la IA es
@@ -70,6 +86,8 @@ static func ejecutar_ventana(liga: Liga, rng: RandomNumberGenerator, equipo_prot
 
 		var jugador_a: Dictionary = club_a.jugadores[indice_a]
 		var jugador_b: Dictionary = club_b.jugadores[indice_b]
+		if not puede_comprarse(jugador_a) or not puede_comprarse(jugador_b):
+			continue
 		if jugador_a["media"] == jugador_b["media"]:
 			continue
 
@@ -108,6 +126,8 @@ static func ejecutar_ventana(liga: Liga, rng: RandomNumberGenerator, equipo_prot
 
 		peor_club._registrar_fichaje(mejor_jugador, valor_mejor)
 		mejor_club._registrar_fichaje(peor_jugador, valor_peor)
+		marcar_compra(mejor_jugador)
+		marcar_compra(peor_jugador)
 		peor_club._limpiar_registro(peor_jugador["id"])  # peor_jugador ya no es de este club
 		mejor_club._limpiar_registro(mejor_jugador["id"])  # mejor_jugador ya no es de este club
 
@@ -212,6 +232,9 @@ static func comprar_al_contado(comprador: Team, vendedor: Team, jugador_id: int,
 	if donde.is_empty():
 		return {"exito": false, "motivo": "Ese jugador ya no está en ese club."}
 	var jugador: Dictionary = donde["jugador"]
+	if not puede_comprarse(jugador):
+		return {"exito": false, "motivo": MOTIVO_RECIEN_COMPRADO,
+			"recien_comprado": true}
 
 	var valor := ValorJugador.calcular(
 		jugador, vendedor.animo.get(jugador_id, 50.0), vendedor.contratos.get(jugador_id, 3))
@@ -244,6 +267,7 @@ static func comprar_al_contado(comprador: Team, vendedor: Team, jugador_id: int,
 	comprador.caja["fichajes"] -= precio
 	vendedor.caja["fichajes"] += precio
 	var saliente := comprador.incorporar(jugador, valor)
+	marcar_compra(jugador)
 
 	return {"exito": true, "jugador": jugador, "posicion": jugador["posicion"],
 		"precio": precio, "origen": donde["origen"], "jugador_sale": saliente}
@@ -367,6 +391,8 @@ static func _intentar_compra(piramide, division_compradora: int, comprador: Team
 	for j in vendedor.todos_los_jugadores() + vendedor.cantera:
 		if j["posicion"] != posicion:
 			continue
+		if not puede_comprarse(j):
+			continue
 		var puntaje := puntaje_interes(j, float(a_mejorar["media"]), nivel_comprador)
 		if puntaje > mejor_puntaje:
 			mejor_puntaje = puntaje
@@ -408,6 +434,7 @@ static func _intentar_compra(piramide, division_compradora: int, comprador: Team
 	comprador.caja["fichajes"] -= valor
 	vendedor.caja["fichajes"] += valor
 	comprador.incorporar(objetivo, valor)
+	marcar_compra(objetivo)
 
 	return {
 		"jugador_id": mejor_id, "posicion": posicion, "joya": es_joya,
@@ -430,6 +457,9 @@ static func ejecutar_pase(comprador: Team, vendedor: Team, jugador_id: int, prec
 	var donde := ubicar(vendedor, jugador_id)
 	if donde.is_empty():
 		return {"exito": false, "motivo": "Ese jugador ya no está en ese club."}
+	if not puede_comprarse(donde["jugador"]):
+		return {"exito": false, "motivo": MOTIVO_RECIEN_COMPRADO,
+			"recien_comprado": true}
 	if comprador.caja["fichajes"] < precio:
 		return {"exito": false, "motivo": "No te alcanza el presupuesto de Fichajes."}
 	if not Economia.puede_pagar_contrato(comprador, sueldo):
@@ -455,6 +485,7 @@ static func ejecutar_pase(comprador: Team, vendedor: Team, jugador_id: int, prec
 	comprador.caja["contratos"] += comprador.sueldos[jugador_id] - sueldo
 	comprador.sueldos[jugador_id] = sueldo
 	comprador.contratos[jugador_id] = anios
+	marcar_compra(jugador)
 
 	return {"exito": true, "jugador": jugador, "posicion": jugador["posicion"],
 		"precio": precio, "sueldo": sueldo, "anios": anios,

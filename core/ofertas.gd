@@ -263,9 +263,15 @@ static func _negocia_el_contrato_ajeno(equipo: Team, oferta: Dictionary, piramid
 	var comprador := _club_por_nombre(piramide, str(oferta["club"]))
 	var id := int(oferta["jugador_id"])
 	var donde := Mercado.ubicar(equipo, id)
-	if comprador == null or donde.is_empty():
+	if comprador == null:
 		oferta["estado"] = RETIRADA
-		_anotar(oferta, "La operación se cayó sola.")
+		_anotar(oferta, "El pase de %s a %s se cayó: el club comprador ya no forma parte de la competición." % [
+			oferta["jugador"], oferta["club"]])
+		return
+	if donde.is_empty():
+		oferta["estado"] = RETIRADA
+		_anotar(oferta, "El pase de %s a %s se cayó: %s ya no está en tu plantel." % [
+			oferta["jugador"], comprador.nombre, oferta["jugador"]])
 		return
 	var jugador: Dictionary = donde["jugador"]
 
@@ -280,7 +286,7 @@ static func _negocia_el_contrato_ajeno(equipo: Team, oferta: Dictionary, piramid
 		jugador, sueldo_actual, division_propia, division_comprador)
 	var detalle := Negociacion.interes_jugador(
 		jugador, equipo.animo.get(id, 50.0), sueldo_actual, ofrecido,
-		division_propia, division_comprador)
+		division_propia, division_comprador, comprador.media_equipo())
 
 	if not detalle["acepta"]:
 		oferta["estado"] = SIN_ACUERDO
@@ -412,6 +418,8 @@ static func generar_entrantes(equipo: Team, piramide, rng: RandomNumberGenerator
 	var candidatos := []
 	for j in equipo.todos_los_jugadores():
 		var id_c := int(j["id"])
+		if not Mercado.puede_comprarse(j):
+			continue
 		if not Traspasos.acepta_ofertas(equipo, id_c):
 			continue
 		if cantidad_abiertas_entrantes(equipo, id_c, "compra") \
@@ -496,7 +504,7 @@ static func _los_que_le_sirven(comprador: Team, division_comprador: int, dueno: 
 		var ofrecido := Negociacion.sueldo_pretendido(
 			j, sueldo_actual, division_dueno, division_comprador)
 		if not Negociacion.interes_jugador(j, dueno.animo.get(id, 50.0), sueldo_actual,
-				ofrecido, division_dueno, division_comprador)["acepta"]:
+				ofrecido, division_dueno, division_comprador, comprador.media_equipo())["acepta"]:
 			continue
 		opciones.append({"comprador": comprador, "jugador": j, "valor": valor,
 			"tope": tope, "peso": puntaje * pow(valor, EXPONENTE_VALOR)})

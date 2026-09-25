@@ -242,7 +242,7 @@ func _test_el_cedido_entra_al_once_si_mejora() -> void:
 
 
 func _test_vuelve_con_lo_que_crecio() -> void:
-	print("\n=== Vuelve con los partidos, los goles y la media que hizo afuera ===")
+	print("\n=== Vuelve con los partidos, goles, asistencias y media que hizo afuera ===")
 	_partida()
 	var equipo: Team = gs.equipo_jugador
 	var destino: Team = gs.piramide.divisiones[gs.piramide.divisiones.size() - 1].equipos[1]
@@ -257,6 +257,7 @@ func _test_vuelve_con_lo_que_crecio() -> void:
 	# Simula la temporada afuera: partidos jugados, goles y crecimiento.
 	j["partidos_prestamo"] = 22
 	j["goles_prestamo"] = 9
+	j["asistencias_prestamo"] = 6
 	j["media"] = media_antes + 4.0
 
 	var vueltos: Array = Prestamos.procesar_retornos(equipo, 4.0)
@@ -272,6 +273,7 @@ func _test_vuelve_con_lo_que_crecio() -> void:
 		print("FALLA: volvio el reporte pero no el jugador.")
 		return
 	if int(rep["partidos"]) == 22 and int(rep["goles"]) == 9 \
+			and int(rep["asistencias"]) == 6 \
 			and float(rep["media_ahora"]) > float(rep["media_antes"]):
 		print("OK: %s" % Prestamos.texto_retorno(rep))
 	else:

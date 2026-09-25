@@ -84,6 +84,16 @@ static func division_percibida(dueno: Team, jugador_id: int, division_origen: in
 	return division_origen + int(round(salto / 2.0))
 
 
+## La media del plantel de destino que el jugador pesa al evaluar un
+## prestamo (Negociacion.interes_jugador). Al suplente no le pesa ser el
+## mejor del club que lo pide: va a sumar minutos, igual que en
+## division_percibida. -1 apaga el factor. Sin esto el suplente de 1a
+## rechazaba bajar a 5a con "tendria que cargar con el equipo"
+## (tests/test_prestamos_mercado.gd).
+static func media_destino_percibida(dueno: Team, jugador_id: int, media_destino: float) -> float:
+	return media_destino if _es_titular(dueno, jugador_id) else -1.0
+
+
 static func _es_titular(equipo: Team, jugador_id: int) -> bool:
 	return _indice_en(equipo.jugadores, jugador_id) >= 0
 
@@ -211,6 +221,7 @@ static func ceder(origen: Team, destino: Team, jugador_id: int, temporada_actual
 	# haria que el reporte de vuelta contara partidos que no jugo ahi.
 	jugador["partidos_prestamo"] = 0
 	jugador["goles_prestamo"] = 0
+	jugador["asistencias_prestamo"] = 0
 
 	var temporada_retorno: float = temporada_actual + temporadas
 	origen.prestados_afuera[jugador_id] = {"club": destino, "temporada_retorno": temporada_retorno,
@@ -255,7 +266,7 @@ static func _ubicar_en_destino(destino: Team, jugador: Dictionary) -> void:
 
 ## Se llama al cierre de cada temporada para "equipo": repatría a los
 ## jugadores que equipo cedió y cuyo préstamo ya venció. Devuelve una
-## lista de reportes {jugador, club, partidos, goles, media_antes,
+## lista de reportes {jugador, club, partidos, goles, asistencias, media_antes,
 ## media_ahora}: el que se fue puede volver mejor de lo que se fue, y
 ## enterarse de eso es la mitad del punto de haberlo prestado.
 ## `momento` es la temporada en curso como decimal: 3.0 es el arranque de
@@ -277,6 +288,9 @@ static func procesar_retornos(equipo: Team, momento: float, equipo_humano: Team 
 		if precio > 0.0 and destino != equipo_humano:
 			var esta := Mercado.ubicar(destino, int(id))
 			if not esta.is_empty() and conviene_la_opcion(destino, equipo, esta["jugador"], precio):
+				var partidos_prestamo := int(esta["jugador"].get("partidos_prestamo", 0))
+				var goles_prestamo := int(esta["jugador"].get("goles_prestamo", 0))
+				var asistencias_prestamo := int(esta["jugador"].get("asistencias_prestamo", 0))
 				var compra := ejercer_opcion(destino, equipo, int(id))
 				if compra["exito"]:
 					vueltos.append({
@@ -284,8 +298,9 @@ static func procesar_retornos(equipo: Team, momento: float, equipo_humano: Team 
 						"club": destino.nombre,
 						"comprado": true,
 						"precio": precio,
-						"partidos": int(compra["jugador"].get("partidos_prestamo", 0)),
-						"goles": int(compra["jugador"].get("goles_prestamo", 0)),
+						"partidos": partidos_prestamo,
+						"goles": goles_prestamo,
+						"asistencias": asistencias_prestamo,
 						"media_antes": float(info.get("media_al_ceder", compra["jugador"]["media"])),
 						"media_ahora": float(compra["jugador"]["media"]),
 					})
@@ -321,11 +336,13 @@ static func procesar_retornos(equipo: Team, momento: float, equipo_humano: Team 
 			"opcion_vencida": float(info.get("opcion_compra", 0.0)),
 			"partidos": int(jugador.get("partidos_prestamo", 0)),
 			"goles": int(jugador.get("goles_prestamo", 0)),
+			"asistencias": int(jugador.get("asistencias_prestamo", 0)),
 			"media_antes": float(info.get("media_al_ceder", jugador["media"])),
 			"media_ahora": float(jugador["media"]),
 		})
 		jugador["partidos_prestamo"] = 0
 		jugador["goles_prestamo"] = 0
+		jugador["asistencias_prestamo"] = 0
 
 	return vueltos
 
@@ -351,6 +368,9 @@ static func ejercer_opcion(comprador: Team, dueno: Team, jugador_id: int,
 	if donde.is_empty():
 		return {"exito": false, "motivo": "Ese jugador ya no está en tu plantel."}
 	var jugador: Dictionary = donde["jugador"]
+	if not Mercado.puede_comprarse(jugador):
+		return {"exito": false, "motivo": Mercado.MOTIVO_RECIEN_COMPRADO,
+			"recien_comprado": true}
 
 	if comprador.caja["fichajes"] < precio:
 		return {"exito": false, "motivo": "No te alcanza el presupuesto de Fichajes para la opción.",
@@ -380,6 +400,8 @@ static func ejercer_opcion(comprador: Team, dueno: Team, jugador_id: int,
 	jugador["club_actual"] = comprador.nombre
 	jugador["partidos_prestamo"] = 0
 	jugador["goles_prestamo"] = 0
+	jugador["asistencias_prestamo"] = 0
+	Mercado.marcar_compra(jugador)
 
 	return {"exito": true, "jugador": jugador, "precio": precio,
 		"sueldo": sueldo, "anios": anios}
@@ -391,6 +413,8 @@ static func ejercer_opcion(comprador: Team, dueno: Team, jugador_id: int,
 ## quedarse.
 static func conviene_la_opcion(comprador: Team, dueno: Team, jugador: Dictionary,
 		precio: float) -> bool:
+	if not Mercado.puede_comprarse(jugador):
+		return false
 	var id := int(jugador["id"])
 	var valor := ValorJugador.calcular(jugador, comprador.animo.get(id, 50.0), 3)
 	if precio > valor * TOPE_OPCION_COMPRADOR:
@@ -406,7 +430,8 @@ static func conviene_la_opcion(comprador: Team, dueno: Team, jugador: Dictionary
 		return false
 	# El jugador tambien decide: quedarse es un pase, no una renovacion.
 	var detalle := Negociacion.interes_jugador(jugador, comprador.animo.get(id, 50.0),
-		sueldo_actual, pretende, dueno.division_actual, comprador.division_actual)
+		sueldo_actual, pretende, dueno.division_actual, comprador.division_actual,
+		comprador.media_equipo())
 	return bool(detalle["acepta"])
 
 
@@ -425,6 +450,8 @@ static func texto_retorno(r: Dictionary) -> String:
 		quien.strip_edges(), str(jugador["posicion"]), str(r["club"]), int(r["partidos"])]
 	if int(r["goles"]) > 0:
 		t += " y %d gol(es)" % int(r["goles"])
+	if int(r.get("asistencias", 0)) > 0:
+		t += " y %d asistencia(s)" % int(r["asistencias"])
 	var delta: int = int(round(float(r["media_ahora"]) - float(r["media_antes"])))
 	if delta > 0:
 		t += ". Vuelve mejor: media %d (+%d)." % [int(round(float(r["media_ahora"]))), delta]

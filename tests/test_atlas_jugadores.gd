@@ -16,6 +16,10 @@ func _init() -> void:
 			assert(img.get_size() == Vector2i(64, 64))
 			assert(img.get_pixel(0, 0).a == 0.0, "Fondo opaco en cuadro %d" % i)
 			assert(img.get_used_rect().get_area() > 80, "Cuadro vacío: %d" % i)
+			var referencia := AtlasJugadores.textura(i, Color.RED, Color.WHITE,
+				Color.SADDLE_BROWN, false, 0, 0).get_image()
+			assert(img.get_used_rect().size.y == referencia.get_used_rect().size.y,
+				"Jugador de distinto tamano: %s/%d" % [AtlasJugadores.PEINADOS[estilo], i])
 			var espejo := AtlasJugadores.textura(i, Color.RED, Color.WHITE, Color.SADDLE_BROWN, true, 0, estilo).get_image()
 			img.flip_x()
 			assert(img.get_data() == espejo.get_data())

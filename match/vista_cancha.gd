@@ -727,6 +727,13 @@ func _dibujar_cuerpo(ent: Dictionary) -> void:
 			ent["color"], ent.get("color_short", Color.TRANSPARENT),
 			ent.get("color_pelo", SpritesPartido.PELO), int(ent.get("pelo", 0)),
 			int(ent.get("numero", 0)))
+	elif accion == MotorEspacial.ACCION_SAQUE_ARCO:
+		var indice := AtlasJugadores.cuadro(accion,
+			float(ent.get("fase_animacion", 0.0)), dir, false, true)
+		indice_atlas = indice
+		tex = AtlasJugadores.textura_saque_arco(indice, ent["color"],
+			ent.get("color_short", Color.WHITE), ent.get("color_pelo", SpritesPartido.PELO),
+			espejo, int(ent.get("numero", 0)), int(ent.get("pelo", 0)))
 	else:
 		var indice := AtlasJugadores.cuadro(accion, float(ent.get("fase_animacion", 0.0)), dir,
 			pose in [SpritesPartido.CORRE_A, SpritesPartido.CORRE_B], bool(ent.get("arquero", false)))

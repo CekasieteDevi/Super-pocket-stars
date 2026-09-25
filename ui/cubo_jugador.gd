@@ -180,7 +180,7 @@ func _barrita(valor: float, ayuda: String) -> Control:
 	barra.tooltip_text = ayuda
 	barra.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var fondo := StyleBoxFlat.new()
-	fondo.bg_color = Color("#1a2420")
+	fondo.bg_color = Tema.FONDO
 	barra.add_theme_stylebox_override("background", fondo)
 	var relleno := StyleBoxFlat.new()
 	relleno.bg_color = Componentes.color_de_valor(int(round(clampf(valor, 0.0, 1.0) * 100.0)))

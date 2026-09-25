@@ -14,20 +14,25 @@ extends RefCounted
 const CURVA_EDAD := [
 	{"min": 15, "max": 18, "mult": 1.25},
 	{"min": 19, "max": 23, "mult": 1.15},
-	{"min": 24, "max": 28, "mult": 1.0},
-	{"min": 29, "max": 32, "mult": 0.5},
-	{"min": 33, "max": 35, "mult": 0.2},
-	{"min": 36, "max": 37, "mult": 0.0},
+	{"min": 24, "max": 27, "mult": 1.0},
+	{"min": 28, "max": 30, "mult": 0.45},
+	{"min": 31, "max": 32, "mult": 0.2},
+	{"min": 33, "max": 34, "mult": 0.0},
 ]
 
-## §7.1: los físicos bajan primero y más fuerte, los técnicos poco, y los
-## mentales siguen subiendo un toque incluso en declive (valor negativo).
+## §7.1: desde los 35 los físicos bajan primero y más fuerte. Los técnicos
+## también caen para que tiro y GRL no queden congelados durante una década.
 const DECLIVE_POR_GRUPO := {
-	"fisico": 1.0,
-	"defensivo": 0.6,
-	"tecnico": 0.3,
-	"mental": -0.15,
+	"fisico": 1.5,
+	"defensivo": 0.8,
+	"tecnico": 0.6,
+	"mental": 0.15,
 }
+
+## Nadie empieza una temporada con esta edad. Evita carreras de 45 años
+## sostenidas solo porque al jugador todavía le quedaban años de contrato.
+const EDAD_RETIRO_MINIMA := 35
+const EDAD_RETIRO_SEGURO := 45
 
 ## §4 punto 2: un GOAT crece más rápido que un Del montón. La diferencia
 ## era 2x y se bajó a 1.3x porque el tier ya paga dos veces: el GOAT tiene
@@ -112,7 +117,32 @@ static func _multiplicador_crecimiento(edad: int) -> float:
 	for tramo in CURVA_EDAD:
 		if edad >= tramo["min"] and edad <= tramo["max"]:
 			return tramo["mult"]
-	return -1.0  # 38+: declive
+	return -1.0  # 35+: declive
+
+
+## La edad abre la posibilidad de retiro y la vitalidad la amortigua. Un
+## jugador fragil suele irse antes; uno vital puede llegar a los 44.
+## A los 45 se retira siempre, sin importar contrato ni vitalidad.
+static func probabilidad_retiro(jugador: Dictionary) -> float:
+	var edad := int(jugador.get("edad", 25))
+	if edad >= EDAD_RETIRO_SEGURO:
+		return 1.0
+	if edad < EDAD_RETIRO_MINIMA:
+		return 0.0
+	var vitalidad := clampf(float(jugador.get("atributos", {}).get("vitalidad", 50)), 0.0, 100.0)
+	var recorrido := float(edad - EDAD_RETIRO_MINIMA + 1) \
+		/ float(EDAD_RETIRO_SEGURO - EDAD_RETIRO_MINIMA + 1)
+	var factor_vitalidad := lerpf(1.5, 0.5, vitalidad / 100.0)
+	return minf(0.95, recorrido * recorrido * factor_vitalidad)
+
+
+static func debe_retirarse(jugador: Dictionary, rng: RandomNumberGenerator) -> bool:
+	var probabilidad := probabilidad_retiro(jugador)
+	if probabilidad <= 0.0:
+		return false
+	if probabilidad >= 1.0:
+		return true
+	return rng.randf() < probabilidad
 
 
 ## §7.3 aprendizaje por uso. El atributo que MÁS usó en la temporada
@@ -218,6 +248,11 @@ static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator, m
 	var mult_personalidad: float = Personalidad.factor_entrenamiento(jugador)
 	var mult_juego: float = factor_minutos(jugador, en_cantera) \
 		* (1.0 if en_cantera else factor_rendimiento(jugador))
+	var vitalidad_declive := clampf(
+		float(jugador["atributos"].get("vitalidad", 50)), 0.0, 100.0)
+	# La vitalidad demora el deterioro, pero no congela al veterano. Incluso
+	# con 99, un jugador de campo de 40 pierde nivel de forma visible.
+	var factor_vitalidad_declive := lerpf(2.8, 0.85, vitalidad_declive / 100.0)
 
 	# §6 Comodón: "si es titular fijo 15 partidos, deja de crecer" — se
 	# congela del todo el crecimiento de esta temporada (ni siquiera el
@@ -254,7 +289,11 @@ static func aplicar_temporada(jugador: Dictionary, rng: RandomNumberGenerator, m
 		else:
 			var grupo := _grupo_de_atributo(attr)
 			var factor_declive: float = DECLIVE_POR_GRUPO.get(grupo, 0.5)
-			cambio = -factor_declive * (1.0 + rng.randf() * 0.5)
+			# La caída se acelera con los años. A los 40 tampoco conserva el
+			# mismo tiro que en su pico, clave para no dominar los goleadores.
+			var factor_edad := minf(3.0, 1.0 + maxf(0.0, float(jugador["edad"] - 35)) * 0.18)
+			# Vitalidad 100 recibe 85% del declive base; vitalidad 0, 280%.
+			cambio = -factor_declive * factor_edad * factor_vitalidad_declive * (1.0 + rng.randf() * 0.5)
 			cambio += rng.randfn(0.0, 0.6)
 
 		jugador["atributos"][attr] = clamp(round(valor_actual + cambio), 0, 100)

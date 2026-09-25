@@ -15,6 +15,7 @@ func _init() -> void:
 	_test_nadie_baja_de_categoria_por_gusto(rng)
 	_test_la_plata_compra_las_ganas(rng)
 	_test_el_que_la_esta_pasando_mal_se_quiere_ir(rng)
+	_test_ser_demasiado_bueno_para_el_equipo_cuesta(rng)
 	_test_hincha_y_mercenario(rng)
 	_test_guardado_del_bloqueo(rng)
 	quit()
@@ -116,6 +117,22 @@ func _test_el_que_la_esta_pasando_mal_se_quiere_ir(rng: RandomNumberGenerator) -
 			comodo["interes"], amargado["interes"]])
 	else:
 		print("FALLA: comodo=%.2f amargado=%.2f" % [comodo["interes"], amargado["interes"]])
+
+
+func _test_ser_demasiado_bueno_para_el_equipo_cuesta(rng: RandomNumberGenerator) -> void:
+	print("\n=== La figura pide mas si llega a cargar con el equipo ===")
+	var club := Team.generar("Figura", rng, 0)
+	var j: Dictionary = club.jugadores[0].duplicate(true)
+	j["media"] = 85.0
+	var parejo := Negociacion.interes_jugador(j, 50.0, 100000.0, 100000.0, 2, 2, 84.0)
+	var salvador := Negociacion.interes_jugador(j, 50.0, 100000.0, 100000.0, 2, 2, 65.0)
+	var compensado := Negociacion.interes_jugador(j, 50.0, 100000.0, 300000.0, 2, 2, 65.0)
+	var gratis := Negociacion.interes_jugador(j, 0.0, 100000.0, 0.0, 5, 0, 84.0)
+	if parejo["acepta"] and not salvador["acepta"] and compensado["acepta"] \
+			and not gratis["acepta"]:
+		print("OK: con pares acepta; para salvar a un plantel inferior exige mas sueldo.")
+	else:
+		print("FALLA: parejo=%s salvador=%s compensado=%s" % [parejo, salvador, compensado])
 
 
 func _test_hincha_y_mercenario(rng: RandomNumberGenerator) -> void:

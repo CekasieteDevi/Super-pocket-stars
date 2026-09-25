@@ -424,18 +424,18 @@ static func _terminos(equipo: Team, pide: Team, d: int, jugador: Dictionary,
 	# reparto del sueldo es plata entre clubes que a el no le mueve nada
 	# (ver Prestamos.ceder). Todos los pedidos terminaban en SIN_ACUERDO.
 	var plus := 0.0
-	if d != division_propia:
-		var detalle := Negociacion.interes_jugador(
-			jugador, equipo.animo.get(id_j, 50.0), float(t["sueldo"]), float(t["sueldo"]),
-			division_propia, Prestamos.division_percibida(equipo, id_j, division_propia, d))
-		if not detalle["acepta"]:
-			plus = Negociacion.plus_para_convencer(detalle, float(t["sueldo"]))
-			# Ni con el tope de plus lo convence: no lo pide. Pedir a
-			# alguien que no va a ir jamas es ruido en la bandeja.
-			if plus <= 0.0 or plus > float(t["plus_sueldo"]):
-				return {}
-			if float(t["sueldo"]) * pct + plus > float(pide.caja.get("contratos", 0.0)):
-				return {}
+	var detalle := Negociacion.interes_jugador(
+		jugador, equipo.animo.get(id_j, 50.0), float(t["sueldo"]), float(t["sueldo"]),
+		division_propia, Prestamos.division_percibida(equipo, id_j, division_propia, d),
+		Prestamos.media_destino_percibida(equipo, id_j, pide.media_equipo()))
+	if not detalle["acepta"]:
+		plus = Negociacion.plus_para_convencer(detalle, float(t["sueldo"]))
+		# Ni con el tope de plus lo convence: no lo pide. Pedir a
+		# alguien que no va a ir jamas es ruido en la bandeja.
+		if plus <= 0.0 or plus > float(t["plus_sueldo"]):
+			return {}
+		if float(t["sueldo"]) * pct + plus > float(pide.caja.get("contratos", 0.0)):
+			return {}
 	return {"duracion": duracion, "fee": fee, "porcentaje_sueldo": pct,
 		"opcion_compra": opcion, "plus_sueldo": plus}
 
@@ -525,7 +525,8 @@ static func cerrar(equipo: Team, oferta: Dictionary, piramide, rng: RandomNumber
 	var plus: float = maxf(0.0, float(oferta.get("plus_sueldo", 0.0)))
 	var detalle := Negociacion.interes_jugador(
 		jugador, equipo.animo.get(id, 50.0), sueldo_actual, sueldo_actual + plus,
-		division_propia, Prestamos.division_percibida(equipo, id, division_propia, division_pide))
+		division_propia, Prestamos.division_percibida(equipo, id, division_propia, division_pide),
+		Prestamos.media_destino_percibida(equipo, id, pide.media_equipo()))
 	if not detalle["acepta"]:
 		oferta["estado"] = Ofertas.SIN_ACUERDO
 		oferta["log"].append("%s no quiere ir a %s: %s Se queda." % [

@@ -16,6 +16,7 @@ func _init() -> void:
 	_test_pueden_competir_tres_clubes_por_el_mismo()
 	_test_el_crack_de_abajo_lo_buscan_los_de_arriba()
 	_test_aceptar_no_garantiza_la_venta()
+	_test_operacion_caida_explica_quien_y_por_que()
 	_test_lo_terminado_va_al_historial()
 	_test_guardado()
 	if gs != null:
@@ -288,6 +289,39 @@ func _test_aceptar_no_garantiza_la_venta() -> void:
 		print("OK: los clubes arreglaron, el jugador dijo que no y se quedo.")
 	else:
 		print("FALLA: estado=%s sigue=%s" % [estado, sigue])
+
+
+func _test_operacion_caida_explica_quien_y_por_que() -> void:
+	print("\n=== Una operación caída identifica jugador, club y causa ===")
+	var p := _partida()
+	var mio: Team = p["mio"]
+	var comprador: Team = p["otro"]
+	var rng: RandomNumberGenerator = p["rng"]
+	var jugador: Dictionary = mio.jugadores[0]
+
+	var sin_jugador := Ofertas.nueva(997, comprador.nombre, jugador, 1000000.0, true, rng)
+	sin_jugador["jugador_id"] = -999
+	sin_jugador["estado"] = Ofertas.ACUERDO_CLUB
+	sin_jugador["dias"] = 0.0
+	mio.ofertas.append(sin_jugador)
+	Ofertas.avanzar(mio, 1, p["piramide"], rng, 1, gs.division_jugador)
+	var aviso_jugador := str(sin_jugador["log"][-1])
+
+	var sin_club := Ofertas.nueva(998, "Club desaparecido", jugador, 1000000.0, true, rng)
+	sin_club["estado"] = Ofertas.ACUERDO_CLUB
+	sin_club["dias"] = 0.0
+	mio.ofertas.append(sin_club)
+	Ofertas.avanzar(mio, 1, p["piramide"], rng, 1, gs.division_jugador)
+	var aviso_club := str(sin_club["log"][-1])
+
+	var nombre := str(sin_jugador["jugador"])
+	if aviso_jugador.contains(nombre) and aviso_jugador.contains(comprador.nombre) \
+			and aviso_jugador.contains("ya no está en tu plantel") \
+			and aviso_club.contains(nombre) and aviso_club.contains("Club desaparecido") \
+			and aviso_club.contains("ya no forma parte de la competición"):
+		print("OK: ambos avisos identifican el pase y explican la causa.")
+	else:
+		print("FALLA: jugador='%s' club='%s'" % [aviso_jugador, aviso_club])
 
 
 func _test_lo_terminado_va_al_historial() -> void:

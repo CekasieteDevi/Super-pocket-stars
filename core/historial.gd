@@ -10,8 +10,8 @@ extends RefCounted
 ## del jugador y nada mas.
 ##
 ## Tres cosas, cada una en el objeto que describe:
-## - `jugador["carrera"]`: una fila por temporada y club, con PJ, goles y
-##   asistencias. Viaja con el jugador en cada pase, asi que no hace falta
+## - `jugador["carrera"]`: una fila por temporada y club, con GRL, PJ, goles
+##   y asistencias. Viaja con el jugador en cada pase, asi que no hace falta
 ##   enganchar nada en el mercado: el pase cambia el club y el partido
 ##   siguiente ya abre la fila nueva.
 ## - `Team.historial_temporadas`: division y puesto de cada temporada.
@@ -89,6 +89,7 @@ static func _minutos(d) -> float:
 ## la ULTIMA fila: un jugador que va de A a B y vuelve a A en la misma
 ## temporada tiene tres filas, que es lo que paso.
 static func fila_abierta(j: Dictionary, equipo: Team) -> Dictionary:
+	completar_grl_actual(j)
 	var carrera: Array = j.get("carrera", [])
 	if not carrera.is_empty():
 		var ultima: Dictionary = carrera[carrera.size() - 1]
@@ -99,11 +100,40 @@ static func fila_abierta(j: Dictionary, equipo: Team) -> Dictionary:
 	var nueva := {
 		"temporada": temporada, "club": equipo.nombre,
 		"division": equipo.division_actual + 1,
+		"grl": float(j.get("media", 0.0)),
 		"pj": 0, "goles": 0, "asistencias": 0,
 	}
 	carrera.append(nueva)
 	j["carrera"] = carrera
 	return nueva
+
+
+## En guardados anteriores no existe `grl`. El pasado no se puede
+## reconstruir, pero el de la temporada en curso sigue siendo conocido.
+static func completar_grl_actual(j: Dictionary) -> void:
+	var carrera: Array = j.get("carrera", [])
+	for fila in carrera:
+		if int(fila.get("temporada", 0)) == temporada and not fila.has("grl"):
+			fila["grl"] = float(j.get("media", 0.0))
+
+
+## Cambio de GRL contra la temporada anterior. Los pases dentro del mismo
+## anio abren otra fila, pero no cuentan como otra subida.
+static func cambio_grl(carrera: Array, indice: int):
+	if indice < 0 or indice >= carrera.size():
+		return null
+	var actual: Dictionary = carrera[indice]
+	if not actual.has("grl"):
+		return null
+	var temporada_actual := int(actual.get("temporada", 0))
+	for i in range(indice - 1, -1, -1):
+		var anterior: Dictionary = carrera[i]
+		if int(anterior.get("temporada", 0)) >= temporada_actual:
+			continue
+		if anterior.has("grl"):
+			return float(actual["grl"]) - float(anterior["grl"])
+		return null
+	return null
 
 
 ## Totales de toda la carrera.

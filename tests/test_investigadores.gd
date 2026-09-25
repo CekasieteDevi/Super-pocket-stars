@@ -14,6 +14,7 @@ func _init() -> void:
 	_test_uno_por_jugador_y_slots_limitados(rng)
 	_test_despedir_libera_el_slot(rng)
 	_test_guardado(rng)
+	_test_informes_sin_ver(rng)
 	_test_olvida_a_los_retirados(rng)
 	quit()
 
@@ -110,6 +111,20 @@ func _test_guardado(rng: RandomNumberGenerator) -> void:
 		print("OK: conocimiento intacto y el informe en curso va %.0f%%." % (sigue * 100.0))
 	else:
 		print("FALLA: sabe=%s progreso=%.2f" % [sabe, sigue])
+
+
+func _test_informes_sin_ver(rng: RandomNumberGenerator) -> void:
+	print("\n=== Los informes terminados esperan hasta que se los abre ===")
+	var e := Team.generar("Espia avisos", rng, 5000)
+	var ajeno := Team.generar("Rival avisos", rng, 6000)
+	var primero: int = int(ajeno.jugadores[0]["id"])
+	Investigadores.investigar(e, primero, ajeno.nombre)
+	e.avanzar_dias(200)
+	var vuelto := Team.cargar(JSON.parse_string(JSON.stringify(e.guardar())))
+	if vuelto.informes_sin_ver == [primero]:
+		print("OK: el aviso conserva al jugador correcto despues de guardar y cargar.")
+	else:
+		print("FALLA: informes sin ver=%s" % [vuelto.informes_sin_ver])
 
 
 func _test_olvida_a_los_retirados(rng: RandomNumberGenerator) -> void:

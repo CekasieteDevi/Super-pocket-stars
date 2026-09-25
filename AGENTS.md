@@ -36,16 +36,24 @@ Usar siempre Godot 4.7.2-stable:
 - Console: `E:\IntelliJ\Super Pocket Stars\Godot_v4.7.2-stable_win64_console.exe`
 - No usar Godot 4.7.1 ni otra versión.
 
-Never execute Godot from Codex.
+Codex puede ejecutar Godot 4.7.2 únicamente para exportar builds cuando el usuario lo pida explícitamente.
+
+Puede:
+- Ejecutar Godot 4.7.2 en modo consola/headless.
+- Exportar APK de Android.
+- Instalar el APK mediante ADB.
+- Verificar que la aplicación abra.
+
+No puede:
+- Abrir ni controlar el editor gráfico.
+- Cerrar una instancia del editor.
+- Usar otra versión de Godot.
 
 Never run:
 
 - Godot.exe
-- Godot_*_win64.exe
-- Godot_*_console.exe
-- godot --headless
+- Godot_v4.7.2-stable_win64.exe
 - godot --editor
-- godot --path
 - any Godot project validation command
 
 Do not launch, stop, restart, or interact with my running Godot editor.

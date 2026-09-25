@@ -54,6 +54,7 @@ func _test_pase_abre_fila_nueva() -> void:
 	var rival := Team.new()
 	rival.nombre = "Rival"
 	var j := {"id": 1}
+	j["media"] = 61.5
 	a.jugadores = [j]
 
 	Historial.registrar_partido(a, rival, _partido(1, "Club A"))
@@ -66,7 +67,8 @@ func _test_pase_abre_fila_nueva() -> void:
 	_ok(carrera.size() == 2, "el pase abre una fila nueva (hay %d)." % carrera.size())
 	if carrera.size() == 2:
 		_ok(str(carrera[0]["club"]) == "Club A" and int(carrera[0]["pj"]) == 2
-			and int(carrera[0]["goles"]) == 2 and int(carrera[0]["division"]) == 3,
+			and int(carrera[0]["goles"]) == 2 and int(carrera[0]["division"]) == 3
+			and is_equal_approx(float(carrera[0]["grl"]), 61.5),
 			"lo hecho en el club viejo queda en su fila: %s." % [carrera[0]])
 		_ok(str(carrera[1]["club"]) == "Club B" and int(carrera[1]["pj"]) == 1
 			and int(carrera[1]["goles"]) == 1,
@@ -80,6 +82,17 @@ func _test_pase_abre_fila_nueva() -> void:
 	var t := Historial.totales(j)
 	_ok(int(t["pj"]) == 3 and int(t["goles"]) == 4 and int(t["clubes"]) == 2,
 		"los totales suman las dos filas: %s." % [t])
+
+	# La subida compara temporadas, no dos clubes del mismo anio.
+	j["media"] = 64.0
+	Historial.temporada = 2
+	Historial.registrar_partido(b, rival, _partido(1, "Club B"))
+	_ok(is_equal_approx(float(Historial.cambio_grl(carrera, 2)), 2.5),
+		"el historial calcula la subida de GRL entre temporadas.")
+	var viejo := {"media": 70.0, "carrera": [{"temporada": 2, "club": "Club B"}]}
+	Historial.completar_grl_actual(viejo)
+	_ok(is_equal_approx(float(viejo["carrera"][0]["grl"]), 70.0),
+		"un guardado viejo recupera el GRL de la temporada actual.")
 
 
 func _test_temporada_completa(gs) -> void:

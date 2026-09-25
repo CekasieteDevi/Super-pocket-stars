@@ -5,6 +5,45 @@ func _init() -> void:
 	assert(SpritesPartido.PALOMITA_PEINADOS == AtlasJugadores.PEINADOS,
 		"La palomita debe cubrir todos los peinados")
 	assert(SpritesPartido.TONOS_PELO.size() == 7, "Deben existir 7 tonos de pelo")
+	var color_prueba_camiseta := Color("d84040")
+	var color_prueba_pelo := Color("397d35")
+	var parado_color := AtlasJugadores.textura(24, color_prueba_camiseta, Color.WHITE,
+		color_prueba_pelo).get_image()
+	var palomita_color := SpritesPartido.palomita_png(color_prueba_camiseta, Color.WHITE,
+		0, false, color_prueba_pelo).get_image()
+	assert(absf(_brillo_tinte(parado_color, 0) - _brillo_tinte(palomita_color, 0)) < 0.12,
+		"La camiseta de la palomita debe conservar el color del jugador")
+	assert(absf(_brillo_tinte(parado_color, 1) - _brillo_tinte(palomita_color, 1)) < 0.12,
+		"El pelo de la palomita debe conservar el color del jugador")
+	for accion_misma_fuente in ["control_pie", "saque_arco"]:
+		for indice in AtlasJugadores.CLIPS[accion_misma_fuente]:
+			assert(int(indice) < 64,
+				"%s debe usar la misma fuente artistica que correr y quedar parado" % accion_misma_fuente)
+	for indice in AtlasJugadores.CLIPS["saque_arco"]:
+		var base_saque := AtlasJugadores.textura(indice, Color.RED, Color.BLUE,
+			Color.SADDLE_BROWN).get_image()
+		var con_guantes := AtlasJugadores.textura_saque_arco(indice, Color.RED,
+			Color.BLUE, Color.SADDLE_BROWN).get_image()
+		assert(con_guantes.get_data() != base_saque.get_data(),
+			"El saque de arco debe conservar los guantes")
+		var espejo_guantes := AtlasJugadores.textura_saque_arco(indice, Color.RED,
+			Color.BLUE, Color.SADDLE_BROWN, true).get_image()
+		con_guantes.flip_x()
+		assert(con_guantes.get_data() == espejo_guantes.get_data(),
+			"Los guantes del saque deben espejarse con el golero")
+	assert(AtlasJugadores.estilo_de(1) == 2,
+		"La rotacion nueva debe actualizar los peinados existentes")
+	var jugadores_con_pelo_azul := 0
+	var jugadores_con_pelo_blanco := 0
+	for jugador_id in range(1, 30001):
+		if SpritesPartido.tono_pelo_de(jugador_id) == SpritesPartido.TONOS_PELO[SpritesPartido.INDICE_PELO_AZUL]:
+			jugadores_con_pelo_azul += 1
+		if SpritesPartido.tono_pelo_de(jugador_id) == SpritesPartido.TONOS_PELO[SpritesPartido.INDICE_PELO_BLANCO]:
+			jugadores_con_pelo_blanco += 1
+	assert(jugadores_con_pelo_azul == 100,
+		"El pelo azul debe aparecer en uno de cada trescientos jugadores")
+	assert(jugadores_con_pelo_blanco == 100,
+		"El pelo blanco debe aparecer en uno de cada trescientos jugadores")
 	var vista := VistaPartido.new()
 	for accion in ["bloquea", "cae", "lesionado", "chilena", "volea", "barrida", "festeja"]:
 		vista.fotogramas = []
@@ -36,6 +75,10 @@ func _init() -> void:
 			assert(peinados_distintos >= 4,
 				"%s sin peinados suficientes: cuadro %d" % [grupo["nombre"], indice])
 	var peinados_palomita := {}
+	var altos_palomita := []
+	for frame in range(SpritesPartido.CUADROS_PALOMITA):
+		altos_palomita.append(SpritesPartido.palomita_png(Color("2b74d9"), Color.WHITE,
+			frame, false, Color("6a3b1e"), 0, 0).get_image().get_used_rect().size.y)
 	for estilo in range(SpritesPartido.PALOMITA_PEINADOS.size()):
 		var cuadros_palomita := {}
 		for frame in range(SpritesPartido.CUADROS_PALOMITA):
@@ -45,6 +88,13 @@ func _init() -> void:
 				"Tamano de palomita: %d/%d" % [estilo, frame])
 			assert(palomita.get_used_rect().has_area(),
 				"PNG de palomita vacio: %d/%d" % [estilo, frame])
+			assert(_componentes_pintados(palomita) == 1,
+				"Palomita con manchas aisladas: %s/%d" % [SpritesPartido.PALOMITA_PEINADOS[estilo], frame])
+			# Tolera 2 px: en el cuadro 4 el pelo asoma arriba o abajo del
+			# cuerpo según el peinado (afro 40, puntas 39, atado 41). Un
+			# cuerpo de otra escala cambia mucho más que eso.
+			assert(absi(palomita.get_used_rect().size.y - int(altos_palomita[frame])) <= 2,
+				"Palomita de distinto tamano: %s/%d" % [SpritesPartido.PALOMITA_PEINADOS[estilo], frame])
 			cuadros_palomita[hash(palomita.get_data())] = true
 			if frame == 0:
 				peinados_palomita[hash(palomita.get_data())] = true
@@ -116,3 +166,50 @@ func _init() -> void:
 	vista.free()
 	print("OK: duraci?n, recuperaci?n y espejos de animaciones pixel")
 	quit()
+
+
+func _brillo_tinte(img: Image, canal: int) -> float:
+	var suma := 0.0
+	var cantidad := 0
+	for y in range(img.get_height()):
+		for x in range(img.get_width()):
+			var c := img.get_pixel(x, y)
+			var coincide := c.r > c.g * 1.5 and c.r > c.b * 1.5 if canal == 0 else \
+				c.g > c.r * 1.2 and c.g > c.b * 1.2
+			if c.a > 0.5 and coincide:
+				suma += c.v
+				cantidad += 1
+	assert(cantidad > 10, "La prueba debe encontrar suficientes pixeles teñidos")
+	return suma / float(cantidad)
+
+
+func _componentes_pintados(img: Image) -> int:
+	var visitado := PackedByteArray()
+	visitado.resize(img.get_width() * img.get_height())
+	var cantidad := 0
+	for y in range(img.get_height()):
+		for x in range(img.get_width()):
+			var inicio := y * img.get_width() + x
+			if visitado[inicio] != 0 or img.get_pixel(x, y).a <= 0.0:
+				continue
+			cantidad += 1
+			var cola := [inicio]
+			visitado[inicio] = 1
+			var cursor := 0
+			while cursor < cola.size():
+				var actual: int = cola[cursor]
+				cursor += 1
+				var ax := actual % img.get_width()
+				var ay := actual / img.get_width()
+				for dy in range(-1, 2):
+					for dx in range(-1, 2):
+						var nx := ax + dx
+						var ny := ay + dy
+						if (dx == 0 and dy == 0) or nx < 0 or nx >= img.get_width() \
+							or ny < 0 or ny >= img.get_height():
+							continue
+						var vecino := ny * img.get_width() + nx
+						if visitado[vecino] == 0 and img.get_pixel(nx, ny).a > 0.0:
+							visitado[vecino] = 1
+							cola.append(vecino)
+	return cantidad

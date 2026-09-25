@@ -179,49 +179,123 @@ var boton_partida_nueva: Button
 var dialogo_partida_nueva: ConfirmationDialog
 var option_fps: OptionButton
 var option_velocidad_partido: OptionButton
+var option_tema: OptionButton
 
 const OPCIONES_FPS := [30, 60, 120]
 const OPCIONES_VELOCIDAD_PARTIDO := [1.0, 2.0, 4.0, 8.0, 16.0]
+const OPCIONES_TEMA := ["oscuro", "claro"]
 const RUTA_OPCIONES := "user://opciones.cfg"
 var fps_elegido := 60
 var velocidad_partido_elegida := 1.0
+var tema_visual := "oscuro"
+static var _recarga_por_tema := false
+static var _seccion_antes_del_tema := "jugar"
+static var _panel_antes_del_tema := ""
 
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_cargar_opciones()
 	Engine.max_fps = fps_elegido
+	Tema.aplicar_modo(tema_visual)
 
 	# El sistema visual entero vive en ui/tema.gd y se hereda desde la raiz.
 	theme = Tema.construir()
+
+	# Fondo real del tema elegido. Antes la raiz era transparente y el color
+	# dependia de que cada pantalla alcanzara a cubrir todo el viewport.
+	var fondo_juego := ColorRect.new()
+	fondo_juego.color = Tema.FONDO
+	fondo_juego.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fondo_juego.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(fondo_juego)
+
+	# Margen exterior comun: evita que el riel, las barras y el contenido
+	# queden pegados a cualquiera de los cuatro bordes de la pantalla.
+	var margen_pantalla := MarginContainer.new()
+	margen_pantalla.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	for lado in ["left", "top", "right", "bottom"]:
+		margen_pantalla.add_theme_constant_override(
+				"margin_%s" % lado, Tema.MARGEN_PANTALLA)
+	add_child(margen_pantalla)
+
+	# Marco amarillo grueso: es el borde de la "consola" y separa el juego
+	# del fondo del dispositivo, igual que en la propuesta aprobada.
+	var marco_juego := PanelContainer.new()
+	marco_juego.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	marco_juego.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var estilo_marco := StyleBoxFlat.new()
+	estilo_marco.bg_color = Tema.AMBAR
+	estilo_marco.border_width_top = 3
+	estilo_marco.border_width_bottom = 3
+	estilo_marco.border_width_left = 3
+	estilo_marco.border_width_right = 3
+	estilo_marco.border_color = Tema.TINTA_OSCURA
+	estilo_marco.corner_radius_top_left = 7
+	estilo_marco.corner_radius_top_right = 7
+	estilo_marco.corner_radius_bottom_left = 7
+	estilo_marco.corner_radius_bottom_right = 7
+	estilo_marco.content_margin_left = 7
+	estilo_marco.content_margin_right = 7
+	estilo_marco.content_margin_top = 7
+	estilo_marco.content_margin_bottom = 7
+	estilo_marco.shadow_color = Color(0.02, 0.04, 0.03, 0.75)
+	estilo_marco.shadow_size = 3
+	estilo_marco.shadow_offset = Vector2(5, 5)
+	marco_juego.add_theme_stylebox_override("panel", estilo_marco)
+	margen_pantalla.add_child(marco_juego)
 
 	# Raiz apaisada: el riel de secciones al COSTADO y el contenido al lado.
 	# Al costado y no abajo porque el alto (648 px logicos) es lo escaso en
 	# apaisado, mientras que a lo ancho sobra.
 	var raiz := HBoxContainer.new()
-	raiz.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(raiz)
+	raiz.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	raiz.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	marco_juego.add_child(raiz)
 
 	_construir_riel(raiz)
 
+	# El contenido vive sobre una trama pixelada real. No es una captura ni
+	# una imagen de muestra: se genera en memoria para ambos temas.
+	var columna_marco := Control.new()
+	columna_marco.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	columna_marco.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	raiz.add_child(columna_marco)
+	var trama := TextureRect.new()
+	trama.texture = _textura_trama_pixel()
+	trama.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	trama.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	trama.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	trama.stretch_mode = TextureRect.STRETCH_TILE
+	trama.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	trama.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	columna_marco.add_child(trama)
+
 	var columna := VBoxContainer.new()
-	columna.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	columna.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	raiz.add_child(columna)
+	columna.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	columna_marco.add_child(columna)
 
 	_construir_barra_contexto(columna)
+
+	var margen_subsolapas := MarginContainer.new()
+	margen_subsolapas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	margen_subsolapas.add_theme_constant_override("margin_left", 24)
+	margen_subsolapas.add_theme_constant_override("margin_right", 24)
+	margen_subsolapas.add_theme_constant_override("margin_top", 8)
+	margen_subsolapas.add_theme_constant_override("margin_bottom", 8)
+	columna.add_child(margen_subsolapas)
 
 	var sub_scroll := ScrollContainer.new()
 	sub_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	sub_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	columna.add_child(sub_scroll)
+	margen_subsolapas.add_child(sub_scroll)
 	barra_subsolapas = HBoxContainer.new()
 	sub_scroll.add_child(barra_subsolapas)
 
 	var margen := MarginContainer.new()
 	margen.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	margen.add_theme_constant_override("margin_bottom", 10)
-	margen.add_theme_constant_override("margin_right", 10)
+	for lado in ["left", "top", "right", "bottom"]:
+		margen.add_theme_constant_override("margin_%s" % lado, 24)
 	columna.add_child(margen)
 
 	var contenedor := Control.new()
@@ -251,6 +325,7 @@ func _ready() -> void:
 	_construir_panel_prestamos(contenedor)
 	_construir_panel_instalaciones(contenedor)
 	_construir_panel_renovaciones(contenedor)
+	_construir_panel_cedidos(contenedor)
 	_construir_panel_seleccion(contenedor)
 	_construir_panel_cantera(contenedor)
 	_construir_panel_noticias(contenedor)
@@ -278,6 +353,20 @@ func _ready() -> void:
 	_construir_pantalla_inicio()
 	_mostrar_seccion("jugar")
 	_mostrar_inicio()
+	if _recarga_por_tema:
+		_recarga_por_tema = false
+		_entrar_al_juego()
+		_mostrar_seccion(_seccion_antes_del_tema, _panel_antes_del_tema)
+
+
+func _textura_trama_pixel() -> ImageTexture:
+	var imagen := Image.create(32, 32, false, Image.FORMAT_RGBA8)
+	var base := Tema.FONDO
+	var alterno := base.lightened(0.035) if tema_visual == "oscuro" else base.darkened(0.025)
+	imagen.fill(base)
+	imagen.fill_rect(Rect2i(0, 0, 16, 16), alterno)
+	imagen.fill_rect(Rect2i(16, 16, 16, 16), alterno)
+	return ImageTexture.create_from_image(imagen)
 
 
 ## La pantalla que se ve al abrir el juego. Tapa TODO —el riel incluido—
@@ -837,36 +926,6 @@ func _construir_panel_plantel(padre: Control) -> void:
 	padre.add_child(raiz)
 	paneles["plantel"] = raiz
 
-	# Estilo de juego y cambios automaticos viven ACA, con el plantel: son
-	# decisiones sobre los once que van a jugar. Estaban en la pantalla de
-	# resultados, que es donde se MIRA lo que ya paso.
-	var barra := HBoxContainer.new()
-	barra.add_theme_constant_override("separation", 12)
-	raiz.add_child(barra)
-
-	option_estilo = OptionButton.new()
-	for estilo in Estilos.LISTA:
-		option_estilo.add_item(estilo)
-	option_estilo.custom_minimum_size = Vector2(190, Tema.ALTO_TACTIL)
-	option_estilo.item_selected.connect(_on_estilo_seleccionado)
-	barra.add_child(_grupo_filtro("Estilo de juego", option_estilo))
-
-	option_cambios = OptionButton.new()
-	for opcion in OPCIONES_CAMBIOS:
-		option_cambios.add_item(ETIQUETAS_CAMBIOS[opcion])
-	option_cambios.custom_minimum_size = Vector2(230, Tema.ALTO_TACTIL)
-	option_cambios.item_selected.connect(_on_config_cambios_seleccionado)
-	barra.add_child(_grupo_filtro("Cambios automaticos", option_cambios))
-
-	# Delegar la rotación: antes de cada partido descansan los cansados, y
-	# en las copas menores juegan los suplentes (Alineacion.rotar).
-	check_rotacion = CheckBox.new()
-	check_rotacion.text = "Rotar el once solo"
-	check_rotacion.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
-	check_rotacion.toggled.connect(func(activo: bool):
-		GameState.equipo_jugador.rotacion_automatica = activo)
-	barra.add_child(_grupo_filtro("Rotación", check_rotacion))
-
 	var panel := HBoxContainer.new()
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -933,7 +992,7 @@ func _refrescar_plantel() -> void:
 ## de la fila cada jugador ocupaba 64 px: titulares, banco y reservas
 ## juntos pasaban las cuatro pantallas de scroll. 36 px sigue siendo un
 ## blanco comodo porque toda la fila es tocable, no solo el nombre.
-const ALTO_FILA_PLANTEL := 36
+const ALTO_FILA_PLANTEL := 44
 
 
 ## Una fila del plantel. TODA la fila es tocable, no solo el nombre.
@@ -972,9 +1031,7 @@ func _fila_jugador(equipo: Team, j: Dictionary, par: bool, es_banco: bool) -> Co
 	dentro.add_child(btn)
 
 	if id == equipo.capitan_id:
-		dentro.add_child(Componentes.chip("C", Tema.AMBAR, Tema.FONDO))
-	if bool(j.get("es_canterano", false)):
-		dentro.add_child(Componentes.chip("cantera", Color("#2a3a4a"), Tema.CELESTE))
+		dentro.add_child(Componentes.chip("C", Tema.AMBAR, Tema.TINTA_OSCURA))
 
 	dentro.add_child(Componentes.celda_numero("%.1f" % float(j["media"]), 62))
 	dentro.add_child(Componentes.celda("→%d" % int(j["potencial"]), 52, Tema.SUAVE))
@@ -986,7 +1043,7 @@ func _fila_jugador(equipo: Team, j: Dictionary, par: bool, es_banco: bool) -> Co
 		Economia.formato_dinero(ValorJugador.calcular(
 			j, equipo.animo.get(id, 50.0), equipo.contratos.get(id, 3))),
 		Componentes.COL_VALOR, Tema.VERDE, HORIZONTAL_ALIGNMENT_RIGHT,
-		Componentes.TAM_TABLA))
+		Tema.TAM_BASE))
 
 	# Estado: lo unico que hace falta saber de un vistazo al armar el equipo.
 	# Vacio cuando esta disponible: "Listo" en once filas era ruido que
@@ -1017,7 +1074,7 @@ func _fila_jugador(equipo: Team, j: Dictionary, par: bool, es_banco: bool) -> Co
 ## minimo solo no alcanza, porque el boton nunca baja de su contenido.
 func _compactar_boton(boton: Button) -> void:
 	boton.custom_minimum_size.y = ALTO_FILA_PLANTEL
-	boton.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	boton.add_theme_font_size_override("font_size", Tema.TAM_BASE)
 	# Del tema de la pantalla y no de boton.get_theme_stylebox: el boton
 	# todavia no esta en el arbol y devolveria el tema por defecto de Godot.
 	for estado in ["normal", "hover", "pressed", "focus", "disabled"]:
@@ -1259,7 +1316,7 @@ func _agregar_quimica(caja: VBoxContainer, equipo: Team, j: Dictionary) -> void:
 		barra.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		barra.tooltip_text = "%d partidos juntos en el once." % int(d["partidos"])
 		var fondo := StyleBoxFlat.new()
-		fondo.bg_color = Color("#2a3a33")
+		fondo.bg_color = Tema.PANEL_ALTO
 		fondo.corner_radius_top_left = 5
 		fondo.corner_radius_top_right = 5
 		fondo.corner_radius_bottom_left = 5
@@ -1378,11 +1435,19 @@ func _construir_panel_ficha(padre: Control) -> void:
 	# Todo se repinta de cero en _refrescar_ficha: la ficha cambia entera
 	# entre un jugador y otro (un arquero trae seis atributos mas) y no
 	# hay nada que valga la pena conservar entre una y otra.
+	# El scroll hace falta aunque las columnas se pensaron para entrar
+	# enteras: en pantallas bajas (el celular apaisado) la cabecera y los
+	# botones se comen el alto y las ultimas filas quedaban cortadas.
+	var scroll_ficha := ScrollContainer.new()
+	scroll_ficha.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll_ficha.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll_ficha.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll_ficha)
 	contenedor_ficha = VBoxContainer.new()
 	contenedor_ficha.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	contenedor_ficha.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	contenedor_ficha.add_theme_constant_override("separation", 8)
-	panel.add_child(contenedor_ficha)
+	scroll_ficha.add_child(contenedor_ficha)
 
 
 ## club = null para uno propio; el Team dueño si es ajeno (viene del
@@ -1465,6 +1530,9 @@ func _refrescar_ficha() -> void:
 		for b in [boton_comprar_ficha, boton_prestamo_ficha]:
 			b.disabled = not traba.is_empty()
 			b.tooltip_text = ayuda
+		if traba.is_empty() and not Mercado.puede_comprarse(j, GameState.temporada_actual):
+			boton_comprar_ficha.disabled = true
+			boton_comprar_ficha.tooltip_text = Mercado.MOTIVO_RECIEN_COMPRADO
 	if j.is_empty():
 		contenedor_ficha.add_child(_texto_suave(
 			"Ese jugador ya no esta en %s." % (equipo.nombre if ajeno else "el plantel")))
@@ -1691,47 +1759,67 @@ func _construir_panel_formacion(padre: Control) -> void:
 	padre.add_child(panel)
 	paneles["formacion"] = panel
 
-	# Los tres controles en UNA fila y sus explicaciones en el tooltip: en
-	# tres filas con su texto debajo se comian 200 px de alto y la cancha
-	# —que es el contenido de esta pantalla— quedaba cortada.
-	var fila := HBoxContainer.new()
-	panel.add_child(fila)
+	# Las decisiones del plan de partido viven junto a la formación y su
+	# familiaridad: cambiar el estilo modifica inmediatamente ese valor.
+	# El bloque toma el ancho exacto de los cuatro controles; la tarjeta de
+	# familiaridad termina en el mismo borde y no cruza toda la pantalla.
+	var bloque_plan := VBoxContainer.new()
+	bloque_plan.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	bloque_plan.add_theme_constant_override("separation", 8)
+	panel.add_child(bloque_plan)
 
-	fila.add_child(Tema.etiqueta_seccion("Formación"))
+	var barra_plan := HBoxContainer.new()
+	barra_plan.add_theme_constant_override("separation", 12)
+	bloque_plan.add_child(barra_plan)
+
 	option_formacion = OptionButton.new()
+	option_formacion.custom_minimum_size = Vector2(150, Tema.ALTO_TACTIL)
 	for nombre in Formaciones.lista():
 		option_formacion.add_item(nombre)
 	option_formacion.item_selected.connect(_on_formacion_elegida)
-	fila.add_child(option_formacion)
+	barra_plan.add_child(_grupo_filtro("Formación", option_formacion))
 
-	# Las bajas en la MISMA fila del selector, no en el pie: es lo primero
-	# que hay que saber al entrar a cambiar el once.
-	label_bajas = Label.new()
-	label_bajas.add_theme_color_override("font_color", Tema.ROJO)
-	label_bajas.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
-	label_bajas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	# RECORTADO, por lo mismo que label_carga_efecto: con medio plantel
-	# suspendido el texto estiraba la fila y empujaba el banco afuera.
-	label_bajas.clip_text = true
-	fila.add_child(label_bajas)
+	option_estilo = OptionButton.new()
+	for estilo in Estilos.LISTA:
+		option_estilo.add_item(estilo)
+	option_estilo.custom_minimum_size = Vector2(190, Tema.ALTO_TACTIL)
+	option_estilo.item_selected.connect(_on_estilo_seleccionado)
+	barra_plan.add_child(_grupo_filtro("Estilo de juego", option_estilo))
 
-	# Carga y foco se mudaron a la solapa Entrenamiento. Aca eran dos
-	# desplegables sin explicacion al lado del selector tactico, como si
-	# fueran parte de armar el equipo: nadie entendia que hacian.
+	option_cambios = OptionButton.new()
+	for opcion in OPCIONES_CAMBIOS:
+		option_cambios.add_item(ETIQUETAS_CAMBIOS[opcion])
+	option_cambios.custom_minimum_size = Vector2(230, Tema.ALTO_TACTIL)
+	option_cambios.item_selected.connect(_on_config_cambios_seleccionado)
+	barra_plan.add_child(_grupo_filtro("Cambios automáticos", option_cambios))
 
-	# §7.4.5: cuanto conoce el equipo la tactica puesta. Va PEGADO a los
-	# desplegables que la cambian: es el dato con el que se decide si el
-	# cambio conviene, y verlo despues de cambiar llega tarde.
-	var caja_fam := fila
+	check_rotacion = CheckBox.new()
+	check_rotacion.text = "Descansar jugadores cansados"
+	check_rotacion.tooltip_text = "Antes de cada partido, cambia automáticamente a los titulares que necesitan descanso."
+	check_rotacion.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	check_rotacion.toggled.connect(func(activo: bool):
+		GameState.equipo_jugador.rotacion_automatica = activo)
+	barra_plan.add_child(_grupo_filtro("Rotación automática", check_rotacion))
+
+	# La familiaridad queda sola debajo del plan. Así se ve inmediatamente
+	# qué efecto tuvo cambiar la formación o el estilo de juego.
+	var tarjeta_fam := Componentes.tarjeta(Tema.VERDE)
+	tarjeta_fam.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bloque_plan.add_child(tarjeta_fam)
+	var caja_fam := HBoxContainer.new()
+	caja_fam.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	caja_fam.add_theme_constant_override("separation", 12)
+	tarjeta_fam.add_child(caja_fam)
 	caja_fam.add_child(Tema.etiqueta_seccion("Familiaridad"))
 	barra_familiaridad = ProgressBar.new()
 	barra_familiaridad.min_value = 0.0
 	barra_familiaridad.max_value = 100.0
 	barra_familiaridad.show_percentage = false
-	barra_familiaridad.custom_minimum_size = Vector2(160, 8)
+	barra_familiaridad.custom_minimum_size = Vector2(220, 10)
+	barra_familiaridad.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	barra_familiaridad.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var fondo_fam := StyleBoxFlat.new()
-	fondo_fam.bg_color = Color("#2a3a33")
+	fondo_fam.bg_color = Tema.PANEL_ALTO
 	barra_familiaridad.add_theme_stylebox_override("background", fondo_fam)
 	caja_fam.add_child(barra_familiaridad)
 	label_familiaridad = Label.new()
@@ -1740,12 +1828,20 @@ func _construir_panel_formacion(padre: Control) -> void:
 	label_familiaridad.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
 	caja_fam.add_child(label_familiaridad)
 
+	label_bajas = Label.new()
+	label_bajas.add_theme_color_override("font_color", Tema.ROJO)
+	label_bajas.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	label_bajas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label_bajas.clip_text = true
+	panel.add_child(label_bajas)
+
 	var pie := HBoxContainer.new()
 	pie.add_theme_constant_override("separation", 10)
 	panel.add_child(pie)
 
 	label_formacion_estado = Label.new()
-	label_formacion_estado.text = "Mantené apretado a un jugador 2 segundos para marcarlo, y tocá a otro para cambiarlos."
+	label_formacion_estado.text = ""
+	label_formacion_estado.visible = false
 	label_formacion_estado.add_theme_color_override("font_color", Tema.SUAVE)
 	label_formacion_estado.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	pie.add_child(label_formacion_estado)
@@ -1762,6 +1858,7 @@ func _construir_panel_formacion(padre: Control) -> void:
 	# en el pie no puede tener el poder de borrar media pantalla.
 	label_carga_efecto.clip_text = true
 	label_carga_efecto.custom_minimum_size = Vector2(280, 0)
+	label_carga_efecto.visible = false
 	pie.add_child(label_carga_efecto)
 
 	# Todo el cuerpo scrollea: la cancha pide su propio alto (ver
@@ -1812,6 +1909,10 @@ func _fila_de_cubos(padre: Control) -> HBoxContainer:
 func _mostrar_formacion() -> void:
 	_ocultar_todos()
 	paneles["formacion"].visible = true
+	option_estilo.select(maxi(Estilos.LISTA.find(GameState.equipo_jugador.estilo), 0))
+	option_cambios.select(maxi(
+			OPCIONES_CAMBIOS.find(GameState.equipo_jugador.config_cambios), 0))
+	check_rotacion.set_pressed_no_signal(GameState.equipo_jugador.rotacion_automatica)
 	_refrescar_formacion()
 
 
@@ -2003,20 +2104,20 @@ func _hueco(texto: String, al_tocar: Callable) -> Control:
 func _on_cubo_tocado(jugador_id: int) -> void:
 	if formacion_marcado == jugador_id:
 		formacion_marcado = -1
-		label_formacion_estado.text = "Listo, no cambiaste nada."
+		_mostrar_estado_formacion("Listo, no cambiaste nada.")
 		_refrescar_formacion()
 		return
 	if formacion_marcado == -1:
 		formacion_marcado = jugador_id
-		label_formacion_estado.text = "Marcado. Tocá a otro para cambiarlos de lugar."
+		_mostrar_estado_formacion("Marcado. Tocá a otro para cambiarlos de lugar.")
 		_refrescar_formacion()
 		return
 
 	var equipo := GameState.equipo_jugador
 	if equipo.intercambiar(formacion_marcado, jugador_id):
-		label_formacion_estado.text = "Cambiados de lugar."
+		_mostrar_estado_formacion("Cambiados de lugar.")
 	else:
-		label_formacion_estado.text = "No se pudieron cambiar."
+		_mostrar_estado_formacion("No se pudieron cambiar.")
 	formacion_marcado = -1
 	_refrescar_formacion()
 	_refrescar_plantel()
@@ -2026,7 +2127,7 @@ func _on_cubo_tocado(jugador_id: int) -> void:
 ## al marcado a esa lista, sin sacar a nadie.
 func _on_hueco_tocado(al_banco: bool) -> void:
 	if formacion_marcado == -1:
-		label_formacion_estado.text = "Primero mantené apretado 2 segundos al que querés mover."
+		_mostrar_estado_formacion("Primero mantené apretado 2 segundos al que querés mover.")
 		return
 	var equipo := GameState.equipo_jugador
 	var donde := equipo.donde_esta(formacion_marcado)
@@ -2034,16 +2135,21 @@ func _on_hueco_tocado(al_banco: bool) -> void:
 	# suplentes: un titular tiene que salir del once por un cambio, o el
 	# equipo quedaria con diez.
 	if al_banco and donde != "reservas":
-		label_formacion_estado.text = "Ese lugar es para una reserva. A un titular cambialo por un suplente."
+		_mostrar_estado_formacion("Ese lugar es para una reserva. A un titular cambialo por un suplente.")
 		return
 	if not al_banco and donde != "banco":
-		label_formacion_estado.text = "A reservas solo baja un suplente. A un titular cambialo primero por uno del banco."
+		_mostrar_estado_formacion("A reservas solo baja un suplente. A un titular cambialo primero por uno del banco.")
 		return
 	var r := equipo.mover_entre_banco_y_reservas(formacion_marcado)
-	label_formacion_estado.text = "Movido al banco." if bool(r.get("exito", false)) and str(r.get("a", "")) == "banco" 		else ("Movido a reservas." if bool(r.get("exito", false)) else str(r.get("motivo", "")))
+	_mostrar_estado_formacion("Movido al banco." if bool(r.get("exito", false)) and str(r.get("a", "")) == "banco" 		else ("Movido a reservas." if bool(r.get("exito", false)) else str(r.get("motivo", ""))))
 	formacion_marcado = -1
 	_refrescar_formacion()
 	_refrescar_plantel()
+
+
+func _mostrar_estado_formacion(texto: String) -> void:
+	label_formacion_estado.text = texto
+	label_formacion_estado.visible = not texto.is_empty()
 
 
 ## Los que no pueden jugar, titulares y suplentes. Los suplentes tambien
@@ -2061,9 +2167,11 @@ func _refrescar_bajas(equipo: Team) -> void:
 	if partes.is_empty():
 		label_bajas.text = ""
 		label_bajas.tooltip_text = ""
+		label_bajas.visible = false
 		return
 	label_bajas.text = "No pueden jugar: %s" % "   ·   ".join(partes)
 	label_bajas.tooltip_text = label_bajas.text
+	label_bajas.visible = true
 
 
 func _construir_panel_tabla(padre: Control) -> void:
@@ -2709,7 +2817,7 @@ func _caja_presupuesto(categoria: String, asignado: float, disponible: float,
 	barra.show_percentage = false
 	barra.custom_minimum_size = Vector2(0, 6)
 	var fondo := StyleBoxFlat.new()
-	fondo.bg_color = Color("#2a3a33")
+	fondo.bg_color = Tema.PANEL_ALTO
 	barra.add_theme_stylebox_override("background", fondo)
 	var relleno := StyleBoxFlat.new()
 	relleno.bg_color = Tema.ROJO if restante < 0.0 else Tema.AMBAR
@@ -3371,6 +3479,12 @@ func _fila_mercado(f: Dictionary, par: bool) -> Control:
 		var pop := menu.get_popup()
 		pop.add_item("Comprar", 0)
 		pop.add_item("Pedir a préstamo", 1)
+		var donde := Mercado.ubicar(vendedor, jugador_id)
+		if not donde.is_empty() and not Mercado.puede_comprarse(
+				donde["jugador"], GameState.temporada_actual):
+			var indice_compra := pop.get_item_index(0)
+			pop.set_item_disabled(indice_compra, true)
+			pop.set_item_tooltip(indice_compra, Mercado.MOTIVO_RECIEN_COMPRADO)
 		pop.id_pressed.connect(func(id: int):
 			if id == 0:
 				_abrir_negociacion(vendedor, jugador_id)
@@ -3896,6 +4010,7 @@ func _construir_dialogo_novedades() -> void:
 	label_novedades.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(label_novedades)
 	add_child(dialogo_novedades)
+	Tema.dialogo(dialogo_novedades)
 
 
 ## Muestra el cartel de novedades. Todo pasa por aca para que nadie vuelva
@@ -3938,6 +4053,7 @@ func _construir_dialogo_vencimientos() -> void:
 	label_vencimientos.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(label_vencimientos)
 	add_child(dialogo_vencimientos)
+	Tema.dialogo(dialogo_vencimientos)
 
 	# Aceptar es lo que borra la lista: mientras no la lea, el aviso
 	# sobrevive a cerrar el juego (Team.vencimientos_del_cierre se guarda).
@@ -3997,9 +4113,10 @@ var label_prestamo_estado: RichTextLabel
 func _construir_dialogo_prestamo() -> void:
 	dialogo_prestamo = AcceptDialog.new()
 	dialogo_prestamo.title = "Prestamo"
-	dialogo_prestamo.ok_button_text = "Cerrar"
-	dialogo_prestamo.min_size = Vector2(640, 440)
+	dialogo_prestamo.min_size = Vector2(640, 0)
 	add_child(dialogo_prestamo)
+	Tema.dialogo(dialogo_prestamo)
+	dialogo_prestamo.get_ok_button().hide()
 	dialogo_prestamo.visibility_changed.connect(_refrescar_ficha_si_visible)
 
 	var caja := VBoxContainer.new()
@@ -4045,6 +4162,7 @@ func _construir_dialogo_prestamo() -> void:
 	spin_prestamo_plus.step = 500
 	spin_prestamo_plus.custom_minimum_size = Vector2(200, 44)
 	fila_plus.add_child(spin_prestamo_plus)
+	_activar_formato_miles(spin_prestamo_plus)
 	label_prestamo_plus = Label.new()
 	label_prestamo_plus.add_theme_color_override("font_color", Tema.SUAVE)
 	fila_plus.add_child(label_prestamo_plus)
@@ -4061,24 +4179,29 @@ func _construir_dialogo_prestamo() -> void:
 	spin_prestamo_opcion.step = 5000
 	spin_prestamo_opcion.custom_minimum_size = Vector2(200, 44)
 	fila_opcion.add_child(spin_prestamo_opcion)
+	_activar_formato_miles(spin_prestamo_opcion)
 
+	var acciones := HBoxContainer.new()
+	acciones.add_theme_constant_override("separation", 8)
+	caja.add_child(acciones)
 	var btn := Button.new()
 	btn.text = "Pedir préstamo"
 	btn.custom_minimum_size = Vector2(220, Tema.ALTO_TACTIL)
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	Tema.primario(btn)
 	btn.pressed.connect(_on_pedir_prestamo)
-	caja.add_child(btn)
+	acciones.add_child(btn)
 
 	var cerrar_prestamo := Button.new()
 	cerrar_prestamo.text = "Cerrar"
 	cerrar_prestamo.custom_minimum_size = Vector2(200, 48)
 	cerrar_prestamo.pressed.connect(func(): dialogo_prestamo.hide())
-	caja.add_child(cerrar_prestamo)
+	acciones.add_child(cerrar_prestamo)
 
 	label_prestamo_estado = RichTextLabel.new()
 	label_prestamo_estado.bbcode_enabled = true
 	label_prestamo_estado.fit_content = true
-	label_prestamo_estado.custom_minimum_size = Vector2(0, 120)
+	label_prestamo_estado.custom_minimum_size = Vector2(0, 52)
 	caja.add_child(label_prestamo_estado)
 
 
@@ -4152,7 +4275,7 @@ func _on_pedir_prestamo() -> void:
 			extra = " No hay plus que lo dé vuelta: buscá otro."
 		if float(r.get("minimo", 0.0)) > 0.0:
 			extra = " Pedirían al menos %s." % Economia.formato_dinero(r["minimo"])
-		label_prestamo_estado.text = "[color=#d4a017]%s%s[/color]" % [r["motivo"], extra]
+		label_prestamo_estado.text = "[color=#ffcf43]%s%s[/color]" % [r["motivo"], extra]
 		return
 	var cola := ""
 	if float(r.get("opcion_compra", 0.0)) > 0.0:
@@ -4200,9 +4323,10 @@ var boton_negociacion_contra: Button
 func _construir_dialogo_negociacion() -> void:
 	dialogo_negociacion = AcceptDialog.new()
 	dialogo_negociacion.title = "Negociacion"
-	dialogo_negociacion.ok_button_text = "Cerrar"
-	dialogo_negociacion.min_size = Vector2(820, 560)
+	dialogo_negociacion.min_size = Vector2(820, 0)
 	add_child(dialogo_negociacion)
+	Tema.dialogo(dialogo_negociacion)
+	dialogo_negociacion.get_ok_button().hide()
 	dialogo_negociacion.visibility_changed.connect(_refrescar_ficha_si_visible)
 
 	var caja := VBoxContainer.new()
@@ -4255,6 +4379,11 @@ func _construir_dialogo_negociacion() -> void:
 	spin_negociacion_anios = _fila_spin(caja_negociacion_contrato,
 		"Años de contrato", 1, 5, 1)
 	spin_negociacion_anios.value = 3
+	var ayuda_sueldo := Label.new()
+	ayuda_sueldo.text = "La oferta empieza en $0. Vos decidís cuánto necesita para subir, bajar o cargar con tu equipo."
+	ayuda_sueldo.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	ayuda_sueldo.add_theme_color_override("font_color", Tema.SUAVE)
+	caja_negociacion_contrato.add_child(ayuda_sueldo)
 	# La clausula la ponés vos: alta lo blinda contra que te lo saquen,
 	# pero a él lo encierra y te lo cobra pidiendo más sueldo.
 
@@ -4300,7 +4429,7 @@ func _construir_dialogo_negociacion() -> void:
 	label_negociacion_estado = RichTextLabel.new()
 	label_negociacion_estado.bbcode_enabled = true
 	label_negociacion_estado.fit_content = true
-	label_negociacion_estado.custom_minimum_size = Vector2(0, 110)
+	label_negociacion_estado.custom_minimum_size = Vector2(0, 52)
 	caja.add_child(label_negociacion_estado)
 
 
@@ -4335,6 +4464,8 @@ func _hacer_spin_tactil(sb: SpinBox, fila: HBoxContainer) -> void:
 	# Plata: el ajuste es relativo, porque un sueldo de $300 y un pase de
 	# $30 millones no se mueven con el mismo paso. Años: de a uno.
 	var es_plata := sb.max_value > 100
+	if es_plata:
+		_activar_formato_miles(sb)
 	var pasos: Array = [0.10, 0.01] if es_plata else [1.0]
 	var indice := sb.get_index()
 	for delta in pasos:
@@ -4358,6 +4489,87 @@ func _hacer_spin_tactil(sb: SpinBox, fila: HBoxContainer) -> void:
 			DisplayServer.KEYBOARD_TYPE_NUMBER)
 	)
 	fila.add_child(escribir)
+
+
+## Los SpinBox muestran plata sin simbolo. Los puntos se agregan mientras se
+## escribe, pero el control conserva el numero puro para todos los calculos.
+func _activar_formato_miles(sb: SpinBox) -> void:
+	if bool(sb.get_meta("formato_miles_activo", false)):
+		return
+	sb.set_meta("formato_miles_activo", true)
+	# El paso grande queda para las flechas. Un paso numerico de 1 evita que
+	# escribir los primeros digitos de 1.000.000 los redondee a cero.
+	sb.custom_arrow_step = sb.step
+	sb.step = 1
+	sb.update_on_text_changed = true
+	var campo := sb.get_line_edit()
+	campo.text_changed.connect(_formatear_campo_dinero.bind(sb))
+	sb.value_changed.connect(_mostrar_valor_spin_dinero.bind(sb))
+	_formatear_campo_dinero(campo.text, sb)
+
+
+func _formatear_campo_dinero(texto: String, sb: SpinBox) -> void:
+	if bool(sb.get_meta("formateando_miles", false)):
+		return
+	var campo := sb.get_line_edit()
+	var caret_original := campo.caret_column
+	var digitos := ""
+	var digitos_a_derecha := 0
+	for i in range(texto.length()):
+		var caracter := texto.substr(i, 1)
+		if caracter >= "0" and caracter <= "9":
+			digitos += caracter
+			if i >= caret_original:
+				digitos_a_derecha += 1
+	if digitos.is_empty():
+		return
+
+	var valor := clampf(float(digitos), sb.min_value, sb.max_value)
+	var formateado := _entero_con_puntos(int(round(valor)))
+	var nuevo_caret := formateado.length()
+	var pendientes := digitos_a_derecha
+	while nuevo_caret > 0 and pendientes > 0:
+		nuevo_caret -= 1
+		var caracter := formateado.substr(nuevo_caret, 1)
+		if caracter >= "0" and caracter <= "9":
+			pendientes -= 1
+
+	sb.set_meta("formateando_miles", true)
+	sb.value = valor
+	# Cambiar solo la presentacion no debe volver a pasar los puntos por el
+	# parser numerico interno del SpinBox.
+	campo.set_block_signals(true)
+	campo.text = formateado
+	campo.caret_column = nuevo_caret
+	campo.set_block_signals(false)
+	sb.set_meta("formateando_miles", false)
+
+
+## Asignar `spin.value` por codigo no emite `text_changed` en el LineEdit.
+## Este segundo camino mantiene separados tambien los importes sugeridos.
+func _mostrar_valor_spin_dinero(valor: float, sb: SpinBox) -> void:
+	if bool(sb.get_meta("formateando_miles", false)):
+		return
+	var campo := sb.get_line_edit()
+	var caret := campo.caret_column
+	sb.set_meta("formateando_miles", true)
+	campo.set_block_signals(true)
+	campo.text = _entero_con_puntos(int(round(valor)))
+	campo.caret_column = mini(caret, campo.text.length())
+	campo.set_block_signals(false)
+	sb.set_meta("formateando_miles", false)
+
+
+func _entero_con_puntos(valor: int) -> String:
+	var digitos := str(valor)
+	var resultado := ""
+	var contador := 0
+	for i in range(digitos.length() - 1, -1, -1):
+		resultado = digitos.substr(i, 1) + resultado
+		contador += 1
+		if contador % 3 == 0 and i > 0:
+			resultado = "." + resultado
+	return resultado
 
 
 func _boton_ajuste_spin(sb: SpinBox, delta: float, relativo: bool) -> Button:
@@ -4389,12 +4601,14 @@ func _dibujar_pasos(paso: int) -> void:
 		var activo: bool = n == paso
 		var color := Tema.VERDE if hecho else (Tema.AMBAR if activo else Tema.SUAVE)
 		caja_negociacion_pasos.add_child(Componentes.chip(
-			"%d" % n, color, Tema.FONDO if (hecho or activo) else Tema.PANEL))
+			"%d" % n, color, Tema.TINTA_OSCURA if (hecho or activo) else Tema.PANEL))
 		caja_negociacion_pasos.add_child(Componentes.celda(nombre, 260, color))
 
 
-func _caja_dato(etiqueta: String, valor: String, color: Color = Tema.TEXTO,
+func _caja_dato(etiqueta: String, valor: String, color: Color = Color.TRANSPARENT,
 		acento: bool = false) -> Control:
+	if color == Color.TRANSPARENT:
+		color = Tema.TEXTO
 	var caja := PanelContainer.new()
 	caja.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var estilo := StyleBoxFlat.new()
@@ -4638,23 +4852,15 @@ func _datos_de_la_oferta(o: Dictionary) -> String:
 	if monto >= pedido:
 		return "[color=#27ae60]Te ofrecen más de lo que pedirías por él (%s). Es buen negocio.[/color]" % Economia.formato_dinero(pedido)
 	if monto >= vale:
-		return "[color=#d4a017]Cubre lo que vale, pero está por debajo de los %s que pedirías vos.[/color]" % Economia.formato_dinero(pedido)
+		return "[color=#ffcf43]Cubre lo que vale, pero está por debajo de los %s que pedirías vos.[/color]" % Economia.formato_dinero(pedido)
 	return "[color=#c0392b]Es menos de lo que vale (%s). Regatealo o rechazalo.[/color]" % Economia.formato_dinero(vale)
 
 
-func _precargar_contrato(o: Dictionary) -> void:
-	var vendedor := GameState._club_por_nombre(str(o["club"]))
-	var id := int(o["jugador_id"])
-	if vendedor == null:
-		return
-	var donde := Mercado.ubicar(vendedor, id)
-	if donde.is_empty():
-		return
-	var jugador: Dictionary = donde["jugador"]
-	var pretende := Negociacion.sueldo_pretendido(
-		jugador, float(vendedor.sueldos.get(id, 0.0)),
-		GameState.division_de(vendedor), GameState.division_jugador)
-	spin_negociacion_sueldo.value = ceil(pretende / spin_negociacion_sueldo.step) * spin_negociacion_sueldo.step
+func _precargar_contrato(_o: Dictionary) -> void:
+	# El contrato lo decide el usuario. Precargar lo que el jugador aceptaria
+	# convertia la negociacion en una respuesta revelada por la interfaz y,
+	# sin informe, filtraba su nivel a traves de una cifra salarial.
+	spin_negociacion_sueldo.value = 0
 
 
 func _on_negociacion_accion() -> void:
@@ -4674,7 +4880,7 @@ func _enviar_oferta_nueva() -> void:
 	var r := GameState.enviar_oferta(
 		negociacion_vendedor, negociacion_jugador_id, float(spin_negociacion_monto.value))
 	if not r["exito"]:
-		label_negociacion_estado.text = "[color=#d4a017]%s[/color]" % r["motivo"]
+		label_negociacion_estado.text = "[color=#ffcf43]%s[/color]" % r["motivo"]
 		return
 	label_negociacion_estado.text = "[color=#27ae60]Oferta enviada. %s te contesta en unos dias — la seguis en Ofertas enviadas.[/color]" % negociacion_vendedor.nombre
 	boton_negociacion_accion.disabled = true
@@ -4689,7 +4895,7 @@ func _responder(o: Dictionary, accion: String) -> void:
 	var monto: float = float(o["monto"]) if accion == "aceptar" else float(spin_negociacion_monto.value)
 	var r := GameState.responder_oferta(int(o["id"]), accion, monto)
 	if not r["exito"]:
-		label_negociacion_estado.text = "[color=#d4a017]%s[/color]" % r["motivo"]
+		label_negociacion_estado.text = "[color=#ffcf43]%s[/color]" % r["motivo"]
 		return
 	dialogo_negociacion.hide()
 	_mostrar_solapa_mercado(solapa_mercado_actual)
@@ -4712,7 +4918,7 @@ func _on_negociacion_rechazar() -> void:
 func _on_negociacion_retirar() -> void:
 	var r := GameState.retirar_oferta(negociacion_oferta_id)
 	if not r["exito"]:
-		label_negociacion_estado.text = "[color=#d4a017]%s[/color]" % r["motivo"]
+		label_negociacion_estado.text = "[color=#ffcf43]%s[/color]" % r["motivo"]
 		return
 	dialogo_negociacion.hide()
 	_mostrar_solapa_mercado(solapa_mercado_actual)
@@ -4723,7 +4929,7 @@ func _firmar_contrato() -> void:
 		negociacion_oferta_id, float(spin_negociacion_sueldo.value),
 		int(spin_negociacion_anios.value))
 	if not r["exito"]:
-		label_negociacion_estado.text = "[color=#d4a017]%s[/color]" % r["motivo"]
+		label_negociacion_estado.text = "[color=#ffcf43]%s[/color]" % r["motivo"]
 		return
 	label_negociacion_estado.text = "[color=#27ae60]Cerrado. %s es tuyo.[/color]" % _nombre_jugador(r["jugador"])
 	boton_negociacion_accion.disabled = true
@@ -5021,7 +5227,7 @@ func _on_ciclar_traspaso(jugador_id: int) -> void:
 
 
 ## Cesion (core/cesiones.gd): la lista de a quien te pueden pedir a
-## prestamo, y el estado de los que ya cediste.
+## prestamo y las opciones de compra de los que llegaron cedidos.
 ##
 ## Antes esto era un boton "Ceder" que mandaba al jugador a un club al
 ## azar de tu division, sin negociar nada. Ahora funciona como la solapa
@@ -5029,6 +5235,86 @@ func _on_ciclar_traspaso(jugador_id: int) -> void:
 ## recibidas y los terminos se discuten ahi.
 var contenedor_cesiones: VBoxContainer
 var contenedor_cedidos: VBoxContainer
+
+
+## Club > Cedidos: seguimiento deportivo de los jugadores propios que
+## estan jugando a prestamo en otro club.
+func _construir_panel_cedidos(padre: Control) -> void:
+	var panel := VBoxContainer.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.visible = false
+	panel.add_theme_constant_override("separation", 8)
+	padre.add_child(panel)
+	paneles["cedidos"] = panel
+
+	var aviso := Label.new()
+	aviso.text = "Jugadores del club cedidos a otros equipos y su rendimiento durante el prestamo."
+	aviso.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	aviso.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
+	aviso.add_theme_color_override("font_color", Tema.SUAVE)
+	panel.add_child(aviso)
+
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.add_child(scroll)
+
+	contenedor_cedidos = VBoxContainer.new()
+	contenedor_cedidos.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	contenedor_cedidos.add_theme_constant_override("separation", 0)
+	scroll.add_child(contenedor_cedidos)
+
+
+func _refrescar_cedidos() -> void:
+	for hijo in contenedor_cedidos.get_children():
+		hijo.queue_free()
+
+	var equipo := GameState.equipo_jugador
+	if equipo == null or equipo.prestados_afuera.is_empty():
+		contenedor_cedidos.add_child(_tarjeta_vacia(
+			"No tenes jugadores cedidos a otros clubes."))
+		return
+
+	contenedor_cedidos.add_child(_encabezado_de_columnas([
+		["Jugador", 210], ["Club", 210],
+		["GRL", 70, HORIZONTAL_ALIGNMENT_RIGHT],
+		["PJ", 70, HORIZONTAL_ALIGNMENT_RIGHT],
+		["Goles", 70, HORIZONTAL_ALIGNMENT_RIGHT],
+		["Asist.", 70, HORIZONTAL_ALIGNMENT_RIGHT],
+		["Vuelve", 140]]))
+
+	var indice := 0
+	for id in equipo.prestados_afuera:
+		var info: Dictionary = equipo.prestados_afuera[id]
+		var destino_dato = info.get("club")
+		var destino: Team = destino_dato as Team
+		var club := destino.nombre if destino != null else str(destino_dato)
+		var jugador: Dictionary = _buscar_jugador_por_id(destino, int(id)) \
+			if destino != null else {}
+		var fila := Componentes.fila(indice % 2 == 0)
+		var dentro := Componentes.contenido(fila)
+		dentro.add_child(Componentes.celda(
+			_nombre_jugador(jugador) if not jugador.is_empty() else "Jugador #%s" % id,
+			210, Tema.TEXTO))
+		dentro.add_child(Componentes.celda(club, 210, Tema.SUAVE))
+		dentro.add_child(Componentes.celda_numero(
+			"%.1f" % float(jugador.get("media", 0.0)), 70,
+			Componentes.color_de_valor(int(jugador.get("media", 0))),
+			HORIZONTAL_ALIGNMENT_RIGHT))
+		dentro.add_child(Componentes.celda_numero(
+			str(int(jugador.get("partidos_prestamo", 0))), 70,
+			Tema.TEXTO, HORIZONTAL_ALIGNMENT_RIGHT))
+		dentro.add_child(Componentes.celda_numero(
+			str(int(jugador.get("goles_prestamo", 0))), 70,
+			Tema.TEXTO, HORIZONTAL_ALIGNMENT_RIGHT))
+		dentro.add_child(Componentes.celda_numero(
+			str(int(jugador.get("asistencias_prestamo", 0))), 70,
+			Tema.TEXTO, HORIZONTAL_ALIGNMENT_RIGHT))
+		dentro.add_child(Componentes.celda(
+			"Temporada %.1f" % float(info["temporada_retorno"]), 140, Tema.AMBAR))
+		contenedor_cedidos.add_child(fila)
+		indice += 1
 
 
 func _construir_panel_prestamos(padre: Control) -> void:
@@ -5061,46 +5347,27 @@ func _construir_panel_prestamos(padre: Control) -> void:
 	caja.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(caja)
 
-	contenedor_cedidos = VBoxContainer.new()
-	contenedor_cedidos.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	caja.add_child(contenedor_cedidos)
-
 	contenedor_cesiones = VBoxContainer.new()
 	contenedor_cesiones.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	caja.add_child(contenedor_cesiones)
 
 
 func _refrescar_prestamos() -> void:
-	for hijo in contenedor_cedidos.get_children():
-		hijo.queue_free()
 	for hijo in contenedor_cesiones.get_children():
 		hijo.queue_free()
 
 	var equipo := GameState.equipo_jugador
-
-	# Primero los que YA estan afuera: es lo que se viene a mirar cuando
-	# ya cediste a alguien, y no aparecia en ningun lado.
-	if not equipo.prestados_afuera.is_empty():
-		contenedor_cedidos.add_child(Tema.etiqueta_seccion("Cedidos ahora"))
-		for id in equipo.prestados_afuera:
-			var info: Dictionary = equipo.prestados_afuera[id]
-			var club: String = info["club"].nombre if info["club"] is Team else str(info["club"])
-			var t := "%s   ·   vuelve en la temporada %.1f" % [club, float(info["temporada_retorno"])]
-			if float(info.get("opcion_compra", 0.0)) > 0.0:
-				t += "   ·   con opcion de compra por %s" % Economia.formato_dinero(
-					float(info["opcion_compra"]))
-			contenedor_cedidos.add_child(_tarjeta_vacia(t))
 
 	# Las opciones de compra que TENES abiertas. Van arriba de todo porque
 	# tienen fecha de vencimiento: al volver el prestamo, la chance se
 	# pierde (ver Prestamos.procesar_retornos).
 	var abiertas: Array = GameState.opciones_de_compra_abiertas()
 	if not abiertas.is_empty():
-		contenedor_cedidos.add_child(Tema.etiqueta_seccion("Opciones de compra abiertas"))
+		contenedor_cesiones.add_child(Tema.etiqueta_seccion("Opciones de compra abiertas"))
 		for entrada in abiertas:
 			var jo: Dictionary = entrada["jugador"]
 			var ido: int = int(jo["id"])
-			contenedor_cedidos.add_child(_fila_jugador_accion(
+			contenedor_cesiones.add_child(_fila_jugador_accion(
 				jo,
 				"a prestamo de %s   ·   la chance vence en la temporada %.1f" % [
 					str(entrada["dueno"]), float(entrada["temporada_retorno"])],
@@ -5361,12 +5628,17 @@ var boton_renovacion_ofrecer: Button
 func _construir_dialogo_renovacion() -> void:
 	dialogo_renovacion = AcceptDialog.new()
 	dialogo_renovacion.title = "Renovacion"
-	dialogo_renovacion.ok_button_text = "Cancelar"
-	dialogo_renovacion.min_size = Vector2(760, 480)
+	dialogo_renovacion.min_size = Vector2(760, 0)
 	add_child(dialogo_renovacion)
+	Tema.dialogo(dialogo_renovacion)
+	# La fila nativa queda debajo de todo el contenido y en celulares bajos
+	# podia salir de la pantalla. Las dos acciones viven juntas dentro del
+	# cuerpo, siempre visibles y sin sumar otra fila al alto del modal.
+	dialogo_renovacion.get_ok_button().hide()
 
 	var caja := VBoxContainer.new()
 	caja.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	caja.add_theme_constant_override("separation", 4)
 	dialogo_renovacion.add_child(caja)
 
 	label_renovacion_titulo = Label.new()
@@ -5409,14 +5681,23 @@ func _construir_dialogo_renovacion() -> void:
 	label_renovacion_respuesta = RichTextLabel.new()
 	label_renovacion_respuesta.bbcode_enabled = true
 	label_renovacion_respuesta.fit_content = true
-	label_renovacion_respuesta.custom_minimum_size = Vector2(0, 110)
+	# Dos lineas alcanzan para la contraoferta; antes reservaba 110 px aun
+	# vacio y empujaba las acciones fuera de la pantalla.
+	label_renovacion_respuesta.custom_minimum_size = Vector2(0, 52)
 	caja.add_child(label_renovacion_respuesta)
 
 	var acciones := HBoxContainer.new()
+	acciones.add_theme_constant_override("separation", 8)
 	caja.add_child(acciones)
 	boton_renovacion_ofrecer = Componentes.boton_de_accion("Ofrecer", 240)
+	boton_renovacion_ofrecer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	boton_renovacion_ofrecer.pressed.connect(_on_ofrecer_renovacion)
 	acciones.add_child(boton_renovacion_ofrecer)
+	var cerrar := Button.new()
+	cerrar.text = "Cerrar"
+	cerrar.custom_minimum_size = Vector2(160, Tema.ALTO_TACTIL)
+	cerrar.pressed.connect(dialogo_renovacion.hide)
+	acciones.add_child(cerrar)
 
 
 func _jugador_de_renovacion() -> Dictionary:
@@ -5885,7 +6166,7 @@ func _cubo_slot_libre(equipo: Team) -> Control:
 	tarjeta.custom_minimum_size = Vector2(0, ALTO_CUBO_INVESTIGADOR)
 	tarjeta.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var estilo: StyleBoxFlat = tarjeta.get_theme_stylebox("panel")
-	estilo.bg_color = Color("#1a231f")
+	estilo.bg_color = Tema.PANEL
 
 	var caja := VBoxContainer.new()
 	caja.add_theme_constant_override("separation", 4)
@@ -5917,13 +6198,14 @@ func _cubo_slot_libre(equipo: Team) -> Control:
 func _construir_dialogo_investigador() -> void:
 	dialogo_investigador = AcceptDialog.new()
 	dialogo_investigador.title = "Contratar un investigador"
-	dialogo_investigador.ok_button_text = "Cerrar"
-	dialogo_investigador.min_size = Vector2(720, 420)
+	dialogo_investigador.min_size = Vector2(720, 0)
 	# Un tope duro: sin esto el dialogo crece con su contenido —diez filas
 	# de opciones— y se pasa del alto de la pantalla, dejando el boton de
 	# cerrar afuera. Que scrollee la lista, no la ventana.
 	dialogo_investigador.max_size = Vector2(760, 560)
 	add_child(dialogo_investigador)
+	Tema.dialogo(dialogo_investigador)
+	dialogo_investigador.get_ok_button().hide()
 
 	var caja := VBoxContainer.new()
 	caja.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -5946,9 +6228,11 @@ func _construir_dialogo_investigador() -> void:
 	contenedor_investigador_dialogo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(contenedor_investigador_dialogo)
 
-	# Sin boton de cerrar propio: con el tope de alto de arriba, el que trae
-	# AcceptDialog siempre queda dentro de la pantalla. Dos botones "Cerrar"
-	# uno arriba del otro se leian como que hacian cosas distintas.
+	var cerrar := Button.new()
+	cerrar.text = "Cerrar"
+	cerrar.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	cerrar.pressed.connect(dialogo_investigador.hide)
+	caja.add_child(cerrar)
 
 
 func _abrir_dialogo_investigador() -> void:
@@ -7234,6 +7518,7 @@ func _carrera_en_ficha(equipo: Team, j: Dictionary) -> void:
 	caja.add_child(datos)
 	contenedor_ficha.add_child(tarjeta)
 
+	Historial.completar_grl_actual(j)
 	var carrera: Array = j.get("carrera", [])
 	if carrera.is_empty():
 		contenedor_ficha.add_child(_texto_suave(
@@ -7250,6 +7535,8 @@ func _carrera_en_ficha(equipo: Team, j: Dictionary) -> void:
 	scroll.add_child(lista)
 	lista.add_child(_encabezado_de_columnas([
 		["Año", COL_ANIO], ["Club", Componentes.COL_EQUIPO], ["División", COL_DIVISION],
+		["GRL", Componentes.COL_MEDIA, HORIZONTAL_ALIGNMENT_RIGHT],
+		["Cambio", 72, HORIZONTAL_ALIGNMENT_RIGHT],
 		["PJ", Componentes.COL_JUGADOS, HORIZONTAL_ALIGNMENT_RIGHT],
 		["Goles", Componentes.COL_GOLES, HORIZONTAL_ALIGNMENT_RIGHT],
 		["Asist.", Componentes.COL_GOLES, HORIZONTAL_ALIGNMENT_RIGHT]]))
@@ -7265,6 +7552,22 @@ func _carrera_en_ficha(equipo: Team, j: Dictionary) -> void:
 		var div := int(f.get("division", 0))
 		dentro.add_child(Componentes.celda(
 			"Div %d" % div if div > 0 else "Exterior", COL_DIVISION, Tema.SUAVE))
+		var grl_texto := "—"
+		var color_grl := Tema.SUAVE
+		if f.has("grl"):
+			grl_texto = "%.1f" % float(f["grl"])
+			color_grl = Componentes.color_de_valor(int(f["grl"]))
+		dentro.add_child(Componentes.celda_numero(
+			grl_texto, Componentes.COL_MEDIA, color_grl, HORIZONTAL_ALIGNMENT_RIGHT))
+		var cambio = Historial.cambio_grl(carrera, i)
+		var cambio_texto := "—"
+		var color_cambio := Tema.SUAVE
+		if cambio != null:
+			var valor := float(cambio)
+			cambio_texto = "%+.1f" % valor
+			color_cambio = Tema.VERDE if valor > 0.0 else (Tema.ROJO if valor < 0.0 else Tema.SUAVE)
+		dentro.add_child(Componentes.celda_numero(
+			cambio_texto, 72, color_cambio, HORIZONTAL_ALIGNMENT_RIGHT))
 		for clave in ["pj", "goles", "asistencias"]:
 			var ancho := Componentes.COL_JUGADOS if clave == "pj" else Componentes.COL_GOLES
 			dentro.add_child(Componentes.celda_numero(
@@ -7704,8 +8007,8 @@ func _tabla_fase_de_liga(tabla: Array, mio: String) -> Control:
 ## Las noticias de la temporada, separadas por categoria y con los
 ## jugadores que se nombran clickeables.
 ##
-## Antes era una sola lista de treinta tarjetas donde un fichaje, una
-## lesion y un campeon se leian igual, y el jugador que se mencionaba era
+## Antes era una sola lista de treinta tarjetas donde todos los hechos se
+## leian igual, y el jugador que se mencionaba era
 ## texto muerto: para saber quien era habia que ir al buscador del mercado
 ## y filtrar a ciegas. Ahora el nombre abre su ficha de mercado y, si
 ## tenes un investigador libre, se lo manda desde ahi mismo.
@@ -7746,8 +8049,7 @@ func _acento_de_noticia(texto: String) -> Color:
 	var t := texto.to_lower()
 	# El descenso primero: "desciende" no contiene "ascien" (lleva una "e"
 	# delante), pero conviene no depender de eso.
-	if t.contains("descen") or t.contains("descien") or t.contains("quiebra") \
-			or t.contains("lesion"):
+	if t.contains("descen") or t.contains("descien") or t.contains("quiebra"):
 		return Tema.ROJO
 	if t.contains("ascen") or t.contains("ascien") or t.contains("campe") \
 			or t.contains("gana"):
@@ -7759,9 +8061,7 @@ func _acento_de_noticia(texto: String) -> Color:
 
 const VACIO_POR_SOLAPA := {
 	"todas": "Todavia no hay noticias.",
-	"rumores": "Todavia no se habla de nadie. Los rumores salen con el libro de pases abierto.",
 	"fichajes": "Todavia no se movio nadie.",
-	"lesiones": "Nadie se rompio todavia. Ojala siga asi.",
 	"campeones": "Todavia no se corono nadie: los titulos se reparten al cerrar la temporada.",
 	"club": "Todavia no jugaste ningun partido.",
 }
@@ -8021,7 +8321,7 @@ func _construir_modal_jugador() -> void:
 
 	var centro := CenterContainer.new()
 	fondo.add_child(centro)
-	var caja := Componentes.tarjeta()
+	var caja := Componentes.modal()
 	caja.custom_minimum_size = Vector2(520, 0)
 	caja.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	centro.add_child(caja)
@@ -8226,6 +8526,7 @@ func _construir_panel_partida_guardado(padre: Control) -> void:
 	dialogo_partida_nueva.cancel_button_text = "Cancelar"
 	dialogo_partida_nueva.confirmed.connect(_on_partida_nueva)
 	add_child(dialogo_partida_nueva)
+	Tema.dialogo(dialogo_partida_nueva, true)
 
 	var hueco := Control.new()
 	hueco.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -8250,6 +8551,8 @@ func _construir_panel_partida_guardado(padre: Control) -> void:
 	dialogo_borrar_partida.cancel_button_text = "Cancelar"
 	dialogo_borrar_partida.confirmed.connect(_on_borrar_partida)
 	add_child(dialogo_borrar_partida)
+	Tema.dialogo(dialogo_borrar_partida)
+	Tema.peligro(dialogo_borrar_partida.get_ok_button())
 
 
 func _construir_panel_opciones(padre: Control) -> void:
@@ -8279,12 +8582,20 @@ func _construir_panel_opciones(padre: Control) -> void:
 	option_velocidad_partido.item_selected.connect(_on_velocidad_partido_seleccionada)
 	dentro.add_child(_grupo_filtro("Velocidad de partido", option_velocidad_partido))
 
+	option_tema = OptionButton.new()
+	option_tema.add_item("Oscuro")
+	option_tema.add_item("Claro")
+	option_tema.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
+	option_tema.item_selected.connect(_on_tema_seleccionado)
+	dentro.add_child(_grupo_filtro("Tema visual", option_tema))
+
 
 func _mostrar_opciones() -> void:
 	_ocultar_todos()
 	paneles["opciones"].visible = true
 	option_fps.select(OPCIONES_FPS.find(fps_elegido))
 	option_velocidad_partido.select(OPCIONES_VELOCIDAD_PARTIDO.find(velocidad_partido_elegida))
+	option_tema.select(OPCIONES_TEMA.find(tema_visual))
 
 
 func _on_fps_seleccionado(indice: int) -> void:
@@ -8300,21 +8611,37 @@ func _on_velocidad_partido_seleccionada(indice: int) -> void:
 	_guardar_opciones()
 
 
+func _on_tema_seleccionado(indice: int) -> void:
+	var nuevo := str(OPCIONES_TEMA[indice])
+	if nuevo == tema_visual:
+		return
+	tema_visual = nuevo
+	_guardar_opciones()
+	_recarga_por_tema = true
+	_seccion_antes_del_tema = seccion_actual
+	_panel_antes_del_tema = panel_de_seccion_actual
+	get_tree().call_deferred("reload_current_scene")
+
+
 func _cargar_opciones() -> void:
 	var archivo := ConfigFile.new()
 	if archivo.load(RUTA_OPCIONES) != OK:
 		return
 	fps_elegido = int(archivo.get_value("video", "fps", 60))
 	velocidad_partido_elegida = float(archivo.get_value("partido", "velocidad", 1.0))
+	tema_visual = str(archivo.get_value("video", "tema", "oscuro"))
 	if not OPCIONES_FPS.has(fps_elegido):
 		fps_elegido = 60
 	if OPCIONES_VELOCIDAD_PARTIDO.find(velocidad_partido_elegida) == -1:
 		velocidad_partido_elegida = 1.0
+	if not OPCIONES_TEMA.has(tema_visual):
+		tema_visual = "oscuro"
 
 
 func _guardar_opciones() -> void:
 	var archivo := ConfigFile.new()
 	archivo.set_value("video", "fps", fps_elegido)
+	archivo.set_value("video", "tema", tema_visual)
 	archivo.set_value("partido", "velocidad", velocidad_partido_elegida)
 	archivo.save(RUTA_OPCIONES)
 
@@ -8964,10 +9291,10 @@ func _texto_posicion(club: Team) -> String:
 	var tabla: Array = GameState.piramide.divisiones[division].tabla_ordenada()
 	var puesto: int = tabla.find(club.nombre) + 1
 	if puesto <= 0:
-		return club.nombre
+		return "sin puesto"
 	if division == GameState.division_jugador:
-		return "%s %d° de %d" % [club.nombre, puesto, tabla.size()]
-	return "%s %d° de %d (Division %d)" % [club.nombre, puesto, tabla.size(), division + 1]
+		return "%d°" % puesto
+	return "%d° · Div. %d" % [puesto, division + 1]
 
 
 func _proximo_rival() -> Team:
@@ -8990,27 +9317,22 @@ func _proximo_rival() -> Team:
 ## salir a jugarle.
 ## `rival` llega de afuera y no se busca aca: el de copa no sale del
 ## fixture de la liga (ver GameState.rival_de_copa).
-func _texto_informe_rival(rival: Team) -> String:
+func _texto_informe_rival(rival: Team, de_local: bool) -> String:
 	if rival == null:
 		return ""
-	var mio: String = GameState.equipo_jugador.estilo
-	var mod := Estilos.modificador(mio, rival.estilo)
-	var pista := ""
-	if mod > 0.0:
-		pista = " (tu estilo lo complica)"
-	elif mod < 0.0:
-		pista = " (su estilo te complica a vos)"
-	var dt_texto := ""
+	var dt_texto := "DT sin datos"
 	if not rival.dt.is_empty():
-		dt_texto = " — DT: %d/10 (%s)" % [rival.dt["nivel"], rival.dt["rasgo"]]
+		dt_texto = "DT %d/10 (%s)" % [rival.dt["nivel"], rival.dt["rasgo"]]
 	var clasico_texto := ""
 	if Rivalidad.es_clasico(GameState.equipo_jugador, rival):
-		clasico_texto = " — ⚔ ¡ES TU CLÁSICO! (más tarjetas, más caos)"
-	return "Rival: %s — estilo %s%s%s%s" % [rival.nombre, rival.estilo, pista, dt_texto, clasico_texto]
+		clasico_texto = "  ·  CLÁSICO"
+	return "%s  ·  Estilo %s  ·  %s%s" % [
+		"Local" if de_local else "Visitante", rival.estilo, dt_texto, clasico_texto]
 
 
 func _on_estilo_seleccionado(idx: int) -> void:
 	GameState.equipo_jugador.estilo = Estilos.LISTA[idx]
+	_refrescar_familiaridad(GameState.equipo_jugador)
 	_refrescar_portada_si_visible()
 
 
@@ -9103,6 +9425,12 @@ func _mostrar_prestamos() -> void:
 	paneles["prestamos"].visible = true
 	label_prestamos_estado.text = ""
 	_refrescar_prestamos()
+
+
+func _mostrar_cedidos() -> void:
+	_ocultar_todos()
+	paneles["cedidos"].visible = true
+	_refrescar_cedidos()
 
 
 func _mostrar_instalaciones() -> void:
@@ -9252,8 +9580,8 @@ func _ajustar_para_tactil(nodo: Node) -> void:
 		_ajustar_para_tactil(hijo)
 
 
-## §UI: el armazón. Trece pestañas sueltas pasan a CINCO secciones con
-## subsolapas, y la navegación va al COSTADO.
+## §UI: el armazón conserva las secciones y subsolapas originales. Solo cambia
+## su tratamiento visual; ningún destino se mueve de lugar.
 ##
 ## Al costado y no abajo porque el juego es apaisado: el alto son 648 px
 ## lógicos y es lo escaso, mientras que a lo ancho sobra. Una barra abajo
@@ -9268,12 +9596,9 @@ const SECCIONES := [
 		["plantel", "Plantel"], ["formacion", "Formacion"],
 		["roles", "Roles"], ["entrenamiento", "Entrenamiento"],
 		["jugadas", "Jugadas"]]},
-	# Lo que es del CLUB y no del plantel: el edificio y los pibes. Antes
-	# vivian de colados en Equipo, que ya tenia cinco subsolapas y era la
-	# unica seccion que mezclaba las dos cosas.
 	{"clave": "club", "nombre": "Club", "paneles": [
 		["renovaciones", "Renovaciones"], ["instalaciones", "Instalaciones"],
-		["cantera", "Cantera"]]},
+		["cedidos", "Cedidos"], ["cantera", "Cantera"]]},
 	{"clave": "finanzas", "nombre": "Economia", "paneles": [
 		["economia", "Presupuesto"], ["sponsors", "Sponsors"]]},
 	{"clave": "partido", "nombre": "Liga", "paneles": [
@@ -9301,60 +9626,121 @@ var label_barra_posicion: Label
 var label_barra_plata: Label
 var label_barra_fecha: Label
 var label_barra_mercado: Label
+var escudo_barra
 
 
 func _construir_riel(padre: HBoxContainer) -> void:
+	var marco := PanelContainer.new()
+	marco.custom_minimum_size = Vector2(190, 0)
+	var estilo := StyleBoxFlat.new()
+	estilo.bg_color = Tema.RIEL
+	estilo.border_width_right = 4
+	estilo.border_color = Tema.BORDE_RIEL
+	estilo.content_margin_left = 14
+	estilo.content_margin_right = 14
+	estilo.content_margin_top = 20
+	estilo.content_margin_bottom = 14
+	marco.add_theme_stylebox_override("panel", estilo)
+	padre.add_child(marco)
+
 	var riel := VBoxContainer.new()
-	riel.custom_minimum_size = Vector2(132, 0)
-	padre.add_child(riel)
+	riel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	marco.add_child(riel)
+
+	var marca_caja := VBoxContainer.new()
+	marca_caja.add_theme_constant_override("separation", -6)
+	riel.add_child(marca_caja)
+	for parte in [["SUPER", Tema.TEXTO], ["POCKET", Tema.AMBAR], ["STARS", Tema.TEXTO]]:
+		var marca := Label.new()
+		marca.text = str(parte[0])
+		Tema.numero(marca, 19, parte[1])
+		marca_caja.add_child(marca)
+	var aire_marca := Control.new()
+	aire_marca.custom_minimum_size.y = 22
+	riel.add_child(aire_marca)
 
 	for seccion in SECCIONES:
+		var clave := str(seccion["clave"])
 		var btn := Button.new()
 		btn.text = str(seccion["nombre"])
-		btn.custom_minimum_size = Vector2(0, 62)
+		btn.custom_minimum_size = Vector2(0, 48)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var clave := str(seccion["clave"])
+		Tema.boton_riel(btn)
 		btn.pressed.connect(func(): _mostrar_seccion(clave))
 		riel.add_child(btn)
 		botones_seccion[clave] = btn
-
-	riel.add_child(Control.new())
-	riel.get_child(riel.get_child_count() - 1).size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var separador := Control.new()
+	separador.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	riel.add_child(separador)
 
 
 ## La barra de contexto: quién sos, dónde estás y cuánta plata tenés. Antes
 ## nada de esto se veía sin entrar a tres pantallas distintas.
 func _construir_barra_contexto(padre: VBoxContainer) -> void:
+	var marco := PanelContainer.new()
+	marco.custom_minimum_size.y = 70
+	var estilo := StyleBoxFlat.new()
+	estilo.bg_color = Tema.BARRA
+	estilo.border_width_bottom = 3
+	estilo.border_color = Tema.BORDE
+	estilo.content_margin_left = 24
+	estilo.content_margin_right = 24
+	estilo.content_margin_top = 10
+	estilo.content_margin_bottom = 10
+	marco.add_theme_stylebox_override("panel", estilo)
+	padre.add_child(marco)
+
 	var barra := HBoxContainer.new()
-	padre.add_child(barra)
+	barra.add_theme_constant_override("separation", 18)
+	marco.add_child(barra)
+
+	escudo_barra = ESCUDO_CLUB_SCRIPT.new()
+	escudo_barra.custom_minimum_size = Vector2(42, 42)
+	escudo_barra.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	barra.add_child(escudo_barra)
+
+	var meta_club := VBoxContainer.new()
+	meta_club.add_theme_constant_override("separation", 0)
+	meta_club.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	barra.add_child(meta_club)
 
 	label_barra_club = Label.new()
 	Tema.numero(label_barra_club, Tema.TAM_BASE, Tema.TEXTO)
-	barra.add_child(label_barra_club)
+	meta_club.add_child(label_barra_club)
 
 	label_barra_posicion = Label.new()
+	label_barra_posicion.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
 	label_barra_posicion.add_theme_color_override("font_color", Tema.SUAVE)
-	barra.add_child(label_barra_posicion)
+	meta_club.add_child(label_barra_posicion)
 
 	# Solo aparece con el mercado abierto: fuera de la ventana no se puede
 	# ofertar ni te ofertan, y eso hay que verlo sin entrar a Mercado.
 	label_barra_mercado = Label.new()
 	Tema.numero(label_barra_mercado, Tema.TAM_CHICO, Tema.VERDE)
+	label_barra_mercado.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	barra.add_child(label_barra_mercado)
 
 	var espacio := Control.new()
 	espacio.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	barra.add_child(espacio)
 
-	barra.add_child(Tema.etiqueta_seccion("Fichajes"))
+	var dato_fichajes := VBoxContainer.new()
+	dato_fichajes.add_theme_constant_override("separation", 0)
+	dato_fichajes.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	dato_fichajes.add_child(Tema.etiqueta_seccion("Fichajes"))
 	label_barra_plata = Label.new()
 	Tema.numero(label_barra_plata, Tema.TAM_BASE, Tema.VERDE)
-	barra.add_child(label_barra_plata)
+	dato_fichajes.add_child(label_barra_plata)
+	barra.add_child(dato_fichajes)
 
-	barra.add_child(Tema.etiqueta_seccion("Fecha"))
+	var dato_fecha := VBoxContainer.new()
+	dato_fecha.add_theme_constant_override("separation", 0)
+	dato_fecha.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	dato_fecha.add_child(Tema.etiqueta_seccion("Fecha"))
 	label_barra_fecha = Label.new()
 	Tema.numero(label_barra_fecha, Tema.TAM_BASE, Tema.TEXTO)
-	barra.add_child(label_barra_fecha)
+	dato_fecha.add_child(label_barra_fecha)
+	barra.add_child(dato_fecha)
 
 	# Un respiro al final: sin esto el ultimo dato de la barra queda
 	# pegado al borde derecho de la pantalla y se ve cortado. Se veia en
@@ -9368,12 +9754,15 @@ func _refrescar_barra_contexto() -> void:
 	if label_barra_club == null:
 		return
 	var equipo := GameState.equipo_jugador
+	if escudo_barra != null:
+		escudo_barra.configurar(equipo.escudo_forma, equipo.logo_forma,
+			equipo.color_escudo, equipo.color_logo)
 	label_barra_club.text = equipo.nombre
 	var tabla := GameState.liga_jugador().tabla_ordenada()
 	var puesto: int = tabla.find(equipo.nombre) + 1
 	# Las fechas jugadas y las que son en total: sin eso, el puesto no
 	# dice si va bien o si todavia no arranco la temporada.
-	label_barra_posicion.text = "  Division %d  ·  %d° de %d  ·  %d de %d fechas" % [
+	label_barra_posicion.text = "Division %d  ·  %d° de %d  ·  %d de %d fechas" % [
 		GameState.division_jugador + 1, puesto, tabla.size(),
 		GameState.fecha_actual, GameState.liga_jugador().fixture.size()]
 	if label_barra_mercado != null:
@@ -9386,7 +9775,9 @@ func _refrescar_barra_contexto() -> void:
 	label_barra_plata.text = Economia.formato_dinero(equipo.caja["fichajes"])
 	# La fecha del calendario, no el numero de jornada: es el dato que se
 	# mira todo el tiempo desde que los dias pasan de a uno.
-	label_barra_fecha.text = Calendario.texto_corto(GameState.dia_absoluto)
+	var fecha_actual := Calendario.fecha(GameState.dia_absoluto)
+	label_barra_fecha.text = "%s/%d" % [Calendario.texto_corto(
+		GameState.dia_absoluto), int(fecha_actual["year"])]
 
 
 ## `panel_destino` elige la subsolapa de llegada. Sin eso, un boton que lleva a un
@@ -9430,7 +9821,7 @@ func _mostrar_panel_de_seccion(clave: String) -> void:
 		"entrenamiento": "_mostrar_entrenamiento",
 		"jugadas": "_mostrar_jugadas",
 		"cantera": "_mostrar_cantera", "instalaciones": "_mostrar_instalaciones",
-		"renovaciones": "_mostrar_renovaciones",
+		"renovaciones": "_mostrar_renovaciones", "cedidos": "_mostrar_cedidos",
 		"roles": "_mostrar_roles",
 		"tabla": "_mostrar_tabla", "jugadores_liga": "_mostrar_jugadores_liga",
 		"historial": "_mostrar_historial_partidos",
@@ -9496,8 +9887,14 @@ func _tarjeta(padre: Control, acento: Color = Color.TRANSPARENT) -> VBoxContaine
 		estilo.corner_radius_top_right = Tema.RADIO
 		estilo.corner_radius_bottom_left = Tema.RADIO
 		estilo.corner_radius_bottom_right = Tema.RADIO
-		estilo.border_width_left = 4
+		estilo.border_width_top = 2
+		estilo.border_width_bottom = 2
+		estilo.border_width_right = 2
+		estilo.border_width_left = 6
 		estilo.border_color = acento
+		estilo.shadow_color = Color("#070907")
+		estilo.shadow_size = 2
+		estilo.shadow_offset = Vector2(3, 3)
 		estilo.content_margin_left = 16
 		estilo.content_margin_right = 16
 		estilo.content_margin_top = 12
@@ -9536,15 +9933,7 @@ func _refrescar_portada() -> void:
 	var hay_playoff: bool = (not hay_copa and not hay_internacional
 		and GameState.hay_partido_de_playoff_hoy())
 	var hay_partido: bool = GameState.hay_partido_hoy() or hay_copa or hay_internacional or hay_playoff
-	var caja_partido := _tarjeta(contenedor_portada, Tema.AMBAR if hay_partido else Tema.BORDE)
-	var encabezado := Calendario.texto_largo(GameState.dia_absoluto)
-	if hay_copa:
-		encabezado = "%s  ·  %s  ·  %s" % [encabezado, copa.nombre, copa.ronda_actual()]
-	elif hay_internacional:
-		encabezado = "%s  ·  %s" % [encabezado, GameState.torneo_internacional_de_hoy()]
-	elif hay_playoff:
-		encabezado = "%s  ·  %s" % [encabezado, GameState.torneo_playoff_de_hoy()]
-	caja_partido.add_child(Tema.etiqueta_seccion(encabezado))
+	var termino_fixture: bool = not GameState.hay_fecha_pendiente()
 	var rival: Team = _proximo_rival()
 	var de_local: bool = _juega_de_local()
 	if hay_copa:
@@ -9556,47 +9945,59 @@ func _refrescar_portada() -> void:
 	elif hay_playoff:
 		rival = GameState.rival_de_playoff()
 		de_local = GameState.playoff_de_local()
+	var partido_destacado := rival != null
+	var caja_partido := _tarjeta(contenedor_portada, Tema.VERDE if partido_destacado else Tema.BORDE)
+	if partido_destacado:
+		var panel_partido := caja_partido.get_parent() as PanelContainer
+		var estilo_partido: StyleBoxFlat = panel_partido.get_theme_stylebox("panel").duplicate()
+		estilo_partido.bg_color = Color("#3eaa57")
+		estilo_partido.border_color = Color("#245f38")
+		estilo_partido.border_width_top = 3
+		estilo_partido.border_width_bottom = 5
+		estilo_partido.border_width_left = 3
+		estilo_partido.border_width_right = 3
+		estilo_partido.content_margin_left = 24
+		estilo_partido.content_margin_right = 24
+		estilo_partido.content_margin_top = 20
+		estilo_partido.content_margin_bottom = 20
+		panel_partido.add_theme_stylebox_override("panel", estilo_partido)
+	var encabezado := Calendario.texto_largo(GameState.dia_absoluto)
+	if hay_copa:
+		encabezado = "%s  ·  %s  ·  %s" % [encabezado, copa.nombre, copa.ronda_actual()]
+	elif hay_internacional:
+		encabezado = "%s  ·  %s" % [encabezado, GameState.torneo_internacional_de_hoy()]
+	elif hay_playoff:
+		encabezado = "%s  ·  %s" % [encabezado, GameState.torneo_playoff_de_hoy()]
+	elif rival != null:
+		encabezado = "PROXIMO PARTIDO  ·  %s" % Calendario.en_cuantos_dias(
+			GameState.dias_hasta_el_partido())
+	var etiqueta_partido := Tema.etiqueta_seccion(encabezado)
+	if partido_destacado:
+		etiqueta_partido.add_theme_color_override("font_color", Color("#fff17d"))
+		Tema.sombra_texto(etiqueta_partido)
+	caja_partido.add_child(etiqueta_partido)
 	var titulo := Label.new()
 	if rival == null:
 		titulo.text = "Temporada terminada."
-	elif hay_partido:
-		titulo.text = "%s  vs  %s   (%s)" % [
-			equipo.nombre, rival.nombre, "de local" if de_local else "de visitante"]
 	else:
-		titulo.text = "Sin partido hoy"
-	Tema.numero(titulo, 24, Tema.TEXTO if hay_partido else Tema.SUAVE)
+		titulo.text = "%s (%s)  VS  %s (%s)" % [equipo.nombre,
+			_texto_posicion(equipo), rival.nombre, _texto_posicion(rival)]
+	Tema.numero(titulo, 28, Color("#fff8df") if partido_destacado else Tema.SUAVE)
+	if partido_destacado:
+		Tema.sombra_texto(titulo)
 	caja_partido.add_child(titulo)
 
-	# Como vienen los dos en la tabla. Es la lectura rapida de si el rival
-	# es facil o dificil: antes el informe decia el estilo y el DT, que no
-	# dicen nada de como le va.
-	if rival != null:
-		var puestos := Label.new()
-		puestos.text = "%s   ·   %s" % [_texto_posicion(equipo), _texto_posicion(rival)]
-		puestos.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		puestos.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
-		caja_partido.add_child(puestos)
-
-	# Lo que se sabe del rival: estilo, DT y si es clasico. Vivia en la
-	# pantalla "Partido", pero es con lo que se elige el estilo propio, y
-	# eso se decide antes de jugar.
+	# Segunda y ultima linea: condicion de local, estilo y DT rival.
 	if rival != null:
 		var informe := Label.new()
-		informe.text = _texto_informe_rival(rival)
+		informe.text = _texto_informe_rival(rival, de_local)
 		informe.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		informe.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
 		informe.add_theme_color_override("font_color", Tema.SUAVE)
+		if partido_destacado:
+			informe.add_theme_color_override("font_color", Color("#eaffdc"))
+			Tema.sombra_texto(informe)
 		caja_partido.add_child(informe)
-
-	if rival != null and not hay_partido:
-		var falta := GameState.dias_hasta_el_partido()
-		var sub := Label.new()
-		sub.text = "Fecha %d  ·  %s vs %s  ·  %s" % [
-			GameState.fecha_actual + 1, equipo.nombre, rival.nombre,
-			Calendario.en_cuantos_dias(falta)]
-		sub.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
-		sub.add_theme_color_override("font_color", Tema.SUAVE)
-		caja_partido.add_child(sub)
 
 	var fila_acciones := HBoxContainer.new()
 	caja_partido.add_child(fila_acciones)
@@ -9610,6 +10011,7 @@ func _refrescar_portada() -> void:
 		elif hay_playoff:
 			btn_jugar.text = "Jugar el playoff de ascenso"
 		btn_jugar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn_jugar.size_flags_stretch_ratio = 2.0
 		Tema.primario(btn_jugar)
 		btn_jugar.disabled = rival == null
 		boton_jugar_partido = btn_jugar
@@ -9622,19 +10024,28 @@ func _refrescar_portada() -> void:
 		var btn_dia := Button.new()
 		btn_dia.text = "Avanzar un dia"
 		btn_dia.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn_dia.size_flags_stretch_ratio = 2.0
 		Tema.primario(btn_dia)
 		btn_dia.pressed.connect(func(): _avanzar_dias(false))
 		fila_acciones.add_child(btn_dia)
 		var btn_salto := Button.new()
-		btn_salto.text = "Ir al proximo partido"
-		btn_salto.custom_minimum_size = Vector2(230, Tema.ALTO_TACTIL)
-		btn_salto.tooltip_text = "Pasa los dias de corrido, pero frena si pasa algo que necesita una decision."
+		btn_salto.text = "Ir al fin de la liga" if termino_fixture else "Ir al proximo partido"
+		btn_salto.custom_minimum_size.y = Tema.ALTO_TACTIL
+		btn_salto.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn_salto.size_flags_stretch_ratio = 1.0
+		btn_salto.tooltip_text = (
+			"Pasa los dias hasta cerrar la liga, pero frena si aparece un partido o algo que necesita una decision."
+			if termino_fixture else
+			"Pasa los dias de corrido, pero frena si pasa algo que necesita una decision."
+		)
 		btn_salto.pressed.connect(func(): _avanzar_dias(true))
 		fila_acciones.add_child(btn_salto)
 	if hay_partido:
 		var btn_form := Button.new()
 		btn_form.text = "Saltar a resultado"
-		btn_form.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
+		btn_form.custom_minimum_size.y = Tema.ALTO_TACTIL
+		btn_form.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn_form.size_flags_stretch_ratio = 1.0
 		btn_form.disabled = rival == null
 		btn_form.pressed.connect(_on_saltar_a_resultado)
 		fila_acciones.add_child(btn_form)
@@ -9644,7 +10055,9 @@ func _refrescar_portada() -> void:
 	# que salta la temporada es pedirle que adivine donde esta.
 	var btn_simular := Button.new()
 	btn_simular.text = TEXTO_SIMULAR_TEMPORADA
-	btn_simular.custom_minimum_size = Vector2(280, Tema.ALTO_TACTIL)
+	btn_simular.custom_minimum_size.y = Tema.ALTO_TACTIL
+	btn_simular.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_simular.size_flags_stretch_ratio = 1.0
 	btn_simular.tooltip_text = "Juega de una todas las fechas que quedan, las tuyas incluidas: no vas a poder tocar nada hasta el final."
 	btn_simular.disabled = rival == null
 	btn_simular.pressed.connect(func():
@@ -9652,6 +10065,16 @@ func _refrescar_portada() -> void:
 		_refrescar_portada()
 	)
 	fila_acciones.add_child(btn_simular)
+
+	# Futbol concreto, no una curva abstracta: resultados, goles y goleador.
+	# El rival usa la misma ficha para que la comparacion sea inmediata.
+	contenedor_portada.add_child(Tema.etiqueta_seccion("Tu equipo y el rival"))
+	var comparacion := HBoxContainer.new()
+	comparacion.add_theme_constant_override("separation", 12)
+	contenedor_portada.add_child(comparacion)
+	_agregar_resumen_club(comparacion, equipo, "TU EQUIPO", Tema.CELESTE)
+	if rival != null:
+		_agregar_resumen_club(comparacion, rival, "PRÓXIMO RIVAL", Tema.ROJO)
 
 	# --- Lo que esta esperando una decision --------------------------------
 	var pendientes := _pendientes_de_portada()
@@ -9683,17 +10106,119 @@ func _refrescar_portada() -> void:
 		btn.pressed.connect(p["al_tocar"])
 		fila.add_child(btn)
 
-	# --- Estado del club ---------------------------------------------------
-	contenedor_portada.add_child(Tema.etiqueta_seccion("El club"))
-	var estado := _tarjeta(contenedor_portada)
-	var linea := Label.new()
-	linea.text = "Media del once %.1f   ·   disponibles %d de %d   ·   carga %s   ·   %s" % [
-		equipo.media_equipo(), equipo.jugadores_sanos_count(),
-		equipo.todos_los_jugadores().size(),
-		CargaEntrenamiento.ETIQUETAS.get(equipo.carga_entrenamiento, "?"),
-		_texto_ejercicios(equipo)]
-	linea.add_theme_color_override("font_color", Tema.SUAVE)
-	estado.add_child(linea)
+	# --- Anuncios descartables ---------------------------------------------
+	# Solo hechos que afectan al club propio. El feed Noticias conserva el
+	# mundo entero; esto es la bandeja corta de resultados importantes.
+	var fila_titulo_anuncios := HBoxContainer.new()
+	contenedor_portada.add_child(fila_titulo_anuncios)
+	var titulo_anuncios := Tema.etiqueta_seccion("Anuncios")
+	titulo_anuncios.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	fila_titulo_anuncios.add_child(titulo_anuncios)
+	if not GameState.anuncios_portada.is_empty():
+		var descartar_todos := Button.new()
+		descartar_todos.text = "Descartar todos"
+		descartar_todos.pressed.connect(func():
+			GameState.descartar_todos_los_anuncios()
+			_refrescar_portada())
+		fila_titulo_anuncios.add_child(descartar_todos)
+	if GameState.anuncios_portada.is_empty():
+		var sin_anuncios := Label.new()
+		sin_anuncios.text = "No hay anuncios nuevos."
+		sin_anuncios.add_theme_color_override("font_color", Tema.SUAVE)
+		contenedor_portada.add_child(sin_anuncios)
+	for anuncio in GameState.anuncios_portada:
+		var tipo := str(anuncio.get("tipo", "club"))
+		var color := Tema.VERDE if tipo == "exito" else (
+			Tema.CELESTE if tipo == "entrenamiento" else Tema.AMBAR)
+		var caja_anuncio := _tarjeta(contenedor_portada, color)
+		var fila_anuncio := HBoxContainer.new()
+		caja_anuncio.add_child(fila_anuncio)
+		var texto_anuncio := Label.new()
+		texto_anuncio.text = str(anuncio.get("texto", ""))
+		texto_anuncio.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		texto_anuncio.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		fila_anuncio.add_child(texto_anuncio)
+		var id_anuncio := int(anuncio.get("id", -1))
+		var descartar := Button.new()
+		descartar.text = "Descartar"
+		descartar.custom_minimum_size = Vector2(130, Tema.ALTO_TACTIL)
+		descartar.pressed.connect(func():
+			GameState.descartar_anuncio_portada(id_anuncio)
+			_refrescar_portada())
+		fila_anuncio.add_child(descartar)
+
+
+
+## Ficha corta con la tabla y los goleadores reales de la division.
+func _agregar_resumen_club(padre: Control, club: Team, rotulo: String,
+		acento: Color) -> void:
+	var caja := _tarjeta(padre, acento)
+	caja.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	caja.add_child(Tema.etiqueta_seccion(rotulo))
+
+	var nombre := Label.new()
+	nombre.text = club.nombre
+	Tema.numero(nombre, 22, Tema.TEXTO)
+	caja.add_child(nombre)
+
+	var division := GameState.division_de(club)
+	if division < 0 or division >= GameState.piramide.divisiones.size():
+		return
+	var liga: Liga = GameState.piramide.divisiones[division]
+	var fila: Dictionary = liga.tabla.get(club.nombre, {})
+	var goleador := _goleador_del_club(liga, club)
+	var nombre_goleador := "Todavia sin goles"
+	var goles_goleador := ""
+	if goleador.is_empty():
+		pass
+	else:
+		nombre_goleador = str(goleador["nombre"])
+		goles_goleador = "%d gol%s" % [int(goleador["goles"]),
+			"" if int(goleador["goles"]) == 1 else "es"]
+
+	# Tres tercios reales. Cada fila usa todo el ancho y comparte exactamente
+	# los mismos comienzos de columna, sin anchos inventados ni espacio muerto.
+	_agregar_fila_resumen(caja, [
+		"Ganados  %d" % int(fila.get("pg", 0)),
+		"Empatados  %d" % int(fila.get("pe", 0)),
+		"Perdidos  %d" % int(fila.get("pp", 0))])
+	_agregar_fila_resumen(caja, ["Goleador", nombre_goleador, goles_goleador], Tema.AMBAR)
+
+
+func _agregar_fila_resumen(padre: VBoxContainer, textos: Array,
+		color: Color = Color.TRANSPARENT) -> void:
+	var fila := HBoxContainer.new()
+	fila.add_theme_constant_override("separation", 0)
+	fila.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	padre.add_child(fila)
+	for texto in textos:
+		# El Control define el tercio. El Label anclado no puede agrandarlo por
+		# tener un nombre largo, que era lo que desalineaba las columnas.
+		var espacio := Control.new()
+		espacio.custom_minimum_size.y = 28
+		espacio.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		espacio.size_flags_stretch_ratio = 1.0
+		fila.add_child(espacio)
+		var etiqueta := Label.new()
+		etiqueta.text = str(texto)
+		etiqueta.clip_text = true
+		etiqueta.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		etiqueta.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		if color != Color.TRANSPARENT:
+			etiqueta.add_theme_color_override("font_color", color)
+		espacio.add_child(etiqueta)
+		etiqueta.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+
+func _goleador_del_club(liga: Liga, club: Team) -> Dictionary:
+	var mejor := {}
+	for jugador in club.todos_los_jugadores():
+		var fila: Dictionary = liga.estadisticas.get(str(int(jugador["id"])), {})
+		var goles := int(fila.get("goles", 0))
+		if goles <= int(mejor.get("goles", 0)):
+			continue
+		mejor = {"nombre": _nombre_jugador(jugador), "goles": goles}
+	return mejor
 
 
 ## Lo que esta esperando una decision tuya, ahora. Solo cosas accionables:
@@ -9744,22 +10269,27 @@ func _pendientes_de_portada() -> Array:
 			"accion": "Aceptar",
 			"al_tocar": acusar,
 		})
-	# El informe mas nuevo es el de mas dias de vigencia: ese abre el boton.
-	var id_informe := -1
-	var dias_informe := Investigadores.DIAS_VIGENCIA - 30
-	for id in equipo.conocimiento:
-		if int(equipo.conocimiento[id]) > dias_informe:
-			dias_informe = int(equipo.conocimiento[id])
-			id_informe = int(id)
+	# Un informe deja de ser novedad al abrirlo. Si terminaron varios, queda
+	# el siguiente en la cola para que ningun resultado tape a otro.
+	var indice := _indice_de_jugadores()
+	while not equipo.informes_sin_ver.is_empty():
+		var primero := int(equipo.informes_sin_ver[0])
+		if equipo.conocimiento.has(primero) and indice.has(primero):
+			break
+		equipo.informes_sin_ver.pop_front()
+	var id_informe := -1 if equipo.informes_sin_ver.is_empty() else int(equipo.informes_sin_ver[0])
 	if id_informe != -1:
+		var dato_informe: Dictionary = indice[id_informe]
+		var nombre_informe := _nombre_jugador(dato_informe["jugador"])
 		var ver_informe := func():
+			equipo.informes_sin_ver.erase(id_informe)
 			_mostrar_seccion("mercado", "mercado")
 			_mostrar_solapa_mercado("investigaciones")
 			_mostrar_modal_jugador(id_informe)
 		salida.append({
 			"color": Tema.CELESTE,
-			"titulo": "Informe nuevo listo",
-			"detalle": "Ya podes ver su ficha completa.",
+			"titulo": "Informe de %s listo" % nombre_informe,
+			"detalle": "%s · Ya podes ver su ficha completa." % str(dato_informe["club"].nombre),
 			"accion": "Ver",
 			"al_tocar": ver_informe,
 		})
@@ -9980,6 +10510,7 @@ func _construir_panel_jugadas(padre: Control) -> void:
 		Jugadas.empezar(GameState.equipo_jugador, jugada_a_confirmar)
 		_refrescar_jugadas())
 	add_child(dialogo_jugada)
+	Tema.dialogo(dialogo_jugada, true)
 
 
 func _mostrar_jugadas() -> void:
@@ -10054,16 +10585,12 @@ func _refrescar_jugadas() -> void:
 	grilla_jugadas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grilla_jugadas.add_theme_constant_override("h_separation", 10)
 	grilla_jugadas.add_theme_constant_override("v_separation", 10)
-	if not pendientes.is_empty():
-		var encabezado := HBoxContainer.new()
-		encabezado.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		contenedor_jugadas.add_child(encabezado)
-		var titulo_pendientes := Tema.etiqueta_seccion(
-			"Para más adelante" if equipo.jugada_en_curso != "" else "Disponibles para ensayar")
-		titulo_pendientes.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		encabezado.add_child(titulo_pendientes)
-		encabezado.add_child(_texto_suave("%d pendientes" % pendientes.size()))
-		contenedor_jugadas.add_child(grilla_jugadas)
+	# Mientras hay un ensayo en curso, las opciones bloqueadas no aportan
+	# ninguna accion y ocupan casi toda la pantalla.
+	if equipo.jugada_en_curso == "" and not pendientes.is_empty():
+		# La grilla vive dentro del mismo VBox que el resumen. Asi no existe
+		# ningun contenedor intermedio capaz de abrir un hueco entre ambos.
+		caja.add_child(grilla_jugadas)
 		for id in pendientes:
 			grilla_jugadas.add_child(_cuadrado_de_jugada(equipo, id, liga))
 
@@ -10334,7 +10861,7 @@ func _construir_modal_dorsal() -> void:
 
 	var centro := CenterContainer.new()
 	fondo.add_child(centro)
-	var caja := Componentes.tarjeta()
+	var caja := Componentes.modal()
 	caja.custom_minimum_size = Vector2(620, 560)
 	caja.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	centro.add_child(caja)
@@ -10399,7 +10926,7 @@ func _refrescar_modal_dorsal() -> void:
 		grilla.add_child(btn)
 
 	var cerrar := Button.new()
-	cerrar.text = "Cancelar"
+	cerrar.text = "Cerrar"
 	cerrar.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
 	cerrar.pressed.connect(_cerrar_modal_dorsal)
 	contenedor_modal_dorsal.add_child(cerrar)
@@ -10428,7 +10955,7 @@ func _construir_modal_roles() -> void:
 
 	var centro := CenterContainer.new()
 	fondo.add_child(centro)
-	var caja := Componentes.tarjeta()
+	var caja := Componentes.modal()
 	caja.custom_minimum_size = Vector2(560, 540)
 	caja.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	centro.add_child(caja)
@@ -10534,7 +11061,7 @@ func _construir_modal_alineacion() -> void:
 
 	var centro := CenterContainer.new()
 	fondo.add_child(centro)
-	var caja := Componentes.tarjeta(Tema.ROJO)
+	var caja := Componentes.modal(Tema.ROJO)
 	caja.custom_minimum_size = Vector2(600, 0)
 	caja.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	centro.add_child(caja)
@@ -10571,6 +11098,18 @@ func _refrescar_modal_alineacion() -> void:
 	Tema.numero(titulo, 26, Tema.TEXTO)
 	contenedor_modal_alineacion.add_child(titulo)
 
+	# La lista puede llegar a once jugadores. Queda acotada y scrollea para
+	# que las decisiones y Cerrar nunca bajen fuera del celular.
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.custom_minimum_size = Vector2(
+		0, mini(260, maxi(80, pasos.size() * 70)))
+	contenedor_modal_alineacion.add_child(scroll)
+	var lista := VBoxContainer.new()
+	lista.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lista.add_theme_constant_override("separation", 4)
+	scroll.add_child(lista)
+
 	for paso in pasos:
 		var sale: Dictionary = paso["sale"]
 		var entra: Dictionary = paso["entra"]
@@ -10602,7 +11141,7 @@ func _refrescar_modal_alineacion() -> void:
 			reemplazo.add_theme_color_override("font_color", Tema.VERDE)
 		reemplazo.add_theme_font_size_override("font_size", Tema.TAM_CHICO)
 		caja.add_child(reemplazo)
-		contenedor_modal_alineacion.add_child(fila)
+		lista.add_child(fila)
 
 	var sin_cubrir := Alineacion.sin_cubrir(equipo)
 	if sin_cubrir > 0:
@@ -10633,6 +11172,12 @@ func _refrescar_modal_alineacion() -> void:
 		# banco. De ahi el jugador vuelve solo y le da a Jugar otra vez.
 		_mostrar_seccion("equipo", "formacion"))
 	acciones.add_child(btn_mano)
+
+	var btn_cerrar := Button.new()
+	btn_cerrar.text = "Cerrar"
+	btn_cerrar.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	btn_cerrar.pressed.connect(_cerrar_modal_alineacion)
+	contenedor_modal_alineacion.add_child(btn_cerrar)
 
 
 ## Arregla el once y sigue derecho al partido: el que aprieta
@@ -10680,9 +11225,10 @@ var cesion_topes: Dictionary = {}
 func _construir_dialogo_cesion() -> void:
 	dialogo_cesion = AcceptDialog.new()
 	dialogo_cesion.title = "Cesion"
-	dialogo_cesion.ok_button_text = "Cerrar"
-	dialogo_cesion.min_size = Vector2(720, 560)
+	dialogo_cesion.min_size = Vector2(720, 0)
 	add_child(dialogo_cesion)
+	Tema.dialogo(dialogo_cesion)
+	dialogo_cesion.get_ok_button().hide()
 
 	var caja := VBoxContainer.new()
 	caja.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -10716,6 +11262,7 @@ func _construir_dialogo_cesion() -> void:
 	spin_cesion_fee.step = 1000
 	spin_cesion_fee.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
 	fila_fee.add_child(spin_cesion_fee)
+	_activar_formato_miles(spin_cesion_fee)
 	label_cesion_fee = Label.new()
 	label_cesion_fee.add_theme_color_override("font_color", Tema.SUAVE)
 	fila_fee.add_child(label_cesion_fee)
@@ -10744,6 +11291,7 @@ func _construir_dialogo_cesion() -> void:
 	spin_cesion_opcion.step = 5000
 	spin_cesion_opcion.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
 	fila_opcion.add_child(spin_cesion_opcion)
+	_activar_formato_miles(spin_cesion_opcion)
 	label_cesion_opcion = Label.new()
 	label_cesion_opcion.add_theme_color_override("font_color", Tema.SUAVE)
 	fila_opcion.add_child(label_cesion_opcion)
@@ -10757,6 +11305,7 @@ func _construir_dialogo_cesion() -> void:
 	spin_cesion_plus.step = 500
 	spin_cesion_plus.custom_minimum_size = Vector2(200, Tema.ALTO_TACTIL)
 	fila_plus.add_child(spin_cesion_plus)
+	_activar_formato_miles(spin_cesion_plus)
 	label_cesion_plus = Label.new()
 	label_cesion_plus.add_theme_color_override("font_color", Tema.SUAVE)
 	fila_plus.add_child(label_cesion_plus)
@@ -10783,11 +11332,16 @@ func _construir_dialogo_cesion() -> void:
 	boton_cesion_retirar.custom_minimum_size = Vector2(180, 48)
 	boton_cesion_retirar.pressed.connect(_on_cesion_retirar)
 	fila_botones.add_child(boton_cesion_retirar)
+	var cerrar := Button.new()
+	cerrar.text = "Cerrar"
+	cerrar.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	cerrar.pressed.connect(dialogo_cesion.hide)
+	caja.add_child(cerrar)
 
 	label_cesion_estado = RichTextLabel.new()
 	label_cesion_estado.bbcode_enabled = true
 	label_cesion_estado.fit_content = true
-	label_cesion_estado.custom_minimum_size = Vector2(0, 140)
+	label_cesion_estado.custom_minimum_size = Vector2(0, 52)
 	caja.add_child(label_cesion_estado)
 
 
@@ -10858,7 +11412,7 @@ func _terminos_de_cesion() -> Dictionary:
 func _on_cesion_aceptar() -> void:
 	var r := GameState.responder_oferta(cesion_oferta_id, "aceptar")
 	if not r["exito"]:
-		label_cesion_estado.text = "[color=#d4a017]%s[/color]" % r["motivo"]
+		label_cesion_estado.text = "[color=#ffcf43]%s[/color]" % r["motivo"]
 		return
 	label_cesion_estado.text = "[color=#27ae60]Aceptaste. Ahora falta que el jugador quiera ir.[/color]"
 	boton_cesion_aceptar.visible = false
@@ -10870,19 +11424,16 @@ func _on_cesion_aceptar() -> void:
 func _on_cesion_contraofertar() -> void:
 	var r := GameState.contraofertar_cesion(cesion_oferta_id, _terminos_de_cesion())
 	if not r["exito"]:
-		label_cesion_estado.text = "[color=#d4a017]%s[/color]" % r["motivo"]
+		label_cesion_estado.text = "[color=#ffcf43]%s[/color]" % r["motivo"]
 		return
-	label_cesion_estado.text = "[color=#27ae60]Contraofertaste. Te contestan en unos dias.[/color]"
-	boton_cesion_aceptar.visible = false
-	boton_cesion_contra.visible = false
-	boton_cesion_rechazar.visible = false
+	dialogo_cesion.hide()
 	_mostrar_solapa_mercado(solapa_mercado_actual)
 
 
 func _on_cesion_retirar() -> void:
 	var r := GameState.retirar_oferta(cesion_oferta_id)
 	if not r["exito"]:
-		label_cesion_estado.text = "[color=#d4a017]%s[/color]" % r["motivo"]
+		label_cesion_estado.text = "[color=#ffcf43]%s[/color]" % r["motivo"]
 		return
 	dialogo_cesion.hide()
 	_mostrar_solapa_mercado(solapa_mercado_actual)
@@ -10891,7 +11442,7 @@ func _on_cesion_retirar() -> void:
 func _on_cesion_rechazar() -> void:
 	var r := GameState.responder_oferta(cesion_oferta_id, "rechazar")
 	if not r["exito"]:
-		label_cesion_estado.text = "[color=#d4a017]%s[/color]" % r["motivo"]
+		label_cesion_estado.text = "[color=#ffcf43]%s[/color]" % r["motivo"]
 		return
 	dialogo_cesion.hide()
 	_mostrar_solapa_mercado(solapa_mercado_actual)
