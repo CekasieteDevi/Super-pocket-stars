@@ -1,4 +1,5 @@
 [
+	{"version": "0.7.46", "fecha": "2026-09-25", "cambio": "Tras un rebote del arquero, la pelota que llega rodando se patea y ya no se cabecea."},
 	{"version": "0.7.45", "fecha": "2026-09-25", "cambio": "Los jugadores se cansan más en los partidos y tardan una semana en recuperarse, así que las copas obligan a rotar."},
 	{"version": "0.7.43", "fecha": "2026-09-25", "cambio": "Los remates con efecto ya no dejan la pelota colgada frente al golero hasta el final del tiempo."},
 	{"version": "0.6.13", "fecha": "2026-09-23", "cambio": "Los jugadores se cansan de verdad: rinden menos cuando les falta energía y los equipos rotan en las copas menores."},

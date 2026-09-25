@@ -6063,6 +6063,13 @@ static func _intentar_remate_rebote(estado: Dictionary, atacante: int, punto: Ve
 	if alto and estado["rng"].randf() >= clampf(0.08 + float(attrs.get("volea", 50.0)) / 100.0 * 0.30, 0.08, 0.38):
 		accion = ACCION_CABECEA
 		atributo = "cabezazo"
+	# El rebote que tuvo que rodar hasta el atacante ya llega por el piso:
+	# se patea, no se cabecea ni se volea (test centro_remate_alcance,
+	# SEED 9261, partido 11). El sorteo de arriba corre igual, para no
+	# correr la secuencia del rng.
+	if float(estado["pelota"].get("z", 0.0)) <= 0.0:
+		accion = ACCION_PATEA
+		atributo = "tiro"
 	_resolver_tiro(estado, e, jugador, atributo, accion)
 
 
