@@ -5398,6 +5398,13 @@ static func _lanzar_remate(estado: Dictionary, poseedor: Dictionary, datos: Dict
 	pelota.erase("pared_a")
 	var dir: Vector2 = (destino - poseedor["pos"]).normalized()
 	pelota["vel"] = dir * float(pesos()["fisica"]["vel_remate"])
+	if not trayectoria_curva.is_empty():
+		# La curva avanza con la rapidez del remate, fija. Tomarla de la
+		# vel del tick anterior la frenaba: la Bezier va mas lenta en el
+		# medio y cada tick heredaba el paso achicado. En remates cortos
+		# y muy curvos no llegaba nunca y la pelota quedaba colgada sobre
+		# el arquero hasta el final del tiempo (tests/_diag_guardado_trancada.gd).
+		trayectoria_curva["rapidez"] = pelota["vel"].length()
 
 	# El arquero se mueve hacia la trayectoria mientras la pelota viaja,
 	# no cuando ya entró (ver el paso 3 de _tick). En la atajada llega
@@ -6676,7 +6683,8 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 		# solo cambia el camino que ve la pelota.
 		var avance_anterior := float(pelota.get("progreso_trayectoria", 0.0))
 		var longitud := maxf(float(trayectoria.get("longitud", restante)), 0.01)
-		var avance := minf(1.0, avance_anterior + paso / longitud)
+		var paso_curva: float = float(trayectoria.get("rapidez", pelota["vel"].length())) * TICK_SEG
+		var avance := minf(1.0, avance_anterior + paso_curva / longitud)
 		var origen_tray := trayectoria["origen"] as Vector2
 		var control_tray := trayectoria["control"] as Vector2
 		var destino_tray := trayectoria["destino"] as Vector2
