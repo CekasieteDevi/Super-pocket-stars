@@ -1,4 +1,5 @@
 [
+	{"version": "0.7.50", "fecha": "2026-09-25", "cambio": "Al empezar una partida nueva, el juego te pide tu nombre como DT."},
 	{"version": "0.7.49", "fecha": "2026-09-25", "cambio": "Un suplente acepta ir a préstamo a un club más chico aunque sea el mejor del plantel."},
 	{"version": "0.7.48", "fecha": "2026-09-25", "cambio": "El saque de arco del golero ya no pinta guantes sobre la patada normal de los jugadores."},
 	{"version": "0.7.47", "fecha": "2026-09-25", "cambio": "Los fichajes ahora muestran el sueldo solo tras investigar y cada oferta de contrato empieza en cero."},

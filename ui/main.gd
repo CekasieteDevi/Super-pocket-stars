@@ -150,6 +150,7 @@ var menu_inicio: VBoxContainer
 var formulario_inicio: VBoxContainer
 var formulario_escudo: VBoxContainer
 var campo_nombre_club: LineEdit
+var campo_nombre_dt: LineEdit
 var campo_abreviacion: LineEdit
 var fila_camiseta: HBoxContainer
 var fila_short: HBoxContainer
@@ -415,7 +416,7 @@ func _construir_pantalla_inicio() -> void:
 		formulario_inicio.visible = true
 		formulario_escudo.visible = false
 		_refrescar_colores_elegidos()
-		campo_nombre_club.grab_focus())
+		campo_nombre_dt.grab_focus())
 	menu_inicio.add_child(btn_nueva)
 
 	boton_cargar_inicio = Button.new()
@@ -452,6 +453,14 @@ func _construir_pantalla_inicio() -> void:
 	formulario_inicio.visible = false
 	formulario_inicio.add_theme_constant_override("separation", 10)
 	caja.add_child(formulario_inicio)
+
+	formulario_inicio.add_child(Tema.etiqueta_seccion("Tu nombre como DT"))
+	campo_nombre_dt = LineEdit.new()
+	campo_nombre_dt.placeholder_text = "Como te llamás"
+	campo_nombre_dt.max_length = 28
+	campo_nombre_dt.custom_minimum_size = Vector2(0, Tema.ALTO_TACTIL)
+	campo_nombre_dt.text_changed.connect(func(_t): _validar_club_nuevo())
+	formulario_inicio.add_child(campo_nombre_dt)
 
 	formulario_inicio.add_child(Tema.etiqueta_seccion("Nombre del club"))
 	campo_nombre_club = LineEdit.new()
@@ -751,7 +760,9 @@ func _validar_club_nuevo() -> void:
 		return
 	var nombre := campo_nombre_club.text.strip_edges()
 	var motivo := ""
-	if nombre == "":
+	if campo_nombre_dt == null or campo_nombre_dt.text.strip_edges() == "":
+		motivo = "Poné tu nombre como DT."
+	elif nombre == "":
 		motivo = "Poné el nombre de tu club."
 	elif campo_abreviacion == null or campo_abreviacion.text.strip_edges() == "":
 		motivo = "Poné una abreviación para el marcador."
@@ -846,7 +857,8 @@ func _on_comenzar_partida() -> void:
 		ColoresClub.PALETA[color_short_secundario_elegido],
 		escudo_forma_elegida, logo_forma_elegida,
 		ColoresClub.PALETA[color_escudo_elegido],
-		ColoresClub.PALETA[color_logo_elegido])
+		ColoresClub.PALETA[color_logo_elegido],
+		campo_nombre_dt.text.strip_edges())
 	_entrar_al_juego()
 
 

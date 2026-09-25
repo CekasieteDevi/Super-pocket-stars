@@ -143,6 +143,10 @@ var ultima_posicion_final: Dictionary = {}  # {"posicion","total","division"} de
 ## resetee las tablas. Vacio en la temporada 1: ahi clasifica por
 ## reputacion.
 var posiciones_temporada_anterior: Dictionary = {}
+## Nombre que el jugador eligió para su DT al crear la partida. Vive acá
+## y no en `Team.dt` porque ese diccionario es la identidad del cuerpo
+## técnico de un club de la IA (nivel y rasgo), no la del jugador.
+var nombre_dt: String = ""
 
 
 
@@ -168,8 +172,9 @@ func partida_nueva(semilla: int = -1, nombre_club: String = "",
 		abreviacion: String = "", camiseta_secundaria: Color = Color.TRANSPARENT,
 		short_secundario: Color = Color.TRANSPARENT, escudo: int = 0,
 		logo: int = 0, color_escudo_elegido: Color = Color.TRANSPARENT,
-		color_logo_elegido: Color = Color.TRANSPARENT) -> void:
+		color_logo_elegido: Color = Color.TRANSPARENT, dt: String = "") -> void:
 	rng = RandomNumberGenerator.new()
+	nombre_dt = dt.strip_edges()
 	if semilla < 0:
 		rng.randomize()
 	else:
@@ -2244,6 +2249,7 @@ func guardar_partida() -> void:
 		"division_jugador": division_jugador,
 		"equipo_jugador_nombre": equipo_jugador.nombre,
 		"rotacion_jugador": equipo_jugador.rotacion_automatica,
+		"nombre_dt": nombre_dt,
 		"fecha_actual": fecha_actual,
 		"temporada_actual": temporada_actual,
 		"dia_temporada": dia_temporada,
@@ -2332,6 +2338,8 @@ func cargar_partida() -> bool:
 	# Una partida de antes de la rotación trae al club del jugador con el
 	# valor por defecto de la IA: su once no se toca sin que lo pida.
 	equipo_jugador.rotacion_automatica = bool(datos.get("rotacion_jugador", false))
+	# Una partida de antes del nombre del DT no lo trae: queda vacío.
+	nombre_dt = str(datos.get("nombre_dt", ""))
 	fecha_actual = datos["fecha_actual"]
 	temporada_actual = datos["temporada_actual"]
 	Historial.temporada = temporada_actual
