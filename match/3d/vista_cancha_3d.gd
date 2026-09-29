@@ -520,6 +520,11 @@ var _viewport: SubViewport
 var _mundo: Node3D
 var _camara_3d: Camera3D
 var _pelota: Node3D
+## Manchas debajo de personas y pelota (en vez de la sombra del sol, ver
+## SombrasRedondas). Alcanza para los 22, suplentes en la banda, oficiales y
+## la pelota.
+const MANCHAS := 40
+var _manchas: SombrasRedondas
 var _escenas := {}
 var _personas := {}
 var _pos_previa := {}
@@ -708,6 +713,8 @@ func _ready() -> void:
 	_pelota = _escenas[ESCENA_PELOTA].instantiate()
 	_pelota.scale = Vector3.ONE * ESCALA_PELOTA
 	_mundo.add_child(_pelota)
+	_manchas = SombrasRedondas.new(MANCHAS)
+	_mundo.add_child(_manchas)
 	Materiales3D.aplicar(_pelota)
 	set_process(true)
 
@@ -727,8 +734,9 @@ func _armar_ambiente() -> void:
 	var sol := DirectionalLight3D.new()
 	sol.light_color = Color(1.0, 0.9, 0.78)
 	sol.light_energy = 1.0
-	sol.shadow_enabled = true
-	sol.directional_shadow_max_distance = 80.0
+	# Sin sombra: en el teléfono de referencia bajaba el partido de 60 a 43 fps
+	# (docs/motor_v2.md, etapa 0). La reemplazan las SombrasRedondas.
+	sol.shadow_enabled = false
 	_mundo.add_child(sol)
 	# Misma dirección que el sol de Blender (0.55, 0.6, -0.75), pasada a ejes
 	# de Godot: arriba-izquierda-adelante, como en los sprites.
@@ -796,6 +804,22 @@ func _process(delta: float) -> void:
 	_pelota.visible = hay_pelota
 	for clave in _personas:
 		_personas[clave].visible = vistos.has(clave)
+	_poner_manchas()
+
+
+func _poner_manchas() -> void:
+	var i := 0
+	for clave in _personas:
+		var p3: Jugador3D = _personas[clave]
+		if p3.visible and i < MANCHAS - 1:
+			_manchas.poner_jugador(i, p3.position)
+			i += 1
+	if _pelota.visible:
+		_manchas.poner_pelota(i, _pelota.position)
+		i += 1
+	while i < MANCHAS:
+		_manchas.ocultar(i)
+		i += 1
 
 
 ## El encuadre sale de CamaraPartido, igual que en el 2D: el centro que

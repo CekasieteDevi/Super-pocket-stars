@@ -1,0 +1,12 @@
+; Extensión nativa del Motor V2 (motor_v2/cpp, docs/motor_v2.md etapa 0).
+; Se arma siempre en template_release y sirve también para el editor y las
+; exportaciones de depuración: se mide con el código optimizado.
+[configuration]
+entry_symbol = "motor_v2_iniciar"
+compatibility_minimum = "4.7"
+
+[libraries]
+windows.debug.x86_64 = "res://motor_v2/bin/libmotor_v2.windows.template_release.x86_64.dll"
+windows.release.x86_64 = "res://motor_v2/bin/libmotor_v2.windows.template_release.x86_64.dll"
+android.debug.arm64 = "res://motor_v2/bin/libmotor_v2.android.template_release.arm64.so"
+android.release.arm64 = "res://motor_v2/bin/libmotor_v2.android.template_release.arm64.so"

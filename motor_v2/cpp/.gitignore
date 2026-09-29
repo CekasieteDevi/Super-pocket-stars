@@ -1,0 +1,5 @@
+# Lo que deja el compilador (scons).
+*.obj
+*.o
+*.os
+.sconsign*.dblite

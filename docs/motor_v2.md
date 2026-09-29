@@ -135,6 +135,26 @@ Nueve etapas, cada una con algo que se puede mirar y un criterio para pasar a la
 - **Pasa si:** ≤ 4 ms de simulación por frame con vista y ≤ 3 s por partido sin vista en el teléfono, con margen para el cerebro (que hoy cuesta 0,34 s por partido en la PC a 4 Hz).
 - **Si no pasa:** mundo y cuerpo se escriben como GDExtension en C++ y el cerebro queda en GDScript. Se decide acá, no a mitad de camino.
 
+#### Resultado (2026-09-29): no pasa sin vista → mundo y cuerpo en C++
+
+Banco: `motor_v2/banco_etapa0.tscn` (`mundo.gd`, `cerebro_falso.gd`, `vista_v2.gd`). Semilla 20260929. En el teléfono corre como app aparte (`uy.cekasiete.bancov2`, "Banco V2"): se exporta con `run/main_scene` apuntando al banco y los argumentos en `command_line/extra_args` (las plantillas oficiales no aceptan una escena por línea de comando), y después se restauran `project.godot` y `export_presets.cfg`. Resultados en logcat con el prefijo `[banco_v2]`.
+
+| Medida | GDScript, PC (Ryzen 7 9700X) | GDScript, teléfono (T760) | C++, PC | C++, teléfono | Presupuesto |
+| --- | --- | --- | --- | --- | --- |
+| Partido de 90 min sin vista, en hilo (mundo + cerebro falso) | 5,9 s | 24,9–26,0 s | 0,60 s | **1,52 s** | ≤ 3 s |
+| Por paso | 18,2 µs | 76,7 µs | 1,84 µs | 4,69 µs | — |
+| Simulación por cuadro con vista (p95) | 0,07 ms | 0,83 ms | 0,01 ms | 0,08 ms | ≤ 4 ms |
+| Vista (código GDScript) por cuadro, prom. | 0,27 ms | 1,9–2,1 ms | 0,35 ms | 2,3 ms | — |
+| Misma semilla, misma huella PC ↔ Android | sí | sí | sí (con matemática propia) | sí | igual |
+
+- **Decisión:** el mundo y el cuerpo se escriben como GDExtension en C++. En GDScript el mundo solo, sin cuerpo de verdad ni cerebro, ya cuesta 8 veces el presupuesto del partido sin vista. El mismo mundo y el mismo cerebro falso en C++ (`motor_v2/cpp`, clase `MundoV2Nativo`, banco con `-- nativo`) tardan 1,5 s en el teléfono: 16 veces menos. Llamar a C++ paso por paso desde GDScript suma solo 0,23 µs por paso.
+- **La extensión:** godot-cpp v10 con `api_version=4.7`, fuera del repo en `D:/dev-tools/godot-cpp`; cómo se arma, en `motor_v2/cpp/SConstruct`. Las bibliotecas van en `motor_v2/bin/` (Windows x86_64 y Android arm64, siempre `template_release`). `motor_v2/cpp/.gdignore` evita que Godot quiera importar los `.obj` del compilador como mallas.
+- **Determinismo en C++:** con `std::sin`, `std::cos` y `std::atan2` el mismo partido terminaba distinto en la PC y en el teléfono (8 goles contra 18). Hacen falta dos cosas: `-ffp-contract=off` en Android (clang junta a*b + c en una sola instrucción FMA que redondea distinto) y trigonometría propia (`motor_v2/cpp/src/matematica_fija.h`, solo con +, −, ×, ÷ y raíz; error 8e-16). Con las dos, la huella es la misma. La trigonometría propia cuesta: el paso pasó de 3,3 a 4,7 µs en el teléfono. Regla para las etapas siguientes: el mundo y el cuerpo no llaman a ninguna función matemática del sistema salvo `sqrt`.
+- **El cerebro tampoco entra en GDScript a 10 Hz:** hoy cuesta 0,34 s por partido en la PC a 4 Hz; a 10 Hz serían ~0,85 s, y el teléfono es 4,3 veces más lento que esta PC (76,7 contra 18,2 µs por paso). Son ~3,7 s por partido solo de cerebro. Ver la decisión abierta nueva.
+- **Determinismo en GDScript:** la huella del estado después de 90 minutos es la misma en la PC y en Android, aunque usa `sin`, `cos` y `atan2` del motor. Probablemente porque las posiciones se guardan en float de 32 bits y ese redondeo tapa la diferencia del último bit; no es una garantía.
+- **Dibujo, no simulación:** con vista el teléfono dibuja a 43 fps. Lo que pesa son las sombras del sol (4 cortes, 197 llamadas de dibujo): sin sombras, 60 fps clavados con 47 llamadas; con 2 cortes o 1 corte, 52 fps. Sin MSAA sube a 48 fps y la escala 3D de 0,75 no cambia nada (no es el llenado de píxeles). La vista actual del juego usa las mismas sombras.
+- **Grilla de choques:** con 22 cuerpos, en GDScript la grilla de 5 m costaba más que mirar los 231 pares con descarte por eje (12,9 contra 7,5 µs por paso en la PC). En C++ se vuelve a medir.
+
 ### Etapa 1 — La pelota
 
 - **Qué:** `motor_v2/pelota.gd`: gravedad, arrastre, Magnus, giro que decae, pique con restitución y rozamiento que convierte deslizamiento en rodada, rodada con frenado, choque con palos, travesaño y red. Parámetros en `data/fisica_v2.json`; césped y clima los modifican.
@@ -217,7 +237,9 @@ El riesgo más grande es el rendimiento de GDScript en el teléfono, y por eso l
 **Decisiones abiertas:**
 
 - [x] Teléfono de referencia para medir: ZTE Z2357N (Unisoc T760), conectado por adb.
-- [ ] GDScript o C++ para mundo y cuerpo (sale de la etapa 0).
+- [x] GDScript o C++ para mundo y cuerpo: C++ (GDExtension). La etapa 0 midió 25 s por partido sin vista en el teléfono con GDScript y 1,5 s con C++.
+- [ ] El cerebro en GDScript a 10 Hz cuesta ~3,7 s por partido en el teléfono (estimado en la etapa 0): ¿pasa también a C++, piensa más lento sin vista, o se sube el presupuesto de 3 s?
+- [x] Sombras en el teléfono: sin sombra del sol, con una mancha bajo cada jugador y la pelota (`match/3d/sombras_redondas.gd`, una sola llamada de dibujo). En el teléfono: 59,5 fps, contra 39,5 con el sol. Dejar el sol solo para el estadio no alcanza: 41,5 fps con 4 cortes y 51 con 1. Ya está en la vista del juego actual (0.7.60).
 - [ ] Si el V2 sin vista resulta lento, ¿los partidos del usuario que se simulan sin mirar pueden ir por `match_engine.gd`? Contradice la decisión 5 del motor espacial ("un solo motor para tus partidos").
 - [ ] Repeticiones de goles: ¿entran en la etapa 8 o después?
 - [ ] Cámara: ¿se mantiene la actual o se pasa a una de transmisión (lateral alta, como FIFA 10)?
