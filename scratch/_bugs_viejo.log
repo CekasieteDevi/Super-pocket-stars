@@ -1,0 +1,36 @@
+TICKS 1046 GOLES { "home": 0, "away": 1 }
+EV centro t61 m5 { "minuto": 6, "tipo": "centro", "equipo": "Atlético Prueba", "rival": "Deportivo Banco", "jugador_posicion": "MC", "resultado": "despeja" }
+REC pecho t122 m11 zmax6 3.5
+EV tiro t138 m13 { "minuto": 13, "tipo": "tiro", "equipo": "Deportivo Banco", "rival": "Atlético Prueba", "jugador_posicion": "DC", "clave": 101010, "resultado": "palo", "remate_id": 1, "tecnica": "patea", "travesano": true, "destino_palo": "afuera" }
+ARQ saque_arco t146 m13 zmax 7.8
+ARQ patea t183 m17 zmax 3.5
+REC pecho t191 m18 zmax6 3.5
+EV tiro t233 m21 { "minuto": 22, "tipo": "tiro", "equipo": "Atlético Prueba", "rival": "Deportivo Banco", "jugador_posicion": "DC", "clave": 9, "resultado": "bloqueado", "remate_id": 3, "bloqueador_clave": 101002, "tecnica": "patea" }
+REC pecho t246 m23 zmax6 3.5
+REC pecho t263 m24 zmax6 3.5
+ARQ patea t287 m27 zmax 3.5
+REC pecho t296 m27 zmax6 3.5
+REC control_pie t374 m35 zmax6 1.0
+ARQ saque_arco t382 m35 zmax 8.0
+EV centro t416 m39 { "minuto": 40, "tipo": "centro", "equipo": "Atlético Prueba", "rival": "Deportivo Banco", "jugador_posicion": "DFC", "resultado": "despeja" }
+REC control_pie t420 m39 zmax6 5.4
+REC pecho t433 m40 zmax6 3.5
+EV centro t545 m46 { "minuto": 47, "tipo": "centro", "equipo": "Atlético Prueba", "rival": "Deportivo Banco", "jugador_posicion": "EXT", "resultado": "despeja" }
+REC pecho t560 m48 zmax6 3.5
+REC pecho t574 m49 zmax6 3.5
+ARQ patea t596 m51 zmax 3.5
+REC pecho t605 m52 zmax6 3.5
+ARQ patea t645 m55 zmax 3.5
+REC pecho t654 m56 zmax6 3.5
+EV centro t719 m62 { "minuto": 63, "tipo": "centro", "equipo": "Atlético Prueba", "rival": "Deportivo Banco", "jugador_posicion": "DFC", "resultado": "despeja" }
+REC control_pie t723 m63 zmax6 4.5
+REC pecho t735 m64 zmax6 3.5
+ARQ patea t774 m68 zmax 3.5
+REC pecho t783 m68 zmax6 3.5
+REC pecho t918 m81 zmax6 3.5
+REC control_pie t930 m82 zmax6 5.9
+EV tiro t937 m83 { "minuto": 84, "tipo": "tiro", "equipo": "Deportivo Banco", "rival": "Atlético Prueba", "jugador_posicion": "DC", "clave": 101010, "resultado": "afuera", "remate_id": 9, "tecnica": "patea", "travesano": false }
+ARQ saque_arco t947 m84 zmax 7.8
+ARQ saque_arco t986 m87 zmax 8.0
+REC control_pie t1022 m91 zmax6 1.1
+ARQ saque_arco t1030 m92 zmax 8.0

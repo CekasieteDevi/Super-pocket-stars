@@ -48,6 +48,11 @@ func _init() -> void:
 	# al club del jugador humano) le cambiaria el plantel por otro motivo.
 	for id in equipo_jugador.contratos:
 		equipo_jugador.contratos[id] = 5
+	# Lo mismo con el retiro por edad (Liga._retirar_por_edad, tambien con
+	# contrato; el cierre primero les suma un ano): con el arquero de 35
+	# anos el cierre lo retiraba.
+	for j in equipo_jugador.todos_los_jugadores():
+		j["edad"] = mini(int(j["edad"]), Progresion.EDAD_RETIRO_MINIMA - 2)
 
 	var ids_antes := []
 	for j in equipo_jugador.jugadores:

@@ -181,14 +181,18 @@ var dialogo_partida_nueva: ConfirmationDialog
 var option_fps: OptionButton
 var option_velocidad_partido: OptionButton
 var option_tema: OptionButton
+var option_simulacion: OptionButton
 
 const OPCIONES_FPS := [30, 60, 120]
 const OPCIONES_VELOCIDAD_PARTIDO := [1.0, 2.0, 4.0, 8.0, 16.0]
 const OPCIONES_TEMA := ["oscuro", "claro"]
+## Cómo se ve el partido animado: la cancha 3D (match/3d) o la 2D de siempre.
+const OPCIONES_SIMULACION := ["3d", "2d"]
 const RUTA_OPCIONES := "user://opciones.cfg"
 var fps_elegido := 60
 var velocidad_partido_elegida := 1.0
 var tema_visual := "oscuro"
+var simulacion_elegida := "2d"
 static var _recarga_por_tema := false
 static var _seccion_antes_del_tema := "jugar"
 static var _panel_antes_del_tema := ""
@@ -7090,6 +7094,7 @@ func _reproducir_laboratorio(clave: String) -> void:
 	if resumen_partido != null:
 		resumen_partido.visible = false
 	var colores := ColoresClub.par_equipos(copia_local, copia_visitante)
+	_aplicar_simulacion()
 	vista_partido.iniciar(
 		r["fotogramas"], colores[0], colores[1],
 		copia_local.nombre, copia_visitante.nombre,
@@ -8601,6 +8606,13 @@ func _construir_panel_opciones(padre: Control) -> void:
 	option_tema.item_selected.connect(_on_tema_seleccionado)
 	dentro.add_child(_grupo_filtro("Tema visual", option_tema))
 
+	option_simulacion = OptionButton.new()
+	option_simulacion.add_item("3D")
+	option_simulacion.add_item("2D")
+	option_simulacion.custom_minimum_size = Vector2(150, Tema.ALTO_TACTIL)
+	option_simulacion.item_selected.connect(_on_simulacion_seleccionada)
+	dentro.add_child(_grupo_filtro("Simulación", option_simulacion))
+
 
 func _mostrar_opciones() -> void:
 	_ocultar_todos()
@@ -8608,6 +8620,31 @@ func _mostrar_opciones() -> void:
 	option_fps.select(OPCIONES_FPS.find(fps_elegido))
 	option_velocidad_partido.select(OPCIONES_VELOCIDAD_PARTIDO.find(velocidad_partido_elegida))
 	option_tema.select(OPCIONES_TEMA.find(tema_visual))
+	option_simulacion.select(OPCIONES_SIMULACION.find(simulacion_elegida))
+
+
+func _on_simulacion_seleccionada(indice: int) -> void:
+	simulacion_elegida = str(OPCIONES_SIMULACION[indice])
+	_guardar_opciones()
+
+
+## Pone en el partido animado la cancha de la simulación elegida: la 3D
+## (VistaCancha3D) o la 2D. Se cambia en el mismo lugar del árbol (debajo del
+## minimapa y del HUD), como el prototipo 3D, antes de iniciar cada partido.
+func _aplicar_simulacion() -> void:
+	if vista_partido == null or not is_instance_valid(vista_partido):
+		return
+	var quiere_3d := simulacion_elegida == "3d"
+	var vieja := vista_partido.vista
+	if vieja == null or (vieja is VistaCancha3D) == quiere_3d:
+		return
+	var nueva: VistaCancha = VistaCancha3D.new() if quiere_3d else VistaCancha.new()
+	nueva.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vista_partido.add_child(nueva)
+	vista_partido.move_child(nueva, vieja.get_index())
+	vista_partido.remove_child(vieja)
+	vieja.queue_free()
+	vista_partido.vista = nueva
 
 
 func _on_fps_seleccionado(indice: int) -> void:
@@ -8642,6 +8679,9 @@ func _cargar_opciones() -> void:
 	fps_elegido = int(archivo.get_value("video", "fps", 60))
 	velocidad_partido_elegida = float(archivo.get_value("partido", "velocidad", 1.0))
 	tema_visual = str(archivo.get_value("video", "tema", "oscuro"))
+	simulacion_elegida = str(archivo.get_value("partido", "simulacion", "2d"))
+	if not OPCIONES_SIMULACION.has(simulacion_elegida):
+		simulacion_elegida = "2d"
 	if not OPCIONES_FPS.has(fps_elegido):
 		fps_elegido = 60
 	if OPCIONES_VELOCIDAD_PARTIDO.find(velocidad_partido_elegida) == -1:
@@ -8655,6 +8695,7 @@ func _guardar_opciones() -> void:
 	archivo.set_value("video", "fps", fps_elegido)
 	archivo.set_value("video", "tema", tema_visual)
 	archivo.set_value("partido", "velocidad", velocidad_partido_elegida)
+	archivo.set_value("partido", "simulacion", simulacion_elegida)
 	archivo.save(RUTA_OPCIONES)
 
 
@@ -9374,6 +9415,7 @@ func _mostrar_partido_animado() -> void:
 	if local == null or visitante == null:
 		return
 	var colores := ColoresClub.par_equipos(local, visitante)
+	_aplicar_simulacion()
 	vista_partido.iniciar(
 		GameState.ultimos_fotogramas, colores[0], colores[1],
 		local.nombre, visitante.nombre,

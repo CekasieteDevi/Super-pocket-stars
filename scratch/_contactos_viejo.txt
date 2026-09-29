@@ -1,0 +1,42 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+[muestra 3d] 29 jugadas, 703 fotogramas
+[muestra 3d] acciones: ["lateral_prepara", "patea", "lateral_manos", "control_pie", "barrida", "pecho", "cae", "taco", "bloquea", "vuela", "agarra", "amague_centro", "festeja", "saque_arco", "cabecea", "volea", "chilena", "palomita", "regate_croqueta", "regate_bicicleta", "regate_ruleta", "regate_globito", "regate_elastica", "lesionado"]
+[muestra 3d] sin mostrar: ["lanza_arquero", "voleo_arquero"]
+  SALTO cabecea t=679.00 dt=0.00 salto=1.72 anclada=false z=3.38 corr=(0.0, -3.377273, 0.0) pelota=(36.76583, 0.22, -6.0)
+CUERPOS  pares a menos de 0.55 m (sumados por muestra): motor 8396 | dibujo 3D 124
+NO LLEGA estiradas sin toque OK    | la pelota pasa a 0.64 m de guantes/cabeza (min 0.10)
+  detalle control_pie: al golpe 0.03 (dt -0.00) recepcion n=7 media 0.06
+  detalle pecho: al golpe -0.00 (dt 0.00) recepcion n=11 media 0.00
+  detalle control_pie: al golpe 0.02 (dt 0.00) recepcion n=1 media 0.02
+  detalle control_pie: al golpe 0.03 (dt -0.00) recepcion n=7 media 0.07
+  detalle control_pie: al golpe 0.05 (dt -0.00) recepcion n=0 media 0.00
+  detalle agarra: al golpe 0.11 (dt -0.00) recepcion n=14 media 0.00
+  detalle control_pie: al golpe 0.03 (dt -0.00) recepcion n=5 media 0.07
+  detalle control_pie: al golpe 0.05 (dt -0.00) recepcion n=7 media 0.07
+  detalle pecho: al golpe -0.00 (dt 0.00) recepcion n=11 media -0.00
+  detalle agarra: al golpe -0.00 (dt 0.00) recepcion n=14 media -0.00
+CONTACTO patea          OK    | al golpe -0.13 m | recepcion - | salto max 0.21 m
+CONTACTO saque_arco     OK    | al golpe 0.09 m | recepcion - | salto max 0.40 m
+CONTACTO lanza_arquero  OK    | al golpe 0.00 m | recepcion - | salto max 0.34 m
+CONTACTO voleo_arquero  OK    | al golpe -0.06 m | recepcion - | salto max 0.37 m
+CONTACTO volea          OK    | al golpe -0.04 m | recepcion - | salto max 0.37 m
+CONTACTO chilena        OK    | al golpe 0.02 m | recepcion - | salto max 0.40 m
+CONTACTO cabecea        OK    | al golpe 0.00 m | recepcion - | salto max 0.39 m
+CONTACTO palomita       OK    | al golpe -0.00 m | recepcion - | salto max 0.28 m
+CONTACTO taco           OK    | al golpe 0.07 m | recepcion - | salto max 0.24 m
+CONTACTO control_pie    OK    | al golpe 0.03 m | recepcion 0.06 m | salto max 0.09 m
+CONTACTO pecho          OK    | al golpe -0.00 m | recepcion 0.00 m | salto max 0.28 m
+CONTACTO agarra         OK    | al golpe 0.11 m | recepcion 0.00 m | salto max 0.29 m
+CONTACTO lateral_manos  OK    | al golpe 0.00 m | recepcion - | salto max 0.40 m
+CONTACTO vuela          -     | ninguna estirada de la muestra toca la pelota (ver NO LLEGA y agarra)
+CONTACTO barrida        OK    | al golpe 0.01 m | recepcion - | salto max 0.39 m
+CONTACTO bloquea        OK    | al golpe 0.03 m | recepcion - | salto max 0.30 m
+  amague: pelota a 0.09 m del jugador como minimo
+CONDUCE  regate_croqueta    OK    | pelota-pie media 0.14 m | max 0.32 m | muestras 40
+CONDUCE  regate_bicicleta   OK    | pelota-pie media 0.12 m | max 0.36 m | muestras 60
+CONDUCE  regate_ruleta      OK    | pelota-pie media 0.07 m | max 0.32 m | muestras 60
+CONDUCE  regate_globito     OK    | pelota-pie media 0.17 m | max 1.00 m | muestras 45
+CONDUCE  regate_elastica    OK    | pelota-pie media 0.15 m | max 0.36 m | muestras 30
+CONDUCE  amague_centro      OK    | pelota-pie media 0.18 m | max 0.24 m | muestras 10
+FALLOS=0

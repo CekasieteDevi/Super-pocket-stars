@@ -1,4 +1,17 @@
-### tests/test_changelog.gd
-FALLA: la versión 0.4.13 no es menor que la de arriba
-FALLA: el changelog cumple el formato (15 entradas)
-ARCHIVOS_CON_FALLAS=1 de 154 en 625s con 8 en paralelo
+Mas lentos:
+  578 test_gradiente_persiste
+  441 test_libro_de_pases
+  362 test_playoff_ascenso
+  305 test_copa_jugable
+  266 test_calendario
+  218 test_noticias
+  215 test_gamestate_flujo
+  175 test_fin_de_mitad
+ARCHIVOS_CON_FALLAS=0 de 163 en 740s con 6 en paralelo
+test_libro_de_pases
+  160 test_gradiente_persiste
+  159 test_calendario
+  143 test_noticias
+  141 test_gamestate_flujo
+  132 test_palos
+ARCHIVOS_CON_FALLAS=0 de 163 en 512s con 6 en paralelo

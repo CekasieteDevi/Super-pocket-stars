@@ -64,6 +64,9 @@ const SEG_PARPADEO := 0.35
 
 var _relato_restante := 0.0
 var _relato_total := 1.0
+## Importancia de la línea que está en pantalla: una menor (un mal pase)
+## no tapa a una más importante (el remate) mientras se sostiene.
+var _relato_peso := RelatoPartido.NADA
 var _festejo_restante := 0.0
 var _festejo_total := 1.0
 var _idx_narrado := 0
@@ -350,10 +353,13 @@ func _narrar(idx: int) -> void:
 			mejor = ev
 	if mejor == null:
 		return
+	if _relato_restante > 0.0 and mejor_peso < _relato_peso:
+		return
 	var texto := RelatoPartido.linea(_con_clave(mejor), nombres)
 	if texto == "":
 		return
 	hud.relato = texto
+	_relato_peso = mejor_peso
 	_relato_total = float(SEG_RELATO.get(mejor_peso, 2.0))
 	_relato_restante = _relato_total
 	hud.relato_alfa = 1.0
@@ -595,7 +601,7 @@ func _mostrar(idx: int, t: float) -> void:
 				# pelota entrante o la posicion actual puede invertir la tijera.
 				for ejecutor in origen["jugadores"]:
 					if int(ejecutor["id"]) == int(j["id"]):
-						var hacia_arco := MotorEspacial.arco_rival(bool(ejecutor["equipo_local"])) \
+						var hacia_arco := MotorEspacial.arco_rival_en(origen, bool(ejecutor["equipo_local"])) \
 							- Vector2(float(ejecutor["x"]), float(ejecutor["y"]))
 						ent["direccion"] = _direccion(hacia_arco)
 						# El arte de chilena golpea hacia atras: espejo contrario

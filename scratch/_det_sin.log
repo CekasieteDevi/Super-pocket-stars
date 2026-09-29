@@ -1,0 +1,50 @@
+CASO PELOTA_ALTA tick 54.9 min 5 | y=4.0
+CASO ENCIMADOS tick 70.3 min 6 | 4 y 101008
+CASO PELOTA_ALTA tick 74.9 min 7 | y=4.4
+CASO ENCIMADOS tick 82.0 min 7 | 1 y 101008
+CASO PELOTA_ALTA tick 88.1 min 8 | y=4.3
+CASO PELOTA_ALTA tick 92.1 min 8 | y=6.8
+CASO ENCIMADOS tick 102.0 min 9 | 10 y 101007
+CASO ENCIMADOS tick 113.1 min 10 | 101005 y 101008
+CASO PELOTA_ALTA tick 179.9 min 16 | y=4.0
+CASO ENCIMADOS tick 216.3 min 20 | 5 y 101009
+CASO PELOTA_ALTA tick 223.0 min 20 | y=4.5
+CASO ENCIMADOS tick 228.1 min 21 | 4 y 101008
+CASO PELOTA_ALTA tick 236.1 min 22 | y=4.0
+CASO ENCIMADOS tick 284.2 min 26 | 8 y 101006
+CASO PELOTA_ALTA tick 291.0 min 27 | y=4.1
+CASO PELOTA_ALTA tick 308.7 min 28 | y=4.1
+CASO PELOTA_ALTA tick 312.9 min 29 | y=6.3
+CASO PELOTA_ALTA tick 324.1 min 30 | y=4.0
+CASO ENCIMADOS tick 329.0 min 30 | 10 y 101005
+CASO PELOTA_ALTA tick 355.1 min 33 | y=4.4
+CASO PELOTA_ALTA tick 359.3 min 33 | y=6.1
+CASO ENCIMADOS tick 425.8 min 39 | 8 y 101006
+CASO PELOTA_ALTA tick 448.3 min 42 | y=4.0
+CASO ENCIMADOS tick 463.8 min 43 | 101002 y 101005
+CASO PELOTA_ALTA tick 470.7 min 44 | y=4.1
+CASO PELOTA_ALTA tick 503.8 min 47 | y=4.0
+CASO PELOTA_ALTA tick 519.7 min 48 | y=4.0
+CASO PELOTA_ALTA tick 588.3 min 55 | y=4.0
+CASO SALTO_PELOTA tick 615.5 min 57 | 53 m/s en (-41.8,-0.4)
+CASO PELOTA_ALTA tick 615.8 min 57 | y=4.9
+CASO PELOTA_ALTA tick 619.9 min 58 | y=4.3
+CASO ENCIMADOS tick 627.3 min 58 | 10 y 101015
+CASO PATINA_OF tick 646.9 min 60 | of_arbitro Tarjeta_Completa a 2.4 m/s
+CASO PATINA_OF tick 700.7 min 65 | of_arbitro Tarjeta_Completa a 2.9 m/s
+CASO ENCIMADOS tick 722.2 min 67 | 101002 y 101005
+CASO ENCIMADOS tick 729.5 min 68 | 9 y 10
+CASO PELOTA_ALTA tick 730.2 min 68 | y=4.3
+CASO PELOTA_ALTA tick 734.3 min 68 | y=6.6
+CASO ENCIMADOS tick 741.0 min 69 | 8 y 101014
+CASO ENCIMADOS tick 779.3 min 73 | 8 y 101005
+CASO PATINA_OF tick 786.1 min 73 | of_arbitro Tarjeta_Completa a 2.4 m/s
+CASO PELOTA_ALTA tick 847.9 min 79 | y=4.0
+CASO SALTO_PELOTA tick 874.6 min 82 | 53 m/s en (41.5,-1.6)
+CASO PELOTA_ALTA tick 874.7 min 82 | y=4.0
+CASO PELOTA_ALTA tick 878.9 min 82 | y=5.5
+CASO PELOTA_ALTA tick 950.9 min 89 | y=4.0
+CASO ENCIMADOS tick 980.0 min 91 | 8 y 101005
+CASO ENCIMADOS tick 1010.7 min 94 | 8 y 101009
+CASO PELOTA_ALTA tick 1018.0 min 95 | y=4.0
+RESUMEN { "PELOTA_ALTA": 27, "ENCIMADOS": 17, "SALTO_PELOTA": 2, "PATINA_OF": 3 } cuadros 7599

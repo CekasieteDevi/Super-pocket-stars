@@ -1,0 +1,47 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+[muestra 3d] 29 jugadas, 703 fotogramas
+[muestra 3d] acciones: ["lateral_prepara", "patea", "lateral_manos", "control_pie", "barrida", "pecho", "cabecea", "vuela", "festeja", "volea", "chilena", "palomita", "regate_croqueta", "regate_bicicleta", "regate_ruleta", "regate_globito", "regate_elastica", "lesionado", "bloquea", "cae", "saque_arco"]
+[muestra 3d] sin mostrar: ["lanza_arquero", "voleo_arquero", "agarra", "taco", "amague_centro"]
+CUERPOS  pares a menos de 0.55 m (sumados por muestra): motor 8023 | dibujo 3D 129
+NO LLEGA estiradas sin toque OK    | la pelota pasa a 0.64 m de guantes/cabeza (min 0.10)
+  detalle control_pie: al golpe 0.03 (dt -0.00) recepcion n=7 media 0.06
+  detalle pecho: al golpe -0.00 (dt 0.00) recepcion n=11 media -0.00
+  detalle control_pie: al golpe -0.00 (dt 0.00) recepcion n=7 media 0.05
+  detalle control_pie: al golpe 0.05 (dt 0.00) recepcion n=8 media 0.06
+  detalle control_pie: al golpe -0.02 (dt -0.00) recepcion n=0 media 0.00
+  detalle control_pie: al golpe 0.02 (dt -0.00) recepcion n=7 media 0.07
+  detalle control_pie: al golpe 0.02 (dt -0.00) recepcion n=0 media 0.00
+  detalle pecho: al golpe 0.00 (dt -0.00) recepcion n=10 media 0.00
+  detalle control_pie: al golpe 0.04 (dt -0.00) recepcion n=7 media 0.07
+  detalle vuela: al golpe 1.33 (dt 0.00) en t=611.70
+  detalle vuela: al golpe 2.09 (dt 0.00) en t=612.00
+  detalle control_pie: al golpe 0.25 (dt 0.00) recepcion n=7 media 0.09
+CONTACTO patea          OK    | al golpe -0.13 m | recepcion - | salto max 0.21 m
+CONTACTO saque_arco     OK    | al golpe -0.10 m | recepcion - | salto max 0.40 m
+CONTACTO lanza_arquero  SIN DATOS
+CONTACTO voleo_arquero  SIN DATOS
+CONTACTO volea          OK    | al golpe -0.04 m | recepcion - | salto max 0.37 m
+CONTACTO chilena        OK    | al golpe 0.02 m | recepcion - | salto max 0.40 m
+CONTACTO cabecea        OK    | al golpe 0.00 m | recepcion - | salto max 0.39 m
+CONTACTO palomita       OK    | al golpe -0.00 m | recepcion - | salto max 0.28 m
+CONTACTO taco           SIN DATOS
+CONTACTO control_pie    OK    | al golpe 0.05 m | recepcion 0.06 m | salto max 0.13 m
+CONTACTO pecho          OK    | al golpe -0.00 m | recepcion - | salto max 0.18 m
+CONTACTO agarra         SIN DATOS
+CONTACTO lateral_manos  OK    | al golpe 0.00 m | recepcion - | salto max 0.40 m
+CONTACTO vuela          FALLA | al golpe 1.33 m | recepcion - | salto max 0.00 m
+CONTACTO barrida        OK    | al golpe 0.01 m | recepcion - | salto max 0.39 m
+CONTACTO bloquea        FALLA | al golpe 1.70 m | recepcion - | salto max 0.40 m
+  amague: pelota a inf m del jugador como minimo
+CONDUCE  regate_croqueta    OK    | pelota-pie media 0.14 m | max 0.30 m | muestras 40
+CONDUCE  regate_bicicleta   OK    | pelota-pie media 0.12 m | max 0.36 m | muestras 60
+CONDUCE  regate_ruleta      OK    | pelota-pie media 0.06 m | max 0.31 m | muestras 60
+CONDUCE  regate_globito     OK    | pelota-pie media 0.18 m | max 1.00 m | muestras 45
+CONDUCE  regate_elastica    OK    | pelota-pie media 0.17 m | max 0.42 m | muestras 30
+CONDUCE  amague_centro      SIN DATOS
+FALLOS=7
+WARNING: 43 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 1 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)

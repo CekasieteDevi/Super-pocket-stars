@@ -41,7 +41,21 @@ static func importancia(evento) -> int:
 		"falta":
 			return MENOR
 		"gambeta":
-			return NOTABLE if res == "pierde" else NADA
+			# El quite se cuenta fuerte; la gambeta ganada, de pasada.
+			return NOTABLE if res == "pierde" else MENOR
+		"pase":
+			# Solo el pase perdido: los completados son el ruido de fondo.
+			return MENOR if res == "pierde" else NADA
+		"control":
+			return MENOR if res == "se_le_va" else NADA
+		"centro":
+			return MENOR
+		"rebote_arquero":
+			match res:
+				"gol": return MAXIMA
+				"control_atacante": return NOTABLE
+				"control_defensor": return MENOR
+			return NADA
 		"cambio":
 			return NOTABLE
 		"lesion":
@@ -111,9 +125,59 @@ static func linea(evento: Dictionary, nombres: Dictionary) -> String:
 						_: return "¡Al %s el remate%s de %s!" % [golpe, tecnica_tiro, quien]
 				_: return "Remata%s %s y se va afuera" % [tecnica_tiro, quien]
 		"gambeta":
-			if str(evento.get("resultado", "")) == "pierde":
-				return "%s se la saca a %s" % [_quien_clave(evento.get("defensor_clave", -1), nombres), quien]
-			return "%s deja atras a %s" % [quien, _quien_clave(evento.get("defensor_clave", -1), nombres)]
+			var defensor := _quien_clave(evento.get("defensor_clave", -1), nombres)
+			if res == "pierde":
+				return _una(evento, [
+					"%s se la saca a %s" % [defensor, quien],
+					"¡Qué quite de %s! Se la roba a %s" % [defensor, quien],
+					"%s pierde la pelota ante %s" % [quien, defensor],
+				])
+			var regate := _nombre_regate(str(evento.get("regate", "")))
+			if regate != "":
+				return "¡%s de %s! Deja atrás a %s" % [regate, quien, defensor]
+			return _una(evento, [
+				"%s deja atrás a %s" % [quien, defensor],
+				"%s se saca de encima a %s" % [quien, defensor],
+			])
+		"pase":
+			var pasador := _quien_clave(evento.get("pasador_clave", -1), nombres)
+			var sin_pasador := not nombres.has(int(evento.get("pasador_clave", -1)))
+			if sin_pasador:
+				return "La corta %s (%s)" % [quien, str(evento.get("rival", ""))]
+			if bool(evento.get("corte", false)):
+				return _una(evento, [
+					"Mal pase de %s, la corta %s" % [pasador, quien],
+					"%s lee el pase de %s y se queda con la pelota" % [quien, pasador],
+					"Pase impreciso de %s, recupera %s" % [pasador, quien],
+				])
+			return _una(evento, [
+				"Se adelanta %s y se queda con el pase de %s" % [quien, pasador],
+				"El pase de %s no llega: la gana %s" % [pasador, quien],
+			])
+		"control":
+			return _una(evento, [
+				"Se le va larga a %s" % quien,
+				"Mal control de %s, la pelota se le escapa" % quien,
+				"%s no la puede dominar" % quien,
+			])
+		"centro":
+			var centrador := _quien_clave(evento.get("centrador_clave", -1), nombres)
+			var con_centrador := nombres.has(int(evento.get("centrador_clave", -1)))
+			var de := (" de %s" % centrador) if con_centrador else ""
+			match res:
+				"despeja": return _una(evento, [
+					"Centro%s y despeja %s" % [de, quien],
+					"Rechaza %s el centro%s" % [quien, de],
+				])
+				"descuelga": return "Centro%s y sale el arquero: la descuelga %s" % [de, quien]
+				"gana": return "Centro%s, la gana de arriba %s" % [de, quien]
+			return ""
+		"rebote_arquero":
+			match res:
+				"gol": return "¡GOL! El rebote del arquero termina adentro. %s" % equipo
+				"control_atacante": return "¡Da rebote el arquero y le queda a %s!" % quien
+				"control_defensor": return "Da rebote el arquero y despeja %s" % quien
+			return ""
 		"cambio":
 			var sale := _quien_clave(evento.get("saliente_clave", -1), nombres)
 			var entra := _quien_clave(evento.get("entrante_clave", -1), nombres)
@@ -145,6 +209,24 @@ static func _nombre_tecnica(tecnica: String) -> String:
 		"volea": return " de volea"
 		"chilena": return " de chilena"
 		_: return ""
+
+
+## Elige una de las variantes para que el mismo momento no se diga siempre
+## igual. Sale del minuto y del jugador, no de un rng: el mismo partido
+## repetido se narra igual.
+static func _una(evento: Dictionary, variantes: Array) -> String:
+	var semilla := int(evento.get("minuto", 0)) * 7 + int(evento.get("clave", 0)) * 3 		+ int(evento.get("defensor_clave", evento.get("pasador_clave", 0)))
+	return str(variantes[posmod(semilla, variantes.size())])
+
+
+static func _nombre_regate(regate: String) -> String:
+	match regate:
+		"bicicleta": return "Bicicleta"
+		"croqueta": return "Croqueta"
+		"ruleta": return "Ruleta"
+		"globito": return "Sombrerito"
+		"elastica": return "Elástica"
+	return ""
 
 
 static func _quien_clave(valor, nombres: Dictionary) -> String:

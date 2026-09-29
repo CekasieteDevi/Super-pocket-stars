@@ -1,0 +1,31 @@
+TICKS 999 GOLES { "home": 0, "away": 3 }
+EV centro t61 m5 { "minuto": 6, "tipo": "centro", "equipo": "Atlético Prueba", "rival": "Deportivo Banco", "jugador_posicion": "MC", "resultado": "despeja" }
+REC pecho t105 m9 zmax6 3.5
+REC pecho t142 m13 zmax6 3.5
+REC pecho t157 m14 zmax6 3.5
+EV centro t181 m17 { "minuto": 17, "tipo": "centro", "equipo": "Deportivo Banco", "rival": "Atlético Prueba", "jugador_posicion": "DC", "resultado": "despeja" }
+REC pecho t181 m17 zmax6 3.5
+REC pecho t224 m21 zmax6 3.5
+EV tiro t246 m23 { "minuto": 24, "tipo": "tiro", "equipo": "Deportivo Banco", "rival": "Atlético Prueba", "jugador_posicion": "DC", "clave": 101010, "resultado": "afuera", "remate_id": 1, "tecnica": "patea", "travesano": false }
+ARQ saque_arco t255 m24 zmax 7.9
+REC pecho t357 m33 zmax6 3.5
+EV centro t366 m34 { "minuto": 35, "tipo": "centro", "equipo": "Deportivo Banco", "rival": "Atlético Prueba", "jugador_posicion": "DFC", "resultado": "despeja" }
+REC control_pie t370 m34 zmax6 5.2
+REC pecho t382 m35 zmax6 3.5
+REC control_pie t431 m40 zmax6 2.3
+REC pecho t462 m43 zmax6 3.5
+REC control_pie t474 m44 zmax6 1.1
+REC pecho t511 m48 zmax6 3.5
+REC pecho t525 m49 zmax6 3.5
+ARQ patea t547 m51 zmax 3.5
+REC pecho t556 m52 zmax6 3.5
+REC control_pie t589 m55 zmax6 2.3
+REC pecho t603 m56 zmax6 3.5
+REC pecho t629 m59 zmax6 3.4
+ARQ saque_arco t657 m61 zmax 8.0
+REC pecho t684 m64 zmax6 3.5
+REC pecho t811 m76 zmax6 3.5
+REC pecho t826 m77 zmax6 3.5
+REC control_pie t934 m87 zmax6 2.3
+REC pecho t948 m88 zmax6 3.5
+REC pecho t998 m93 zmax6 3.5

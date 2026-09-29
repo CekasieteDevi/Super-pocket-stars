@@ -121,8 +121,12 @@ func _test_temporada_completa(gs) -> void:
 	_ok(revisados > 100 and menos == 0,
 		"la carrera tiene al menos los goles de la liga (%d revisados, %d con menos)." % [revisados, menos])
 
+	# Todo el plantel, no solo los once de la lista de titulares: una lesión
+	# en la última fecha pone en el once a uno que no jugó y con la semilla
+	# 4417 eso depende de cómo salga la temporada (con la frenada al llegar
+	# del motor, un EXT de 0 partidos quedaba en el once).
 	var con_partidos := 0
-	for j in gs.equipo_jugador.jugadores:
+	for j in gs.equipo_jugador.todos_los_jugadores():
 		for f in j.get("carrera", []):
 			if int(f["pj"]) > 0:
 				con_partidos += 1

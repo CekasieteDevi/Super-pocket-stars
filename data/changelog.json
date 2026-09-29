@@ -1,4 +1,13 @@
 [
+	{"version": "0.7.59", "fecha": "2026-09-29", "cambio": "En el partido 3D el arquero agarra la pelota, la saca con la mano o de volea, y ataja según la altura a la que va el tiro."},
+	{"version": "0.7.58", "fecha": "2026-09-29", "cambio": "Los cambios de jugadores se hacen siempre por la banda de abajo, donde está el cuarto árbitro."},
+	{"version": "0.7.57", "fecha": "2026-09-29", "cambio": "Si un defensor manda la pelota afuera al quitarla, el saque es para el equipo que la tenía."},
+	{"version": "0.7.56", "fecha": "2026-09-29", "cambio": "En el entretiempo los equipos cambian de lado de la cancha."},
+	{"version": "0.7.55", "fecha": "2026-09-29", "cambio": "El relato cuenta los pases perdidos, los controles que se van largos, los centros rechazados y las gambetas ganadas."},
+	{"version": "0.7.54", "fecha": "2026-09-29", "cambio": "En el partido 3D los jugadores llevan el número en la espalda."},
+	{"version": "0.7.53", "fecha": "2026-09-29", "cambio": "En el partido 3D los jugadores tienen 10 peinados distintos."},
+	{"version": "0.7.52", "fecha": "2026-09-29", "cambio": "En Opciones > Simulación podés elegir ver los partidos en 3D."},
+	{"version": "0.7.51", "fecha": "2026-09-29", "cambio": "En el partido 3D los jugadores tienen 20 caras distintas y ponen cara de alegría con un gol, de dolor con una falta o lesión y de tristeza con un gol en contra."},
 	{"version": "0.7.50", "fecha": "2026-09-25", "cambio": "Al empezar una partida nueva, el juego te pide tu nombre como DT."},
 	{"version": "0.7.49", "fecha": "2026-09-25", "cambio": "Un suplente acepta ir a préstamo a un club más chico aunque sea el mejor del plantel."},
 	{"version": "0.7.48", "fecha": "2026-09-25", "cambio": "El saque de arco del golero ya no pinta guantes sobre la patada normal de los jugadores."},

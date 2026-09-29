@@ -261,8 +261,16 @@ const FACTOR_SALE_CAMBIADO := 2.0
 ## cancha. Es por donde salen y entran en el futbol de verdad, y tener un
 ## solo punto hace que se lea la escena — el que sale y el que entra se
 ## cruzan ahi.
-static func _punto_de_salida(desde: Vector2) -> Vector2:
-	var lado: float = 1.0 if desde.y >= 0.0 else -1.0
+##
+## En un cambio, con `fisica.cambio_por_abajo`, siempre por la banda de
+## abajo (+y), la del cuarto arbitro y los bancos (bug 3D-06: salian por la
+## banda mas cercana y el cuarto arbitro quedaba del otro lado). El
+## expulsado, `cercano`, por la mas cercana.
+## `abajo_y` es el signo de la banda de abajo en el motor: con el fotograma
+## girado (segundo tiempo, ver _giro_de_vista) la de abajo es la -y.
+static func _punto_de_salida(desde: Vector2, cercano: bool = false, abajo_y: float = 1.0) -> Vector2:
+	var abajo := not cercano and int(pesos()["fisica"].get("cambio_por_abajo", 0)) != 0
+	var lado: float = abajo_y if abajo else (1.0 if desde.y >= 0.0 else -1.0)
 	return Vector2(0.0, lado * (MEDIO_ANCHO + 2.5))
 
 ## Tope de ticks caminando. Si por lo que sea no llega —lo empujaron
@@ -2170,7 +2178,8 @@ static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bo
 				_entregar_rodando(estado, arq_clave)
 				estado["eventos"].append({
 					"minuto": minuto, "tipo": "centro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
-					"jugador_posicion": "ARQ", "resultado": "descuelga",
+					"jugador_posicion": "ARQ", "resultado": "descuelga", "clave": arq_clave,
+					"centrador_clave": _centrador(estado, ataca_local),
 				})
 				return
 
@@ -2178,6 +2187,7 @@ static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bo
 	# Antes un centro corto hacia adelante lo dejaba como el mas cercano al
 	# punto de caida: parecia auto-pase y luego cabezazo del mismo jugador.
 	var pasador_centro := int(estado["pelota"].get("pasador_clave", -1))
+	var centrador := _centrador(estado, ataca_local)
 	var atacante := _mas_cercano_del_equipo(estado, punto, ataca_local, pasador_centro)
 	var defensor := _mas_cercano_del_equipo(estado, punto, not ataca_local)
 	if atacante == -1:
@@ -2200,6 +2210,7 @@ static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bo
 			estado["eventos"].append({
 				"minuto": minuto, "tipo": "centro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 				"jugador_posicion": estado["jugadores"][defensor]["rol"], "resultado": "despeja",
+				"clave": defensor, "centrador_clave": centrador,
 			})
 		else:
 			_sumar_estadistica_centro(estado, tipo_centro, "sin_receptor")
@@ -2231,6 +2242,7 @@ static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bo
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "centro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 			"jugador_posicion": estado["jugadores"][atacante]["rol"], "resultado": "gana",
+			"clave": atacante, "centrador_clave": centrador,
 		})
 		# Ganó de arriba dentro del área: cabecea al arco. Antes se
 		# quedaba la pelota y seguía jugando, que es lo que hacía que un
@@ -2321,7 +2333,17 @@ static func _resolver_centro(estado: Dictionary, punto: Vector2, ataca_local: bo
 		estado["eventos"].append({
 			"minuto": minuto, "tipo": "centro", "equipo": eq_a.nombre, "rival": eq_d.nombre,
 			"jugador_posicion": estado["jugadores"][defensor]["rol"], "resultado": "despeja",
+			"clave": defensor, "centrador_clave": centrador,
 		})
+
+
+## Para el relato: quién tiró el centro, solo si es del equipo que ataca
+## (la pelota alta puede venir de un rechazo del rival). -1 si no se sabe.
+static func _centrador(estado: Dictionary, ataca_local: bool) -> int:
+	var clave := int(estado["pelota"].get("pasador_clave", -1))
+	if not estado["jugadores"].has(clave):
+		return -1
+	return clave if bool(estado["jugadores"][clave]["equipo_local"]) == ataca_local else -1
 
 
 ## Adónde sale a recibir el que juega la pared: por delante suyo, hacia el
@@ -4223,7 +4245,15 @@ static func _calcular_linea_offside(estado: Dictionary) -> void:
 	}
 
 
-static func _mover_hacia(e: Dictionary, objetivo: Vector2, factor: float = 1.0) -> void:
+## `frenar`: frena antes de llegar (fisica.frenada, m/s²) en vez de clavarse
+## en el punto a toda velocidad. Solo para ir a un lugar fijo —acomodarse en
+## la formación, la pelota parada, el que entra o sale—: el que presiona, el
+## que busca la pelota o el pase, el arquero y las corridas llegan igual que
+## antes, porque ahí llegar medio segundo después cambia quién gana la jugada.
+## Medido en 4 partidos de primera: 262 frenadas en seco por partido (de más de
+## 4 m/s a menos de 0.8 en un tick), casi todas llegando a su marca; en la
+## vista 3D se veía a los jugadores clavarse.
+static func _mover_hacia(e: Dictionary, objetivo: Vector2, factor: float = 1.0, frenar: bool = false) -> void:
 	var delta: Vector2 = objetivo - e["pos"]
 	var dist: float = delta.length()
 	if dist < 0.01:
@@ -4232,12 +4262,21 @@ static func _mover_hacia(e: Dictionary, objetivo: Vector2, factor: float = 1.0) 
 		return
 	var dir: Vector2 = delta / dist
 	var rapidez: float = float(e.get("rapidez", 0.0))
+	var fisica: Dictionary = pesos()["fisica"]
+	# Giro con inercia (fisica.giro_acel, m/s²): la velocidad cambia de a poco
+	# hacia la nueva dirección, en vez de darse vuelta en un tick. Medido en
+	# 3 partidos de primera: 275 vueltas por partido, de +6.6 m/s a -2.9 m/s
+	# de un tick al otro; en el 3D rebotaban como una pelota. En 0 queda el
+	# giro de antes (freno_giro).
+	var vel_previa: Vector2 = e["vel"]
+	var giro_acel: float = float(fisica.get("giro_acel", 0.0))
+	var con_inercia: bool = giro_acel > 0.0 and vel_previa.length_squared() > 0.01
 
 	# Girar cuesta velocidad: a 8 m/s no se cambia de sentido sin frenar.
 	# Un cambio chico de rumbo casi no paga (el coseno vale ~1), pero
 	# darse vuelta del todo deja al jugador casi parado, y ahí la
 	# aceleración vuelve a decidir cuánto tarda en relanzarse.
-	if e["vel"].length_squared() > 0.01:
+	if e["vel"].length_squared() > 0.01 and not con_inercia:
 		var alineacion: float = dir.dot(e["vel"].normalized())
 		rapidez *= clampf((alineacion + 1.0) * 0.5,
 			float(pesos()["fisica"]["freno_giro"]), 1.0)
@@ -4248,7 +4287,40 @@ static func _mover_hacia(e: Dictionary, objetivo: Vector2, factor: float = 1.0) 
 	# uno es del que entra o sale de la cancha, que no juega la jugada.
 	var techo: float = factor if factor > 1.0 else minf(factor, capacidad_de_sprint(e))
 	var tope: float = float(e["vel_max"]) * techo
-	rapidez = minf(rapidez + float(e.get("aceleracion", 3.0)) * TICK_SEG, tope)
+	if frenar:
+		# La velocidad con la que todavía se frena a tiempo: v² = 2·a·d.
+		var frenada: float = float(pesos()["fisica"].get("frenada", 0.0))
+		if frenada > 0.0:
+			tope = minf(tope, sqrt(2.0 * frenada * dist))
+	# Arranque (fisica.arranque_extra): parado acelera más que cerca de su
+	# punta, como un velocista. Con la rampa pareja, el que recibía salía a
+	# 1.4 m/s el primer tick y tardaba un segundo en correr.
+	var acel: float = float(e.get("aceleracion", 3.0))
+	var extra: float = float(fisica.get("arranque_extra", 0.0))
+	if extra > 0.0:
+		acel *= 1.0 + extra * clampf(1.0 - rapidez / maxf(float(e["vel_max"]), 0.1), 0.0, 1.0)
+	rapidez = minf(rapidez + acel * TICK_SEG, tope)
+	if con_inercia:
+		# El tope es para girar; frenar hacia la marca (ver `frenar`) no lo
+		# paga: si no, llegaba sin poder frenar y se clavaba igual.
+		var cambio_max: float = giro_acel * TICK_SEG
+		if frenar:
+			cambio_max = maxf(cambio_max, vel_previa.length() - rapidez)
+		var nueva: Vector2 = vel_previa + (dir * rapidez - vel_previa).limit_length(cambio_max)
+		var avance: Vector2 = nueva * TICK_SEG
+		if avance.dot(dir) >= dist and nueva.dot(dir) > 0.0:
+			e["recorrido"] = float(e.get("recorrido", 0.0)) + dist
+			e["pos"] = objetivo
+			e["vel"] = Vector2.ZERO
+			e["rapidez"] = 0.0
+			return
+		if nueva.length() >= float(pesos_control()["rapidez_para_girar"]):
+			girar_hacia(e, nueva.normalized())
+		e["recorrido"] = float(e.get("recorrido", 0.0)) + avance.length()
+		e["pos"] = e["pos"] + avance
+		e["vel"] = nueva
+		e["rapidez"] = nueva.length()
+		return
 	# Etapa 3: corriendo, el cuerpo sigue a la carrera con giro limitado. Al
 	# trote se sigue mirando la jugada (ver _mirar_la_pelota).
 	if rapidez >= float(pesos_control()["rapidez_para_girar"]):
@@ -4530,6 +4602,15 @@ static func _toque_largo(estado: Dictionary, e: Dictionary, vel: Vector2, dificu
 	pelota.erase("pared_a")
 	# El receptor sale a buscar su propio toque (ver `esperando` en _tick).
 	pelota["destino_id"] = int(e["clave"])
+	# Solo para el relato ("Se le va larga a ..."): no cuenta en las
+	# estadísticas (no es pase ni acción ofensiva).
+	var local_toque := bool(e["equipo_local"])
+	estado["eventos"].append({
+		"minuto": _minuto_int(estado), "tipo": "control",
+		"equipo": _equipo_de(estado, local_toque).nombre,
+		"rival": _equipo_de(estado, not local_toque).nombre,
+		"jugador_posicion": e["rol"], "clave": int(e["clave"]), "resultado": "se_le_va",
+	})
 
 
 ## Saca las opciones que mandan la pelota fuera del cono del cuerpo. Girar
@@ -5660,6 +5741,12 @@ static func _dar_pelota_al_arquero(estado: Dictionary, arquero_local: bool, saqu
 	estado["pelota"]["en_vuelo"] = false
 	estado["pelota"]["ticks_con_pelota"] = 0
 	estado["pelota"].erase("control")
+	# Agarrada en una estirada: queda tirado con la pelota y se levanta antes
+	# de jugarla (`fisica.arquero_tendido_ticks` desde que se tiró).
+	var tendido := int(pesos()["fisica"].get("arquero_tendido_ticks", 0))
+	var estirada := int(arq.get("estirada_tick", -99))
+	if tendido > 0 and int(estado["tick"]) - estirada <= 6:
+		arq["tendido_hasta"] = estirada + tendido
 	_accion(estado, arquero_clave, ACCION_AGARRA)
 
 
@@ -6413,7 +6500,7 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 				# terminaba apareciendo encima de la pelota al momento
 				# del centro. Por eso no se veia quien pateaba.
 				var factor: float = FACTOR_CORRE_A_LA_PELOTA if id == ejecutor_bp 					else FACTOR_TROTE_PARADO
-				_mover_hacia(e_p, e_p.get("marca", e_p["pos"]), factor)
+				_mover_hacia(e_p, e_p.get("marca", e_p["pos"]), factor, true)
 			_mirar_la_pelota(estado)
 		# El que sale camina hacia afuera y el que entra trota a su lugar;
 		# el saque espera a que terminen.
@@ -6552,6 +6639,10 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 			var falta: float = pelota["pos"].distance_to(pelota["destino_pos"])
 			if falta <= float(pesos()["fisica"]["vel_remate"]) * TICK_SEG * 2.0:
 				_accion(estado, id, ACCION_VUELA)
+				# Cuándo se tiró (la primera de las que graba seguidas): si la
+				# agarra, queda tirado (ver _dar_pelota_al_arquero).
+				if int(estado["tick"]) - int(e.get("estirada_tick", -99)) > 4:
+					e["estirada_tick"] = int(estado["tick"])
 			_mover_hacia(e, pelota["remate"]["destino_arquero"])
 			continue
 		if perseguidores.has(id):
@@ -6564,7 +6655,7 @@ static func _tick(estado: Dictionary, con_fotogramas: bool) -> void:
 		# perdido la pelota. En un remate se veía clarísimo — pateaban al
 		# arco y arrancaban a retroceder antes de saber si era gol.
 		var mi_equipo_tiene: bool = e["equipo_local"] == equipo_con_pelota
-		_mover_hacia(e, _objetivo_sin_pelota(estado, e, equipo, mi_equipo_tiene))
+		_mover_hacia(e, _objetivo_sin_pelota(estado, e, equipo, mi_equipo_tiene), 1.0, true)
 	# Etapa 3: los que quedaron al trote o quietos se perfilan hacia la
 	# pelota, despues de moverse todos y desde la misma posicion de pelota.
 	_mirar_la_pelota(estado)
@@ -6779,6 +6870,16 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 	# que un centro sea un centro y no un pase raso con más recorrido.
 	var mejor_id := -1
 	var mejor_d: float = radio_inter
+	# Cada rival disputa el corte UNA vez por vuelo: cuando la pelota le pasa.
+	# Si lo pierde, al tick siguiente sigue a menos del radio del comienzo del
+	# tramo (la pelota ya lo pasó) y volvía a tirar: cortaba una pelota que
+	# ya estaba en los pies del receptor, a 4 m de él (3D-02).
+	var ya_fallaron: Array = []
+	if int(f.get("un_corte_por_vuelo", 0)) != 0:
+		var vuelo := [origen, destino]
+		if pelota.get("cortes_fallidos", {}).get("vuelo", []) != vuelo:
+			pelota["cortes_fallidos"] = {"vuelo": vuelo, "claves": []}
+		ya_fallaron = pelota["cortes_fallidos"]["claves"]
 	if not bool(pelota.get("es_rebote_arquero", false)) \
 			and float(pelota.get("z", 0.0)) <= float(f["z_inalcanzable"]):
 		for id in estado["jugadores"]:
@@ -6786,6 +6887,8 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 			if e["equipo_local"] == pasador_local:
 				continue
 			if e["pos"].distance_to(origen) < minimo_desde_origen:
+				continue
+			if ya_fallaron.has(id):
 				continue
 			var d := _dist_a_segmento(e["pos"], desde, hasta)
 			if d < mejor_d:
@@ -6801,6 +6904,7 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 	# un DFC: quite + inteligencia, o sea marca y lectura de juego.
 	if mejor_id != -1 and bool(pelota.get("es_pase", false)):
 		if not _gana_intercepcion(estado, mejor_id, mejor_d, radio_inter, pasador_local, minuto):
+			ya_fallaron.append(mejor_id)
 			mejor_id = -1
 
 	if mejor_id != -1:
@@ -6840,9 +6944,13 @@ static func _avanzar_pelota(estado: Dictionary) -> void:
 			else:
 				_pelota_fuera(estado, hasta, bool(pelota.get("centro_de", pasador_local)))
 		else:
+			# Solo se baja de pecho lo que venía por arriba: hay "centros" que
+			# viajan por el piso (altura_max 0) y se veían bajar de pecho.
+			var centro_por_arriba: bool = float(pelota.get("altura_max", 0.0)) >= 1.4
 			pelota["altura_max"] = 0.0
 			pelota["z"] = 0.0
-			estado["recibiendo_centro"] = true
+			if centro_por_arriba:
+				estado["recibiendo_centro"] = true
 			_resolver_centro(estado, hasta, bool(pelota.get("centro_de", pasador_local)), minuto)
 			estado.erase("recibiendo_centro")
 		return
@@ -7008,10 +7116,12 @@ static func _completar_dirigida(estado: Dictionary, minuto: int, alcanzada: bool
 				bool(pelota.get("pasador_local", true)))
 			return
 	if pendiente == "entrega":
-		if pecho:
-			estado["recibiendo_centro"] = true
+		# El centro cayó y la pelota llegó RODANDO (_dirigir_pelota_a le bajó
+		# la altura): se para con el pie. Con el pecho se veía bajar de pecho
+		# una pelota que venía por el piso.
 		_entregar_pelota(estado, clave)
-		estado.erase("recibiendo_centro")
+		if pecho and int(pelota.get("poseedor_id", -1)) == clave:
+			_accion(estado, clave, "control_pie")
 		# El toque final de un centro nace cuando el atacante controla la
 		# pelota, no cuando el centro cae lejos. Así el cabezazo y el pase de
 		# cabeza no saltan desde el punto de caída hasta otro jugador.
@@ -7056,10 +7166,14 @@ static func _resolver_intercepcion(estado: Dictionary, mejor_id: int, minuto: in
 		laterales["interceptados"] = int(laterales.get("interceptados", 0)) + 1
 		estado["pases_laterales_area"] = laterales
 	_entregar_pelota(estado, mejor_id)
+	# `clave` es el que la corta y `pasador_clave` el que la jugó (solo si
+	# fue un pase): los usa el relato ("Mal pase de ..., la corta ...").
 	estado["eventos"].append({
 		"minuto": minuto, "tipo": "pase", "equipo": _equipo_de(estado, pasador_local).nombre,
 		"rival": _equipo_de(estado, not pasador_local).nombre,
 		"jugador_posicion": estado["jugadores"][mejor_id]["rol"], "resultado": "pierde",
+		"clave": mejor_id, "corte": true,
+		"pasador_clave": int(pelota.get("pasador_clave", -1)) if bool(pelota.get("es_pase", false)) else -1,
 	})
 
 
@@ -7166,6 +7280,7 @@ static func _resolver_recepcion(estado: Dictionary, receptor: int, hasta: Vector
 			"minuto": minuto, "tipo": "pase", "equipo": _equipo_de(estado, pasador_local).nombre,
 			"rival": _equipo_de(estado, not pasador_local).nombre,
 			"jugador_posicion": e_receptor["rol"], "resultado": "pierde",
+			"clave": receptor, "pasador_clave": int(pelota.get("pasador_clave", -1)),
 		})
 
 	# Etapa 3: el pase llego y quedo registrado; falta que la controle. Solo
@@ -7241,7 +7356,7 @@ static func _avanzar_entradas_y_salidas(estado: Dictionary) -> bool:
 		s["ticks"] = int(s["ticks"]) + 1
 		var destino: Vector2 = s["destino"]
 		var paso: float = FACTOR_CAMINA_EXPULSADO if bool(s.get("expulsado", false)) 			else FACTOR_SALE_CAMBIADO
-		_mover_hacia(e, destino, paso)
+		_mover_hacia(e, destino, paso, true)
 		if e["pos"].distance_to(destino) > 0.5 and int(s["ticks"]) < TICKS_MAX_SALIENDO:
 			siguen.append(s)
 			continue
@@ -7269,7 +7384,7 @@ static func _avanzar_entradas_y_salidas(estado: Dictionary) -> bool:
 		en["ticks"] = int(en["ticks"]) + 1
 		var e2: Dictionary = estado["jugadores"][clave_e]
 		var destino_e: Vector2 = en["destino"]
-		_mover_hacia(e2, destino_e, FACTOR_ENTRA_SUPLENTE)
+		_mover_hacia(e2, destino_e, FACTOR_ENTRA_SUPLENTE, true)
 		if e2["pos"].distance_to(destino_e) > 1.5 and int(en["ticks"]) < TICKS_MAX_SALIENDO:
 			entrando.append(en)
 	estado["entrando"] = entrando
@@ -7367,7 +7482,7 @@ static func _sincronizar_cambios(estado: Dictionary, instantaneo: bool = false) 
 			# Adonde va: al lugar que dejo el que salio. Y de donde sale:
 			# del lateral, como en el futbol.
 			var destino: Vector2 = hueco["pos"] if hueco.has("pos") else base
-			var entra_por: Vector2 = destino if instantaneo else _punto_de_salida(destino)
+			var entra_por: Vector2 = destino if instantaneo else _punto_de_salida(destino, false, _giro_de_vista(estado))
 			estado["jugadores"][clave] = {
 				"clave": clave, "jugador_id": j["id"], "equipo_local": es_local,
 				"numero": equipo.dorsal_de(int(j["id"])),
@@ -8451,6 +8566,12 @@ static func _decidir_y_ejecutar(estado: Dictionary) -> void:
 		return
 	if recuperacion_hasta != -1:
 		poseedor.erase("recuperacion_quite_hasta")
+	# El arquero que la agarró tirado se levanta antes de jugarla.
+	var tendido_hasta: int = int(poseedor.get("tendido_hasta", -1))
+	if tendido_hasta >= int(estado["tick"]):
+		return
+	if tendido_hasta != -1:
+		poseedor.erase("tendido_hasta")
 	# El gesto de regate tiene su propia ventana visual. Durante ella no se
 	# vuelve a conducir: la ruleta y la posicion del cuerpo deben avanzar
 	# juntas, no mostrar al jugador corriendo de espaldas.
@@ -8650,7 +8771,7 @@ static func _empezar_salida(estado: Dictionary, clave: int, expulsado: bool = fa
 		_dar_pelota_al_arquero(estado, not bool(estado["jugadores"][clave]["equipo_local"]))
 	estado["saliendo"].append({
 		"clave": clave,
-		"destino": _punto_de_salida(estado["jugadores"][clave]["pos"]),
+		"destino": _punto_de_salida(estado["jugadores"][clave]["pos"], expulsado, _giro_de_vista(estado)),
 		"ticks": 0,
 		# La caída y la recuperación ocurren quietas. Recién después el
 		# lesionado camina al lateral para la sustitución.
@@ -9778,7 +9899,11 @@ static func _intentar_robo(estado: Dictionary) -> void:
 	if estado["rng"].randf() < float(f["prob_desvio_al_lateral"]):
 		_accion(estado, mejor_id, ACCION_BARRIDA)
 		_penalizar(estado, poseedor["clave"], jug_a)
-		_desviar_afuera(estado, poseedor["pos"], es_local)
+		# La última la toca el que va a quitarla: el saque es del que la tenía.
+		# Se anotaba al poseedor y el lateral era para el rival que la mandó
+		# afuera (3D-11).
+		var toco_local := es_local if int(f.get("desvio_lo_toca_el_defensor", 0)) == 0 else not es_local
+		_desviar_afuera(estado, poseedor["pos"], toco_local)
 		return
 
 	if not aguanta:
@@ -9848,13 +9973,31 @@ static func _cambios_para_fotograma(estado: Dictionary) -> Array:
 	return visibles
 
 
+## Cómo sale girado el fotograma respecto del motor: 1 o -1 (180 grados).
+## El motor juega siempre con el local atacando hacia +x.
+## - En la tanda los dos equipos patean al MISMO arco. El motor sigue
+##   pateando cada penal al arco que ataca ese equipo (ver
+##   _tanda_de_penales), y el fotograma del penal visitante sale girado.
+##   Girar y no espejar conserva el costado: el penal cruzado sigue cruzado
+##   y el arquero se tira al mismo lado.
+## - En el segundo tiempo (y el del alargue) los equipos cambian de cancha,
+##   como en el fútbol (3D-12, `fisica.cambio_de_lado`).
+static func _giro_de_vista(estado: Dictionary) -> float:
+	if bool(estado.get("en_tanda", false)):
+		return -1.0 if bool(estado.get("tanda_girada", false)) else 1.0
+	if int(pesos()["fisica"].get("cambio_de_lado", 0)) != 0 and int(estado.get("periodo", 1)) in [2, 4]:
+		return -1.0
+	return 1.0
+
+
+## El arco que ataca el equipo en las coordenadas del fotograma (ver
+## _giro_de_vista). Los fotogramas viejos no traen "giro": van sin girar.
+static func arco_rival_en(fotograma: Dictionary, es_local: bool) -> Vector2:
+	return arco_rival(es_local) * float(fotograma.get("giro", 1.0))
+
+
 static func _push_fotograma(estado: Dictionary, eventos_del_tick: Array = []) -> void:
-	# En la tanda los dos equipos patean al MISMO arco. El motor sigue
-	# pateando cada penal al arco que ataca ese equipo (ver
-	# _tanda_de_penales), y el fotograma del penal visitante sale girado
-	# 180 grados. Girar y no espejar conserva el costado: el penal cruzado
-	# sigue cruzado y el arquero se tira al mismo lado.
-	var giro: float = -1.0 if bool(estado.get("en_tanda", false)) and bool(estado.get("tanda_girada", false)) else 1.0
+	var giro := _giro_de_vista(estado)
 	var jugadores := []
 	for id in estado["jugadores"]:
 		var e: Dictionary = estado["jugadores"][id]
@@ -9898,6 +10041,9 @@ static func _push_fotograma(estado: Dictionary, eventos_del_tick: Array = []) ->
 		# esto: el minuto solo no alcanza porque el descuento se pasa de 45
 		# y de 90.
 		"periodo": int(estado.get("periodo", 1)),
+		# 1 o -1: el fotograma sale girado 180 grados respecto del motor (ver
+		# _giro_de_vista). Para saber qué arco ataca cada uno: arco_rival_en().
+		"giro": giro,
 		# Ticks que le faltan a la pausa en curso, 0 si el juego corre. Es la
 		# unica forma de separar juego abierto de pelota parada midiendo
 		# sobre fotogramas; la vista lo ignora y los fotogramas viejos no lo

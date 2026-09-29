@@ -1,0 +1,4 @@
+s7 PALO t371 { "minuto": 35, "tipo": "tiro", "equipo": "Atlético Prueba", "rival": "Deportivo Banco", "jugador_posicion": "DC", "clave": 9, "resultado": "palo", "remate_id": 7, "tecnica": "patea", "travesano": false, "destino_palo": "afuera" }
+s7 PALO t422 { "minuto": 40, "tipo": "tiro_puerta", "remate_id": 8, "equipo": "Atlético Prueba", "rival": "Deportivo Banco", "jugador_posicion": "MC", "clave": 6, "resultado": "gol", "tecnica": "palomita", "asistencia_clave": 7, "tiro_libre": false, "con_efecto": false, "curva_m": 0.0, "calidad_tiro": 0.0, "palo": true, "tras_palo": false }
+s7 TRAMO 0 vmax 24.9 m/s en 368.28
+s7 TRAMO 1 vmax 19.5 m/s en 419.53

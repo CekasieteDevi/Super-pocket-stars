@@ -72,7 +72,9 @@ func _medir(estilo: String) -> Dictionary:
 			for j in f["jugadores"]:
 				if str(j["rol"]) != "ARQ":
 					continue
-				var linea: float = -MotorEspacial.MEDIO_LARGO if bool(j["equipo_local"]) else MotorEspacial.MEDIO_LARGO
+				# Su línea es la del otro arco: en el segundo tiempo el fotograma
+				# sale girado y los equipos cambian de cancha (3D-12).
+				var linea: float = -MotorEspacial.arco_rival_en(f, bool(j["equipo_local"])).x
 				var d: float = absf(float(j["x"]) - linea)
 				suma += d
 				muestras += 1

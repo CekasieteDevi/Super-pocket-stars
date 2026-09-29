@@ -109,6 +109,12 @@ porque el arreglo define un contrato que hay que respetar.
 `docs/motor_espacial.md` es el documento de diseño. Las referencias tipo
 §8.4 #22 que aparecen en los comentarios del código apuntan ahí.
 
+- `docs/motor_v2.md`: plan del motor nuevo, solo 3D (el modo 2D se abandona).
+  Leelo antes de trabajar en cualquier etapa del Motor V2.
+- `match/3d/LEEME.md`: cómo funciona la vista 3D actual.
+- `tools/blender/`: copia de los scripts de Blender que arman los modelos y
+  las animaciones. Los `.blend` quedan en la PC del usuario.
+
 ## Estilo de escritura (STE adaptado)
 
 - Voz activa siempre. "El script lee el archivo", no "el archivo es leído".

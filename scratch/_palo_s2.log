@@ -1,0 +1,2 @@
+s2 PALO t122 { "minuto": 12, "tipo": "tiro", "equipo": "Deportivo Banco", "rival": "Atlético Prueba", "jugador_posicion": "DC", "clave": 101009, "resultado": "palo", "remate_id": 1, "tecnica": "patea", "travesano": false, "destino_palo": "en_juego" }
+s2 TRAMO 0 vmax 26.7 m/s en 120.47

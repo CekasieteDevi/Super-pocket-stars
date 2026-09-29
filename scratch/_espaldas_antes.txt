@@ -1,0 +1,22 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+[prototipo 3d] Atlético Prueba 0-3 Deportivo Banco | 999 fotogramas | medias 85.4 y 86.3
+CASO ESPALDAS_PECHO tick 106.4 min 10 | id 10 Caminar 0.47 s hasta 3.9 m/s 180°
+CASO ESPALDAS_PECHO tick 182.4 min 17 | id 10 Caminar 0.47 s hasta 5.0 m/s 175°
+CASO ESPALDAS_PECHO tick 225.4 min 21 | id 101008 Caminar 0.40 s hasta 4.6 m/s 180°
+CASO ESPALDAS_PECHO tick 383.5 min 36 | id 9 Caminar 0.40 s hasta 3.8 m/s 152°
+CASO ESPALDAS_PECHO tick 463.5 min 43 | id 101008 Caminar 0.40 s hasta 3.7 m/s 160°
+CASO ESPALDAS_PECHO tick 526.4 min 49 | id 101008 Caminar 0.43 s hasta 4.6 m/s 113°
+CASO ESPALDAS_PECHO tick 557.5 min 52 | id 9 Caminar 0.43 s hasta 4.9 m/s 176°
+CASO ESPALDAS_PECHO tick 604.5 min 56 | id 101009 Caminar 0.40 s hasta 3.9 m/s 122°
+CASO ESPALDAS_PECHO tick 630.5 min 59 | id 10 Caminar 0.43 s hasta 5.1 m/s 180°
+CASO ESPALDAS tick 658.1 min 61 | id 101000 Correr 0.30 s hasta 5.0 m/s 173°
+CASO ESPALDAS_PECHO tick 685.4 min 64 | id 101010 Caminar 0.47 s hasta 4.4 m/s 180°
+CASO ESPALDAS_PECHO tick 812.5 min 76 | id 101009 Caminar 0.40 s hasta 3.7 m/s 158°
+CASO ESPALDAS_PECHO tick 827.4 min 77 | id 101008 Caminar 0.43 s hasta 3.6 m/s 144°
+CASO ESPALDAS_PECHO tick 949.5 min 89 | id 101010 Caminar 0.43 s hasta 5.0 m/s 177°
+RESUMEN { "ESPALDAS_PECHO": 13, "ESPALDAS": 1 } cuadros 7546
+WARNING: 43 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 1 resources still in use at exit (run with --verbose for details).
+   at: clear (core/io/resource.cpp:822)

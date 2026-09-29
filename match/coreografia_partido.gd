@@ -315,7 +315,7 @@ func _direccion_salida(idx: int, pos: Vector2, j: Dictionary, accion: String) ->
 		if delta.length_squared() > 0.04:
 			return delta.normalized()
 	if accion in AEREAS:
-		return (MotorEspacial.arco_rival(bool(j["equipo_local"])) - pos).normalized()
+		return (MotorEspacial.arco_rival_en(_lista[idx], bool(j["equipo_local"])) - pos).normalized()
 	return orientacion
 
 

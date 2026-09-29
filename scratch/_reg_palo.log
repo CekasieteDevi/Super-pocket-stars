@@ -1,0 +1,4 @@
+  186 test_noticias
+  184 test_gamestate_flujo
+  169 test_fin_de_mitad
+ARCHIVOS_CON_FALLAS=0 de 163 en 687s con 6 en paralelo

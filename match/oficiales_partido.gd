@@ -166,7 +166,7 @@ static func _objetivo_arbitro(actual: Dictionary, siguiente: Dictionary,
 	var poseedor := int((actual.get("pelota", {}) as Dictionary).get("poseedor_id", -1))
 	for jugador in actual.get("jugadores", []):
 		if int(jugador["id"]) == poseedor:
-			rumbo_x = 1.0 if bool(jugador["equipo_local"]) else -1.0
+			rumbo_x = signf(MotorEspacial.arco_rival_en(actual, bool(jugador["equipo_local"])).x)
 			break
 	if rumbo_x == 0.0:
 		rumbo_x = 1.0 if pelota.x >= 0.0 else -1.0
@@ -183,8 +183,10 @@ static func _objetivo_arbitro(actual: Dictionary, siguiente: Dictionary,
 static func _posicion_asistente(fotograma: Dictionary, derecha: bool,
 		gol: Dictionary, idx: int) -> Vector2:
 	var defensores_x: Array = []
+	# Con el fotograma girado (segundo tiempo) el local defiende la derecha.
+	var girado := float(fotograma.get("giro", 1.0)) < 0.0
 	for jugador in fotograma.get("jugadores", []):
-		if bool(jugador["equipo_local"]) == (not derecha):
+		if (bool(jugador["equipo_local"]) != girado) == (not derecha):
 			defensores_x.append(float(jugador["x"]))
 	defensores_x.sort()
 	var pelota_x := _pelota(fotograma).x

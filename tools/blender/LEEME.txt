@@ -1,0 +1,75 @@
+SUPER POCKET STARS - MODELOS 3D PARA EL JUEGO (glTF binario .glb)
+======================================================================
+Los .blend de Graficos V2\Modelos son la version "alta" (para renders y sprites).
+Estos .glb son la version liviana para tiempo real. Se regeneran con exportar_juego3d.py.
+
+ARCHIVOS Y PESO
+  jugador.glb   ~62.600 triangulos con los 10 peinados (se dibujan ~11.000 + el peinado: 0-9.500)  ~2,9 MB
+  golero.glb    ~64.200 triangulos con los 10 peinados (se dibujan ~12.600 + el peinado)          ~3,0 MB
+  pelota.glb      4.320 triangulos                       sin animacion   ~98 KB
+  estadio.glb   ~12.400 triangulos (cancha, lineas, arcos con red, carteles, tribunas, torres)  ~324 KB
+  => 22 jugadores + pelota + estadio ~ 420.000 triangulos: bien para PC; en celulares de gama baja
+     conviene un LOD mas simple para los jugadores lejanos (pedilo y lo armo).
+
+UNIDADES Y EJES
+  1 unidad = 1 metro. glTF es Y-arriba. Pies del personaje en Y=0.
+  Los personajes miran hacia +Z del glTF (en Blender miraban a -Y).
+  Cancha: 105 x 68 m, centro en el origen, largo sobre el eje X. Arcos de 9.15 x 3.05 m en X = +-52.5.
+  Pelota: radio 0.11 m, centrada en su origen (apoyala en Y = 0.11).
+
+PERSONAJES EN UNA SOLA MALLA (jugador.glb, golero.glb)
+  Una malla "Chibi" pesada al esqueleto, un solo material "Chibi" (1 llamada de dibujo por personaje).
+  Color de vertice (COLOR_0, sRGB) = color del material de esa cara. UV (TEXCOORD_0): U = tipo,
+  V = alfa (en glTF la V va dada vuelta: 1 - alfa). Tipos: 0 fijo con toon, 1 Equipo_Rojo, 2 Equipo_Blanco,
+  3 Pelo, 4 Piel, 5 sin luz (Ojos/Boca/Lengua), 6 Cachetes (alfa 0.55 sobre la piel), 7 Contorno.
+  Lo arma unir_personaje() en exportar_juego3d.py. Lo de MATERIALES de abajo vale para pelota y estadio.
+  PEINADOS: trae los 10 (peinados.py): en las caras de pelo la V es 2 + peinado (en glTF: -1 - peinado).
+  0 puntas, 1 pelado (sin malla), 2 rapado, 3 mohicano, 4 afro, 5 jopo, 6 raya, 7 rulos, 8 hongo, 9 alto.
+  El motor dibuja solo los triangulos del peinado del jugador (Godot: Jugador3D.poner_peinado).
+
+MATERIALES (colores planos -> el toon lo hace el shader del motor)
+  Vienen como PBR simples (rugosidad 1, sin metal) con el COLOR BASE en baseColorFactor.
+  Nombres pensados para cambiar colores por codigo:
+    Piel, Pelo, Equipo_Rojo (camiseta/medias/franja), Equipo_Blanco (short/mangas/botin), Suela,
+    Guantes, Guantes_Detalle (solo golero), Ojos, Boca, Lengua, Cachetes (semi transparente)
+  CONTORNO: el material "Contorno" es un casco invertido ("inverted hull"): es una copia inflada con las
+  normales al reves y SOLO se ve si el motor hace backface culling (el material es de una cara).
+  Dejalo sin luz (unlit) y de color casi negro. Si tu shader toon ya dibuja contorno, ocultá esos submeshes.
+  Estadio: Cesped / Cesped_2 son las dos franjas de corte. Arco_Red usa una textura con alfa (alpha MASK).
+
+SHADER TOON SUGERIDO (cualquier motor)
+  luz = dot(normal, dirSol); tono = luz < 0.35 ? sombra : (luz < 0.8 ? medio : luz_alta)
+  color = colorBase * tono      (3 tonos constantes, sin degradado)
+  Valores que usamos en Blender: sombra ~0.72 (un poco violacea), medio 1.0, luz 1.13.
+  Sol calido (1.0, 0.9, 0.78) desde arriba-izquierda-adelante: direccion (0.55, 0.6, -0.75) en Blender.
+
+ANIMACIONES (24 fps, empiezan en t = 0; cuadro f del eventos.txt -> t = (f-1)/24 s)
+  Jugador y golero comparten el mismo esqueleto (13 huesos, mismos nombres): cualquier animacion
+  sirve para cualquiera de los dos.
+  nombre              dur(s) loop  eventos (segundos)
+  Correr_Gambeta      0.50   SI    toque de gambeta t=0.125
+  Patear_Corriendo    0.46   no    IMPACTO t=0.167
+  Pase_Corriendo      0.38   no    IMPACTO t=0.167
+  Control_Corriendo   0.38   no    contacto t=0.125, pelota dominada t=0.208
+  Quitar_Corriendo    0.54   no    ventana de quite t=0.167 - 0.250
+  Patear              1.21   no    IMPACTO t=0.500   (parado, empieza/termina con manos en la cintura)
+  Pase                1.04   no    IMPACTO t=0.458
+  Control             0.96   no    contacto t=0.375, dominada t=0.500
+  Quitar              1.04   no    ventana t=0.417 - 0.542
+  Golero_Guardia      0.50   SI    idle del golero
+  Atajar_Volando      0.96   no    ATAJADA t=0.333 - 0.458 (pelota a los guantes), cae al piso t=0.583
+  Levantarse          0.79   no    termina parado con la pelota en el pecho
+
+  Transiciones: en 3D podes hacer crossfade de ~0.08-0.12 s entre animaciones y no hace falta
+  esperar el cuadro exacto. Si queres el empalme perfecto (como en los sprites):
+    correr -> *_Corriendo: arrancar la accion cuando correr esta en t = 0.375
+    *_Corriendo -> correr: al terminar, seguir correr desde t = 0.25
+
+  Movimiento de raiz: Atajar_Volando y Levantarse mueven la cadera 1.3 m hacia la DERECHA del golero
+  (hueso "Cadera"). Opciones: usar root motion del motor, o al terminar Levantarse mover el nodo del
+  golero 1.3 m a su derecha y volver a Golero_Guardia. Para estirarse al otro lado: espejar
+  (escala -1 en X del nodo) o pedime la version izquierda como animacion propia.
+
+PUNTOS DE CONTACTO CON LA PELOTA
+  Hueso "Pie.R" (punta del pie derecho) para patear/pase/control/quite.
+  Huesos "Antebrazo.L" / "Antebrazo.R" (manos/guantes) para la atajada: la pelota va entre los dos.
