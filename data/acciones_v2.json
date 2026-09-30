@@ -1,0 +1,900 @@
+{
+	"_notas": {
+		"origen": "Lo genera tools/generar_acciones_v2.py; no editar a mano. Duración y punto de contacto medidos en assets/3d/jugador.glb y golero.glb; contacto y hueso de tools/blender/animaciones_jugador.py o, si la vista 3D lo verificó, de CONTACTO_3D (match/3d/vista_cancha_3d.gd).",
+		"contacto": "Fracción de la duración en la que el punto `ancla` toca la pelota. null: el clip no toca la pelota (o todavía no se sabe dónde).",
+		"punto_contacto": "Dónde está el ancla en ese cuadro, en metros desde el pie del jugador parado en el origen y mirando a +z: [x a su izquierda, y arriba, z adelante]. alcance_m es su distancia en el piso.",
+		"locomocion": "Clip de andar (quieto, caminar, trotar, correr): no es una acción, lo elige la vista por la velocidad.",
+		"mueve": "true: el cuerpo sigue con su locomoción durante el clip (se hace corriendo). false: frena hasta que termina."
+	},
+	"clips": {
+		"Agarrar": {
+			"duracion": 1.0,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"golero"
+			],
+			"contacto": 0.0,
+			"ancla": "manos",
+			"fuente_contacto": "match/3d/vista_cancha_3d.gd CONTACTO_3D",
+			"punto_contacto": [
+				0.0,
+				0.596,
+				0.395
+			],
+			"alcance_m": 0.395,
+			"altura_m": 0.596
+		},
+		"Amague": {
+			"duracion": 0.75,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": true,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Arquero_Lanza": {
+			"duracion": 0.5,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"golero"
+			],
+			"contacto": 0.5833,
+			"ancla": "Mano_R",
+			"fuente_contacto": "match/3d/vista_cancha_3d.gd CONTACTO_3D",
+			"punto_contacto": [
+				-0.121,
+				0.248,
+				0.188
+			],
+			"alcance_m": 0.223,
+			"altura_m": 0.248
+		},
+		"Arquero_Levanta": {
+			"duracion": 1.5,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Arquero_Levanta_Izq": {
+			"duracion": 1.5,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Arquero_Sostiene": {
+			"duracion": 2.0,
+			"bucle": true,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Arquero_Voleo": {
+			"duracion": 1.0,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"golero"
+			],
+			"contacto": 0.5,
+			"ancla": "Pie_R",
+			"fuente_contacto": "match/3d/vista_cancha_3d.gd CONTACTO_3D",
+			"punto_contacto": [
+				-0.124,
+				0.124,
+				0.363
+			],
+			"alcance_m": 0.384,
+			"altura_m": 0.124
+		},
+		"Atajar_Abajo": {
+			"duracion": 1.0,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Atajar_Arriba": {
+			"duracion": 1.0,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Atajar_Volando": {
+			"duracion": 1.0,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": 0.4167,
+			"ancla": "manos",
+			"fuente_contacto": "match/3d/vista_cancha_3d.gd CONTACTO_3D",
+			"punto_contacto": [
+				-1.366,
+				0.578,
+				0.308
+			],
+			"alcance_m": 1.401,
+			"altura_m": 0.578
+		},
+		"Atajar_Volando_Alto": {
+			"duracion": 1.0,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Atajar_Volando_Alto_Izq": {
+			"duracion": 1.0,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Atajar_Volando_Izq": {
+			"duracion": 1.0,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Bandera_Arriba": {
+			"duracion": 1.25,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Bandera_Horizontal": {
+			"duracion": 0.5,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Barrera": {
+			"duracion": 1.0,
+			"bucle": true,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Barrera_Salto": {
+			"duracion": 0.75,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Barrida": {
+			"duracion": 0.75,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": 0.3333,
+			"ancla": "Pie_L",
+			"fuente_contacto": "match/3d/vista_cancha_3d.gd CONTACTO_3D",
+			"punto_contacto": [
+				0.31,
+				0.371,
+				0.323
+			],
+			"alcance_m": 0.448,
+			"altura_m": 0.371
+		},
+		"Bloquear": {
+			"duracion": 0.75,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": 0.2778,
+			"ancla": "Pie_R",
+			"fuente_contacto": "match/3d/vista_cancha_3d.gd CONTACTO_3D",
+			"punto_contacto": [
+				-0.205,
+				0.24,
+				0.358
+			],
+			"alcance_m": 0.412,
+			"altura_m": 0.24
+		},
+		"Cabecear": {
+			"duracion": 0.5,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": true,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": 0.5833,
+			"ancla": "Frente",
+			"fuente_contacto": "match/3d/vista_cancha_3d.gd CONTACTO_3D",
+			"punto_contacto": [
+				0.0,
+				0.973,
+				0.566
+			],
+			"alcance_m": 0.566,
+			"altura_m": 0.973
+		},
+		"Caer": {
+			"duracion": 1.25,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Caminar": {
+			"duracion": 1.0,
+			"bucle": true,
+			"locomocion": true,
+			"aerea": false,
+			"mueve": true,
+			"modelos": [
+				"jugador"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Chilena": {
+			"duracion": 1.25,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": true,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": 0.3667,
+			"ancla": "Pie_R",
+			"fuente_contacto": "match/3d/vista_cancha_3d.gd CONTACTO_3D",
+			"punto_contacto": [
+				-0.124,
+				1.02,
+				-0.115
+			],
+			"alcance_m": 0.169,
+			"altura_m": 1.02
+		},
+		"Control": {
+			"duracion": 0.9583,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Control_Corriendo": {
+			"duracion": 0.375,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": true,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": 0.3333,
+			"ancla": "Pie_R",
+			"fuente_contacto": "match/3d/vista_cancha_3d.gd CONTACTO_3D",
+			"punto_contacto": [
+				-0.126,
+				0.088,
+				0.201
+			],
+			"alcance_m": 0.238,
+			"altura_m": 0.088
+		},
+		"Correr": {
+			"duracion": 0.5,
+			"bucle": true,
+			"locomocion": true,
+			"aerea": false,
+			"mueve": true,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Correr_Gambeta": {
+			"duracion": 0.5,
+			"bucle": true,
+			"locomocion": true,
+			"aerea": false,
+			"mueve": true,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Efecto_Acomoda": {
+			"duracion": 0.75,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": true,
+			"modelos": [
+				"jugador"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Festejar": {
+			"duracion": 0.5,
+			"bucle": true,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Forcejear": {
+			"duracion": 1.0,
+			"bucle": true,
+			"locomocion": true,
+			"aerea": false,
+			"mueve": true,
+			"modelos": [
+				"jugador"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Forcejear_Izq": {
+			"duracion": 1.0,
+			"bucle": true,
+			"locomocion": true,
+			"aerea": false,
+			"mueve": true,
+			"modelos": [
+				"jugador"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Golero_Guardia": {
+			"duracion": 0.5,
+			"bucle": true,
+			"locomocion": true,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Lateral": {
+			"duracion": 0.5,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": 0.25,
+			"ancla": "manos",
+			"fuente_contacto": "match/3d/vista_cancha_3d.gd CONTACTO_3D",
+			"punto_contacto": [
+				0.0,
+				0.709,
+				0.434
+			],
+			"alcance_m": 0.434,
+			"altura_m": 0.709
+		},
+		"Lateral_Prepara": {
+			"duracion": 0.75,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Lesionado": {
+			"duracion": 2.0,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Levantar_Brazo": {
+			"duracion": 0.5,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Levantarse": {
+			"duracion": 0.7917,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Palomita": {
+			"duracion": 1.0,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": true,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": 0.375,
+			"ancla": "Frente",
+			"fuente_contacto": "match/3d/vista_cancha_3d.gd CONTACTO_3D",
+			"punto_contacto": [
+				0.0,
+				0.846,
+				0.795
+			],
+			"alcance_m": 0.795,
+			"altura_m": 0.846
+		},
+		"Pase": {
+			"duracion": 1.0417,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Pase_Corriendo": {
+			"duracion": 0.375,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": true,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Patear": {
+			"duracion": 1.2083,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Patear_Corriendo": {
+			"duracion": 0.4583,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": true,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": 0.3636,
+			"ancla": "Pie_R",
+			"fuente_contacto": "match/3d/vista_cancha_3d.gd CONTACTO_3D",
+			"punto_contacto": [
+				-0.042,
+				0.14,
+				0.396
+			],
+			"alcance_m": 0.398,
+			"altura_m": 0.14
+		},
+		"Pecho": {
+			"duracion": 0.75,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": 0.0,
+			"ancla": "Pecho",
+			"fuente_contacto": "match/3d/vista_cancha_3d.gd CONTACTO_3D",
+			"punto_contacto": [
+				0.0,
+				0.718,
+				0.114
+			],
+			"alcance_m": 0.114,
+			"altura_m": 0.718
+		},
+		"Quieto": {
+			"duracion": 0.0417,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Quitar": {
+			"duracion": 1.0417,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Quitar_Corriendo": {
+			"duracion": 0.5417,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": true,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Regate_Bicicleta": {
+			"duracion": 1.5,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": true,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Regate_Croqueta": {
+			"duracion": 1.0,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": true,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Regate_Elastica": {
+			"duracion": 0.75,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": true,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Regate_Globito": {
+			"duracion": 2.0,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": true,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Regate_Ruleta": {
+			"duracion": 1.5,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": true,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Remate_Efecto": {
+			"duracion": 0.5,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": true,
+			"modelos": [
+				"jugador"
+			],
+			"contacto": 0.3636,
+			"ancla": "Pie_R",
+			"fuente_contacto": "tools/blender/animaciones_jugador.py",
+			"punto_contacto": [
+				-0.331,
+				0.18,
+				0.274
+			],
+			"alcance_m": 0.43,
+			"altura_m": 0.18
+		},
+		"Respirar": {
+			"duracion": 2.0,
+			"bucle": true,
+			"locomocion": true,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Saque_Arco": {
+			"duracion": 1.0,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"golero"
+			],
+			"contacto": 0.5,
+			"ancla": "Pie_R",
+			"fuente_contacto": "match/3d/vista_cancha_3d.gd CONTACTO_3D",
+			"punto_contacto": [
+				-0.074,
+				0.092,
+				0.365
+			],
+			"alcance_m": 0.373,
+			"altura_m": 0.092
+		},
+		"Tablero": {
+			"duracion": 0.5,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Taco": {
+			"duracion": 0.5,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": 0.5,
+			"ancla": "Talon_R",
+			"fuente_contacto": "match/3d/vista_cancha_3d.gd CONTACTO_3D",
+			"punto_contacto": [
+				-0.116,
+				0.411,
+				-0.363
+			],
+			"alcance_m": 0.381,
+			"altura_m": 0.411
+		},
+		"Tarjeta": {
+			"duracion": 0.5,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Tarjeta_Completa": {
+			"duracion": 2.5,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Trotar": {
+			"duracion": 1.0,
+			"bucle": true,
+			"locomocion": true,
+			"aerea": false,
+			"mueve": true,
+			"modelos": [
+				"jugador"
+			],
+			"contacto": null,
+			"ancla": ""
+		},
+		"Volea": {
+			"duracion": 0.75,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": true,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": 0.3889,
+			"ancla": "Pie_R",
+			"fuente_contacto": "match/3d/vista_cancha_3d.gd CONTACTO_3D",
+			"punto_contacto": [
+				-0.145,
+				0.431,
+				0.472
+			],
+			"alcance_m": 0.494,
+			"altura_m": 0.431
+		}
+	}
+}

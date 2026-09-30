@@ -201,6 +201,59 @@ Hecha en la nube (Linux, sin pantalla). Test: `tests/test_pelota_v2.gd`.
   - Mientras falten los clips de arranque, frenada, giro y correr de costado o de espaldas, la vista usa `Correr`, `Trotar`, `Caminar` y `Respirar`. La lista de clips que faltan queda anotada acá para hacerlos en la PC con Blender.
   - La prueba de deslizamiento de pies se mide sin pantalla (posición del hueso del pie contra el piso). La revisión visual de `muestra_animaciones_3d.tscn` queda para la PC.
 
+#### Resultado (2026-09-30): el cuerpo pasa sin vista; los pies patinan hasta tener clips nuevos
+
+Hecha en la nube. Test: `tests/test_cuerpo_v2.gd`.
+
+- **Código:**
+  - `motor_v2/cpp/src/cuerpo.h/.cpp` (`motor_v2::Cuerpo`, sin Godot) y `cuerpos_v2_nativos.h/.cpp` (`CuerposV2Nativos`, para el banco y los tests).
+  - `MundoV2Nativo` mueve a sus 22 jugadores con el mismo cuerpo.
+  - `FisicaV2` suma `parametros_cuerpo()`, `clips()` y `fisico_de(atributos, energia)`.
+- **Locomoción:** es `_mover_hacia` a 60 Hz con los mismos números de `data/utility_pesos.json` (fisica, control y esfuerzo). Tiene dos cambios, para que ningún paso mueva a nadie más de lo que da su velocidad:
+  - La rapidez baja como mucho `frenada` por segundo.
+  - Al pasar por el objetivo sin frenar, sigue con su velocidad en vez de clavarse.
+  - Además, la energía del partido (`Cansancio.factor_stats`) baja la punta y la aceleración. El motor actual solo la aplica a los duelos.
+- **Acciones:** fases preparación → ventana de contacto → recuperación. La ventana dura `ventana_contacto_seg` (0,1 s, en `data/fisica_v2.json`) y va centrada en el cuadro de contacto del clip. No se puede empezar un gesto hasta que termina el anterior. Un gesto con `mueve = false` (cabecear, barrerse, atajar) no deja acelerar ni girar: el cuerpo frena con su frenada.
+- **`data/acciones_v2.json`:** lo genera `tools/generar_acciones_v2.py` (Python lee las definiciones de Blender con `ast`; `tools/medir_clips_v2.gd` mide los GLB con Godot sin pantalla). Tiene 60 clips con su duración real; 17 con contacto, ancla y punto de contacto medido en el cuadro del golpe. El contacto sale de `CONTACTO_3D` de la vista cuando está (ya verificado) y si no de Blender. Faltan velocidades de salida típicas: llegan en la etapa 3, cuando el pie toque la pelota.
+- **Vista:** `VistaV2.dibujar_cuerpos` pone a cada `Jugador3D` en su acción y su segundo; sin acción, anda según su velocidad real.
+- **Banco:** `motor_v2/laboratorio_cuerpo.tscn`. Tiene 22 cuerpos: 12 hacen todos los gestos de su modelo, 5 pican de punta a punta con media vuelta, 3 trotan y caminan, y 2 patean y controlan corriendo. Un toque cambia de grupo. Con `--headless` imprime con `[lab_cuerpo]`.
+- **Detector PATINA:** `motor_v2/detector_patina.gd` (`DetectorPatinaV2`). Mide sobre los `Jugador3D` cuánto desliza en el mundo el pie apoyado (a menos de 1,5 cm del punto más bajo).
+
+| Medida (test y laboratorio, 60 s) | Resultado |
+| --- | --- |
+| Arranque | El rápido (90) llega al 90% de su punta en 1,13 s; con la misma punta, aceleración 90 hace 3,46 m en el primer segundo contra 2,54 m con 30 |
+| Frenar | Llega a 20 m parado, sin pasarse |
+| Saltos | Ningún paso mueve a nadie más que su velocidad (exceso 3e-6 m, redondeo de float) |
+| Media vuelta a 8,6 m/s | Frena hasta 0,04 m/s y tarda 1,83 s en correr al revés; nadie gira 180° en el lugar |
+| Giro de 90° a la punta | La carrera gira como mucho `giro_acel`/v; sigue 3,3 m hacia adelante antes de doblar |
+| Reserva y energía | Un minuto de pique deja la punta en 7,34 de 8,64 m/s (piso 0,85); con energía 0,2 corre a 5,62 m/s |
+| Gestos | Los 52 clips que no son de andar duran lo del clip y abren el contacto en su cuadro; en 60 s se terminaron 516 |
+| Costo | El paso del banco de la etapa 0 bajó de 4,3 a 2,9 µs en la misma máquina de la nube (la locomoción nueva usa vectores en vez de seno y coseno) |
+
+**Pasa si, uno por uno:**
+
+- **Nadie gira 180° en el lugar corriendo a velocidad máxima:** pasa.
+- **`muestra_animaciones_3d.tscn` manejada por acciones:** no se hizo. Esa escena repite jugadas reales del motor actual, y el V2 recién las va a poder jugar desde la etapa 3. Mientras tanto, `laboratorio_cuerpo.tscn` muestra todos los clips manejados por el cuerpo. Decisión abierta: pasar la muestra al V2 en la etapa 6 o dejar el laboratorio como prueba de la etapa 2.
+- **Deslizamiento de pies bajo un umbral:** no pasa, y no se arregla desde el código. Los clips de andar están hechos en el lugar: el pie apoyado casi no retrocede (en Correr, el pie bajo hasta avanza). El pie apoyado desliza más o menos lo que avanza el cuerpo. Se probaron largos de ciclo de 0,5 a 3,2 m y ninguno lo baja.
+
+| Clip | Pie apoyado | Cuerpo |
+| --- | --- | --- |
+| Correr | 7,48 m/s | 6,88 m/s |
+| Trotar | 3,23 m/s | 3,54 m/s |
+| Caminar | 1,43 m/s | 1,59 m/s |
+| Respirar (parado) | 0,05 m/s | 0,02 m/s |
+
+- **Umbral propuesto:** el pie apoyado desliza menos del 15% de lo que avanza el cuerpo. Se mide con `laboratorio_cuerpo.tscn -- segundos=60` sin pantalla.
+- **Ajuste del pie a la pelota** (los últimos 0,15 s): queda para la etapa 3, porque necesita una pelota a la que llevar el pie.
+
+**Para hacer en la PC con Blender** (`tools/blender/animaciones_jugador.py`):
+
+1. Rehacé `Caminar`, `Trotar` y `Correr` "en cinta": el pie apoyado retrocede a la velocidad del cuerpo mientras toca el piso. Anotá en el clip cuántos metros avanza el cuerpo por ciclo, así la vista avanza la animación con los metros reales.
+2. Agregá clips de arranque, frenada, giro de 90° y de 180°, correr de costado y correr de espaldas.
+3. Exportá el GLB y ejecutá `GODOT=<godot> python3 tools/generar_acciones_v2.py`. `test_cuerpo_v2` falla si el JSON no coincide con los GLB.
+4. Medí con `laboratorio_cuerpo.tscn -- segundos=60` sin pantalla y mirá el laboratorio con pantalla.
+5. Rearmá las bibliotecas de Windows y Android: las de `motor_v2/bin/` no tienen `CuerposV2Nativos`, así que hasta entonces `test_cuerpo_v2` falla en la PC.
+
 ### Etapa 3 — Tocar la pelota
 
 - **Qué:** conducción por toques, recepción según la altura de la pelota (pie, muslo, pecho, cabeza), pase al punto de encuentro con tangentes y tiempos de llegada de cada rival, intercepción = el primero que la alcanza.

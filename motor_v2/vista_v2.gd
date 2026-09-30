@@ -147,6 +147,27 @@ func dibujar_nativo(m: Object, alfa: float, delta: float) -> void:
 
 func dibujar_estado(pos_previa: PackedVector2Array, pos: PackedVector2Array, rumbo: PackedFloat32Array,
 		rapidez: PackedFloat32Array, pelota_previa: Vector3, pelota: Vector3, alfa: float, delta: float) -> void:
+	_dibujar_jugadores(pos_previa, pos, rumbo, rapidez, [], alfa, delta)
+	dibujar_pelota(pelota_previa, pelota, alfa, delta)
+
+
+## Los cuerpos de la etapa 2 (CuerposV2Nativos, 22 como en el partido) sin
+## pelota: cada uno muestra su acción en el segundo en que va o, si no hace
+## ninguna, anda según su velocidad real. La cámara sigue a `foco`.
+func dibujar_cuerpos(c: Object, alfa: float, delta: float, foco: Vector2) -> void:
+	var acciones := []
+	for i in MundoV2.JUGADORES:
+		# El tiempo de la acción es el del paso actual: se lo lleva al del
+		# cuadro con lo que falta del paso (alfa).
+		acciones.append([c.get_accion(i), maxf(0.0, float(c.get_tiempo_accion(i)) - (1.0 - alfa) / 60.0)])
+	_dibujar_jugadores(c.get_pos_previa(), c.get_pos(), c.get_rumbo(), c.get_rapidez(), acciones, alfa, delta)
+	_pelota.visible = false
+	_mover_camara(foco, delta)
+
+
+## `acciones[i]` = [clip, segundo]; "" o sin entrada = anda.
+func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array, rumbo: PackedFloat32Array,
+		rapidez: PackedFloat32Array, acciones: Array, alfa: float, delta: float) -> void:
 	_tiempo += delta
 	for i in MundoV2.JUGADORES:
 		var p := pos_previa[i].lerp(pos[i], alfa)
@@ -157,6 +178,11 @@ func dibujar_estado(pos_previa: PackedVector2Array, pos: PackedVector2Array, rum
 		p3.rotation.y = rumbo[i]
 		var v: float = rapidez[i]
 		_odometro[i] += v * delta
+		var accion: String = acciones[i][0] if i < acciones.size() else ""
+		if accion != "" and p3.tiene(accion):
+			p3.poner(accion, float(acciones[i][1]), delta)
+			p3.poner_cara(p3.cara, Jugador3D.Gesto.NORMAL, _tiempo)
+			continue
 		var anim := _andar_de(i, v)
 		var tiempo: float
 		if anim == VistaCancha3D.ANIM_QUIETO or anim == "Golero_Guardia":
@@ -165,7 +191,6 @@ func dibujar_estado(pos_previa: PackedVector2Array, pos: PackedVector2Array, rum
 			tiempo = fposmod(_odometro[i] / VistaCancha3D.METROS_POR_CICLO, 1.0) * p3.duracion(anim)
 		p3.poner(anim, tiempo, delta)
 		p3.poner_cara(p3.cara, Jugador3D.Gesto.NORMAL, _tiempo)
-	dibujar_pelota(pelota_previa, pelota, alfa, delta)
 
 
 ## `giro` (rad/s, del motor) hace girar el modelo: sin él no se ve el efecto.

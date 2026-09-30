@@ -6,6 +6,7 @@
 // El estado va en double: la vista lo lee pasado a float. Desde la etapa 1 la
 // pelota es motor_v2::Pelota (pelota.h), la misma del laboratorio.
 
+#include "cuerpo.h"
 #include "pelota.h"
 
 #include <godot_cpp/classes/ref_counted.hpp>
@@ -26,6 +27,8 @@ public:
 
 	// Los parámetros de la pelota (FisicaV2.parametros()); antes de iniciar.
 	void configurar_pelota(const Dictionary &parametros);
+	// Los parámetros del cuerpo (FisicaV2.parametros_cuerpo()); antes de iniciar.
+	void configurar_cuerpos(const Dictionary &parametros);
 	void iniciar(int64_t semilla);
 	// Un paso de 1/60 s: el cerebro falso y después el mundo.
 	void avanzar();
@@ -62,6 +65,8 @@ private:
 	double _velocidad_max[JUGADORES] = {};
 	double _masa[JUGADORES] = {};
 
+	motor_v2::ParametrosCuerpo _param_cuerpo;
+	motor_v2::Cuerpo _cuerpos[JUGADORES];
 	motor_v2::ParametrosPelota _param_pelota;
 	motor_v2::Pelota _pelota;
 	int64_t _paso = 0;

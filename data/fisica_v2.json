@@ -14,7 +14,9 @@
 		"restitucion_red": "La red casi no devuelve: la pelota muere adentro del arco.",
 		"subpaso_max_m": "Cuánto avanza la pelota como máximo por subpaso. Solo afina la integración del vuelo: los choques se buscan por barrido y no dependen de esto.",
 		"cesped": "calidad de EstadoCancha (-8 a +3, 0 neutra). frenado_rodando × (1 + frenado_por_punto × calidad): la peor cancha frena 32% más. restitucion_piso + restitucion_por_punto × calidad: la peor pica 0,08 menos.",
-		"clima": "Factores sobre la pelota. Lluvia: el pasto mojado frena menos la rodada y en el pique la pelota patina y sale rasante. Viento: velocidad del aire en m/s, en la dirección que se pase."
+		"clima": "Factores sobre la pelota. Lluvia: el pasto mojado frena menos la rodada y en el pique la pelota patina y sale rasante. Viento: velocidad del aire en m/s, en la dirección que se pase.",
+		"cuerpo": "Etapa 2. La locomoción usa los números del motor actual (data/utility_pesos.json: fisica.frenada, giro_acel y arranque_extra; control.rapidez_para_girar; esfuerzo); acá va solo lo nuevo del Motor V2.",
+		"ventana_contacto_seg": "Cuánto dura la ventana de contacto de un gesto, centrada en el cuadro de contacto del clip (data/acciones_v2.json). 0,1 s = 6 pasos: una pelota a 20 m/s recorre 2 m en ese tiempo. Valor de partida; se calibra en la etapa 3, cuando el pie toque la pelota."
 	},
 	"pelota": {
 		"gravedad": 9.81,
@@ -45,6 +47,9 @@
 		"restitucion_red": 0.12,
 		"rozamiento_red": 0.5,
 		"subpaso_max_m": 0.05
+	},
+	"cuerpo": {
+		"ventana_contacto_seg": 0.1
 	},
 	"cesped": {
 		"frenado_por_punto": -0.04,

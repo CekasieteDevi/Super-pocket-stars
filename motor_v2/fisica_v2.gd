@@ -1,14 +1,17 @@
 class_name FisicaV2
 extends RefCounted
 
-## Parámetros de la física del Motor V2 (docs/motor_v2.md, etapa 1): lee
-## data/fisica_v2.json y les aplica el césped y el clima del partido. El
-## resultado se le pasa al motor en C++ (PelotaV2Nativa.configurar,
-## MundoV2Nativo.configurar_pelota): así se calibra sin recompilar.
+## Parámetros de la física del Motor V2 (docs/motor_v2.md): lee
+## data/fisica_v2.json y les aplica el césped y el clima del partido (etapa
+## 1), y arma los del cuerpo y sus clips (etapa 2). El resultado se le pasa al
+## motor en C++ (PelotaV2Nativa, CuerposV2Nativos, MundoV2Nativo): así se
+## calibra sin recompilar.
 
 const RUTA := "res://data/fisica_v2.json"
+const RUTA_ACCIONES := "res://data/acciones_v2.json"
 
 static var _datos: Dictionary = {}
+static var _acciones: Dictionary = {}
 
 
 static func datos() -> Dictionary:
@@ -38,3 +41,47 @@ static func parametros(calidad_cancha := 0.0, clima := "", direccion_viento := V
 		else:
 			p[clave] = float(p[clave]) * float(por_clima[clave])
 	return p
+
+
+## Los de la locomoción y los gestos (CuerposV2Nativos.configurar,
+## MundoV2Nativo.configurar_cuerpos). La locomoción usa los números del motor
+## actual (MotorEspacial.pesos(): fisica, control y esfuerzo), así los dos
+## motores corren igual; de data/fisica_v2.json sale solo lo nuevo.
+static func parametros_cuerpo() -> Dictionary:
+	var fisica: Dictionary = MotorEspacial.pesos()["fisica"]
+	var p := {
+		"frenada": float(fisica["frenada"]),
+		"giro_acel": float(fisica["giro_acel"]),
+		"arranque_extra": float(fisica["arranque_extra"]),
+		"rapidez_para_girar": float(MotorEspacial.pesos_control()["rapidez_para_girar"]),
+	}
+	var esfuerzo := MotorEspacial.pesos_esfuerzo()
+	for clave in ["peso_aceleracion", "umbral_sprint", "consumo_sprint", "recuperacion_reserva",
+			"reserva_para_frenar", "piso_sprint"]:
+		p[clave] = float(esfuerzo[clave])
+	p.merge(datos()["cuerpo"])
+	return p
+
+
+## Los clips de data/acciones_v2.json (lo genera tools/generar_acciones_v2.py).
+static func clips() -> Dictionary:
+	if _acciones.is_empty():
+		var leido: Variant = JSON.parse_string(FileAccess.get_file_as_string(RUTA_ACCIONES))
+		assert(leido is Dictionary, "No se pudo leer %s" % RUTA_ACCIONES)
+		_acciones = leido
+	return _acciones["clips"]
+
+
+## El físico de un jugador para el cuerpo, con las mismas cuentas que el motor
+## actual: `atributos` como los de Player (velocidad, aceleracion, agilidad).
+## `energia` (0..1, la del partido) baja punta y aceleración con
+## Cansancio.factor_stats. El motor actual no la aplica al andar (solo a los
+## duelos); el V2 sí, porque la carrera es parte del físico.
+static func fisico_de(atributos: Dictionary, energia := 1.0) -> Dictionary:
+	var j := {"atributos": atributos}
+	return {
+		"vel_max": MotorEspacial._vel_max(j),
+		"aceleracion": MotorEspacial._aceleracion(j),
+		"giro": MotorEspacial._giro_de(j),
+		"cansancio": Cansancio.factor_stats(energia),
+	}

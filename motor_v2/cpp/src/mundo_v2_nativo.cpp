@@ -1,4 +1,5 @@
 #include "mundo_v2_nativo.h"
+#include "cuerpos_v2_nativos.h"
 #include "matematica_fija.h"
 #include "pelota_v2_nativa.h"
 
@@ -22,10 +23,10 @@ constexpr double MEDIO_ANCHO = 34.0;
 constexpr double RESTITUCION_CUERPO = 0.3;
 constexpr double RADIO_CUERPO = 0.35;
 constexpr double ALTO_CUERPO = 1.7;
+// Físico de los jugadores de prueba de la etapa 0 (el de verdad lo pasa
+// GDScript desde los atributos cuando haya partido).
 constexpr double ACELERACION = 4.5;
-constexpr double FRENADA = 7.0;
-constexpr double GIRO_PARADO = 12.0;
-constexpr double GIRO_A_TOPE = 3.0;
+constexpr double GIRO = 9.0;
 
 constexpr int PASOS_POR_TURNO = 6;
 constexpr double DISPERSION_M = 7.0;
@@ -61,6 +62,11 @@ void MundoV2Nativo::configurar_pelota(const Dictionary &parametros) {
 	leer_parametros_pelota(parametros, _param_pelota);
 }
 
+void MundoV2Nativo::configurar_cuerpos(const Dictionary &parametros) {
+	_param_cuerpo = motor_v2::ParametrosCuerpo();
+	leer_parametros_cuerpo(parametros, _param_cuerpo);
+}
+
 void MundoV2Nativo::iniciar(int64_t semilla) {
 	_estado_rng = uint64_t(semilla) * 2u + 1u;
 	_rng();
@@ -73,6 +79,14 @@ void MundoV2Nativo::iniciar(int64_t semilla) {
 		V2 p = _puesto(i);
 		_pos[i] = { p.x * 0.9, p.y };
 		_pos_previa[i] = _pos[i];
+		motor_v2::Cuerpo c;
+		c.vel_max = _velocidad_max[i];
+		c.aceleracion = ACELERACION;
+		c.giro = GIRO;
+		c.x = c.previa_x = _pos[i].x;
+		c.z = c.previa_z = _pos[i].y;
+		c.rumbo = _rumbo[i];
+		_cuerpos[i] = c;
 		_objetivo[i] = _pos[i];
 		_puede_patear[i] = 0;
 	}
@@ -195,31 +209,17 @@ void MundoV2Nativo::_poner_pelota(double x, double z) {
 
 // --- Mundo ---
 
+// Desde la etapa 2 cada jugador es un motor_v2::Cuerpo (cuerpo.h): la misma
+// locomoción del banco del cuerpo. El cerebro falso llega siempre frenando.
 void MundoV2Nativo::_mover_cuerpos() {
-	const double dt = PASO_SEG;
+	static const std::vector<motor_v2::Clip> sin_clips;
 	for (int i = 0; i < JUGADORES; i++) {
-		double fx = _objetivo[i].x - _pos[i].x, fy = _objetivo[i].y - _pos[i].y;
-		double d = std::sqrt(fx * fx + fy * fy);
-		double vi = _rapidez[i];
-		double ri = _rumbo[i];
-		double deseada = 0.0;
-		if (d > 0.05) {
-			deseada = std::min(_velocidad_max[i], std::sqrt(2.0 * FRENADA * d));
-			double angulo = mate::arcotangente2(fx, fy);
-			double giro_max = (GIRO_PARADO + (GIRO_A_TOPE - GIRO_PARADO) * (vi / 9.0)) * dt;
-			double dif = mate::envolver(angulo - ri);
-			ri += std::clamp(dif, -giro_max, giro_max);
-			deseada *= std::max(0.0, mate::coseno(dif));
-		}
-		if (deseada > vi) {
-			vi = std::min(deseada, vi + ACELERACION * dt);
-		} else {
-			vi = std::max(deseada, vi - FRENADA * dt);
-		}
-		_rapidez[i] = vi;
-		_rumbo[i] = ri;
-		_pos[i].x += mate::seno(ri) * vi * dt;
-		_pos[i].y += mate::coseno(ri) * vi * dt;
+		motor_v2::Cuerpo &c = _cuerpos[i];
+		c.ir_a(_objetivo[i].x, _objetivo[i].y, 1.0, true);
+		c.paso(_param_cuerpo, sin_clips, PASO_SEG);
+		_pos[i] = { c.x, c.z };
+		_rumbo[i] = c.rumbo;
+		_rapidez[i] = c.rapidez();
 	}
 }
 
@@ -246,6 +246,10 @@ void MundoV2Nativo::_separar_cuerpos() {
 			}
 		}
 	}
+	for (int i = 0; i < JUGADORES; i++) {
+		_cuerpos[i].x = _pos[i].x;
+		_cuerpos[i].z = _pos[i].y;
+	}
 }
 
 void MundoV2Nativo::_mover_pelota() {
@@ -269,7 +273,7 @@ void MundoV2Nativo::_chocar_cuerpos() {
 		double d = std::sqrt(ex * ex + ey * ey);
 		if (d < minimo && d > 0.0001) {
 			double nx = ex / d, ny = ey / d;
-			double cx = mate::seno(_rumbo[j]) * _rapidez[j], cy = mate::coseno(_rumbo[j]) * _rapidez[j];
+			double cx = _cuerpos[j].vx, cy = _cuerpos[j].vz;
 			double rx = _pelota.vel.x - cx, ry = _pelota.vel.z - cy;
 			double vn = rx * nx + ry * ny;
 			px = _pos[j].x + nx * minimo;
@@ -366,6 +370,7 @@ int64_t MundoV2Nativo::huella() const {
 
 void MundoV2Nativo::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("configurar_pelota", "parametros"), &MundoV2Nativo::configurar_pelota);
+	ClassDB::bind_method(D_METHOD("configurar_cuerpos", "parametros"), &MundoV2Nativo::configurar_cuerpos);
 	ClassDB::bind_method(D_METHOD("iniciar", "semilla"), &MundoV2Nativo::iniciar);
 	ClassDB::bind_method(D_METHOD("avanzar"), &MundoV2Nativo::avanzar);
 	ClassDB::bind_method(D_METHOD("simular", "pasos"), &MundoV2Nativo::simular);
