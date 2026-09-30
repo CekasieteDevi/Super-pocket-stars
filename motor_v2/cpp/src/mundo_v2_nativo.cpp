@@ -1,5 +1,6 @@
 #include "mundo_v2_nativo.h"
 #include "matematica_fija.h"
+#include "pelota_v2_nativa.h"
 
 #include <godot_cpp/core/class_db.hpp>
 
@@ -10,32 +11,15 @@
 using namespace godot;
 
 // Los mismos números que motor_v2/mundo.gd y motor_v2/cerebro_falso.gd
-// (ahí está el porqué de cada uno). Seno, coseno y arcotangente salen de
+// (ahí está el porqué de cada uno); los de la pelota, desde la etapa 1, en
+// data/fisica_v2.json. Seno, coseno y arcotangente salen de
 // matematica_fija.h: las del sistema daban otro partido en Android.
 namespace {
 constexpr double PI_ = 3.14159265358979323846;
 constexpr double PASO_SEG = 1.0 / 60.0;
-constexpr double GRAVEDAD = 9.81;
 constexpr double MEDIO_LARGO = 52.5;
 constexpr double MEDIO_ANCHO = 34.0;
-constexpr double ARCO_MEDIO_ANCHO = 3.66;
-constexpr double ARCO_ALTO = 2.44;
-constexpr double RADIO_PALO = 0.06;
-constexpr double RADIO_PELOTA = 0.11;
-constexpr double MASA_PELOTA = 0.43;
-constexpr double K_AIRE = 0.5 * 1.2 * PI_ * RADIO_PELOTA * RADIO_PELOTA / MASA_PELOTA;
-constexpr double CD_RAPIDA = 0.25;
-constexpr double CD_LENTA = 0.45;
-constexpr double VELOCIDAD_CRISIS = 12.0;
-constexpr double CL_TOPE = 0.35;
-constexpr double GIRO_DECAE = 0.12;
-constexpr double RESTITUCION_PISO = 0.62;
-constexpr double ROCE_PIQUE = 0.35;
-constexpr double VERTICAL_RUEDA = 0.6;
-constexpr double FRENADO_RODANDO = 1.1;
-constexpr double RESTITUCION_PALO = 0.7;
 constexpr double RESTITUCION_CUERPO = 0.3;
-constexpr double SUBPASO_MAX_M = 0.1;
 constexpr double RADIO_CUERPO = 0.35;
 constexpr double ALTO_CUERPO = 1.7;
 constexpr double ACELERACION = 4.5;
@@ -72,6 +56,11 @@ double MundoV2Nativo::_al_azar(double desde, double hasta) {
 	return desde + (hasta - desde) * (double(_rng()) / 4294967296.0);
 }
 
+void MundoV2Nativo::configurar_pelota(const Dictionary &parametros) {
+	_param_pelota = motor_v2::ParametrosPelota();
+	leer_parametros_pelota(parametros, _param_pelota);
+}
+
 void MundoV2Nativo::iniciar(int64_t semilla) {
 	_estado_rng = uint64_t(semilla) * 2u + 1u;
 	_rng();
@@ -87,15 +76,16 @@ void MundoV2Nativo::iniciar(int64_t semilla) {
 		_objetivo[i] = _pos[i];
 		_puede_patear[i] = 0;
 	}
-	_poner_pelota({ 0.0, RADIO_PELOTA, 0.0 });
-	_piques = _golpes_palo = _choques_cuerpos = _choques_pelota = 0;
+	_pelota = motor_v2::Pelota();
+	_pelota.configurar(_param_pelota);
+	_poner_pelota(0.0, 0.0);
+	_choques_cuerpos = _choques_pelota = 0;
 	_patadas = _goles = _salidas = 0;
 }
 
 void MundoV2Nativo::avanzar() {
 	_pensar();
 	std::copy(std::begin(_pos), std::end(_pos), std::begin(_pos_previa));
-	_pelota_previa = _pelota;
 	_mover_cuerpos();
 	_separar_cuerpos();
 	_mover_pelota();
@@ -120,11 +110,11 @@ MundoV2Nativo::V2 MundoV2Nativo::_puesto(int i) const {
 
 void MundoV2Nativo::_pensar() {
 	int turno = int(_paso % PASOS_POR_TURNO);
-	V2 pelota = { _pelota.x, _pelota.z };
+	V2 pelota = { _pelota.pos.x, _pelota.pos.z };
 	if (turno == 0) {
 		_elegir_perseguidores(pelota);
 	}
-	V2 adelante = { pelota.x + _pelota_vel.x * 0.3, pelota.y + _pelota_vel.z * 0.3 };
+	V2 adelante = { pelota.x + _pelota.vel.x * 0.3, pelota.y + _pelota.vel.z * 0.3 };
 	for (int i = turno; i < JUGADORES; i += PASOS_POR_TURNO) {
 		if (i == _perseguidor[0] || i == _perseguidor[1]) {
 			_objetivo[i] = adelante;
@@ -162,10 +152,10 @@ void MundoV2Nativo::_elegir_perseguidores(V2 pelota) {
 }
 
 void MundoV2Nativo::_intentar_patear(int i) {
-	if (_paso < _puede_patear[i] || _pelota.y > PATEA_ALTURA_M) {
+	if (_paso < _puede_patear[i] || _pelota.pos.y > PATEA_ALTURA_M) {
 		return;
 	}
-	double dx = _pelota.x - _pos[i].x, dy = _pelota.z - _pos[i].y;
+	double dx = _pelota.pos.x - _pos[i].x, dy = _pelota.pos.z - _pos[i].y;
 	if (std::sqrt(dx * dx + dy * dy) > PATEA_DISTANCIA_M) {
 		return;
 	}
@@ -174,33 +164,33 @@ void MundoV2Nativo::_intentar_patear(int i) {
 	double rapidez = _al_azar(6.0, 27.0);
 	double alto = _al_azar(0.0, 1.0) < 0.5 ? 0.0 : _al_azar(0.1, 0.45) * rapidez;
 	double giro = _al_azar(-12.0, 12.0);
-	_pelota_vel = { mate::coseno(angulo) * hacia * rapidez, alto, mate::seno(angulo) * rapidez };
-	_pelota_giro = { 0.0, giro, 0.0 };
+	_pelota.poner(_pelota.pos, { mate::coseno(angulo) * hacia * rapidez, alto, mate::seno(angulo) * rapidez },
+			{ 0.0, giro, 0.0 });
 	_puede_patear[i] = _paso + ESPERA_ENTRE_PATADAS;
 	_patadas++;
 }
 
 void MundoV2Nativo::_reglas() {
-	V3 p = _pelota;
-	if (std::abs(p.x) > MEDIO_LARGO + RADIO_PELOTA) {
-		if (std::abs(p.z) < ARCO_MEDIO_ANCHO && p.y < ARCO_ALTO) {
+	const motor_v2::V3 &p = _pelota.pos;
+	const double r = _param_pelota.radio;
+	if (std::abs(p.x) > MEDIO_LARGO + r) {
+		// Adentro del arco la pelota puede quedar en la red; gol cuando cruzó
+		// entera la línea entre los palos y bajo el travesaño.
+		if (std::abs(p.z) < _param_pelota.arco_medio_ancho && p.y < _param_pelota.arco_alto) {
 			_goles++;
-			_poner_pelota({ 0.0, RADIO_PELOTA, 0.0 });
+			_poner_pelota(0.0, 0.0);
 		} else {
 			_salidas++;
-			_poner_pelota({ signo(p.x) * (MEDIO_LARGO - 5.5), RADIO_PELOTA, signo(p.z) * 9.0 });
+			_poner_pelota(signo(p.x) * (MEDIO_LARGO - 5.5), signo(p.z) * 9.0);
 		}
-	} else if (std::abs(p.z) > MEDIO_ANCHO + RADIO_PELOTA) {
+	} else if (std::abs(p.z) > MEDIO_ANCHO + r) {
 		_salidas++;
-		_poner_pelota({ p.x, RADIO_PELOTA, signo(p.z) * (MEDIO_ANCHO - 0.5) });
+		_poner_pelota(p.x, signo(p.z) * (MEDIO_ANCHO - 0.5));
 	}
 }
 
-void MundoV2Nativo::_poner_pelota(V3 p) {
-	_pelota = p;
-	_pelota_previa = p;
-	_pelota_vel = {};
-	_pelota_giro = {};
+void MundoV2Nativo::_poner_pelota(double x, double z) {
+	_pelota.poner({ x, _param_pelota.radio, z }, {}, {});
 }
 
 // --- Mundo ---
@@ -259,106 +249,18 @@ void MundoV2Nativo::_separar_cuerpos() {
 }
 
 void MundoV2Nativo::_mover_pelota() {
-	double rapida = std::sqrt(_pelota_vel.x * _pelota_vel.x + _pelota_vel.y * _pelota_vel.y + _pelota_vel.z * _pelota_vel.z);
-	int subpasos = std::max(1, int(std::ceil(rapida * PASO_SEG / SUBPASO_MAX_M)));
-	double dt = PASO_SEG / double(subpasos);
-	for (int s = 0; s < subpasos; s++) {
-		_subpaso_pelota(dt);
-	}
-	double decae = 1.0 - GIRO_DECAE * PASO_SEG;
-	_pelota_giro = { _pelota_giro.x * decae, _pelota_giro.y * decae, _pelota_giro.z * decae };
+	_pelota.avanzar();
 	_chocar_cuerpos();
 }
 
-void MundoV2Nativo::_subpaso_pelota(double dt) {
-	V3 v = _pelota_vel;
-	V3 p = _pelota;
-	bool en_piso = p.y <= RADIO_PELOTA + 0.001 && std::abs(v.y) < 0.001;
-	double rapida = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-	if (en_piso) {
-		double h = std::sqrt(v.x * v.x + v.z * v.z);
-		double frena = (FRENADO_RODANDO + K_AIRE * CD_LENTA * h * h) * dt;
-		if (h <= frena) {
-			v = {};
-		} else {
-			double f = (h - frena) / h;
-			v = { v.x * f, 0.0, v.z * f };
-		}
-		p = { p.x + v.x * dt, p.y + v.y * dt, p.z + v.z * dt };
-	} else {
-		V3 a = { 0.0, -GRAVEDAD, 0.0 };
-		if (rapida > 0.01) {
-			double cd = rapida > VELOCIDAD_CRISIS ? CD_RAPIDA : CD_LENTA;
-			double k = K_AIRE * cd * rapida;
-			a.x -= v.x * k;
-			a.y -= v.y * k;
-			a.z -= v.z * k;
-			const V3 &g = _pelota_giro;
-			double w = std::sqrt(g.x * g.x + g.y * g.y + g.z * g.z);
-			if (w > 0.1) {
-				double cl = std::min(RADIO_PELOTA * w / rapida, CL_TOPE);
-				double m = K_AIRE * cl * rapida / w;
-				a.x += (g.y * v.z - g.z * v.y) * m;
-				a.y += (g.z * v.x - g.x * v.z) * m;
-				a.z += (g.x * v.y - g.y * v.x) * m;
-			}
-		}
-		v = { v.x + a.x * dt, v.y + a.y * dt, v.z + a.z * dt };
-		p = { p.x + v.x * dt, p.y + v.y * dt, p.z + v.z * dt };
-		if (p.y < RADIO_PELOTA) {
-			p.y = RADIO_PELOTA;
-			if (-v.y < VERTICAL_RUEDA) {
-				v.y = 0.0;
-			} else {
-				v.y = -v.y * RESTITUCION_PISO;
-				v.x *= 1.0 - ROCE_PIQUE * 0.3;
-				v.z *= 1.0 - ROCE_PIQUE * 0.3;
-				_pelota_giro = { _pelota_giro.x * (1.0 - ROCE_PIQUE), _pelota_giro.y * (1.0 - ROCE_PIQUE),
-					_pelota_giro.z * (1.0 - ROCE_PIQUE) };
-				_piques++;
-			}
-		}
-	}
-	if (std::abs(p.x) > MEDIO_LARGO - 0.5 && std::abs(p.x) < MEDIO_LARGO + 0.5) {
-		double linea = signo(p.x) * MEDIO_LARGO;
-		if (p.y < ARCO_ALTO + RADIO_PALO) {
-			for (double lado : { -1.0, 1.0 }) {
-				_rebote_en_eje(p.x, p.z, v.x, v.z, linea, lado * ARCO_MEDIO_ANCHO);
-			}
-		}
-		if (std::abs(p.z) < ARCO_MEDIO_ANCHO) {
-			_rebote_en_eje(p.x, p.y, v.x, v.y, linea, ARCO_ALTO);
-		}
-	}
-	_pelota_vel = v;
-	_pelota = p;
-}
-
-bool MundoV2Nativo::_rebote_en_eje(double &px, double &py, double &vx, double &vy, double ex, double ey) {
-	double dx = px - ex, dy = py - ey;
-	double d = std::sqrt(dx * dx + dy * dy);
-	double minimo = RADIO_PELOTA + RADIO_PALO;
-	if (d >= minimo || d < 0.0001) {
-		return false;
-	}
-	double nx = dx / d, ny = dy / d;
-	double vn = vx * nx + vy * ny;
-	if (vn < 0.0) {
-		vx -= nx * (1.0 + RESTITUCION_PALO) * vn;
-		vy -= ny * (1.0 + RESTITUCION_PALO) * vn;
-		_golpes_palo++;
-	}
-	px = ex + nx * minimo;
-	py = ey + ny * minimo;
-	return true;
-}
-
+// Choque de la pelota con los cuerpos, todavía el de la etapa 0: empuja la
+// pelota afuera de la cápsula. Tocar la pelota de verdad llega en la etapa 3.
 void MundoV2Nativo::_chocar_cuerpos() {
-	if (_pelota.y > ALTO_CUERPO + RADIO_PELOTA) {
+	if (_pelota.pos.y > ALTO_CUERPO + _param_pelota.radio) {
 		return;
 	}
-	double px = _pelota.x, py = _pelota.z;
-	const double minimo = RADIO_CUERPO + RADIO_PELOTA;
+	double px = _pelota.pos.x, py = _pelota.pos.z;
+	const double minimo = RADIO_CUERPO + _param_pelota.radio;
 	for (int j = 0; j < JUGADORES; j++) {
 		double ex = px - _pos[j].x, ey = py - _pos[j].y;
 		if (std::abs(ex) >= minimo || std::abs(ey) >= minimo) {
@@ -368,21 +270,21 @@ void MundoV2Nativo::_chocar_cuerpos() {
 		if (d < minimo && d > 0.0001) {
 			double nx = ex / d, ny = ey / d;
 			double cx = mate::seno(_rumbo[j]) * _rapidez[j], cy = mate::coseno(_rumbo[j]) * _rapidez[j];
-			double rx = _pelota_vel.x - cx, ry = _pelota_vel.z - cy;
+			double rx = _pelota.vel.x - cx, ry = _pelota.vel.z - cy;
 			double vn = rx * nx + ry * ny;
 			px = _pos[j].x + nx * minimo;
 			py = _pos[j].y + ny * minimo;
 			if (vn < 0.0) {
 				rx -= nx * (1.0 + RESTITUCION_CUERPO) * vn;
 				ry -= ny * (1.0 + RESTITUCION_CUERPO) * vn;
-				_pelota_vel.x = rx + cx;
-				_pelota_vel.z = ry + cy;
+				_pelota.vel.x = rx + cx;
+				_pelota.vel.z = ry + cy;
 				_choques_pelota++;
 			}
 		}
 	}
-	_pelota.x = px;
-	_pelota.z = py;
+	_pelota.pos.x = px;
+	_pelota.pos.z = py;
 }
 
 // --- Lectura desde GDScript ---
@@ -424,11 +326,11 @@ PackedFloat32Array MundoV2Nativo::get_rapidez() const {
 }
 
 Vector3 MundoV2Nativo::get_pelota_pos() const {
-	return Vector3(real_t(_pelota.x), real_t(_pelota.y), real_t(_pelota.z));
+	return Vector3(real_t(_pelota.pos.x), real_t(_pelota.pos.y), real_t(_pelota.pos.z));
 }
 
 Vector3 MundoV2Nativo::get_pelota_previa() const {
-	return Vector3(real_t(_pelota_previa.x), real_t(_pelota_previa.y), real_t(_pelota_previa.z));
+	return Vector3(real_t(_pelota.previa.x), real_t(_pelota.previa.y), real_t(_pelota.previa.z));
 }
 
 Dictionary MundoV2Nativo::contadores() const {
@@ -436,8 +338,8 @@ Dictionary MundoV2Nativo::contadores() const {
 	d["goles"] = _goles;
 	d["patadas"] = _patadas;
 	d["salidas"] = _salidas;
-	d["piques"] = _piques;
-	d["palos"] = _golpes_palo;
+	d["piques"] = _pelota.piques;
+	d["palos"] = _pelota.palos + _pelota.travesanos;
 	d["choques"] = _choques_cuerpos;
 	d["choques_pelota"] = _choques_pelota;
 	return d;
@@ -456,13 +358,14 @@ int64_t MundoV2Nativo::huella() const {
 	mezclar(_pos, sizeof(_pos));
 	mezclar(_rumbo, sizeof(_rumbo));
 	mezclar(_rapidez, sizeof(_rapidez));
-	mezclar(&_pelota, sizeof(_pelota));
-	mezclar(&_pelota_vel, sizeof(_pelota_vel));
-	mezclar(&_pelota_giro, sizeof(_pelota_giro));
+	mezclar(&_pelota.pos, sizeof(_pelota.pos));
+	mezclar(&_pelota.vel, sizeof(_pelota.vel));
+	mezclar(&_pelota.giro, sizeof(_pelota.giro));
 	return int64_t(h & 0x7fffffffffffffffULL);
 }
 
 void MundoV2Nativo::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("configurar_pelota", "parametros"), &MundoV2Nativo::configurar_pelota);
 	ClassDB::bind_method(D_METHOD("iniciar", "semilla"), &MundoV2Nativo::iniciar);
 	ClassDB::bind_method(D_METHOD("avanzar"), &MundoV2Nativo::avanzar);
 	ClassDB::bind_method(D_METHOD("simular", "pasos"), &MundoV2Nativo::simular);

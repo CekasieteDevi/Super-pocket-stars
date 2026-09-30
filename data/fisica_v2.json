@@ -1,0 +1,63 @@
+{
+	"_notas": {
+		"pelota": "Motor V2, etapa 1 (docs/motor_v2.md). Los valores de partida salen de la balística de pelota (docs/motor_v2.md, 'Cómo lo resuelven FIFA y PES'); los calibrados dicen contra qué. Unidades: m, s, kg, rad. motor_v2/cpp/src/pelota.h tiene los mismos valores para quien no la configura; tests/test_pelota_v2.gd falla si se separan.",
+		"cd_lenta": "Arrastre a baja velocidad (pase flotado). Entre crisis_desde y crisis_hasta baja en rampa a cd_rapida (crisis de arrastre, tiro fuerte).",
+		"cl_por_giro": "Sustentación de Magnus = cl_por_giro × radio × giro / velocidad, tope cl_tope. Con 55 rad/s (unas 9 vueltas por segundo, lo de un tiro libre con comba) un tiro a 25 m/s se curva 4,5 m en 23 m: laboratorio_pelota, 'tiro con efecto'.",
+		"restitucion_piso": "Vertical que devuelve el pique. Con 0,55 y vertical_rueda 1,8 el saque de arco del laboratorio (30 m/s a 32°) cae a 51 m, pica 3 veces y rueda 9 m; con los de la etapa 0 (0,62 y 0,6) picaba 6 veces.",
+		"vertical_rueda": "Si la pelota cae con menos vertical que esto (m/s) ya no pica: se apoya y rueda. 1,8 m/s es un pique de 16 cm; con 1,2 el saque de arco hacía un cuarto pique de 4 cm que no se ve.",
+		"rozamiento_pique": "Coulomb en el pique: el impulso que cambia deslizamiento por giro no pasa de esto × el impulso vertical.",
+		"rozamiento_deslizar": "Coulomb con la pelota apoyada que todavía desliza: la lleva a rodar.",
+		"frenado_rodando": "m/s² que le saca el pasto a la pelota que rueda, además del aire. El de la etapa 0.",
+		"giro_vertical_decae_piso": "1/s: el efecto de costado se muere rápido al rodar.",
+		"quieta": "Por debajo de esta velocidad (m/s) rodando, la pelota se para.",
+		"restitucion_palo": "Palo y travesaño de metal: devuelven el 70% de la normal.",
+		"restitucion_red": "La red casi no devuelve: la pelota muere adentro del arco.",
+		"subpaso_max_m": "Cuánto avanza la pelota como máximo por subpaso. Solo afina la integración del vuelo: los choques se buscan por barrido y no dependen de esto.",
+		"cesped": "calidad de EstadoCancha (-8 a +3, 0 neutra). frenado_rodando × (1 + frenado_por_punto × calidad): la peor cancha frena 32% más. restitucion_piso + restitucion_por_punto × calidad: la peor pica 0,08 menos.",
+		"clima": "Factores sobre la pelota. Lluvia: el pasto mojado frena menos la rodada y en el pique la pelota patina y sale rasante. Viento: velocidad del aire en m/s, en la dirección que se pase."
+	},
+	"pelota": {
+		"gravedad": 9.81,
+		"radio": 0.11,
+		"masa": 0.43,
+		"densidad_aire": 1.2,
+		"cd_lenta": 0.45,
+		"cd_rapida": 0.25,
+		"crisis_desde": 10.0,
+		"crisis_hasta": 14.0,
+		"cl_por_giro": 1.0,
+		"cl_tope": 0.35,
+		"giro_decae_aire": 0.12,
+		"restitucion_piso": 0.55,
+		"rozamiento_pique": 0.45,
+		"vertical_rueda": 1.8,
+		"rozamiento_deslizar": 0.4,
+		"frenado_rodando": 1.1,
+		"giro_vertical_decae_piso": 2.5,
+		"quieta": 0.03,
+		"medio_largo": 52.5,
+		"arco_medio_ancho": 3.66,
+		"arco_alto": 2.44,
+		"radio_palo": 0.06,
+		"restitucion_palo": 0.7,
+		"rozamiento_palo": 0.1,
+		"profundidad_red": 2.0,
+		"restitucion_red": 0.12,
+		"rozamiento_red": 0.5,
+		"subpaso_max_m": 0.05
+	},
+	"cesped": {
+		"frenado_por_punto": -0.04,
+		"restitucion_por_punto": 0.01
+	},
+	"clima": {
+		"Lluvia": {
+			"frenado_rodando": 0.8,
+			"rozamiento_pique": 0.6,
+			"restitucion_piso": 0.92
+		},
+		"Viento": {
+			"viento_ms": 6.0
+		}
+	}
+}

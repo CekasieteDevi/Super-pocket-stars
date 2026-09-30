@@ -1,4 +1,5 @@
 #include "mundo_v2_nativo.h"
+#include "pelota_v2_nativa.h"
 
 #include <gdextension_interface.h>
 #include <godot_cpp/core/class_db.hpp>
@@ -12,6 +13,7 @@ void iniciar_modulo(ModuleInitializationLevel nivel) {
 		return;
 	}
 	GDREGISTER_CLASS(MundoV2Nativo);
+	GDREGISTER_CLASS(PelotaV2Nativa);
 }
 
 void terminar_modulo(ModuleInitializationLevel nivel) {

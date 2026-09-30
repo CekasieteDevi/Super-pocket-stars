@@ -3,7 +3,10 @@
 // El mundo de la etapa 0 del Motor V2 (docs/motor_v2.md) en C++: la misma
 // física que motor_v2/mundo.gd y el mismo cerebro falso que
 // motor_v2/cerebro_falso.gd, para medir cuánto baja el costo contra GDScript.
-// El estado va en double: la vista lo lee pasado a float.
+// El estado va en double: la vista lo lee pasado a float. Desde la etapa 1 la
+// pelota es motor_v2::Pelota (pelota.h), la misma del laboratorio.
+
+#include "pelota.h"
 
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/variant/packed_float32_array.hpp>
@@ -21,6 +24,8 @@ class MundoV2Nativo : public RefCounted {
 public:
 	static constexpr int JUGADORES = 22;
 
+	// Los parámetros de la pelota (FisicaV2.parametros()); antes de iniciar.
+	void configurar_pelota(const Dictionary &parametros);
 	void iniciar(int64_t semilla);
 	// Un paso de 1/60 s: el cerebro falso y después el mundo.
 	void avanzar();
@@ -43,9 +48,6 @@ private:
 	struct V2 {
 		double x = 0.0, y = 0.0;
 	};
-	struct V3 {
-		double x = 0.0, y = 0.0, z = 0.0;
-	};
 
 	// PCG32: el mismo generador en PC y Android, sin pasar por el motor.
 	uint64_t _estado_rng = 0;
@@ -60,31 +62,27 @@ private:
 	double _velocidad_max[JUGADORES] = {};
 	double _masa[JUGADORES] = {};
 
-	V3 _pelota;
-	V3 _pelota_previa;
-	V3 _pelota_vel;
-	V3 _pelota_giro;
+	motor_v2::ParametrosPelota _param_pelota;
+	motor_v2::Pelota _pelota;
 	int64_t _paso = 0;
 
 	// Cerebro falso.
 	int _perseguidor[2] = { 1, 12 };
 	int64_t _puede_patear[JUGADORES] = {};
 
-	int64_t _piques = 0, _golpes_palo = 0, _choques_cuerpos = 0, _choques_pelota = 0;
+	int64_t _choques_cuerpos = 0, _choques_pelota = 0;
 	int64_t _patadas = 0, _goles = 0, _salidas = 0;
 
 	void _pensar();
 	void _elegir_perseguidores(V2 pelota);
 	void _intentar_patear(int i);
 	void _reglas();
-	void _poner_pelota(V3 p);
+	void _poner_pelota(double x, double z);
 	V2 _puesto(int i) const;
 
 	void _mover_cuerpos();
 	void _separar_cuerpos();
 	void _mover_pelota();
-	void _subpaso_pelota(double dt);
-	bool _rebote_en_eje(double &px, double &py, double &vx, double &vy, double ex, double ey);
 	void _chocar_cuerpos();
 };
 

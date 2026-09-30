@@ -165,6 +165,29 @@ Banco: `motor_v2/banco_etapa0.tscn` (`mundo.gd`, `cerebro_falso.gd`, `vista_v2.g
 - **Banco:** escena `laboratorio_pelota.tscn` que dispara tiros, centros, globos, rebotes en el palo y saques de arco con la cámara actual.
 - **Pasa si:** el saque de arco pica 2 o 3 veces y rueda; un tiro con efecto se curva de forma visible; un tiro al palo rebota sin casos especiales; la pelota nunca avanza en un paso más de lo que da su velocidad (detector `SALTO_PELOTA` = 0 por construcción).
 
+#### Resultado (2026-09-30): pasa sin vista; falta la revisión visual en la PC
+
+Hecha en la nube (Linux, sin pantalla). Test: `tests/test_pelota_v2.gd`.
+
+- **Código:** `motor_v2/cpp/src/pelota.h/.cpp` (`motor_v2::Pelota`, sin Godot) y `pelota_v2_nativa.h/.cpp` (`PelotaV2Nativa`, para el laboratorio y los tests). `MundoV2Nativo` usa la misma pelota; su choque con los cuerpos sigue siendo el de la etapa 0 hasta la etapa 3. Los parámetros van en `data/fisica_v2.json`; `motor_v2/fisica_v2.gd` (`FisicaV2.parametros(calidad_cancha, clima, direccion_viento)`) les aplica el césped y el clima.
+- **Cómo choca:** en cada subpaso se busca el primer choque por barrido (piso, palos y travesaño como cilindros, red como planos de fondo, costados y techo), la pelota avanza justo hasta el punto de contacto y sale con la velocidad nueva. Nunca se corrige de lugar, así que `SALTO_PELOTA` = 0 sale de la construcción y no de un tope.
+- **Pique y rodada:** esfera hueca (inercia 2/3 m r²). El pique devuelve la vertical con restitución y el rozamiento de Coulomb cambia deslizamiento por giro; apoyada, desliza hasta rodar y rodando la frenan el pasto y el aire. Por debajo de 1,8 m/s de caída ya no pica: rueda.
+- **Banco:** `motor_v2/laboratorio_pelota.tscn`, con los disparos de `motor_v2/disparos_pelota.gd` y la cámara del partido (`VistaV2` con `con_jugadores = false`). Con `--headless` imprime lo que mide cada disparo con el prefijo `[lab_pelota]`. Argumentos: `disparo=N`, `cancha=N`, `clima=Lluvia|Viento`.
+
+| Disparo | Qué pasa | Criterio |
+| --- | --- | --- |
+| Saque de arco (30 m/s a 32°) | Cae a 51 m, sube 10,5 m, pica 3 veces, rueda 9 m y se para | 2 o 3 piques y rueda |
+| Tiro con efecto (55 rad/s de giro) | Se curva 4,5 m y entra; sin giro, la misma patada pasa 3 m afuera | curva visible |
+| Tiro al palo (rasante) | Pega en la cara de afuera del palo y sale desviado | rebota sin casos especiales |
+| Tiro al travesaño | Pega y vuelve a la cancha picando | rebota sin casos especiales |
+| Remate a la red | Pega en la red de fondo y queda muerto adentro del arco | — |
+| Centro y globo | El centro se cierra 1,9 m; el globo sube 10,4 m y cae adentro | — |
+| Todos | `SALTO_PELOTA` = 0 (exceso 0,0 m); la misma patada da la misma huella | = 0 |
+
+- **Césped y clima:** un pase rasante a 12 m/s rueda 27,5 m; en la peor cancha (−8) 24,6 m y en la mejor (+3) 28,9 m; con lluvia 30,1 m. Con viento de 6 m/s el globo pica 6 m más lejos a favor y 7 m más cerca en contra.
+- **Costo:** en la misma máquina de la nube, el paso del banco de la etapa 0 (`-- nativo solo_sin_vista`) pasó de 3,65 a 3,80 µs (+4%) con la pelota nueva. El partido sin vista sigue en 1,26 s.
+- **Falta, en la PC:** rearmar las bibliotecas de Windows y Android (las de `motor_v2/bin/` no tienen `PelotaV2Nativa`; hasta entonces `test_pelota_v2` falla en la PC); mirar el laboratorio y calibrar contra video (piques, curva, rodada); comparar la huella PC ↔ Android de los disparos.
+
 ### Etapa 2 — El cuerpo
 
 - **Qué:** locomoción (aceleración, frenada, giro según velocidad, atributos y cansancio, a partir de `_mover_hacia`) y la máquina de acciones: preparación → ventana de contacto → recuperación.

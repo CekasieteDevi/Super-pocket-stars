@@ -108,6 +108,7 @@ func _empezar_con_vista() -> void:
 	_cerebro = CerebroFalsoV2.new(_mundo)
 	if _nativo:
 		_mundo_nativo = ClassDB.instantiate("MundoV2Nativo")
+		_mundo_nativo.configurar_pelota(FisicaV2.parametros())
 		_mundo_nativo.iniciar(_semilla)
 	_vista = VistaV2.new()
 	var v: Array = _variantes[_variante]
@@ -250,9 +251,11 @@ func _partido_sin_vista() -> Dictionary:
 func _partido_nativo_sin_vista() -> Dictionary:
 	var pasos := int(MINUTOS * 60.0 / MundoV2.PASO_SEG)
 	var m: Object = ClassDB.instantiate("MundoV2Nativo")
+	m.configurar_pelota(FisicaV2.parametros())
 	m.iniciar(_semilla)
 	var seg: float = m.simular(pasos)
 	var m2: Object = ClassDB.instantiate("MundoV2Nativo")
+	m2.configurar_pelota(FisicaV2.parametros())
 	m2.iniciar(_semilla)
 	var inicio := Time.get_ticks_usec()
 	for k in pasos:

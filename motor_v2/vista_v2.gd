@@ -36,6 +36,8 @@ var sombras_redondas := false
 var personajes_con_sombra_sol := true
 var _manchas: SombrasRedondas
 var escala_3d := 1.0
+## Sin los 22 jugadores: el laboratorio de la pelota (etapa 1) solo la mira a ella.
+var con_jugadores := true
 
 
 func _ready() -> void:
@@ -74,6 +76,8 @@ func _ready() -> void:
 		_mundo_3d.add_child(_manchas)
 	if not personajes_con_sombra_sol:
 		_sin_sombra_sol(_pelota)
+	if not con_jugadores:
+		return
 	var jugador := load(ESCENA_JUGADOR) as PackedScene
 	var golero := load(ESCENA_GOLERO) as PackedScene
 	var colores := ColoresClub.par("Atlético Prueba", "Deportivo Banco")
@@ -161,7 +165,15 @@ func dibujar_estado(pos_previa: PackedVector2Array, pos: PackedVector2Array, rum
 			tiempo = fposmod(_odometro[i] / VistaCancha3D.METROS_POR_CICLO, 1.0) * p3.duracion(anim)
 		p3.poner(anim, tiempo, delta)
 		p3.poner_cara(p3.cara, Jugador3D.Gesto.NORMAL, _tiempo)
+	dibujar_pelota(pelota_previa, pelota, alfa, delta)
+
+
+## `giro` (rad/s, del motor) hace girar el modelo: sin él no se ve el efecto.
+func dibujar_pelota(pelota_previa: Vector3, pelota: Vector3, alfa: float, delta: float,
+		giro := Vector3.ZERO) -> void:
 	var bola := pelota_previa.lerp(pelota, alfa)
+	if giro.length() > 0.01:
+		_pelota.global_rotate(giro.normalized(), giro.length() * delta)
 	# El modelo de la pelota se dibuja al doble (VistaCancha3D.ESCALA_PELOTA):
 	# se levanta lo que crece el radio para que no se hunda en el piso.
 	bola.y += MundoV2.RADIO_PELOTA * (VistaCancha3D.ESCALA_PELOTA - 1.0)
