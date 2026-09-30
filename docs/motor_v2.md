@@ -165,7 +165,7 @@ Banco: `motor_v2/banco_etapa0.tscn` (`mundo.gd`, `cerebro_falso.gd`, `vista_v2.g
 - **Banco:** escena `laboratorio_pelota.tscn` que dispara tiros, centros, globos, rebotes en el palo y saques de arco con la cámara actual.
 - **Pasa si:** el saque de arco pica 2 o 3 veces y rueda; un tiro con efecto se curva de forma visible; un tiro al palo rebota sin casos especiales; la pelota nunca avanza en un paso más de lo que da su velocidad (detector `SALTO_PELOTA` = 0 por construcción).
 
-#### Resultado (2026-09-30): pasa sin vista; falta la revisión visual en la PC
+#### Resultado (2026-09-30): pasa
 
 Hecha en la nube (Linux, sin pantalla). Test: `tests/test_pelota_v2.gd`.
 
@@ -186,7 +186,8 @@ Hecha en la nube (Linux, sin pantalla). Test: `tests/test_pelota_v2.gd`.
 
 - **Césped y clima:** un pase rasante a 12 m/s rueda 27,5 m; en la peor cancha (−8) 24,6 m y en la mejor (+3) 28,9 m; con lluvia 30,1 m. Con viento de 6 m/s el globo pica 6 m más lejos a favor y 7 m más cerca en contra.
 - **Costo:** en la misma máquina de la nube, el paso del banco de la etapa 0 (`-- nativo solo_sin_vista`) pasó de 3,65 a 3,80 µs (+4%) con la pelota nueva. El partido sin vista sigue en 1,26 s.
-- **Falta, en la PC:** rearmar las bibliotecas de Windows y Android (las de `motor_v2/bin/` no tienen `PelotaV2Nativa`; hasta entonces `test_pelota_v2` falla en la PC); mirar el laboratorio y calibrar contra video (piques, curva, rodada); comparar la huella PC ↔ Android de los disparos.
+- **Hecho en la PC (2026-09-30):** bibliotecas de Windows y Android rearmadas; `test_pelota_v2` da 0 fallas en la PC. El partido del banco de la etapa 0 con la pelota nueva da la misma huella en la PC y en el teléfono (7802884780403246726) y tarda 1,61 s en el teléfono (0,63 s en la PC).
+- **Revisión visual (2026-09-30):** el usuario miró el laboratorio en la PC y le gustó cómo se ve. La etapa 1 pasa. La calibración fina contra video queda para la etapa 7.
 
 ### Etapa 2 — El cuerpo
 
@@ -194,6 +195,11 @@ Hecha en la nube (Linux, sin pantalla). Test: `tests/test_pelota_v2.gd`.
 - **Blender:** `animaciones_jugador.py` exporta junto al GLB un `acciones_v2.json` por clip: duración, frame de contacto, hueso que toca (`Pie_R`, `Frente`, `Pecho`, `Mano_L/R`), alcance y velocidad de salida típica. Se suman clips de locomoción (arranque, frenada, giro de 90° y 180°, correr de costado y de espaldas).
 - **Vista:** `Jugador3D` lee acción + fase; las piernas siguen la velocidad real; el pie se lleva a la pelota en los últimos 0,15 s (el *warping* de FIFA 10, solo en huesos).
 - **Pasa si:** `muestra_animaciones_3d.tscn` corre manejada por acciones; deslizamiento de pies bajo un umbral medido; nadie gira 180° en el lugar corriendo a velocidad máxima.
+- **En la nube (decisión del usuario, 2026-09-30):** la etapa 2 se hace en la nube salvo lo que pide Blender. Los `.blend` no están en el repo, así que ahí no se pueden hacer clips nuevos. Qué sí:
+  - Locomoción y máquina de acciones en C++ (`motor_v2/cpp/src/cuerpo.h/.cpp`), con su test sin pantalla.
+  - `data/acciones_v2.json` armado desde lo que ya hay: `contacto`, `hueso` y `ticks` de cada clip salen de las definiciones de `tools/blender/animaciones_jugador.py`, y la duración real de cada animación se lee de `assets/3d/jugador.glb` y `golero.glb` con Godot sin pantalla. Un script en `tools/` lo genera, así se rehace igual cuando cambien los clips.
+  - Mientras falten los clips de arranque, frenada, giro y correr de costado o de espaldas, la vista usa `Correr`, `Trotar`, `Caminar` y `Respirar`. La lista de clips que faltan queda anotada acá para hacerlos en la PC con Blender.
+  - La prueba de deslizamiento de pies se mide sin pantalla (posición del hueso del pie contra el piso). La revisión visual de `muestra_animaciones_3d.tscn` queda para la PC.
 
 ### Etapa 3 — Tocar la pelota
 

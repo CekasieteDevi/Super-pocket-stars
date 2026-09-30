@@ -1,4 +1,5 @@
 [
+	{"version": "0.7.63", "fecha": "2026-09-30", "cambio": "La pelota del motor nuevo ya funciona también en la computadora y en el celular."},
 	{"version": "0.7.62", "fecha": "2026-09-30", "cambio": "La pelota del motor nuevo ya vuela, pica, rueda, se curva con efecto y rebota en los palos y la red por su cuenta."},
 	{"version": "0.7.61", "fecha": "2026-09-29", "cambio": "Queda escrito cómo se construye el motor nuevo del partido, todo en C++ para que ande rápido en el celular."},
 	{"version": "0.7.60", "fecha": "2026-09-29", "cambio": "En el partido 3D las sombras son manchas debajo de cada jugador y de la pelota, y el partido se ve más fluido en el celular."},
