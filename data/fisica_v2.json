@@ -30,7 +30,14 @@
 		"control_ms": "Rapidez con que sale la pelota del control orientado. error_control_rad y error_control_ms: lo que agrega un mal control (con control 0; con 100 es el 20%), más con pelota rápida, alta o con un rival encima. Con 0,6 rad y 2,5 m/s la pelota quedaba suelta y en el partidito había un quite cada 2 s.",
 		"toque_largo_m": "Conducción: cuánto se adelanta la pelota en cada toque con espacio (toque_largo_m) o con un rival a 2 m (toque_corto_m); un buen control lo acorta hasta 20%. El que conduce corre a conduccion_factor de su punta. Con 2,5 m la pelota quedaba 3 m adelante y el rival llegaba antes.",
 		"giro_alcance_rad": "El pie llega a la pelota hasta esto hacia un costado de adonde mira el cuerpo.",
-		"margen_seguro_seg": "Partidito: pasa sin apuro si el mejor pase le gana a todo rival por esto."
+		"margen_seguro_seg": "Partidito: pasa sin apuro si el mejor pase le gana a todo rival por esto.",
+		"cerebro": "Etapa 4 (docs/motor_v2.md). Lo que el cerebro del motor espacial no tenía; el resto de sus pesos sale de data/utility_pesos.json igual que en el motor actual. motor_v2/cpp/src/cerebro/cerebro.h tiene los mismos valores para quien no lo configura; tests/test_cerebro_v2.gd falla si se separan.",
+		"grilla": "Grilla de apoyo (Simple Soccer): columnas × filas casillas sobre la cancha entera. Cada una se puntúa desde la pelota: grilla_peso_pase si un pase a grilla_rapidez_pase m/s llega antes que cualquier rival, grilla_peso_tiro por factor_geometria (se puede tirar desde ahí) y grilla_peso_distancia si queda a la distancia justa (sin_pelota.dist_ideal). Las grilla_candidatos mejores entran como candidatas de apoyo en los desmarques, con grilla_bono × puntaje de más. 12 × 8 es lo que pide el presupuesto de Android (docs/motor_v2.md) y deja casillas de 8,75 × 8,5 m.",
+		"linea_mezcla": "Sin la pelota, cuánto se acercan centrales y laterales a la altura común de la línea defensiva (la media de sus anclas): 1 = los cuatro a la misma altura.",
+		"decision_vigencia_seg": "Cuánto vale un pase decidido si todavía no salió (el poseedor llega a la pelota). Sin esto el sorteo del softmax cambiaba de receptor cada 0,1 s y el cuerpo nunca terminaba de acomodarse.",
+		"riesgo": "Riesgo de un pase para decidir: riesgo_por_tiempos mezcla riesgo_linea del motor espacial (0) con el pase seguro por tiempos de Simple Soccer (1). La pelota viaja a riesgo_rapidez_pase de media (un pase de 15 a 30 m sale a 9-11 m/s y llega a 7) y el pase es seguro si el rival que mejor corta llega riesgo_margen_seguro después.",
+		"entrada_ventaja_seg": "El que presiona va a la pelota controlada solo si llega esto antes que el que la tiene; si no, se para delante y contiene (Canchita._contener). En la canchita de la etapa 3 es 0,1 s.",
+		"castigo_corte": "Utilidad que pierde un globo (pelotazo o centro) por el riesgo que da la física del toque (el margen del Planeador). En el motor espacial el pelotazo no tenía término de seguridad: la intercepción era un sorteo aparte. El pase raso ya lo paga en `seguridad`."
 	},
 	"pelota": {
 		"gravedad": 9.81,
@@ -115,5 +122,22 @@
 			"Pecho",
 			"Cabecear"
 		]
+	},
+	"cerebro": {
+		"grilla_columnas": 12,
+		"grilla_filas": 8,
+		"grilla_rapidez_pase": 15.0,
+		"grilla_peso_pase": 1.0,
+		"grilla_peso_tiro": 0.6,
+		"grilla_peso_distancia": 0.5,
+		"grilla_candidatos": 3.0,
+		"grilla_bono": 0.35,
+		"linea_mezcla": 1.0,
+		"decision_vigencia_seg": 1.0,
+		"riesgo_por_tiempos": 1.0,
+		"riesgo_rapidez_pase": 8.5,
+		"riesgo_margen_seguro": 0.5,
+		"entrada_ventaja_seg": 0.5,
+		"castigo_corte": 1.0
 	}
 }

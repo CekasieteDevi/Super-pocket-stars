@@ -33,6 +33,16 @@ public:
 	// `fisico`: el de FisicaV2.fisico_de más "pases" y "control" (0..100).
 	int64_t agregar(int64_t equipo, const Dictionary &fisico);
 	void empezar(int64_t modo, int64_t semilla);
+	// Etapa 4 (PARTIDO): los pesos del cerebro (MotorEspacial.pesos() y la
+	// sección "cerebro" de data/fisica_v2.json) y el plan de cada club. La
+	// ficha de cada jugador va en `agregar` (ver motor_v2/cerebro_v2.gd).
+	void configurar_cerebro(const Dictionary &utility, const Dictionary &nuevos);
+	void configurar_plan(int64_t equipo, const Dictionary &plan);
+	// Los pesos de fábrica del cerebro, como los JSON (para el test).
+	Dictionary pesos_cerebro_de_fabrica() const;
+	// La matemática propia (matematica_fija.h), para el test.
+	static double exponencial(double x);
+	static double logaritmo(double x);
 	// Modo PRUEBA (tests): dónde está cada uno y la pelota que se lanza.
 	void poner_jugador(int64_t i, const Vector2 &pos, double rumbo);
 	void lanzar(const Vector3 &pos, const Vector3 &vel, const Vector3 &giro, int64_t equipo);
@@ -64,6 +74,22 @@ public:
 	// Lo que va a hacer la pelota si nadie la toca (lo que planean todos).
 	PackedVector3Array prediccion() const;
 	Dictionary contadores() const;
+	// PARTIDO: lo que pensó el cerebro.
+	Dictionary contadores_cerebro() const;
+	// Papel en la defensa de cada uno (cerebro.h, PapelDefensa).
+	PackedInt32Array get_papeles() const;
+	// Adónde va cada uno que no tiene la pelota (el objetivo del cerebro).
+	PackedVector2Array get_objetivos() const;
+	// Destino del desmarque de cada uno, o (NAN, NAN) si no tiene.
+	PackedVector2Array get_desmarques() const;
+	PackedInt32Array get_roles() const;
+	// Línea de offside y línea defensiva de cada equipo: (offside0, offside1,
+	// defensiva0, defensiva1).
+	PackedFloat32Array get_lineas() const;
+	int64_t get_fase_ritmo() const;
+	// La última decisión del cerebro: {decisor, temperatura, opciones: [{tipo,
+	// receptor, punto, utilidad}]}.
+	Dictionary ultima_decision() const;
 	int64_t huella() const;
 
 protected:

@@ -401,6 +401,82 @@ El banco de la etapa 0 cambió de huella: 7270582477375384744 antes (PC, teléfo
 - **Qué:** se portan a C++ (`motor_v2/cpp/src/cerebro/`) `evaluar_opciones`, `elegir_softmax`, perfiles, ritmo, marcador, desmarques, defensa y jugadas preparadas, devolviendo intenciones. Nuevo: puntaje de puntos de apoyo sobre una grilla (se le puede pasar, puede tirar, distancia al poseedor), línea defensiva y offside en el frame del pase.
 - **Pasa si:** 11 vs 11 sin arqueros ni reglas durante 10 minutos con posesiones de varios pases, bloques que se desplazan con la pelota y pases al espacio que salen solos.
 
+#### Resultado (2026-09-30): pasa sin vista; falta la revisión visual
+
+Hecha en la nube. Test: `tests/test_cerebro_v2.gd`. Medición: `tests/_diag_cerebro_v2.gd` (varias semillas).
+
+- **Código:**
+  - `motor_v2/cpp/src/cerebro/cerebro.h/.cpp` (`motor_v2::Cerebro`, sin Godot). Lee una foto del partido (`Mundo`) y devuelve intenciones: la decisión del poseedor (`Decision`) y adónde va cada uno sin la pelota (`Objetivo`). Nunca mueve la pelota ni a un jugador.
+  - `canchita.h/.cpp`: modo `PARTIDO`, 11 contra 11 en la cancha entera. El mundo es el de la etapa 3: la canchita arma la foto, le pregunta al cerebro y ejecuta con el toque de siempre.
+  - `cerebro_v2_nativo.h/.cpp`: lee los pesos, el plan de cada club y la ficha de cada jugador. `CanchitaV2Nativa` suma `configurar_cerebro`, `configurar_plan`, `contadores_cerebro`, `ultima_decision` y lecturas para la vista (papeles, objetivos, desmarques, líneas).
+  - `motor_v2/cerebro_v2.gd` (`CerebroV2.armar_partido`): arma el partido con dos `Team.generar`, sus formaciones (`Formaciones.slots`) y sus estilos. GDScript solo junta datos que ya existían.
+  - `matematica_fija.h` suma `exponencial` y `logaritmo` (softmax y `log` de `_ponderar_plan`), solo con +, −, ×, ÷ y bits del double.
+  - `SConstruct` compila también `src/cerebro/*.cpp`.
+- **Pesos:** los de `data/utility_pesos.json`, los mismos del motor actual (conducir, pase, pase_hueco, pase_largo, pared, centro, despeje, temperatura, presión, ritmo, marcador, perfil, sin_pelota, defensa). Lo nuevo va en `data/fisica_v2.json`, sección `cerebro`. `test_cerebro_v2` falla si el C++ y los JSON se separan.
+- **Unidades:** el motor espacial contaba en ticks de 0,25 s. Los relojes pasan a segundos (plan 1 s, ritmo 1,5 s, transición 6 s, desmarque de 1 a 3 s). Lo que el JSON trae en ticks se pasa con `TICK_ESPACIAL_SEG`.
+
+**Qué se portó** (con el nombre de GDScript):
+
+- Poseedor: `evaluar_opciones` (conducir, despeje, pase, pase atrás al área, pase al hueco, pase a la corrida preparada, centro, pelotazo, pared con tercer hombre y pared de ida y vuelta), `_ponderar_plan`, `_premiar_descarga_util`, `_aplicar_pie_preferido`, `_solo_frente_al_arco`, acorralado y arquero encerrado, `temperatura` y `elegir_softmax`. La decisión vale lo que la cadencia (`cadencia_de_decision`).
+- Sin pelota: `_ancla_de_rol`, `_objetivo_sin_pelota`, `_buscar_apoyo` y los desmarques (apoyo, ruptura, arrastre, llegada; el 9 que baja y el que ocupa su hueco, la diagonal del extremo, el lateral que dobla, el cambio de frente).
+- Defensa: `_planificar_defensa` (presionante, cobertura y cierre) con `_intensidad_de_presion`.
+- Ritmo (circulación, aceleración, transición), marcador (urgencia), perfiles (`_construir_perfil`) y las jugadas de juego abierto: Paredes y Contragolpe.
+
+**Qué es nuevo:**
+
+- **Grilla de apoyo (Simple Soccer):** 12 × 8 casillas puntuadas desde la pelota por pase seguro por tiempos, `factor_geometria` y distancia justa. Las 3 mejores entran como candidatas de apoyo en los desmarques.
+- **Línea defensiva:** sin la pelota, centrales y laterales se paran a la media de sus anclas.
+- **Offside en el cuadro del pase:** `Cerebro::en_offside` mira la foto del momento en que sale la pelota. Se cuenta; cobrarlo es la etapa 6.
+- **El cerebro planea con la física del mundo:** la canchita es un `Planeador`. Mientras el poseedor decide, el cerebro le pregunta el margen de cada pase (a los pies, al punto y globo) con el mismo cálculo con que después sale la pelota.
+
+**Qué no entra todavía:** remate y arquero (etapa 5), gambeta (faltan clips de regate), pelota parada y jugadas preparadas de pelota parada (etapa 6), `_opciones_orientadas` (en el V2 el cuerpo gira de verdad y el pase de costado ya es más impreciso).
+
+**Banco sin reglas:** la pelota que sale vuelve con un lateral, un córner o un saque de arco. Si un equipo controla la pelota en el área rival es una llegada y el otro saca del arco. Los once de cada equipo son los de la formación; el arquero juega con los pies (no ataja).
+
+**Lo que cambió al medir** (todo en `tests/_diag_cerebro_v2.gd`, semilla 20261002, 4 minutos):
+
+| Cambio | Por qué |
+| --- | --- |
+| Pasar antes de la cadencia con un rival a menos de 4 m | El motor espacial aguantaba la cadencia con la pelota pegada al pie y el robo era un duelo. Acá la pelota va suelta entre toques: 16 quites por minuto. |
+| Riesgo del pase por su física (`Planeador`) | Con `riesgo_linea` solo se cortaba el 47% de los pases. |
+| `castigo_corte` en globos | El pelotazo y el centro no tenían término de seguridad: eran la mitad de los pases y se cortaba el 50%. Con castigo en todos los pases el poseedor conducía el 74% de las veces. |
+| `entrada_ventaja_seg` 0,1 → 0,5 | El que presiona se tiraba apenas llegaba 0,1 s antes: la mayoría de los quites eran tras un control. Las entradas de verdad (con ventana y falta) son de la etapa 6. |
+| El que conduce aleja la pelota del rival | Como el control orientado. Sin esto la pelota iba hacia el que presionaba. |
+| Pase al espacio: si el receptor llega antes, va el pase normal; el receptor pica a fondo | Salían pases a 16 m/s a 10 m que el receptor no alcanzaba. |
+| `_alcance` de a 3 puntos en el partido | Con 22 jugadores era el 45% del costo del paso. |
+
+| Medido (10 min, sin vista) | 20261002 | 20261003 | 20261004 |
+| --- | --- | --- | --- |
+| Posesiones / con 3+ pases / con 5+ / máximo | 98 / 10 / 3 / 6 | 86 / 10 / 1 / 5 | 98 / 8 / 2 / 6 |
+| Pases por minuto / completos | 12,0 / 54% | 12,0 / 64% | 12,8 / 58% |
+| Globos | 40% | 48% | 46% |
+| Pases al espacio (llegan) | 22 (7) | 23 (14) | 12 (3) |
+| Quites por minuto | 4,4 | 3,0 | 4,1 |
+| Bloques: correlación con la pelota a lo largo (x) | 0,93 / 0,94 | 0,94 / 0,95 | 0,87 / 0,91 |
+| A lo ancho (z) | 0,92 / 0,84 | 0,87 / 0,90 | 0,89 / 0,85 |
+| Línea de atrás del que defiende | ±2,7 m | ±2,6 m | ±2,8 m |
+| Correcciones de la pelota / SALTO_PELOTA / frenadas en seco | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 |
+| Costo por paso | 9,5 µs | 8,6 µs | 9,0 µs |
+
+- **Contra el motor espacial:** el mismo cruce en el motor actual (semilla 20261002) decide conducir el 51% de las veces y completa unos 10 pases por minuto de juego. El cerebro portado da la misma mezcla (48-52% conducir, 12 pases por minuto). Lo que el V2 no alcanza todavía es el porcentaje de pases completos: el motor espacial pierde el 15% por intercepción; el V2, del 32 al 42%.
+- **Cuánto cuesta el cerebro:** el 14% del paso (planificar, decidir y los objetivos). El resto es el mundo de la etapa 3 con 22 cuerpos.
+- **Laboratorio:** `motor_v2/laboratorio_cerebro.tscn`. Con pantalla muestra lo que cuenta el motor y la última decisión del poseedor con sus mejores opciones; un toque arma otro partido. Con `--headless` imprime con `[lab_cerebro]` (0,82 ms por paso con la vista en la nube).
+
+**Pasa si, uno por uno:**
+
+- **Posesiones de varios pases:** pasa. De 8 a 10 posesiones de 3 pases o más cada 10 minutos, y de 5 o más en las tres semillas.
+- **Bloques que se desplazan con la pelota:** pasa. El centro de cada equipo sigue a la pelota con correlación de 0,87 a 0,95 a lo largo y 0,84 a 0,92 a lo ancho, y la línea de atrás se para junta (±2,7 m).
+- **Pases al espacio que salen solos:** pasa. De 12 a 23 cada 10 minutos, al hueco o a la corrida preparada, y llegan de 3 a 14.
+
+**Qué falta:**
+
+1. Revisión visual de `laboratorio_cerebro.tscn` en la PC.
+2. Bibliotecas de Windows y Android: el C++ cambió y hay que rearmarlas en la PC.
+3. Pases completos (54-64%): el motor espacial calibró sus pesos con otra intercepción. Es la calibración de la etapa 7. Los quites tras un control (el receptor tarda ~0,8 s en volver a tocarla) también.
+4. Costo: 9 µs por paso en la nube son ~2,9 s por partido sin vista; en el teléfono (1,3 veces la nube en la etapa 0) serían ~3,8 s, por encima de los 3 s. Casi todo es el mundo de la etapa 3 con 22 cuerpos (`_alcance`, gatillos), no el cerebro.
+5. Las corridas preparadas casi no reciben el pase (1 o 2 cada 10 minutos): los pases al espacio salen sobre todo al hueco por delante del receptor.
+6. Patinaje en el partido: Frenada 1,24 m/s y los fundidos 2,24 m/s, más que en el laboratorio del cuerpo, porque el cerebro cambia de objetivo a 10 Hz.
+
 ### Etapa 5 — Remates y arqueros
 
 - **Qué:** elección de punto y tipo de remate; modelo de error por tiro, pie malo, postura y presión; arquero que predice el cruce, elige parado, estirada o salida y resuelve agarre, rebote o no llega; rebotes jugables. Se reusan las animaciones de arquero que ya existen.
@@ -444,7 +520,7 @@ Reglas para todas las etapas. Salen de lo que midió la etapa 0.
 1. Instalá scons: `python -m pip install scons`.
 2. Cloná godot-cpp v10 fuera del repo: `git clone --depth 1 https://github.com/godotengine/godot-cpp` (en la PC está en `D:/dev-tools/godot-cpp`). Poné su ruta en la variable `GODOT_CPP`.
 3. Desde `motor_v2/cpp`, ejecutá `python -m SCons api_version=4.7 target=template_release platform=<windows|linux|android>` (Android además `arch=arm64 ANDROID_HOME=... ndk_version=28.2.13676358`).
-4. La biblioteca sale en `motor_v2/bin/`. Después de agregar clases nuevas, ejecutá `<godot> --path . --headless --editor --quit` para que Godot las registre.
+4. La biblioteca sale en `motor_v2/bin/`. `SConstruct` compila `src/*.cpp` y `src/cerebro/*.cpp`. Después de agregar clases nuevas, ejecutá `<godot> --path . --headless --editor --quit` para que Godot las registre.
 
 ### Trabajar en la nube
 

@@ -1,5 +1,7 @@
 #include "canchita_v2_nativa.h"
+#include "cerebro_v2_nativo.h"
 #include "cuerpos_v2_nativos.h"
+#include "matematica_fija.h"
 #include "pelota_v2_nativa.h"
 
 #include <godot_cpp/core/class_db.hpp>
@@ -7,6 +9,8 @@
 #include <godot_cpp/variant/variant.hpp>
 
 #include <chrono>
+#include <algorithm>
+#include <cmath>
 
 using namespace godot;
 
@@ -93,7 +97,32 @@ int64_t CanchitaV2Nativa::agregar(int64_t equipo, const Dictionary &fisico) {
 	leer(fisico, "pases", pases);
 	leer(fisico, "control", control);
 	_c.agregar(int(equipo), c, pases, control);
+	if (fisico.has("rol")) {
+		motor_v2::FichaCerebro f;
+		leer_ficha_cerebro(int(equipo), fisico, f);
+		_c.cerebro.agregar(f);
+	}
 	return int64_t(_c.jugadores.size()) - 1;
+}
+
+void CanchitaV2Nativa::configurar_cerebro(const Dictionary &utility, const Dictionary &nuevos) {
+	leer_pesos_cerebro(utility, nuevos, _c.cerebro.pesos);
+}
+
+void CanchitaV2Nativa::configurar_plan(int64_t equipo, const Dictionary &plan) {
+	leer_plan_equipo(plan, _c.cerebro.planes[equipo & 1]);
+}
+
+Dictionary CanchitaV2Nativa::pesos_cerebro_de_fabrica() const {
+	return pesos_cerebro_a_diccionario(motor_v2::PesosCerebro());
+}
+
+double CanchitaV2Nativa::exponencial(double x) {
+	return mate::exponencial(x);
+}
+
+double CanchitaV2Nativa::logaritmo(double x) {
+	return mate::logaritmo(x);
 }
 
 void CanchitaV2Nativa::empezar(int64_t modo, int64_t semilla) {
@@ -275,6 +304,114 @@ Dictionary CanchitaV2Nativa::contadores() const {
 	d["posesion_0"] = k.posesion_seg[0];
 	d["posesion_1"] = k.posesion_seg[1];
 	d["pasos"] = _c.paso;
+	d["posesiones"] = k.posesiones;
+	d["pases_en_posesiones"] = k.pases_en_posesiones;
+	d["posesiones_3_pases"] = k.posesiones_3_pases;
+	d["posesiones_5_pases"] = k.posesiones_5_pases;
+	d["max_pases_posesion"] = k.max_pases_posesion;
+	d["pases_al_espacio"] = k.pases_al_espacio;
+	d["pases_al_espacio_completos"] = k.pases_al_espacio_completos;
+	d["pases_a_corrida"] = k.pases_a_corrida;
+	d["offsides"] = k.offsides;
+	d["llegadas_0"] = k.llegadas[0];
+	d["llegadas_1"] = k.llegadas[1];
+	d["saques_de_arco"] = k.saques_de_arco;
+	d["laterales"] = k.laterales;
+	d["corners"] = k.corners;
+	d["paredes_devueltas"] = k.paredes_devueltas;
+	d["quites_conduccion"] = k.quites_conduccion;
+	d["quites_control"] = k.quites_control;
+	d["quites_suelta"] = k.quites_suelta;
+
+	return d;
+}
+
+Dictionary CanchitaV2Nativa::contadores_cerebro() const {
+	const motor_v2::ContadoresCerebro &k = _c.cerebro.cuenta;
+	const char *decisiones[motor_v2::DECISIONES] = { "nada", "conducir", "pase", "pase_hueco", "pase_largo", "centro",
+		"pared", "despeje" };
+	Dictionary d;
+	for (int t = 0; t < motor_v2::DECISIONES; t++) {
+		d[decisiones[t]] = k.decisiones[t];
+	}
+	d["corridas_preparadas"] = k.corridas_preparadas;
+	d["desmarque_apoyo"] = k.desmarques[motor_v2::DES_APOYO];
+	d["desmarque_ruptura"] = k.desmarques[motor_v2::DES_RUPTURA];
+	d["desmarque_arrastre"] = k.desmarques[motor_v2::DES_ARRASTRE];
+	d["desmarque_llegada"] = k.desmarques[motor_v2::DES_LLEGADA];
+	d["apoyos_de_grilla"] = k.apoyos_de_grilla;
+	d["fase_circulacion"] = k.fases_ritmo[0];
+	d["fase_aceleracion"] = k.fases_ritmo[1];
+	d["fase_transicion"] = k.fases_ritmo[2];
+	return d;
+}
+
+PackedInt32Array CanchitaV2Nativa::get_papeles() const {
+	PackedInt32Array r;
+	for (size_t i = 0; i < _c.cerebro.fichas.size() && i < _c.jugadores.size(); i++) {
+		r.push_back(_c.cerebro.papel(int(i)));
+	}
+	return r;
+}
+
+PackedVector2Array CanchitaV2Nativa::get_objetivos() const {
+	PackedVector2Array r;
+	if (_c.modo != motor_v2::PARTIDO) {
+		return r;
+	}
+	for (size_t i = 0; i < _c.cerebro.fichas.size() && i < _c.jugadores.size(); i++) {
+		motor_v2::Objetivo o = _c.cerebro.objetivo(_c.mundo(), int(i));
+		r.push_back(Vector2(real_t(o.x), real_t(o.z)));
+	}
+	return r;
+}
+
+PackedVector2Array CanchitaV2Nativa::get_desmarques() const {
+	PackedVector2Array r;
+	for (size_t i = 0; i < _c.cerebro.fichas.size() && i < _c.jugadores.size(); i++) {
+		const motor_v2::PlanDesmarque &p = _c.cerebro.desmarque(int(i));
+		r.push_back(p.vivo ? Vector2(real_t(p.x), real_t(p.z)) : Vector2(NAN, NAN));
+	}
+	return r;
+}
+
+PackedInt32Array CanchitaV2Nativa::get_roles() const {
+	PackedInt32Array r;
+	for (const motor_v2::FichaCerebro &f : _c.cerebro.fichas) {
+		r.push_back(f.rol);
+	}
+	return r;
+}
+
+PackedFloat32Array CanchitaV2Nativa::get_lineas() const {
+	PackedFloat32Array r;
+	r.push_back(float(_c.cerebro.linea_offside(0)));
+	r.push_back(float(_c.cerebro.linea_offside(1)));
+	r.push_back(float(_c.cerebro.linea_defensiva(0)));
+	r.push_back(float(_c.cerebro.linea_defensiva(1)));
+	return r;
+}
+
+int64_t CanchitaV2Nativa::get_fase_ritmo() const {
+	return _c.cerebro.fase_ritmo();
+}
+
+Dictionary CanchitaV2Nativa::ultima_decision() const {
+	const char *tipos[motor_v2::DECISIONES] = { "nada", "conducir", "pase", "pase_hueco", "pase_largo", "centro", "pared",
+		"despeje" };
+	Dictionary d;
+	d["decisor"] = _c.cerebro.ultimo_decisor;
+	d["temperatura"] = _c.cerebro.ultima_temperatura;
+	Array opciones;
+	for (const motor_v2::OpcionVista &o : _c.cerebro.ultimas_opciones) {
+		Dictionary v;
+		v["tipo"] = tipos[std::clamp(o.tipo, 0, motor_v2::DECISIONES - 1)];
+		v["receptor"] = o.receptor;
+		v["punto"] = Vector2(real_t(o.x), real_t(o.z));
+		v["utilidad"] = o.utilidad;
+		opciones.push_back(v);
+	}
+	d["opciones"] = opciones;
 	return d;
 }
 
@@ -286,6 +423,19 @@ void CanchitaV2Nativa::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("configurar", "pelota", "cuerpo", "clips", "toque"), &CanchitaV2Nativa::configurar);
 	ClassDB::bind_method(D_METHOD("agregar", "equipo", "fisico"), &CanchitaV2Nativa::agregar);
 	ClassDB::bind_method(D_METHOD("empezar", "modo", "semilla"), &CanchitaV2Nativa::empezar);
+	ClassDB::bind_method(D_METHOD("configurar_cerebro", "utility", "nuevos"), &CanchitaV2Nativa::configurar_cerebro);
+	ClassDB::bind_method(D_METHOD("configurar_plan", "equipo", "plan"), &CanchitaV2Nativa::configurar_plan);
+	ClassDB::bind_method(D_METHOD("pesos_cerebro_de_fabrica"), &CanchitaV2Nativa::pesos_cerebro_de_fabrica);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("exponencial", "x"), &CanchitaV2Nativa::exponencial);
+	ClassDB::bind_static_method(get_class_static(), D_METHOD("logaritmo", "x"), &CanchitaV2Nativa::logaritmo);
+	ClassDB::bind_method(D_METHOD("contadores_cerebro"), &CanchitaV2Nativa::contadores_cerebro);
+	ClassDB::bind_method(D_METHOD("get_papeles"), &CanchitaV2Nativa::get_papeles);
+	ClassDB::bind_method(D_METHOD("get_objetivos"), &CanchitaV2Nativa::get_objetivos);
+	ClassDB::bind_method(D_METHOD("get_desmarques"), &CanchitaV2Nativa::get_desmarques);
+	ClassDB::bind_method(D_METHOD("get_roles"), &CanchitaV2Nativa::get_roles);
+	ClassDB::bind_method(D_METHOD("get_lineas"), &CanchitaV2Nativa::get_lineas);
+	ClassDB::bind_method(D_METHOD("get_fase_ritmo"), &CanchitaV2Nativa::get_fase_ritmo);
+	ClassDB::bind_method(D_METHOD("ultima_decision"), &CanchitaV2Nativa::ultima_decision);
 	ClassDB::bind_method(D_METHOD("poner_jugador", "i", "pos", "rumbo"), &CanchitaV2Nativa::poner_jugador);
 	ClassDB::bind_method(D_METHOD("lanzar", "pos", "vel", "giro", "equipo"), &CanchitaV2Nativa::lanzar);
 	ClassDB::bind_method(D_METHOD("avanzar"), &CanchitaV2Nativa::avanzar);
@@ -318,4 +468,5 @@ void CanchitaV2Nativa::_bind_methods() {
 	ClassDB::bind_integer_constant(clase, "", "RONDO", motor_v2::RONDO);
 	ClassDB::bind_integer_constant(clase, "", "PARTIDITO", motor_v2::PARTIDITO);
 	ClassDB::bind_integer_constant(clase, "", "PRUEBA", motor_v2::PRUEBA);
+	ClassDB::bind_integer_constant(clase, "", "PARTIDO", motor_v2::PARTIDO);
 }

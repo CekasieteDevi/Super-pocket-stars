@@ -41,6 +41,17 @@ constexpr double REINICIO_DISTANCIA_M = 5.0;
 // Partidito: anclas de los cinco para el que ataca hacia +x (el otro las
 // espeja): dos atrás, uno al medio y dos adelante abiertos.
 constexpr double ANCLAS[5][2] = { { -12.0, -7.0 }, { -12.0, 7.0 }, { -2.0, 0.0 }, { 8.0, -8.0 }, { 8.0, 8.0 } };
+// Partido: en el saque del medio la formación se comprime hacia el arco
+// propio para caber en su mitad (MotorEspacial.COMPRESION_SAQUE).
+constexpr double COMPRESION_SAQUE = 0.775;
+// Partido: saque de arco desde el borde del área chica.
+constexpr double SAQUE_DE_ARCO_M = 5.5;
+// Pase al espacio: la pelota puede llegar hasta esto después que el receptor
+// (así no la espera parado), y todavía rodando a esta rapidez como mínimo.
+constexpr double ESPACIO_TARDE_SEG = 0.3;
+constexpr double ESPACIO_RESTO_MS = 2.0;
+// Partido: _alcance mira la trayectoria de a estos puntos (0,05 s).
+constexpr int SALTO_ALCANCE = 3;
 
 double hipot(double x, double z) {
 	return std::sqrt(x * x + z * z);
@@ -62,10 +73,16 @@ void Canchita::agregar(int equipo, const Cuerpo &fisico, double pases, double co
 
 double Canchita::_medio_x() const {
 	// El modo PRUEBA usa la cancha del partidito.
+	if (modo == PARTIDO) {
+		return PARTIDO_LARGO * 0.5;
+	}
 	return modo == RONDO ? RONDO_LADO * 0.5 : PARTIDITO_LARGO * 0.5;
 }
 
 double Canchita::_medio_z() const {
+	if (modo == PARTIDO) {
+		return PARTIDO_ANCHO * 0.5;
+	}
 	return modo == RONDO ? RONDO_LADO * 0.5 : PARTIDITO_ANCHO * 0.5;
 }
 
@@ -108,6 +125,12 @@ void Canchita::empezar(int modo_, int64_t semilla) {
 	_pase_activo = false;
 	_pateador = _receptor = -1;
 	_reinicio_en = _reinicio_hasta = -1;
+	_pases_posesion = 0;
+	_pase_al_espacio = false;
+	if (modo == PARTIDO) {
+		cerebro.pesos.reaccion_seg = param_toque.reaccion_seg;
+		cerebro.empezar();
+	}
 	int por_equipo[2] = { 0, 0 };
 	const double h = RONDO_LADO * 0.5;
 	for (JugadorCanchita &j : jugadores) {
@@ -121,6 +144,12 @@ void Canchita::empezar(int modo_, int64_t semilla) {
 			} else {
 				x = j.puesto == 0 ? -1.5 : 1.5;
 			}
+		} else if (modo == PARTIDO) {
+			// Su casillero, comprimido hacia su arco para caber en su mitad.
+			size_t k = size_t(&j - jugadores.data());
+			const FichaCerebro &f = cerebro.fichas[k];
+			x = (-Cerebro::MEDIO_LARGO + (f.base_x + Cerebro::MEDIO_LARGO) * COMPRESION_SAQUE) * _ataca(j.equipo);
+			z = f.base_z;
 		} else {
 			const double *a = ANCLAS[j.puesto % 5];
 			// Cada uno en su mitad, a la mitad de su ancla.
@@ -143,6 +172,12 @@ void Canchita::empezar(int modo_, int64_t semilla) {
 		j.quieto_seg = 0.0;
 		j.rapidez_previa = 0.0;
 		j.pensar_ya = true;
+		j.hay_decision = false;
+		j.rapidez_pase = 0.0;
+		j.tipo_pase = DEC_NADA;
+	}
+	if (modo == PARTIDO) {
+		_armar_mundo();
 	}
 	_reiniciar(0, 0.0, modo == RONDO ? -h : 0.0);
 	cuenta.reinicios = 0;
@@ -213,7 +248,13 @@ void Canchita::avanzar() {
 
 void Canchita::_pensar() {
 	bool vio = paso >= _visto_paso;
+	if (modo == PARTIDO) {
+		_armar_mundo();
+	}
 	if (paso % PASOS_POR_TURNO == 0) {
+		if (modo == PARTIDO) {
+			cerebro.planificar(_mundo);
+		}
 		_analizar();
 	}
 	for (size_t i = 0; i < jugadores.size(); i++) {
@@ -272,6 +313,15 @@ void Canchita::_analizar() {
 	if (modo == RONDO && _reinicio_en >= 0) {
 		_perseguidor[0] = _perseguidor[1] = -1;
 	}
+	// Partido: con la pelota controlada sale el presionante del plan de
+	// defensa, no el que llega primero (ese puede ser el que cubre).
+	if (modo == PARTIDO && poseedor >= 0 && !reinicio) {
+		int defiende = 1 - jugadores[size_t(poseedor)].equipo;
+		int presiona = cerebro.presionante(defiende);
+		if (presiona >= 0) {
+			_perseguidor[defiende] = presiona;
+		}
+	}
 }
 
 // El primer punto de la trayectoria al que llega a tiempo corriendo a
@@ -290,17 +340,35 @@ void Canchita::_alcance(int i, double factor, int &k, double &t) const {
 	// el receptor del rondo trotaba a buscarla afuera del cuadrado (15% de
 	// los pases se iban).
 	double adentro = modo == RONDO ? RONDO_AFUERA_M - 0.5 : -0.2;
-	for (int q = desde; q < n; q++) {
+	// Partido: de a SALTO_ALCANCE puntos y, al encontrar uno, se busca hacia
+	// atrás el primero. Con 22 jugadores recorrer los 300 puntos uno por uno
+	// era el 45% del costo del paso (tests/_diag_cerebro_v2.gd); en la
+	// canchita chica se sigue de a uno.
+	const int salto = modo == PARTIDO ? SALTO_ALCANCE : 1;
+	auto llega = [&](int q, double &tq) {
+		const V3 &p = trayectoria.pos[size_t(q)];
+		if (p.y > param_toque.cabeza_hasta) {
+			return false;
+		}
+		tq = double(_tray_paso + q + 1 - paso) * PASO_SEG;
+		return tiempo_de_llegada(c, p.x, p.z, ALCANCE_PLAN_M, factor) <= tq;
+	};
+	for (int q = desde; q < n; q += salto) {
 		const V3 &p = trayectoria.pos[size_t(q)];
 		if (!_adentro(p.x, p.z, adentro)) {
 			n = std::max(q, desde + 1);
 			break;
 		}
-		if (p.y > param_toque.cabeza_hasta) {
-			continue;
-		}
-		double tq = double(_tray_paso + q + 1 - paso) * PASO_SEG;
-		if (tiempo_de_llegada(c, p.x, p.z, ALCANCE_PLAN_M, factor) <= tq) {
+		double tq;
+		if (llega(q, tq)) {
+			for (int atras = std::max(desde, q - salto + 1); atras < q; atras++) {
+				double ta;
+				if (llega(atras, ta)) {
+					k = atras;
+					t = ta;
+					return;
+				}
+			}
 			k = q;
 			t = tq;
 			return;
@@ -318,9 +386,12 @@ void Canchita::_pensar_jugador(int i) {
 	if (j.toque_pendiente && j.cuerpo.clip >= 0) {
 		return;
 	}
+	// En el partido el cerebro decide cuánta ventaja pide para tirarse
+	// (cerebro.pesos.entrada_ventaja_seg).
+	double gana = modo == PARTIDO ? cerebro.pesos.entrada_ventaja_seg : GANA_CARRERA_SEG;
 	bool contiene = j.equipo != equipo_con_pelota && poseedor >= 0
 			&& jugadores[size_t(poseedor)].equipo == equipo_con_pelota
-			&& _t_llega[size_t(i)] > _t_llega[size_t(poseedor)] - GANA_CARRERA_SEG;
+			&& _t_llega[size_t(i)] > _t_llega[size_t(poseedor)] - gana;
 	if (_perseguidor[j.equipo] == i && contiene) {
 		// La tiene controlada otro y no le gana de mano: se para delante y
 		// espera el error (o el pase), no se tira a ciegas.
@@ -361,8 +432,32 @@ void Canchita::_plan_tocar(int i) {
 	V3 vp = k >= 0 ? trayectoria.vel[size_t(k)] : pelota.vel;
 
 	j.toque = TOQUE_CONTROL;
+	j.rapidez_pase = 0.0;
+	j.tipo_pase = DEC_NADA;
+	int corredor_pared = -1;
+	double retorno_x = 0.0, retorno_z = 0.0;
+	bool devuelve_pared = modo == PARTIDO && ataca && _pase_activo && p.y <= param_toque.pie_hasta
+			&& cerebro.muro_de_pared(_mundo, corredor_pared, retorno_x, retorno_z) == i;
 	if (poseedor_ && ataca && p.y <= param_toque.pie_hasta) {
 		_decidir(i, p, t);
+	} else if (devuelve_pared) {
+		// El muro de la pared la devuelve de primera al que sale a buscarla.
+		Decision d;
+		d.tipo = DEC_PASE_HUECO;
+		d.receptor = corredor_pared;
+		d.tiene_punto = true;
+		d.x = retorno_x;
+		d.z = retorno_z;
+		Pase pase = _pase_a(i, p, t, d);
+		if (pase.hay) {
+			j.toque = TOQUE_PASE;
+			j.meta_x = pase.x;
+			j.meta_z = pase.z;
+			j.receptor = pase.receptor;
+			j.globo = pase.globo;
+			j.rapidez_pase = pase.rapidez;
+			j.tipo_pase = DEC_PASE_HUECO;
+		}
 	} else if (ataca && _pase_activo && p.y <= param_toque.pie_hasta
 			&& _rival_mas_cerca(i, p.x, p.z) < param_toque.presion_m + 1.0) {
 		// De primera: con un rival encima no hay tiempo de parar la pelota.
@@ -466,8 +561,10 @@ void Canchita::_avisar_receptor(int pateador) {
 	r.toque = TOQUE_CONTROL;
 	V3 meta = { jp.meta_x, param_pelota.radio, jp.meta_z };
 	_orientar(_receptor, meta);
-	// De frente a la pelota que viene, con el pie en el punto.
-	r.cuerpo.ir_a(jp.meta_x + dx / l * ALCANCE_PLAN_M, jp.meta_z + dz / l * ALCANCE_PLAN_M, FACTOR_RECIBIR, true);
+	// De frente a la pelota que viene, con el pie en el punto. Al espacio pica
+	// a fondo: la rapidez del pase se calculó con él corriendo a su punta.
+	double factor = modo == PARTIDO && _pase_al_espacio ? 1.0 : FACTOR_RECIBIR;
+	r.cuerpo.ir_a(jp.meta_x + dx / l * ALCANCE_PLAN_M, jp.meta_z + dz / l * ALCANCE_PLAN_M, factor, true);
 	r.cuerpo.mira = true;
 	r.cuerpo.mira_x = pelota.pos.x;
 	r.cuerpo.mira_z = pelota.pos.z;
@@ -525,6 +622,10 @@ void Canchita::_orientar(int i, V3 bola) {
 
 // El poseedor: pase o conducción.
 void Canchita::_decidir(int i, V3 bola, double t_patada) {
+	if (modo == PARTIDO) {
+		_decidir_partido(i, bola, t_patada);
+		return;
+	}
 	JugadorCanchita &j = jugadores[size_t(i)];
 	Pase pase = _planear_pase(i, bola, t_patada);
 	double presion = _rival_mas_cerca(i, bola.x, bola.z);
@@ -573,12 +674,12 @@ void Canchita::_decidir(int i, V3 bola, double t_patada) {
 // Pase al punto de encuentro (docs/motor_v2.md, Simple Soccer): a los pies o
 // a una de las dos tangentes al círculo que el receptor cubre mientras viaja
 // la pelota. Cada punto se prueba con los tiempos de llegada de cada rival.
-Canchita::Pase Canchita::_planear_pase(int i, V3 bola, double t_patada) {
+Canchita::Pase Canchita::_planear_pase(int i, V3 bola, double t_patada, int solo) {
 	const JugadorCanchita &j = jugadores[size_t(i)];
 	Pase mejor;
 	for (size_t r = 0; r < jugadores.size(); r++) {
 		const JugadorCanchita &jr = jugadores[r];
-		if (int(r) == i || jr.equipo != j.equipo) {
+		if (int(r) == i || jr.equipo != j.equipo || (solo >= 0 && int(r) != solo)) {
 			continue;
 		}
 		const Cuerpo &cr = jr.cuerpo;
@@ -770,7 +871,10 @@ void Canchita::_ubicar(int i) {
 	Cuerpo &c = j.cuerpo;
 	V3 bola = pelota.pos;
 	double qx = c.x, qz = c.z, factor = 0.7;
-	if (modo == RONDO) {
+	bool frenar = true;
+	if (modo == PARTIDO) {
+		_ubicar_partido(i, qx, qz, factor, frenar);
+	} else if (modo == RONDO) {
 		const double h = RONDO_LADO * 0.5;
 		if (j.equipo == 0) {
 			// Sobre su lado, donde la línea de pase queda más libre.
@@ -865,7 +969,7 @@ void Canchita::_ubicar(int i) {
 	}
 	qx = std::clamp(qx, -_medio_x() - 0.5, _medio_x() + 0.5);
 	qz = std::clamp(qz, -_medio_z() - 0.5, _medio_z() + 0.5);
-	c.ir_a(qx, qz, factor, true);
+	c.ir_a(qx, qz, factor, frenar);
 	c.mira = true;
 	c.mira_x = bola.x;
 	c.mira_z = bola.z;
@@ -1069,6 +1173,8 @@ void Canchita::_tocar(int i, double distancia) {
 	bool pase_en_juego = _pase_activo;
 	bool ataca = j.equipo == equipo_con_pelota;
 	int tipo = j.toque;
+	int receptor_previo = _receptor;
+	bool al_espacio_previo = _pase_al_espacio;
 	bool poseedor_ = ultimo_toque == i && (ultimo_tipo == TOQUE_CONTROL || ultimo_tipo == TOQUE_CONDUCE);
 	// Pase de primera: el receptor de un pase la puede mandar sin pararla.
 	bool de_primera = tipo == TOQUE_PASE && pase_en_juego && !poseedor_;
@@ -1089,7 +1195,7 @@ void Canchita::_tocar(int i, double distancia) {
 			double dx = j.meta_x - pelota.pos.x, dz = j.meta_z - pelota.pos.z;
 			double d = std::max(hipot(dx, dz), 0.5);
 			int k;
-			rapidez = j.globo ? _rapidez_globo(d, k) : _rapidez_raso(d, k);
+			rapidez = j.rapidez_pase > 0.0 ? j.rapidez_pase : (j.globo ? _rapidez_globo(d, k) : _rapidez_raso(d, k));
 			if (rapidez < 0.0) {
 				rapidez = j.globo ? 12.0 : param_toque.pase_max_ms;
 			}
@@ -1119,6 +1225,34 @@ void Canchita::_tocar(int i, double distancia) {
 				} else {
 					cuenta.completados_otro++;
 				}
+			}
+			if (modo == PARTIDO) {
+				_armar_mundo();
+				if (cerebro.en_offside(_mundo, j.receptor)) {
+					cuenta.offsides++;
+				}
+				_pase_al_espacio = false;
+				if (j.receptor >= 0 && j.rapidez_pase > 0.0) {
+					const Cuerpo &cr = jugadores[size_t(j.receptor)].cuerpo;
+					_pase_al_espacio = (j.meta_x - cr.x) * _ataca(j.equipo) > 2.0;
+				}
+				if (_pase_al_espacio) {
+					cuenta.pases_al_espacio++;
+				}
+				if (j.tipo_pase != DEC_NADA && j.hay_decision && j.decision.corrida_preparada) {
+					cuenta.pases_a_corrida++;
+				}
+				int corredor;
+				double rx, rz;
+				if (cerebro.muro_de_pared(_mundo, corredor, rx, rz) == i) {
+					cuenta.paredes_devueltas++;
+					cerebro.terminar_pared();
+				}
+				if (j.tipo_pase == DEC_PARED && j.hay_decision) {
+					cerebro.anotar_pared(_mundo, j.receptor, j.decision.corredor, j.decision.retorno_x,
+							j.decision.retorno_z);
+				}
+				cerebro.anotar_pase(_mundo, i, j.receptor);
 			}
 			_pase_activo = true;
 			_pateador = i;
@@ -1177,13 +1311,31 @@ void Canchita::_tocar(int i, double distancia) {
 			break;
 		}
 	}
+	if (modo == PARTIDO && ataca && pase_en_juego && (tipo == TOQUE_CONTROL || de_primera)) {
+		// Un pase completado entre compañeros.
+		_pases_posesion++;
+		if (al_espacio_previo && i == receptor_previo) {
+			cuenta.pases_al_espacio_completos++;
+		}
+	}
 	if (!ataca) {
+		if (modo == PARTIDO) {
+			_cerrar_posesion();
+			cerebro.terminar_pared();
+		}
 		// El rival la tocó: corte si venía un pase, si no quite.
 		if (pase_en_juego) {
 			cuenta.cortes++;
 			cuenta.corte_mas_lejos_m = std::max(cuenta.corte_mas_lejos_m, distancia);
 		} else {
 			cuenta.quites++;
+			if (ultimo_tipo == TOQUE_CONDUCE) {
+				cuenta.quites_conduccion++;
+			} else if (ultimo_tipo == TOQUE_CONTROL) {
+				cuenta.quites_control++;
+			} else {
+				cuenta.quites_suelta++;
+			}
 		}
 		if (modo == RONDO) {
 			_reinicio_en = paso + RONDO_ESPERA_CORTE;
@@ -1202,6 +1354,13 @@ void Canchita::_tocar(int i, double distancia) {
 	j.toque_pendiente = false;
 	j.persigue = false;
 	j.pensar_ya = true;
+	// La conducción que el cerebro pidió sigue hasta que vence (cadencia);
+	// cualquier otro toque vuelve a decidir.
+	if (tipo != TOQUE_CONDUCE || j.decision.tipo != DEC_CONDUCIR) {
+		j.hay_decision = false;
+	}
+	j.rapidez_pase = 0.0;
+	j.tipo_pase = DEC_NADA;
 	j.inmune_hasta = paso + int64_t(param_toque.sin_rebote_seg / PASO_SEG + 0.5);
 	ultimo_toque = i;
 	ultimo_tipo = tipo;
@@ -1264,6 +1423,10 @@ bool Canchita::_rebotes() {
 }
 
 void Canchita::_reglas() {
+	if (modo == PARTIDO) {
+		_reglas_partido();
+		return;
+	}
 	if (_reinicio_en >= 0 && paso >= _reinicio_en) {
 		_reinicio_en = -1;
 		_reiniciar(0, pelota.pos.x, pelota.pos.z);
@@ -1319,6 +1482,9 @@ void Canchita::_reiniciar(int equipo, double x, double z) {
 		bz = std::clamp(z, -_medio_z() + 0.3, _medio_z() - 0.3);
 	}
 	pelota.poner({ bx, param_pelota.radio, bz }, {}, {});
+	if (modo == PARTIDO && equipo != equipo_con_pelota) {
+		_cerrar_posesion();
+	}
 	equipo_con_pelota = equipo;
 	poseedor = saca;
 	ultimo_toque = saca;
@@ -1441,4 +1607,343 @@ uint64_t Canchita::huella() const {
 	mezclar(pelota.vel.y);
 	mezclar(pelota.vel.z);
 	return h;
+}
+
+// --- Partido (etapa 4): el cerebro de verdad ---
+
+// La foto que lee el cerebro.
+void Canchita::_armar_mundo() {
+	size_t n = jugadores.size();
+	_mundo.jugadores.resize(n);
+	for (size_t i = 0; i < n; i++) {
+		const Cuerpo &c = jugadores[i].cuerpo;
+		JugadorVisto &v = _mundo.jugadores[i];
+		v.x = c.x;
+		v.z = c.z;
+		v.vx = c.vx;
+		v.vz = c.vz;
+		v.vel_max = c.vel_max * c.cansancio;
+		v.aceleracion = c.aceleracion * c.cansancio;
+		v.resistencia = 1.0;
+		mate::seno_coseno(c.rumbo, v.mira_x, v.mira_z);
+	}
+	_mundo.pelota_x = pelota.pos.x;
+	_mundo.pelota_z = pelota.pos.z;
+	_mundo.poseedor = poseedor;
+	_mundo.equipo_con_pelota = equipo_con_pelota;
+	_mundo.con_pelota_seg = poseedor >= 0 ? double(paso - _desde_control) * PASO_SEG : 0.0;
+	_mundo.segundos = double(paso) * PASO_SEG;
+	_mundo.minuto = _mundo.segundos / 60.0;
+	_mundo.detenido = false;
+}
+
+void Canchita::_ubicar_partido(int i, double &qx, double &qz, double &factor, bool &frenar) {
+	Objetivo o = cerebro.objetivo(_mundo, i);
+	qx = o.x;
+	qz = o.z;
+	factor = o.factor;
+	frenar = o.frenar;
+}
+
+// El poseedor le pregunta al cerebro. La decisión vale un rato: la conducción
+// hasta su cadencia (MotorEspacial.cadencia_de_decision) y el pase hasta que
+// sale; si no, a cada paso cambiaría de idea por el sorteo del softmax.
+void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
+	JugadorCanchita &j = jugadores[size_t(i)];
+	double tiene = double(paso - _desde_control) * PASO_SEG;
+	double cadencia = cerebro.cadencia_seg(i);
+	if (!j.hay_decision || paso >= j.decision_hasta) {
+		// El motor espacial aguantaba la cadencia con la pelota pegada al pie y
+		// el robo era un duelo. Acá la conducción la deja suelta entre toques:
+		// con un rival encima, aguantar era regalarla (16 quites por minuto).
+		bool puede_pasar = tiene >= cadencia || _rival_mas_cerca(i, bola.x, bola.z) < param_toque.presion_m + 1.0;
+		_plan_bola = bola;
+		_plan_t = t_patada;
+		cerebro.planeador = this;
+		j.decision = cerebro.decidir(_mundo, i, puede_pasar, _azar);
+		cerebro.planeador = nullptr;
+		j.hay_decision = true;
+		double vale = cerebro.pesos.decision_vigencia_seg;
+		if (j.decision.tipo == DEC_CONDUCIR) {
+			vale = puede_pasar ? cadencia : std::max(cadencia - tiene, PASO_SEG);
+		}
+		j.decision_hasta = paso + std::max<int64_t>(1, int64_t(vale / PASO_SEG + 0.5));
+	}
+	const Decision &d = j.decision;
+	if (d.tipo != DEC_CONDUCIR && d.tipo != DEC_NADA) {
+		Pase pase = _pase_a(i, bola, t_patada, d);
+		if (pase.hay) {
+			j.toque = TOQUE_PASE;
+			j.meta_x = pase.x;
+			j.meta_z = pase.z;
+			j.receptor = pase.receptor;
+			j.globo = pase.globo;
+			j.rapidez_pase = pase.rapidez;
+			j.tipo_pase = d.tipo;
+			return;
+		}
+	}
+	// Conduce por el carril que eligió el cerebro, sin irse de la cancha. El
+	// cuerpo protege la pelota: la aleja del rival más cercano igual que el
+	// control orientado (_orientar). Con el carril solo, la pelota iba suelta
+	// hacia el que presionaba y se perdían 8 pelotas por minuto conduciendo.
+	double dx = d.tipo == DEC_CONDUCIR ? d.dir_x : _ataca(j.equipo);
+	double dz = d.tipo == DEC_CONDUCIR ? d.dir_z : 0.0;
+	{
+		int cerca = -1;
+		double d_cerca = 1e9;
+		for (size_t o = 0; o < jugadores.size(); o++) {
+			if (jugadores[o].equipo == j.equipo) {
+				continue;
+			}
+			double e = hipot(jugadores[o].cuerpo.x - bola.x, jugadores[o].cuerpo.z - bola.z);
+			if (e < d_cerca) {
+				d_cerca = e;
+				cerca = int(o);
+			}
+		}
+		if (cerca >= 0 && d_cerca < 6.0 && d_cerca > 1e-6) {
+			double peso = 1.5 * (6.0 - d_cerca) / 6.0;
+			dx += (bola.x - jugadores[size_t(cerca)].cuerpo.x) / d_cerca * peso;
+			dz += (bola.z - jugadores[size_t(cerca)].cuerpo.z) / d_cerca * peso;
+		}
+		double l0 = hipot(dx, dz);
+		if (l0 > 1e-9) {
+			dx /= l0;
+			dz /= l0;
+		}
+	}
+	double qx = std::clamp(bola.x + dx * 5.0, -_medio_x() + 2.0, _medio_x() - 2.0);
+	double qz = std::clamp(bola.z + dz * 5.0, -_medio_z() + 2.0, _medio_z() - 2.0);
+	double l = hipot(qx - bola.x, qz - bola.z);
+	if (l > 1e-6) {
+		j.dir_x = (qx - bola.x) / l;
+		j.dir_z = (qz - bola.z) / l;
+	} else {
+		j.dir_x = _ataca(j.equipo);
+		j.dir_z = 0.0;
+	}
+	// Más largo con espacio, más corto con mejor control (igual que el partidito).
+	double presion = _rival_mas_cerca(i, bola.x, bola.z);
+	double espacio = std::clamp((presion - 2.0) / 4.0, 0.0, 1.0);
+	double largo = (param_toque.toque_corto_m + (param_toque.toque_largo_m - param_toque.toque_corto_m) * espacio)
+			* (1.2 - 0.4 * j.control / 100.0);
+	double corre = std::min(j.cuerpo.vel_max * j.cuerpo.cansancio * param_toque.conduccion_factor,
+			j.cuerpo.rapidez() + j.cuerpo.aceleracion * 0.5);
+	j.toque = TOQUE_CONDUCE;
+	j.rapidez_toque = _rapidez_conduce(corre, largo);
+}
+
+// La rapidez con la que la pelota llega al punto cuando llega el receptor (o
+// apenas después), todavía rodando: la más baja que llega a tiempo. Si él
+// llega antes que un pase normal (_rapidez_raso), va el pase normal y la
+// espera: apurando la pelota para que llegue con él salían pases a 16 m/s a
+// 10 m que el receptor no alcanzaba a parar.
+double Canchita::_rapidez_al_espacio(double d, double t_receptor, double t_patada) {
+	int k_raso;
+	double normal = _rapidez_raso(d, k_raso);
+	if (normal > 0.0 && k_raso >= 0 && t_patada + double(k_raso + 1) * PASO_SEG >= t_receptor) {
+		return normal;
+	}
+	int desde = int(param_toque.pase_min_ms / Perfiles::PASO_RAPIDEZ + 0.5);
+	int hasta = int(param_toque.pase_max_ms / Perfiles::PASO_RAPIDEZ + 0.5);
+	for (int iv = desde; iv <= hasta; iv++) {
+		double v = Perfiles::rapidez_de(iv);
+		const Perfil &p = _perfiles.de(v, false);
+		int k = p.paso_a(d);
+		if (k < 0 || p.rapidez[size_t(k)] < ESPACIO_RESTO_MS) {
+			continue;
+		}
+		if (t_patada + double(k + 1) * PASO_SEG <= t_receptor + ESPACIO_TARDE_SEG) {
+			return v;
+		}
+	}
+	int k;
+	return _rapidez_raso(d, k);
+}
+
+// El pase que pidió el cerebro, con la física del toque (etapa 3): a los pies
+// o a una tangente del receptor, al espacio con la rapidez justa, o globo.
+Canchita::Pase Canchita::_pase_a(int i, V3 bola, double t_patada, const Decision &d) {
+	Pase r;
+	int receptor = d.receptor;
+	double tx, tz;
+	if (d.tiene_punto) {
+		tx = d.x;
+		tz = d.z;
+	} else if (receptor >= 0) {
+		tx = jugadores[size_t(receptor)].cuerpo.x;
+		tz = jugadores[size_t(receptor)].cuerpo.z;
+	} else {
+		return r;
+	}
+	if (d.tipo == DEC_DESPEJE) {
+		// No busca a nadie; el receptor es el compañero más cerca de donde cae.
+		double mejor = 1e18;
+		for (size_t o = 0; o < jugadores.size(); o++) {
+			if (int(o) == i || jugadores[o].equipo != jugadores[size_t(i)].equipo) {
+				continue;
+			}
+			double e = hipot(jugadores[o].cuerpo.x - tx, jugadores[o].cuerpo.z - tz);
+			if (e < mejor) {
+				mejor = e;
+				receptor = int(o);
+			}
+		}
+	}
+	double dx = tx - bola.x, dz = tz - bola.z;
+	double dd = hipot(dx, dz);
+	if (dd < 1.0) {
+		return r;
+	}
+	bool globo = d.tipo == DEC_PASE_LARGO || d.tipo == DEC_CENTRO || d.tipo == DEC_DESPEJE;
+	if (globo) {
+		// Si ni el globo más fuerte llega, cae más cerca en la misma línea.
+		int k;
+		double v = _rapidez_globo(dd, k);
+		while (v < 0.0 && dd > 8.0) {
+			dd -= 3.0;
+			v = _rapidez_globo(dd, k);
+		}
+		if (v < 0.0) {
+			return r;
+		}
+		r.hay = true;
+		r.receptor = receptor;
+		r.x = bola.x + dx / hipot(dx, dz) * dd;
+		r.z = bola.z + dz / hipot(dx, dz) * dd;
+		r.globo = true;
+		return r;
+	}
+	if (!d.tiene_punto) {
+		// A los pies o a una tangente de ese receptor, lo que mejor le gane a
+		// los rivales; si ninguno sirve, a los pies igual (el softmax ya pesó
+		// el riesgo de esa línea).
+		Pase p = _planear_pase(i, bola, t_patada, receptor);
+		if (p.hay) {
+			return p;
+		}
+		r.hay = true;
+		r.receptor = receptor;
+		r.x = tx;
+		r.z = tz;
+		return r;
+	}
+	// Al espacio: el receptor sale apenas sale la pelota (le avisan).
+	const Cuerpo &cr = jugadores[size_t(receptor)].cuerpo;
+	double t_receptor = t_patada + tiempo_de_llegada(cr, tx, tz, ALCANCE_PLAN_M, 1.0);
+	double v = _rapidez_al_espacio(dd, t_receptor, t_patada);
+	if (v < 0.0) {
+		return r;
+	}
+	r.hay = true;
+	r.receptor = receptor;
+	r.x = tx;
+	r.z = tz;
+	r.rapidez = v;
+	return r;
+}
+
+double Canchita::margen_pase(int de, int a) {
+	Pase p = _planear_pase(de, _plan_bola, _plan_t, a);
+	return p.hay ? p.margen : -1e9;
+}
+
+double Canchita::margen_al_punto(int de, int a, double x, double z) {
+	double dx = x - _plan_bola.x, dz = z - _plan_bola.z;
+	double d = hipot(dx, dz);
+	if (d < 1.0 || a < 0) {
+		return -1e9;
+	}
+	const Cuerpo &cr = jugadores[size_t(a)].cuerpo;
+	double t_receptor = _plan_t + tiempo_de_llegada(cr, x, z, ALCANCE_PLAN_M, 1.0);
+	double v = _rapidez_al_espacio(d, t_receptor, _plan_t);
+	if (v < 0.0) {
+		return -1e9;
+	}
+	const Perfil &perfil = _perfiles.de(v, false);
+	int k = perfil.paso_a(d);
+	if (k < 0) {
+		return -1e9;
+	}
+	return _margen(de, _plan_bola, dx / d, dz / d, perfil, k, _plan_t);
+}
+
+double Canchita::margen_globo(int de, double x, double z) {
+	double dx = x - _plan_bola.x, dz = z - _plan_bola.z;
+	double d = hipot(dx, dz);
+	if (d < 1.0) {
+		return -1e9;
+	}
+	int k;
+	double v = _rapidez_globo(d, k);
+	while (v < 0.0 && d > 8.0) {
+		d -= 3.0;
+		v = _rapidez_globo(d, k);
+	}
+	if (v < 0.0 || k < 0) {
+		return -1e9;
+	}
+	double l = hipot(dx, dz);
+	return _margen(de, _plan_bola, dx / l, dz / l, _perfiles.de(v, true), k, _plan_t);
+}
+
+// Sin reglas de verdad (etapa 6): la pelota que sale vuelve con un lateral, un
+// córner o un saque de arco, y controlarla en el área rival es una llegada.
+bool Canchita::_reglas_partido() {
+	if (poseedor >= 0 && paso >= _reinicio_hasta) {
+		const JugadorCanchita &j = jugadores[size_t(poseedor)];
+		double ax = Cerebro::MEDIO_LARGO * _ataca(j.equipo);
+		if (std::abs(ax - pelota.pos.x) <= Cerebro::AREA_LARGO && std::abs(pelota.pos.z) <= Cerebro::AREA_MEDIO_ANCHO) {
+			cuenta.llegadas[j.equipo & 1]++;
+			int saca = 1 - j.equipo;
+			cuenta.saques_de_arco++;
+			_reiniciar(saca, -_ataca(saca) * (Cerebro::MEDIO_LARGO - SAQUE_DE_ARCO_M), 0.0);
+			return true;
+		}
+	}
+	if (_adentro(pelota.pos.x, pelota.pos.z, param_pelota.radio)) {
+		return false;
+	}
+	cuenta.salidas++;
+	if (_pase_activo) {
+		cuenta.pases_afuera++;
+	}
+	int toco = ultimo_toque >= 0 ? jugadores[size_t(ultimo_toque)].equipo : equipo_con_pelota;
+	if (std::abs(pelota.pos.x) > _medio_x() + param_pelota.radio) {
+		// Por el fondo: el equipo 1 defiende el arco de +x.
+		int defiende = pelota.pos.x > 0.0 ? 1 : 0;
+		if (toco != defiende) {
+			cuenta.saques_de_arco++;
+			_reiniciar(defiende, -_ataca(defiende) * (Cerebro::MEDIO_LARGO - SAQUE_DE_ARCO_M), 0.0);
+		} else {
+			cuenta.corners++;
+			double lado = pelota.pos.z >= 0.0 ? 1.0 : -1.0;
+			_reiniciar(1 - defiende, pelota.pos.x > 0.0 ? _medio_x() : -_medio_x(), lado * _medio_z());
+		}
+	} else {
+		cuenta.laterales++;
+		_reiniciar(1 - toco, pelota.pos.x, pelota.pos.z);
+	}
+	return true;
+}
+
+void Canchita::_cerrar_posesion() {
+	if (modo != PARTIDO) {
+		return;
+	}
+	cuenta.posesiones++;
+	cuenta.pases_en_posesiones += _pases_posesion;
+	if (_pases_posesion >= 3) {
+		cuenta.posesiones_3_pases++;
+	}
+	if (_pases_posesion >= 5) {
+		cuenta.posesiones_5_pases++;
+	}
+	cuenta.max_pases_posesion = std::max<int64_t>(cuenta.max_pases_posesion, _pases_posesion);
+	_pases_posesion = 0;
+	_pase_al_espacio = false;
+	for (JugadorCanchita &j : jugadores) {
+		j.hay_decision = false;
+	}
 }

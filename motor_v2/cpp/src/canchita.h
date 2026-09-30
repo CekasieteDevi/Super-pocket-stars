@@ -14,9 +14,17 @@
 // ventana de contacto su pie (o su pecho, o su frente) está en la pelota, la
 // toca. Los cerebros son del banco: los de verdad llegan en la etapa 4.
 //
+// Etapa 4 suma un tercer juego:
+// - PARTIDO: 11 contra 11 en la cancha entera, sin arqueros que atajen ni
+//   reglas (etapa 5 y 6). Los cerebros son los de verdad (cerebro/cerebro.h):
+//   el poseedor decide con la utility AI del motor espacial y los demás van
+//   adonde el cerebro les pide. Si un equipo controla la pelota en el área
+//   rival, cuenta como llegada y el otro saca del arco.
+//
 // Sin Godot: solo C++ y matematica_fija.h.
 
 #include "azar.h"
+#include "cerebro/cerebro.h"
 #include "cuerpo.h"
 #include "pelota.h"
 #include "toque.h"
@@ -32,6 +40,7 @@ enum ModoCanchita : int {
 	// Para los tests: cada uno se queda en su lugar (poner_jugador) y solo va
 	// a la pelota que se lanza (lanzar). El que la controla no sigue.
 	PRUEBA = 2,
+	PARTIDO = 3,
 };
 
 enum TipoToque : int {
@@ -82,6 +91,31 @@ struct ContadoresCanchita {
 	// los choques entre cuerpos).
 	double peor_salto_cuerpo_m = 0.0;
 	double posesion_seg[2] = { 0.0, 0.0 };
+
+	// PARTIDO (etapa 4, docs/motor_v2.md "Pasa si").
+	// Posesiones: cada vez que la pelota cambia de equipo. Los pases son los
+	// completados entre compañeros durante esa posesión.
+	int64_t posesiones = 0;
+	int64_t pases_en_posesiones = 0;
+	int64_t posesiones_3_pases = 0;
+	int64_t posesiones_5_pases = 0;
+	int64_t max_pases_posesion = 0;
+	// Pases a un punto por delante del receptor (al hueco o al desmarque).
+	int64_t pases_al_espacio = 0;
+	int64_t pases_al_espacio_completos = 0;
+	// Salieron hacia la corrida que el cerebro ya había preparado.
+	int64_t pases_a_corrida = 0;
+	int64_t offsides = 0;
+	int64_t llegadas[2] = { 0, 0 };
+	int64_t saques_de_arco = 0;
+	int64_t laterales = 0;
+	int64_t corners = 0;
+	int64_t paredes_devueltas = 0;
+	// De dónde salen los quites: la pelota venía de una conducción, de un
+	// control, o suelta (rebote, pelota que nadie tenía).
+	int64_t quites_conduccion = 0;
+	int64_t quites_control = 0;
+	int64_t quites_suelta = 0;
 };
 
 struct JugadorCanchita {
@@ -118,9 +152,18 @@ struct JugadorCanchita {
 	double casa_x = 0.0, casa_z = 0.0;
 	double quieto_seg = 0.0;
 	double rapidez_previa = 0.0;
+	// PARTIDO: lo que decidió el cerebro y hasta qué paso vale.
+	Decision decision;
+	bool hay_decision = false;
+	int64_t decision_hasta = 0;
+	// Rapidez planeada del pase (al espacio); 0 = la calcula el toque.
+	double rapidez_pase = 0.0;
+	// La decisión del cerebro que armó el pase de este toque (DEC_NADA si no
+	// salió del cerebro).
+	int tipo_pase = DEC_NADA;
 };
 
-class Canchita {
+class Canchita : public Planeador {
 public:
 	static constexpr double PASO_SEG = 1.0 / 60.0;
 	// Cuánto adelanta la pelota el que planea: 5 s.
@@ -131,6 +174,9 @@ public:
 	static constexpr double PARTIDITO_LARGO = 40.0;
 	static constexpr double PARTIDITO_ANCHO = 30.0;
 	static constexpr double RAPIDEZ_QUIETO = 0.5;
+	// Partido: la cancha entera (la misma del motor espacial).
+	static constexpr double PARTIDO_LARGO = Cerebro::LARGO;
+	static constexpr double PARTIDO_ANCHO = Cerebro::ANCHO;
 
 	ParametrosPelota param_pelota;
 	ParametrosCuerpo param_cuerpo;
@@ -138,6 +184,8 @@ public:
 	std::vector<Clip> clips;
 
 	std::vector<JugadorCanchita> jugadores;
+	// PARTIDO: una ficha por jugador, en el mismo orden (ver cerebro.fichas).
+	Cerebro cerebro;
 	Pelota pelota;
 	Trayectoria trayectoria;
 	ContadoresCanchita cuenta;
@@ -157,9 +205,19 @@ public:
 	void lanzar(V3 p, V3 v, V3 giro, int equipo);
 	void avanzar();
 	uint64_t huella() const;
+
+	// Planeador (cerebro.h): el margen de un pase con la física del toque,
+	// desde la pelota y el momento de la patada del que está decidiendo.
+	double margen_pase(int de, int a) override;
+	double margen_al_punto(int de, int a, double x, double z) override;
+	double margen_globo(int de, double x, double z) override;
 	// El receptor del pase que viaja (-1 si no hay pase).
 	int receptor() const {
 		return _pase_activo ? _receptor : -1;
+	}
+	// La foto que lee el cerebro (se arma en cada paso del PARTIDO).
+	const Mundo &mundo() const {
+		return _mundo;
 	}
 
 private:
@@ -180,6 +238,14 @@ private:
 	int64_t _reinicio_en = -1;
 	int64_t _reinicio_hasta = -1;
 	bool _cambio = false;
+	// PARTIDO.
+	Mundo _mundo;
+	int _pases_posesion = 0;
+	bool _pase_al_espacio = false;
+	// Desde dónde y en cuántos segundos patea el que decide (Planeador).
+	V3 _plan_bola;
+
+	double _plan_t = 0.0;
 
 	double _medio_x() const;
 	double _medio_z() const;
@@ -211,8 +277,11 @@ private:
 		bool globo = false;
 		double margen = -1e9;
 		double puntaje = -1e9;
+		// Rapidez planeada (pase al espacio); 0 = la del toque.
+		double rapidez = 0.0;
 	};
-	Pase _planear_pase(int i, V3 bola, double t_patada);
+	// `solo`: solo a ese receptor (el que eligió el cerebro).
+	Pase _planear_pase(int i, V3 bola, double t_patada, int solo = -1);
 	double _margen(int i, V3 bola, double dx, double dz, const Perfil &perfil, int k_fin, double t_patada) const;
 	double _rapidez_raso(double d, int &k);
 	double _rapidez_globo(double d, int &k);
@@ -228,6 +297,15 @@ private:
 	void _asignar_marcas();
 	void _separar_cuerpos();
 	void _medir();
+
+	// PARTIDO.
+	void _armar_mundo();
+	void _ubicar_partido(int i, double &qx, double &qz, double &factor, bool &frenar);
+	void _decidir_partido(int i, V3 bola, double t_patada);
+	Pase _pase_a(int i, V3 bola, double t_patada, const Decision &d);
+	double _rapidez_al_espacio(double d, double t_receptor, double t_patada);
+	bool _reglas_partido();
+	void _cerrar_posesion();
 };
 
 } // namespace motor_v2

@@ -93,6 +93,12 @@ static func parametros_toque() -> Dictionary:
 	return (datos()["toque"] as Dictionary).duplicate(true)
 
 
+## Lo nuevo del cerebro (etapa 4; CanchitaV2Nativa.configurar_cerebro):
+## data/fisica_v2.json, "cerebro". El resto de sus pesos es MotorEspacial.pesos().
+static func parametros_cerebro() -> Dictionary:
+	return (datos()["cerebro"] as Dictionary).duplicate(true)
+
+
 ## El físico de fisico_de más lo que usa el toque (etapa 3): pases y control,
 ## como los de Player (0..100).
 static func jugador_de(atributos: Dictionary, energia := 1.0) -> Dictionary:

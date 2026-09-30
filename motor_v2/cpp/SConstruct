@@ -20,6 +20,6 @@ if env["platform"] != "windows":
     env.Append(CCFLAGS=["-ffp-contract=off"])
 biblioteca = env.SharedLibrary(
     "../bin/libmotor_v2{}{}".format(env["suffix"], env["SHLIBSUFFIX"]),
-    source=Glob("src/*.cpp"),
+    source=Glob("src/*.cpp") + Glob("src/cerebro/*.cpp"),
 )
 Default(biblioteca)
