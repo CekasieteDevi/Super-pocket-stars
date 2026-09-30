@@ -8,5 +8,7 @@ compatibility_minimum = "4.7"
 [libraries]
 windows.debug.x86_64 = "res://motor_v2/bin/libmotor_v2.windows.template_release.x86_64.dll"
 windows.release.x86_64 = "res://motor_v2/bin/libmotor_v2.windows.template_release.x86_64.dll"
+linux.debug.x86_64 = "res://motor_v2/bin/libmotor_v2.linux.template_release.x86_64.so"
+linux.release.x86_64 = "res://motor_v2/bin/libmotor_v2.linux.template_release.x86_64.so"
 android.debug.arm64 = "res://motor_v2/bin/libmotor_v2.android.template_release.arm64.so"
 android.release.arm64 = "res://motor_v2/bin/libmotor_v2.android.template_release.arm64.so"

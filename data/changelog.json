@@ -1,4 +1,5 @@
 [
+	{"version": "0.7.61", "fecha": "2026-09-29", "cambio": "Queda escrito cómo se construye el motor nuevo del partido, todo en C++ para que ande rápido en el celular."},
 	{"version": "0.7.60", "fecha": "2026-09-29", "cambio": "En el partido 3D las sombras son manchas debajo de cada jugador y de la pelota, y el partido se ve más fluido en el celular."},
 	{"version": "0.7.59", "fecha": "2026-09-29", "cambio": "En el partido 3D el arquero agarra la pelota, la saca con la mano o de volea, y ataja según la altura a la que va el tiro."},
 	{"version": "0.7.58", "fecha": "2026-09-29", "cambio": "Los cambios de jugadores se hacen siempre por la banda de abajo, donde está el cuarto árbitro."},

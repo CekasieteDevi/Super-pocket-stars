@@ -11,6 +11,8 @@ El Motor V2 es un partido que se simula directamente en 3D y en tiempo real: la 
 
 **Qué cambia.** Tres relojes en vez de uno: la física corre a 60 Hz, el cuerpo avanza con las restricciones de su animación, y la cabeza (la utility AI que ya existe) decide cada 0,1–0,2 s. Una acción no "pasa" en un tick: tiene preparación, frame de contacto y recuperación, y la pelota sale recién en el contacto. Un pase apunta al punto donde el receptor puede llegar a tiempo, así que su velocidad nunca se corrige.
 
+**En qué se escribe.** Todo el motor va en C++ como GDExtension (una biblioteca nativa que Godot carga): mundo, cuerpo, cerebro, reglas y registro. GDScript queda solo para la vista, el HUD, los menús y los bancos de prueba, que leen el estado del motor. Lo decidió la etapa 0: en el teléfono, el mundo solo en GDScript tardaba 25 s por partido y en C++ 1,5 s. Las reglas para escribir ese C++ están en "Cómo se escribe el C++".
+
 **Qué no cambia.** `match_engine.gd` sigue simulando los partidos de las otras divisiones. Atributos, tácticas, estilos, pesos de utility, relatos, estadísticas, modelos y animaciones de Blender se reusan. El modo 2D se abandona.
 
 **Definición de hecho del Motor V2** (no de este documento):
@@ -103,7 +105,9 @@ El cerebro pide, el cuerpo ejecuta y el mundo decide quién toca la pelota; regl
 
 ## Qué se reusa, qué se adapta y qué se tira
 
-Se reusa casi todo lo que define al jugador y al club; se reescribe lo que mueve cuerpos y pelota. El Motor V2 vive en una carpeta nueva (`motor_v2/`) y convive con `motor_espacial.gd` hasta la etapa 8, así el juego sigue andando mientras se construye.
+Se reusa casi todo lo que define al jugador y al club; se reescribe lo que mueve cuerpos y pelota. El Motor V2 vive en una carpeta nueva (`motor_v2/`, el C++ en `motor_v2/cpp/src/`) y convive con `motor_espacial.gd` hasta la etapa 8, así el juego sigue andando mientras se construye.
+
+"Se reusa" en la tabla quiere decir que se reusa la lógica y los números. Lo que corre durante el partido (modificadores, utilidades, árbitro, cansancio) se porta a C++. Los datos del club y de los jugadores los arma GDScript como hoy y se le pasan al motor al empezar el partido. Estadísticas y relato siguen en GDScript y leen los eventos que devuelve el motor.
 
 | Pieza | Qué es hoy | Destino en V2 |
 | --- | --- | --- |
@@ -112,7 +116,7 @@ Se reusa casi todo lo que define al jugador y al club; se reescribe lo que mueve
 | `core/cansancio.gd`, `lesiones.gd`, `arbitro.gd`, `clima.gd`, `estado_cancha.gd` | Energía, lesiones, tarjetas, clima, césped | **Se reusa**; el clima y el césped entran como rozamiento y pique de la pelota |
 | `core/jugadas.gd`, `penales.gd` | Jugadas preparadas y tanda | **Se reusa** la lógica; las jugadas pasan a ser planes del cerebro |
 | `data/utility_pesos.json` | Pesos de la utility AI | **Se reusa** como punto de partida; se recalibra en la etapa 7 |
-| `core/motor_espacial.gd` — cerebro | `evaluar_opciones`, `elegir_softmax`, `temperatura`, perfiles, ritmo, marcador, `_buscar_apoyo`, `_planificar_desmarques`, `_planificar_defensa`, arqueros, balón parado | **Se adapta**: se mudan a `motor_v2/cerebro/`, leen el mundo nuevo y devuelven intenciones |
+| `core/motor_espacial.gd` — cerebro | `evaluar_opciones`, `elegir_softmax`, `temperatura`, perfiles, ritmo, marcador, `_buscar_apoyo`, `_planificar_desmarques`, `_planificar_defensa`, arqueros, balón parado | **Se porta a C++** (`motor_v2/cpp/src/cerebro/`): lee el mundo nuevo y devuelve intenciones |
 | `core/motor_espacial.gd` — resolución | `_avanzar_pelota`, `_dirigir_pelota_a`, `_entregar_rodando`, `_completar_dirigida`, `_gana_intercepcion`, `modelo_destino_remate`, `_resolver_rebote` | **Se tira**: lo reemplazan el mundo y el cuerpo |
 | `core/motor_espacial.gd` — `_mover_hacia` y parámetros `fisica` | Aceleración, frenada, giro | **Se adapta** como locomoción del cuerpo a 60 Hz |
 | `core/estadisticas_partido.gd`, `match/relato_partido.gd` | Estadísticas y relato desde `eventos` | **Se reusan**: el V2 emite el mismo formato de eventos |
@@ -157,7 +161,7 @@ Banco: `motor_v2/banco_etapa0.tscn` (`mundo.gd`, `cerebro_falso.gd`, `vista_v2.g
 
 ### Etapa 1 — La pelota
 
-- **Qué:** `motor_v2/pelota.gd`: gravedad, arrastre, Magnus, giro que decae, pique con restitución y rozamiento que convierte deslizamiento en rodada, rodada con frenado, choque con palos, travesaño y red. Parámetros en `data/fisica_v2.json`; césped y clima los modifican.
+- **Qué:** la pelota en C++ (`motor_v2/cpp/src/pelota.h/.cpp`, a partir de la de `mundo_v2_nativo.cpp`): gravedad, arrastre, Magnus, giro que decae, pique con restitución y rozamiento que convierte deslizamiento en rodada, rodada con frenado, choque con palos, travesaño y red. Parámetros en `data/fisica_v2.json`; césped y clima los modifican.
 - **Banco:** escena `laboratorio_pelota.tscn` que dispara tiros, centros, globos, rebotes en el palo y saques de arco con la cámara actual.
 - **Pasa si:** el saque de arco pica 2 o 3 veces y rueda; un tiro con efecto se curva de forma visible; un tiro al palo rebota sin casos especiales; la pelota nunca avanza en un paso más de lo que da su velocidad (detector `SALTO_PELOTA` = 0 por construcción).
 
@@ -176,7 +180,7 @@ Banco: `motor_v2/banco_etapa0.tscn` (`mundo.gd`, `cerebro_falso.gd`, `vista_v2.g
 
 ### Etapa 4 — El cerebro
 
-- **Qué:** se mudan `evaluar_opciones`, `elegir_softmax`, perfiles, ritmo, marcador, desmarques, defensa y jugadas preparadas a `motor_v2/cerebro/`, devolviendo intenciones. Nuevo: puntaje de puntos de apoyo sobre una grilla (se le puede pasar, puede tirar, distancia al poseedor), línea defensiva y offside en el frame del pase.
+- **Qué:** se portan a C++ (`motor_v2/cpp/src/cerebro/`) `evaluar_opciones`, `elegir_softmax`, perfiles, ritmo, marcador, desmarques, defensa y jugadas preparadas, devolviendo intenciones. Nuevo: puntaje de puntos de apoyo sobre una grilla (se le puede pasar, puede tirar, distancia al poseedor), línea defensiva y offside en el frame del pase.
 - **Pasa si:** 11 vs 11 sin arqueros ni reglas durante 10 minutos con posesiones de varios pases, bloques que se desplazan con la pelota y pases al espacio que salen solos.
 
 ### Etapa 5 — Remates y arqueros
@@ -201,7 +205,38 @@ Banco: `motor_v2/banco_etapa0.tscn` (`mundo.gd`, `cerebro_falso.gd`, `vista_v2.g
 
 **Herramientas que acompañan todas las etapas:** un detector nuevo que mide sobre el mundo (no sobre la vista) `SALTO_PELOTA`, `ENCIMADOS` (cápsulas superpuestas), `PATINA` (pie que desliza), `ESPERA` (jugador quieto con la pelota viniendo a él) y ms por frame; y una grabación por semilla que se puede reproducir y rebobinar para ver cualquier minuto.
 
-**Dónde se hace cada etapa:** 0 (teléfono por adb) y 2 (Blender) en la PC del usuario; 1, 3, 4, 5, 6 y 7 se pueden hacer en la nube con Godot sin pantalla; la revisión visual de cada etapa, en la PC.
+**Dónde se hace cada etapa:** 0 (teléfono por adb) y 2 (Blender) en la PC del usuario; 1, 3, 4, 5, 6 y 7 se pueden hacer en la nube (Claude Cloud) con Godot sin pantalla; la revisión visual de cada etapa, en la PC.
+
+## Cómo se escribe el C++
+
+Reglas para todas las etapas. Salen de lo que midió la etapa 0.
+
+- **Todo el motor en C++.** Mundo, cuerpo, cerebro, reglas y registro van en `motor_v2/cpp/src/`. GDScript solo lee el estado (posiciones, acciones, eventos) para dibujar y contar. Nada de lógica del partido en GDScript.
+- **Paso fijo de 1/60 s** para mundo y cuerpo; el cerebro piensa cada 6 pasos, escalonado. Nada depende de los fps.
+- **Sin matemática del sistema.** Solo `std::sqrt` (IEEE 754 la redondea igual en todos lados). Seno, coseno y arcotangente salen de `matematica_fija.h`. Si hace falta otra (exp, pow, log), se escribe ahí con +, −, ×, ÷ y raíz. Sin esto, el mismo partido termina distinto en la PC y en Android.
+- **`-ffp-contract=off`** en todo lo que no compila MSVC (Android y Linux): sin eso clang junta a*b + c en una FMA que redondea distinto. Ya está en `SConstruct`.
+- **Un solo generador al azar,** el PCG32 propio de `MundoV2Nativo` (no el `RandomNumberGenerator` de Godot), consumido siempre en el mismo orden.
+- **Estado en `double`,** en arreglos planos. Nada de iterar contenedores sin orden fijo (`unordered_map`) en algo que cambia el partido.
+- **Parámetros en `data/fisica_v2.json`:** GDScript lee el JSON y se lo pasa al motor al crearlo. Así se calibran sin recompilar.
+- **Nombres, comentarios y mensajes en español,** con las mismas reglas de `CLAUDE.md` (el comentario dice por qué y contra qué se midió).
+- **Cada etapa tiene su verificación:** un test `tests/test_*.gd` que corre el motor sin vista y compara números (con `FALLOS=n`), y la huella del estado con la misma semilla.
+
+### Cómo se arma la extensión
+
+1. Instalá scons: `python -m pip install scons`.
+2. Cloná godot-cpp v10 fuera del repo: `git clone --depth 1 https://github.com/godotengine/godot-cpp` (en la PC está en `D:/dev-tools/godot-cpp`). Poné su ruta en la variable `GODOT_CPP`.
+3. Desde `motor_v2/cpp`, ejecutá `python -m SCons api_version=4.7 target=template_release platform=<windows|linux|android>` (Android además `arch=arm64 ANDROID_HOME=... ndk_version=28.2.13676358`).
+4. La biblioteca sale en `motor_v2/bin/`. Después de agregar clases nuevas, ejecutá `<godot> --path . --headless --editor --quit` para que Godot las registre.
+
+### Trabajar en la nube
+
+La sesión en la nube es Linux y no tiene pantalla, teléfono ni Blender.
+
+1. Bajá Godot 4.7.2 para Linux: `https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip`.
+2. Armá la extensión con `platform=linux` (pasos de arriba). `motor_v2/bin/motor_v2.gdextension` ya tiene la entrada de Linux.
+3. Corré los tests sin pantalla: `<godot> --path . --headless --script tests/<archivo>.gd`, y la regresión con `GODOT=<godot> bash tests/correr_regresion.sh <n>`.
+4. No se puede: armar la biblioteca de Windows ni la de Android, probar en el teléfono ni mirar cómo se ve. Si cambia el C++, las de `motor_v2/bin/` quedan viejas: anotalo en el commit ("falta rearmar Windows y Android") y se rearman en la PC.
+5. Commit y push a `graficos-3d` como siempre (changelog y regresión antes del commit).
 
 ## Presupuesto para Android
 
@@ -219,11 +254,11 @@ A 60 fps un frame dura 16,6 ms, y el objetivo es que la simulación use como má
 
 **Calor y batería.** Un partido animado dura varios minutos a pleno. La etapa 8 incluye una prueba de 3 partidos seguidos en el teléfono de referencia midiendo fps al final; si baja, la opción de 30 fps pasa a ser la de fábrica.
 
-**Determinismo.** GDScript usa `float` de 64 bits en todas las plataformas, pero funciones como `sin` o `atan2` pueden diferir en el último bit entre la PC y ARM. Garantizado: misma semilla, mismo partido en el mismo dispositivo. Entre PC y Android se verifica en la etapa 0 y, si difiere, los tests de regresión comparan estadísticas y no frames.
+**Determinismo.** Verificado en la etapa 0: con las reglas de "Cómo se escribe el C++" la misma semilla da el mismo partido en la PC y en Android (misma huella después de 90 minutos). Cada etapa vuelve a comparar la huella en los dos.
 
 ## Riesgos y decisiones abiertas
 
-El riesgo más grande es el rendimiento de GDScript en el teléfono, y por eso la etapa 0 va primero. El segundo es que la calibración lleve más que la construcción: cuando el resultado sale de la física, un cambio chico en el rozamiento mueve los goles por partido.
+El riesgo más grande era el rendimiento de GDScript en el teléfono; la etapa 0 lo cerró pasando el motor a C++. El segundo es que la calibración lleve más que la construcción: cuando el resultado sale de la física, un cambio chico en el rozamiento mueve los goles por partido.
 
 | Riesgo | Qué pasa si ocurre | Mitigación |
 | --- | --- | --- |
@@ -238,7 +273,7 @@ El riesgo más grande es el rendimiento de GDScript en el teléfono, y por eso l
 
 - [x] Teléfono de referencia para medir: ZTE Z2357N (Unisoc T760), conectado por adb.
 - [x] GDScript o C++ para mundo y cuerpo: C++ (GDExtension). La etapa 0 midió 25 s por partido sin vista en el teléfono con GDScript y 1,5 s con C++.
-- [ ] El cerebro en GDScript a 10 Hz cuesta ~3,7 s por partido en el teléfono (estimado en la etapa 0): ¿pasa también a C++, piensa más lento sin vista, o se sube el presupuesto de 3 s?
+- [x] El cerebro también va en C++: en GDScript a 10 Hz costaría ~3,7 s por partido en el teléfono (estimado en la etapa 0). Decisión del usuario: todo el motor en C++.
 - [x] Sombras en el teléfono: sin sombra del sol, con una mancha bajo cada jugador y la pelota (`match/3d/sombras_redondas.gd`, una sola llamada de dibujo). En el teléfono: 59,5 fps, contra 39,5 con el sol. Dejar el sol solo para el estadio no alcanza: 41,5 fps con 4 cortes y 51 con 1. Ya está en la vista del juego actual (0.7.60).
 - [ ] Si el V2 sin vista resulta lento, ¿los partidos del usuario que se simulan sin mirar pueden ir por `match_engine.gd`? Contradice la decisión 5 del motor espacial ("un solo motor para tus partidos").
 - [ ] Repeticiones de goles: ¿entran en la etapa 8 o después?

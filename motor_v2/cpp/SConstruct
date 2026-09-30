@@ -4,6 +4,7 @@
 # Necesita godot-cpp v10 (fuera del repo, en GODOT_CPP; por defecto
 # D:/dev-tools/godot-cpp). Desde esta carpeta:
 #   python -m SCons api_version=4.7 target=template_release platform=windows
+#   python -m SCons api_version=4.7 target=template_release platform=linux
 #   python -m SCons api_version=4.7 target=template_release platform=android arch=arm64 \
 #       ANDROID_HOME=D:/dev-tools/android-sdk ndk_version=28.2.13676358
 # La biblioteca sale en motor_v2/bin/ (ver motor_v2.gdextension).
@@ -14,7 +15,8 @@ env.Append(CPPPATH=["src/"])
 # Misma semilla, mismo partido en PC y Android: clang en arm64 junta a*b + c en
 # una sola instrucción (FMA) que redondea una vez en vez de dos, y el partido
 # se separaba del de la PC (etapa 0: 18 goles contra 8 con la misma semilla).
-if env["platform"] == "android":
+# Igual en Linux (la nube compila con gcc o clang). MSVC no las junta.
+if env["platform"] != "windows":
     env.Append(CCFLAGS=["-ffp-contract=off"])
 biblioteca = env.SharedLibrary(
     "../bin/libmotor_v2{}{}".format(env["suffix"], env["SHLIBSUFFIX"]),
