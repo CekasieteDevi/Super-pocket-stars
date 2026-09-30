@@ -245,6 +245,8 @@ Hecha en la nube. Test: `tests/test_cuerpo_v2.gd`.
 
 - **Umbral propuesto:** el pie apoyado desliza menos del 15% de lo que avanza el cuerpo. Se mide con `laboratorio_cuerpo.tscn -- segundos=60` sin pantalla.
 - **Ajuste del pie a la pelota** (los últimos 0,15 s): queda para la etapa 3, porque necesita una pelota a la que llevar el pie.
+- **Hecho en la PC (2026-09-30):** bibliotecas de Windows y Android rearmadas; `test_cuerpo_v2` y `test_pelota_v2` dan 0 fallas en la PC. El banco de la etapa 0 con el cuerpo nuevo da la misma huella en la PC y en el teléfono (7270582477375384744) y tarda 1,25 s en el teléfono (0,43 s en la PC).
+- **Revisión visual (2026-09-30):** el usuario miró `laboratorio_cuerpo.tscn` en la PC y le gustó cómo se ve. La etapa 2 pasa, salvo el patinaje de pies, que espera los clips nuevos de Blender.
 
 **Para hacer en la PC con Blender** (`tools/blender/animaciones_jugador.py`):
 
@@ -252,7 +254,7 @@ Hecha en la nube. Test: `tests/test_cuerpo_v2.gd`.
 2. Agregá clips de arranque, frenada, giro de 90° y de 180°, correr de costado y correr de espaldas.
 3. Exportá el GLB y ejecutá `GODOT=<godot> python3 tools/generar_acciones_v2.py`. `test_cuerpo_v2` falla si el JSON no coincide con los GLB.
 4. Medí con `laboratorio_cuerpo.tscn -- segundos=60` sin pantalla y mirá el laboratorio con pantalla.
-5. Rearmá las bibliotecas de Windows y Android: las de `motor_v2/bin/` no tienen `CuerposV2Nativos`, así que hasta entonces `test_cuerpo_v2` falla en la PC.
+5. Rearmá las bibliotecas de Windows y Android después de cambiar el C++.
 
 ### Etapa 3 — Tocar la pelota
 
