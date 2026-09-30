@@ -98,8 +98,21 @@ struct Cuerpo {
 	bool empezar(int indice_clip);
 	void paso(const ParametrosCuerpo &p, const std::vector<Clip> &clips, double dt);
 
+	// Lo que el cuerpo busca hacer, para que la vista elija el clip (Arranque,
+	// Frenada, giros) sin adivinarlo. Solo lectura: no cambia nada.
+	// La rapidez a la que va el objetivo (sin la frenada del final); 0 sin objetivo.
+	double rapidez_buscada(const ParametrosCuerpo &p) const;
+	// Metros hasta quedar parado: al objetivo si llega frenando, lo que tarda
+	// en frenar si no tiene objetivo; -1 si pasa el objetivo sin frenar.
+	double metros_para_parar(const ParametrosCuerpo &p) const;
+	// Radianes que le faltan girar (+ = hacia su izquierda).
+	double giro_pendiente(const ParametrosCuerpo &p) const;
+	// Hacia dónde queda el objetivo (como el rumbo); sin objetivo, el rumbo.
+	double rumbo_buscado() const;
+
 private:
 	double _capacidad_de_sprint(const ParametrosCuerpo &p) const;
+	double _hacia(const ParametrosCuerpo &p) const;
 	void _moverse(const ParametrosCuerpo &p, bool quieto, double dt);
 	void _girar(const ParametrosCuerpo &p, bool trabado, double dt);
 	void _gastar(const ParametrosCuerpo &p, double rapidez_previa, double dt);

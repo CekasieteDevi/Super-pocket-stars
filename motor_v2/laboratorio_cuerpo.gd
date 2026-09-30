@@ -8,7 +8,9 @@ extends Control
 ## - 0 y 11 (arqueros) y 1 a 10: hacen, uno detrás de otro, todos los gestos
 ##   de data/acciones_v2.json de su modelo.
 ## - 12 a 16: piques de punta a punta; en cada punta dan la media vuelta.
-## - 17 a 19: trotan y caminan a puntos al azar, llegando frenados.
+## - 17 a 19: van a puntos al azar y llegan frenados. Parados, miran a otro
+##   lado (giran en el lugar) y salen: 17 camina mirando otro punto (de
+##   costado o de espaldas), 18 trota y 19 pica (Arranque y Frenada).
 ## - 20 y 21: corren y cada tanto patean o controlan sin frenar.
 ##
 ## Con pantalla: un toque o una tecla cambia de grupo (la cámara lo sigue).
@@ -36,6 +38,7 @@ var _grupo := 0
 var _gestos := {}
 var _proximo := {}
 var _espera := {}
+var _destino := {}
 var _completados := 0
 var _detector := DetectorPatinaV2.new()
 
@@ -122,11 +125,16 @@ func _paso() -> void:
 			var p: Vector2 = _cuerpos.get_pos()[i]
 			_cuerpos.ir_a(i, Vector2(-signf(p.x) * PIQUE_X, p.y), 1.0, false)
 	for i in range(17, 20):
-		if _cuerpos.get_rapidez()[i] == 0.0:
-			var destino := Vector2(_rng.randf_range(-20.0, 20.0), _rng.randf_range(-30.0, -12.0))
-			# 17 camina, 18 trota, 19 alterna.
-			var factor := [0.2, 0.5, _rng.randf_range(0.2, 0.6)][i - 17] as float
-			_cuerpos.ir_a(i, destino, factor, true)
+		if _cuerpos.get_rapidez()[i] != 0.0:
+			_espera[i] = 0.0
+			continue
+		if float(_espera[i]) == 0.0:
+			_destino[i] = Vector2(_rng.randf_range(-20.0, 20.0), _rng.randf_range(-30.0, -12.0))
+			var mira: Vector2 = _destino[i] if i != 17 else Vector2(_rng.randf_range(-20.0, 20.0), -21.0)
+			_cuerpos.mirar_a(i, mira)
+		_espera[i] = float(_espera[i]) + PASO_SEG
+		if absf(_cuerpos.get_giro_pendiente(i)) < 0.05 and float(_espera[i]) > PAUSA_GESTOS_SEG:
+			_cuerpos.ir_a(i, _destino[i], [0.2, 0.5, 1.0][i - 17], true)
 	for i in range(20, 22):
 		var p: Vector2 = _cuerpos.get_pos()[i]
 		if absf(p.x) >= PIQUE_X - 0.5 or _cuerpos.get_rapidez()[i] == 0.0:
@@ -200,7 +208,12 @@ func _medir(segundos: float) -> void:
 			metros[anim] = float(metros.get(anim, 0.0)) + r[i] * PASO_SEG
 	print("%s %.0f s: %d gestos terminados, peor exceso de paso %s m, rapidez mínima en las medias vueltas %.2f m/s"
 		% [PREFIJO, segundos, _completados, peor_salto, minima_en_vuelta])
-	for anim in ["Correr", "Trotar", "Caminar", "Respirar", "Golero_Guardia", "Patear_Corriendo", "Control_Corriendo"]:
+	for anim in ["Correr", "Trotar", "Caminar", "Correr_Costado_Izq", "Correr_Costado_Der", "Correr_Espaldas",
+			"Arranque", "Frenada", "Giro_90_Izq", "Giro_90_Der", "Giro_180_Izq", "Giro_180_Der", "Media_Vuelta_Izq", "Media_Vuelta_Der", "Respirar", "Golero_Guardia", "Patear_Corriendo", "Control_Corriendo", DetectorPatinaV2.FUNDIDO]:
+		if anim == DetectorPatinaV2.FUNDIDO:
+			print("%s PATINA %s: %.2f m/s con el pie apoyado, mientras un clip se funde con otro" % [
+				PREFIJO, anim, _detector.patina(anim)])
+			continue
 		if not tiempo_en.has(anim):
 			continue
 		var t: float = tiempo_en[anim]

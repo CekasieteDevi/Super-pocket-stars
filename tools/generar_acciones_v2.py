@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Arma data/acciones_v2.json para el Motor V2 (docs/motor_v2.md, etapa 2).
 
-Junta dos fuentes, sin Blender:
+Junta tres fuentes, sin Blender:
 1. Las definiciones de tools/blender/animaciones_jugador.py (ticks,
    contacto, hueso, aérea). Se leen con `ast`: el script importa bpy y no se
    puede ejecutar acá.
-2. Los GLB que usa el juego (assets/3d/jugador.glb y golero.glb): Godot sin
+2. tools/blender/avance_locomocion.json: los metros que avanza el cuerpo en
+   cada cuadro de los clips en cinta (lo escribe Blender al armarlos).
+3. Los GLB que usa el juego (assets/3d/jugador.glb y golero.glb): Godot sin
    pantalla lee la duración real de cada animación y mide dónde está el
    punto que toca la pelota en el cuadro de contacto (tools/medir_clips_v2.gd).
 
@@ -22,6 +24,7 @@ import tempfile
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BLENDER = os.path.join(RAIZ, "tools", "blender", "animaciones_jugador.py")
+AVANCE = os.path.join(RAIZ, "tools", "blender", "avance_locomocion.json")
 MEDIR = "res://tools/medir_clips_v2.gd"
 CAMPOS = ("ticks", "contacto", "aerea", "bucle", "hueso")
 
@@ -74,7 +77,11 @@ def main():
     if not godot:
         sys.exit("Falta GODOT=/ruta/al/godot")
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
-        json.dump(definiciones_blender(), f)
+        definiciones = definiciones_blender()
+        with open(AVANCE, encoding="utf-8") as a:
+            for nombre, cinta in json.load(a).items():
+                definiciones.setdefault(nombre, {})["cinta"] = cinta
+        json.dump(definiciones, f)
         ruta = f.name
     try:
         r = subprocess.run([godot, "--path", RAIZ, "--headless", "--script", MEDIR, "--",

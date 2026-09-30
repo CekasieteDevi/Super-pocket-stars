@@ -21,9 +21,11 @@ const SE_MUEVE_SUFIJOS := ["_Corriendo"]
 const SE_MUEVE_PREFIJOS := ["Correr", "Trotar", "Caminar", "Forcejear", "Regate_", "Amague", "Efecto_Acomoda",
 	"Remate_Efecto"]
 
-## Los clips de andar: la vista los repite y los avanza con los metros
-## recorridos (no con el reloj). Correr y Golero_Guardia no traen el loop
-## marcado en el GLB.
+## Los clips de andar que se repiten: la vista los elige por la velocidad y
+## los avanza con los metros recorridos (no con el reloj). Correr y
+## Golero_Guardia no traen el loop marcado en el GLB. También son de andar
+## los clips en cinta de Blender (Arranque, Frenada, giros, de costado y de
+## espaldas): traen "cinta" en las definiciones.
 const LOCOMOCION := ["Respirar", "Caminar", "Trotar", "Correr", "Correr_Gambeta", "Golero_Guardia",
 	"Forcejear", "Forcejear_Izq"]
 
@@ -63,13 +65,16 @@ func _medir() -> void:
 			var c := {
 				"duracion": snappedf(anim.length, 0.0001),
 				"bucle": anim.loop_mode != Animation.LOOP_NONE or bool(d.get("bucle", false)) or nombre in LOCOMOCION,
-				"locomocion": nombre in LOCOMOCION,
+				"locomocion": nombre in LOCOMOCION or d.has("cinta"),
 				"aerea": bool(d.get("aerea", false)),
 				"mueve": _se_mueve(nombre),
 				"modelos": [m],
 				"contacto": null,
 				"ancla": "",
 			}
+			if d.has("cinta"):
+				for k in d["cinta"]:
+					c[k] = d["cinta"][k]
 			if contacto_vista.has(nombre):
 				c["contacto"] = snappedf(float(contacto_vista[nombre][1]), 0.0001)
 				c["ancla"] = contacto_vista[nombre][0]
@@ -96,6 +101,12 @@ func _medir() -> void:
 			"punto_contacto": "Dónde está el ancla en ese cuadro, en metros desde el pie del jugador parado en el origen y mirando a +z: [x a su izquierda, y arriba, z adelante]. alcance_m es su distancia en el piso.",
 			"locomocion": "Clip de andar (quieto, caminar, trotar, correr): no es una acción, lo elige la vista por la velocidad.",
 			"mueve": "true: el cuerpo sigue con su locomoción durante el clip (se hace corriendo). false: frena hasta que termina.",
+			"metros": "Clips en cinta (el pie apoyado retrocede a la velocidad del cuerpo): metros del juego que avanza el cuerpo en todo el clip; en un loop, por ciclo. La vista avanza el clip con los metros reales y el pie apoyado queda quieto en la cancha.",
+			"avance_m": "Metros avanzados en cada cuadro del clip (24 por segundo, desde el primero), hacia `direccion` = [x a su izquierda, z adelante]. Arranque y Frenada no avanzan parejo: la vista busca en esta lista el segundo que corresponde a lo recorrido.",
+			"giro": "Grados que gira la cadera durante el clip (+ = hacia su izquierda). La vista deja el modelo con el rumbo del principio mientras dura.",
+			"giro_por_cuadro": "Grados girados en cada cuadro del clip: la vista busca el segundo que corresponde a lo que ya giró el cuerpo.",
+			"fase_inicial": "Frenada: la fase de Correr con la que empieza (el derecho apoyando).",
+			"fase_final": "Arranque: la fase de Correr en la que termina; la vista sigue con Correr desde ahí.",
 		},
 		"clips": ordenados,
 	}

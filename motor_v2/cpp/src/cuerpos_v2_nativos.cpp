@@ -172,6 +172,22 @@ double CuerposV2Nativos::get_reserva(int64_t i) const {
 	return _valido(i) ? _cuerpos[size_t(i)].reserva : 0.0;
 }
 
+double CuerposV2Nativos::get_rapidez_buscada(int64_t i) const {
+	return _valido(i) ? _cuerpos[size_t(i)].rapidez_buscada(_param) : 0.0;
+}
+
+double CuerposV2Nativos::get_metros_para_parar(int64_t i) const {
+	return _valido(i) ? _cuerpos[size_t(i)].metros_para_parar(_param) : -1.0;
+}
+
+double CuerposV2Nativos::get_giro_pendiente(int64_t i) const {
+	return _valido(i) ? _cuerpos[size_t(i)].giro_pendiente(_param) : 0.0;
+}
+
+double CuerposV2Nativos::get_rumbo_buscado(int64_t i) const {
+	return _valido(i) ? _cuerpos[size_t(i)].rumbo_buscado() : 0.0;
+}
+
 String CuerposV2Nativos::get_accion(int64_t i) const {
 	if (!_valido(i) || _cuerpos[size_t(i)].clip < 0) {
 		return String();
@@ -233,6 +249,10 @@ void CuerposV2Nativos::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_rapidez"), &CuerposV2Nativos::get_rapidez);
 	ClassDB::bind_method(D_METHOD("get_vel", "i"), &CuerposV2Nativos::get_vel);
 	ClassDB::bind_method(D_METHOD("get_reserva", "i"), &CuerposV2Nativos::get_reserva);
+	ClassDB::bind_method(D_METHOD("get_rapidez_buscada", "i"), &CuerposV2Nativos::get_rapidez_buscada);
+	ClassDB::bind_method(D_METHOD("get_metros_para_parar", "i"), &CuerposV2Nativos::get_metros_para_parar);
+	ClassDB::bind_method(D_METHOD("get_giro_pendiente", "i"), &CuerposV2Nativos::get_giro_pendiente);
+	ClassDB::bind_method(D_METHOD("get_rumbo_buscado", "i"), &CuerposV2Nativos::get_rumbo_buscado);
 	ClassDB::bind_method(D_METHOD("get_accion", "i"), &CuerposV2Nativos::get_accion);
 	ClassDB::bind_method(D_METHOD("get_fase", "i"), &CuerposV2Nativos::get_fase);
 	ClassDB::bind_method(D_METHOD("get_tiempo_accion", "i"), &CuerposV2Nativos::get_tiempo_accion);

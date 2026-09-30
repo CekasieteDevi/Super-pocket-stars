@@ -11,6 +11,8 @@ extends SceneTree
 ##   que no se hace corriendo frena al cuerpo.
 ## - data/acciones_v2.json coincide con los GLB, los valores de cuerpo.h son
 ##   los de los JSON y la misma orden da la misma huella.
+## - Los clips en cinta traen un avance por cuadro que cierra en sus metros,
+##   y la vista 3D usa esos metros para Correr, Trotar y Caminar.
 
 const SEED := 20260930
 const PASO := 1.0 / 60.0
@@ -39,6 +41,7 @@ func _init() -> void:
 	_acciones_trabadas()
 	_huellas()
 	_clips_contra_glb()
+	_clips_en_cinta()
 	print("FALLOS=%d" % fallos)
 	quit(1 if fallos else 0)
 
@@ -339,6 +342,41 @@ func _clips_contra_glb() -> void:
 	for d in distintos:
 		_ok(false, d)
 	_ok(distintos.is_empty(), "data/acciones_v2.json coincide con los GLB (%d clips)" % en_glb.size())
+
+
+## Los clips en cinta (tools/blender/animaciones_jugador.py): un avance por
+## cuadro del clip (24 por segundo) que no retrocede y termina en `metros`.
+## VistaCancha3D avanza Correr, Trotar y Caminar con constantes propias: si
+## no son esos metros, el pie apoyado vuelve a patinar.
+func _clips_en_cinta() -> void:
+	var malos := []
+	var en_cinta := 0
+	for n in _clips:
+		var c: Dictionary = _clips[n]
+		if not c.has("metros"):
+			continue
+		en_cinta += 1
+		var avance: Array = c["avance_m"]
+		if avance.size() != roundi(float(c["duracion"]) * 24.0) + 1:
+			malos.append("%s: %d cuadros de avance para %.2f s" % [n, avance.size(), c["duracion"]])
+		elif absf(float(avance[-1]) - float(c["metros"])) > 0.001 or float(avance[0]) != 0.0:
+			malos.append("%s: el avance va de %.3f a %.3f y los metros son %.3f" % [n, avance[0], avance[-1], c["metros"]])
+		# La media vuelta va y vuelve: lo que no baja son los metros recorridos.
+		var sube: Array = c.get("recorrido_m", avance)
+		if sube.size() != avance.size():
+			malos.append("%s: %d cuadros de recorrido y %d de avance" % [n, sube.size(), avance.size()])
+		for k in range(1, sube.size()):
+			if float(sube[k]) < float(sube[k - 1]):
+				malos.append("%s: el avance retrocede en el cuadro %d" % [n, k])
+				break
+	for m in malos:
+		_ok(false, m)
+	_ok(en_cinta >= 14 and malos.is_empty(), "%d clips en cinta con su avance por cuadro" % en_cinta)
+	var vista := {"Correr": VistaCancha3D.METROS_POR_CICLO, "Trotar": VistaCancha3D.CICLO_TROTAR_M,
+		"Caminar": VistaCancha3D.CICLO_CAMINAR_M}
+	for n in vista:
+		_ok(absf(float(_clips[n].get("metros", 0.0)) - float(vista[n])) < 0.001,
+			"VistaCancha3D avanza %s cada %.2f m, los metros de su ciclo (%.2f)" % [n, vista[n], _clips[n].get("metros", 0.0)])
 
 
 func _ok(condicion: bool, mensaje: String) -> void:

@@ -46,6 +46,10 @@ public:
 	PackedFloat32Array get_rapidez() const;
 	Vector2 get_vel(int64_t i) const;
 	double get_reserva(int64_t i) const;
+	double get_rapidez_buscada(int64_t i) const;
+	double get_metros_para_parar(int64_t i) const;
+	double get_giro_pendiente(int64_t i) const;
+	double get_rumbo_buscado(int64_t i) const;
 	String get_accion(int64_t i) const;
 	int64_t get_fase(int64_t i) const;
 	double get_tiempo_accion(int64_t i) const;

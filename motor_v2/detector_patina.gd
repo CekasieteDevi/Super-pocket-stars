@@ -8,18 +8,22 @@ extends RefCounted
 ## el pie. Funciona sin pantalla.
 ##
 ## Un pie cuenta como apoyado si está a menos de APOYO_M del punto más bajo
-## que tocó un pie en lo que va de la medición. Con los clips actuales el
-## pie casi no se levanta (Caminar entre 5,6 y 7,1 cm), así que el umbral es
-## chico.
+## que tocó un pie en ese clip. Con un solo suelo para todos, una barrida o
+## una caída lo bajaba 4 cm y en Correr el pie apoyado ya no contaba.
+## Mientras el modelo funde un clip con otro (Jugador3D._mezcla < 1) el pie
+## cuenta aparte, en FUNDIDO: ahí patina por la mezcla de dos poses, no por
+## el clip, y el suelo no se toma de esos cuadros.
 
 const APOYO_M := 0.015
 const PIES := ["Pie_L", "Pie_R"]
+const FUNDIDO := "(fundido)"
 
 ## jugador -> {pie: Vector3 del cuadro anterior}
 var _previos := {}
 ## clip -> [metros deslizados apoyado, segundos apoyado]
 var por_clip := {}
-var _suelo := INF
+## clip -> punto más bajo de un pie (sobre el del jugador)
+var _suelo := {}
 
 
 ## Un cuadro: `delta` segundos desde el anterior.
@@ -28,22 +32,25 @@ func medir(jugadores: Array, delta: float) -> void:
 		return
 	for p3: Jugador3D in jugadores:
 		var anim := p3._anim_actual
+		var fundiendo := p3._mezcla < 1.0
 		var previos: Dictionary = _previos.get(p3, {})
 		var ahora := {}
 		for pie in PIES:
 			var punto := ancla_de(p3, pie)
 			ahora[pie] = punto
-			_suelo = minf(_suelo, punto.y - p3.global_position.y)
+			if not fundiendo:
+				_suelo[anim] = minf(float(_suelo.get(anim, INF)), punto.y - p3.global_position.y)
 			if not previos.has(pie):
 				continue
 			var antes: Vector3 = previos[pie]
 			var alto := minf(punto.y, antes.y) - p3.global_position.y
-			if alto > _suelo + APOYO_M:
+			if alto > float(_suelo.get(anim, INF)) + APOYO_M:
 				continue
-			var dato: Array = por_clip.get(anim, [0.0, 0.0])
+			var cubo := FUNDIDO if fundiendo else anim
+			var dato: Array = por_clip.get(cubo, [0.0, 0.0])
 			dato[0] += Vector2(punto.x - antes.x, punto.z - antes.z).length()
 			dato[1] += delta
-			por_clip[anim] = dato
+			por_clip[cubo] = dato
 		_previos[p3] = ahora
 
 

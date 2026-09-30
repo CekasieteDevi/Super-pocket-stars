@@ -14,6 +14,10 @@ Convencion de poses (grados; el personaje mira a -Y y su izquierda es +X):
   apoyar=1    : mide la malla real y la baja/sube hasta tocar el piso (poses tiradas)
   gL/gR       : donde van las manos (IK), en el cuerpo en reposo
   bisagraL/R  : 1 (siempre, salvo =0): el codo gira solo sobre su bisagra (sin nudo en la malla)
+  qpL/qpR     : giro del pie (cuaternion w,x,y,z, ejes del esqueleto) en vez de f: lo usan los clips en cinta
+Los clips de andar (Correr, Trotar, Caminar y los de la seccion "locomocion en cinta") no usan
+angulos: ubican cada tobillo en la cancha y resuelven la pierna. Despues de construirlos:
+    escribir_avance(r"...tools/blender/avance_locomocion.json"); [medir_cinta(n) for n in LOCOMOCION_CINTA]
 """
 import bpy, math, os
 import numpy as np
@@ -22,6 +26,7 @@ from mathutils import Vector, Quaternion, Matrix
 FPS = 24
 TICK = 6            # cuadros por tick del motor (0.25 s)
 PISO = -0.021       # punto mas bajo en reposo (contorno incluido): es el piso
+PUNTA_PIE = Vector((0, 0.04, 0.03))   # anclas Pie_L/Pie_R: el empeine, apenas atras y arriba de la punta
 
 
 def _ctx():
@@ -81,7 +86,8 @@ def pose(P):
     for side, s in (('L', 1), ('R', -1)):
         t, k = g('t' + side), g('k' + side); f = g('f' + side, -(t + k))
         setq('Muslo.' + side, ry(-s * g('ab' + side)) @ rz(g('y' + side)) @ rx(t) @ rz(g('tw' + side)))
-        setq('Pierna.' + side, rx(k)); setq('Pie.' + side, rx(f))
+        setq('Pierna.' + side, rx(k))
+        setq('Pie.' + side, Quaternion(P['qp' + side]) if 'qp' + side in P else rx(f))
     loc = list(P.get('loc', (0, 0, 0)))
     if len(loc) == 2: loc = [loc[0], 0.0, loc[1]]
     if g('ground'):
@@ -225,6 +231,472 @@ def _mezcla(a, b, t):
     return out
 
 
+# ---------------------------------------------------------------- locomocion en cinta
+# Los clips de andar van "en cinta": el cuerpo queda en el lugar y el pie
+# apoyado retrocede a la velocidad del cuerpo. La vista avanza cada clip con
+# los metros que recorre el cuerpo (avance_locomocion.json, que pasa a
+# data/acciones_v2.json) y el pie apoyado queda quieto en la cancha. Los
+# Correr, Trotar y Caminar anteriores movian las piernas por angulos: el pie
+# apoyado casi no retrocedia y patinaba lo mismo que avanzaba el cuerpo
+# (Correr: 7,48 m/s de pie contra 6,88 de cuerpo; docs/motor_v2.md, etapa 2).
+# Aca cada tobillo tiene un lugar en la cancha y la pierna se resuelve (IK).
+ESCALA_JUEGO = 0.75       # Jugador3D.ESCALA_CHIBI: 1 m de Blender es 0,75 m del juego
+# Fraccion del largo de la pierna que se usa: estirada del todo, la rodilla
+# se ve trabada. Con 0.97 la cadera parada queda 1,4 cm (de Blender) debajo
+# de la de Respirar, que no se nota en el fundido.
+ALCANCE = 0.97
+GIRO_PIERNA_MAX = 40.0    # grados que el plano de la pierna sigue al pie cuando la cadera gira
+POLOS = dict(pL=(1.0, 0.35, -0.6), pR=(-1.0, 0.35, -0.6))   # codos: el polo por defecto de pose()
+TRONCO = ('hy', 'tp', 'tr', 'ty', 'hp', 'hr', 'hz', 'gL', 'gR', 'pL', 'pR', 'roll', 'pitch')
+# Correr: 2,2 m del juego por ciclo (1,1 por paso) y cada pie apoyado el 16%
+# del ciclo. La pierna del chibi mide 0,38 m del juego: el pie apoyado barre
+# 0,47 m de Blender (lo que da la pierna con la cadera abajo) y el resto es
+# vuelo. Los clips en cinta van a 24 cuadros por ciclo: la vista los avanza
+# por metros y la duracion no importa, pero con 12 el apoyo duraba 2 cuadros
+# y entre uno y otro el pie se hundia 1,2 cm (las rotaciones se interpolan).
+METROS_CORRER, APOYO_CORRER, TICKS_CORRER = 2.2, 0.16, 4
+V_CORRER = METROS_CORRER / ESCALA_JUEGO / (TICKS_CORRER * TICK / FPS)   # m de Blender por segundo
+
+
+def _tronco(P, **extra):
+    """Solo lo de la cintura para arriba de una pose (las piernas las pone la cinta)."""
+    Q = dict(POLOS)
+    Q.update({k: v for k, v in P.items() if k in TRONCO}); Q.update(extra)
+    return Q
+
+
+def _suave(x):
+    x = min(max(x, 0.0), 1.0)
+    return x * x * (3 - 2 * x)
+
+
+def _rot2(v, grados):
+    """Un punto del piso girado alrededor del cuerpo (+ = hacia su izquierda)."""
+    return (rz(grados) @ Vector((v[0], v[1], 0.0))).to_2d()
+
+
+def _curva(puntos):
+    """Funcion t -> valor que pasa por los puntos (t, valor), sin frenar en cada uno."""
+    ts = [p[0] for p in puntos]; vs = [p[1] for p in puntos]
+
+    def f(t):
+        if t <= ts[0]: return vs[0]
+        if t >= ts[-1]: return vs[-1]
+        i = max(j for j in range(len(ts) - 1) if ts[j] <= t)
+        h = ts[i + 1] - ts[i]; s = (t - ts[i]) / h
+        m = [0.0 if j in (0, len(ts) - 1) else (vs[j + 1] - vs[j - 1]) / (ts[j + 1] - ts[j - 1]) for j in (i, i + 1)]
+        return ((2 * s ** 3 - 3 * s ** 2 + 1) * vs[i] + (s ** 3 - 2 * s ** 2 + s) * h * m[0]
+                + (-2 * s ** 3 + 3 * s ** 2) * vs[i + 1] + (s ** 3 - s ** 2) * h * m[1])
+    return f
+
+
+def _pierna(side):
+    """La pierna en reposo: cabeza de la Cadera, articulacion del muslo, muslo
+    (hasta la rodilla), pierna (rodilla -> tobillo), punta del pie (tobillo ->
+    ancla Pie_L/R) y altura del tobillo con el pie plano en el piso."""
+    arm, ad, R3 = _ctx(); b = ad.bones
+    muslo = b['Muslo.' + side].head_local.copy()
+    rod = b['Pierna.' + side].head_local.copy(); tob = b['Pie.' + side].head_local.copy()
+    return dict(cad=b['Cadera'].head_local.copy(), muslo=muslo, u1=rod - muslo, u2=tob - rod,
+                punta=b['Pie.' + side].tail_local + PUNTA_PIE - tob, tobillo_z=tob.z)
+
+
+def _tobillo(s, ab, y, t, k, u1, u2):
+    return (ry(-s * ab) @ rz(y) @ rx(t)) @ (u1 + rx(k) @ u2)
+
+
+def _resolver_pierna(side, d, y, geo):
+    """ab, t, k (grados) que llevan el tobillo al punto d, medido desde la
+    articulacion del muslo en el marco de la Cadera ya girada. Arranca de la
+    pierna plana y corrige con Newton: el esqueleto no es plano (el tobillo
+    esta 2 cm adelante de la pierna). Devuelve tambien el error (m de Blender)."""
+    s = 1 if side == 'L' else -1
+    u1, u2 = geo['u1'], geo['u2']; l1, l2 = u1.length, u2.length
+    dp = rz(-y) @ d
+    n = math.hypot(dp.x, dp.z); fw = -dp.y
+    D = max(0.05, min(math.hypot(fw, n), (l1 + l2) * 0.999))
+    inter = math.acos(max(-1.0, min(1.0, (l1 * l1 + l2 * l2 - D * D) / (2 * l1 * l2))))
+    beta = math.acos(max(-1.0, min(1.0, (l1 * l1 + D * D - l2 * l2) / (2 * l1 * D))))
+    x = np.array([-s * math.degrees(math.atan2(-dp.x, -dp.z)),
+                  -math.degrees(math.atan2(fw, n) + beta), 180.0 - math.degrees(inter)])
+    meta = np.array(d)
+
+    def f(v): return np.array(_tobillo(s, v[0], y, v[1], v[2], u1, u2))
+    for _ in range(25):
+        r = f(x) - meta
+        if np.linalg.norm(r) < 1e-6: break
+        J = np.column_stack([(f(x + h) - f(x)) / 1e-3 for h in np.eye(3) * 1e-3])
+        x = x + np.linalg.lstsq(J, -r, rcond=None)[0]
+        x[2] = max(x[2], 0.0)          # la rodilla no se dobla al reves
+    return float(x[0]), float(x[1]), float(x[2]), float(np.linalg.norm(f(x) - meta))
+
+
+def _velocidad(cuerpo, t, e=1e-3):
+    return (cuerpo(t + e)[0] - cuerpo(t - e)[0]).length / (2 * e)
+
+
+def _apoyo_en(a, t, geo):
+    """Tobillo (x, y) y rumbo del pie durante un apoyo. Con pivote=(t0, t1, rumbo)
+    el pie gira sobre la punta: el ancla no se mueve y el talon da la vuelta."""
+    if 'pivote' not in a:
+        return Vector(a['pos']), a['yaw']
+    t0, t1, y1 = a['pivote']
+    yaw = a['yaw'] + (y1 - a['yaw']) * _suave((t - t0) / (t1 - t0))
+    ancla = Vector(a['pos']) + (rz(a['yaw']) @ geo['punta']).to_2d()
+    return ancla - (rz(yaw) @ geo['punta']).to_2d(), yaw
+
+
+def _pie_en(plan, t, cuerpo, alto_paso, geo):
+    """Donde va un pie en el segundo t: (tobillo x,y; altura sobre el apoyo;
+    rumbo; punta abajo en grados; apoyado). En el aire va de un apoyo al
+    siguiente saliendo y llegando quieto en la cancha: si arrancara con
+    velocidad, el primer cuadro en el aire ya contaria como patinar."""
+    for i, a in enumerate(plan):
+        if t > a['off']: continue
+        if t >= a['on'] or i == 0:
+            p, yaw = _apoyo_en(a, max(t, a['on']), geo)
+            return p, 0.0, yaw, 0.0, True
+        b = plan[i - 1]; dur = a['on'] - b['off']; s = (t - b['off']) / dur
+        p0, y0 = _apoyo_en(b, b['off'], geo); p1, y1 = _apoyo_en(a, a['on'], geo)
+        # En la cancha el pie sale y llega con velocidad 0 y al principio y al
+        # final del paso solo sube y baja: el cuadro en que despega o apoya ya
+        # no avanza (en Caminar era el 90% de lo que patinaba). Ese tramo dura
+        # hasta el 10% del paso, lo que tarda el cuerpo en alejarse 3 cm: si
+        # se aleja mas, la pierna no llega y el pie queda arrastrado.
+        m0 = min(0.1, 0.03 / max(_velocidad(cuerpo, b['off']) * dur, 1e-6))
+        m1 = min(0.1, 0.03 / max(_velocidad(cuerpo, a['on']) * dur, 1e-6))
+        adelante = _suave((s - m0) / (1 - m0 - m1))
+        # Un paso corto (acomodarse) no levanta el pie como uno de carrera.
+        h = min(alto_paso, 0.3 * (p1 - p0).length + 0.02)
+        return (p0 + (p1 - p0) * adelante, h * math.sin(math.pi * s) ** 0.6, y0 + (y1 - y0) * adelante,
+                min(30.0, 150.0 * h) * math.sin(math.pi * s) * (1 - s), False)
+    p, yaw = _apoyo_en(plan[-1], plan[-1]['off'], geo)
+    return p, 0.0, yaw, 0.0, True
+
+
+def _clip_cinta(ticks, cuerpo, pies, alto, arriba, alto_paso, t0=0.0, direccion=(0.0, -1.0)):
+    """Arma un clip en cinta, una clave por cuadro.
+    cuerpo(t) -> (Vector 2D en la cancha de Blender, rumbo en grados, + = a su izquierda).
+    pies: {'L'|'R': [apoyos]}; cada apoyo es dict(on, off, pos=(x, y) del tobillo, yaw[, pivote]).
+    alto(t): altura deseada de la articulacion del muslo; la baja lo que haga falta para que el
+    pie apoyado llegue al piso. arriba(t): tronco, cabeza y brazos (claves de TRONCO).
+    El clip saca la traslacion del cuerpo (queda en el lugar) y deja el giro."""
+    geo = {s: _pierna(s) for s in 'LR'}
+    largo = {s: ALCANCE * (geo[s]['u1'].length + geo[s]['u2'].length) for s in 'LR'}
+    dvec = Vector(direccion).normalized()
+    n = ticks * TICK; claves = []; avance = []; giros = []; recorrido = [0.0]; peor = 0.0
+    c_ini, psi_ini = cuerpo(t0)
+    for f in range(1, n + 2):
+        t = t0 + (f - 1) / FPS
+        c, psi = cuerpo(t)
+        A = dict(arriba(t)); hy = psi + A.pop('hy', 0.0)
+        Qc = ry(A.get('roll', 0.0)) @ rx(A.get('pitch', 0.0)) @ rz(hy)
+        pie = {s: _pie_en(pies[s], t, cuerpo, alto_paso, geo[s]) for s in 'LR'}
+        H = alto(t)
+        for s in 'LR':
+            p, sube = pie[s][0], pie[s][1]
+            if sube > 0.03: continue            # en el aire no importa si estira de mas
+            g = geo[s]
+            cadera = (g['cad'] + Qc @ (g['muslo'] - g['cad'])).to_2d()
+            dxy = ((p - c) - cadera).length
+            if dxy < largo[s]:
+                H = min(H, g['tobillo_z'] + sube + math.sqrt(largo[s] ** 2 - dxy ** 2))
+        loc = Vector((0.0, 0.0, H - geo['L']['muslo'].z))
+        P = dict(A, hy=hy, loc=tuple(loc))
+        for s in 'LR':
+            g = geo[s]; p, sube, yaw, punta, apoyado = pie[s]
+            meta = Vector(((p - c).x, (p - c).y, g['tobillo_z'] + sube))
+            d = Qc.inverted() @ (meta - (g['cad'] + loc + Qc @ (g['muslo'] - g['cad'])))
+            if d.length > largo[s]:
+                # En el aire, si la pierna no llega, el pie va hacia la cadera
+                # (arrastrado) y no hacia abajo: estirada, la pierna lo metia
+                # debajo del piso y el detector tomaba ese punto como el suelo.
+                d = d * (largo[s] / d.length)
+            y = max(-GIRO_PIERNA_MAX, min(GIRO_PIERNA_MAX, yaw - hy))
+            ab, tt, k, err = _resolver_pierna(s, d, y, g)
+            if apoyado: peor = max(peor, err)
+            sg = 1 if s == 'L' else -1
+            # El pie queda plano en la cancha (o con la punta abajo en el aire)
+            # por mas que la pierna gire: se le pone el giro que falta.
+            qp = (Qc @ ry(-sg * ab) @ rz(y) @ rx(tt) @ rx(k)).inverted() @ rz(yaw) @ rx(punta)
+            P.update({'t' + s: tt, 'k' + s: k, 'ab' + s: ab, 'y' + s: y, 'qp' + s: tuple(qp)})
+        claves.append((f, P))
+        avance.append(round((c - c_ini).dot(dvec) * ESCALA_JUEGO, 4))
+        giros.append(round(psi - psi_ini, 2))
+        if f > 1:
+            recorrido.append(recorrido[-1] + (c - cuerpo(t - 1 / FPS)[0]).length * ESCALA_JUEGO)
+    cinta = dict(avance_m=avance, metros=avance[-1], direccion=[round(dvec.x, 4), round(-dvec.y, 4)],
+                 giro=giros[-1], error_ik=peor)
+    if any(giros):
+        # La vista avanza los giros con lo que ya giro el cuerpo, no con el reloj.
+        cinta['giro_por_cuadro'] = giros
+    if any(b < a for a, b in zip(avance, avance[1:])):
+        # El cuerpo va y vuelve (media vuelta): la vista lo avanza con los
+        # metros recorridos, que no bajan.
+        cinta['recorrido_m'] = [round(r, 4) for r in recorrido]
+    return dict(ticks=ticks, claves=claves, cinta=cinta)
+
+
+def _cinta_ciclo(ticks, metros, apoyo, direccion, centros, alto, arriba, alto_paso):
+    """Un loop en cinta. metros: los que avanza el cuerpo por ciclo, del juego.
+    apoyo: fraccion del ciclo que cada pie esta en el piso. El derecho esta en
+    el medio de su apoyo en la fase 0.5 y el izquierdo en la 0: en la 0 el
+    derecho pasa por debajo del cuerpo, como en el Correr de antes, y la vista
+    cambia de clip sin cambiar de pie. centros: donde queda cada tobillo,
+    relativo al cuerpo, en el medio del apoyo. alto(p) y arriba(p) por fase."""
+    T = ticks * TICK / FPS; dvec = Vector(direccion).normalized()
+    v = metros / ESCALA_JUEGO / T
+
+    def cuerpo(t): return dvec * v * t, 0.0
+    pies = {s: [dict(on=(fase + c) * T - apoyo * T / 2, off=(fase + c) * T + apoyo * T / 2,
+                     pos=dvec * v * (fase + c) * T + Vector(centros[s]), yaw=0.0) for c in range(-1, 4)]
+            for s, fase in (('R', 0.5), ('L', 0.0))}
+
+    def fase(t): return (t / T) % 1.0
+    return _clip_cinta(ticks, cuerpo, pies, lambda t: alto(fase(t)), lambda t: arriba(fase(t)), alto_paso,
+                       t0=T, direccion=direccion)
+
+
+def _pisadas(X, pasos, dvec):
+    """Apoyos de una carrera que acelera o frena. X(t): metros de Blender
+    recorridos (no decrece). pasos: (pie, a, antes, despues, costado): el
+    tobillo apoya en el punto a del recorrido (y costado a su izquierda),
+    llega cuando el cuerpo esta `antes` detras de a y se va cuando esta
+    `despues` adelante. None: desde antes del clip o hasta despues."""
+    lado = Vector((-dvec.y, dvec.x))
+
+    def cuando(x):
+        lo, hi = -3.0, 3.0
+        for _ in range(60):
+            mid = (lo + hi) / 2
+            lo, hi = (mid, hi) if X(mid) < x else (lo, mid)
+        return hi
+    plan = {'L': [], 'R': []}
+    for pie, a, antes, despues, costado in pasos:
+        plan[pie].append(dict(on=-9.0 if antes is None else cuando(a - antes),
+                              off=9.0 if despues is None else cuando(a + despues),
+                              pos=dvec * a + lado * costado, yaw=0.0))
+    return plan
+
+
+def _fase_por_pisadas(plan):
+    """La fase de Correr en cada t segun cuando apoya cada pie: el derecho
+    apoya en 0.5 - apoyo/2 y el izquierdo medio ciclo despues."""
+    ev = sorted((a['on'], s) for s in 'LR' for a in plan[s] if -5 < a['on'] < 5)
+    p0 = 0.5 - APOYO_CORRER / 2 + (0.5 if ev[0][1] == 'L' else 0.0)
+    ts = [e[0] for e in ev]; ps = [p0 + 0.5 * i for i in range(len(ev))]
+
+    def f(t):
+        if t <= ts[0]: return ps[0] - (ts[0] - t) * 0.5 / (ts[1] - ts[0])
+        if t >= ts[-1]: return ps[-1] + (t - ts[-1]) * 0.5 / (ts[-1] - ts[-2])
+        i = max(j for j in range(len(ts) - 1) if ts[j] <= t)
+        return ps[i] + 0.5 * (t - ts[i]) / (ts[i + 1] - ts[i])
+    return f
+
+
+def _alto_correr(p):
+    """Cadera de Correr por fase: abajo en el medio de cada apoyo (la rodilla
+    amortigua) y arriba en el vuelo."""
+    return 0.47 + 0.05 * (1 - math.cos(4 * math.pi * p)) / 2
+
+
+def _giro_en_el_lugar(ticks, rumbo, pies, lado):
+    """Media vuelta o cuarto de vuelta sin avanzar. rumbo: [(t, grados)] de la
+    cadera; los pies pisan girados y uno pivotea sobre la punta. La cabeza y
+    el pecho giran antes que la cadera, como quien mira adonde va."""
+    T = ticks * TICK / FPS
+    yaw = _curva(rumbo)
+
+    def arriba(t):
+        b = math.sin(math.pi * min(max(t / (0.8 * T), 0.0), 1.0))
+        A = _mezcla(_tronco(respira(0, 0.3)), _tronco(LISTO), b)
+        A['hz'] = A.get('hz', 0.0) + 24 * lado * math.sin(math.pi * min(max(t / (0.55 * T), 0.0), 1.0))
+        A['ty'] = A.get('ty', 0.0) + 14 * lado * b
+        return A
+    return _clip_cinta(ticks, lambda t: (Vector((0.0, 0.0)), yaw(t)), pies,
+                       lambda t: 0.575 - 0.05 * math.sin(math.pi * min(t / T, 1.0)), arriba, 0.1)
+
+
+def respira(r, peso):
+    """RESPIRAR: el quieto del partido. Brazos sueltos a los costados (el Quieto
+    original tiene las manos en la cintura: parado en la cancha no quedaba
+    bien), respira (pecho y hombros suben) y pasa el peso de un pie al otro."""
+    return dict(ground=1, tL=-3 - 2 * peso, kL=6, tR=-3 + 2 * peso, kR=6, roll=1.5 * peso, tr=-1.0 * peso,
+                tp=3 - 2.0 * r, hp=-3 + 1.5 * r,
+                gL=(0.37, -0.03, 0.52 + 0.025 * r), gR=(-0.37, -0.03, 0.52 + 0.025 * r),
+                pL=(0.4, 1.0, -0.2), pR=(-0.4, 1.0, -0.2))
+
+
+def definiciones_locomocion():
+    D = {}
+    # CORRER, TROTAR y CAMINAR en cinta. Mismos brazos y tronco que antes
+    # (carrera y ciclo); las piernas salen de donde pisa cada pie.
+    D['Correr'] = dict(contacto=None, aerea=False, bucle=True, **_cinta_ciclo(
+        TICKS_CORRER, METROS_CORRER, APOYO_CORRER, (0, -1), {'L': (0.10, 0), 'R': (-0.10, 0)},
+        _alto_correr, lambda p: _tronco(carrera(p)), 0.22))
+    # Trotar: 1,3 m por ciclo; a 3 m/s son 2,3 ciclos por segundo. Antes
+    # 2,4 m: con la pierna del chibi el pie apoyado no llegaba a barrerlos.
+    D['Trotar'] = dict(contacto=None, aerea=False, bucle=True, **_cinta_ciclo(
+        4, 1.3, 0.26, (0, -1), {'L': (0.12, 0), 'R': (-0.12, 0)},
+        lambda p: 0.47 + 0.03 * (1 - math.cos(4 * math.pi * p)) / 2,
+        lambda p: _tronco(ciclo(p, muslo=30, rodilla=58, vuelo=0.025, torso=9, brazo=40)), 0.11))
+    # Caminar: siempre un pie en el piso (apoyo 0.56 > 0.5). La cadera sube
+    # sola en el medio del apoyo: la limita el largo de la pierna.
+    D['Caminar'] = dict(contacto=None, aerea=False, bucle=True, **_cinta_ciclo(
+        4, 0.62, 0.56, (0, -1), {'L': (0.14, 0), 'R': (-0.14, 0)},
+        lambda p: 0.53, lambda p: _tronco(ciclo(p, muslo=19, rodilla=24, vuelo=0.0, torso=3, brazo=20)), 0.05))
+    # CORRER DE COSTADO hacia su izquierda: paso de arquero. Sale con el pie
+    # izquierdo bien abierto, el derecho se junta sin cruzarse, rodillas
+    # flexionadas (con la pierna abierta la cadera no da mas alto).
+    D['Correr_Costado_Izq'] = dict(contacto=None, aerea=False, bucle=True, **_cinta_ciclo(
+        4, 1.0, 0.30, (1, 0), {'L': (0.22, 0), 'R': (-0.22, 0)},
+        lambda p: 0.43 + 0.015 * (1 - math.cos(4 * math.pi * p)) / 2,
+        lambda p: _tronco(dict(tp=14, tr=4, hp=-8, gL=(0.42, -0.2, 0.72 + 0.02 * math.cos(4 * math.pi * p)),
+                               gR=(-0.42, -0.2, 0.72 + 0.02 * math.cos(4 * math.pi * p)))), 0.07))
+    D['Correr_Costado_Der'] = dict(D['Correr_Costado_Izq'])
+    # CORRER DE ESPALDAS: pasos cortos y rapidos, el pie apoya atras y el
+    # cuerpo pasa por encima hacia atras. Tronco derecho y la vista adelante.
+    D['Correr_Espaldas'] = dict(contacto=None, aerea=False, bucle=True, **_cinta_ciclo(
+        4, 1.0, 0.30, (0, 1), {'L': (0.12, 0), 'R': (-0.12, 0)},
+        lambda p: 0.46 + 0.02 * (1 - math.cos(4 * math.pi * p)) / 2,
+        lambda p: _tronco(ciclo(p, muslo=20, rodilla=40, vuelo=0.0, torso=5, brazo=25), hp=-6), 0.08))
+    # ARRANQUE: de parado (Respirar) a Correr. Se inclina, el derecho da el
+    # primer paso corto y los pasos se alargan con la velocidad. Termina a la
+    # velocidad de Correr con el derecho en el aire. Como Correr, la vista lo
+    # avanza por metros: los 6 ticks son para que cada apoyo tenga cuadros.
+    t0, T = 0.12, 6 * TICK / FPS
+
+    def x_arranque(t):
+        if t <= t0: return 0.0
+        if t >= T: return V_CORRER * (T - t0) * 2 / 3 + V_CORRER * (t - T)
+        u = (t - t0) / (T - t0)
+        return V_CORRER * (T - t0) * (u * u - u ** 3 / 3)
+    plan = _pisadas(x_arranque, [('R', 0.0, None, 0.0, -0.15), ('L', 0.0, None, 0.22, 0.15),
+                                 ('R', 0.22, 0.08, 0.30, -0.13), ('L', 0.85, 0.20, 0.24, 0.12),
+                                 ('R', 1.55, 0.22, 0.24, -0.11), ('L', 2.45, 0.235, 0.235, 0.10),
+                                 ('R', 3.6, 0.235, 0.235, -0.10)], Vector((0, -1)))
+    plan['R'][0]['off'] = 0.08          # el primer paso sale antes de que el cuerpo se mueva
+    fase_a = _fase_por_pisadas(plan)
+
+    def arriba_arranque(t):
+        A = _mezcla(_tronco(respira(0, 0.0)), _tronco(carrera(fase_a(t))), _suave((t - 0.1) / 0.7))
+        A['tp'] += 14 * _suave(t / 0.3) * (1 - _suave((t - 0.6) / 0.9))
+        return A
+    D['Arranque'] = dict(contacto=None, aerea=False, **_clip_cinta(
+        6, lambda t: (Vector((0.0, -x_arranque(t))), 0.0), plan,
+        lambda t: 0.575 + (_alto_correr(fase_a(t)) - 0.575) * _suave(t / 0.6), arriba_arranque, 0.22))
+    # La fase de Correr en la que termina: la vista sigue con Correr desde ahi.
+    D['Arranque']['cinta']['fase_final'] = round(fase_a(T) % 1.0, 4)
+    # FRENADA: de Correr (el derecho apoyando) a parado. Frena con dos apoyos
+    # largos bien adelante, el cuerpo atras, y junta los pies. Termina en la
+    # pose del primer cuadro de Respirar. 6 ticks, por lo mismo que Arranque.
+    ts = 1.0
+
+    def x_frenada(t):
+        if t <= 0: return V_CORRER * t
+        u = min(t / ts, 1.0)
+        return V_CORRER * ts * (u - u * u / 2)
+    fin = V_CORRER * ts / 2
+    plan = _pisadas(x_frenada, [('L', 0.235 - METROS_CORRER / ESCALA_JUEGO / 2, 0.235, 0.235, 0.10),
+                                ('R', 0.235, 0.235, 0.20, -0.10), ('L', 0.95, 0.32, 0.30, 0.12),
+                                ('R', fin, 0.30, None, -0.14)], Vector((0, -1)))
+    plan['L'].append(dict(on=1.04, off=9.0, pos=Vector((0.14, -fin)), yaw=0.0))
+    fase_f = _fase_por_pisadas(plan)
+
+    def arriba_frenada(t):
+        freno = dict(POLOS, tp=-6, hp=-10, ty=0, hz=0, hy=0, tr=0, gL=(0.5, -0.28, 0.8), gR=(-0.5, -0.28, 0.8))
+        A = _mezcla(_tronco(carrera(fase_f(t))), freno, _suave(t / 0.5))
+        return _mezcla(A, _tronco(respira(0, 0.3)), _suave((t - 0.7) / 0.7))
+    D['Frenada'] = dict(contacto=None, aerea=False, **_clip_cinta(
+        6, lambda t: (Vector((0.0, -x_frenada(t))), 0.0), plan,
+        lambda t: _alto_correr(fase_f(t)) + (0.575 - _alto_correr(fase_f(t))) * _suave((t - 0.6) / 0.8),
+        arriba_frenada, 0.22))
+    # La fase de Correr en la que empieza (el derecho apoyando).
+    D['Frenada']['cinta']['fase_inicial'] = round(fase_f(0.0) % 1.0, 4)
+    # GIROS en el lugar hacia su izquierda (la vista pone el rumbo del
+    # arranque y el clip gira la cadera; "giro" en avance_locomocion.json).
+    # 90: abre el izquierdo, pivotea sobre la punta del derecho y lo trae.
+    L0, R0 = (0.15, 0.0), (-0.15, 0.0)
+    D['Giro_90_Izq'] = dict(contacto=None, aerea=False, **_giro_en_el_lugar(2, [
+        (0, 0), (0.06, 4), (0.22, 50), (0.40, 88), (0.5, 90)], {
+        'L': [dict(on=-9, off=0.06, pos=L0, yaw=0.0), dict(on=0.22, off=9, pos=_rot2(L0, 85), yaw=80.0)],
+        'R': [dict(on=-9, off=0.26, pos=R0, yaw=0.0, pivote=(0.06, 0.24, 40.0)),
+              dict(on=0.42, off=9, pos=_rot2(R0, 90), yaw=90.0)]}, 1))
+    # 180: cuatro pasos, cada pie gira unos 60 grados por paso.
+    D['Giro_180_Izq'] = dict(contacto=None, aerea=False, **_giro_en_el_lugar(3, [
+        (0, 0), (0.05, 4), (0.20, 55), (0.38, 115), (0.54, 160), (0.66, 178), (0.75, 180)], {
+        'L': [dict(on=-9, off=0.05, pos=L0, yaw=0.0), dict(on=0.20, off=0.36, pos=_rot2(L0, 75), yaw=85.0),
+              dict(on=0.54, off=9, pos=_rot2(L0, 180), yaw=175.0)],
+        'R': [dict(on=-9, off=0.24, pos=R0, yaw=0.0, pivote=(0.05, 0.22, 45.0)),
+              dict(on=0.40, off=0.52, pos=_rot2(R0, 125), yaw=125.0),
+              dict(on=0.66, off=9, pos=_rot2(R0, 180), yaw=180.0)]}, 1))
+    # MEDIA VUELTA corriendo, hacia su izquierda. El cuerpo del motor da la
+    # vuelta frenando en linea recta (giro_acel), pasa por 0 y sale al reves:
+    # frena con dos apoyos largos, gira 180 en dos pasos casi parado (el
+    # derecho pivotea sobre la punta) y sale corriendo al reves. Antes se
+    # veia Correr_Espaldas con el modelo girando y el pie barria el piso.
+    # Frena en 1 m del juego (la vista lo empieza a esa distancia de parar) y
+    # vuelve con la misma aceleracion.
+    frenado = 1.0 / ESCALA_JUEGO
+    acel = V_CORRER * V_CORRER / (2 * frenado); t_s = V_CORRER / acel
+
+    def x_vuelta(t):
+        if t <= 0: return V_CORRER * t
+        if t <= t_s: return V_CORRER * t - acel * t * t / 2
+        return frenado - acel * (t - t_s) ** 2 / 2
+
+    def en(tc, costado, grados):
+        """Tobillo en el medio de un apoyo: debajo del cuerpo, al costado, girado."""
+        return Vector((0.0, -x_vuelta(tc))) + _rot2((costado, 0.0), grados)
+    plan = {
+        'L': [dict(on=-0.50, off=-0.34, pos=en(-0.42, 0.10, 0), yaw=0.0),
+              dict(on=0.38, off=0.62, pos=en(0.50, 0.12, 0), yaw=0.0),
+              dict(on=0.84, off=1.00, pos=en(0.92, 0.13, 75), yaw=85.0),
+              dict(on=1.16, off=1.28, pos=en(1.22, 0.13, 180), yaw=180.0),
+              dict(on=1.62, off=1.70, pos=en(1.66, 0.10, 180), yaw=180.0),
+              dict(on=2.02, off=2.08, pos=en(2.05, 0.10, 180), yaw=180.0)],
+        'R': [dict(on=-1.00, off=-0.84, pos=en(-0.92, -0.10, 0), yaw=0.0),
+              dict(on=0.0, off=0.16, pos=en(0.08, -0.10, 0), yaw=0.0),
+              dict(on=0.66, off=0.96, pos=en(0.75, -0.14, 0), yaw=0.0, pivote=(0.78, 0.94, 45.0)),
+              dict(on=1.10, off=1.22, pos=en(1.16, -0.13, 125), yaw=125.0),
+              dict(on=1.40, off=1.50, pos=en(1.45, -0.10, 180), yaw=180.0),
+              dict(on=1.83, off=1.89, pos=en(1.86, -0.10, 180), yaw=180.0)]}
+    fase_v = _fase_por_pisadas(plan)
+    yaw_v = _curva([(0, 0), (0.72, 0), (0.86, 40), (1.0, 95), (1.12, 140), (1.24, 172), (1.34, 180), (1.75, 180)])
+
+    def arriba_vuelta(t):
+        freno = dict(POLOS, tp=-6, hp=-10, ty=0, hz=0, hy=0, tr=0, gL=(0.5, -0.28, 0.8), gR=(-0.5, -0.28, 0.8))
+        gira = _tronco(LISTO)
+        A = _mezcla(_tronco(carrera(fase_v(t))), freno, _suave((t - 0.1) / 0.4))
+        A = _mezcla(A, gira, _suave((t - 0.6) / 0.25))
+        A = _mezcla(A, _tronco(carrera(fase_v(t)), tp=22), _suave((t - 1.2) / 0.3))
+        A['hz'] = A.get('hz', 0.0) + 30 * math.sin(math.pi * min(max((t - 0.62) / 0.5, 0.0), 1.0))
+        return A
+
+    def alto_vuelta(t):
+        return _alto_correr(fase_v(t)) + (0.53 - _alto_correr(fase_v(t))) * (
+            _suave((t - 0.6) / 0.2) - _suave((t - 1.2) / 0.2))
+    D['Media_Vuelta_Izq'] = dict(contacto=None, aerea=False, **_clip_cinta(
+        7, lambda t: (Vector((0.0, -x_vuelta(t))), yaw_v(t)), plan, alto_vuelta, arriba_vuelta, 0.22))
+    D['Media_Vuelta_Izq']['cinta']['metros_frenado'] = round(frenado * ESCALA_JUEGO, 4)
+    D['Media_Vuelta_Izq']['cinta']['fase_final'] = round(fase_v(7 * TICK / FPS) % 1.0, 4)
+    # Empieza como Frenada: el derecho apoyando. La vista la arranca cuando
+    # Correr pasa por esa fase y no funde dos pasos distintos.
+    D['Media_Vuelta_Izq']['cinta']['fase_inicial'] = round(fase_v(0.0) % 1.0, 4)
+    # Los del otro lado, espejados.
+    for izq, der in (('Correr_Costado_Izq', 'Correr_Costado_Der'), ('Giro_90_Izq', 'Giro_90_Der'),
+                     ('Giro_180_Izq', 'Giro_180_Der'), ('Media_Vuelta_Izq', 'Media_Vuelta_Der')):
+        c = dict(D[izq]['cinta']); c['giro'] = -c['giro']; c['direccion'] = [-c['direccion'][0], c['direccion'][1]]
+        if 'giro_por_cuadro' in c:
+            c['giro_por_cuadro'] = [-g for g in c['giro_por_cuadro']]
+        # Espejado cambia de pie: la fase de Correr corre medio ciclo.
+        for k in ('fase_inicial', 'fase_final'):
+            if k in c:
+                c[k] = round((c[k] + 0.5) % 1.0, 4)
+        D[der] = dict(D[izq], claves=[(f, espejar(P)) for f, P in D[izq]['claves']], cinta=c)
+    return D
+
+
 # ---------------------------------------------------------------- definiciones
 def espejar(P):
     """La pose del otro lado: izquierda <-> derecha (el personaje mira a -Y, su
@@ -232,10 +704,13 @@ def espejar(P):
     de manos, polos y cadera, y el signo de los giros de costado."""
     Q = {}
     for k, v in P.items():
-        if len(k) >= 2 and k[-1] in 'LR' and k[:-1] in ('t', 'k', 'f', 'ab', 'y', 'tw', 'g', 'p'):
+        if len(k) >= 2 and k[-1] in 'LR' and k[:-1] in ('t', 'k', 'f', 'ab', 'y', 'tw', 'g', 'p', 'qp'):
             k2 = k[:-1] + ('R' if k[-1] == 'L' else 'L')
             if k[:-1] in ('g', 'p'):
                 v = (-v[0], v[1], v[2])
+            elif k[:-1] == 'qp':
+                # Espejar en X: el giro sobre X queda, los de Y y Z cambian de signo.
+                v = (v[0], v[1], -v[2], -v[3])
             elif k[:-1] in ('y', 'tw'):
                 v = -v
             Q[k2] = v
@@ -577,15 +1052,10 @@ def definiciones():
         (15, dict(ground=1, tL=-12, kL=30, tR=30, kR=65, fR=15, yR=-12, abR=10, hy=-4, ty=-10, tp=0, tr=-4, hp=-8, **ef_brazos)),
         (19, dict(D['Remate_Efecto']['claves'][0][1])),
     ])
-    # TROTAR y CAMINAR: los pasos del partido por debajo del pique. Antes todo
-    # era Correr con la zancada achicada y a 2 m/s parecia un pique en camara
-    # lenta. Loops de 4 ticks; la vista los avanza con los metros recorridos.
+    # TROTAR y CAMINAR (los pasos del partido por debajo del pique) y CORRER:
+    # en definiciones_locomocion(), en cinta.
     def loop_de(f, n=8, **kw):
         return [(1 + i * 3, f(i / n, **kw)) for i in range(n + 1)]
-    D['Trotar'] = dict(ticks=4, contacto=None, aerea=False, bucle=True,
-                       claves=loop_de(lambda p: ciclo(p, muslo=30, rodilla=58, vuelo=0.025, torso=9, brazo=40)))
-    D['Caminar'] = dict(ticks=4, contacto=None, aerea=False, bucle=True,
-                        claves=loop_de(lambda p: ciclo(p, muslo=19, rodilla=24, vuelo=0.0, torso=3, brazo=20)))
     # FORCEJEAR: corre hombro con hombro con el rival que tiene a su derecha:
     # se inclina hacia el, el brazo derecho abierto contra su cuerpo y mira
     # la pelota. La de la izquierda es la misma espejada.
@@ -595,16 +1065,10 @@ def definiciones():
         return P
     D['Forcejear'] = dict(ticks=4, contacto=None, aerea=False, bucle=True, claves=loop_de(forcejeo))
     D['Forcejear_Izq'] = dict(D['Forcejear'], claves=[(f, espejar(P)) for f, P in D['Forcejear']['claves']])
-    # RESPIRAR: el quieto del partido, loop de 2 s. Brazos sueltos a los costados
-    # (el Quieto original tiene las manos en la cintura: parado en la cancha no
-    # quedaba bien), respira (pecho y hombros suben) y pasa el peso de un pie al otro.
-    def respira(r, peso):
-        return dict(ground=1, tL=-3 - 2 * peso, kL=6, tR=-3 + 2 * peso, kR=6, roll=1.5 * peso, tr=-1.0 * peso,
-                    tp=3 - 2.0 * r, hp=-3 + 1.5 * r,
-                    gL=(0.37, -0.03, 0.52 + 0.025 * r), gR=(-0.37, -0.03, 0.52 + 0.025 * r),
-                    pL=(0.4, 1.0, -0.2), pR=(-0.4, 1.0, -0.2))
+    # RESPIRAR: loop de 2 s (la pose en respira(), afuera: la usan los clips en cinta).
     D['Respirar'] = dict(ticks=8, contacto=None, aerea=False, bucle=True, claves=[
         (1, respira(0, 0.3)), (13, respira(1, 0.0)), (25, respira(0, -0.3)), (37, respira(1, 0.0)), (49, respira(0, 0.3))])
+    D.update(definiciones_locomocion())
     return D
 
 
@@ -646,8 +1110,8 @@ def poner_anclajes():
         # frente: adelante de la cabeza, a la altura de las cejas
         'Frente': ('Cabeza', Vector((0, -0.47, 1.62))),
         # empeine: apenas atras y arriba de la punta del botin
-        'Pie_R': ('Pie.R', tail('Pie.R') + Vector((0, 0.04, 0.03))),
-        'Pie_L': ('Pie.L', tail('Pie.L') + Vector((0, 0.04, 0.03))),
+        'Pie_R': ('Pie.R', tail('Pie.R') + PUNTA_PIE),
+        'Pie_L': ('Pie.L', tail('Pie.L') + PUNTA_PIE),
         # talon: detras del tobillo, cerca del piso
         'Talon_R': ('Pie.R', b['Pie.R'].head_local + Vector((0, 0.09, -0.04))),
     }
@@ -806,8 +1270,15 @@ def construir_todas(solo=None, golero=False):
     D = definiciones_golero() if golero else definiciones(); hechas = {}
     for nombre, d in D.items():
         if solo and nombre not in solo: continue
-        construir(nombre, d['claves'])
-        hechas[nombre] = asentar(nombre, d)
+        act = construir(nombre, d['claves'])
+        if d.get('cinta'):
+            # Una clave por cuadro y lineal entre claves, como lo dibuja Godot
+            # (el GLB se muestrea por cuadro): con Bezier el pie apoyado se
+            # mecia entre dos cuadros.
+            lineal(act)
+        # En cinta el pie apoyado ya pisa justo el piso: subir la cadera en un
+        # cuadro lo despegaria y volveria a patinar.
+        hechas[nombre] = 0 if d.get('cinta') else asentar(nombre, d)
     return hechas
 
 
@@ -888,6 +1359,61 @@ def verificar(nombre, d):
         r['bucle_ok'] = all((x.to_translation() - y.to_translation()).length < 1e-3 for x, y in zip(a, b))
     arm.animation_data.action = None
     r['ok'] = all(v for k, v in r.items() if k.endswith('_ok'))
+    return r
+
+
+def locomocion_cinta():
+    """Nombres de los clips en cinta (los que arma _clip_cinta)."""
+    return [n for n, d in definiciones_locomocion().items() if d.get('cinta')]
+
+
+def escribir_avance(ruta):
+    """Lo que la vista necesita para avanzar cada clip en cinta con los metros
+    reales: metros del juego en cada cuadro (avance_m), hacia donde ([x a su
+    izquierda, z adelante]) y cuanto gira (grados, + = a su izquierda). Lo lee
+    tools/generar_acciones_v2.py y lo pasa a data/acciones_v2.json."""
+    import json
+    out = {n: {k: v for k, v in d['cinta'].items() if k != 'error_ik'}
+           for n, d in definiciones_locomocion().items() if d.get('cinta')}
+    with open(ruta, 'w', encoding='utf-8', newline='\n') as f:
+        json.dump(out, f, indent=1, sort_keys=True)
+        f.write('\n')
+    return sorted(out)
+
+
+def medir_cinta(nombre, d=None, sub=3):
+    """Lo mismo que DetectorPatinaV2 (Godot) pero en Blender: cuanto desliza en
+    la cancha la punta del pie (ancla Pie_L/R) mientras esta a menos de 1,5 cm
+    del juego de su punto mas bajo, con el cuerpo avanzando lo que dice
+    avance_m. Mide `sub` veces por cuadro (el detector va a 60 Hz): de a un
+    cuadro, el ultimo cuadro en el aire de cada paso contaba entero.
+    Metros y m/s del juego."""
+    arm, ad, R3 = _ctx(); d = d or definiciones_locomocion()[nombre]; c = d['cinta']
+    arm.animation_data_create(); arm.animation_data.action = bpy.data.actions[nombre]
+    sc = bpy.context.scene; n = d['ticks'] * TICK
+    dvec = Vector((c['direccion'][0], -c['direccion'][1]))
+    pts = {s: [] for s in 'LR'}
+    for i in range(n * sub + 1):
+        f, frac = 1 + i // sub, (i % sub) / sub
+        sc.frame_set(f, subframe=frac)
+        a0 = c['avance_m'][f - 1]; a1 = c['avance_m'][min(f, n)]
+        cuerpo = dvec * ((a0 + (a1 - a0) * frac) / ESCALA_JUEGO)
+        for s in 'LR':
+            w = bpy.data.objects['Pie_' + s].matrix_world.translation
+            pts[s].append(Vector((w.x + cuerpo.x, w.y + cuerpo.y, w.z)))
+    arm.animation_data.action = None
+    suelo = min(p.z for s in 'LR' for p in pts[s])
+    desliza = 0.0; cuadros = 0
+    for s in 'LR':
+        for a, b in zip(pts[s], pts[s][1:]):
+            if min(a.z, b.z) <= suelo + 0.015 / ESCALA_JUEGO:
+                desliza += (b - a).to_2d().length; cuadros += 1
+    desliza *= ESCALA_JUEGO
+    dur = n / FPS
+    r = dict(nombre=nombre, desliza_m=round(desliza, 4), avance_m=round(c['metros'], 3), giro=c['giro'],
+             error_ik_mm=round(c['error_ik'] * ESCALA_JUEGO * 1000, 2),
+             pie_ms=round(desliza / max(cuadros / (FPS * sub), 1e-6), 3), cuerpo_ms=round(abs(c['metros']) / dur, 3))
+    r['relacion'] = round(r['pie_ms'] / r['cuerpo_ms'], 3) if r['cuerpo_ms'] > 0 else None
     return r
 
 

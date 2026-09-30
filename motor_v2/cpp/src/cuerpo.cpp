@@ -82,11 +82,7 @@ void Cuerpo::_moverse(const ParametrosCuerpo &p, bool trabado, double dt) {
 		return;
 	}
 	double ux = dx / dist, uz = dz / dist;
-	// La reserva baja el techo de la corrida, no el trote (por eso es un
-	// mínimo contra el factor). Un factor mayor que 1 es el que entra o sale
-	// de la cancha, que no juega la jugada.
-	double techo = factor > 1.0 ? factor : std::min(factor, _capacidad_de_sprint(p));
-	double tope = vel_max * techo * cansancio;
+	double tope = rapidez_buscada(p);
 	if (frenar) {
 		// La velocidad con la que todavía se frena a tiempo: v² = 2·a·d.
 		tope = std::min(tope, std::sqrt(2.0 * p.frenada * dist));
@@ -126,23 +122,62 @@ void Cuerpo::_moverse(const ParametrosCuerpo &p, bool trabado, double dt) {
 	recorrido += avance;
 }
 
+double Cuerpo::rapidez_buscada(const ParametrosCuerpo &p) const {
+	if (!tiene_objetivo) {
+		return 0.0;
+	}
+	// La reserva baja el techo de la corrida, no el trote (por eso es un
+	// mínimo contra el factor). Un factor mayor que 1 es el que entra o sale
+	// de la cancha, que no juega la jugada.
+	double techo = factor > 1.0 ? factor : std::min(factor, _capacidad_de_sprint(p));
+	return vel_max * techo * cansancio;
+}
+
+double Cuerpo::metros_para_parar(const ParametrosCuerpo &p) const {
+	if (!tiene_objetivo) {
+		double r = rapidez();
+		return r * r / (2.0 * std::max(p.frenada, 0.01));
+	}
+	if (!frenar) {
+		return -1.0;
+	}
+	double dx = objetivo_x - x, dz = objetivo_z - z;
+	return std::sqrt(dx * dx + dz * dz);
+}
+
+double Cuerpo::giro_pendiente(const ParametrosCuerpo &p) const {
+	return mate::envolver(_hacia(p) - rumbo);
+}
+
+double Cuerpo::rumbo_buscado() const {
+	if (!tiene_objetivo) {
+		return rumbo;
+	}
+	double dx = objetivo_x - x, dz = objetivo_z - z;
+	return dx * dx + dz * dz > 1e-12 ? mate::arcotangente2(dx, dz) : rumbo;
+}
+
 // Corriendo, el cuerpo mira hacia donde corre; despacio mira la jugada (o
-// sigue como estaba). Gira como mucho `giro` por segundo: la agilidad.
+// sigue como estaba).
+double Cuerpo::_hacia(const ParametrosCuerpo &p) const {
+	if (rapidez() >= p.rapidez_para_girar) {
+		return mate::arcotangente2(vx, vz);
+	}
+	if (mira) {
+		double dx = mira_x - x, dz = mira_z - z;
+		if (dx * dx + dz * dz > 1e-6) {
+			return mate::arcotangente2(dx, dz);
+		}
+	}
+	return rumbo;
+}
+
+// Gira hacia _hacia como mucho `giro` por segundo: la agilidad.
 void Cuerpo::_girar(const ParametrosCuerpo &p, bool trabado, double dt) {
 	if (trabado) {
 		return;
 	}
-	double r = rapidez();
-	double hacia = rumbo;
-	if (r >= p.rapidez_para_girar) {
-		hacia = mate::arcotangente2(vx, vz);
-	} else if (mira) {
-		double dx = mira_x - x, dz = mira_z - z;
-		if (dx * dx + dz * dz > 1e-6) {
-			hacia = mate::arcotangente2(dx, dz);
-		}
-	}
-	double dif = mate::envolver(hacia - rumbo);
+	double dif = giro_pendiente(p);
 	double maximo = giro * dt;
 	rumbo = mate::envolver(rumbo + std::clamp(dif, -maximo, maximo));
 }

@@ -78,12 +78,19 @@ def reproject_face(head_name, items):
                     pt.co = (*(Mwi @ fix(Mw @ Vector(pt.co[:3]), off)), 1)
 
 
+def _contexto(**kw):
+    """temp_override con la ventana de Blender si hay. Sin pantalla (blender -b)
+    no hay ventanas y los operadores andan igual sin ella."""
+    wins = bpy.context.window_manager.windows
+    if wins:
+        kw['window'] = wins[0]
+    return bpy.context.temp_override(**kw)
+
+
 def curves_to_mesh():
-    win = bpy.context.window_manager.windows[0]
     for o in [o for o in bpy.data.objects if o.type == 'CURVE' and o.visible_get()]:
         o.data.bevel_resolution = 1; o.data.resolution_u = 6
-        with bpy.context.temp_override(window=win, active_object=o, selected_objects=[o],
-                                       selected_editable_objects=[o], object=o):
+        with _contexto(active_object=o, selected_objects=[o], selected_editable_objects=[o], object=o):
             bpy.ops.object.convert(target='MESH')
 
 
@@ -112,9 +119,14 @@ def tri_count():
 
 
 def export_glb(path, animations=True, colores='MATERIAL'):
-    win = bpy.context.window_manager.windows[0]
-    area = next((a for a in win.screen.areas if a.type == 'VIEW_3D'), win.screen.areas[0])
-    with bpy.context.temp_override(window=win, area=area, scene=win.scene, view_layer=win.view_layer):
+    wins = bpy.context.window_manager.windows
+    if wins:
+        win = wins[0]
+        area = next((a for a in win.screen.areas if a.type == 'VIEW_3D'), win.screen.areas[0])
+        ctx = bpy.context.temp_override(window=win, area=area, scene=win.scene, view_layer=win.view_layer)
+    else:
+        ctx = bpy.context.temp_override()
+    with ctx:
         bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_visible=True, export_apply=True,
                                   export_animations=animations, export_animation_mode='ACTIONS',
                                   export_anim_slide_to_zero=True, export_skins=True, export_yup=True,
@@ -237,8 +249,7 @@ def unir_personaje():
         copias.append(c)
     for o in mallas:
         o.hide_set(True); o.hide_render = True
-    win = bpy.context.window_manager.windows[0]
-    with bpy.context.temp_override(window=win, active_object=copias[0], object=copias[0],
+    with _contexto(active_object=copias[0], object=copias[0],
                                    selected_objects=copias, selected_editable_objects=copias):
         bpy.ops.object.join()
     ob = copias[0]; ob.name = 'Chibi'; me = ob.data; me.name = 'Chibi'

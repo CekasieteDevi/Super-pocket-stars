@@ -1,4 +1,7 @@
 [
+	{"version": "0.7.68", "fecha": "2026-09-30", "cambio": "En el motor nuevo los jugadores que vuelven corriendo frenan, se dan vuelta y salen al revés, en vez de correr para atrás."},
+	{"version": "0.7.67", "fecha": "2026-09-30", "cambio": "En el motor nuevo los jugadores arrancan, frenan y se dan vuelta con sus propios pasos, sin patinar."},
+	{"version": "0.7.66", "fecha": "2026-09-30", "cambio": "Los jugadores ya no patinan al correr, trotar y caminar, y tienen pasos nuevos para arrancar, frenar, girar y correr de costado o de espaldas."},
 	{"version": "0.7.65", "fecha": "2026-09-30", "cambio": "Los jugadores del motor nuevo ya se mueven también en la computadora y en el celular."},
 	{"version": "0.7.64", "fecha": "2026-09-30", "cambio": "En el motor nuevo los jugadores arrancan, frenan y doblan con su físico, y cada gesto dura lo que dura su animación."},
 	{"version": "0.7.63", "fecha": "2026-09-30", "cambio": "La pelota del motor nuevo ya funciona también en la computadora y en el celular."},

@@ -234,7 +234,7 @@ Hecha en la nube. Test: `tests/test_cuerpo_v2.gd`.
 
 - **Nadie gira 180° en el lugar corriendo a velocidad máxima:** pasa.
 - **`muestra_animaciones_3d.tscn` manejada por acciones:** no se hizo. Esa escena repite jugadas reales del motor actual, y el V2 recién las va a poder jugar desde la etapa 3. Mientras tanto, `laboratorio_cuerpo.tscn` muestra todos los clips manejados por el cuerpo. Decisión abierta: pasar la muestra al V2 en la etapa 6 o dejar el laboratorio como prueba de la etapa 2.
-- **Deslizamiento de pies bajo un umbral:** no pasa, y no se arregla desde el código. Los clips de andar están hechos en el lugar: el pie apoyado casi no retrocede (en Correr, el pie bajo hasta avanza). El pie apoyado desliza más o menos lo que avanza el cuerpo. Se probaron largos de ciclo de 0,5 a 3,2 m y ninguno lo baja.
+- **Deslizamiento de pies bajo un umbral:** no pasaba (ver el resultado de los clips en cinta, más abajo). Los clips de andar estaban hechos en el lugar: el pie apoyado casi no retrocede (en Correr, el pie bajo hasta avanza). El pie apoyado desliza más o menos lo que avanza el cuerpo. Se probaron largos de ciclo de 0,5 a 3,2 m y ninguno lo baja.
 
 | Clip | Pie apoyado | Cuerpo |
 | --- | --- | --- |
@@ -248,13 +248,88 @@ Hecha en la nube. Test: `tests/test_cuerpo_v2.gd`.
 - **Hecho en la PC (2026-09-30):** bibliotecas de Windows y Android rearmadas; `test_cuerpo_v2` y `test_pelota_v2` dan 0 fallas en la PC. El banco de la etapa 0 con el cuerpo nuevo da la misma huella en la PC y en el teléfono (7270582477375384744) y tarda 1,25 s en el teléfono (0,43 s en la PC).
 - **Revisión visual (2026-09-30):** el usuario miró `laboratorio_cuerpo.tscn` en la PC y le gustó cómo se ve. La etapa 2 pasa, salvo el patinaje de pies, que espera los clips nuevos de Blender.
 
-**Para hacer en la PC con Blender** (`tools/blender/animaciones_jugador.py`):
+#### Resultado (2026-09-30): clips en cinta hechos en Blender; los pies ya no patinan al andar derecho
 
-1. Rehacé `Caminar`, `Trotar` y `Correr` "en cinta": el pie apoyado retrocede a la velocidad del cuerpo mientras toca el piso. Anotá en el clip cuántos metros avanza el cuerpo por ciclo, así la vista avanza la animación con los metros reales.
-2. Agregá clips de arranque, frenada, giro de 90° y de 180°, correr de costado y correr de espaldas.
-3. Exportá el GLB y ejecutá `GODOT=<godot> python3 tools/generar_acciones_v2.py`. `test_cuerpo_v2` falla si el JSON no coincide con los GLB.
-4. Medí con `laboratorio_cuerpo.tscn -- segundos=60` sin pantalla y mirá el laboratorio con pantalla.
-5. Rearmá las bibliotecas de Windows y Android después de cambiar el C++.
+Hecho en la PC con Blender 5.2 sin pantalla (`blender -b`). `exportar_juego3d.py` ahora exporta también sin pantalla, y el GLB sale igual byte a byte que desde la ventana.
+
+- **Cómo se arman:** `animaciones_jugador.py`, sección "locomoción en cinta". Cada tobillo tiene un lugar en la cancha y la pierna se resuelve con IK (cinemática inversa: se busca el ángulo de cada articulación para llegar a un punto). El pie apoyado queda plano y fijo en la cancha mientras el cuerpo avanza. El clip saca la traslación del cuerpo: queda en el lugar y el pie apoyado retrocede a la velocidad del cuerpo.
+- **Clips (jugador y golero):**
+  - Loops: `Correr` (2,2 m por ciclo), `Trotar` (1,3 m), `Caminar` (0,62 m), `Correr_Costado_Izq/Der` y `Correr_Espaldas` (1 m).
+  - Una vez: `Arranque` (de parado a Correr en 2 m), `Frenada` (de Correr a parado en 1,1 m), `Giro_90_Izq/Der` y `Giro_180_Izq/Der` (en el lugar, un pie pivotea sobre la punta).
+  - Todos los loops arrancan con el derecho pasando por debajo en la fase 0 y lo tienen en el medio del apoyo en la 0,5, como el `Correr` de antes.
+  - Van a 24 cuadros por ciclo (los loops de 1 s y Arranque y Frenada de 1,5 s). La vista los avanza por metros y la duración no importa. Con 12 cuadros el apoyo de Correr duraba 2 cuadros y el pie se hundía 1,2 cm entre uno y otro.
+- **Metros por cuadro:** Blender escribe `tools/blender/avance_locomocion.json` al armarlos. `generar_acciones_v2.py` lo pasa a `data/acciones_v2.json` como `metros`, `avance_m` (metros en cada cuadro), `direccion` y `giro`. `test_cuerpo_v2` controla el avance y que `VistaCancha3D` use los mismos metros.
+- **Vista:**
+  - `VistaV2` avanza cada loop con sus `metros`.
+  - Por debajo de `rapidez_para_girar` el cuerpo mira la jugada. Si anda de costado o para atrás, la vista usa `Correr_Costado_*` o `Correr_Espaldas` y gira el modelo hasta 45° para que el clip vaya justo hacia donde va el cuerpo.
+  - Entre dos loops cambia recién en la fase 0 o 0,5: ahí el pie apoyado está debajo del cuerpo en los dos clips.
+- **Detector PATINA:** el suelo ahora es el de cada clip. Con uno solo para todos, una barrida o una caída lo bajaba 4 cm y en Correr el pie apoyado dejaba de contar. Lo que patina mientras un clip se funde con otro va aparte, en `(fundido)`.
+
+| Clip | Pie apoyado antes | Pie apoyado ahora | Cuerpo |
+| --- | --- | --- | --- |
+| Correr | 7,48 m/s | 0,43 m/s (6%) | 6,82 m/s |
+| Trotar | 3,23 m/s | 0,17 m/s (5%) | 3,59 m/s |
+| Caminar | 1,43 m/s | 0,16 m/s (9%) | 1,74 m/s |
+| Correr_Costado_Izq / Der | — | 0,49 / 0,26 m/s (22% / 14%) | 2,24 / 1,91 m/s |
+| Correr_Espaldas | — | 0,57 m/s (32%) | 1,76 m/s |
+| (fundido) | — | 1,29 m/s | — |
+
+Medido con `laboratorio_cuerpo.tscn -- segundos=60` sin pantalla. En Blender, `medir_cinta()` da menos del 3,5% en todos los clips.
+
+**Pasa si, uno por uno:**
+
+- **Deslizamiento de pies bajo un umbral (15%):** pasa en Correr, Trotar y Caminar.
+- **De costado y de espaldas:** no pasan en el laboratorio. Sin el modelo girando patinan del 5 al 11%. El resto sale de las medias vueltas de los piques: la marcha barre 180° a poca velocidad y el modelo gira con el pie apoyado.
+- **Fundidos:** el cambio de clip todavía arrastra el pie (1,29 m/s mientras dura).
+
+#### Resultado (2026-09-30): la vista usa Arranque, Frenada y los giros
+
+Test: `tests/test_vista_cinta_v2.gd`.
+
+- **Qué busca el cuerpo:** `Cuerpo` (C++) suma tres lecturas que no cambian nada: `rapidez_buscada` (la punta hacia el objetivo), `metros_para_parar` (hasta el objetivo si llega frenando; -1 si lo pasa) y `giro_pendiente` (lo que le falta girar). `CuerposV2Nativos` las expone con `get_`. `_girar` usa la misma cuenta: el banco de la etapa 0 da la misma huella (7270582477375384744). Bibliotecas de Windows y Android rearmadas.
+- **Cuándo usa cada clip (`VistaV2._empezar_una_vez`):**
+  - Giro: quieto y le faltan 60° o más. Desde 135°, `Giro_180_*`; si no, `Giro_90_*`.
+  - Arranque: sale de parado, hacia adelante, buscando al menos la rapidez de Correr (`ANDAR_TROTA_HASTA_MS`). El que sale caminando o trotando no se tira como un velocista.
+  - Frenada: ya frenando y le quedan a lo sumo los metros del clip (1,1 m). Si quedan menos, el clip empieza más adelante.
+- **Cómo avanzan:** con lo que hace el cuerpo, no con el reloj. Arranque va con los metros recorridos y sigue con Correr en `fase_final`. Frenada va con los metros que le faltan al cuerpo para parar: sumando v·dt el clip terminaba 6 cm antes de que el cuerpo parara. El final, con el cuerpo quieto, va con el reloj. Los giros van con lo que giró el cuerpo (`giro_por_cuadro`), con el modelo quieto en el rumbo del principio.
+- **Sin fundido en los giros:** empiezan y terminan en la pose de Respirar, pero con el modelo girado. Fundiendo, el giro se sumaba dos veces y el pie barría 0,36 m en un cuadro.
+
+| Test (un jugador: media vuelta, pique de 25 m y frena) | Pie apoyado |
+| --- | --- |
+| Giro_180 | 0,21 m en toda la vuelta (girando sin clip, cada pie barre unos 0,35 m) |
+| Arranque | 2% de lo que avanza |
+| Correr | 4% |
+| Frenada | 3% |
+
+En `laboratorio_cuerpo.tscn`, 17 a 19 ahora paran, miran a otro lado y salen (19 pica). En 60 s: Arranque 0,07 m/s de pie contra 1,94 del cuerpo y Frenada 0,05 contra 2,47.
+
+#### Resultado (2026-09-30): la media vuelta corriendo
+
+- **Qué hace el cuerpo:** con el objetivo atrás frena en línea recta (`giro_acel`, 12 m/s²), pasa por 0 y sale al revés. Por debajo de 2 m/s no gira, así que la vista mostraba `Correr_Espaldas` y el modelo girando.
+- **Clip nuevo `Media_Vuelta_Izq/Der`** (Blender, en cinta, 1,75 s): frena en 1 m con dos apoyos largos, gira 180° en dos pasos casi parado (un pie pivotea sobre la punta) y sale corriendo al revés. El cuerpo va y vuelve: el JSON trae `recorrido_m` (metros recorridos, que no bajan), `metros_frenado`, `fase_inicial` y `fase_final`. Espejar cambia de pie: las fases corren medio ciclo.
+- **C++:** `Cuerpo::rumbo_buscado` (hacia dónde queda el objetivo), expuesto como `get_rumbo_buscado`. Bibliotecas de Windows y Android rearmadas.
+- **Vista:**
+  - Corriendo con el objetivo a 150° o más de la carrera, cuando le falta 1 m o menos para parar, entra en el pie con que empieza el clip (Correr pasa por su `fase_inicial`).
+  - Avanza con los metros recorridos: hasta parar salen de la rapidez (v²/2·giro_acel) y después suma lo que anda al revés.
+  - Sale a Correr en `fase_final`, sin fundido, y anda hacia adelante aunque el rumbo del cuerpo todavía esté girando.
+  - Frenada deja el lugar al giro si el cuerpo ya parado tiene que girar: juntando los pies con el modelo girando, el pie patinaba 0,48 m/s.
+
+| Laboratorio, 60 s | Pie apoyado | Cuerpo |
+| --- | --- | --- |
+| Media_Vuelta_Izq / Der | 0,26 / 0,28 m/s (14% / 16%) | 1,89 / 1,78 m/s |
+| Correr_Espaldas (antes 0,57 m/s, 32%) | 0,07 m/s (5%) | 1,49 m/s |
+| Correr_Costado_Izq (antes 22%) | 0,13 m/s (9%) | 1,51 m/s |
+| Frenada | 0,10 m/s (5%) | 1,89 m/s |
+
+En `test_vista_cinta_v2`, un pique a 8,1 m/s que vuelve: Correr, Media_Vuelta, Correr, sin pasar de espaldas ni de costado, y el pie apoyado desliza el 12% de lo que recorre el cuerpo.
+
+**Qué falta:**
+
+1. La media vuelta entra recién cuando Correr pasa por el pie del clip: a veces ya se comió parte de la frenada y queda en el borde del 15%.
+2. Los fundidos entre loops todavía arrastran el pie (1,2 m/s mientras duran).
+3. Revisión visual del partido 3D actual (`VistaCancha3D` también usa los clips nuevos, pero no los de una vez).
+
+- **Revisión visual (2026-09-30):** el usuario miró `laboratorio_cuerpo.tscn` en la PC con los clips nuevos y se ve bien.
 
 ### Etapa 3 — Tocar la pelota
 

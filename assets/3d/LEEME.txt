@@ -60,6 +60,11 @@ ANIMACIONES (24 fps, empiezan en t = 0; cuadro f del eventos.txt -> t = (f-1)/24
   Atajar_Volando      0.96   no    ATAJADA t=0.333 - 0.458 (pelota a los guantes), cae al piso t=0.583
   Levantarse          0.79   no    termina parado con la pelota en el pecho
 
+  CLIPS EN CINTA (animaciones_jugador.py, "locomocion en cinta"): Correr, Trotar, Caminar,
+  Correr_Costado_Izq/Der, Correr_Espaldas, Arranque, Frenada, Giro_90_Izq/Der, Giro_180_Izq/Der.
+  El cuerpo queda en el lugar y el pie apoyado retrocede a la velocidad del cuerpo: avanzalos con los
+  metros recorridos (avance_locomocion.json -> data/acciones_v2.json: metros, avance_m, giro), no con el reloj.
+
   Transiciones: en 3D podes hacer crossfade de ~0.08-0.12 s entre animaciones y no hace falta
   esperar el cuadro exacto. Si queres el empalme perfecto (como en los sprites):
     correr -> *_Corriendo: arrancar la accion cuando correr esta en t = 0.375

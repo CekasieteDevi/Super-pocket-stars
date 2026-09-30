@@ -116,17 +116,20 @@ const COLOR_PISO_FONDO := Color("3e8c36")
 ## Materiales del estadio que son piso: nunca se cortan.
 const MATERIALES_PISO := ["Cesped", "Cesped_2", "Tierra", "Lineas"]
 
-## Metros de carrera por ciclo de la animación Correr (dos pasos). Es el
-## mismo paso de 1.6 m que usa VistaPartido._pose para los sprites.
-const METROS_POR_CICLO := 3.2
+## Metros de carrera por ciclo de la animación Correr (dos pasos). Los
+## clips de andar van en cinta (el pie apoyado retrocede a la velocidad del
+## cuerpo): con estos metros por ciclo el pie apoyado queda quieto en la
+## cancha. Son los "metros" de data/acciones_v2.json; test_cuerpo_v2 lo
+## controla. Antes 3,2 (el paso de los sprites), con clips hechos en el lugar.
+const METROS_POR_CICLO := 2.2
 ## Por debajo del pique trota y despacio camina (m/s), con margen al cambiar.
-## Metros de cada ciclo de piernas de esas animaciones.
+## Metros de cada ciclo de piernas de esas animaciones (antes 1,5 y 2,4).
 const ANDAR_CAMINA_HASTA_MS := 1.8
 const ANDAR_TROTA_HASTA_MS := 4.6
 const ANDAR_MARGEN_MS := 0.6
 const ANDAR_SUAVIZADO := 2.5
-const CICLO_CAMINAR_M := 1.5
-const CICLO_TROTAR_M := 2.4
+const CICLO_CAMINAR_M := 0.62
+const CICLO_TROTAR_M := 1.3
 ## Qué tan rápido (m/s de partido) la pelota toma o suelta el desvío del que
 ## la lleva (regate, recepción).
 const DESVIO_PELOTA_VELOCIDAD := 8.0
