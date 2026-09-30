@@ -45,6 +45,10 @@ struct Clip {
 	double contacto_seg = -1.0;
 	// Sigue con su locomoción mientras dura (patear corriendo).
 	bool mueve = false;
+	// Dónde toca la pelota en el cuadro de contacto (punto_contacto de
+	// data/acciones_v2.json), en metros desde el pie del jugador: x a su
+	// izquierda, y arriba, z adelante. La etapa 3 lo usa para saber si llega.
+	double punto_x = 0.0, punto_y = 0.0, punto_z = 0.0;
 };
 
 enum FaseAccion : int {
@@ -92,6 +96,9 @@ struct Cuerpo {
 	uint32_t eventos = 0;
 
 	double rapidez() const;
+	// Lo más que puede bajar la rapidez en un paso (llegando frenado a un
+	// punto): más que eso es frenar en seco.
+	static double caida_maxima(const ParametrosCuerpo &p, double dt);
 	void ir_a(double px, double pz, double factor_ = 1.0, bool frenar_ = false);
 	// Arranca un gesto. No se puede empezar otro hasta que termina: devuelve
 	// false y no cambia nada.

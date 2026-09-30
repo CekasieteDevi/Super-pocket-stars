@@ -35,6 +35,14 @@ const GIRO_180_DESDE := deg_to_rad(135.0)
 ## cuerpo la da frenando en línea recta (Cuerpo::_moverse, giro_acel).
 const MEDIA_VUELTA_DESDE := deg_to_rad(150.0)
 
+## Ajuste de pie (etapa 3): el pie va a la pelota en los últimos
+## AJUSTE_ANTES_SEG antes del cuadro de contacto y la suelta en
+## AJUSTE_DESPUES_SEG. Hacia la pelota el modelo gira a lo sumo
+## giro_alcance_rad (data/fisica_v2.json), lo mismo que el motor le deja
+## estirar el pie hacia un costado.
+const AJUSTE_ANTES_SEG := 0.15
+const AJUSTE_DESPUES_SEG := 0.1
+
 var _viewport: SubViewport
 var _mundo_3d: Node3D
 var _camara: Camera3D
@@ -85,6 +93,15 @@ var _manchas: SombrasRedondas
 var escala_3d := 1.0
 ## Sin los 22 jugadores: el laboratorio de la pelota (etapa 1) solo la mira a ella.
 var con_jugadores := true
+## Cuántos y de qué equipo (etapa 3: el rondo y el partidito tienen 6 y 10,
+## sin arqueros). Vacío: los 22 del partido, del 0 al 10 un equipo y el 0 y
+## el 11 arqueros.
+var equipos := PackedInt32Array()
+## Clip -> [segundo del contacto, ancla] de los que tocan con el pie.
+var _contacto_pie := {}
+var _giro_alcance := 1.0
+## Dibujando la canchita: los pies van a la pelota.
+var _ajustar_pies := false
 
 
 func _ready() -> void:
@@ -119,7 +136,7 @@ func _ready() -> void:
 	_mundo_3d.add_child(_pelota)
 	Materiales3D.aplicar(_pelota)
 	if sombras_redondas:
-		_manchas = SombrasRedondas.new(MundoV2.JUGADORES + 1)
+		_manchas = SombrasRedondas.new(_cantidad() + 1)
 		_mundo_3d.add_child(_manchas)
 	if not personajes_con_sombra_sol:
 		_sin_sombra_sol(_pelota)
@@ -128,16 +145,19 @@ func _ready() -> void:
 	var jugador := load(ESCENA_JUGADOR) as PackedScene
 	var golero := load(ESCENA_GOLERO) as PackedScene
 	var colores := ColoresClub.par("Atlético Prueba", "Deportivo Banco")
-	for i in MundoV2.JUGADORES:
-		var arquero := i % 11 == 0
+	var numero := [0, 0]
+	for i in _cantidad():
+		var arquero := _es_arquero(i)
+		var equipo := _equipo(i)
+		numero[equipo] += 1
 		var p := Jugador3D.new(golero if arquero else jugador)
 		_mundo_3d.add_child(p)
-		var id := i if i < 11 else 1000 + i
-		var camiseta: Color = colores[0 if i < 11 else 1]
+		var id := i if equipo == 0 else 1000 + i
+		var camiseta: Color = colores[equipo]
 		if arquero:
-			camiseta = Color("2f9e44") if i < 11 else Color("e8a33a")
+			camiseta = Color("2f9e44") if equipo == 0 else Color("e8a33a")
 		p.colorear(camiseta, Color(0, 0, 0, 0), Color("3b2618"))
-		p.poner_numero(i % 11 + 1)
+		p.poner_numero(numero[equipo])
 		p.poner_cara(Jugador3D.cara_de(id), Jugador3D.Gesto.NORMAL)
 		if not arquero:
 			p.poner_peinado(Jugador3D.peinado_de(id))
@@ -145,22 +165,55 @@ func _ready() -> void:
 		if not personajes_con_sombra_sol:
 			_sin_sombra_sol(p)
 		_andar.append("Respirar")
-	_ciclos.resize(MundoV2.JUGADORES)
-	_sentido.resize(MundoV2.JUGADORES)
-	_rumbo_modelo.resize(MundoV2.JUGADORES)
-	_una_vez.resize(MundoV2.JUGADORES)
-	_sin_fundido.resize(MundoV2.JUGADORES)
-	_adelante.resize(MundoV2.JUGADORES)
+	_ciclos.resize(_cantidad())
+	_sentido.resize(_cantidad())
+	_rumbo_modelo.resize(_cantidad())
+	_una_vez.resize(_cantidad())
+	_sin_fundido.resize(_cantidad())
+	_adelante.resize(_cantidad())
 	_frenada = float(FisicaV2.parametros_cuerpo()["frenada"])
 	_giro_acel = float(FisicaV2.parametros_cuerpo()["giro_acel"])
 	var clips := FisicaV2.clips()
+	_giro_alcance = float(FisicaV2.parametros_toque()["giro_alcance_rad"])
 	for nombre in clips:
 		var c: Dictionary = clips[nombre]
+		if c["contacto"] != null and str(c["ancla"]) in ["Pie_R", "Pie_L"]:
+			_contacto_pie[nombre] = [float(c["contacto"]) * float(c["duracion"]), str(c["ancla"])]
 		if not c.has("metros"):
 			continue
 		_cinta[nombre] = c
 		if c["bucle"]:
 			_metros_ciclo[nombre] = float(c["metros"])
+
+
+func _cantidad() -> int:
+	return MundoV2.JUGADORES if equipos.is_empty() else equipos.size()
+
+
+func _equipo(i: int) -> int:
+	return (0 if i < 11 else 1) if equipos.is_empty() else equipos[i]
+
+
+func _es_arquero(i: int) -> bool:
+	return equipos.is_empty() and i % 11 == 0
+
+
+## Las líneas de un rectángulo en el pasto (el cuadrado del rondo, la
+## canchita del partidito), centrado en el medio de la cancha.
+func marcar_rectangulo(medio_x: float, medio_z: float) -> void:
+	var material := Materiales3D.toon(Color.WHITE)
+	for lado in [[Vector3(0.0, 0.0, -medio_z), Vector2(medio_x * 2.0, 0.08)],
+			[Vector3(0.0, 0.0, medio_z), Vector2(medio_x * 2.0, 0.08)],
+			[Vector3(-medio_x, 0.0, 0.0), Vector2(0.08, medio_z * 2.0)],
+			[Vector3(medio_x, 0.0, 0.0), Vector2(0.08, medio_z * 2.0)]]:
+		var linea := MeshInstance3D.new()
+		var plano := PlaneMesh.new()
+		plano.size = lado[1]
+		linea.mesh = plano
+		linea.position = lado[0] + Vector3(0.0, 0.012, 0.0)
+		linea.material_override = material
+		linea.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_mundo_3d.add_child(linea)
 
 
 static func _sin_sombra_sol(raiz: Node) -> void:
@@ -219,9 +272,26 @@ func dibujar_estado(pos_previa: PackedVector2Array, pos: PackedVector2Array, rum
 ## metros para parar, giro que falta) elige Arranque, Frenada y los giros.
 ## La cámara sigue a `foco`.
 func dibujar_cuerpos(c: Object, alfa: float, delta: float, foco: Vector2) -> void:
+	_poner_cuerpos(c, alfa, delta)
+	_pelota.visible = false
+	_mover_camara(foco, delta)
+
+
+## La canchita de la etapa 3 (CanchitaV2Nativa): los cuerpos como
+## dibujar_cuerpos, y la pelota con su giro. La cámara sigue a la pelota.
+func dibujar_canchita(c: Object, alfa: float, delta: float) -> void:
+	# La pelota primero: los pies van adonde quedó dibujada.
+	_pelota.visible = true
+	dibujar_pelota(c.get_pelota_previa(), c.get_pelota_pos(), alfa, delta, c.get_pelota_giro())
+	_ajustar_pies = true
+	_poner_cuerpos(c, alfa, delta)
+	_ajustar_pies = false
+
+
+func _poner_cuerpos(c: Object, alfa: float, delta: float) -> void:
 	var acciones := []
 	var intenciones := []
-	for i in MundoV2.JUGADORES:
+	for i in _cantidad():
 		# El tiempo de la acción es el del paso actual: se lo lleva al del
 		# cuadro con lo que falta del paso (alfa).
 		acciones.append([c.get_accion(i), maxf(0.0, float(c.get_tiempo_accion(i)) - (1.0 - alfa) / 60.0)])
@@ -229,8 +299,6 @@ func dibujar_cuerpos(c: Object, alfa: float, delta: float, foco: Vector2) -> voi
 			c.get_rumbo_buscado(i)])
 	_dibujar_jugadores(c.get_pos_previa(), c.get_pos(), c.get_rumbo(), c.get_rapidez(), acciones, alfa, delta,
 		intenciones)
-	_pelota.visible = false
-	_mover_camara(foco, delta)
 
 
 ## `acciones[i]` = [clip, segundo]; "" o sin entrada = anda.
@@ -240,7 +308,7 @@ func dibujar_cuerpos(c: Object, alfa: float, delta: float, foco: Vector2) -> voi
 func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array, rumbo: PackedFloat32Array,
 		rapidez: PackedFloat32Array, acciones: Array, alfa: float, delta: float, intenciones := []) -> void:
 	_tiempo += delta
-	for i in MundoV2.JUGADORES:
+	for i in _cantidad():
 		var p := pos_previa[i].lerp(pos[i], alfa)
 		var p3 := _jugadores[i]
 		p3.position = Vector3(p.x, 0.0, p.y)
@@ -275,6 +343,8 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 			p3.rotation.y = una_vez[2]
 		if hace_gesto:
 			p3.poner(accion, float(acciones[i][1]), delta)
+			if _ajustar_pies and _contacto_pie.has(accion):
+				_ajustar_pie(p3, accion, float(acciones[i][1]))
 			p3.poner_cara(p3.cara, Jugador3D.Gesto.NORMAL, _tiempo)
 			continue
 		var fundido := -1.0 if _sin_fundido[i] else delta
@@ -308,6 +378,27 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 			tiempo = fposmod(_ciclos[i], 1.0) * p3.duracion(anim)
 		p3.poner(anim, tiempo, fundido)
 		p3.poner_cara(p3.cara, Jugador3D.Gesto.NORMAL, _tiempo)
+
+
+## Lleva el pie del gesto al borde de la pelota cerca del contacto: gira el
+## modelo hacia ella (lo que el motor le deja estirar) y dobla la pierna. No
+## mueve ni al jugador ni a la pelota.
+func _ajustar_pie(p3: Jugador3D, accion: String, segundo: float) -> void:
+	var contacto: float = _contacto_pie[accion][0]
+	var peso := smoothstep(contacto - AJUSTE_ANTES_SEG, contacto, segundo) \
+		* (1.0 - smoothstep(contacto, contacto + AJUSTE_DESPUES_SEG, segundo))
+	if peso <= 0.0:
+		return
+	var bola := _pelota.position
+	var hacia := Vector2(bola.x - p3.position.x, bola.z - p3.position.z)
+	if hacia.length_squared() > 1e-6:
+		var dif := clampf(wrapf(atan2(hacia.x, hacia.y) - p3.rotation.y, -PI, PI), -_giro_alcance, _giro_alcance)
+		p3.rotation.y += dif * peso
+	var ancla: String = _contacto_pie[accion][1]
+	var pie := p3.ancla_de_pose(ancla)
+	var radio := MundoV2.RADIO_PELOTA * VistaCancha3D.ESCALA_PELOTA
+	var borde := bola + (pie - bola).normalized() * radio if pie.distance_to(bola) > 1e-4 else bola
+	p3.llevar_pie(ancla, borde, peso)
 
 
 ## El clip de una vez de este cuadro: [clip, segundo, rumbo del modelo o
@@ -505,7 +596,7 @@ func _rumbo_mostrado(i: int, rumbo: float, paso: Vector2, v: float, hace_gesto: 
 		meta = atan2(paso.x, paso.y) - float(ANGULO_DE_SENTIDO[_sentido[i]])
 	if not _rumbo_listo:
 		_rumbo_modelo[i] = meta
-		_rumbo_listo = i == MundoV2.JUGADORES - 1
+		_rumbo_listo = i == _cantidad() - 1
 		return meta
 	var dif := wrapf(meta - _rumbo_modelo[i], -PI, PI)
 	var tope := GIRO_MODELO_RAD_S * delta
@@ -524,12 +615,12 @@ func dibujar_pelota(pelota_previa: Vector3, pelota: Vector3, alfa: float, delta:
 	bola.y += MundoV2.RADIO_PELOTA * (VistaCancha3D.ESCALA_PELOTA - 1.0)
 	_pelota.position = bola
 	if _manchas != null:
-		_manchas.poner_pelota(MundoV2.JUGADORES, bola)
+		_manchas.poner_pelota(_cantidad(), bola)
 	_mover_camara(Vector2(bola.x, bola.z), delta)
 
 
 func _andar_de(i: int, v: float) -> String:
-	if i % 11 == 0:
+	if _es_arquero(i):
 		return "Correr" if v > VistaCancha3D.ARQUERO_CORRE_MS else "Golero_Guardia"
 	var nuevo := VistaCancha3D._andar(_andar[i], v)
 	if v < VistaCancha3D.VELOCIDAD_PARA_PIERNAS:

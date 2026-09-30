@@ -47,6 +47,12 @@ void godot::leer_clips(const Dictionary &d, std::vector<motor_v2::Clip> &clips, 
 			clip.contacto_seg = double(contacto) * clip.duracion;
 		}
 		clip.mueve = bool(c.get("mueve", false));
+		Array punto = c.get("punto_contacto", Array());
+		if (punto.size() == 3) {
+			clip.punto_x = double(punto[0]);
+			clip.punto_y = double(punto[1]);
+			clip.punto_z = double(punto[2]);
+		}
 		clips.push_back(clip);
 		nombres.push_back(nombre);
 	}

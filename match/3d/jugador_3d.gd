@@ -317,6 +317,72 @@ func ancla(nombre: String) -> Vector3:
 	return hueso * nodo.transform.origin
 
 
+## Como ancla(), pero siempre con la pose de este momento. Las anclas del
+## GLB (Pie_R, Cabeza...) son el BoneAttachment3D mismo, no un hijo suyo:
+## ancla() cae en su global_position, que se mueve recién al final del
+## cuadro. El Motor V2 pone la pose y la mide en el mismo cuadro (ajuste de
+## pie, laboratorio sin pantalla), y necesita la de ahora.
+func ancla_de_pose(nombre: String) -> Vector3:
+	var nodo := find_child(nombre, true, false) as Node3D
+	if nodo is BoneAttachment3D and _esqueleto != null and (nodo as BoneAttachment3D).bone_idx >= 0:
+		return _esqueleto.global_transform * _esqueleto.get_bone_global_pose((nodo as BoneAttachment3D).bone_idx).origin
+	return ancla(nombre)
+
+
+## Ajuste de pie del Motor V2 (docs/motor_v2.md, etapa 3; el warping de
+## FIFA 10): lleva el punto `nombre_ancla` (Pie_R o Pie_L) hacia `objetivo`
+## (en el mundo) con `peso` 0..1, doblando muslo y pierna (IK de dos huesos,
+## con la rodilla del lado en que ya estaba). Solo toca huesos: el jugador y
+## la pelota quedan donde están. Va después de poner(), que el cuadro
+## siguiente vuelve a poner la pose del clip.
+func llevar_pie(nombre_ancla: String, objetivo: Vector3, peso: float) -> void:
+	if _esqueleto == null or peso <= 0.0:
+		return
+	var lado := "R" if nombre_ancla.ends_with("R") else "L"
+	var muslo := _esqueleto.find_bone("Muslo." + lado)
+	var pierna := _esqueleto.find_bone("Pierna." + lado)
+	var pie := _esqueleto.find_bone("Pie." + lado)
+	if muslo < 0 or pierna < 0 or pie < 0:
+		return
+	var al_esqueleto := _esqueleto.global_transform.affine_inverse()
+	var t := al_esqueleto * objetivo
+	# Dos vueltas: el pie gira con la pierna y el punto de contacto no cae
+	# justo donde iba el tobillo; la segunda corrige lo que queda.
+	for vuelta in 2:
+		var gm := _esqueleto.get_bone_global_pose(muslo)
+		var gp := _esqueleto.get_bone_global_pose(pierna)
+		var gf := _esqueleto.get_bone_global_pose(pie)
+		var h := gm.origin
+		var k := gp.origin
+		var a := gf.origin
+		var e := al_esqueleto * ancla_de_pose(nombre_ancla)
+		var a2 := a + (t - e) * (peso if vuelta == 0 else 1.0)
+		var l1 := h.distance_to(k)
+		var l2 := k.distance_to(a)
+		var hacia := a2 - h
+		if l1 < 1e-5 or l2 < 1e-5 or hacia.length_squared() < 1e-10:
+			return
+		var d := clampf(hacia.length(), absf(l1 - l2) + 1e-4, (l1 + l2) * 0.999)
+		var dir := hacia.normalized()
+		var normal := (k - h).cross(a - h)
+		if normal.length_squared() < 1e-12:
+			normal = gm.basis.x
+		var arriba := normal.normalized().cross(dir).normalized()
+		if arriba.dot(k - h) < 0.0:
+			arriba = -arriba
+		var cos_h := clampf((l1 * l1 + d * d - l2 * l2) / (2.0 * l1 * d), -1.0, 1.0)
+		var k2 := h + dir * (l1 * cos_h) + arriba * (l1 * sqrt(1.0 - cos_h * cos_h))
+		var a3 := h + dir * d
+		var q1 := Quaternion((k - h).normalized(), (k2 - h).normalized())
+		var muslo_nuevo := Basis(q1) * gm.basis
+		var q2 := Quaternion((Basis(q1) * (a - k)).normalized(), (a3 - k2).normalized())
+		var pierna_nueva := Basis(q2) * Basis(q1) * gp.basis
+		var padre := _esqueleto.get_bone_parent(muslo)
+		var base := _esqueleto.get_bone_global_pose(padre).basis if padre >= 0 else Basis()
+		_esqueleto.set_bone_pose_rotation(muslo, (base.inverse() * muslo_nuevo).get_rotation_quaternion())
+		_esqueleto.set_bone_pose_rotation(pierna, (muslo_nuevo.inverse() * pierna_nueva).get_rotation_quaternion())
+
+
 ## Transform en el mundo de un hueso (Antebrazo.R...), con la pose actual. El
 ## eje Y del hueso va de la cabeza a la cola (del codo a la mano). Sirve para
 ## orientar lo que se lleva en la mano (bandera, tarjeta).

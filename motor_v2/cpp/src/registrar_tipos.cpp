@@ -1,3 +1,4 @@
+#include "canchita_v2_nativa.h"
 #include "cuerpos_v2_nativos.h"
 #include "mundo_v2_nativo.h"
 #include "pelota_v2_nativa.h"
@@ -16,6 +17,7 @@ void iniciar_modulo(ModuleInitializationLevel nivel) {
 	GDREGISTER_CLASS(MundoV2Nativo);
 	GDREGISTER_CLASS(PelotaV2Nativa);
 	GDREGISTER_CLASS(CuerposV2Nativos);
+	GDREGISTER_CLASS(CanchitaV2Nativa);
 }
 
 void terminar_modulo(ModuleInitializationLevel nivel) {

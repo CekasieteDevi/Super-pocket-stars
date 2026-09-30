@@ -337,6 +337,66 @@ En `test_vista_cinta_v2`, un pique a 8,1 m/s que vuelve: Correr, Media_Vuelta, C
 - **Banco:** un rondo 4 vs 2 y un 5 vs 5 sin arcos, con cerebros sencillos.
 - **Pasa si:** cero correcciones de velocidad de la pelota; los pases se cortan solo cuando un defensor llega; ningún receptor frena en seco para esperar.
 
+#### Resultado (2026-09-30): pasa sin vista; falta la revisión visual
+
+Hecha en la nube. Test: `tests/test_toque_v2.gd`. Medición: `tests/_diag_toque_v2.gd` (varias semillas).
+
+- **Código:**
+  - `motor_v2/cpp/src/toque.h/.cpp`: lo que comparten todos los que tocan la pelota. Punto de contacto de un clip, parte del cuerpo según la altura, tiempo de llegada de un cuerpo a un punto, trayectoria prevista y perfiles de pase.
+  - `motor_v2/cpp/src/canchita.h/.cpp` (`motor_v2::Canchita`, sin Godot): el banco. Pelota, cuerpos, cerebros sencillos, reglas del rondo y del partidito, y los detectores.
+  - `canchita_v2_nativa.h/.cpp` (`CanchitaV2Nativa`): lo mismo para GDScript. `motor_v2/canchita_v2.gd` (`CanchitaV2.armar`) la arma igual para el laboratorio, el test y la medición.
+  - `azar.h`: el PCG32 de `MundoV2Nativo`, suelto, con una normal que solo suma (Irwin-Hall).
+  - Parámetros en `data/fisica_v2.json`, sección `toque`; `FisicaV2.parametros_toque()` y `FisicaV2.jugador_de()` (físico más pases y control).
+- **Nadie adjudica:** el que patea elige el punto y la rapidez; al patear se suma un error según pases, presión y cuánto patea de costado. Quién la toca lo decide el mundo: el primero cuyo punto de contacto, con la ventana del gesto abierta, pasa por el tramo que recorrió la pelota en ese paso. La pelota solo cambia por la física, por un toque o por un rebote contra las piernas. Un detector cuenta cualquier otro cambio (`correcciones`).
+- **Todos planean con la misma física:** al tocarse la pelota se adelanta una copia 5 s (`Trayectoria`). La predicción coincide con la pelota paso por paso mientras nadie la toca (diferencia 0,0 m). Los demás la leen recién después de `reaccion_seg` (0,2 s). El receptor del pase no espera: el que patea le avisa y sale al punto (Simple Soccer). Esperando la reacción, arrancaba 0,3 s tarde y los pases al espacio se le iban.
+- **Pase al punto de encuentro:** a los pies o a las dos tangentes del círculo que el receptor cubre trotando mientras viaja la pelota (hasta 2,5 m). La rapidez es la más baja que llega todavía a `llegada_pase_ms` (7 m/s), con perfiles de la misma pelota sin viento. Para cada punto se prueba cada rival con su tiempo de llegada a cada tramo; el pase va al mejor margen. Si no hay pase raso seguro, un globo que pasa por arriba de la cabeza.
+- **Recepción según la altura:** pie (`Control_Corriendo`), muslo, pecho (`Pecho`) y cabeza (`Cabecear`). El clip sale de la altura de la pelota en su cuadro de contacto, y el toque solo vale con la pelota en la franja de esa parte. **No hay clip de muslo:** usa `Pecho` hasta que se haga `Control_Muslo` en Blender. Con un rival encima, el receptor la manda de primera si tiene un pase que le gana a todos.
+- **Conducción por toques:** cada toque es un pase corto hacia adelante con `Control_Corriendo`. El largo sale de lo que corre en ese momento: más largo con espacio (hasta 1,8 m), más corto con un rival cerca y con mejor control. Entre toques la pelota está suelta: en el test se separa del pie de 0,02 a 2,6 m.
+- **Intercepción:** cualquiera que llegue primero, de cualquier equipo. Si dos tienen la ventana abierta en el mismo paso, gana el primero y las otras ventanas se cierran (sin esto, en el partidito había quites de ida y vuelta en 0,02 s). El defensor va a una pelota controlada solo si llega 0,1 s antes que el que la tiene; si no, se para a 1,5 m y contiene.
+- **Gatillo:** el cuerpo arranca el gesto cuando, en lo que tarda en llegar a su cuadro de contacto, el punto que toca va a quedar a `gatillo_m` de la pelota, o cuando es el mejor momento y queda a `tolerancia_m`. El toque vale hasta `tolerancia_m` (0,3 m) en el piso.
+- **Vista:** `VistaV2.dibujar_canchita` dibuja la pelota con su giro y los cuerpos con su acción. **Ajuste de pie:** en los últimos 0,15 s antes del contacto el modelo gira hacia la pelota (lo que el motor le deja estirar, `giro_alcance_rad`) y `Jugador3D.llevar_pie` dobla muslo y pierna (IK de dos huesos) hasta el borde de la pelota. Solo toca huesos. `Jugador3D.ancla_de_pose` da el ancla con la pose de este momento: `ancla()` cae en la posición del `BoneAttachment3D`, que se mueve recién al final del cuadro.
+- **Banco:** `motor_v2/laboratorio_toque.tscn`. Con pantalla, un toque pasa del rondo al partidito. Con `--headless` simula cada juego (`segundos=N`), mide el patinaje y el hueco entre el pie y la pelota en cada toque, e imprime con `[lab_toque]`.
+
+**Cambio en el cuerpo (etapa 2):** el detector `frenadas_en_seco` encontró 477 en 5 minutos de rondo. El cuerpo se clavaba al llegar frenando (hasta de 3,8 m/s a 0 en un paso). Dos causas:
+
+- La rampa de frenada era la continua (v² = 2·a·d): llegaba al punto a casi 1 m/s. Ahora es la de a pasos (v²/2a + v·dt/2 = d) y llega a menos de `frenada`·dt.
+- Si el cerebro le acerca el objetivo, llega rápido. Ahora no se clava: lo pasa frenando y vuelve. `Cuerpo::caida_maxima` (el mayor cambio de rapidez en un paso, `giro_acel`·dt) lo usan el cuerpo y el detector.
+
+El banco de la etapa 0 cambió de huella: 7270582477375384744 antes (PC, teléfono y Linux) y 8207067039817050138 ahora (Linux). `test_cuerpo_v2` sigue en 0 fallas.
+
+| Medido (5 semillas × 5 min, sin vista) | Rondo 4 vs 2 | Partidito 5 vs 5 |
+| --- | --- | --- |
+| Correcciones de la pelota / SALTO_PELOTA | 0 / 0 | 0 / 0 |
+| Corte más lejos (pie del defensor a la pelota) | 0,30 m | 0,30 m |
+| Frenadas en seco | 0 | 0 |
+| Espera del receptor quieto con el pase viniendo | media 0,05 s, máx 0,47 s | media 0,03 s, máx 0,47 s |
+| Pases por minuto / completos | 44,8 / 87% | 37,8 / 77% |
+| Cortados / afuera | 5% / 7% | 21% / 3% |
+| De primera | 16% | 45% |
+| Quites por minuto | 1,3 | 12,9 |
+| Recepciones pie / muslo / pecho / cabeza | 852 / 5 / 6 / 0 | 827 / 2 / 2 / 0 |
+| Peor exceso de paso de un cuerpo (choques entre cuerpos) | 0,05 m | 0,05 m |
+| Costo por paso | 3,2 µs | 7,6 µs |
+
+| Laboratorio con vista (120 s) | Rondo | Partidito |
+| --- | --- | --- |
+| Hueco pie-pelota dibujados en el toque, con el ajuste de pie | mediana 0,00 m, 90% 0,07 m | mediana 0,00 m, 90% 0,11 m |
+| Hueco sin el ajuste (antes de agregarlo) | mediana 0,32 m, 90% 0,54 m | mediana 0,37 m, 90% 0,57 m |
+
+**Pasa si, uno por uno:**
+
+- **Cero correcciones de velocidad de la pelota:** pasa, por construcción y medido.
+- **Los pases se cortan solo cuando un defensor llega:** pasa. Todo corte es un toque o un rebote del defensor, con su pie a 0,3 m o menos de la pelota.
+- **Ningún receptor frena en seco para esperar:** pasa. Cero frenadas en seco, y el receptor espera quieto 0,03 a 0,05 s de media.
+
+**Qué falta:**
+
+1. Revisión visual en la PC de `laboratorio_toque.tscn`, y bibliotecas de Windows y Android rearmadas.
+2. En los juegos casi no hay recepciones altas: el receptor sale a buscar el globo y lo toma después del pique. El test las prueba con pelotas lanzadas (las cuatro partes aparecen).
+3. Clip `Control_Muslo` en Blender.
+4. El partidito es caótico (12,9 quites por minuto): los cerebros son del banco. Los de verdad son la etapa 4.
+5. Los gestos (patear, controlar) no están hechos en cinta: el detector de patinaje no los mide. En la canchita Frenada patina 0,6 a 1,6 m/s y Caminar 0,9 a 1,2 m/s, más que en el laboratorio del cuerpo, porque el cerebro cambia de objetivo a 10 Hz.
+
 ### Etapa 4 — El cerebro
 
 - **Qué:** se portan a C++ (`motor_v2/cpp/src/cerebro/`) `evaluar_opciones`, `elegir_softmax`, perfiles, ritmo, marcador, desmarques, defensa y jugadas preparadas, devolviendo intenciones. Nuevo: puntaje de puntos de apoyo sobre una grilla (se le puede pasar, puede tirar, distancia al poseedor), línea defensiva y offside en el frame del pase.

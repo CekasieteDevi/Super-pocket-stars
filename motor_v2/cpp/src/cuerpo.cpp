@@ -84,8 +84,12 @@ void Cuerpo::_moverse(const ParametrosCuerpo &p, bool trabado, double dt) {
 	double ux = dx / dist, uz = dz / dist;
 	double tope = rapidez_buscada(p);
 	if (frenar) {
-		// La velocidad con la que todavía se frena a tiempo: v² = 2·a·d.
-		tope = std::min(tope, std::sqrt(2.0 * p.frenada * dist));
+		// La velocidad con la que todavía se frena a tiempo, de a pasos: si
+		// baja frenada·dt por paso recorre v²/2a + v·dt/2. Con la rampa
+		// continua (v² = 2·a·d) llegaba a casi 1 m/s y se clavaba en el punto
+		// (etapa 3: frenar en seco); así llega a menos de frenada·dt.
+		double medio = p.frenada * dt * 0.5;
+		tope = std::min(tope, std::sqrt(medio * medio + 2.0 * p.frenada * dist) - medio);
 	}
 	double acel = aceleracion * cansancio;
 	// Parado acelera más que cerca de su punta, como un velocista.
@@ -104,9 +108,15 @@ void Cuerpo::_moverse(const ParametrosCuerpo &p, bool trabado, double dt) {
 	vx += cx;
 	vz += cz;
 	double avance = rapidez() * dt;
-	if (avance >= dist && vx * ux + vz * uz > 0.0) {
+	// Si el objetivo se le vino encima (el cerebro lo cambió por uno más
+	// cerca), llega rápido: no se clava ahí, lo pasa de largo frenando y
+	// vuelve. Clavarse era frenar en seco (etapa 3: 477 veces en 5 minutos
+	// de rondo, hasta de 3,8 m/s a 0 en un paso).
+	// Cuenta lo que venía al empezar el paso: es lo que cae si se clava.
+	bool clavaria = frenar && r > caida_maxima(p, dt);
+	if (avance >= dist && vx * ux + vz * uz > 0.0 && !clavaria) {
 		// Llega en este paso: se para en el punto si venía frenando (ya viene
-		// a menos de frenada·dt) o lo cruza con su velocidad.
+		// a menos de caida_maxima) o lo cruza con su velocidad.
 		x = objetivo_x;
 		z = objetivo_z;
 		recorrido += dist;
@@ -120,6 +130,13 @@ void Cuerpo::_moverse(const ParametrosCuerpo &p, bool trabado, double dt) {
 	x += vx * dt;
 	z += vz * dt;
 	recorrido += avance;
+}
+
+// El cambio de velocidad más grande que da la locomoción en un paso es
+// giro_acel·dt (la frenada es menor). Llegando frenado a un punto, la rampa
+// de _moverse deja al cuerpo a menos de frenada·dt: clavarse ahí entra.
+double Cuerpo::caida_maxima(const ParametrosCuerpo &p, double dt) {
+	return std::max(p.frenada, p.giro_acel) * dt;
 }
 
 double Cuerpo::rapidez_buscada(const ParametrosCuerpo &p) const {

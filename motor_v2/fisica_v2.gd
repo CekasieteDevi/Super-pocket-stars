@@ -85,3 +85,18 @@ static func fisico_de(atributos: Dictionary, energia := 1.0) -> Dictionary:
 		"giro": MotorEspacial._giro_de(j),
 		"cansancio": Cansancio.factor_stats(energia),
 	}
+
+
+## Los del toque (etapa 3; CanchitaV2Nativa.configurar): data/fisica_v2.json,
+## "toque". Los clips van por nombre y el motor los busca en clips().
+static func parametros_toque() -> Dictionary:
+	return (datos()["toque"] as Dictionary).duplicate(true)
+
+
+## El físico de fisico_de más lo que usa el toque (etapa 3): pases y control,
+## como los de Player (0..100).
+static func jugador_de(atributos: Dictionary, energia := 1.0) -> Dictionary:
+	var f := fisico_de(atributos, energia)
+	f["pases"] = float(atributos.get("pases", 50.0))
+	f["control"] = float(atributos.get("control", 50.0))
+	return f

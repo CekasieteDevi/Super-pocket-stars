@@ -16,7 +16,21 @@
 		"cesped": "calidad de EstadoCancha (-8 a +3, 0 neutra). frenado_rodando × (1 + frenado_por_punto × calidad): la peor cancha frena 32% más. restitucion_piso + restitucion_por_punto × calidad: la peor pica 0,08 menos.",
 		"clima": "Factores sobre la pelota. Lluvia: el pasto mojado frena menos la rodada y en el pique la pelota patina y sale rasante. Viento: velocidad del aire en m/s, en la dirección que se pase.",
 		"cuerpo": "Etapa 2. La locomoción usa los números del motor actual (data/utility_pesos.json: fisica.frenada, giro_acel y arranque_extra; control.rapidez_para_girar; esfuerzo); acá va solo lo nuevo del Motor V2.",
-		"ventana_contacto_seg": "Cuánto dura la ventana de contacto de un gesto, centrada en el cuadro de contacto del clip (data/acciones_v2.json). 0,1 s = 6 pasos: una pelota a 20 m/s recorre 2 m en ese tiempo. Valor de partida; se calibra en la etapa 3, cuando el pie toque la pelota."
+		"ventana_contacto_seg": "Cuánto dura la ventana de contacto de un gesto, centrada en el cuadro de contacto del clip (data/acciones_v2.json). 0,1 s = 6 pasos: una pelota a 20 m/s recorre 2 m en ese tiempo. En la etapa 3 alcanza: los toques se buscan con el tramo que recorre la pelota en cada paso, no con su punto.",
+		"toque": "Etapa 3 (docs/motor_v2.md, 'Etapa 3 — Tocar la pelota'). Lo usa motor_v2/cpp/src/toque.h y canchita.h; tests/test_toque_v2.gd falla si se separan de toque.h. Distancias en m, tiempos en s, rapidez en m/s.",
+		"tolerancia_m": "Cuánto puede errarle en el piso el punto de contacto del clip a la pelota y tocarla igual: el ajuste de pie de la vista (los últimos 0,15 s) tapa esa diferencia llevando el hueso. Es un poco menos que el alcance de Control_Corriendo (0,24 m) más el radio de la pelota.",
+		"gatillo_m": "El gesto arranca cuando, en lo que tarda en llegar a su cuadro de contacto, el punto de contacto va a quedar a esto de la pelota.",
+		"radio_piernas": "Radio del cuerpo contra la pelota (las piernas del chibi). El de los cuerpos entre sí es 0,35 m: con ese, la pelota rebotaba contra el cuerpo antes de llegar al pie de Control_Corriendo, que toca a 0,24 m.",
+		"reaccion_seg": "Lo que tardan en leer la pelota nueva todos menos el que la tocó y el receptor del pase (al que le avisan al patear): hasta ahí siguen con el plan viejo.",
+		"pie_hasta": "Recepción según la altura del centro de la pelota: pie hasta pie_hasta, muslo hasta muslo_hasta, pecho hasta pecho_hasta, cabeza hasta cabeza_hasta; más arriba pasa por encima. Salen de la altura del punto de contacto de los clips del chibi (Pecho 0,72 m, Frente 0,97 m).",
+		"clip_recepcion": "Clip de pie, muslo, pecho y cabeza. No hay clip de muslo: usa Pecho hasta que se haga Control_Muslo en Blender.",
+		"llegada_pase_ms": "El pase raso sale con la rapidez más baja que llega al punto todavía a esto: un pase firme. Con 5 m/s el defensor que corría de atrás alcanzaba los pases cortos.",
+		"elevacion_globo": "Ángulo de salida del globo (rad): 0,6 son 34°.",
+		"error_pase_rad": "Desvío del ángulo del pase (desvío estándar) con pases 0; con pases 100 es el 20%. Un rival a menos de presion_m lo sube hasta 1,5 veces, y patear de espaldas a adonde mira lo duplica (de costado, 1,5 veces). error_pase_rapidez: lo mismo para la rapidez, en fracción.",
+		"control_ms": "Rapidez con que sale la pelota del control orientado. error_control_rad y error_control_ms: lo que agrega un mal control (con control 0; con 100 es el 20%), más con pelota rápida, alta o con un rival encima. Con 0,6 rad y 2,5 m/s la pelota quedaba suelta y en el partidito había un quite cada 2 s.",
+		"toque_largo_m": "Conducción: cuánto se adelanta la pelota en cada toque con espacio (toque_largo_m) o con un rival a 2 m (toque_corto_m); un buen control lo acorta hasta 20%. El que conduce corre a conduccion_factor de su punta. Con 2,5 m la pelota quedaba 3 m adelante y el rival llegaba antes.",
+		"giro_alcance_rad": "El pie llega a la pelota hasta esto hacia un costado de adonde mira el cuerpo.",
+		"margen_seguro_seg": "Partidito: pasa sin apuro si el mejor pase le gana a todo rival por esto."
 	},
 	"pelota": {
 		"gravedad": 9.81,
@@ -64,5 +78,42 @@
 		"Viento": {
 			"viento_ms": 6.0
 		}
+	},
+	"toque": {
+		"tolerancia_m": 0.3,
+		"tolerancia_alto_m": 0.25,
+		"gatillo_m": 0.2,
+		"radio_piernas": 0.2,
+		"alto_cuerpo": 1.25,
+		"restitucion_cuerpo": 0.3,
+		"reaccion_seg": 0.2,
+		"pie_hasta": 0.32,
+		"muslo_hasta": 0.55,
+		"pecho_hasta": 0.85,
+		"cabeza_hasta": 1.3,
+		"llegada_pase_ms": 7.0,
+		"pase_min_ms": 4.0,
+		"pase_max_ms": 26.0,
+		"elevacion_globo": 0.6,
+		"error_pase_rad": 0.1,
+		"error_pase_rapidez": 0.12,
+		"presion_m": 3.0,
+		"control_ms": 1.5,
+		"error_control_rad": 0.4,
+		"error_control_ms": 1.5,
+		"toque_largo_m": 1.8,
+		"toque_corto_m": 0.8,
+		"conduccion_factor": 0.75,
+		"sin_rebote_seg": 0.3,
+		"margen_seguro_seg": 0.25,
+		"giro_alcance_rad": 1.0,
+		"clip_pase": "Patear_Corriendo",
+		"clip_conduce": "Control_Corriendo",
+		"clip_recepcion": [
+			"Control_Corriendo",
+			"Pecho",
+			"Pecho",
+			"Cabecear"
+		]
 	}
 }
