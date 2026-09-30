@@ -1,4 +1,5 @@
 [
+	{"version": "0.7.75", "fecha": "2026-09-30", "cambio": "Los jugadores que piensan del motor nuevo ya andan en los teléfonos Android."},
 	{"version": "0.7.74", "fecha": "2026-09-30", "cambio": "Los jugadores que piensan del motor nuevo ya andan en computadoras con Windows."},
 	{"version": "0.7.73", "fecha": "2026-09-30", "cambio": "En el motor nuevo los jugadores ya piensan: se pasan la pelota, se desmarcan, meten pases al espacio y defienden en bloque."},
 	{"version": "0.7.72", "fecha": "2026-09-30", "cambio": "El motor nuevo con los toques de pelota ya anda en los teléfonos Android."},

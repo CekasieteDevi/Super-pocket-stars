@@ -401,7 +401,9 @@ El banco de la etapa 0 cambió de huella: 7270582477375384744 antes (PC, teléfo
 - **Qué:** se portan a C++ (`motor_v2/cpp/src/cerebro/`) `evaluar_opciones`, `elegir_softmax`, perfiles, ritmo, marcador, desmarques, defensa y jugadas preparadas, devolviendo intenciones. Nuevo: puntaje de puntos de apoyo sobre una grilla (se le puede pasar, puede tirar, distancia al poseedor), línea defensiva y offside en el frame del pase.
 - **Pasa si:** 11 vs 11 sin arqueros ni reglas durante 10 minutos con posesiones de varios pases, bloques que se desplazan con la pelota y pases al espacio que salen solos.
 
-#### Resultado (2026-09-30): pasa sin vista; falta la revisión visual
+#### Resultado (2026-09-30): pasa
+
+- **Revisión visual (2026-09-30):** el usuario miró `laboratorio_cerebro.tscn` en la PC y se ve bien. Bibliotecas de Windows y Android rearmadas.
 
 Hecha en la nube. Test: `tests/test_cerebro_v2.gd`. Medición: `tests/_diag_cerebro_v2.gd` (varias semillas).
 
@@ -470,12 +472,10 @@ Hecha en la nube. Test: `tests/test_cerebro_v2.gd`. Medición: `tests/_diag_cere
 
 **Qué falta:**
 
-1. Revisión visual de `laboratorio_cerebro.tscn` en la PC.
-2. Bibliotecas de Windows y Android: el C++ cambió y hay que rearmarlas en la PC.
-3. Pases completos (54-64%): el motor espacial calibró sus pesos con otra intercepción. Es la calibración de la etapa 7. Los quites tras un control (el receptor tarda ~0,8 s en volver a tocarla) también.
-4. Costo: 9 µs por paso en la nube son ~2,9 s por partido sin vista; en el teléfono (1,3 veces la nube en la etapa 0) serían ~3,8 s, por encima de los 3 s. Casi todo es el mundo de la etapa 3 con 22 cuerpos (`_alcance`, gatillos), no el cerebro.
-5. Las corridas preparadas casi no reciben el pase (1 o 2 cada 10 minutos): los pases al espacio salen sobre todo al hueco por delante del receptor.
-6. Patinaje en el partido: Frenada 1,24 m/s y los fundidos 2,24 m/s, más que en el laboratorio del cuerpo, porque el cerebro cambia de objetivo a 10 Hz.
+1. Pases completos (54-64%): el motor espacial calibró sus pesos con otra intercepción. Es la calibración de la etapa 7. Los quites tras un control (el receptor tarda ~0,8 s en volver a tocarla) también.
+2. Costo: 9 µs por paso en la nube son ~2,9 s por partido sin vista; en el teléfono (1,3 veces la nube en la etapa 0) serían ~3,8 s, por encima de los 3 s. Casi todo es el mundo de la etapa 3 con 22 cuerpos (`_alcance`, gatillos), no el cerebro.
+3. Las corridas preparadas casi no reciben el pase (1 o 2 cada 10 minutos): los pases al espacio salen sobre todo al hueco por delante del receptor.
+4. Patinaje en el partido: Frenada 1,24 m/s y los fundidos 2,24 m/s, más que en el laboratorio del cuerpo, porque el cerebro cambia de objetivo a 10 Hz.
 
 ### Etapa 5 — Remates y arqueros
 
