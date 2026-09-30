@@ -2,9 +2,10 @@ extends Control
 
 ## Laboratorio del cerebro, etapa 4 de docs/motor_v2.md: 11 contra 11 en la
 ## cancha entera (CanchitaV2Nativa, modo PARTIDO) con el cerebro en C++,
-## dibujado con los Jugador3D del partido (VistaV2). Sin arqueros que atajen
-## ni reglas: la pelota que sale vuelve con un lateral, un córner o un saque de
-## arco, y controlarla en el área rival es una llegada.
+## dibujado con los Jugador3D del partido (VistaV2). Sin las reglas de la
+## etapa 6: la pelota que sale vuelve con un lateral, un córner o un saque de
+## arco. Desde la etapa 5 hay remates, arqueros que atajan y goles, que se
+## sacan del medio.
 ##
 ## Con pantalla: arriba a la izquierda, lo que cuenta el motor y la última
 ## decisión del poseedor con sus mejores opciones. Un toque o una tecla arma
@@ -60,6 +61,7 @@ func _armar() -> void:
 		_vista.queue_free()
 	_vista = VistaV2.new()
 	_vista.equipos = _partido.get_equipos()
+	_vista.arqueros = _partido.get_arqueros()
 	_vista.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(_vista)
 	if _etiqueta != null:
@@ -91,6 +93,9 @@ func _texto() -> String:
 		k["pases_al_espacio_completos"]]
 	t += "posesiones %d · de 3+ pases %d · de 5+ %d · llegadas %d-%d\n" % [k["posesiones"], k["posesiones_3_pases"],
 		k["posesiones_5_pases"], k["llegadas_0"], k["llegadas_1"]]
+	var goles: PackedInt32Array = _partido.get_goles()
+	t += "goles %d-%d · remates %d-%d · atajados %d\n" % [goles[0], goles[1], k["remates_0"], k["remates_1"],
+		k["remates_atajado"]]
 	t += "ritmo: %s · correcciones %d\n" % [FASES[clampi(fase, 0, 2)], k["correcciones"]]
 	var d: Dictionary = _partido.ultima_decision()
 	if int(d["decisor"]) >= 0:

@@ -10,12 +10,23 @@ extends RefCounted
 
 
 ## Los dos clubes, de la semilla: planteles con Team.generar (los mismos que
-## usa el juego) y estilos distintos para que se vea la diferencia.
-static func armar_partido(semilla: int, estilo_local := "", estilo_visitante := "") -> Object:
+## usa el juego) y estilos distintos para que se vea la diferencia. Con
+## `division_local` y `division_visitante` (0 = primera) los planteles salen
+## del nivel de esa división, como en tests/_diag_embudo_remates.gd.
+static func armar_partido(semilla: int, estilo_local := "", estilo_visitante := "",
+		division_local := -1, division_visitante := -1) -> Object:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = semilla
-	var local := Team.generar("Local", rng)
-	var visitante := Team.generar("Visitante", rng, 1000)
+	var local: Team
+	var visitante: Team
+	if division_local >= 0:
+		local = Team.generar("Local", rng, 0, NivelDivision.potencial(division_local), "Uruguay",
+			NivelDivision.realizacion(division_local))
+		visitante = Team.generar("Visitante", rng, 1000, NivelDivision.potencial(division_visitante), "Uruguay",
+			NivelDivision.realizacion(division_visitante))
+	else:
+		local = Team.generar("Local", rng)
+		visitante = Team.generar("Visitante", rng, 1000)
 	if estilo_local != "":
 		local.estilo = estilo_local
 	if estilo_visitante != "":
@@ -29,6 +40,7 @@ static func armar(local: Team, visitante: Team, semilla: int) -> Object:
 	var c: Object = ClassDB.instantiate("CanchitaV2Nativa")
 	c.configurar(FisicaV2.parametros(), FisicaV2.parametros_cuerpo(), FisicaV2.clips(), FisicaV2.parametros_toque())
 	c.configurar_cerebro(MotorEspacial.pesos(), FisicaV2.parametros_cerebro())
+	c.configurar_remate(FisicaV2.parametros_remate(), FisicaV2.parametros_arquero())
 	var nivel := MatchEngine.nivel_partido(local, visitante)
 	var equipos := [local, visitante]
 	for e in 2:
@@ -72,6 +84,7 @@ static func ficha_de(jugador: Dictionary, rol: String, base: Vector2, nivel: flo
 	f["relativos"] = relativos
 	f["creador"] = Personalidad.tiene(jugador, "Creador")
 	f["metodico"] = Personalidad.tiene(jugador, "Metodico")
+	f["egoista"] = Personalidad.tiene(jugador, "Egoista")
 	f["pie_malo_lado"] = Personalidad.pie_preferido(jugador) if Personalidad.tiene(jugador, "Pie preferido") else 0
 	f["margen_offside"] = MotorEspacial.FACTOR_OFFSIDE_ENFOCADO if Personalidad.tiene(jugador, "Enfocado") else 1.0
 	return f

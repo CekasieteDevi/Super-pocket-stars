@@ -21,12 +21,21 @@
 //   adonde el cerebro les pide. Si un equipo controla la pelota en el área
 //   rival, cuenta como llegada y el otro saca del arco.
 //
+// Etapa 5 suma el arco (docs/motor_v2.md, "Etapa 5 — Remates y arqueros"):
+// en el PARTIDO el poseedor puede rematar (el cerebro elige punto y golpe) y
+// cada equipo tiene un arquero que lee la trayectoria, elige parado o
+// estirada y la agarra, la da en rebote o no llega. El gol lo decide la
+// pelota al cruzar la línea: nadie lo adjudica. Después del gol se saca del
+// medio. Las demás reglas siguen siendo las del banco (etapa 6). La llegada
+// ya no termina la jugada: se cuenta una por posesión.
+//
 // Sin Godot: solo C++ y matematica_fija.h.
 
 #include "azar.h"
 #include "cerebro/cerebro.h"
 #include "cuerpo.h"
 #include "pelota.h"
+#include "remate.h"
 #include "toque.h"
 
 #include <cstdint>
@@ -41,6 +50,9 @@ enum ModoCanchita : int {
 	// a la pelota que se lanza (lanzar). El que la controla no sigue.
 	PRUEBA = 2,
 	PARTIDO = 3,
+	// Etapa 5, para los tests y el laboratorio de remates: como PRUEBA pero en
+	// la cancha entera, con los arcos y el arquero (rematar()).
+	ARCO = 4,
 };
 
 enum TipoToque : int {
@@ -48,6 +60,21 @@ enum TipoToque : int {
 	TOQUE_PASE = 1,
 	TOQUE_CONDUCE = 2,
 	TOQUE_CONTROL = 3,
+	// Etapa 5: al arco, y el arquero con las manos.
+	TOQUE_REMATE = 4,
+	TOQUE_ATAJADA = 5,
+};
+
+// Cómo terminó un remate (el mundo lo decide, ver Canchita::_cerrar_remate).
+enum ResultadoRemate : int {
+	REMATE_GOL = 0,
+	REMATE_ATAJADO = 1,
+	REMATE_PALO = 2,
+	REMATE_BLOQUEADO = 3,
+	REMATE_AFUERA = 4,
+	// Se quedó corto o lo desvió un compañero.
+	REMATE_OTRO = 5,
+	RESULTADOS_REMATE = 6,
 };
 
 // Lo que miden los detectores de la etapa 3 (docs/motor_v2.md, "Pasa si").
@@ -116,6 +143,55 @@ struct ContadoresCanchita {
 	int64_t quites_conduccion = 0;
 	int64_t quites_control = 0;
 	int64_t quites_suelta = 0;
+
+	// Etapa 5 (docs/motor_v2.md, "Pasa si"): el embudo de remates, con los
+	// mismos cortes que tests/_diag_embudo_remates.gd. Al arco = gol + atajado.
+	int64_t remates = 0;
+	int64_t remates_equipo[2] = { 0, 0 };
+	int64_t remates_cabeza = 0;
+	int64_t remates_primera = 0;
+	int64_t resultados[RESULTADOS_REMATE] = {};
+	int64_t goles[2] = { 0, 0 };
+	int64_t goles_cabeza = 0;
+	int64_t golpes[TIPOS_REMATE] = {};
+	double distancia_remates = 0.0;
+	// Remates que salen de un rebote del arquero (hasta 3 s después).
+	int64_t remates_tras_rebote = 0;
+	int64_t goles_tras_rebote = 0;
+	// Lo que hizo el arquero con la pelota que tocó.
+	int64_t agarres = 0;
+	int64_t rebotes_arquero = 0;
+	int64_t roces_arquero = 0;
+	int64_t estiradas = 0;
+	int64_t paradas = 0;
+	// Pelotas sueltas que salió a agarrar (no remates).
+	int64_t salidas_arquero = 0;
+	// Gestos de atajada que no llegaron a la pelota.
+	int64_t atajadas_falladas = 0;
+};
+
+// Un remate, para el diagnóstico (tests/_diag_remates_v2.gd): de dónde salió,
+// adónde apuntaba, dónde estaba el arquero y cómo terminó.
+struct RegistroRemate {
+	int equipo = 0;
+	int pateador = -1;
+	int golpe = 0;
+	bool de_primera = false;
+	double desde_x = 0.0, desde_z = 0.0;
+	double alto = 0.0, lateral = 0.0;
+	double rapidez = 0.0;
+	// El rival más cerca de la pelota al patear (m).
+	double presion_m = 0.0;
+	// El arquero al patear (NAN si no hay).
+	double arquero_x = 0.0, arquero_z = 0.0;
+	// El clip de atajada que arrancó (ClipArquero), -1 si no se tiró.
+	int clip_arquero = -1;
+	// El arquero estaba en medio de otro gesto al patear, y en qué paso
+	// planeó la atajada (-1 si nunca).
+	bool arquero_ocupado = false;
+	int64_t paso_remate = 0;
+	int64_t paso_plan = -1;
+	int resultado = -1;
 };
 
 struct JugadorCanchita {
@@ -126,6 +202,18 @@ struct JugadorCanchita {
 	// Atributos de Player (0..100).
 	double pases = 50.0;
 	double control = 50.0;
+	// Etapa 5, relativos al nivel del partido (MatchEngine.relativo_al_nivel),
+	// como la puntería del motor espacial.
+	double tiro = 50.0;
+	double golpe = 50.0;
+	double cabezazo = 50.0;
+	double reflejos = 50.0;
+	double estirada = 50.0;
+	double agarre = 50.0;
+	double achique = 50.0;
+	// Pie preferido: 0 sin el rasgo; +1 derecho, -1 zurdo.
+	int pie_malo_lado = 0;
+	bool arquero = false;
 
 	// El plan: ir a tocar la pelota en el paso `paso_meta` y hacer `toque`.
 	bool persigue = false;
@@ -161,6 +249,13 @@ struct JugadorCanchita {
 	// La decisión del cerebro que armó el pase de este toque (DEC_NADA si no
 	// salió del cerebro).
 	int tipo_pase = DEC_NADA;
+	// Remate: al punto (meta_x, meta_alto, meta_z) con el golpe `golpe_remate`.
+	double meta_alto = 0.0;
+	int golpe_remate = REMATE_COLOCADO;
+	// Atajada: el clip del arquero (ClipArquero de remate.h).
+	int clip_arquero = -1;
+	// Modo ARCO: le pega al arco la próxima pelota (rematar()).
+	bool remata_prueba = false;
 };
 
 class Canchita : public Planeador {
@@ -181,6 +276,8 @@ public:
 	ParametrosPelota param_pelota;
 	ParametrosCuerpo param_cuerpo;
 	ParametrosToque param_toque;
+	ParametrosRemate param_remate;
+	ParametrosArquero param_arquero;
 	std::vector<Clip> clips;
 
 	std::vector<JugadorCanchita> jugadores;
@@ -189,6 +286,8 @@ public:
 	Pelota pelota;
 	Trayectoria trayectoria;
 	ContadoresCanchita cuenta;
+	// Etapa 5: cada remate del partido.
+	std::vector<RegistroRemate> registro;
 	int modo = RONDO;
 	int64_t paso = 0;
 	int equipo_con_pelota = 0;
@@ -203,6 +302,19 @@ public:
 	// `giro` para que la juegue el equipo `equipo` (la ven todos enseguida).
 	void poner_jugador(int i, double x, double z, double rumbo);
 	void lanzar(V3 p, V3 v, V3 giro, int equipo);
+	// Modo PRUEBA: el jugador `i` le va a pegar al arco a la pelota que viene
+	// (la próxima que se lance), al punto (alto, lateral) con el golpe `golpe`.
+	void rematar(int i, int golpe, double alto, double lateral);
+	// El arquero de `equipo` (-1 si no tiene).
+	int arquero_de(int equipo) const;
+	// El que tiene la pelota en las manos (-1 si nadie).
+	int en_manos() const {
+		return _en_manos;
+	}
+	// El resultado del último remate que terminó (ResultadoRemate), -1 si no hubo.
+	int ultimo_resultado() const {
+		return _ultimo_resultado;
+	}
 	void avanzar();
 	uint64_t huella() const;
 
@@ -211,6 +323,7 @@ public:
 	double margen_pase(int de, int a) override;
 	double margen_al_punto(int de, int a, double x, double z) override;
 	double margen_globo(int de, double x, double z) override;
+	double valor_remate(int de, int tipo, double alto, double lateral) override;
 	// El receptor del pase que viaja (-1 si no hay pase).
 	int receptor() const {
 		return _pase_activo ? _receptor : -1;
@@ -244,6 +357,32 @@ private:
 	bool _pase_al_espacio = false;
 	// Desde dónde y en cuántos segundos patea el que decide (Planeador).
 	V3 _plan_bola;
+	// Etapa 5.
+	// Dónde cruza la trayectoria la línea de cada arco (índice en la
+	// trayectoria, -1 si no va al arco). _k_cruce[e] es el arco que defiende e.
+	int _k_cruce[2] = { -1, -1 };
+	int _en_manos = -1;
+	int64_t _suelta_en = -1;
+	// Saque del medio después de un gol: cuándo y quién.
+	int64_t _saque_medio_en = -1;
+	int _saca_medio = 0;
+	bool _llegada_contada = false;
+	int _ultimo_resultado = -1;
+	// El rebote del arquero, para contar el remate que sale de ahí.
+	int64_t _rebote_arquero_en = -1000;
+	struct Remate {
+		bool activo = false;
+		int equipo = 0;
+		int pateador = -1;
+		int64_t paso = 0;
+		bool palo = false;
+		bool toco_arquero = false;
+		bool cabeza = false;
+		bool tras_rebote = false;
+		// Su lugar en `registro`.
+		size_t indice = 0;
+	};
+	Remate _remate;
 
 	double _plan_t = 0.0;
 
@@ -306,6 +445,39 @@ private:
 	double _rapidez_al_espacio(double d, double t_receptor, double t_patada);
 	bool _reglas_partido();
 	void _cerrar_posesion();
+
+	// Etapa 5.
+	void _nueva_trayectoria();
+	void _buscar_cruces();
+	bool _es_mi_area(int i, double x, double z) const;
+	double _reaccion_arquero(int i) const;
+	double _tolerancia(int i, int clip) const;
+	double _tolerancia_alto(int clip, bool arriba) const;
+	bool _es_estirada(int clip_arquero) const;
+	double _alto_minimo(int clip_arquero, const Clip &k) const;
+	double _distancia_al_brazo(const JugadorCanchita &j, const Cuerpo &c, V3 mano, V3 a, V3 b) const;
+	// De su punta, lo que corre para acomodarse sin darse vuelta.
+	double _factor_acomodarse(const Cuerpo &c) const;
+	double _rumbo_contacto(const JugadorCanchita &j, const Cuerpo &c, int clip, double rumbo, double x, double z) const;
+	bool _plan_atajar(int i);
+	bool _prueba() const {
+		return modo == PRUEBA || modo == ARCO;
+	}
+	bool _con_arcos() const {
+		return modo == PARTIDO || modo == ARCO;
+	}
+	void _ubicar_arquero(int i, double &qx, double &qz, double &factor);
+	void _atajar(int i, double distancia);
+	void _llevar_en_manos();
+	void _soltar();
+	bool _decidir_remate_de_primera(int i, V3 bola, double t);
+	double _rapidez_remate(const JugadorCanchita &j, int golpe) const;
+	double _error_remate(const JugadorCanchita &j, int golpe, double de_lado, double alto_pelota, double llega_ms,
+			double apretado, double cruce_pie_malo) const;
+	void _patear_al_arco(int i, bool de_primera, double apretado);
+	void _cerrar_remate(int resultado);
+	void _gol(int marca);
+	void _sacar_del_medio();
 };
 
 } // namespace motor_v2

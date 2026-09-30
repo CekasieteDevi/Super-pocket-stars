@@ -6,6 +6,7 @@
 #include "canchita.h"
 
 #include <godot_cpp/classes/ref_counted.hpp>
+#include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/packed_float32_array.hpp>
 #include <godot_cpp/variant/packed_int32_array.hpp>
@@ -22,6 +23,9 @@ namespace godot {
 // Pasa lo que armó FisicaV2.parametros_toque() (data/fisica_v2.json, "toque").
 // Los nombres de los clips se buscan en `nombres` (los de leer_clips).
 void leer_parametros_toque(const Dictionary &d, const std::vector<String> &nombres, motor_v2::ParametrosToque &p);
+// Etapa 5: FisicaV2.parametros_remate() y parametros_arquero().
+void leer_parametros_remate(const Dictionary &d, const std::vector<String> &nombres, motor_v2::ParametrosRemate &p);
+void leer_parametros_arquero(const Dictionary &d, const std::vector<String> &nombres, motor_v2::ParametrosArquero &p);
 
 class CanchitaV2Nativa : public RefCounted {
 	GDCLASS(CanchitaV2Nativa, RefCounted)
@@ -30,7 +34,14 @@ public:
 
 	// FisicaV2.parametros(), parametros_cuerpo(), clips() y parametros_toque().
 	void configurar(const Dictionary &pelota, const Dictionary &cuerpo, const Dictionary &clips, const Dictionary &toque);
-	// `fisico`: el de FisicaV2.fisico_de más "pases" y "control" (0..100).
+	// Etapa 5: FisicaV2.parametros_remate() y parametros_arquero().
+	void configurar_remate(const Dictionary &remate, const Dictionary &arquero);
+	// Los de fábrica del remate y del arquero, como los JSON (para el test).
+	Dictionary remate_de_fabrica() const;
+	// `fisico`: el de FisicaV2.fisico_de más "pases" y "control" (0..100). Etapa
+	// 5: tiro, golpe, cabezazo y los del arquero (reflejos, estirada, agarre,
+	// achique), de "relativos" si viene (CerebroV2.ficha_de) o sueltos; y
+	// "arquero" (o rol "ARQ") y "pie_malo_lado".
 	int64_t agregar(int64_t equipo, const Dictionary &fisico);
 	void empezar(int64_t modo, int64_t semilla);
 	// Etapa 4 (PARTIDO): los pesos del cerebro (MotorEspacial.pesos() y la
@@ -46,6 +57,13 @@ public:
 	// Modo PRUEBA (tests): dónde está cada uno y la pelota que se lanza.
 	void poner_jugador(int64_t i, const Vector2 &pos, double rumbo);
 	void lanzar(const Vector3 &pos, const Vector3 &vel, const Vector3 &giro, int64_t equipo);
+	// Modo ARCO: el jugador `i` le pega al arco a la próxima pelota.
+	void rematar(int64_t i, int64_t golpe, double alto, double lateral);
+	// La patada que busca `apuntar` (remate.h) con la pelota de `pelota`
+	// (FisicaV2.parametros()): {ok, vel, giro, cruce (dónde cruza el plano),
+	// segundos}. Para el test.
+	static Dictionary apuntar_prueba(const Dictionary &pelota, const Vector3 &desde, const Vector3 &meta, double rapidez,
+			double elevacion_fija, double giro_lateral);
 	void avanzar();
 	// `pasos` pasos seguidos; devuelve los segundos que tardó.
 	double simular(int64_t pasos);
@@ -67,6 +85,12 @@ public:
 	int64_t get_equipo_con_pelota() const;
 	int64_t get_ultimo_toque() const;
 	int64_t get_receptor() const;
+	// Etapa 5.
+	int64_t get_en_manos() const;
+	int64_t get_ultimo_resultado() const;
+	PackedInt32Array get_arqueros() const;
+	// Los goles (0 y 1).
+	PackedInt32Array get_goles() const;
 	Vector3 get_pelota_pos() const;
 	Vector3 get_pelota_previa() const;
 	Vector3 get_pelota_vel() const;
@@ -74,6 +98,8 @@ public:
 	// Lo que va a hacer la pelota si nadie la toca (lo que planean todos).
 	PackedVector3Array prediccion() const;
 	Dictionary contadores() const;
+	// Etapa 5: cada remate (canchita.h, RegistroRemate).
+	Array registro_remates() const;
 	// PARTIDO: lo que pensó el cerebro.
 	Dictionary contadores_cerebro() const;
 	// Papel en la defensa de cada uno (cerebro.h, PapelDefensa).

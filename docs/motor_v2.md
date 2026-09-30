@@ -482,6 +482,72 @@ Hecha en la nube. Test: `tests/test_cerebro_v2.gd`. Medición: `tests/_diag_cere
 - **Qué:** elección de punto y tipo de remate; modelo de error por tiro, pie malo, postura y presión; arquero que predice el cruce, elige parado, estirada o salida y resuelve agarre, rebote o no llega; rebotes jugables. Se reusan las animaciones de arquero que ya existen.
 - **Pasa si:** porcentaje de remates al arco y de atajadas por división dentro de los rangos medidos hoy con `tests/_diag_embudo_remates.gd` (el arquero de primera ataja cerca del 63%).
 
+#### Resultado (2026-09-30): pasa en las divisiones parejas; falta la revisión visual
+
+Hecha en la PC. Test: `tests/test_remate_v2.gd`. Mediciones: `tests/_diag_remates_v2.gd` (el embudo por división) y `tests/_diag_arquero_v2.gd` (remates sueltos contra el arquero).
+
+- **Código:**
+  - `motor_v2/cpp/src/remate.h/.cpp`: `apuntar` (la patada que llega al punto pedido), `cruce_con_plano` y los parámetros del remate y del arquero.
+  - `canchita.h/.cpp`: el remate, el arquero, el gol y el saque del medio. Modo nuevo `ARCO` (como `PRUEBA` pero en la cancha entera, con `rematar()`) para los tests y el laboratorio.
+  - `cerebro/cerebro.h/.cpp`: la opción `DEC_REMATE` en `_evaluar` y `Cerebro::elegir_remate`. El `Planeador` suma `valor_remate`.
+  - `CanchitaV2Nativa`: `configurar_remate`, `rematar`, `apuntar_prueba`, `registro_remates` y lecturas del arquero y de los goles. `FisicaV2` suma `parametros_remate()` y `parametros_arquero()`.
+  - `data/fisica_v2.json` suma las secciones `remate` y `arquero`. El achique, la ventaja para salir y la regla parado/estirada salen de lo que ya existía: `data/utility_pesos.json` ("arquero") y `VistaCancha3D.PARADA_TRAVESIA_M`.
+  - `tools/medir_clips_v2.gd` mide el contacto de las atajadas que faltaban (estirada a la izquierda, estirada alta, arriba y abajo): `data/acciones_v2.json` pasa de 17 a 22 clips con contacto.
+- **Nadie adjudica:** el que remata elige punto y golpe. `apuntar` busca con la física de la pelota (sin viento, sin arco) la patada que cruza por ese punto. Al patear se suma el error. Gol, palo, afuera o atajada salen del vuelo y de la mano del arquero.
+
+**El remate:**
+
+- **Cuándo:** la opción `tiro` del motor espacial, con los mismos pesos (`tiro.base + tiro.geometria × factor_geometria`, habilitada por el rango de tiro). También de primera: el receptor en zona de tiro (`primera_geometria`) le pega de pie, de volea o de cabeza según la altura a la que le llega. Así los centros terminan en cabezazos.
+- **Adónde:** `elegir_remate` prueba 15 puntos del arco (pegado al palo, a 1,35 m del palo y al medio; raso, a media altura y arriba) con cada golpe. El planeador (`valor_remate`) le da a cada uno la chance de ir adentro por la chance de que el arquero no llegue, con el mismo error y el mismo arquero que después juegan. Elige con softmax de temperatura baja.
+- **Golpes:** colocado, fuerte, con efecto (45 rad/s de comba hacia el medio del arco), globo (sale a 40° y `apuntar` busca la rapidez) y cabeza. El raso sale por el piso: apuntado a 0,2 m de alto la patada salía en globo.
+- **Error:** desvío del ángulo `error_rad` × (1 − 0,8 × tiro/100), por el golpe, hasta 1,5 con un rival encima, × (1 + de costado a adonde mira), por el pie malo, la volea y la pelota que llega rápida de primera. Los atributos van relativos al nivel del partido, como la puntería del motor espacial.
+
+**El arquero:**
+
+- **Lee la trayectoria:** si la pelota va a cruzar su línea entre los palos, después de su reacción (reflejos: 0,35 a 0,12 s) piensa en cada paso hasta tirarse. Esperando su turno y la reacción de los demás planeaba 0,27 s tarde.
+- **Elige el clip:** el primer punto de su área al que llega una mano a tiempo, con Agarrar, Atajar_Abajo, Atajar_Arriba o las estiradas (baja y alta, a cada lado). Ataja parado solo si se corre hasta 1 m (la regla de la vista 3D actual). Se acomoda por debajo de `rapidez_para_girar`, así sigue mirando la pelota. Si nada llega, se tira igual.
+- **Con qué toca:** parado, la mano (tolerancia de 0,25 a 0,5 m según estirada). En la estirada, el brazo entero, del hombro a la mano: con la mano sola, las pelotas que pasaban a 0,5-0,9 m del cuerpo no las tocaba nadie. Parado en su área, el cuerpo con los brazos abiertos (0,45 m de radio, 1,6 m de alto) también la frena.
+- **Qué hace con la pelota:** la agarra, la da en rebote o la roza. La calidad sale de la pasada más cercana de la pelota a la mano, no del primer paso que entra en la tolerancia: con eso, la pelota rápida siempre entraba por el borde y todo era un roce. La que agarra la lleva en las manos 1,5 s (la vista dibuja `Arquero_Sostiene`) y la suelta para jugarla con el pie. El rebote sale hacia la cancha y al costado, y lo juega el que llega.
+- **Sin remate encima:** sobre la bisectriz pelota-arco, 0,15 m adelante de la línea por cada metro de la pelota (entre 0,8 y 3 m). En el mano a mano achica (los pesos del motor espacial). Sale a una pelota suelta de su área solo si le gana al rival más rápido por `ventaja_base` + `ventaja_por_metro`: si no, salía a buscar la pelota que el delantero tenía en el área y le pateaban con él corriendo.
+
+**El gol:** la pelota entera pasa la línea entre los palos y abajo del travesaño. Después de 3 s de festejo (todos vuelven a su mitad caminando) se saca del medio. La llegada de la etapa 4 ya no termina la jugada: se cuenta una por posesión.
+
+| Medido (`_diag_remates_v2`, 16 partidos de 45 min por pareja) | Al arco | Atajadas | Motor actual: al arco / atajadas | Abstracto |
+| --- | --- | --- | --- | --- |
+| D1/D1 | 61,7% | 53,2% | 53,0% / 55,4% | 61,3% / 47,8% |
+| D5/D5 | 61,8% | 53,3% | 49,8% / 38,2% | 57,7% / 46,0% |
+| D10/D10 | 66,0% | 51,1% | 56,4% / 45,6% | 64,8% / 46,8% |
+| D1/D4 | 59,7% | 58,7% | 64,4% / 28,1% | 61,9% / 26,9% |
+| D5/D8 | 61,3% | 54,5% | 56,2% / 26,2% | 63,2% / 27,5% |
+| D10/D7 | 66,1% | 53,5% | 57,8% / 27,7% | 68,7% / 27,4% |
+
+El motor actual y el abstracto salen de `_diag_embudo_remates.gd` (40 partidos por pareja: 20 planteles de ida y vuelta, semilla 97000). Al arco = gol + atajado sobre todos los remates (los bloqueados incluidos); atajadas sobre los remates al arco.
+
+| Remate suelto contra el arquero (`_diag_arquero_v2`, tiro y arquero 70, colocado, 20 por punto) | Gol | Atajado |
+| --- | --- | --- |
+| Desde 11 m | 48% | 48% |
+| Desde 16 m | 32% | 60% |
+| Desde 22 m | 2% | 80% |
+| Desde 28 m | 1% | 83% |
+| Al medio / a 1,5 m / a 2,3 m / a 3,2 m del medio | 1% / 10% / 35% / 38% | 95% / 83% / 55% / 38% |
+
+**Calibración:** con la reacción y la mano de arriba, el error del remate (`error_rad`) pasó de 0,07 a 0,12: con 0,07 iba al arco el 72% de los remates. Cambiar la reacción (0,25-0,06 o 0,4-0,15 s) o la mano (0,2-0,45 m) movió las atajadas menos que el ruido de 16 partidos (±3 puntos): el arquero pesa por dónde se para y cómo tapa, no por esos números.
+
+**Pasa si, uno por uno:**
+
+- **Al arco por división:** pasa. 62 a 66% en las parejas, dentro del 50-69% del motor actual y del abstracto.
+- **Atajadas por división:** pasa en las parejas: 51 a 53%, dentro del 38-55%. **No pasa en las desparejas:** el arquero del equipo débil ataja 54-59%, contra 26-28% de los dos motores. En el V2 el equipo fuerte todavía no domina (D1 contra D4: 14,6 a 11,9 goles por partido); es la calibración de la etapa 7 ("el mejor equipo gane lo que tiene que ganar").
+- **Sin correcciones:** 0 correcciones y `SALTO_PELOTA` = 0 en todos los partidos, también con la pelota en las manos (no es de la física mientras el arquero la lleva).
+
+**Qué falta:**
+
+1. **Volumen:** 60 a 95 remates y 21 a 28 goles por partido (el motor actual: 7 y 2,4). Sin offside, sin faltas y con 70 a 110 llegadas por partido, el V2 llega demasiado. Es la etapa 6 y la 7.
+2. **Cabezazos:** 1,4 a 3,3 por partido y casi ningún gol (el motor actual: 0,9 y 40% de gol). Salen a 9-14 m/s y el arquero los agarra.
+3. **Costo:** 5,9 µs por paso en esta PC: unos 1,9 s por partido sin vista. En el teléfono serían unos 5 s (2,6 veces la PC en la etapa 1), por encima de los 3 s del presupuesto, como ya pasaba en la etapa 4. `apuntar` corre solo al patear.
+4. **Teléfono:** bibliotecas de Windows y Android rearmadas; la de Linux quedó vieja. Falta comparar la huella del partido V2 en la PC y en el teléfono (hasta ahora solo el banco de la etapa 0).
+5. **Revisión visual:** `motor_v2/laboratorio_remate.tscn` (una tanda de 12 remates contra el arquero) y `laboratorio_cerebro.tscn` (el partido con arqueros y goles).
+6. **Clips:** no hay volea de costado ni cabezazo en carrera; el saque del arquero con la mano y el voleo quedan para la etapa 6.
+
 ### Etapa 6 — Reglas y pelota parada
 
 - **Qué:** laterales, saques de arco, córners, faltas por contacto, tarjetas, offside, penales y tanda, cambios, lesiones, entretiempo con cambio de lado. Se reusa la lógica de ubicación de `_ubicar_para_el_balon_parado`, barrera y ejecutor.

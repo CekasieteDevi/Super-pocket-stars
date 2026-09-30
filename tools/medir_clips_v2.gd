@@ -128,6 +128,17 @@ func _contactos_de_la_vista() -> Dictionary:
 	for accion in VistaCancha3D.CONTACTO_3D:
 		if VistaCancha3D.ANIM_DE_ACCION.has(accion):
 			r[VistaCancha3D.ANIM_DE_ACCION[accion]] = VistaCancha3D.CONTACTO_3D[accion]
+	# Las atajadas que la vista elige aparte de ANIM_DE_ACCION (etapa 5 del
+	# Motor V2): la estirada a la izquierda y la alta usan los cuadros de
+	# Atajar_Volando (estirado en 10/24); las paradas tienen las manos en la
+	# pelota en 6/24 (animaciones_jugador.py, "ATAJADAS POR ZONA").
+	var vuela: Array = VistaCancha3D.CONTACTO_3D[MotorEspacial.ACCION_VUELA]
+	var parada := VistaCancha3D.PARADA_CONTACTO_TICKS / 4.0
+	for anim in [VistaCancha3D.ANIM_VUELA_IZQUIERDA, VistaCancha3D.ANIM_VUELA_ALTA,
+			VistaCancha3D.ANIM_VUELA_ALTA_IZQUIERDA]:
+		r[anim] = vuela
+	for anim in [VistaCancha3D.ANIM_ATAJA_ARRIBA, VistaCancha3D.ANIM_ATAJA_ABAJO]:
+		r[anim] = ["manos", parada]
 	return r
 
 

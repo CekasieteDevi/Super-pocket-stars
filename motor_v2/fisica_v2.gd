@@ -106,3 +106,21 @@ static func jugador_de(atributos: Dictionary, energia := 1.0) -> Dictionary:
 	f["pases"] = float(atributos.get("pases", 50.0))
 	f["control"] = float(atributos.get("control", 50.0))
 	return f
+
+
+## Etapa 5 (CanchitaV2Nativa.configurar_remate): data/fisica_v2.json, "remate".
+static func parametros_remate() -> Dictionary:
+	return (datos()["remate"] as Dictionary).duplicate(true)
+
+
+## Etapa 5: data/fisica_v2.json, "arquero", más el achique del motor espacial
+## (data/utility_pesos.json, "arquero"): una sola fuente para los dos motores.
+static func parametros_arquero() -> Dictionary:
+	var p: Dictionary = (datos()["arquero"] as Dictionary).duplicate(true)
+	var espacial := MotorEspacial.pesos_arquero()
+	for clave in ["achique_min", "achique_max", "achique_dist_rival", "achique_margen_pelota", "achique_carril",
+			"ventaja_base", "ventaja_por_metro"]:
+		p[clave] = float(espacial[clave])
+	# Parado o estirada: la misma regla que la vista 3D actual.
+	p["parada_max_m"] = VistaCancha3D.PARADA_TRAVESIA_M
+	return p

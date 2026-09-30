@@ -26,8 +26,12 @@
 // - Offside en el cuadro del pase: `en_offside` mira la foto del momento en
 //   que sale la pelota. Por ahora solo se cuenta; cobrarlo es la etapa 6.
 //
-// Qué NO entra todavía: remate (etapa 5), gambeta (faltan los clips de
-// regate), arquero (etapa 5) y pelota parada (etapa 6).
+// Etapa 5: el remate (la opción `tiro` del motor espacial, DEC_REMATE) y
+// adónde y cómo patear (elegir_remate, con el valor que da el planeador). Lo
+// que hace el arquero lo resuelve la canchita (canchita.h).
+//
+// Qué NO entra todavía: gambeta (faltan los clips de regate) y pelota parada
+// (etapa 6).
 //
 // Unidades: el motor espacial contaba en ticks de 0,25 s. Acá todo va en
 // segundos; los parámetros que vienen de data/utility_pesos.json en ticks se
@@ -71,6 +75,12 @@ enum Atributo : int {
 	AT_TIRO,
 	// Del arquero: la salida corta (atributo_pase).
 	AT_PIES,
+	// Del arquero (etapa 5): reacción, alcance de la estirada, retener la
+	// pelota y salir a achicar.
+	AT_REFLEJOS,
+	AT_ESTIRADA,
+	AT_AGARRE,
+	AT_ACHIQUE,
 	ATRIBUTOS,
 };
 
@@ -94,6 +104,9 @@ enum TipoDecision : int {
 	DEC_CENTRO,
 	DEC_PARED,
 	DEC_DESPEJE,
+	// Etapa 5: tirar al arco. El punto y el tipo de golpe salen de
+	// Cerebro::elegir_remate.
+	DEC_REMATE,
 	DECISIONES,
 };
 
@@ -130,6 +143,8 @@ struct PesosCerebro {
 	double pared_base = 0.25, pared_progreso = 1.1, pared_seguridad = 0.5;
 	// pase_largo
 	double largo_base = 0.2, largo_progreso = 0.7, largo_presion = 0.55, largo_salida = 0.45;
+	// tiro
+	double tiro_base = 0.0, tiro_geometria = 8.5;
 	// pase_hueco
 	double hueco_base = 0.1, hueco_progreso = 1.3, hueco_seguridad = 0.3, hueco_distancia = 0.2;
 	// temperatura
@@ -138,7 +153,7 @@ struct PesosCerebro {
 	// presion
 	double presion_radio = 7.0, presion_factor_frente = 1.5, presion_normalizador = 2.5;
 	// sesgos_personalidad
-	double creador_pase = 1.3, pie_preferido_penalizacion = 0.25;
+	double creador_pase = 1.3, pie_preferido_penalizacion = 0.25, egoista_tiro = 1.4;
 	// asociacion_colectiva
 	double descarga_util = 0.35;
 	// fisica
@@ -156,6 +171,8 @@ struct PesosCerebro {
 	double corredor_conduccion = 18.0, ticks_control_malo = 9.0, ticks_control_bueno = 2.0;
 	double rango_tiro_medio = 24.0, tercio_propio_arquero = 30.0, dist_saque_largo = 28.0;
 	double radio_tackle = 2.0, gambeta_cono_frontal = -0.1;
+	double rango_tiro_malo = 16.0, rango_tiro_bueno = 36.0, mezcla_fisica_rango_tiro = 0.8;
+	double geometria_minima_tiro = 0.03;
 	// ritmo
 	double ritmo_umbral_transicion = 0.7, ritmo_frente = 12.0, ritmo_espacio_para_acelerar = 0.62;
 	double ritmo_apoyo_libre = 0.65, ritmo_apoyo_adelante = 4.0, ritmo_apoyo_alcance = 32.0, ritmo_carril_libre = 0.4;
@@ -200,6 +217,7 @@ struct PesosCerebro {
 	double riesgo_margen_seguro = 0.5;
 	double entrada_ventaja_seg = 0.5;
 	double castigo_corte = 1.0;
+	double remate_temperatura = 0.05;
 	// No sale de ningún JSON: es toque.reaccion_seg, que la canchita le copia
 	// al empezar (una sola fuente de verdad).
 	double reaccion_seg = 0.2;
@@ -236,6 +254,7 @@ struct FichaCerebro {
 	double relativo[ATRIBUTOS] = {};
 	bool creador = false;
 	bool metodico = false;
+	bool egoista = false;
 	// Pie preferido: 0 si no tiene el rasgo; si no, +1 derecho o -1 zurdo.
 	int pie_malo_lado = 0;
 	// Enfocado: MotorEspacial.FACTOR_OFFSIDE_ENFOCADO y TOLERANCIA_OFFSIDE_ENFOCADO.
@@ -289,6 +308,11 @@ public:
 	// Lo mismo para un globo que cae en (x, z): solo cuenta donde vuela a la
 	// altura de la cabeza o menos.
 	virtual double margen_globo(int de, double x, double z) = 0;
+	// Etapa 5: qué tan bueno es un remate de `de` al punto (alto, lateral) del
+	// arco rival con el golpe `tipo` (remate.h): la chance de que vaya adentro
+	// y el arquero no llegue, con el mismo error y el mismo arquero que
+	// después juegan. -1 si ese golpe no llega.
+	virtual double valor_remate(int de, int tipo, double alto, double lateral) = 0;
 };
 
 struct Decision {
@@ -305,6 +329,10 @@ struct Decision {
 	double dir_x = 1.0, dir_z = 0.0;
 	// Viene de un desmarque preparado (pase al espacio que "sale solo").
 	bool corrida_preparada = false;
+	// Remate: el golpe (TipoRemate de remate.h) y el alto del punto del arco
+	// (x, z es el punto sobre la línea).
+	int golpe = 0;
+	double alto = 0.0;
 };
 
 // Adónde va uno que no tiene la pelota.
@@ -384,6 +412,13 @@ public:
 	Decision decidir(const Mundo &m, int i, bool puede_pasar, Azar &azar);
 	// Adónde va el que no tiene la pelota ni va a buscarla.
 	Objetivo objetivo(const Mundo &m, int i) const;
+	// Etapa 5: adónde y cómo remata `i` (el golpe, el punto y su valor), entre
+	// los puntos del arco que le pregunta al planeador. `solo_cabeza`: la
+	// pelota le llega alta y solo la puede cabecear.
+	Decision elegir_remate(const Mundo &m, int i, bool solo_cabeza, Azar &azar) const;
+	// Si le da el alcance para tirar desde (x, z) (factor_geometria con su
+	// rango de tiro, rango_tiro_malo a rango_tiro_bueno).
+	bool alcanza_para_tirar(int i, double x, double z) const;
 	// El que sale a presionar al poseedor (-1 si nadie).
 	int presionante(int equipo_defensor) const {
 		return _defensa[equipo_defensor & 1].presionante;

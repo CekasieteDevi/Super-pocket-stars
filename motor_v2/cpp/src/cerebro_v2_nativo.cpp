@@ -38,6 +38,8 @@ const Entrada ENTRADAS[] = {
 	{ "pase_largo", "progreso", &PesosCerebro::largo_progreso },
 	{ "pase_largo", "presion", &PesosCerebro::largo_presion },
 	{ "pase_largo", "salida", &PesosCerebro::largo_salida },
+	{ "tiro", "base", &PesosCerebro::tiro_base },
+	{ "tiro", "geometria", &PesosCerebro::tiro_geometria },
 	{ "pase_hueco", "base", &PesosCerebro::hueco_base },
 	{ "pase_hueco", "progreso", &PesosCerebro::hueco_progreso },
 	{ "pase_hueco", "seguridad", &PesosCerebro::hueco_seguridad },
@@ -54,6 +56,7 @@ const Entrada ENTRADAS[] = {
 	{ "presion", "normalizador", &PesosCerebro::presion_normalizador },
 	{ "sesgos_personalidad", "creador_pase", &PesosCerebro::creador_pase },
 	{ "sesgos_personalidad", "pie_preferido_penalizacion", &PesosCerebro::pie_preferido_penalizacion },
+	{ "sesgos_personalidad", "egoista_tiro", &PesosCerebro::egoista_tiro },
 	{ "asociacion_colectiva", "descarga_util", &PesosCerebro::descarga_util },
 	{ "fisica", "vel_min", &PesosCerebro::vel_min },
 	{ "fisica", "vel_max", &PesosCerebro::vel_max },
@@ -96,6 +99,10 @@ const Entrada ENTRADAS[] = {
 	{ "fisica", "dist_saque_largo", &PesosCerebro::dist_saque_largo },
 	{ "fisica", "radio_tackle", &PesosCerebro::radio_tackle },
 	{ "fisica", "gambeta_cono_frontal", &PesosCerebro::gambeta_cono_frontal },
+	{ "fisica", "rango_tiro_malo", &PesosCerebro::rango_tiro_malo },
+	{ "fisica", "rango_tiro_bueno", &PesosCerebro::rango_tiro_bueno },
+	{ "fisica", "mezcla_fisica_rango_tiro", &PesosCerebro::mezcla_fisica_rango_tiro },
+	{ "fisica", "geometria_minima_tiro", &PesosCerebro::geometria_minima_tiro },
 	{ "ritmo", "umbral_transicion", &PesosCerebro::ritmo_umbral_transicion },
 	{ "ritmo", "frente", &PesosCerebro::ritmo_frente },
 	{ "ritmo", "espacio_para_acelerar", &PesosCerebro::ritmo_espacio_para_acelerar },
@@ -182,11 +189,13 @@ const Entrada NUEVOS[] = {
 	{ "cerebro", "riesgo_margen_seguro", &PesosCerebro::riesgo_margen_seguro },
 	{ "cerebro", "entrada_ventaja_seg", &PesosCerebro::entrada_ventaja_seg },
 	{ "cerebro", "castigo_corte", &PesosCerebro::castigo_corte },
+	{ "cerebro", "remate_temperatura", &PesosCerebro::remate_temperatura },
 };
 
 // Los atributos de Player, en el orden de motor_v2::Atributo.
 const char *ATRIBUTOS[motor_v2::ATRIBUTOS] = { "pases", "vision", "inteligencia", "control", "centros", "fuerza",
-	"golpe", "velocidad", "aceleracion", "energia", "agilidad", "cabezazo", "tiro", "pies" };
+	"golpe", "velocidad", "aceleracion", "energia", "agilidad", "cabezazo", "tiro", "pies", "reflejos", "estirada",
+	"agarre", "achique" };
 
 const char *ROLES[motor_v2::ROLES] = { "ARQ", "DFC", "LAT", "MC", "MCO", "EXT", "DC" };
 
@@ -281,6 +290,7 @@ void godot::leer_ficha_cerebro(int equipo, const Dictionary &d, motor_v2::FichaC
 	}
 	leer(d, "creador", f.creador);
 	leer(d, "metodico", f.metodico);
+	leer(d, "egoista", f.egoista);
 	f.pie_malo_lado = int(d.get("pie_malo_lado", 0));
 	leer(d, "margen_offside", f.margen_offside);
 }

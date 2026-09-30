@@ -91,12 +91,17 @@ var sombras_redondas := false
 var personajes_con_sombra_sol := true
 var _manchas: SombrasRedondas
 var escala_3d := 1.0
+## El arquero con la pelota en las manos (loop de 2 s).
+const ANIM_SOSTIENE := "Arquero_Sostiene"
 ## Sin los 22 jugadores: el laboratorio de la pelota (etapa 1) solo la mira a ella.
 var con_jugadores := true
 ## Cuántos y de qué equipo (etapa 3: el rondo y el partidito tienen 6 y 10,
 ## sin arqueros). Vacío: los 22 del partido, del 0 al 10 un equipo y el 0 y
 ## el 11 arqueros.
 var equipos := PackedInt32Array()
+## Etapa 5: 1 el que es arquero (get_arqueros de CanchitaV2Nativa). Vacío:
+## con `equipos` vacío, el 0 y el 11; si no, nadie.
+var arqueros := PackedInt32Array()
 ## Clip -> [segundo del contacto, ancla] de los que tocan con el pie.
 var _contacto_pie := {}
 var _giro_alcance := 1.0
@@ -195,6 +200,8 @@ func _equipo(i: int) -> int:
 
 
 func _es_arquero(i: int) -> bool:
+	if not arqueros.is_empty():
+		return i < arqueros.size() and arqueros[i] == 1
 	return equipos.is_empty() and i % 11 == 0
 
 
@@ -291,10 +298,17 @@ func dibujar_canchita(c: Object, alfa: float, delta: float) -> void:
 func _poner_cuerpos(c: Object, alfa: float, delta: float) -> void:
 	var acciones := []
 	var intenciones := []
+	var en_manos: int = c.get_en_manos() if c.has_method("get_en_manos") else -1
 	for i in _cantidad():
 		# El tiempo de la acción es el del paso actual: se lo lleva al del
 		# cuadro con lo que falta del paso (alfa).
-		acciones.append([c.get_accion(i), maxf(0.0, float(c.get_tiempo_accion(i)) - (1.0 - alfa) / 60.0)])
+		var accion: String = c.get_accion(i)
+		if accion == "" and i == en_manos:
+			# Etapa 5: el arquero que la agarró la tiene contra el pecho hasta
+			# soltarla (el motor la lleva en sus manos).
+			acciones.append([ANIM_SOSTIENE, fmod(_tiempo, 2.0)])
+		else:
+			acciones.append([accion, maxf(0.0, float(c.get_tiempo_accion(i)) - (1.0 - alfa) / 60.0)])
 		intenciones.append([c.get_rapidez_buscada(i), c.get_metros_para_parar(i), c.get_giro_pendiente(i),
 			c.get_rumbo_buscado(i)])
 	_dibujar_jugadores(c.get_pos_previa(), c.get_pos(), c.get_rumbo(), c.get_rapidez(), acciones, alfa, delta,

@@ -52,6 +52,26 @@ constexpr double ESPACIO_TARDE_SEG = 0.3;
 constexpr double ESPACIO_RESTO_MS = 2.0;
 // Partido: _alcance mira la trayectoria de a estos puntos (0,05 s).
 constexpr int SALTO_ALCANCE = 3;
+// Etapa 5. Festejo: la pelota queda en la red y cada uno vuelve a su mitad
+// antes del saque del medio.
+constexpr int FESTEJO_PASOS = 180;
+// Un remate termina a lo sumo 3 s después de salir (si ya nadie la toca ni
+// sale, se quedó corto) o cuando la pelota casi no se mueve.
+constexpr int REMATE_MAX_PASOS = 180;
+constexpr double REMATE_MUERTO_MS = 1.0;
+// El remate que sale hasta 3 s después de un rebote del arquero.
+constexpr int TRAS_REBOTE_PASOS = 180;
+// La trayectoria "va al arco" si cruza la línea hasta esto afuera de los
+// palos y del travesaño: el arquero también va a la que pasa rozando.
+constexpr double CRUCE_MARGEN_M = 0.5;
+// En las manos: adelante del pecho (Arquero_Sostiene) y a qué alto.
+constexpr double MANOS_ADELANTE_M = 0.35;
+constexpr double MANOS_ALTO_M = 0.6;
+// La pasada de la pelota por la mano del arquero se mide hasta esto más
+// adelante (0,1 s: lo que dura la ventana de contacto).
+constexpr double PASOS_PASADA = 6.0;
+// Al soltarla para jugar, la deja caer adelante a esta rapidez.
+constexpr double SUELTA_MS = 1.0;
 
 double hipot(double x, double z) {
 	return std::sqrt(x * x + z * z);
@@ -72,15 +92,15 @@ void Canchita::agregar(int equipo, const Cuerpo &fisico, double pases, double co
 }
 
 double Canchita::_medio_x() const {
-	// El modo PRUEBA usa la cancha del partidito.
-	if (modo == PARTIDO) {
+	// El modo PRUEBA usa la cancha del partidito; ARCO, la entera.
+	if (_con_arcos()) {
 		return PARTIDO_LARGO * 0.5;
 	}
 	return modo == RONDO ? RONDO_LADO * 0.5 : PARTIDITO_LARGO * 0.5;
 }
 
 double Canchita::_medio_z() const {
-	if (modo == PARTIDO) {
+	if (_con_arcos()) {
 		return PARTIDO_ANCHO * 0.5;
 	}
 	return modo == RONDO ? RONDO_LADO * 0.5 : PARTIDITO_ANCHO * 0.5;
@@ -127,6 +147,15 @@ void Canchita::empezar(int modo_, int64_t semilla) {
 	_reinicio_en = _reinicio_hasta = -1;
 	_pases_posesion = 0;
 	_pase_al_espacio = false;
+	_en_manos = -1;
+	_suelta_en = -1;
+	_saque_medio_en = -1;
+	_llegada_contada = false;
+	_ultimo_resultado = -1;
+	_rebote_arquero_en = -1000;
+	_remate = Remate();
+	registro.clear();
+	_k_cruce[0] = _k_cruce[1] = -1;
 	if (modo == PARTIDO) {
 		cerebro.pesos.reaccion_seg = param_toque.reaccion_seg;
 		cerebro.empezar();
@@ -175,6 +204,8 @@ void Canchita::empezar(int modo_, int64_t semilla) {
 		j.hay_decision = false;
 		j.rapidez_pase = 0.0;
 		j.tipo_pase = DEC_NADA;
+		j.clip_arquero = -1;
+		j.remata_prueba = false;
 	}
 	if (modo == PARTIDO) {
 		_armar_mundo();
@@ -204,13 +235,15 @@ void Canchita::lanzar(V3 p, V3 v, V3 giro, int equipo) {
 	_pase_activo = false;
 	_receptor = -1;
 	_reinicio_en = _reinicio_hasta = -1;
+	_en_manos = -1;
+	_remate = Remate();
+	_ultimo_resultado = -1;
 	for (JugadorCanchita &j : jugadores) {
 		j.toque_pendiente = false;
 		j.persigue = false;
 		j.pensar_ya = true;
 	}
-	trayectoria.predecir(pelota, HORIZONTE);
-	_tray_paso = paso;
+	_nueva_trayectoria();
 	_visto_paso = paso;
 	for (size_t i = 0; i < jugadores.size(); i++) {
 		_alcance(int(i), 1.0, _k_llega[i], _t_llega[i]);
@@ -227,19 +260,29 @@ void Canchita::avanzar() {
 		j.cuerpo.paso(param_cuerpo, clips, PASO_SEG);
 	}
 	_separar_cuerpos();
-	pelota.avanzar();
+	// En las manos del arquero la pelota no es de la física: va con él hasta
+	// que la suelta (etapa 5).
+	bool en_manos = _en_manos >= 0;
+	uint32_t eventos = 0;
+	if (en_manos) {
+		_llevar_en_manos();
+	} else {
+		eventos = pelota.avanzar();
+	}
 	V3 fisica = pelota.vel;
 	bool tocada = _resolver_toques();
 	tocada = _rebotes() || tocada;
 	// Detector de la etapa 3: la pelota solo cambia por la física o por un
 	// toque. Nada más la puede corregir.
-	if (!tocada && (pelota.vel.x != fisica.x || pelota.vel.y != fisica.y || pelota.vel.z != fisica.z)) {
+	if (!en_manos && !tocada && (pelota.vel.x != fisica.x || pelota.vel.y != fisica.y || pelota.vel.z != fisica.z)) {
 		cuenta.correcciones++;
+	}
+	if (_remate.activo && (eventos & (PALO | TRAVESANO))) {
+		_remate.palo = true;
 	}
 	_reglas();
 	if (_cambio) {
-		trayectoria.predecir(pelota, HORIZONTE);
-		_tray_paso = paso;
+		_nueva_trayectoria();
 	}
 	_medir();
 }
@@ -260,7 +303,12 @@ void Canchita::_pensar() {
 	for (size_t i = 0; i < jugadores.size(); i++) {
 		JugadorCanchita &j = jugadores[i];
 		bool turno = (paso + int64_t(i)) % PASOS_POR_TURNO == 0;
-		if (j.pensar_ya || (turno && (vio || int(i) == ultimo_toque))) {
+		// El arquero con un remate encima piensa en cada paso hasta tirarse:
+		// esperando su turno (hasta 0,1 s) y la reacción de los demás
+		// (reaccion_seg) planeaba 0,27 s después de la patada aunque sus
+		// reflejos dieran 0,2 s, y a 13 m ya no llegaba a estirarse.
+		bool atajando = j.arquero && _k_cruce[j.equipo & 1] >= 0 && j.cuerpo.clip < 0 && j.toque != TOQUE_ATAJADA;
+		if (j.pensar_ya || atajando || (turno && (vio || int(i) == ultimo_toque))) {
 			j.pensar_ya = false;
 			_pensar_jugador(int(i));
 		}
@@ -280,12 +328,37 @@ void Canchita::_analizar() {
 		}
 	}
 	bool reinicio = paso < _reinicio_hasta;
+	// Lo que tarda el más rápido de cada equipo (etapa 5: el arquero sale solo
+	// si le gana a ese).
+	double t_min[2] = { 1e9, 1e9 };
+	for (size_t i = 0; i < jugadores.size(); i++) {
+		const JugadorCanchita &j = jugadores[i];
+		if (paso - j.pateo_en >= DESCANSO_PATEADOR) {
+			t_min[j.equipo & 1] = std::min(t_min[j.equipo & 1], _t_llega[i]);
+		}
+	}
 	for (int e = 0; e < 2; e++) {
 		int mejor = -1;
 		for (size_t i = 0; i < jugadores.size(); i++) {
 			const JugadorCanchita &j = jugadores[i];
 			if (j.equipo != e || paso - j.pateo_en < DESCANSO_PATEADOR) {
 				continue;
+			}
+			// Etapa 5: el arquero sale solo a la pelota que alcanza en su área
+			// (con las manos) y si le gana al rival más rápido por lo que le
+			// cuesta dejar el arco (MotorEspacial, ventaja_base y
+			// ventaja_por_metro). En la etapa 4 iba a cualquiera y dejaba el arco
+			// solo; sin la ventaja, salía a buscar la pelota que el delantero
+			// tenía en el área y le pateaban con él corriendo.
+			if (j.arquero && int(i) != poseedor) {
+				V3 donde = _k_llega[i] >= 0 && !trayectoria.pos.empty()
+						? trayectoria.pos[size_t(std::min(_k_llega[i], int(trayectoria.pos.size()) - 1))]
+						: pelota.pos;
+				double sale = std::abs(donde.x + _ataca(j.equipo) * param_pelota.medio_largo);
+				double ventaja = param_arquero.ventaja_base + param_arquero.ventaja_por_metro * sale;
+				if (!_es_mi_area(int(i), donde.x, donde.z) || _t_llega[i] + ventaja > t_min[1 - e]) {
+					continue;
+				}
 			}
 			if (mejor < 0 || _t_llega[i] < _t_llega[size_t(mejor)]) {
 				mejor = int(i);
@@ -386,6 +459,32 @@ void Canchita::_pensar_jugador(int i) {
 	if (j.toque_pendiente && j.cuerpo.clip >= 0) {
 		return;
 	}
+	// Etapa 5. Con la pelota en las manos el arquero espera para soltarla.
+	if (_en_manos == i) {
+		j.persigue = false;
+		j.toque = TOQUE_NADA;
+		j.cuerpo.ir_a(j.cuerpo.x, j.cuerpo.z, 0.3, true);
+		return;
+	}
+	// Festejo del gol: todos a su mitad para el saque del medio.
+	if (_saque_medio_en >= 0) {
+		j.persigue = false;
+		j.toque = TOQUE_NADA;
+		_ubicar(i);
+		return;
+	}
+	// El remate que va a su arco manda sobre todo lo demás. Hasta que lo lee
+	// se queda en su lugar: siguiendo el plan de antes (salir a buscar la
+	// pelota) arrancaba un gesto equivocado y cuando reaccionaba ya no podía
+	// tirarse.
+	if (j.arquero && _k_cruce[j.equipo & 1] >= 0) {
+		if (!_plan_atajar(i)) {
+			j.persigue = false;
+			j.toque = TOQUE_NADA;
+			_ubicar(i);
+		}
+		return;
+	}
 	// En el partido el cerebro decide cuánta ventaja pide para tirarse
 	// (cerebro.pesos.entrada_ventaja_seg).
 	double gana = modo == PARTIDO ? cerebro.pesos.entrada_ventaja_seg : GANA_CARRERA_SEG;
@@ -398,7 +497,7 @@ void Canchita::_pensar_jugador(int i) {
 		j.persigue = false;
 		j.toque = TOQUE_NADA;
 		_contener(i);
-	} else if (modo == PRUEBA && i == poseedor) {
+	} else if (_prueba() && i == poseedor) {
 		// En la prueba el que la controla no sigue jugando.
 		j.persigue = false;
 		j.toque = TOQUE_NADA;
@@ -440,6 +539,16 @@ void Canchita::_plan_tocar(int i) {
 			&& cerebro.muro_de_pared(_mundo, corredor_pared, retorno_x, retorno_z) == i;
 	if (poseedor_ && ataca && p.y <= param_toque.pie_hasta) {
 		_decidir(i, p, t);
+	} else if (j.arquero && !ataca && _es_mi_area(i, p.x, p.z)) {
+		// Etapa 5: en su área la pelota del rival la agarra con las manos (a la
+		// que le pasa un compañero no: la juega con el pie).
+		int a = p.y <= param_toque.pie_hasta ? ATAJA_ABAJO : (p.y <= param_toque.pecho_hasta ? ATAJA_AGARRA : ATAJA_ARRIBA);
+		if (param_arquero.clips[a] >= 0) {
+			j.toque = TOQUE_ATAJADA;
+			j.clip_arquero = a;
+		}
+	} else if (ataca && !poseedor_ && !devuelve_pared && _decidir_remate_de_primera(i, p, t)) {
+		// Etapa 5: le pega de primera al arco (de pie, de volea o de cabeza).
 	} else if (devuelve_pared) {
 		// El muro de la pared la devuelve de primera al que sale a buscarla.
 		Decision d;
@@ -474,7 +583,7 @@ void Canchita::_plan_tocar(int i) {
 	if (j.toque == TOQUE_CONTROL) {
 		_orientar(i, p);
 	}
-	int clip = _clip_para(j, p.y);
+	int clip = j.toque == TOQUE_ATAJADA ? param_arquero.clips[j.clip_arquero] : _clip_para(j, p.y);
 	if (clip < 0) {
 		// Pasa por arriba de la cabeza: va a donde cae.
 		c.ir_a(p.x, p.z, 1.0, true);
@@ -486,7 +595,7 @@ void Canchita::_plan_tocar(int i) {
 	// para quedar de frente al destino le tomaba medio segundo y el rival
 	// se la sacaba. El que recibe mira la pelota que viene.
 	double fx, fz;
-	if (j.toque == TOQUE_PASE || j.toque == TOQUE_CONDUCE) {
+	if (j.toque == TOQUE_PASE || j.toque == TOQUE_CONDUCE || j.toque == TOQUE_REMATE) {
 		fx = p.x - c.x;
 		fz = p.z - c.z;
 	} else if (hipot(vp.x, vp.z) > 1.0) {
@@ -922,7 +1031,7 @@ void Canchita::_ubicar(int i) {
 				}
 			}
 		}
-	} else if (modo == PRUEBA) {
+	} else if (_prueba()) {
 		qx = j.casa_x;
 		qz = j.casa_z;
 	} else if (j.equipo == equipo_con_pelota) {
@@ -984,6 +1093,21 @@ void Canchita::_franja(Parte parte, double &desde, double &hasta) const {
 }
 
 int Canchita::_clip_de_parte(const JugadorCanchita &j, Parte parte) const {
+	if (j.toque == TOQUE_ATAJADA) {
+		return j.clip_arquero >= 0 ? param_arquero.clips[j.clip_arquero] : -1;
+	}
+	if (j.toque == TOQUE_REMATE) {
+		// De cabeza: parado (Cabecear) o tirándose de palomita a la pelota más
+		// baja. De pie: el empeine, o de volea a la altura del muslo.
+		if (j.golpe_remate == REMATE_CABEZA) {
+			return parte == CABEZA ? param_remate.clip_cabeza : (parte == PECHO ? param_remate.clip_palomita : -1);
+		}
+		if (parte == PIE) {
+			return j.golpe_remate == REMATE_EFECTO && param_remate.clip_efecto >= 0 ? param_remate.clip_efecto
+																				 : param_remate.clip_pie;
+		}
+		return parte == MUSLO ? param_remate.clip_volea : -1;
+	}
 	if (j.toque == TOQUE_PASE) {
 		return param_toque.clip_pase;
 	}
@@ -1023,12 +1147,19 @@ void Canchita::_gatillo(int i) {
 	if (modo == RONDO && _reinicio_en >= 0) {
 		return;
 	}
+	if (_en_manos >= 0 || _saque_medio_en >= 0) {
+		return;
+	}
 	// El clip depende de la parte con que la va a tocar, y la parte de la
 	// altura de la pelota en su cuadro de contacto: se prueba la de dentro
 	// de 8 pasos y, si en el contacto de ese clip la pelota queda en otra
-	// franja, la de esa franja. Clip y parte van siempre juntos.
+	// franja, la de esa franja. Clip y parte van siempre juntos. El remate de
+	// primera elige igual (empeine, volea o cabeza); el arquero ya eligió su
+	// clip al planear la atajada.
+	bool por_altura = j.toque == TOQUE_CONTROL || j.toque == TOQUE_REMATE;
+	bool ataja = j.toque == TOQUE_ATAJADA;
 	Parte parte = PIE;
-	if (j.toque == TOQUE_CONTROL) {
+	if (por_altura) {
 		parte = parte_para(param_toque, _bola_en(paso + 8).y);
 		if (parte == NINGUNA) {
 			return;
@@ -1038,10 +1169,12 @@ void Canchita::_gatillo(int i) {
 	if (clip < 0) {
 		return;
 	}
+	double tolerancia = ataja ? _tolerancia(i, j.clip_arquero) : param_toque.tolerancia_m;
+	double gatillo = ataja ? tolerancia * 0.5 : param_toque.gatillo_m;
 	for (int vuelta = 0; vuelta < 2; vuelta++) {
 		double tc = std::max(clips[size_t(clip)].contacto_seg, 0.0);
 		V3 p = _bola_en(paso + int64_t(tc / PASO_SEG + 0.5));
-		if (j.toque == TOQUE_CONTROL && vuelta == 0) {
+		if (por_altura && vuelta == 0) {
 			Parte otra = parte_para(param_toque, p.y);
 			if (otra == NINGUNA) {
 				return;
@@ -1066,28 +1199,41 @@ void Canchita::_gatillo(int i) {
 				Cuerpo luego = c;
 				luego.x += c.vx * t;
 				luego.z += c.vz * t;
-				q = punto_de_contacto(luego, clips[size_t(clip)], _rumbo_al_tocar(luego, c.rumbo, pt.x, pt.z));
-				d[luego_de] = hipot(q.x - pt.x, q.z - pt.z);
+				q = punto_de_contacto(luego, clips[size_t(clip)], _rumbo_contacto(j, luego, clip, c.rumbo, pt.x, pt.z));
+				d[luego_de] = ataja ? _distancia_al_brazo(j, luego, q, pt, pt) : hipot(q.x - pt.x, q.z - pt.z);
 				if (luego_de == 0) {
 					p = pt;
 				}
 			}
-			double desde, hasta;
-			_franja(parte, desde, hasta);
-			bool alto_ok = j.toque != TOQUE_CONTROL
-					? std::abs(clips[size_t(clip)].punto_y - p.y) <= param_toque.tolerancia_alto_m
-					: p.y >= desde - param_toque.tolerancia_alto_m && p.y <= hasta + param_toque.tolerancia_alto_m;
+			bool alto_ok;
+			if (ataja) {
+				alto_ok = p.y >= _alto_minimo(j.clip_arquero, clips[size_t(clip)])
+						&& p.y <= clips[size_t(clip)].punto_y + _tolerancia_alto(j.clip_arquero, true);
+			} else if (j.toque == TOQUE_CONTROL) {
+				double desde, hasta;
+				_franja(parte, desde, hasta);
+				alto_ok = p.y >= desde - param_toque.tolerancia_alto_m && p.y <= hasta + param_toque.tolerancia_alto_m;
+			} else {
+				alto_ok = std::abs(clips[size_t(clip)].punto_y - p.y) <= param_toque.tolerancia_alto_m;
+			}
 			bool quietos = c.rapidez() < RAPIDEZ_QUIETO && hipot(pelota.vel.x, pelota.vel.z) < RAPIDEZ_QUIETO;
 			// Arranca si va a quedar justo en la pelota, o si este es el mejor
 			// momento (después se aleja) y queda al alcance: con la pelota a
 			// 9 m/s pasando a medio metro, esperar el gatillo exacto la dejaba
 			// pasar (en el rondo, la mitad de los pases que se iban afuera).
-			bool mejor_ahora = d[0] <= d[1] && d[0] <= param_toque.tolerancia_m;
-			if (alto_ok && (d[0] <= param_toque.gatillo_m || mejor_ahora || (quietos && d[0] <= param_toque.tolerancia_m))) {
+			bool mejor_ahora = d[0] <= d[1] && d[0] <= tolerancia;
+			// El arquero se tira a tiempo aunque no vaya a llegar: esperando a
+			// quedar justo, el remate ya estaba adentro cuando arrancaba.
+			bool a_tiempo = ataja && paso + int64_t(tc / PASO_SEG + 0.5) >= j.paso_meta;
+			if ((alto_ok && (d[0] <= gatillo || mejor_ahora || (quietos && d[0] <= tolerancia))) || a_tiempo) {
 				if (c.empezar(clip)) {
 					j.clip_toque = clip;
 					j.parte = parte;
 					j.toque_pendiente = true;
+					if (ataja && _remate.activo && _remate.equipo != j.equipo && _remate.indice < registro.size()
+							&& registro[_remate.indice].clip_arquero < 0) {
+						registro[_remate.indice].clip_arquero = j.clip_arquero;
+					}
 				}
 			}
 			return;
@@ -1102,7 +1248,7 @@ void Canchita::_gatillo(int i) {
 bool Canchita::_resolver_toques() {
 	int mejor = -1;
 	double mejor_d = 1e9;
-	bool bloqueado = modo == RONDO && _reinicio_en >= 0;
+	bool bloqueado = (modo == RONDO && _reinicio_en >= 0) || _en_manos >= 0 || _saque_medio_en >= 0;
 	for (size_t i = 0; i < jugadores.size(); i++) {
 		const JugadorCanchita &j = jugadores[i];
 		const Cuerpo &c = j.cuerpo;
@@ -1114,10 +1260,18 @@ bool Canchita::_resolver_toques() {
 			continue;
 		}
 		const Clip &k = clips[size_t(j.clip_toque)];
-		V3 q = punto_de_contacto(c, k, _rumbo_al_tocar(c, c.rumbo, pelota.pos.x, pelota.pos.z));
-		double d = distancia_al_tramo(q.x, q.z, pelota.previa, pelota.pos);
+		V3 q = punto_de_contacto(c, k, _rumbo_contacto(j, c, j.clip_toque, c.rumbo, pelota.pos.x, pelota.pos.z));
+		double d = j.toque == TOQUE_ATAJADA ? _distancia_al_brazo(j, c, q, pelota.previa, pelota.pos)
+											: distancia_al_tramo(q.x, q.z, pelota.previa, pelota.pos);
+		double tolerancia = param_toque.tolerancia_m;
 		bool alto_ok;
-		if (j.toque == TOQUE_CONTROL) {
+		if (j.toque == TOQUE_ATAJADA) {
+			// Las manos: su alto, más el salto que dibuja la vista en la estirada.
+			tolerancia = _tolerancia(int(i), j.clip_arquero);
+			double bajo = std::min(pelota.previa.y, pelota.pos.y), alto = std::max(pelota.previa.y, pelota.pos.y);
+			double desde = _alto_minimo(j.clip_arquero, k);
+			alto_ok = alto >= desde && bajo <= k.punto_y + _tolerancia_alto(j.clip_arquero, true);
+		} else if (j.toque == TOQUE_CONTROL) {
 			// La pelota tiene que estar a la altura de la parte con que la
 			// recibe (su franja, más la tolerancia): la cabeza no para una
 			// pelota que ya bajó al pie.
@@ -1129,7 +1283,7 @@ bool Canchita::_resolver_toques() {
 		} else {
 			alto_ok = std::min(std::abs(pelota.previa.y - q.y), std::abs(pelota.pos.y - q.y)) <= param_toque.tolerancia_alto_m;
 		}
-		if (alto_ok && d <= param_toque.tolerancia_m && d < mejor_d) {
+		if (alto_ok && d <= tolerancia && d < mejor_d) {
 			mejor = int(i);
 			mejor_d = d;
 		}
@@ -1162,6 +1316,9 @@ bool Canchita::_resolver_toques() {
 			j.persigue = false;
 			j.pensar_ya = true;
 			cuenta.fallos++;
+			if (j.toque == TOQUE_ATAJADA) {
+				cuenta.atajadas_falladas++;
+			}
 		}
 	}
 	return mejor >= 0;
@@ -1170,6 +1327,22 @@ bool Canchita::_resolver_toques() {
 void Canchita::_tocar(int i, double distancia) {
 	JugadorCanchita &j = jugadores[size_t(i)];
 	const Cuerpo &c = j.cuerpo;
+	if (j.toque == TOQUE_ATAJADA) {
+		_atajar(i, distancia);
+		return;
+	}
+	// Etapa 5: el remate termina con el primer toque de otro. Si antes lo tocó
+	// el arquero es atajada; si no, un rival lo bloqueó (o un compañero lo
+	// desvió).
+	if (_remate.activo) {
+		if (_remate.toco_arquero) {
+			_cerrar_remate(REMATE_ATAJADO);
+		} else if (j.equipo != _remate.equipo) {
+			_cerrar_remate(REMATE_BLOQUEADO);
+		} else {
+			_cerrar_remate(REMATE_OTRO);
+		}
+	}
 	bool pase_en_juego = _pase_activo;
 	bool ataca = j.equipo == equipo_con_pelota;
 	int tipo = j.toque;
@@ -1178,7 +1351,10 @@ void Canchita::_tocar(int i, double distancia) {
 	bool poseedor_ = ultimo_toque == i && (ultimo_tipo == TOQUE_CONTROL || ultimo_tipo == TOQUE_CONDUCE);
 	// Pase de primera: el receptor de un pase la puede mandar sin pararla.
 	bool de_primera = tipo == TOQUE_PASE && pase_en_juego && !poseedor_;
-	if (!ataca || (!poseedor_ && !de_primera) || (tipo != TOQUE_PASE && tipo != TOQUE_CONDUCE)) {
+	// Al arco se le pega de primera a cualquier pelota del equipo (pase,
+	// rebote o centro), o después de controlarla.
+	bool remata = tipo == TOQUE_REMATE && ataca;
+	if (!remata && (!ataca || (!poseedor_ && !de_primera) || (tipo != TOQUE_PASE && tipo != TOQUE_CONDUCE))) {
 		tipo = TOQUE_CONTROL;
 	}
 	if (tipo == TOQUE_CONTROL && j.toque != TOQUE_CONTROL) {
@@ -1190,7 +1366,25 @@ void Canchita::_tocar(int i, double distancia) {
 	double apretado = 1.0 + 0.5 * std::clamp(1.0 - presion / param_toque.presion_m, 0.0, 1.0);
 	double vin = std::sqrt(pelota.vel.x * pelota.vel.x + pelota.vel.y * pelota.vel.y + pelota.vel.z * pelota.vel.z);
 	double angulo = 0.0, rapidez = 0.0, elevacion = 0.0, vertical = 0.0;
+	// El remate arma su propia velocidad y su giro (_patear_al_arco).
+	bool pateada = false;
 	switch (tipo) {
+		case TOQUE_REMATE: {
+			if (pase_en_juego) {
+				// De primera: completa el pase que le llegaba.
+				if (i == _receptor) {
+					cuenta.completados++;
+				} else {
+					cuenta.completados_otro++;
+				}
+				if (modo == PARTIDO) {
+					_pases_posesion++;
+				}
+			}
+			_patear_al_arco(i, !poseedor_, apretado);
+			pateada = true;
+			break;
+		}
 		case TOQUE_PASE: {
 			double dx = j.meta_x - pelota.pos.x, dz = j.meta_z - pelota.pos.z;
 			double d = std::max(hipot(dx, dz), 0.5);
@@ -1345,12 +1539,14 @@ void Canchita::_tocar(int i, double distancia) {
 			_asignar_marcas();
 		}
 	}
-	double s, co;
-	mate::seno_coseno(angulo, s, co);
-	double se, ce;
-	mate::seno_coseno(elevacion, se, ce);
-	V3 v = { s * rapidez * ce, rapidez * se + vertical, co * rapidez * ce };
-	pelota.poner(pelota.pos, v, {});
+	if (!pateada) {
+		double s, co;
+		mate::seno_coseno(angulo, s, co);
+		double se, ce;
+		mate::seno_coseno(elevacion, se, ce);
+		V3 v = { s * rapidez * ce, rapidez * se + vertical, co * rapidez * ce };
+		pelota.poner(pelota.pos, v, {});
+	}
 	j.toque_pendiente = false;
 	j.persigue = false;
 	j.pensar_ya = true;
@@ -1372,20 +1568,27 @@ void Canchita::_tocar(int i, double distancia) {
 // contra él (choque con restitución, en el piso). Solo cambia la velocidad:
 // la posición sigue siendo la de la física.
 bool Canchita::_rebotes() {
-	if (modo == RONDO && _reinicio_en >= 0) {
+	if ((modo == RONDO && _reinicio_en >= 0) || _en_manos >= 0 || _saque_medio_en >= 0) {
 		return false;
 	}
 	const double r = param_pelota.radio;
-	if (pelota.pos.y > param_toque.alto_cuerpo + r) {
+	// El arquero parado en su área tapa más: brazos abiertos y más alto
+	// (etapa 5). Los de campo, las piernas.
+	double alto_max = std::max(param_toque.alto_cuerpo, param_arquero.alto_cuerpo_m);
+	if (pelota.pos.y > alto_max + r) {
 		return false;
 	}
-	const double minimo = param_toque.radio_piernas + r;
 	for (size_t i = 0; i < jugadores.size(); i++) {
 		JugadorCanchita &j = jugadores[i];
 		if (paso < j.inmune_hasta || j.toque_pendiente) {
 			continue;
 		}
 		const Cuerpo &c = j.cuerpo;
+		bool tapa = j.arquero && _es_mi_area(int(i), c.x, c.z);
+		if (pelota.pos.y > (tapa ? param_arquero.alto_cuerpo_m : param_toque.alto_cuerpo) + r) {
+			continue;
+		}
+		const double minimo = (tapa ? param_arquero.radio_cuerpo_m : param_toque.radio_piernas) + r;
 		double ex = pelota.pos.x - c.x, ez = pelota.pos.z - c.z;
 		double d = hipot(ex, ez);
 		if (d >= minimo || d < 1e-6) {
@@ -1403,6 +1606,15 @@ bool Canchita::_rebotes() {
 		pelota.vel.z = rz + c.vz;
 		cuenta.rebotes_cuerpo++;
 		j.inmune_hasta = paso + 10;
+		// Etapa 5: el remate que pega en el arquero es atajada (aunque siga
+		// hacia el arco: se decide cuando termina); en un rival, bloqueo.
+		if (_remate.activo && j.equipo != _remate.equipo) {
+			if (j.arquero) {
+				_remate.toco_arquero = true;
+			} else if (!_remate.toco_arquero) {
+				_cerrar_remate(REMATE_BLOQUEADO);
+			}
+		}
 		if (j.equipo != equipo_con_pelota) {
 			cuenta.desvios++;
 			if (_pase_activo) {
@@ -1423,7 +1635,7 @@ bool Canchita::_rebotes() {
 }
 
 void Canchita::_reglas() {
-	if (modo == PARTIDO) {
+	if (_con_arcos()) {
 		_reglas_partido();
 		return;
 	}
@@ -1504,8 +1716,7 @@ void Canchita::_reiniciar(int equipo, double x, double z) {
 	// Un saque lo ven todos enseguida.
 	_visto_paso = paso;
 	_cambio = true;
-	trayectoria.predecir(pelota, HORIZONTE);
-	_tray_paso = paso;
+	_nueva_trayectoria();
 	for (size_t i = 0; i < jugadores.size(); i++) {
 		_alcance(int(i), 1.0, _k_llega[i], _t_llega[i]);
 	}
@@ -1634,15 +1845,30 @@ void Canchita::_armar_mundo() {
 	_mundo.con_pelota_seg = poseedor >= 0 ? double(paso - _desde_control) * PASO_SEG : 0.0;
 	_mundo.segundos = double(paso) * PASO_SEG;
 	_mundo.minuto = _mundo.segundos / 60.0;
-	_mundo.detenido = false;
+	_mundo.goles[0] = int(cuenta.goles[0]);
+	_mundo.goles[1] = int(cuenta.goles[1]);
+	_mundo.detenido = _saque_medio_en >= 0 || _en_manos >= 0;
 }
 
 void Canchita::_ubicar_partido(int i, double &qx, double &qz, double &factor, bool &frenar) {
+	if (_saque_medio_en >= 0) {
+		// Festejo: cada uno a su casillero del saque del medio, caminando.
+		const JugadorCanchita &j = jugadores[size_t(i)];
+		const FichaCerebro &f = cerebro.fichas[size_t(i)];
+		qx = (-Cerebro::MEDIO_LARGO + (f.base_x + Cerebro::MEDIO_LARGO) * COMPRESION_SAQUE) * _ataca(j.equipo);
+		qz = f.base_z;
+		factor = 0.5;
+		frenar = true;
+		return;
+	}
 	Objetivo o = cerebro.objetivo(_mundo, i);
 	qx = o.x;
 	qz = o.z;
 	factor = o.factor;
 	frenar = o.frenar;
+	if (jugadores[size_t(i)].arquero) {
+		_ubicar_arquero(i, qx, qz, factor);
+	}
 }
 
 // El poseedor le pregunta al cerebro. La decisión vale un rato: la conducción
@@ -1670,6 +1896,14 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 		j.decision_hasta = paso + std::max<int64_t>(1, int64_t(vale / PASO_SEG + 0.5));
 	}
 	const Decision &d = j.decision;
+	if (d.tipo == DEC_REMATE) {
+		j.toque = TOQUE_REMATE;
+		j.meta_x = d.x;
+		j.meta_alto = d.alto;
+		j.meta_z = d.z;
+		j.golpe_remate = d.golpe;
+		return;
+	}
 	if (d.tipo != DEC_CONDUCIR && d.tipo != DEC_NADA) {
 		Pase pase = _pase_a(i, bola, t_patada, d);
 		if (pase.hay) {
@@ -1889,20 +2123,57 @@ double Canchita::margen_globo(int de, double x, double z) {
 }
 
 // Sin reglas de verdad (etapa 6): la pelota que sale vuelve con un lateral, un
-// córner o un saque de arco, y controlarla en el área rival es una llegada.
+// córner o un saque de arco. Etapa 5: el gol lo decide la pelota al cruzar la
+// línea; después del festejo se saca del medio. El arquero que la agarró la
+// suelta para jugar. En el modo ARCO no hay reanudaciones: el test mira cómo
+// terminó el remate.
 bool Canchita::_reglas_partido() {
-	if (poseedor >= 0 && paso >= _reinicio_hasta) {
+	if (_saque_medio_en >= 0) {
+		if (paso >= _saque_medio_en) {
+			_sacar_del_medio();
+			return true;
+		}
+		return false;
+	}
+	if (_en_manos >= 0) {
+		if (paso >= _suelta_en && modo == PARTIDO) {
+			_soltar();
+		}
+		return false;
+	}
+	if (_remate.activo) {
+		double v = std::sqrt(pelota.vel.x * pelota.vel.x + pelota.vel.y * pelota.vel.y + pelota.vel.z * pelota.vel.z);
+		if (paso - _remate.paso > REMATE_MAX_PASOS || (v < REMATE_MUERTO_MS && pelota.en_piso)) {
+			_cerrar_remate(_remate.toco_arquero ? REMATE_ATAJADO : (_remate.palo ? REMATE_PALO : REMATE_OTRO));
+		}
+	}
+	// Gol: la pelota entera pasó la línea entre los palos y abajo del
+	// travesaño. Detrás de la línea y adentro del arco solo se llega por la
+	// boca: la red es de la física (pelota.h).
+	const double r = param_pelota.radio;
+	if (std::abs(pelota.pos.x) > param_pelota.medio_largo + r && std::abs(pelota.pos.z) < param_pelota.arco_medio_ancho
+			&& pelota.pos.y < param_pelota.arco_alto) {
+		// El equipo 1 defiende el arco de +x.
+		int defiende = pelota.pos.x > 0.0 ? 1 : 0;
+		_gol(1 - defiende);
+		return true;
+	}
+	if (modo == PARTIDO && poseedor >= 0 && !_llegada_contada && paso >= _reinicio_hasta) {
+		// Una llegada por posesión: controlarla en el área rival.
 		const JugadorCanchita &j = jugadores[size_t(poseedor)];
 		double ax = Cerebro::MEDIO_LARGO * _ataca(j.equipo);
 		if (std::abs(ax - pelota.pos.x) <= Cerebro::AREA_LARGO && std::abs(pelota.pos.z) <= Cerebro::AREA_MEDIO_ANCHO) {
 			cuenta.llegadas[j.equipo & 1]++;
-			int saca = 1 - j.equipo;
-			cuenta.saques_de_arco++;
-			_reiniciar(saca, -_ataca(saca) * (Cerebro::MEDIO_LARGO - SAQUE_DE_ARCO_M), 0.0);
-			return true;
+			_llegada_contada = true;
 		}
 	}
 	if (_adentro(pelota.pos.x, pelota.pos.z, param_pelota.radio)) {
+		return false;
+	}
+	if (_remate.activo) {
+		_cerrar_remate(_remate.toco_arquero ? REMATE_ATAJADO : (_remate.palo ? REMATE_PALO : REMATE_AFUERA));
+	}
+	if (modo == ARCO) {
 		return false;
 	}
 	cuenta.salidas++;
@@ -1943,7 +2214,728 @@ void Canchita::_cerrar_posesion() {
 	cuenta.max_pases_posesion = std::max<int64_t>(cuenta.max_pases_posesion, _pases_posesion);
 	_pases_posesion = 0;
 	_pase_al_espacio = false;
+	_llegada_contada = false;
 	for (JugadorCanchita &j : jugadores) {
 		j.hay_decision = false;
 	}
+}
+
+// --- Etapa 5: remates y arqueros ---
+
+void Canchita::rematar(int i, int golpe, double alto, double lateral) {
+	if (i < 0 || i >= int(jugadores.size())) {
+		return;
+	}
+	JugadorCanchita &j = jugadores[size_t(i)];
+	j.remata_prueba = true;
+	j.golpe_remate = std::clamp(golpe, 0, TIPOS_REMATE - 1);
+	j.meta_x = param_pelota.medio_largo * _ataca(j.equipo);
+	j.meta_alto = alto;
+	j.meta_z = lateral;
+}
+
+int Canchita::arquero_de(int equipo) const {
+	for (size_t i = 0; i < jugadores.size(); i++) {
+		if (jugadores[i].arquero && jugadores[i].equipo == equipo) {
+			return int(i);
+		}
+	}
+	return -1;
+}
+
+void Canchita::_nueva_trayectoria() {
+	trayectoria.predecir(pelota, HORIZONTE);
+	_tray_paso = paso;
+	_buscar_cruces();
+}
+
+// Si la trayectoria va a algún arco: el primer punto detrás de la línea, si
+// cruza entre los palos y abajo del travesaño (con CRUCE_MARGEN_M de más).
+void Canchita::_buscar_cruces() {
+	_k_cruce[0] = _k_cruce[1] = -1;
+	if (!_con_arcos()) {
+		return;
+	}
+	const double linea = param_pelota.medio_largo;
+	for (size_t q = 0; q < trayectoria.pos.size(); q++) {
+		const V3 &p = trayectoria.pos[q];
+		if (std::abs(p.z) > _medio_z() + 1.0) {
+			return;
+		}
+		if (std::abs(p.x) < linea) {
+			continue;
+		}
+		if (std::abs(p.z) < param_pelota.arco_medio_ancho + CRUCE_MARGEN_M && p.y < param_pelota.arco_alto + CRUCE_MARGEN_M) {
+			// El equipo 1 defiende el arco de +x.
+			_k_cruce[p.x > 0.0 ? 1 : 0] = int(q);
+		}
+		return;
+	}
+}
+
+bool Canchita::_es_mi_area(int i, double x, double z) const {
+	double gx = -_ataca(jugadores[size_t(i)].equipo) * param_pelota.medio_largo;
+	return std::abs(x - gx) <= Cerebro::AREA_LARGO && std::abs(z) <= Cerebro::AREA_MEDIO_ANCHO;
+}
+
+double Canchita::_reaccion_arquero(int i) const {
+	return segun_atributo(jugadores[size_t(i)].reflejos, param_arquero.reaccion_lenta_seg, param_arquero.reaccion_rapida_seg);
+}
+
+double Canchita::_tolerancia(int i, int clip_arquero) const {
+	(void)clip_arquero;
+	return segun_atributo(jugadores[size_t(i)].estirada, param_arquero.tolerancia_min_m, param_arquero.tolerancia_max_m);
+}
+
+double Canchita::_tolerancia_alto(int clip_arquero, bool arriba) const {
+	return param_arquero.tolerancia_alto_m + (arriba && _es_estirada(clip_arquero) ? param_arquero.salto_estirada_m : 0.0);
+}
+
+bool Canchita::_es_estirada(int clip_arquero) const {
+	return clip_arquero >= ATAJA_VUELA_DER;
+}
+
+// Lo más bajo que llega la mano del clip. Atajar_Abajo y la estirada baja
+// llegan al piso (la de la estirada va a la pelota que rueda al costado); las
+// demás, su alto menos la tolerancia.
+double Canchita::_alto_minimo(int clip_arquero, const Clip &k) const {
+	if (clip_arquero == ATAJA_ABAJO || clip_arquero == ATAJA_VUELA_DER || clip_arquero == ATAJA_VUELA_IZQ) {
+		return 0.0;
+	}
+	return k.punto_y - _tolerancia_alto(clip_arquero, false);
+}
+
+// Distancia en el piso de la pelota (el tramo a-b que recorrió) a lo que toca
+// el arquero: la mano; en la estirada, el brazo entero, del hombro
+// (brazo_desde del camino a la mano) a la mano. Con solo la mano, las
+// pelotas que pasaban a 0,5-0,9 m del cuerpo no las tocaba ni parado ni
+// tirado.
+double Canchita::_distancia_al_brazo(const JugadorCanchita &j, const Cuerpo &c, V3 mano, V3 a, V3 b) const {
+	if (!_es_estirada(j.clip_arquero)) {
+		return distancia_al_tramo(mano.x, mano.z, a, b);
+	}
+	V3 hombro = { c.x + (mano.x - c.x) * param_arquero.brazo_desde, mano.y,
+		c.z + (mano.z - c.z) * param_arquero.brazo_desde };
+	// Dos tramos en el piso: se cruzan (0) o la distancia es la de alguna
+	// punta al otro tramo.
+	auto lado = [](V3 p, V3 q, V3 r) {
+		return (q.x - p.x) * (r.z - p.z) - (q.z - p.z) * (r.x - p.x);
+	};
+	double d1 = lado(hombro, mano, a), d2 = lado(hombro, mano, b);
+	double d3 = lado(a, b, hombro), d4 = lado(a, b, mano);
+	if (((d1 > 0.0 && d2 < 0.0) || (d1 < 0.0 && d2 > 0.0)) && ((d3 > 0.0 && d4 < 0.0) || (d3 < 0.0 && d4 > 0.0))) {
+		return 0.0;
+	}
+	return std::min(std::min(distancia_al_tramo(hombro.x, hombro.z, a, b), distancia_al_tramo(mano.x, mano.z, a, b)),
+			std::min(distancia_al_tramo(a.x, a.z, hombro, mano), distancia_al_tramo(b.x, b.z, hombro, mano)));
+}
+
+double Canchita::_factor_acomodarse(const Cuerpo &c) const {
+	return std::clamp(param_cuerpo.rapidez_para_girar * 0.95 / std::max(c.vel_max * c.cansancio, 0.1), 0.05, 1.0);
+}
+
+// Hacia dónde queda el cuerpo al tocarla. El de campo gira hacia la pelota
+// (_rumbo_al_tocar). El arquero gira para que la MANO quede del lado de la
+// pelota: en la estirada la mano va 1,4 m al costado, y girar hacia la pelota
+// la alejaba.
+double Canchita::_rumbo_contacto(const JugadorCanchita &j, const Cuerpo &c, int clip, double rumbo, double x,
+		double z) const {
+	if (j.toque != TOQUE_ATAJADA || clip < 0) {
+		return _rumbo_al_tocar(c, rumbo, x, z);
+	}
+	double dx = x - c.x, dz = z - c.z;
+	if (dx * dx + dz * dz < 1e-9) {
+		return rumbo;
+	}
+	Cuerpo cero;
+	V3 o = punto_de_contacto(cero, clips[size_t(clip)], 0.0);
+	double desfase = o.x * o.x + o.z * o.z > 1e-9 ? rumbo_de(o.x, o.z) : 0.0;
+	double dif = std::clamp(mate::envolver(rumbo_de(dx, dz) - (rumbo + desfase)), -param_arquero.giro_alcance_rad,
+			param_arquero.giro_alcance_rad);
+	return rumbo + dif;
+}
+
+// El arquero lee el remate (después de su reacción) y busca en la trayectoria
+// el primer punto de su área donde una mano llega a tiempo: se corre hasta
+// donde tiene que arrancar el clip y el gatillo lo tira. Prefiere atajar
+// parado (agarra más) y la estirada si no llega. Si ningún clip llega, se
+// tira igual con el que menos le falta: el gol sale de que no llegó.
+bool Canchita::_plan_atajar(int i) {
+	JugadorCanchita &j = jugadores[size_t(i)];
+	int kc = _k_cruce[j.equipo & 1];
+	if (kc < 0 || _en_manos >= 0 || trayectoria.pos.empty()) {
+		return false;
+	}
+	if (paso < _tray_paso + int64_t(_reaccion_arquero(i) / PASO_SEG + 0.5)) {
+		return false;
+	}
+	Cuerpo &c = j.cuerpo;
+	int desde = std::max(0, _indice_tray(paso + 1));
+	// Se acomoda sin darse vuelta: por debajo de rapidez_para_girar el cuerpo
+	// sigue mirando la pelota (cuerpo.h). Corriendo a fondo giraba hacia
+	// donde iba y la mano quedaba para otro lado.
+	double factor = _factor_acomodarse(c);
+	double mejor = 1e18;
+	int mejor_a = -1;
+	double mejor_x = c.x, mejor_z = c.z, mejor_t = 0.0;
+	for (int q = desde; q <= kc && q < int(trayectoria.pos.size()); q++) {
+		const V3 &p = trayectoria.pos[size_t(q)];
+		if (!_es_mi_area(i, p.x, p.z)) {
+			continue;
+		}
+		double tq = double(_tray_paso + q + 1 - paso) * PASO_SEG;
+		const V3 &vp = trayectoria.vel[size_t(q)];
+		// De frente a la pelota que viene.
+		double rumbo = hipot(vp.x, vp.z) > 1.0 ? rumbo_de(-vp.x, -vp.z) : rumbo_de(p.x - c.x, p.z - c.z);
+		for (int a = 0; a < CLIPS_ARQUERO; a++) {
+			int clip = param_arquero.clips[a];
+			if (clip < 0) {
+				continue;
+			}
+			const Clip &k = clips[size_t(clip)];
+			double tc = std::max(k.contacto_seg, 0.0);
+			// El clip que no llega a su contacto a tiempo cuenta como falta: si
+			// nada llega, se tira igual (tarde) con el que menos le falta.
+			double tarde = std::max(0.0, tc - tq);
+			double abajo = _alto_minimo(a, k);
+			if (p.y < abajo || p.y > k.punto_y + _tolerancia_alto(a, true)) {
+				continue;
+			}
+			Cuerpo cero;
+			V3 o = punto_de_contacto(cero, k, rumbo);
+			double bx = p.x - o.x, bz = p.z - o.z;
+			if (_es_estirada(a)) {
+				// Con la pelota entre el hombro y la mano: el cuerpo en el tramo
+				// de p - o (la mano) a p - brazo_desde·o (el hombro), lo más
+				// cerca de donde está.
+				double hx = p.x - o.x * param_arquero.brazo_desde, hz = p.z - o.z * param_arquero.brazo_desde;
+				double ux = hx - bx, uz = hz - bz;
+				double l2 = ux * ux + uz * uz;
+				double f = l2 > 1e-9 ? std::clamp(((c.x - bx) * ux + (c.z - bz) * uz) / l2, 0.0, 1.0) : 0.0;
+				bx += ux * f;
+				bz += uz * f;
+			}
+			if (!_es_estirada(a) && hipot(bx - c.x, bz - c.z) > param_arquero.parada_max_m) {
+				continue;
+			}
+			double falta = tarde + std::max(0.0, tiempo_de_llegada(c, bx, bz, _tolerancia(i, a) * 0.5, factor) - std::max(tq - tc, 0.0));
+			// Parado antes que tirado; y cuanto antes, mejor (más lejos del arco).
+			double costo = falta > 0.0 ? 100.0 + falta : (_es_estirada(a) ? 1.0 : 0.0) + 0.002 * double(q - desde);
+			if (costo < mejor) {
+				mejor = costo;
+				mejor_a = a;
+				mejor_x = bx;
+				mejor_z = bz;
+				mejor_t = tq;
+			}
+		}
+	}
+	if (mejor_a < 0) {
+		return false;
+	}
+	j.toque = TOQUE_ATAJADA;
+	j.clip_arquero = mejor_a;
+	j.persigue = true;
+	j.paso_meta = paso + int64_t(mejor_t / PASO_SEG + 0.5);
+	if (_remate.activo && _remate.indice < registro.size() && registro[_remate.indice].paso_plan < 0) {
+		registro[_remate.indice].paso_plan = paso;
+	}
+	c.ir_a(mejor_x, mejor_z, factor, true);
+	c.mira = true;
+	c.mira_x = pelota.pos.x;
+	c.mira_z = pelota.pos.z;
+	return true;
+}
+
+// Sin remate encima: sobre la bisectriz entre la pelota y el medio del arco,
+// más adelante de la línea cuanto más lejos está la pelota. En el mano a mano
+// sale a achicar (MotorEspacial.punto_de_achique, mismos pesos).
+void Canchita::_ubicar_arquero(int i, double &qx, double &qz, double &factor) {
+	const JugadorCanchita &j = jugadores[size_t(i)];
+	int e = j.equipo;
+	double gx = -_ataca(e) * param_pelota.medio_largo;
+	V3 b = _bola_en(paso + PASOS_POR_TURNO);
+	double ux = b.x - gx, uz = b.z;
+	double db = hipot(ux, uz);
+	// Lejos, o con la pelota de su equipo, se queda en el ancla del cerebro
+	// (MotorEspacial._ancla_de_rol: el líbero de su área).
+	if (db > 40.0 || db < 1e-6 || (equipo_con_pelota == e && poseedor >= 0)) {
+		return;
+	}
+	ux /= db;
+	uz /= db;
+	double d = std::clamp(db * param_arquero.linea_por_metro, param_arquero.linea_m, param_arquero.linea_max_m);
+	int rival = poseedor >= 0 && jugadores[size_t(poseedor)].equipo != e ? poseedor : -1;
+	if (rival >= 0 && db <= param_arquero.achique_dist_rival) {
+		// Mano a mano: ningún compañero cerca del camino del rival al arco.
+		const Cuerpo &cr = jugadores[size_t(rival)].cuerpo;
+		V3 arco = { gx, 0.0, 0.0 };
+		V3 desde = { cr.x, 0.0, cr.z };
+		bool solo = true;
+		for (size_t o = 0; o < jugadores.size(); o++) {
+			const JugadorCanchita &jo = jugadores[o];
+			if (jo.equipo == e && !jo.arquero
+					&& distancia_al_tramo(jo.cuerpo.x, jo.cuerpo.z, desde, arco) < param_arquero.achique_carril) {
+				solo = false;
+				break;
+			}
+		}
+		if (solo) {
+			double sale = segun_atributo(j.achique, param_arquero.achique_min, param_arquero.achique_max);
+			d = std::max(d, std::min(sale, db - param_arquero.achique_margen_pelota));
+		}
+	}
+	qx = gx + ux * d;
+	qz = uz * d;
+	factor = 1.0;
+}
+
+// La mano llegó. La agarra, la da en rebote o la roza (con la punta), según
+// sus atributos, la rapidez de la pelota y qué tan justo llegó.
+void Canchita::_atajar(int i, double distancia) {
+	JugadorCanchita &j = jugadores[size_t(i)];
+	const Cuerpo &c = j.cuerpo;
+	int e = j.equipo;
+	bool vuela = _es_estirada(j.clip_arquero);
+	bool es_remate = _remate.activo && _remate.equipo != e;
+	double vin = std::sqrt(pelota.vel.x * pelota.vel.x + pelota.vel.y * pelota.vel.y + pelota.vel.z * pelota.vel.z);
+	(void)distancia;
+	// Qué tan justo llegó: la pasada más cercana de la pelota a la mano (o al
+	// brazo), con el tramo de este paso más lo que va a recorrer en los
+	// próximos. Con la distancia del primer paso que entra en la tolerancia,
+	// la pelota rápida siempre llegaba por el borde y todo era un roce.
+	V3 adelante = { pelota.pos.x + pelota.vel.x * PASO_SEG * PASOS_PASADA, pelota.pos.y,
+		pelota.pos.z + pelota.vel.z * PASO_SEG * PASOS_PASADA };
+	V3 mano = punto_de_contacto(c, clips[size_t(j.clip_toque)],
+			_rumbo_contacto(j, c, j.clip_toque, c.rumbo, pelota.pos.x, pelota.pos.z));
+	double pasada = _distancia_al_brazo(j, c, mano, pelota.previa, adelante);
+	double borde = std::clamp(pasada / std::max(_tolerancia(i, j.clip_arquero), 1e-6), 0.0, 1.0);
+	if (vuela) {
+		cuenta.estiradas++;
+	} else {
+		cuenta.paradas++;
+	}
+	if (es_remate) {
+		_remate.toco_arquero = true;
+	} else {
+		cuenta.salidas_arquero++;
+	}
+	bool agarra = false;
+	V3 v = pelota.vel;
+	if (borde > param_arquero.roce_desde && vin > param_arquero.rapidez_comoda_ms) {
+		// Con la punta: sigue con parte de su rapidez, desviada hacia afuera
+		// del arco (hacia el palo de su lado). Puede entrar igual.
+		double afuera = pelota.pos.z >= 0.0 ? 1.0 : -1.0;
+		double h = hipot(v.x, v.z);
+		double rumbo = rumbo_de(v.x, v.z);
+		// d(vz)/d(rumbo) = -vx: el signo que abre la pelota hacia `afuera`.
+		double giro = (v.x >= 0.0 ? -1.0 : 1.0) * afuera * param_arquero.roce_desvio_rad;
+		double s, co;
+		mate::seno_coseno(rumbo + giro, s, co);
+		double k = param_arquero.roce_conserva;
+		v = { s * h * k, v.y * k + 0.1 * vin, co * h * k };
+		cuenta.roces_arquero++;
+		_rebote_arquero_en = paso;
+	} else {
+		double p = param_arquero.agarre_base + param_arquero.agarre_por_atributo * std::clamp(j.agarre / 100.0, 0.0, 1.0)
+				- param_arquero.agarre_por_rapidez * std::max(0.0, vin - param_arquero.rapidez_comoda_ms)
+				- (vuela ? param_arquero.castigo_estirada : 0.0) - param_arquero.castigo_borde * borde;
+		agarra = _azar.uno() < std::clamp(p, 0.02, 0.98);
+		if (!agarra) {
+			// Rebote: hacia la cancha y hacia el costado de la pelota, lejos
+			// del medio del arco; más prolijo con buena estirada.
+			double lado = pelota.pos.z - c.z >= 0.0 ? 1.0 : -1.0;
+			double angulo = rumbo_de(_ataca(e), lado * 1.2)
+					+ _azar.normal() * param_arquero.rebote_dispersion_rad * (1.0 - 0.5 * std::clamp(j.estirada / 100.0, 0.0, 1.0));
+			double rapidez = std::max(param_arquero.rebote_min_ms, vin * param_arquero.rebote_factor);
+			double s, co;
+			mate::seno_coseno(angulo, s, co);
+			v = { s * rapidez, rapidez * (0.1 + 0.3 * _azar.uno()), co * rapidez };
+			cuenta.rebotes_arquero++;
+			_rebote_arquero_en = paso;
+		}
+	}
+	if (agarra) {
+		cuenta.agarres++;
+		if (es_remate) {
+			_cerrar_remate(REMATE_ATAJADO);
+		}
+		if (equipo_con_pelota != e && modo == PARTIDO) {
+			_cerrar_posesion();
+			cerebro.terminar_pared();
+		}
+		equipo_con_pelota = e;
+		_en_manos = i;
+		_suelta_en = paso + int64_t(param_arquero.retiene_seg / PASO_SEG + 0.5);
+		// Los rivales no se la pueden disputar y se alejan hasta que juega.
+		_reinicio_hasta = _suelta_en + REINICIO_PASOS;
+		poseedor = i;
+		_llevar_en_manos();
+	} else {
+		pelota.poner(pelota.pos, v, {});
+		poseedor = -1;
+	}
+	_pase_activo = false;
+	_receptor = -1;
+	j.toque_pendiente = false;
+	j.persigue = false;
+	j.pensar_ya = true;
+	j.hay_decision = false;
+	j.inmune_hasta = paso + int64_t(param_toque.sin_rebote_seg / PASO_SEG + 0.5);
+	ultimo_toque = i;
+	ultimo_tipo = agarra ? TOQUE_CONTROL : TOQUE_ATAJADA;
+	_desde_control = paso;
+	_visto_paso = paso + _reaccion_pasos;
+	_cambio = true;
+}
+
+// La pelota va en las manos, adelante del pecho y a la rapidez del arquero.
+void Canchita::_llevar_en_manos() {
+	const Cuerpo &c = jugadores[size_t(_en_manos)].cuerpo;
+	double s, co;
+	mate::seno_coseno(c.rumbo, s, co);
+	pelota.poner({ c.x + s * MANOS_ADELANTE_M, MANOS_ALTO_M, c.z + co * MANOS_ADELANTE_M }, { c.vx, 0.0, c.vz }, {});
+}
+
+// La suelta adelante y la juega con el pie: la pelota cae con la física y él
+// la controla como poseedor. Las demás reanudaciones del arquero (saque con la
+// mano, voleo) son de la etapa 6.
+void Canchita::_soltar() {
+	int i = _en_manos;
+	JugadorCanchita &j = jugadores[size_t(i)];
+	const Cuerpo &c = j.cuerpo;
+	double s, co;
+	mate::seno_coseno(c.rumbo, s, co);
+	pelota.poner(pelota.pos, { c.vx + s * SUELTA_MS, 0.0, c.vz + co * SUELTA_MS }, {});
+	_en_manos = -1;
+	poseedor = i;
+	ultimo_toque = i;
+	ultimo_tipo = TOQUE_CONTROL;
+	_desde_control = paso;
+	j.pensar_ya = true;
+	j.hay_decision = false;
+	_visto_paso = paso;
+	_cambio = true;
+}
+
+// El receptor (de un pase, un centro o un rebote) le pega de primera al arco
+// si está en zona de tiro: de pie, de volea o de cabeza según la altura a la
+// que le llega. En el modo ARCO lo que pidió rematar().
+bool Canchita::_decidir_remate_de_primera(int i, V3 bola, double t) {
+	JugadorCanchita &j = jugadores[size_t(i)];
+	if (j.arquero) {
+		return false;
+	}
+	Parte parte = parte_para(param_toque, bola.y);
+	if (parte == NINGUNA) {
+		return false;
+	}
+	if (modo == ARCO) {
+		if (!j.remata_prueba) {
+			return false;
+		}
+		j.toque = TOQUE_REMATE;
+		return true;
+	}
+	if (modo != PARTIDO || !cerebro.alcanza_para_tirar(i, bola.x, bola.z)
+			|| cerebro.factor_geometria(bola.x, bola.z, j.equipo) < param_remate.primera_geometria) {
+		return false;
+	}
+	_plan_bola = bola;
+	_plan_t = t;
+	cerebro.planeador = this;
+	Decision d = cerebro.elegir_remate(_mundo, i, parte == CABEZA || parte == PECHO, _azar);
+	cerebro.planeador = nullptr;
+	j.toque = TOQUE_REMATE;
+	j.meta_x = d.x;
+	j.meta_alto = d.alto;
+	j.meta_z = d.z;
+	j.golpe_remate = d.golpe;
+	return true;
+}
+
+double Canchita::_rapidez_remate(const JugadorCanchita &j, int golpe) const {
+	const ParametrosRemate &r = param_remate;
+	switch (golpe) {
+		case REMATE_FUERTE:
+			return segun_atributo(j.golpe, r.fuerte_min_ms, r.fuerte_max_ms);
+		case REMATE_EFECTO:
+			return segun_atributo(j.tiro, r.efecto_min_ms, r.efecto_max_ms);
+		case REMATE_CABEZA:
+			return segun_atributo(j.cabezazo, r.cabeza_min_ms, r.cabeza_max_ms);
+		default:
+			return segun_atributo(j.tiro, r.colocado_min_ms, r.colocado_max_ms);
+	}
+}
+
+// El desvío estándar del ángulo del remate (rad).
+double Canchita::_error_remate(const JugadorCanchita &j, int golpe, double de_lado, double alto_pelota, double llega_ms,
+		double apretado, double cruce_pie_malo) const {
+	const ParametrosRemate &r = param_remate;
+	double atributo = std::clamp(golpe == REMATE_CABEZA ? j.cabezazo : j.tiro, 0.0, 100.0);
+	double sigma = r.error_rad * (1.0 - 0.8 * atributo / 100.0) * r.error_tipo[std::clamp(golpe, 0, TIPOS_REMATE - 1)];
+	sigma *= apretado * (1.0 + de_lado) * (1.0 + r.pie_malo * cruce_pie_malo);
+	if (golpe != REMATE_CABEZA && alto_pelota > param_toque.pie_hasta) {
+		sigma *= 1.0 + r.alto_factor;
+	}
+	if (llega_ms > 0.0) {
+		sigma *= 1.0 + llega_ms / std::max(r.primera_ms, 1.0);
+	}
+	return sigma;
+}
+
+// La patada al arco: `apuntar` busca con la física la que llega al punto
+// elegido y después se le suma el error de ejecución. Nadie mira adónde va.
+void Canchita::_patear_al_arco(int i, bool de_primera, double apretado) {
+	JugadorCanchita &j = jugadores[size_t(i)];
+	const Cuerpo &c = j.cuerpo;
+	const ParametrosRemate &r = param_remate;
+	int golpe = j.golpe_remate;
+	V3 desde = pelota.pos;
+	V3 meta = { j.meta_x, std::max(j.meta_alto, param_pelota.radio), j.meta_z };
+	double rapidez = _rapidez_remate(j, golpe);
+	double giro_lateral = 0.0;
+	if (golpe == REMATE_EFECTO) {
+		// La comba cierra hacia el medio del arco: el Magnus empuja hacia
+		// -giro·vx (pelota.h), así que el signo sale del lado del punto.
+		double lado = meta.z != 0.0 ? (meta.z > 0.0 ? 1.0 : -1.0) : (desde.z >= 0.0 ? -1.0 : 1.0);
+		double hacia = meta.x >= desde.x ? 1.0 : -1.0;
+		giro_lateral = r.giro_efecto * lado * hacia;
+	}
+	double elevacion = golpe == REMATE_GLOBO ? r.elevacion_globo : -1.0;
+	V3 vel, giro;
+	bool apunto = apuntar(param_pelota, desde, meta, rapidez, elevacion, giro_lateral, vel, giro);
+	// Si a esa rapidez no llega en el aire (un colocado a 20 m/s desde 28 m
+	// pica antes del arco), le pega más fuerte.
+	for (int intento = 0; intento < 3 && !apunto && elevacion < 0.0; intento++) {
+		rapidez *= 1.15;
+		apunto = apuntar(param_pelota, desde, meta, rapidez, elevacion, giro_lateral, vel, giro);
+	}
+	if (!apunto) {
+		// No hay patada exacta (demasiado cerca o demasiado lejos para ese
+		// golpe): derecho al punto con la rapidez del golpe.
+		double dx = meta.x - desde.x, dz = meta.z - desde.z;
+		double l = std::max(hipot(dx, dz), 1e-6);
+		double sube = std::clamp((meta.y - desde.y) / l, -0.2, 0.6);
+		vel = { dx / l * rapidez, sube * rapidez, dz / l * rapidez };
+		giro = { 0.0, giro_lateral, 0.0 };
+	}
+	// Error: según tiro (o cabezazo), el golpe, la presión, de costado a
+	// adonde mira, el pie malo, la pelota alta y la que llega rápida.
+	double h = hipot(vel.x, vel.z);
+	double rumbo = rumbo_de(vel.x, vel.z);
+	double elev = mate::arcotangente2(vel.y, h);
+	double v = std::sqrt(h * h + vel.y * vel.y);
+	double de_lado = std::abs(mate::envolver(rumbo - c.rumbo)) / mate::PI;
+	double llega = de_primera ? std::sqrt(pelota.vel.x * pelota.vel.x + pelota.vel.y * pelota.vel.y + pelota.vel.z * pelota.vel.z)
+							  : 0.0;
+	double cruce = 0.0;
+	if (j.pie_malo_lado != 0) {
+		// Cruzarla hacia el lado de su pie malo (Cerebro::_cruce_al_pie_malo).
+		double lateral = (meta.z - desde.z) / std::max(hipot(meta.x - desde.x, meta.z - desde.z), 1e-6) * _ataca(j.equipo);
+		cruce = lateral * double(j.pie_malo_lado) >= 0.0 ? 0.0 : std::abs(lateral);
+	}
+	double sigma = _error_remate(j, golpe, de_lado, desde.y, llega, apretado, cruce);
+	rumbo += _azar.normal() * sigma;
+	elev += _azar.normal() * sigma * r.error_vertical;
+	double atributo = std::clamp(golpe == REMATE_CABEZA ? j.cabezazo : j.tiro, 0.0, 100.0);
+	v *= 1.0 + _azar.normal() * r.error_rapidez * (1.0 - 0.7 * atributo / 100.0);
+	double sr, cr, se, ce;
+	mate::seno_coseno(rumbo, sr, cr);
+	mate::seno_coseno(elev, se, ce);
+	pelota.poner(desde, { sr * ce * v, se * v, cr * ce * v }, giro);
+
+	cuenta.remates++;
+	cuenta.remates_equipo[j.equipo & 1]++;
+	cuenta.golpes[std::clamp(golpe, 0, TIPOS_REMATE - 1)]++;
+	if (golpe == REMATE_CABEZA) {
+		cuenta.remates_cabeza++;
+	}
+	if (de_primera) {
+		cuenta.remates_primera++;
+	}
+	cuenta.distancia_remates += hipot(meta.x - desde.x, desde.z);
+	RegistroRemate reg;
+	reg.equipo = j.equipo;
+	reg.pateador = i;
+	reg.golpe = golpe;
+	reg.de_primera = de_primera;
+	reg.desde_x = desde.x;
+	reg.desde_z = desde.z;
+	reg.alto = meta.y;
+	reg.lateral = meta.z;
+	reg.rapidez = v;
+	reg.presion_m = _rival_mas_cerca(i, desde.x, desde.z);
+	int arquero = arquero_de(1 - j.equipo);
+	reg.arquero_x = arquero >= 0 ? jugadores[size_t(arquero)].cuerpo.x : NAN;
+	reg.arquero_z = arquero >= 0 ? jugadores[size_t(arquero)].cuerpo.z : NAN;
+	reg.arquero_ocupado = arquero >= 0 && jugadores[size_t(arquero)].cuerpo.clip >= 0;
+	reg.paso_remate = paso;
+	registro.push_back(reg);
+	_remate = Remate();
+	_remate.indice = registro.size() - 1;
+	_remate.activo = true;
+	_remate.equipo = j.equipo;
+	_remate.pateador = i;
+	_remate.paso = paso;
+	_remate.cabeza = golpe == REMATE_CABEZA;
+	_remate.tras_rebote = paso - _rebote_arquero_en <= TRAS_REBOTE_PASOS;
+	if (_remate.tras_rebote) {
+		cuenta.remates_tras_rebote++;
+	}
+	_pase_activo = false;
+	_receptor = -1;
+	poseedor = -1;
+	j.pateo_en = paso;
+	j.remata_prueba = false;
+	for (JugadorCanchita &o : jugadores) {
+		o.quieto_seg = 0.0;
+	}
+}
+
+void Canchita::_cerrar_remate(int resultado) {
+	if (!_remate.activo) {
+		return;
+	}
+	cuenta.resultados[std::clamp(resultado, 0, RESULTADOS_REMATE - 1)]++;
+	_ultimo_resultado = resultado;
+	_remate.activo = false;
+	if (_remate.indice < registro.size()) {
+		registro[_remate.indice].resultado = resultado;
+	}
+}
+
+void Canchita::_gol(int marca) {
+	cuenta.goles[marca & 1]++;
+	if (_remate.activo) {
+		if (_remate.equipo == marca) {
+			if (_remate.cabeza) {
+				cuenta.goles_cabeza++;
+			}
+			if (_remate.tras_rebote) {
+				cuenta.goles_tras_rebote++;
+			}
+			_cerrar_remate(REMATE_GOL);
+		} else {
+			// En contra: el remate era del otro equipo.
+			_cerrar_remate(REMATE_OTRO);
+		}
+	}
+	_pase_activo = false;
+	_receptor = -1;
+	poseedor = -1;
+	for (JugadorCanchita &j : jugadores) {
+		j.toque_pendiente = false;
+		j.persigue = false;
+		j.pensar_ya = true;
+	}
+	if (modo != PARTIDO) {
+		return;
+	}
+	_cerrar_posesion();
+	cerebro.terminar_pared();
+	_saque_medio_en = paso + FESTEJO_PASOS;
+	_saca_medio = 1 - (marca & 1);
+}
+
+// La pelota vuelve al medio (una reanudación, como el lateral: no es una
+// corrección) y saca el que recibió el gol.
+void Canchita::_sacar_del_medio() {
+	_saque_medio_en = -1;
+	_reiniciar(_saca_medio, 0.0, 0.0);
+}
+
+// Planeador: qué tan bueno es el remate de `de` al punto (alto, lateral) del
+// arco rival con este golpe, con los mismos números que después lo ejecutan.
+// Chance de ir adentro (el error de _error_remate a la distancia del arco)
+// por chance de que el arquero no llegue (su reacción, su tolerancia y los
+// clips de atajada, en una cuenta cerrada sin simular la pelota).
+double Canchita::valor_remate(int de, int tipo, double alto, double lateral) {
+	const JugadorCanchita &j = jugadores[size_t(de)];
+	const Cuerpo &c = j.cuerpo;
+	V3 bola = _plan_bola;
+	double gx = param_pelota.medio_largo * _ataca(j.equipo);
+	double dx = gx - bola.x, dz = lateral - bola.z;
+	double d = hipot(dx, dz);
+	if (d < 1.0) {
+		return -1.0;
+	}
+	double g = param_pelota.gravedad;
+	double t_vuelo;
+	if (tipo == REMATE_GLOBO) {
+		// Parábola sin aire con la elevación del globo.
+		double s, co;
+		mate::seno_coseno(param_remate.elevacion_globo, s, co);
+		double abajo = 2.0 * co * co * (d * s / co - (alto - bola.y));
+		if (abajo <= 1e-6) {
+			return -1.0;
+		}
+		double v = std::sqrt(g * d * d / abajo);
+		if (v > param_remate.fuerte_max_ms) {
+			return -1.0;
+		}
+		t_vuelo = d / (v * co);
+	} else {
+		if (tipo == REMATE_CABEZA && alto > 1.2) {
+			// De cabeza no se la manda arriba del arquero.
+			return -1.0;
+		}
+		// El aire la frena: llega en ~10% más que a rapidez constante.
+		t_vuelo = d / _rapidez_remate(j, tipo) * 1.1;
+	}
+	// Adentro: el error del ángulo a esta distancia, de costado y de alto.
+	double de_lado = std::abs(mate::envolver(rumbo_de(dx, dz) - c.rumbo)) / mate::PI;
+	double presion = _rival_mas_cerca(de, bola.x, bola.z);
+	double apretado = 1.0 + 0.5 * std::clamp(1.0 - presion / param_toque.presion_m, 0.0, 1.0);
+	double sigma = _error_remate(j, tipo, de_lado, bola.y, 0.0, apretado, 0.0);
+	double sd_lado = std::max(d * sigma, 0.02);
+	double sd_alto = std::max(d * sigma * param_remate.error_vertical, 0.02);
+	// Normal acumulada aproximada con la logística (1,702 x): sin erf.
+	auto fi = [](double x) {
+		return 1.0 / (1.0 + mate::exponencial(-1.702 * x));
+	};
+	double adentro = param_pelota.arco_medio_ancho - param_pelota.radio;
+	double arriba = param_pelota.arco_alto - param_pelota.radio;
+	double p_lado = fi((adentro - lateral) / sd_lado) - fi((-adentro - lateral) / sd_lado);
+	double p_alto = fi((arriba - alto) / sd_alto);
+	double p_adentro = std::clamp(p_lado * p_alto, 0.0, 1.0);
+	// El arquero: cuánto se corre hasta que la pelota pasa por su altura.
+	int k = arquero_de(1 - j.equipo);
+	double p_pasa = 1.0;
+	if (k >= 0) {
+		const Cuerpo &ck = jugadores[size_t(k)].cuerpo;
+		double frac = std::clamp((ck.x - bola.x) / (gx - bola.x), 0.0, 1.0);
+		double pz = bola.z + dz * frac;
+		double py = bola.y + (alto - bola.y) * frac;
+		if (tipo == REMATE_GLOBO) {
+			// La parábola: en la mitad del vuelo está g·t²/8 más arriba.
+			py = std::max(py, 4.0 * frac * (1.0 - frac) * g * t_vuelo * t_vuelo / 8.0);
+		}
+		double hueco = std::abs(pz - ck.z);
+		double tiene = t_vuelo * frac - _reaccion_arquero(k);
+		double tol = _tolerancia(k, ATAJA_AGARRA);
+		double alcance = 0.0;
+		for (int a = 0; a < CLIPS_ARQUERO; a++) {
+			int clip = param_arquero.clips[a];
+			if (clip < 0) {
+				continue;
+			}
+			const Clip &kc = clips[size_t(clip)];
+			double tc = std::max(kc.contacto_seg, 0.0);
+			double abajo = _alto_minimo(a, kc);
+			if (tiene < tc || py < abajo || py > kc.punto_y + _tolerancia_alto(a, true)) {
+				continue;
+			}
+			// La mano al costado del clip, más lo que se acomoda antes de
+			// arrancarlo (sin darse vuelta, como en _plan_atajar); parado, hasta
+			// parada_max_m.
+			double corre = 0.5 * _factor_acomodarse(ck) * ck.vel_max * ck.cansancio * (tiene - tc);
+			if (!_es_estirada(a)) {
+				corre = std::min(corre, param_arquero.parada_max_m);
+			}
+			alcance = std::max(alcance, std::abs(kc.punto_x) + tol + corre);
+		}
+		p_pasa = fi((hueco - alcance) / 0.3);
+	}
+	return p_adentro * p_pasa;
 }

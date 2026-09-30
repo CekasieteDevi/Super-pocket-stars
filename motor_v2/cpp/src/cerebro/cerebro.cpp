@@ -1,5 +1,6 @@
 #include "cerebro/cerebro.h"
 #include "matematica_fija.h"
+#include "remate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -741,7 +742,21 @@ void Cerebro::_evaluar(const Mundo &m, int i, std::vector<Opcion> &op) const {
 				+ pesos.conducir_progreso * (1.0 - mi_valor) + pesos.conducir_camino * camino_libre;
 		op.push_back(o);
 	}
-	// El remate es la etapa 5: sin arcos no hay a qué tirar.
+	// Tirar (etapa 5): el alcance según su tiro solo habilita el intento; la
+	// utilidad mira la misma geometría para todos, así tener más pierna no
+	// vuelve mejor jugada un tiro de lejos (BUG-007 del motor espacial).
+	if (!es_arquero && alcanza_para_tirar(i, x, z)) {
+		Opcion o;
+		o.tipo = DEC_REMATE;
+		o.utilidad = pesos.tiro_base + pesos.tiro_geometria * factor_geometria(x, z, equipo);
+		if (f.egoista) {
+			o.utilidad *= pesos.egoista_tiro;
+		}
+		o.tiene_punto = true;
+		o.x = ax;
+		o.z = 0.0;
+		op.push_back(o);
+	}
 	if (acorralado || arquero_encerrado) {
 		Opcion o;
 		o.tipo = DEC_DESPEJE;
@@ -1305,10 +1320,10 @@ Decision Cerebro::decidir(const Mundo &m, int i, bool puede_pasar, Azar &azar) {
 		// Pie preferido: le cuesta jugar hacia su lado malo.
 		if (f.pie_malo_lado != 0) {
 			for (Opcion &o : op) {
-				if (o.tipo == DEC_CONDUCIR || o.tipo == DEC_DESPEJE || o.receptor < 0) {
+				if (o.tipo == DEC_CONDUCIR || o.tipo == DEC_DESPEJE || (o.receptor < 0 && o.tipo != DEC_REMATE)) {
 					continue;
 				}
-				bool con_punto = o.tiene_punto && es_pase(o.tipo);
+				bool con_punto = o.tiene_punto && (es_pase(o.tipo) || o.tipo == DEC_REMATE);
 				double dx = con_punto ? o.x : m.jugadores[size_t(o.receptor)].x;
 				double dz = con_punto ? o.z : m.jugadores[size_t(o.receptor)].z;
 				o.utilidad -= pesos.pie_preferido_penalizacion * _cruce_al_pie_malo(i, p.x, p.z, dx, dz);
@@ -1335,7 +1350,7 @@ Decision Cerebro::decidir(const Mundo &m, int i, bool puede_pasar, Azar &azar) {
 		if (acorralado || (f.rol == ARQ && _arquero_encerrado(m, equipo))) {
 			std::vector<Opcion> salidas;
 			for (const Opcion &o : op) {
-				if (o.tipo == DEC_DESPEJE || o.tipo == DEC_PASE_LARGO) {
+				if (o.tipo == DEC_DESPEJE || o.tipo == DEC_PASE_LARGO || o.tipo == DEC_REMATE) {
 					salidas.push_back(o);
 				}
 			}
@@ -1421,6 +1436,13 @@ Decision Cerebro::decidir(const Mundo &m, int i, bool puede_pasar, Azar &azar) {
 		dec.tiene_punto = true;
 		dec.x = std::clamp(p.x + s * largo, -MEDIO_LARGO + 3.0, MEDIO_LARGO - 3.0);
 		dec.z = std::clamp(p.z * 0.5, -MEDIO_ANCHO + 3.0, MEDIO_ANCHO - 3.0);
+	}
+	if (o.tipo == DEC_REMATE) {
+		Decision r = elegir_remate(m, i, false, azar);
+		dec.x = r.x;
+		dec.z = r.z;
+		dec.alto = r.alto;
+		dec.golpe = r.golpe;
 	}
 	cuenta.decisiones[dec.tipo]++;
 	if (dec.corrida_preparada) {
@@ -2601,3 +2623,85 @@ void Cerebro::_planificar_desmarques(const Mundo &m, int ataca) {
 		pendientes.erase(pendientes.begin() + elegido);
 	}
 }
+
+// --- Remate (etapa 5) ---
+
+bool Cerebro::alcanza_para_tirar(int i, double x, double z) const {
+	int equipo = fichas[size_t(i)].equipo;
+	double ax = MEDIO_LARGO * signo(equipo);
+	double rango = _por_atributo(i, AT_TIRO, pesos.rango_tiro_malo, pesos.rango_tiro_bueno, pesos.mezcla_fisica_rango_tiro);
+	double f_dist = clamp01(1.0 - (dist(x, z, ax, 0.0) - 5.0) / std::max(rango, 1.0));
+	return f_dist * factor_angulo(x, z, equipo) > pesos.geometria_minima_tiro;
+}
+
+Decision Cerebro::elegir_remate(const Mundo &m, int i, bool solo_cabeza, Azar &azar) const {
+	(void)m;
+	int equipo = fichas[size_t(i)].equipo;
+	Decision d;
+	d.tipo = DEC_REMATE;
+	d.tiene_punto = true;
+	d.x = MEDIO_LARGO * signo(equipo);
+	d.z = 0.0;
+	d.alto = 1.0;
+	d.golpe = solo_cabeza ? REMATE_CABEZA : REMATE_COLOCADO;
+	if (planeador == nullptr) {
+		return d;
+	}
+	// Los puntos del arco que mira: pegado al palo (media pelota más un
+	// margen), a un metro y medio del palo y al medio; raso, a media altura y
+	// arriba (medio metro abajo del travesaño, 2,44 m).
+	const double laterales[5] = { -(ARCO_MEDIO_ANCHO - 0.45), -(ARCO_MEDIO_ANCHO - 1.35), 0.0, ARCO_MEDIO_ANCHO - 1.35,
+		ARCO_MEDIO_ANCHO - 0.45 };
+	const double altos[3] = { 0.2, 1.0, 1.9 };
+	const int de_pie[4] = { REMATE_COLOCADO, REMATE_FUERTE, REMATE_EFECTO, REMATE_GLOBO };
+	const int de_cabeza[1] = { REMATE_CABEZA };
+	const int *golpes = solo_cabeza ? de_cabeza : de_pie;
+	int cuantos_golpes = solo_cabeza ? 1 : 4;
+	struct Candidato {
+		int golpe;
+		double alto, lateral, valor;
+	};
+	std::vector<Candidato> candidatos;
+	double mejor = -1.0;
+	for (int g = 0; g < cuantos_golpes; g++) {
+		for (double alto : altos) {
+			for (double lateral : laterales) {
+				double v = planeador->valor_remate(i, golpes[g], alto, lateral);
+				if (v < 0.0) {
+					continue;
+				}
+				candidatos.push_back({ golpes[g], alto, lateral, v });
+				mejor = std::max(mejor, v);
+			}
+		}
+	}
+	if (candidatos.empty()) {
+		return d;
+	}
+	// Softmax con temperatura baja: casi siempre el mejor punto, a veces uno
+	// parecido (los delanteros no rematan siempre al mismo rincón).
+	double temp = std::max(pesos.remate_temperatura, 1e-3);
+	double suma = 0.0;
+	std::vector<double> pesos_exp(candidatos.size());
+	for (size_t k = 0; k < candidatos.size(); k++) {
+		pesos_exp[k] = mate::exponencial((candidatos[k].valor - mejor) / temp);
+		suma += pesos_exp[k];
+	}
+	double tirada = azar.uno() * suma;
+	size_t elegido = candidatos.size() - 1;
+	for (size_t k = 0; k < candidatos.size(); k++) {
+		tirada -= pesos_exp[k];
+		if (tirada < 0.0) {
+			elegido = k;
+			break;
+		}
+	}
+	const Candidato &c = candidatos[elegido];
+	d.golpe = c.golpe;
+	d.alto = c.alto;
+	// El lateral va del lado del arco que mira el que ataca: z en la cancha.
+	d.z = c.lateral;
+	d.utilidad = c.valor;
+	return d;
+}
+

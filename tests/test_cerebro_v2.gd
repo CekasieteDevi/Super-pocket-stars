@@ -6,7 +6,8 @@ extends SceneTree
 ##   data/fisica_v2.json ("cerebro").
 ## - La exponencial y el logaritmo propios (matematica_fija.h) coinciden con
 ##   los de Godot.
-## - "Pasa si": 11 contra 11 sin arqueros ni reglas durante 10 minutos, con
+## - "Pasa si": 11 contra 11 sin reglas durante 20 minutos (desde la etapa 5,
+##   con arqueros y remates), con
 ##   posesiones de varios pases, bloques que se desplazan con la pelota y
 ##   pases al espacio que salen solos. Sin correcciones de la pelota.
 ## - Presionante, cobertura y línea defensiva: el que presiona es el que
@@ -14,7 +15,11 @@ extends SceneTree
 ## - Misma semilla = misma huella.
 
 const SEED := 20261002
-const SEGUNDOS := 600.0
+## 20 minutos: desde la etapa 5 hay remates y arqueros, y la posesión termina
+## también en un remate o en las manos del arquero. En 10 minutos esta semilla
+## pasó de 3 posesiones de 5 pases a 0 (otras semillas dan 1 y 4): ruido de una
+## muestra chica, no el juego armado.
+const SEGUNDOS := 1200.0
 const DiagCerebro := preload("res://tests/_diag_cerebro_v2.gd")
 
 var fallos := 0
@@ -117,7 +122,7 @@ func _partido() -> void:
 	var k: Dictionary = c.contadores()
 	var d: Dictionary = c.contadores_cerebro()
 	# Posesiones de varios pases.
-	_ok(int(k["posesiones_3_pases"]) >= 5, "posesiones de 3 pases o más: %d (al menos 5 en 10 min)" % k["posesiones_3_pases"])
+	_ok(int(k["posesiones_3_pases"]) >= 5, "posesiones de 3 pases o más: %d (al menos 5 en 20 min)" % k["posesiones_3_pases"])
 	_ok(int(k["posesiones_5_pases"]) >= 1, "posesiones de 5 pases o más: %d (al menos 1)" % k["posesiones_5_pases"])
 	var pases := maxf(float(k["pases"]), 1.0)
 	_ok((float(k["completados"]) + float(k["completados_otro"])) / pases >= 0.45,
@@ -136,7 +141,7 @@ func _partido() -> void:
 	_ok(int(d["desmarque_ruptura"]) > 0 and int(d["apoyos_de_grilla"]) > 0,
 		"hay rupturas (%d) y apoyos de la grilla (%d)" % [d["desmarque_ruptura"], d["apoyos_de_grilla"]])
 	# Todas las decisiones del poseedor aparecen.
-	for tipo in ["conducir", "pase", "pase_hueco", "pase_largo", "pared"]:
+	for tipo in ["conducir", "pase", "pase_hueco", "pase_largo", "pared", "remate"]:
 		_ok(int(d[tipo]) > 0, "el poseedor elige %s (%d)" % [tipo, d[tipo]])
 	# Lo de la etapa 3 sigue valiendo con 22 jugadores y el cerebro.
 	_ok(int(k["correcciones"]) == 0 and int(k["saltos_pelota"]) == 0,
