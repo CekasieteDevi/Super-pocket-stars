@@ -391,11 +391,10 @@ El banco de la etapa 0 cambió de huella: 7270582477375384744 antes (PC, teléfo
 
 **Qué falta:**
 
-1. Revisión visual en la PC de `laboratorio_toque.tscn`, y bibliotecas de Windows y Android rearmadas.
-2. En los juegos casi no hay recepciones altas: el receptor sale a buscar el globo y lo toma después del pique. El test las prueba con pelotas lanzadas (las cuatro partes aparecen).
-3. Clip `Control_Muslo` en Blender.
-4. El partidito es caótico (12,9 quites por minuto): los cerebros son del banco. Los de verdad son la etapa 4.
-5. Los gestos (patear, controlar) no están hechos en cinta: el detector de patinaje no los mide. En la canchita Frenada patina 0,6 a 1,6 m/s y Caminar 0,9 a 1,2 m/s, más que en el laboratorio del cuerpo, porque el cerebro cambia de objetivo a 10 Hz.
+1. En los juegos casi no hay recepciones altas: el receptor sale a buscar el globo y lo toma después del pique. El test las prueba con pelotas lanzadas (las cuatro partes aparecen).
+2. Clip `Control_Muslo` en Blender.
+3. El partidito es caótico (12,9 quites por minuto): los cerebros son del banco. Los de verdad son la etapa 4.
+4. Los gestos (patear, controlar) no están hechos en cinta: el detector de patinaje no los mide. En la canchita Frenada patina 0,6 a 1,6 m/s y Caminar 0,9 a 1,2 m/s, más que en el laboratorio del cuerpo, porque el cerebro cambia de objetivo a 10 Hz.
 
 ### Etapa 4 — El cerebro
 
