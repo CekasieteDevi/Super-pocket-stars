@@ -149,7 +149,197 @@ const char *CLIPS_ARQUERO[motor_v2::CLIPS_ARQUERO] = { "clip_agarra", "clip_abaj
 	"clip_vuela_izq", "clip_vuela_alta_der", "clip_vuela_alta_izq" };
 const char *CLIPS_REMATE[5] = { "clip_pie", "clip_efecto", "clip_volea", "clip_palomita", "clip_cabeza" };
 const char *ATRIBUTOS_CANCHITA[7] = { "tiro", "golpe", "cabezazo", "reflejos", "estirada", "agarre", "achique" };
+
+// Etapa 6: data/fisica_v2.json, "reglas" (más lo que FisicaV2.parametros_reglas
+// suma de data/utility_pesos.json y del motor espacial).
+struct NumeroReglas {
+	const char *clave;
+	double motor_v2::ParametrosReglas::*campo;
+};
+const NumeroReglas NUMEROS_REGLAS[] = {
+	{ "minutos_tiempo", &motor_v2::ParametrosReglas::minutos_tiempo },
+	{ "adicion_min_seg", &motor_v2::ParametrosReglas::adicion_min_seg },
+	{ "adicion_max_seg", &motor_v2::ParametrosReglas::adicion_max_seg },
+	{ "adicion_gol_seg", &motor_v2::ParametrosReglas::adicion_gol_seg },
+	{ "adicion_cambio_seg", &motor_v2::ParametrosReglas::adicion_cambio_seg },
+	{ "adicion_lesion_seg", &motor_v2::ParametrosReglas::adicion_lesion_seg },
+	{ "adicion_tarjeta_seg", &motor_v2::ParametrosReglas::adicion_tarjeta_seg },
+	{ "recuperacion_entretiempo", &motor_v2::ParametrosReglas::recuperacion_entretiempo },
+	{ "tope_entretiempo", &motor_v2::ParametrosReglas::tope_entretiempo },
+	{ "reponer_seg", &motor_v2::ParametrosReglas::reponer_seg },
+	{ "llegada_m", &motor_v2::ParametrosReglas::llegada_m },
+	{ "ubicado_m", &motor_v2::ParametrosReglas::ubicado_m },
+	{ "distancia_libre_m", &motor_v2::ParametrosReglas::distancia_libre_m },
+	{ "distancia_lateral_m", &motor_v2::ParametrosReglas::distancia_lateral_m },
+	{ "distancia_penal_m", &motor_v2::ParametrosReglas::distancia_penal_m },
+	{ "saque_arco_m", &motor_v2::ParametrosReglas::saque_arco_m },
+	{ "radio_circulo_m", &motor_v2::ParametrosReglas::radio_circulo_m },
+	{ "lateral_min_ms", &motor_v2::ParametrosReglas::lateral_min_ms },
+	{ "lateral_max_ms", &motor_v2::ParametrosReglas::lateral_max_ms },
+	{ "lateral_elevacion_rad", &motor_v2::ParametrosReglas::lateral_elevacion_rad },
+	{ "lateral_alto_m", &motor_v2::ParametrosReglas::lateral_alto_m },
+	{ "lateral_alcance_m", &motor_v2::ParametrosReglas::lateral_alcance_m },
+	{ "ejecutor_max_m", &motor_v2::ParametrosReglas::ejecutor_max_m },
+	{ "rango_libre_malo", &motor_v2::ParametrosReglas::rango_libre_malo },
+	{ "rango_libre_bueno", &motor_v2::ParametrosReglas::rango_libre_bueno },
+	{ "angulo_minimo_tiro_libre", &motor_v2::ParametrosReglas::angulo_minimo_tiro_libre },
+	{ "dist_libre_al_area", &motor_v2::ParametrosReglas::dist_libre_al_area },
+	{ "dist_para_colgar_lejos", &motor_v2::ParametrosReglas::dist_para_colgar_lejos },
+	{ "area_desde_m", &motor_v2::ParametrosReglas::area_desde_m },
+	{ "area_hasta_m", &motor_v2::ParametrosReglas::area_hasta_m },
+	{ "area_ancho_m", &motor_v2::ParametrosReglas::area_ancho_m },
+	{ "entrada_dist_m", &motor_v2::ParametrosReglas::entrada_dist_m },
+	{ "entrada_prob", &motor_v2::ParametrosReglas::entrada_prob },
+	{ "entrada_amonestado", &motor_v2::ParametrosReglas::entrada_amonestado },
+	{ "falta_radio_m", &motor_v2::ParametrosReglas::falta_radio_m },
+	{ "gravedad_rapidez_ms", &motor_v2::ParametrosReglas::gravedad_rapidez_ms },
+	{ "gravedad_desde_atras", &motor_v2::ParametrosReglas::gravedad_desde_atras },
+	{ "cruce_falta_prob", &motor_v2::ParametrosReglas::cruce_falta_prob },
+	{ "caido_seg", &motor_v2::ParametrosReglas::caido_seg },
+	{ "amarilla_por_falta", &motor_v2::ParametrosReglas::amarilla_por_falta },
+	{ "roja_por_falta", &motor_v2::ParametrosReglas::roja_por_falta },
+	{ "lesion_por_contacto", &motor_v2::ParametrosReglas::lesion_por_contacto },
+	{ "lesionado_seg", &motor_v2::ParametrosReglas::lesionado_seg },
+	{ "esfuerzo_base", &motor_v2::ParametrosReglas::esfuerzo_base },
+	{ "esfuerzo_carrera", &motor_v2::ParametrosReglas::esfuerzo_carrera },
+	{ "energia_minima", &motor_v2::ParametrosReglas::energia_minima },
+	{ "cambio_desde_min", &motor_v2::ParametrosReglas::cambio_desde_min },
+	{ "mano_alcance_m", &motor_v2::ParametrosReglas::mano_alcance_m },
+	{ "mano_libre_m", &motor_v2::ParametrosReglas::mano_libre_m },
+	{ "voleo_m", &motor_v2::ParametrosReglas::voleo_m },
+	{ "juega_m", &motor_v2::ParametrosReglas::juega_m },
+	{ "penal_adivina", &motor_v2::ParametrosReglas::penal_adivina },
+};
+const char *PARADAS[motor_v2::PARADAS] = { "nada", "saque_medio", "lateral", "saque_arco", "corner", "tiro_libre",
+	"penal" };
+const char *EVENTOS[motor_v2::EVENTOS] = { "saque", "gol", "falta", "amarilla", "roja", "offside", "lesion", "cambio",
+	"fin_tiempo", "penal_tanda" };
+
+void leer_cuatro(const Dictionary &d, const char *clave, double *destino) {
+	if (!d.has(clave)) {
+		return;
+	}
+	Array a = d[clave];
+	for (int k = 0; k < 4 && k < a.size(); k++) {
+		destino[k] = double(a[k]);
+	}
+}
+
+Array cuatro(const double *v) {
+	Array a;
+	for (int k = 0; k < 4; k++) {
+		a.push_back(v[k]);
+	}
+	return a;
+}
+
+// Lo que las reglas leen de un jugador: "reglas" (FisicaV2.reglas_de) y su rol.
+void leer_ficha_reglas(const Dictionary &fisico, motor_v2::FichaReglas &f) {
+	Dictionary d = fisico.get("reglas", Dictionary());
+	f.id = int(d.get("id", -1));
+	leer(d, "factor_amarilla", f.factor_amarilla);
+	leer(d, "factor_roja", f.factor_roja);
+	leer(d, "riesgo_lesion", f.riesgo_lesion);
+	leer(d, "desgaste_minuto", f.desgaste_minuto);
+	leer(d, "energia", f.energia);
+	leer(d, "quite", f.quite);
+	leer(d, "barrida", f.barrida);
+	leer(d, "tiros_libres", f.tiros_libres);
+	leer(d, "centros", f.centros);
+	leer(d, "fuerza", f.fuerza);
+	leer(d, "salto", f.salto);
+	leer(d, "amenaza", f.amenaza);
+	leer(d, "media", f.media);
+	String rol = fisico.get("rol", "MC");
+	const char *roles[motor_v2::ROLES] = { "ARQ", "DFC", "LAT", "MC", "MCO", "EXT", "DC" };
+	for (int k = 0; k < motor_v2::ROLES; k++) {
+		if (rol == roles[k]) {
+			f.rol = k;
+		}
+	}
+}
 } // namespace
+
+void godot::leer_parametros_reglas(const Dictionary &d, const std::vector<String> &nombres, motor_v2::ParametrosReglas &p) {
+	for (const NumeroReglas &n : NUMEROS_REGLAS) {
+		leer(d, n.clave, p.*(n.campo));
+	}
+	Dictionary pausas = d.get("pausa_seg", Dictionary());
+	Dictionary esperas = d.get("espera_max_seg", Dictionary());
+	for (int k = 1; k < motor_v2::PARADAS; k++) {
+		leer(pausas, PARADAS[k], p.pausa_seg[k]);
+		leer(esperas, PARADAS[k], p.espera_max_seg[k]);
+	}
+	leer_cuatro(d, "franja_piso", p.franja_piso);
+	leer_cuatro(d, "factor_franja", p.factor_franja);
+	leer_cuatro(d, "riesgo_franja", p.riesgo_franja);
+	if (d.has("cambios_max")) {
+		p.cambios_max = int(d["cambios_max"]);
+	}
+	if (d.has("menos_en_centro")) {
+		p.menos_en_centro = int(d["menos_en_centro"]);
+	}
+	if (d.has("menos_en_directo")) {
+		p.menos_en_directo = int(d["menos_en_directo"]);
+	}
+	if (d.has("tanda")) {
+		p.tanda = bool(d["tanda"]);
+	}
+	if (d.has("tanda_pateadores")) {
+		p.tanda_pateadores = int(d["tanda_pateadores"]);
+	}
+	struct {
+		const char *clave;
+		int *campo;
+	} clips[] = { { "clip_lateral", &p.clip_lateral }, { "clip_lateral_prepara", &p.clip_lateral_prepara },
+		{ "clip_entrada", &p.clip_entrada }, { "clip_caer", &p.clip_caer }, { "clip_levantarse", &p.clip_levantarse },
+		{ "clip_lesionado", &p.clip_lesionado }, { "clip_saque_arco", &p.clip_saque_arco },
+		{ "clip_arquero_lanza", &p.clip_arquero_lanza }, { "clip_arquero_voleo", &p.clip_arquero_voleo } };
+	for (auto &c : clips) {
+		if (d.has(c.clave)) {
+			*c.campo = indice(nombres, d[c.clave]);
+		}
+	}
+}
+
+void CanchitaV2Nativa::configurar_reglas(const Dictionary &reglas) {
+	leer_parametros_reglas(reglas, _nombres, _c.param_reglas);
+	_c.reglas = true;
+}
+
+void CanchitaV2Nativa::configurar_reglas_equipo(int64_t equipo, const Dictionary &club) {
+	motor_v2::ParametrosReglas &p = _c.param_reglas;
+	int e = int(equipo & 1);
+	leer(club, "umbral_cambio", p.umbral_cambio[e]);
+	if (club.has("suben_corner")) {
+		p.suben_corner[e] = int(club["suben_corner"]);
+	}
+	if (club.has("cuelga_lejos")) {
+		p.cuelga_lejos[e] = bool(club["cuelga_lejos"]);
+	}
+}
+
+Dictionary CanchitaV2Nativa::reglas_de_fabrica() const {
+	motor_v2::ParametrosReglas r;
+	Dictionary d, pausas, esperas;
+	for (const NumeroReglas &n : NUMEROS_REGLAS) {
+		d[n.clave] = r.*(n.campo);
+	}
+	for (int k = 1; k < motor_v2::PARADAS; k++) {
+		pausas[PARADAS[k]] = r.pausa_seg[k];
+		esperas[PARADAS[k]] = r.espera_max_seg[k];
+	}
+	d["pausa_seg"] = pausas;
+	d["espera_max_seg"] = esperas;
+	d["franja_piso"] = cuatro(r.franja_piso);
+	d["factor_franja"] = cuatro(r.factor_franja);
+	d["riesgo_franja"] = cuatro(r.riesgo_franja);
+	d["cambios_max"] = r.cambios_max;
+	d["menos_en_centro"] = r.menos_en_centro;
+	d["menos_en_directo"] = r.menos_en_directo;
+	d["tanda_pateadores"] = r.tanda_pateadores;
+	return d;
+}
 
 void godot::leer_parametros_remate(const Dictionary &d, const std::vector<String> &nombres, motor_v2::ParametrosRemate &p) {
 	for (const NumeroRemate &n : NUMEROS_REMATE) {
@@ -247,6 +437,25 @@ void CanchitaV2Nativa::configurar(const Dictionary &pelota, const Dictionary &cu
 }
 
 int64_t CanchitaV2Nativa::agregar(int64_t equipo, const Dictionary &fisico) {
+	_agregar_jugador(int(equipo), fisico);
+	return int64_t(_c.jugadores.size()) - 1;
+}
+
+void CanchitaV2Nativa::agregar_suplente(int64_t equipo, const Dictionary &fisico) {
+	// Se arma igual que un titular y se pasa al banco.
+	size_t fichas = _c.cerebro.fichas.size();
+	_agregar_jugador(int(equipo), fisico);
+	motor_v2::JugadorCanchita j = _c.jugadores.back();
+	_c.jugadores.pop_back();
+	motor_v2::FichaCerebro f;
+	if (_c.cerebro.fichas.size() > fichas) {
+		f = _c.cerebro.fichas.back();
+		_c.cerebro.fichas.pop_back();
+	}
+	_c.agregar_suplente(int(equipo), j, f);
+}
+
+void CanchitaV2Nativa::_agregar_jugador(int equipo, const Dictionary &fisico) {
 	motor_v2::Cuerpo c;
 	leer(fisico, "vel_max", c.vel_max);
 	leer(fisico, "aceleracion", c.aceleracion);
@@ -266,12 +475,12 @@ int64_t CanchitaV2Nativa::agregar(int64_t equipo, const Dictionary &fisico) {
 	}
 	j.pie_malo_lado = int(fisico.get("pie_malo_lado", 0));
 	j.arquero = bool(fisico.get("arquero", false)) || String(fisico.get("rol", "")) == "ARQ";
+	leer_ficha_reglas(fisico, j.reglas);
 	if (fisico.has("rol")) {
 		motor_v2::FichaCerebro f;
 		leer_ficha_cerebro(int(equipo), fisico, f);
 		_c.cerebro.agregar(f);
 	}
-	return int64_t(_c.jugadores.size()) - 1;
 }
 
 void CanchitaV2Nativa::configurar_cerebro(const Dictionary &utility, const Dictionary &nuevos) {
@@ -540,7 +749,110 @@ Dictionary CanchitaV2Nativa::contadores() const {
 	d["paradas"] = k.paradas;
 	d["salidas_arquero"] = k.salidas_arquero;
 	d["atajadas_falladas"] = k.atajadas_falladas;
+	// Etapa 6: las reglas.
+	for (int t = 1; t < motor_v2::PARADAS; t++) {
+		String n = PARADAS[t];
+		d[String("paradas_") + n] = k.paradas_tipo[t];
+		d[String("saques_") + n] = k.saques[t];
+		d[String("espera_media_") + n] = k.saques[t] > 0 ? k.espera_parada_suma[t] / double(k.saques[t]) : 0.0;
+		d[String("espera_max_") + n] = k.espera_parada_max[t];
+		d[String("camina_") + n] = k.ejecutor_camina[t];
+	}
+	d["saques_de_lejos"] = k.saques_de_lejos;
+	d["laterales_lentos"] = k.laterales_lentos;
+	d["entradas"] = k.entradas;
+	d["entradas_limpias"] = k.entradas_limpias;
+	d["faltas_0"] = k.faltas[0];
+	d["faltas_1"] = k.faltas[1];
+	d["faltas_entrada"] = k.faltas_entrada;
+	d["faltas_cruce"] = k.faltas_cruce;
+	d["amarillas_0"] = k.amarillas[0];
+	d["amarillas_1"] = k.amarillas[1];
+	d["rojas_0"] = k.rojas[0];
+	d["rojas_1"] = k.rojas[1];
+	d["rojas_directas"] = k.rojas_directas;
+	d["gravedad_media"] = (k.faltas[0] + k.faltas[1]) > 0 ? k.gravedad_suma / double(k.faltas[0] + k.faltas[1]) : 0.0;
+	d["gravedad_max"] = k.gravedad_max;
+	d["offsides_cobrados_0"] = k.offsides_cobrados[0];
+	d["offsides_cobrados_1"] = k.offsides_cobrados[1];
+	d["penales"] = k.penales;
+	d["penales_gol"] = k.penales_gol;
+	d["lesiones"] = k.lesiones;
+	d["cambios_0"] = k.cambios[0];
+	d["cambios_1"] = k.cambios[1];
+	d["libres_corto"] = k.tiros_libres[motor_v2::LIBRE_CORTO];
+	d["libres_centro"] = k.tiros_libres[motor_v2::LIBRE_CENTRO];
+	d["libres_directo"] = k.tiros_libres[motor_v2::LIBRE_DIRECTO];
+	d["arquero_mano"] = k.arquero_mano;
+	d["arquero_voleo"] = k.arquero_voleo;
+	d["arquero_pie"] = k.arquero_pie;
 
+	return d;
+}
+
+Array CanchitaV2Nativa::eventos() const {
+	Array r;
+	for (const motor_v2::EventoPartido &e : _c.eventos) {
+		Dictionary d;
+		d["paso"] = e.paso;
+		d["tipo"] = EVENTOS[std::clamp(e.tipo, 0, motor_v2::EVENTOS - 1)];
+		d["equipo"] = e.equipo;
+		d["jugador"] = e.jugador;
+		d["otro"] = e.otro;
+		d["detalle"] = e.detalle;
+		d["pos"] = Vector2(real_t(e.x), real_t(e.z));
+		r.push_back(d);
+	}
+	return r;
+}
+
+PackedInt32Array CanchitaV2Nativa::get_ids() const {
+	PackedInt32Array r;
+	for (const motor_v2::JugadorCanchita &j : _c.jugadores) {
+		r.push_back(j.reglas.id);
+	}
+	return r;
+}
+
+PackedFloat32Array CanchitaV2Nativa::get_energias() const {
+	PackedFloat32Array r;
+	for (const motor_v2::JugadorCanchita &j : _c.jugadores) {
+		r.push_back(float(j.energia));
+	}
+	return r;
+}
+
+Array CanchitaV2Nativa::get_afuera() const {
+	Array r;
+	for (const motor_v2::Saliente &s : _c.afuera) {
+		Dictionary d;
+		d["id"] = s.id;
+		d["equipo"] = s.equipo;
+		d["pos"] = Vector2(real_t(s.cuerpo.x), real_t(s.cuerpo.z));
+		d["rumbo"] = s.cuerpo.rumbo;
+		d["rapidez"] = s.cuerpo.rapidez();
+		d["expulsado"] = s.expulsado;
+		d["accion"] = s.cuerpo.clip >= 0 ? _nombres[size_t(s.cuerpo.clip)] : String();
+		d["tiempo_accion"] = s.cuerpo.tiempo_accion;
+		r.push_back(d);
+	}
+	return r;
+}
+
+Dictionary CanchitaV2Nativa::get_estado() const {
+	Dictionary d;
+	const char *periodos[4] = { "primer_tiempo", "segundo_tiempo", "tanda", "terminado" };
+	d["periodo"] = periodos[std::clamp(_c.periodo, 0, 3)];
+	d["reloj"] = _c.reloj_seg();
+	d["adicion"] = _c.adicion_seg();
+	d["lado"] = _c.lado();
+	d["suspendido"] = _c.suspendido();
+	d["parada"] = PARADAS[std::clamp(_c.parada_tipo(), 0, motor_v2::PARADAS - 1)];
+	d["ejecutor"] = _c.parada_ejecutor();
+	motor_v2::V3 p = _c.parada_punto();
+	d["punto"] = Vector2(real_t(p.x), real_t(p.z));
+	d["goles_tanda"] = Vector2i(_c.goles_tanda[0], _c.goles_tanda[1]);
+	d["pateados_tanda"] = Vector2i(_c.pateados_tanda[0], _c.pateados_tanda[1]);
 	return d;
 }
 
@@ -663,6 +975,15 @@ int64_t CanchitaV2Nativa::huella() const {
 void CanchitaV2Nativa::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("configurar", "pelota", "cuerpo", "clips", "toque"), &CanchitaV2Nativa::configurar);
 	ClassDB::bind_method(D_METHOD("agregar", "equipo", "fisico"), &CanchitaV2Nativa::agregar);
+	ClassDB::bind_method(D_METHOD("agregar_suplente", "equipo", "fisico"), &CanchitaV2Nativa::agregar_suplente);
+	ClassDB::bind_method(D_METHOD("configurar_reglas", "reglas"), &CanchitaV2Nativa::configurar_reglas);
+	ClassDB::bind_method(D_METHOD("configurar_reglas_equipo", "equipo", "club"), &CanchitaV2Nativa::configurar_reglas_equipo);
+	ClassDB::bind_method(D_METHOD("reglas_de_fabrica"), &CanchitaV2Nativa::reglas_de_fabrica);
+	ClassDB::bind_method(D_METHOD("eventos"), &CanchitaV2Nativa::eventos);
+	ClassDB::bind_method(D_METHOD("get_ids"), &CanchitaV2Nativa::get_ids);
+	ClassDB::bind_method(D_METHOD("get_energias"), &CanchitaV2Nativa::get_energias);
+	ClassDB::bind_method(D_METHOD("get_afuera"), &CanchitaV2Nativa::get_afuera);
+	ClassDB::bind_method(D_METHOD("get_estado"), &CanchitaV2Nativa::get_estado);
 	ClassDB::bind_method(D_METHOD("configurar_remate", "remate", "arquero"), &CanchitaV2Nativa::configurar_remate);
 	ClassDB::bind_method(D_METHOD("remate_de_fabrica"), &CanchitaV2Nativa::remate_de_fabrica);
 	ClassDB::bind_method(D_METHOD("rematar", "i", "golpe", "alto", "lateral"), &CanchitaV2Nativa::rematar);

@@ -102,6 +102,9 @@ var equipos := PackedInt32Array()
 ## Etapa 5: 1 el que es arquero (get_arqueros de CanchitaV2Nativa). Vacío:
 ## con `equipos` vacío, el 0 y el 11; si no, nadie.
 var arqueros := PackedInt32Array()
+## Etapa 6: el id de cada uno (get_ids de CanchitaV2Nativa) para su cara y su
+## peinado: el que entra en un cambio es otro. Vacío: de su lugar.
+var ids := PackedInt32Array()
 ## Clip -> [segundo del contacto, ancla] de los que tocan con el pie.
 var _contacto_pie := {}
 var _giro_alcance := 1.0
@@ -158,6 +161,8 @@ func _ready() -> void:
 		var p := Jugador3D.new(golero if arquero else jugador)
 		_mundo_3d.add_child(p)
 		var id := i if equipo == 0 else 1000 + i
+		if i < ids.size() and ids[i] >= 0:
+			id = ids[i]
 		var camiseta: Color = colores[equipo]
 		if arquero:
 			camiseta = Color("2f9e44") if equipo == 0 else Color("e8a33a")

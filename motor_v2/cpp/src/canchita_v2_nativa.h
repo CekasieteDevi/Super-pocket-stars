@@ -26,6 +26,8 @@ void leer_parametros_toque(const Dictionary &d, const std::vector<String> &nombr
 // Etapa 5: FisicaV2.parametros_remate() y parametros_arquero().
 void leer_parametros_remate(const Dictionary &d, const std::vector<String> &nombres, motor_v2::ParametrosRemate &p);
 void leer_parametros_arquero(const Dictionary &d, const std::vector<String> &nombres, motor_v2::ParametrosArquero &p);
+// Etapa 6: FisicaV2.parametros_reglas().
+void leer_parametros_reglas(const Dictionary &d, const std::vector<String> &nombres, motor_v2::ParametrosReglas &p);
 
 class CanchitaV2Nativa : public RefCounted {
 	GDCLASS(CanchitaV2Nativa, RefCounted)
@@ -43,6 +45,14 @@ public:
 	// achique), de "relativos" si viene (CerebroV2.ficha_de) o sueltos; y
 	// "arquero" (o rol "ARQ") y "pie_malo_lado".
 	int64_t agregar(int64_t equipo, const Dictionary &fisico);
+	// Etapa 6: las reglas (FisicaV2.parametros_reglas()) y lo de cada club
+	// (umbral_cambio, suben_corner, cuelga_lejos). Antes de empezar. Los
+	// jugadores traen "reglas" (FisicaV2.reglas_de) y los suplentes van al banco.
+	void configurar_reglas(const Dictionary &reglas);
+	void configurar_reglas_equipo(int64_t equipo, const Dictionary &club);
+	void agregar_suplente(int64_t equipo, const Dictionary &fisico);
+	// Los de fábrica de las reglas, como el JSON (para el test).
+	Dictionary reglas_de_fabrica() const;
 	void empezar(int64_t modo, int64_t semilla);
 	// Etapa 4 (PARTIDO): los pesos del cerebro (MotorEspacial.pesos() y la
 	// sección "cerebro" de data/fisica_v2.json) y el plan de cada club. La
@@ -100,6 +110,16 @@ public:
 	Dictionary contadores() const;
 	// Etapa 5: cada remate (canchita.h, RegistroRemate).
 	Array registro_remates() const;
+	// Etapa 6: lo que pasó ({paso, tipo, equipo, jugador, otro, detalle, pos};
+	// jugador y otro son ids), el id y la energía de cada uno, los que se van
+	// ({id, equipo, pos, rumbo, rapidez, expulsado, accion, tiempo_accion}) y el estado del partido
+	// ({periodo, reloj, adicion, lado, parada, ejecutor, punto, goles_tanda,
+	// pateados_tanda}).
+	Array eventos() const;
+	PackedInt32Array get_ids() const;
+	PackedFloat32Array get_energias() const;
+	Array get_afuera() const;
+	Dictionary get_estado() const;
 	// PARTIDO: lo que pensó el cerebro.
 	Dictionary contadores_cerebro() const;
 	// Papel en la defensa de cada uno (cerebro.h, PapelDefensa).
@@ -126,6 +146,7 @@ private:
 	std::vector<String> _nombres;
 
 	bool _valido(int64_t i) const;
+	void _agregar_jugador(int equipo, const Dictionary &fisico);
 };
 
 } // namespace godot

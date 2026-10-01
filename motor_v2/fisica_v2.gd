@@ -124,3 +124,75 @@ static func parametros_arquero() -> Dictionary:
 	# Parado o estirada: la misma regla que la vista 3D actual.
 	p["parada_max_m"] = VistaCancha3D.PARADA_TRAVESIA_M
 	return p
+
+
+## Etapa 6 (CanchitaV2Nativa.configurar_reglas): data/fisica_v2.json, "reglas",
+## más lo que ya existía en otro lado, para que los dos motores lean lo mismo:
+## el tiro libre (data/utility_pesos.json, "fisica"), las medidas y el
+## ejecutor del motor espacial, el entretiempo ("esfuerzo"), las franjas de
+## Cansancio y los cambios de Team. `tanda`: si el partido empatado se define
+## por penales.
+static func parametros_reglas(tanda := false) -> Dictionary:
+	var p: Dictionary = (datos()["reglas"] as Dictionary).duplicate(true)
+	var fisica: Dictionary = MotorEspacial.pesos()["fisica"]
+	for clave in ["rango_libre_malo", "rango_libre_bueno", "angulo_minimo_tiro_libre", "dist_libre_al_area",
+			"dist_para_colgar_lejos"]:
+		p[clave] = float(fisica[clave])
+	var esfuerzo := MotorEspacial.pesos_esfuerzo()
+	p["recuperacion_entretiempo"] = float(esfuerzo["recuperacion_entretiempo"])
+	p["tope_entretiempo"] = float(esfuerzo["tope_entretiempo"])
+	p["distancia_penal_m"] = MotorEspacial.DIST_PENAL
+	p["radio_circulo_m"] = MotorEspacial.RADIO_CIRCULO
+	p["ejecutor_max_m"] = MotorEspacial.DIST_MAX_AL_EJECUTOR
+	var pisos := []
+	for pct in Cansancio.FRANJA_PISO_PCT:
+		pisos.append(float(pct) / 100.0)
+	p["franja_piso"] = pisos
+	p["factor_franja"] = Cansancio.FACTOR_FRANJA.duplicate()
+	p["riesgo_franja"] = Cansancio.RIESGO_LESION_POR_FRANJA.duplicate()
+	p["energia_minima"] = Cansancio.ENERGIA_MINIMA
+	p["cambios_max"] = Team.MAX_CAMBIOS
+	p["tanda"] = tanda
+	return p
+
+
+## Lo de cada club que leen las reglas (CanchitaV2Nativa.configurar_reglas_equipo).
+static func reglas_del_club(equipo: Team) -> Dictionary:
+	return {
+		"umbral_cambio": Cansancio.umbral_cambio(equipo.config_cambios),
+		"suben_corner": Estilos.suben_al_corner(equipo.estilo),
+		"cuelga_lejos": Estilos.cuelga_de_lejos(equipo.estilo),
+	}
+
+
+## Lo de un jugador que leen las reglas (etapa 6): su id, lo que multiplica
+## las tarjetas (MatchEngine._chequear_tarjeta), el riesgo de lesión
+## descansado (MatchEngine._chequear_lesion), el desgaste por minuto
+## (Team.desgastar_minutos), la energía con que arranca y los atributos que
+## usan las pelotas paradas. El C++ solo sortea.
+static func reglas_de(jugador: Dictionary, equipo: Team, rival: Team) -> Dictionary:
+	var a: Dictionary = jugador["atributos"]
+	var arbitro := Arbitro.factor_tarjetas(equipo.arbitro_partido)
+	var clasico := Rivalidad.factor_tarjetas(Rivalidad.es_clasico(equipo, rival))
+	var amenaza := float(a.get("cabezazo", 50.0)) + float(a.get("salto", 50.0))
+	if MotorEspacial.ROLES_QUE_ATACAN.has(str(jugador["posicion"])):
+		amenaza += 40.0
+	return {
+		"id": int(jugador["id"]),
+		"factor_amarilla": arbitro * clasico * Personalidad.factor_amarilla(jugador),
+		"factor_roja": arbitro * clasico * Personalidad.factor_roja(jugador),
+		"riesgo_lesion": Lesiones.evaluar_riesgo(jugador, 1.0, Instalaciones.factor_riesgo_lesion(equipo),
+			CargaEntrenamiento.factor_lesion(equipo.carga_entrenamiento)),
+		"desgaste_minuto": Cansancio.desgaste_por_minuto(str(jugador["posicion"]))
+			* Cansancio.factor_atributo_energia(float(a.get("energia", 50.0)))
+			* Clima.factor_energia(equipo.clima_partido) * Entrenamiento.factor_desgaste(equipo),
+		"energia": equipo.resistencia_pct(int(jugador["id"])),
+		"quite": float(a.get("quite", 50.0)),
+		"barrida": float(a.get("barrida", 50.0)),
+		"tiros_libres": float(a.get("tiros_libres", 50.0)),
+		"centros": float(a.get("centros", 50.0)),
+		"fuerza": float(a.get("fuerza", 50.0)),
+		"salto": float(a.get("salto", 50.0)),
+		"amenaza": amenaza,
+		"media": float(jugador.get("media", 50.0)),
+	}

@@ -13,8 +13,12 @@ extends RefCounted
 ## usa el juego) y estilos distintos para que se vea la diferencia. Con
 ## `division_local` y `division_visitante` (0 = primera) los planteles salen
 ## del nivel de esa división, como en tests/_diag_embudo_remates.gd.
+##
+## Etapa 6: con `reglas` el partido tiene reloj, reanudaciones, faltas,
+## tarjetas, cambios y lesiones (motor_v2/cpp/src/reglas.h); con `tanda`, el
+## empate se define por penales.
 static func armar_partido(semilla: int, estilo_local := "", estilo_visitante := "",
-		division_local := -1, division_visitante := -1) -> Object:
+		division_local := -1, division_visitante := -1, reglas := false, tanda := false) -> Object:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = semilla
 	var local: Team
@@ -31,24 +35,39 @@ static func armar_partido(semilla: int, estilo_local := "", estilo_visitante := 
 		local.estilo = estilo_local
 	if estilo_visitante != "":
 		visitante.estilo = estilo_visitante
-	return armar(local, visitante, semilla)
+	return armar(local, visitante, semilla, reglas, tanda)
 
 
 ## El local (equipo 0) ataca hacia +x. Van los once de Team.jugadores en el
-## orden de Formaciones.slots: el slot i lo ocupa jugadores[i].
-static func armar(local: Team, visitante: Team, semilla: int) -> Object:
+## orden de Formaciones.slots: el slot i lo ocupa jugadores[i]. Con `reglas`
+## (etapa 6) cada uno lleva lo que leen las reglas (FisicaV2.reglas_de) y el
+## banco (Team.banco) va como suplentes.
+static func armar(local: Team, visitante: Team, semilla: int, reglas := false, tanda := false) -> Object:
 	var c: Object = ClassDB.instantiate("CanchitaV2Nativa")
 	c.configurar(FisicaV2.parametros(), FisicaV2.parametros_cuerpo(), FisicaV2.clips(), FisicaV2.parametros_toque())
 	c.configurar_cerebro(MotorEspacial.pesos(), FisicaV2.parametros_cerebro())
 	c.configurar_remate(FisicaV2.parametros_remate(), FisicaV2.parametros_arquero())
+	if reglas:
+		c.configurar_reglas(FisicaV2.parametros_reglas(tanda))
 	var nivel := MatchEngine.nivel_partido(local, visitante)
 	var equipos := [local, visitante]
 	for e in 2:
 		var equipo: Team = equipos[e]
-		c.configurar_plan(e, plan_de(equipo, equipos[1 - e]))
+		var rival: Team = equipos[1 - e]
+		c.configurar_plan(e, plan_de(equipo, rival))
+		if reglas:
+			c.configurar_reglas_equipo(e, FisicaV2.reglas_del_club(equipo))
 		var slots := Formaciones.slots(equipo.formacion)
 		for i in mini(equipo.jugadores.size(), slots.size()):
-			c.agregar(e, ficha_de(equipo.jugadores[i], str(slots[i]["rol"]), slots[i]["base"], nivel))
+			var f := ficha_de(equipo.jugadores[i], str(slots[i]["rol"]), slots[i]["base"], nivel)
+			if reglas:
+				f["reglas"] = FisicaV2.reglas_de(equipo.jugadores[i], equipo, rival)
+			c.agregar(e, f)
+		if reglas:
+			for j in equipo.banco:
+				var f := ficha_de(j, str(j["posicion"]), Vector2.ZERO, nivel)
+				f["reglas"] = FisicaV2.reglas_de(j, equipo, rival)
+				c.agregar_suplente(e, f)
 	c.empezar(CanchitaV2Nativa.PARTIDO, semilla)
 	return c
 

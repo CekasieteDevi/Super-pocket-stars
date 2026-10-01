@@ -29,12 +29,20 @@
 // medio. Las demás reglas siguen siendo las del banco (etapa 6). La llegada
 // ya no termina la jugada: se cuenta una por posesión.
 //
+// Etapa 6 suma las reglas (reglas.h, docs/motor_v2.md "Etapa 6 — Reglas y
+// pelota parada"), solo si se activan (activar_reglas): sin ellas el PARTIDO
+// sigue con las reanudaciones del banco y los tests de las etapas 4 y 5 dan
+// lo mismo. Con reglas hay dos tiempos y entretiempo, cada reanudación la
+// ejecuta alguien que llega corriendo, el offside se cobra, las entradas
+// hacen faltas, hay tarjetas, penales, lesiones, cambios y tanda.
+//
 // Sin Godot: solo C++ y matematica_fija.h.
 
 #include "azar.h"
 #include "cerebro/cerebro.h"
 #include "cuerpo.h"
 #include "pelota.h"
+#include "reglas.h"
 #include "remate.h"
 #include "toque.h"
 
@@ -63,6 +71,9 @@ enum TipoToque : int {
 	// Etapa 5: al arco, y el arquero con las manos.
 	TOQUE_REMATE = 4,
 	TOQUE_ATAJADA = 5,
+	// Etapa 6: entrada a la pelota del rival. Si el pie llega primero a la
+	// pelota, la saca; si llega a las piernas del rival, es falta.
+	TOQUE_ENTRADA = 6,
 };
 
 // Cómo terminó un remate (el mundo lo decide, ver Canchita::_cerrar_remate).
@@ -168,6 +179,45 @@ struct ContadoresCanchita {
 	int64_t salidas_arquero = 0;
 	// Gestos de atajada que no llegaron a la pelota.
 	int64_t atajadas_falladas = 0;
+
+	// Etapa 6 (docs/motor_v2.md, "Pasa si"). Paradas por TipoParada: cuántas,
+	// cuántas se ejecutaron y los segundos desde que se cortó el juego hasta
+	// el saque (suma y la más larga).
+	int64_t paradas_tipo[PARADAS] = {};
+	int64_t saques[PARADAS] = {};
+	double espera_parada_suma[PARADAS] = {};
+	double espera_parada_max[PARADAS] = {};
+	// El ejecutor que tocó la pelota estando a más de llegada_m de ella al
+	// arrancar el saque: tiene que dar 0 (nadie aparece encima de la pelota).
+	int64_t saques_de_lejos = 0;
+	// Las veces que el ejecutor camina (medio segundo seguido) hacia su lugar
+	// estando lejos, por TipoParada: el pasa-si de la etapa es que en el
+	// lateral dé 0. Y los
+	// laterales que tardaron más de 17 ticks del motor espacial (4,25 s).
+	int64_t ejecutor_camina[PARADAS] = {};
+	int64_t laterales_lentos = 0;
+	int64_t entradas = 0;
+	int64_t entradas_limpias = 0;
+	int64_t faltas[2] = { 0, 0 };
+	int64_t faltas_entrada = 0;
+	int64_t faltas_cruce = 0;
+	int64_t amarillas[2] = { 0, 0 };
+	int64_t rojas[2] = { 0, 0 };
+	int64_t rojas_directas = 0;
+	// La gravedad de las faltas: suma y la mayor.
+	double gravedad_suma = 0.0;
+	double gravedad_max = 0.0;
+	int64_t offsides_cobrados[2] = { 0, 0 };
+	int64_t penales = 0;
+	int64_t penales_gol = 0;
+	int64_t lesiones = 0;
+	int64_t cambios[2] = { 0, 0 };
+	int64_t tiros_libres[3] = { 0, 0, 0 };
+	// El arquero con la pelota en las manos: con la mano, de voleo o la
+	// suelta y la juega con el pie.
+	int64_t arquero_mano = 0;
+	int64_t arquero_voleo = 0;
+	int64_t arquero_pie = 0;
 };
 
 // Un remate, para el diagnóstico (tests/_diag_remates_v2.gd): de dónde salió,
@@ -256,6 +306,34 @@ struct JugadorCanchita {
 	int clip_arquero = -1;
 	// Modo ARCO: le pega al arco la próxima pelota (rematar()).
 	bool remata_prueba = false;
+
+	// Etapa 6.
+	FichaReglas reglas;
+	double energia = 1.0;
+	int amarillas = 0;
+	bool lesionado = false;
+	// En el piso (falta o lesión) hasta este paso: no juega.
+	int64_t en_el_piso_hasta = -1;
+	// Se tira a quitarla (_plan_entrada): el gesto es el de la entrada, y
+	// sigue en eso hasta este paso.
+	bool entra = false;
+	int64_t entrada_hasta = -1;
+};
+
+// Etapa 6: el que se va de la cancha (expulsado, cambiado o lesionado). Ya no
+// juega: camina hasta afuera y la vista lo dibuja hasta que sale.
+struct Saliente {
+	Cuerpo cuerpo;
+	int equipo = 0;
+	int id = -1;
+	double x = 0.0, z = 0.0;
+	bool expulsado = false;
+};
+
+// Etapa 6: un suplente, con todo lo que necesita para entrar.
+struct Suplente {
+	JugadorCanchita jugador;
+	FichaCerebro ficha;
 };
 
 class Canchita : public Planeador {
@@ -272,6 +350,12 @@ public:
 	// Partido: la cancha entera (la misma del motor espacial).
 	static constexpr double PARTIDO_LARGO = Cerebro::LARGO;
 	static constexpr double PARTIDO_ANCHO = Cerebro::ANCHO;
+	// Partido: en el saque del medio la formación se comprime hacia el arco
+	// propio para caber en su mitad (MotorEspacial.COMPRESION_SAQUE).
+	static constexpr double COMPRESION_SAQUE = 0.775;
+	// Etapa 5. Festejo: la pelota queda en la red y cada uno vuelve a su mitad
+	// antes del saque del medio.
+	static constexpr int FESTEJO_PASOS = 180;
 
 	ParametrosPelota param_pelota;
 	ParametrosCuerpo param_cuerpo;
@@ -317,6 +401,42 @@ public:
 	}
 	void avanzar();
 	uint64_t huella() const;
+
+	// Etapa 6: reglas del partido (reglas.h). Se activan antes de empezar.
+	ParametrosReglas param_reglas;
+	bool reglas = false;
+	std::vector<EventoPartido> eventos;
+	std::vector<Suplente> banco;
+	std::vector<Saliente> afuera;
+	int periodo = PRIMER_TIEMPO;
+	int goles_tanda[2] = { 0, 0 };
+	int pateados_tanda[2] = { 0, 0 };
+	// Un suplente de `equipo`: puede entrar en un cambio.
+	void agregar_suplente(int equipo, const JugadorCanchita &j, const FichaCerebro &f);
+	// Segundos de juego del tiempo que se está jugando y su agregado.
+	double reloj_seg() const;
+	double adicion_seg() const;
+	// 0 en el primer tiempo, 1 en el segundo: la vista gira la cancha 180°
+	// (el motor sigue con el equipo 0 atacando hacia +x).
+	int lado() const {
+		return periodo == PRIMER_TIEMPO ? 0 : 1;
+	}
+	bool terminado() const {
+		return periodo == TERMINADO;
+	}
+	bool suspendido() const {
+		return _suspendido;
+	}
+	// La parada en curso (PARADA_NADA si se juega).
+	int parada_tipo() const {
+		return _parada.activa ? _parada.tipo : PARADA_NADA;
+	}
+	int parada_ejecutor() const {
+		return _parada.activa ? _parada.ejecutor : -1;
+	}
+	V3 parada_punto() const {
+		return { _parada.x, 0.0, _parada.z };
+	}
 
 	// Planeador (cerebro.h): el margen de un pase con la física del toque,
 	// desde la pelota y el momento de la patada del que está decidiendo.
@@ -379,12 +499,74 @@ private:
 		bool toco_arquero = false;
 		bool cabeza = false;
 		bool tras_rebote = false;
+		// Etapa 6: un penal (para contar los convertidos y la tanda), y si el
+		// arquero ya eligió lado y si adivinó.
+		bool penal = false;
+		bool lado_elegido = false;
+		bool adivina = false;
 		// Su lugar en `registro`.
 		size_t indice = 0;
 	};
 	Remate _remate;
 
 	double _plan_t = 0.0;
+
+	// Etapa 6.
+	struct Parada {
+		bool activa = false;
+		int tipo = PARADA_NADA;
+		int equipo = 0;
+		double x = 0.0, z = 0.0;
+		int ejecutor = -1;
+		int tipo_libre = LIBRE_CORTO;
+		// Sin offside: el lateral, el saque de arco y el córner.
+		bool sin_offside = false;
+		int64_t desde = 0;
+		// Cuándo se repone la pelota, y lo mínimo y lo máximo que dura.
+		int64_t reponer_en = 0;
+		int64_t minimo = 0;
+		int64_t tope = 0;
+		bool repuesta = false;
+		// Lateral: la tiene en las manos y arrancó el lanzamiento.
+		bool en_manos = false;
+		bool lanzando = false;
+		// Saque con el pie: ya es el poseedor y va a patear (desde este paso).
+		bool sacando = false;
+		int64_t sacando_desde = 0;
+		// Dónde se para el ejecutor.
+		double lugar_x = 0.0, lugar_z = 0.0;
+		// Distancia que respetan los rivales.
+		double distancia = 0.0;
+		// En la tanda.
+		bool tanda = false;
+		// Pasos seguidos que el ejecutor va caminando (detector).
+		int64_t lento_pasos = 0;
+	};
+	Parada _parada;
+	// Adónde va cada uno en la parada (si tiene_marca).
+	std::vector<double> _marca_x, _marca_z;
+	std::vector<char> _tiene_marca;
+	// Los que estaban en offside en el cuadro del último pase.
+	std::vector<int> _adelantados;
+	int64_t _inicio_periodo = 0;
+	double _adicion[2] = { 0.0, 0.0 };
+	int _saco_primero = 0;
+	// La tanda: el orden de cada equipo y por dónde va.
+	std::vector<int> _orden_tanda[2];
+	int _turno_tanda = 0;
+	bool _tanda_pateo = false;
+	// Los que entraron y todavía no pisaron la cancha.
+	std::vector<int> _entrando;
+	// El arquero que saca con la mano o de voleo (arrancó el gesto).
+	struct SaqueMano {
+		bool activo = false;
+		bool voleo = false;
+		int receptor = -1;
+		double x = 0.0, z = 0.0;
+	};
+	SaqueMano _mano;
+	// Un equipo quedó con menos de siete: el partido se suspende.
+	bool _suspendido = false;
 
 	double _medio_x() const;
 	double _medio_z() const;
@@ -478,6 +660,50 @@ private:
 	void _cerrar_remate(int resultado);
 	void _gol(int marca);
 	void _sacar_del_medio();
+
+	// Etapa 6 (canchita_reglas.cpp).
+	void _empezar_reglas();
+	void _parar(int tipo, int equipo, double x, double z, int64_t demora = 0);
+	int _elegir_ejecutor(int tipo, int equipo, double x, double z, int tipo_libre) const;
+	int _tipo_de_libre(int equipo, double x, double z) const;
+	void _lugar_del_ejecutor();
+	void _marcar_parada();
+	void _marcar_area(int ataca, int suben);
+	bool _pensar_en_parada(int i);
+	bool _avanzar_parada();
+	void _ejecutar_parada();
+	void _lanzar_lateral();
+	void _llevar_lateral();
+	// Lanza la pelota con las manos (o de voleo) desde `desde` hacia (tx, tz),
+	// en una parábola a `elevacion` que llega a la cintura; como un pase a
+	// `receptor`.
+	void _lanzar_a(int i, V3 desde, double tx, double tz, double elevacion, double rapidez_max, int receptor);
+	bool _decidir_saque_de_manos();
+	void _sacar_de_manos();
+	void _termina_saque(int i);
+	void _decidir_saque(int i, V3 bola, double t_patada);
+	bool _reloj();
+	void _fin_de_tiempo();
+	void _ubicar_saque_del_medio(int i, double &x, double &z) const;
+	void _desgastar();
+	double _distancia_parada(int i) const;
+	bool _plan_entrada(int i);
+	void _falta(int infractor, int victima, double gravedad, bool de_entrada);
+	void _tarjeta(int i, double gravedad);
+	void _lesion(int i, double factor);
+	void _caer(int i, int clip, double segundos);
+	void _quitar(int i, bool expulsado);
+	void _hacer_cambios(bool entretiempo);
+	void _cambiar(int sale, size_t entra);
+	void _anotar(int tipo, int equipo, int jugador, int otro, int detalle, double x, double z);
+	void _offside_al_patear(int pateador);
+	bool _offside_al_tocar(int i);
+	void _empezar_tanda();
+	void _siguiente_penal();
+	bool _avanzar_tanda();
+	int _id(int i) const {
+		return i >= 0 && i < int(jugadores.size()) ? jugadores[size_t(i)].reglas.id : -1;
+	}
 };
 
 } // namespace motor_v2

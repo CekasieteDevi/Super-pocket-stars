@@ -195,6 +195,27 @@ void Cerebro::empezar() {
 	cuenta = ContadoresCerebro();
 }
 
+void Cerebro::quitar(int i) {
+	if (i < 0 || i >= int(fichas.size())) {
+		return;
+	}
+	fichas.erase(fichas.begin() + i);
+	ultimo_decisor = -1;
+	ContadoresCerebro c = cuenta;
+	empezar();
+	cuenta = c;
+}
+
+void Cerebro::cambiar(int i, const FichaCerebro &f) {
+	if (i < 0 || i >= int(fichas.size())) {
+		return;
+	}
+	fichas[size_t(i)] = f;
+	ContadoresCerebro c = cuenta;
+	empezar();
+	cuenta = c;
+}
+
 // --- Geometría (MotorEspacial) ---
 
 double Cerebro::valor_posicion(double x, double z, int equipo) {

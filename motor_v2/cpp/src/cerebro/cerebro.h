@@ -24,14 +24,15 @@
 // - Línea defensiva: sin la pelota, centrales y laterales se paran a la misma
 //   altura (la media de sus anclas), así suben y bajan juntos.
 // - Offside en el cuadro del pase: `en_offside` mira la foto del momento en
-//   que sale la pelota. Por ahora solo se cuenta; cobrarlo es la etapa 6.
+//   que sale la pelota. La etapa 6 lo cobra (canchita_reglas.cpp).
 //
 // Etapa 5: el remate (la opción `tiro` del motor espacial, DEC_REMATE) y
 // adónde y cómo patear (elegir_remate, con el valor que da el planeador). Lo
 // que hace el arquero lo resuelve la canchita (canchita.h).
 //
-// Qué NO entra todavía: gambeta (faltan los clips de regate) y pelota parada
-// (etapa 6).
+// Qué NO entra todavía: gambeta (faltan los clips de regate). La pelota parada
+// de la etapa 6 la arma la canchita (canchita_reglas.cpp) y le pide al
+// cerebro la decisión del que saca.
 //
 // Unidades: el motor espacial contaba en ticks de 0,25 s. Acá todo va en
 // segundos; los parámetros que vienen de data/utility_pesos.json en ticks se
@@ -403,6 +404,11 @@ public:
 	void agregar(const FichaCerebro &f);
 	// Arma los perfiles y deja los planes en cero.
 	void empezar();
+	// Etapa 6: se va el jugador `i` (expulsado o lesionado sin cambio) o lo
+	// reemplaza otro con la ficha `f`. Los planes vuelven a cero, como en
+	// empezar(); lo contado sigue.
+	void quitar(int i);
+	void cambiar(int i, const FichaCerebro &f);
 	// Lo que cambia el plan de todos: transición, ritmo, marcador, línea de
 	// offside, línea defensiva, defensa, desmarques y grilla de apoyo. Cada
 	// cosa con su propio reloj, como en el motor espacial.

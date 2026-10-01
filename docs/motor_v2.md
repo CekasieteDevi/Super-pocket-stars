@@ -558,6 +558,80 @@ El motor actual y el abstracto salen de `_diag_embudo_remates.gd` (40 partidos p
 - **Qué:** laterales, saques de arco, córners, faltas por contacto, tarjetas, offside, penales y tanda, cambios, lesiones, entretiempo con cambio de lado. Se reusa la lógica de ubicación de `_ubicar_para_el_balon_parado`, barrera y ejecutor.
 - **Pasa si:** un partido de 90 minutos completo sin intervención, con todas las reanudaciones, y sin ningún corte de cámara por un jugador que camina 17 ticks hasta la línea.
 
+#### Resultado (2026-10-01): pasa sin vista; falta la revisión visual
+
+Hecha en la nube. Test: `tests/test_reglas_v2.gd`. Medición: `tests/_diag_reglas_v2.gd` (varias semillas). Laboratorio: `motor_v2/laboratorio_reglas.tscn`.
+
+- **Código:**
+  - `motor_v2/cpp/src/reglas.h`: los parámetros (`ParametrosReglas`), lo de cada jugador que leen las reglas (`FichaReglas`), los tipos de parada y los eventos.
+  - `motor_v2/cpp/src/canchita_reglas.cpp`: la parte de `Canchita` que hace las reglas (la misma clase que `canchita.cpp`, en otro archivo). Se activan con `configurar_reglas`: sin reglas el PARTIDO sigue con las reanudaciones del banco y los tests de las etapas 4 y 5 dan las mismas huellas.
+  - `canchita.cpp`: los enganches (pensar, gatillo, toques, rebotes, salidas, gol) y la entrada (`TOQUE_ENTRADA`).
+  - `cerebro.h/.cpp`: `quitar` y `cambiar` (el que se va y el que entra; los planes vuelven a cero).
+  - `CanchitaV2Nativa`: `configurar_reglas`, `configurar_reglas_equipo`, `agregar_suplente`, `reglas_de_fabrica`, `eventos`, `get_ids`, `get_energias`, `get_afuera` y `get_estado`. `FisicaV2` suma `parametros_reglas`, `reglas_del_club` y `reglas_de`. `CerebroV2.armar_partido(..., reglas, tanda)` arma el partido con el banco.
+  - `data/fisica_v2.json`, sección `reglas`. Lo que ya existía sale de donde estaba: el tiro libre de `data/utility_pesos.json`, las medidas y el ejecutor del motor espacial, las franjas y el desgaste de `Cansancio`, las tarjetas de `MatchEngine` y `Arbitro`, los cambios de `Team`.
+  - `motor_v2/partido_visto_v2.gd` (`PartidoVistoV2`): lo que lee la vista. Suma a los que salen y gira la cancha en el segundo tiempo. `VistaV2.ids` le pone su cara al que entra.
+- **Nadie adjudica:** la falta sale del contacto: el pie de la entrada llega a las piernas del rival antes que a la pelota. El offside sale de la foto del pase. Gol, palo o atajada del penal salen del vuelo. Lo único que se sortea es lo que no es físico: la tarjeta, la lesión y el lado que elige el arquero en el penal.
+
+**El reloj:** dos tiempos de 45 minutos con agregado (un minuto, más 30 s por gol, cambio y lesión y 15 s por tarjeta, hasta 5 minutos). El tiempo se cierra con la pelota lejos de un área o a los 30 s del final. En el entretiempo cada uno recupera parte de la energía (`MotorEspacial._recuperar_entretiempo`), entran los cambios y los equipos cambian de lado. El motor sigue con el equipo 0 atacando hacia +x: la vista gira la cancha 180° (`lado`) y el viento da la vuelta. Con `tanda`, el empate se define por penales.
+
+**Las reanudaciones:** el juego se corta, la pelota que salió se repone en su lugar a 1 s y el ejecutor llega corriendo a su lugar. Nadie se teletransporta. Se saca cuando pasó la pausa mínima y los que tienen marca llegaron a 2 m de ella, o al tope pase lo que pase (`pausa_seg` y `espera_max_seg`). Mientras dura la parada nadie toca la pelota y los rivales respetan la distancia (9,15 m; 2 m en el lateral; afuera del área en el saque de arco).
+
+- **Ejecutor** (`MotorEspacial._elegir_ejecutor`): el arquero en el saque de arco; el de más centros en el córner y en el tiro libre que se cuelga; el de más tiros libres en el directo; el de más tiro en el penal. Los tres, de los que están a 22 m. En el lateral y en el tiro libre corto, el que antes llega.
+- **Lateral:** con las dos manos desde arriba de la cabeza (`Lateral_Prepara` y `Lateral`), en una parábola a un compañero libre entre 4 y 22 m. Sale desde la línea: con las manos afuera, la pelota que se soltaba contaba como otro lateral (297 seguidos en un partido).
+- **Córner y tiro libre:** el tipo de tiro libre es el de `MotorEspacial.tipo_de_falta` (al arco, colgado o corto). Al área suben los de más amenaza aérea según el estilo (`Estilos.suben_al_corner`; dos menos en un centro de tiro libre, cuatro menos en un directo). Uno queda atrás y los demás esperan el rebote al borde del área. Cada defensor toma a uno, del lado del arco; los que sobran cuidan los palos y el punto penal. En el directo, barrera de 2 a 5 a 9,15 m (`MotorEspacial._tamano_barrera`).
+- **El que saca con el pie** es el poseedor de una pelota quieta: el penal y el directo van al arco (`elegir_remate`), el córner y el centro de tiro libre a la cabeza del que más amenaza, el resto pide al cerebro un pase (un saque se juega, no se conduce).
+- **El arquero con la pelota en las manos** (lo pendiente de la etapa 5): a un compañero libre con la mano (`Arquero_Lanza`); si no hay y lo apuran, de voleo (`Arquero_Voleo`); si no, la suelta y la juega con el pie.
+
+**Offside:** en el cuadro del pase o del remate quedan anotados los compañeros adelantados (`Cerebro::en_offside`). Si uno de ellos juega la pelota antes de que la toque otro, es offside y tiro libre indirecto donde estaba. Un rebote o una atajada no lo habilitan. Del lateral, del saque de arco y del córner no hay offside.
+
+**Faltas y tarjetas:** el defensor que contiene la pelota del rival a 2 m o menos se tira (`Barrida`) con una chance por cada vez que piensa según quite y barrida; ya amonestado, con el 40%. Si su pie pasa a 0,35 m del medio de un rival antes de tocar la pelota, es falta. En un cruce de dos piernas en la pelota, el que pierde puede pegarle al otro. La gravedad sale de la rapidez del que entra y de si entra de atrás. La tarjeta es la tirada de `MatchEngine._chequear_tarjeta` con la falta de verdad: 0,18 amarillas por falta (lo del fútbol real) por la gravedad, roja directa con la razón de `MatchEngine`, dos amarillas roja. El expulsado sale caminando y el equipo sigue con diez. Con menos de siete se suspende. La falta en el área es penal. **Punto de contacto de la entrada:** el de `Barrida` está a 0,37 m (la tibia); con su alto la entrada no tocaba ninguna pelota, así que la entrada usa la franja del pie.
+
+**Penales:** todos afuera del área y a 9,15 m, el arquero en la línea. El arquero no espera a leer la patada: elige lado y se tira en la patada, y adivina con chance 0,55. Esperando su reacción no llegaba a ninguno (11 de 11 adentro). En la tanda patean de a uno, alternados, cada equipo en el arco que atacó; los demás miran desde el círculo central.
+
+**Lesiones, energía y cambios:** la energía baja con el desgaste de `Cansancio` cobrado según cuánto corre cada uno; la franja baja punta y aceleración. El que recibe una falta se puede lesionar (`Lesiones.evaluar_riesgo` por el cansancio y la gravedad): queda en el piso y sale en la parada siguiente. Los cambios entran en las paradas largas (saque de arco, tiro libre, saque del medio) y en el entretiempo: sale el lesionado y, desde el minuto 55, el que bajó del umbral del club (`MatchEngine._procesar_cambios_equipo`); entra el de más media del banco en su puesto, frente al banco, y el saque espera a que pise la cancha. El que sale camina hasta el lateral.
+
+| Medido (`_diag_reglas_v2`, 10 partidos de 90 min, semilla 20261010) | Media por partido | Mínimo-máximo |
+| --- | --- | --- |
+| Minutos jugados (con el agregado) | 99,3 | 96,0-100,7 |
+| Saques del medio / laterales / saques de arco / córners / tiros libres / penales | 20,7 / 31,5 / 24,3 / 5,8 / 34,0 / 0,9 | |
+| Lateral: del corte al saque | 1,9 s | máximo 5,6 s |
+| Laterales de más de 4,25 s (17 ticks), todos con el ejecutor corriendo | 1,4 | 0-4 |
+| Veces que el ejecutor del lateral camina hacia la línea (medio segundo seguido) | 0 | 0 |
+| Saques con el ejecutor lejos de la pelota | 0 | 0 |
+| Entradas / limpias / faltas de entrada / faltas de cruce | 137 / 52 / 26,8 / 1,3 | |
+| Faltas | 28,1 | 21-36 |
+| Amarillas / rojas (directas) | 4,8 / 0,5 (0,1) | 3-8 / 0-2 |
+| Offside cobrados | 6,8 | 1-20 |
+| Penales (convertidos) | 0,9 (0,6) | 0-2 |
+| Lesiones / cambios | 0,7 / 6,4 | 0-2 / 1-10 |
+| Tiros libres cortos / colgados / directos | 23,5 / 9,4 / 1,1 | |
+| Saques del arquero con la mano | 15,0 | 7-25 |
+| Goles | 18,7 | 7-29 |
+| Correcciones de la pelota / SALTO_PELOTA / peor paso de un cuerpo | 0 / 0 / 0,07 m | máximo 0,16 m |
+| Costo del partido sin vista (en la nube) | 2,5 s | 2,2-3,9 s |
+
+| Penales (tandas de 8 partidos cortos empatados) | Medido | Fútbol real |
+| --- | --- | --- |
+| Adentro | 77% (54 de 70) | 75-78% |
+
+- **Laboratorio:** con pantalla muestra el reloj, el marcador, la parada en curso y lo último que pasó; las flechas apuran hasta x16 para llegar al segundo tiempo y "R" arma otro partido. Con `--headless` simula `segundos=N` con la vista dibujando e imprime con `[lab_reglas]` (0,35 ms por paso con la vista en la nube; cruza el entretiempo y arma la vista de nuevo en cada cambio).
+
+**Pasa si, uno por uno:**
+
+- **Un partido de 90 minutos completo sin intervención:** pasa. Los tres partidos del test y los diez de la medición terminan solos, con dos tiempos y su agregado. La tanda termina con un ganador.
+- **Con todas las reanudaciones:** pasa. Saque del medio, lateral, saque de arco, córner, tiro libre (corto, colgado y directo) y penal aparecen y se sacan todos.
+- **Sin ningún corte de cámara por un jugador que camina hasta la línea:** pasa. El ejecutor del lateral nunca camina: llega corriendo y en 1,9 s de media. Hay 1,4 laterales por partido que tardan más de los 17 ticks (4,25 s) del motor espacial, siempre con el ejecutor corriendo 20 a 30 m: se ven enteros, no hay nada que cortar. Nadie aparece encima de la pelota y nadie salta más de 0,16 m entre pasos.
+
+**Qué falta:**
+
+1. **Calibración (etapa 7):** goles (18,7 por partido), offside (6,8 de media y hasta 20 en un partido), penales (0,9 por partido, el real 0,3), amarillas (4,8) y rojas (0,5, casi todas por doble amarilla: el que presiona junta las faltas). Las lesiones y los cambios son del orden del motor espacial.
+2. **El córner y el tiro libre esperan casi siempre el tope (8 s):** los que van al área no llegan a 2 m de su marca. Se ve a los que llegan corriendo al área; se puede bajar el tope o la exigencia si en la revisión visual se hace largo.
+3. **Ventaja y bote a tierra:** el árbitro cobra toda falta (no da ventaja) y no hay bote a tierra: la lesión sale solo de una falta, y el lesionado se va en la parada siguiente.
+4. **Tanda en dos arcos:** cada equipo patea en el arco que atacó (el motor tiene a cada equipo atacando siempre el mismo arco).
+5. **El voleo del arquero casi no sale:** los rivales se alejan mientras tiene la pelota en las manos y casi siempre hay un compañero libre para la mano.
+6. **Vista:** no hay árbitro ni tarjeta en la cancha, ni repeticiones. El laboratorio dibuja todo lo demás; la integración con relato, estadísticas, HUD y minimapa (que leen `eventos`) es la etapa 8.
+7. **Teléfono:** la biblioteca de Linux está rearmada; faltan rearmar las de Windows y Android en la PC y la revisión visual.
+
 ### Etapa 7 — Calibración
 
 - **Qué:** 200 partidos por división sin vista. Se ajustan `utility_pesos.json` y el modelo de error hasta que goles, remates, posesión, pases, faltas y tarjetas caigan en los rangos del motor actual (sección 11 de `docs/motor_espacial.md`) y el mejor equipo gane lo que tiene que ganar.
