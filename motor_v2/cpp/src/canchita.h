@@ -328,6 +328,11 @@ struct Saliente {
 	int id = -1;
 	double x = 0.0, z = 0.0;
 	bool expulsado = false;
+	// El expulsado espera parado a que el árbitro le muestre la roja y recién
+	// después sale (NUNCA no: sale enseguida).
+	int64_t espera_hasta = -1;
+	double factor = 1.0;
+	bool saliendo = false;
 };
 
 // Etapa 6: un suplente, con todo lo que necesita para entrar.
@@ -434,9 +439,30 @@ public:
 	int parada_ejecutor() const {
 		return _parada.activa ? _parada.ejecutor : -1;
 	}
+	// Paso del último corte al saque después de una tarjeta (-1 si no hubo):
+	// la vista corta la cámara en ese paso.
+	int64_t corte_paso = -1;
+	// El que tiene el lateral en las manos (-1 si nadie).
+	int lateral_en_manos() const {
+		return _parada.activa && _parada.en_manos ? _parada.ejecutor : -1;
+	}
 	V3 parada_punto() const {
 		return { _parada.x, 0.0, _parada.z };
 	}
+	// Laboratorio de reanudaciones: el partido nunca las llama. Cortan el juego
+	// con las mismas funciones que el partido (_parar, _falta, _fin_de_tiempo),
+	// así lo que se ve es lo que haría el partido. Devuelven false si no se
+	// puede (sin reglas, en la tanda o terminado).
+	// Córner, tiro libre, penal o lateral para `equipo`. El córner y el lateral
+	// salen del lado de `z`; el tiro libre, desde (x, z); el penal, de su punto.
+	bool forzar_parada(int tipo, int equipo, double x, double z);
+	// Falta del rival más cercano sobre el que lleva la pelota. Solo con el
+	// rival a la distancia de una entrada: si no, devuelve false y el
+	// laboratorio prueba en el paso siguiente. `tarjeta`: 0 ninguna, 1
+	// amarilla, 2 roja. Con `lesion`, el que la recibe sale lesionado y entra
+	// su cambio.
+	bool forzar_falta(int tarjeta, bool lesion);
+	bool forzar_fin_de_tiempo();
 
 	// Planeador (cerebro.h): el margen de un pase con la física del toque,
 	// desde la pelota y el momento de la patada del que está decidiendo.
@@ -460,6 +486,8 @@ private:
 	int64_t _tray_paso = 0;
 	// Desde qué paso los demás ya vieron la pelota nueva (reacción).
 	int64_t _visto_paso = 0;
+	// Paso de la última tarjeta: la parada de esa falta espera al árbitro.
+	int64_t _tarjeta_paso = -1;
 	int _reaccion_pasos = 12;
 	std::vector<int> _k_llega;
 	std::vector<double> _t_llega;
@@ -541,6 +569,8 @@ private:
 		bool tanda = false;
 		// Pasos seguidos que el ejecutor va caminando (detector).
 		int64_t lento_pasos = 0;
+		// Con tarjeta: el paso del corte al saque (-1 si no hay).
+		int64_t corte_en = -1;
 	};
 	Parada _parada;
 	// Adónde va cada uno en la parada (si tiene_marca).
@@ -671,6 +701,7 @@ private:
 	void _marcar_area(int ataca, int suben);
 	bool _pensar_en_parada(int i);
 	bool _avanzar_parada();
+	void _cortar_al_saque();
 	void _ejecutar_parada();
 	void _lanzar_lateral();
 	void _llevar_lateral();
@@ -688,9 +719,13 @@ private:
 	void _desgastar();
 	double _distancia_parada(int i) const;
 	bool _plan_entrada(int i);
-	void _falta(int infractor, int victima, double gravedad, bool de_entrada);
+	// `tarjeta` y `lesion`: -1 las sortea (el partido); el laboratorio las elige
+	// (tarjeta 0 ninguna, 1 amarilla, 2 roja; lesion 0 o 1).
+	void _falta(int infractor, int victima, double gravedad, bool de_entrada, int tarjeta = -1, int lesion = -1);
 	void _tarjeta(int i, double gravedad);
+	void _sacar_tarjeta(int i, bool roja);
 	void _lesion(int i, double factor);
+	void _lesionar(int i);
 	void _caer(int i, int clip, double segundos);
 	void _quitar(int i, bool expulsado);
 	void _hacer_cambios(bool entretiempo);

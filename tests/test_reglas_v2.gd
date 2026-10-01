@@ -135,42 +135,51 @@ func _partidos() -> void:
 		"hay cambios, cinco por equipo como mucho (%d y %d)" % [suma["cambios_0"], suma["cambios_1"]])
 
 
-## Con rojas y lesiones a propósito (muchas más que en un partido): el que se
-## va sale de la cancha, los índices de los que siguen se reacomodan y el
-## partido termina igual.
+## Con dos rojas y una lesión a propósito (CanchitaV2Nativa.forzar_falta, la
+## misma falta del partido con la tarjeta elegida): el que se va sale de la
+## cancha, el saque lo espera, los índices de los que siguen se reacomodan y
+## el partido termina igual. Antes subía roja_por_falta y esperaba que
+## salieran solas: daba de 0 a 8 rojas según la semilla.
 func _expulsiones() -> void:
-	var semilla := SEED + 50
-	var c: Object = CerebroV2.armar_partido(semilla, "", "", -1, -1, true)
-	var r := FisicaV2.parametros_reglas()
-	r["minutos_tiempo"] = 20.0
-	r["roja_por_falta"] = 0.12
-	r["lesion_por_contacto"] = 60.0
-	c.configurar_reglas(r)
-	c.empezar(CanchitaV2Nativa.PARTIDO, semilla)
+	var c := _corto(SEED + 50, 20.0, false)
 	var inicial: int = c.cantidad()
+	# Minuto en que se pide cada una: [minuto, tarjeta, lesión]. Sale en el
+	# primer cruce que haya desde ahí.
+	var pedidas := [[2.0, 2, false], [6.0, 2, false], [10.0, 0, true]]
 	var salidas := 0
 	var pasos := 0
 	var en_cancha_ok := true
+	var sin_esperar := 0
+	var medio_ancho := ProyeccionPartido.MEDIO_ANCHO
 	while str(c.get_estado()["periodo"]) != "terminado" and pasos < 60 * 60 * 60:
-		c.simular(60)
-		pasos += 60
-		salidas = maxi(salidas, (c.get_afuera() as Array).size())
-		var ids: PackedInt32Array = c.get_ids()
+		c.avanzar()
+		pasos += 1
+		if not pedidas.is_empty() and pasos >= float(pedidas[0][0]) * 3600.0 				and c.forzar_falta(int(pedidas[0][1]), bool(pedidas[0][2])):
+			pedidas.pop_front()
+		if pasos % 30 != 0:
+			continue
+		var afuera: Array = c.get_afuera()
+		salidas = maxi(salidas, afuera.size())
+		if str(c.get_estado()["parada"]) == "nada":
+			for a in afuera:
+				if absf((a["pos"] as Vector2).y) < medio_ancho - 0.5:
+					sin_esperar += 1
 		var vistos := {}
-		for id in ids:
+		for id in c.get_ids():
 			if vistos.has(id) or id < 0:
 				en_cancha_ok = false
 			vistos[id] = true
 	var k: Dictionary = c.contadores()
 	var rojas: int = int(k["rojas_0"]) + int(k["rojas_1"])
 	var menos: int = inicial - c.cantidad()
-	_ok(str(c.get_estado()["periodo"]) == "terminado" and rojas >= 2 and menos >= rojas
-			and menos <= rojas + int(k["lesiones"]) and en_cancha_ok,
+	_ok(pedidas.is_empty() and str(c.get_estado()["periodo"]) == "terminado" and rojas >= 2 and int(k["lesiones"]) >= 1
+			and menos >= rojas and menos <= rojas + int(k["lesiones"]) and en_cancha_ok,
 		"con %d rojas y %d lesiones el partido termina, con %d en cancha y sin ids repetidos" % [rojas, k["lesiones"],
 			c.cantidad()])
 	_ok(salidas > 0 and int(k["correcciones"]) == 0 and float(k["peor_salto_cuerpo_m"]) < SALTO_MAX_M,
-		"los que se van salen caminando (hasta %d a la vez) y nadie salta (peor %.2f m)" % [salidas,
+		"los que se van salen por sus medios (hasta %d a la vez) y nadie salta (peor %.2f m)" % [salidas,
 			k["peor_salto_cuerpo_m"]])
+	_ok(sin_esperar == 0, "el saque espera a que el que se va salga de la cancha (%d veces no)" % sin_esperar)
 
 
 ## Un partido corto empatado se define por penales y la tanda tiene ganador.

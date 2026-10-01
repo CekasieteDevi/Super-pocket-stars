@@ -89,6 +89,9 @@ struct ParametrosReglas {
 	double adicion_cambio_seg = 30.0;
 	double adicion_lesion_seg = 30.0;
 	double adicion_tarjeta_seg = 15.0;
+	// Después de una tarjeta el saque espera esto: el árbitro corre hasta el
+	// jugador y se la muestra (Tarjeta_Completa dura 2,5 s).
+	double tarjeta_seg = 4.5;
 	// Entretiempo (MotorEspacial._recuperar_entretiempo): recupera esta
 	// fracción de lo perdido, hasta el tope.
 	double recuperacion_entretiempo = 0.25;
@@ -111,12 +114,13 @@ struct ParametrosReglas {
 	double distancia_penal_m = 11.0;
 	double saque_arco_m = 5.5;
 	double radio_circulo_m = 9.15;
-	// Lateral: rapidez del lanzamiento con fuerza 0 y 100, a qué ángulo sale,
-	// desde qué alto (las manos arriba de la cabeza) y hasta qué distancia
-	// busca un compañero.
+	// Lateral: rapidez del lanzamiento con fuerza 0 y 100, a qué ángulo sale
+	// y hasta qué distancia busca un compañero. Sale de donde las manos la
+	// sueltan en el clip Lateral; lateral_alto_m (el alto de ese punto) solo
+	// se usa si falta el clip.
 	double lateral_min_ms = 9.0, lateral_max_ms = 15.0;
 	double lateral_elevacion_rad = 0.5;
-	double lateral_alto_m = 2.1;
+	double lateral_alto_m = 0.71;
 	double lateral_alcance_m = 22.0;
 	// Ejecutores: el mejor de los que están a esto de la pelota
 	// (MotorEspacial.DIST_MAX_AL_EJECUTOR); si no, el más cercano.

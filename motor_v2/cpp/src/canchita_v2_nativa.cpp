@@ -164,6 +164,7 @@ const NumeroReglas NUMEROS_REGLAS[] = {
 	{ "adicion_cambio_seg", &motor_v2::ParametrosReglas::adicion_cambio_seg },
 	{ "adicion_lesion_seg", &motor_v2::ParametrosReglas::adicion_lesion_seg },
 	{ "adicion_tarjeta_seg", &motor_v2::ParametrosReglas::adicion_tarjeta_seg },
+	{ "tarjeta_seg", &motor_v2::ParametrosReglas::tarjeta_seg },
 	{ "recuperacion_entretiempo", &motor_v2::ParametrosReglas::recuperacion_entretiempo },
 	{ "tope_entretiempo", &motor_v2::ParametrosReglas::tope_entretiempo },
 	{ "reponer_seg", &motor_v2::ParametrosReglas::reponer_seg },
@@ -847,6 +848,8 @@ Dictionary CanchitaV2Nativa::get_estado() const {
 	d["adicion"] = _c.adicion_seg();
 	d["lado"] = _c.lado();
 	d["suspendido"] = _c.suspendido();
+	d["paso"] = _c.paso;
+	d["corte"] = _c.corte_paso;
 	d["parada"] = PARADAS[std::clamp(_c.parada_tipo(), 0, motor_v2::PARADAS - 1)];
 	d["ejecutor"] = _c.parada_ejecutor();
 	motor_v2::V3 p = _c.parada_punto();
@@ -854,6 +857,27 @@ Dictionary CanchitaV2Nativa::get_estado() const {
 	d["goles_tanda"] = Vector2i(_c.goles_tanda[0], _c.goles_tanda[1]);
 	d["pateados_tanda"] = Vector2i(_c.pateados_tanda[0], _c.pateados_tanda[1]);
 	return d;
+}
+
+bool CanchitaV2Nativa::forzar_parada(const String &tipo, int64_t equipo, const Vector2 &pos) {
+	for (int k = 1; k < motor_v2::PARADAS; k++) {
+		if (tipo == PARADAS[k]) {
+			return _c.forzar_parada(k, int(equipo), pos.x, pos.y);
+		}
+	}
+	return false;
+}
+
+bool CanchitaV2Nativa::forzar_falta(int64_t tarjeta, bool lesion) {
+	return _c.forzar_falta(int(tarjeta), lesion);
+}
+
+bool CanchitaV2Nativa::forzar_fin_de_tiempo() {
+	return _c.forzar_fin_de_tiempo();
+}
+
+int64_t CanchitaV2Nativa::get_lateral_en_manos() const {
+	return _c.lateral_en_manos();
 }
 
 Array CanchitaV2Nativa::registro_remates() const {
@@ -984,6 +1008,10 @@ void CanchitaV2Nativa::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_energias"), &CanchitaV2Nativa::get_energias);
 	ClassDB::bind_method(D_METHOD("get_afuera"), &CanchitaV2Nativa::get_afuera);
 	ClassDB::bind_method(D_METHOD("get_estado"), &CanchitaV2Nativa::get_estado);
+	ClassDB::bind_method(D_METHOD("forzar_parada", "tipo", "equipo", "pos"), &CanchitaV2Nativa::forzar_parada);
+	ClassDB::bind_method(D_METHOD("forzar_falta", "tarjeta", "lesion"), &CanchitaV2Nativa::forzar_falta);
+	ClassDB::bind_method(D_METHOD("forzar_fin_de_tiempo"), &CanchitaV2Nativa::forzar_fin_de_tiempo);
+	ClassDB::bind_method(D_METHOD("get_lateral_en_manos"), &CanchitaV2Nativa::get_lateral_en_manos);
 	ClassDB::bind_method(D_METHOD("configurar_remate", "remate", "arquero"), &CanchitaV2Nativa::configurar_remate);
 	ClassDB::bind_method(D_METHOD("remate_de_fabrica"), &CanchitaV2Nativa::remate_de_fabrica);
 	ClassDB::bind_method(D_METHOD("rematar", "i", "golpe", "alto", "lateral"), &CanchitaV2Nativa::rematar);

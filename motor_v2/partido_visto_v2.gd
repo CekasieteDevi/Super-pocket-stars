@@ -130,6 +130,34 @@ func get_en_manos() -> int:
 	return partido.get_en_manos()
 
 
+func get_paso() -> int:
+	return int(partido.get_estado()["paso"])
+
+
+## Paso del último corte al saque después de una tarjeta (-1 si no hubo).
+func get_corte() -> int:
+	return int(partido.get_estado()["corte"])
+
+
+## La última tarjeta para el árbitro (ArbitroV2): {paso, roja, pos}, con el
+## lugar del jugador ya girado; {} si no hubo.
+func get_tarjeta() -> Dictionary:
+	var eventos: Array = partido.eventos()
+	for k in range(eventos.size() - 1, -1, -1):
+		var e: Dictionary = eventos[k]
+		if e["tipo"] == "amarilla" or e["tipo"] == "roja":
+			# Donde está ahora el que la recibe (frena unos metros después de
+			# la falta y espera ahí); si ya no está, donde fue.
+			var i := ids().rfind(int(e["jugador"]))
+			var pos: Vector2 = get_pos()[i] if i >= 0 else _girar(e["pos"])
+			return {"paso": int(e["paso"]), "roja": e["tipo"] == "roja", "pos": pos}
+	return {}
+
+
+func get_lateral_en_manos() -> int:
+	return partido.get_lateral_en_manos()
+
+
 func get_pelota_pos() -> Vector3:
 	return _girar3(partido.get_pelota_pos())
 

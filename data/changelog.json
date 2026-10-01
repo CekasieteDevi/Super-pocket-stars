@@ -1,4 +1,5 @@
 [
+	{"version": "0.7.83", "fecha": "2026-10-01", "cambio": "En el motor nuevo el árbitro muestra las tarjetas, el expulsado se va al vestuario y el lateral se saca con la pelota en las manos."},
 	{"version": "0.7.82", "fecha": "2026-10-01", "cambio": "Queda anotado lo que se vio al mirar los partidos con reglas del motor nuevo: los controles y los laterales todavía fallan."},
 	{"version": "0.7.81", "fecha": "2026-10-01", "cambio": "Las reglas y la pelota parada del motor nuevo ya andan en los teléfonos Android."},
 	{"version": "0.7.80", "fecha": "2026-10-01", "cambio": "Las reglas y la pelota parada del motor nuevo ya andan en computadoras con Windows."},

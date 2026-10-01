@@ -574,6 +574,21 @@ El motor actual y el abstracto salen de `_diag_embudo_remates.gd` (40 partidos p
   - **Conducción:** el jugador patea la pelota adelante y corre detrás de ella. El cerebro no tiene una decisión de "adelantar la pelota": es la conducción por toques a máxima velocidad.
   - **Sin revisar:** el usuario no vio goles, córners, tiros libres, penales, faltas, tarjetas, cambios ni segundo tiempo. El juego es tan al azar que en lo que miró no pasó nada de eso. El laboratorio sin pantalla da lo mismo en los primeros 10 minutos de su semilla: 0 goles, 6 laterales y 1 falta. Para revisar esas reanudaciones hay que apurar a x16 o armar un laboratorio que las fuerce.
   - Pelotazos, centros sin nadie y defensa sin coordinar ya estaban anotados en la revisión de la etapa 5. Controles, frenada, recepción y lateral son nuevos.
+- **Segunda revisión visual (2026-10-01), con las reanudaciones forzadas:** en un partido normal el usuario no llegaba a ver las reanudaciones. Se arman dos laboratorios que las fuerzan y se arregla lo que el usuario ve en ellos.
+  - **Laboratorios:** `motor_v2/laboratorio_reanudaciones.tscn` fuerza 11 escenas seguidas (córner, tiro libre con barrera, penal, falta con amarilla, con roja, con lesión y cambio, lateral, entretiempo, y córner, tiro libre y penal del visitante en el segundo tiempo). "N" pasa a la siguiente. `motor_v2/laboratorio_roja.tscn` muestra solo la roja y la repite. Los dos usan `laboratorio_reglas.gd` (`guion` y `solo`). Con `capturas=<carpeta>` el laboratorio guarda una imagen cada 0,5 s: así se revisó cada arreglo.
+  - **Cómo se fuerzan:** `Canchita::forzar_parada`, `forzar_falta` y `forzar_fin_de_tiempo` (C++). Cortan el juego con las mismas funciones del partido (`_parar`, `_falta`, `_fin_de_tiempo`). El partido nunca las llama. La falta forzada espera un cruce de verdad: el que lleva la pelota con un rival a la distancia de la entrada.
+  - **Lateral (arreglado):** el motor ponía la pelota a 2,1 m de alto y las manos del modelo llegan a 0,99 m. Ahora el motor la lleva donde las manos la sueltan (el punto de contacto del clip `Lateral`: 0,71 m de alto y 0,43 m adelante) y la vista la dibuja entre las manos mientras suben.
+  - **Tarjetas (nuevo):** el usuario no veía la falta ni la tarjeta, y el juego seguía mientras el expulsado salía. El orden que pidió el usuario, y que quedó:
+    1. Falta. El que la recibe cae y todos se quedan donde están.
+    2. El árbitro (`motor_v2/arbitro_v2.gd`, capa visual como `OficialesPartido`) llega en 2 s como mucho, se para a 1,1 m del jugador de frente a la cámara y muestra la tarjeta (`Tarjeta_Completa`). El motor espera `tarjeta_seg` (4,5 s).
+    3. Con roja, el expulsado sale corriendo (4,9 m/s) hacia el vestuario: el medio de la banda de la cámara.
+    4. Cuando cruza la línea (con amarilla, enseguida), la jugada se corta al saque: cada uno aparece en su lugar y se saca a los 0,75 s. Es lo que hace `VistaCancha3D._cortar_despues_de_tarjeta`.
+  - **El corte es un teletransporte a propósito.** Es el único del partido junto con el entretiempo. El detector de teletransportes no lo cuenta (el peor paso de un cuerpo sigue en 0,07 m).
+  - **El que se va:** salía de espaldas porque seguía mirando la jugada; ahora mira adonde va. El cambiado sale al trote y el lesionado al paso, por la banda más cercana. El saque espera a que crucen la línea.
+  - **Laboratorio:** la cámara se queda con el jugador mientras el árbitro muestra la tarjeta y se acerca (`VistaV2.acercamiento`); después sigue al que sale. Al armar la vista de nuevo (alguien entra o se va) la pantalla quedaba gris un cuadro: la vista vieja ahora tapa a la nueva hasta que dibuja.
+  - **Test:** la prueba de expulsiones de `test_reglas_v2` subía `roja_por_falta` y esperaba que salieran rojas: daba de 0 a 8 según la semilla. Ahora fuerza dos rojas y una lesión, y controla que el saque espere al que se va.
+  - **Huella:** el arreglo del lateral cambia el partido. `test_reglas_v2` da 4235184708021746737 en Windows (antes 7809787842291322285).
+  - **Visto por el usuario:** la roja queda bien. Falta que mire el resto del guion con estos arreglos.
 
 Hecha en la nube. Test: `tests/test_reglas_v2.gd`. Medición: `tests/_diag_reglas_v2.gd` (varias semillas). Laboratorio: `motor_v2/laboratorio_reglas.tscn`.
 
@@ -589,7 +604,7 @@ Hecha en la nube. Test: `tests/test_reglas_v2.gd`. Medición: `tests/_diag_regla
 
 **El reloj:** dos tiempos de 45 minutos con agregado (un minuto, más 30 s por gol, cambio y lesión y 15 s por tarjeta, hasta 5 minutos). El tiempo se cierra con la pelota lejos de un área o a los 30 s del final. En el entretiempo cada uno recupera parte de la energía (`MotorEspacial._recuperar_entretiempo`), entran los cambios y los equipos cambian de lado. El motor sigue con el equipo 0 atacando hacia +x: la vista gira la cancha 180° (`lado`) y el viento da la vuelta. Con `tanda`, el empate se define por penales.
 
-**Las reanudaciones:** el juego se corta, la pelota que salió se repone en su lugar a 1 s y el ejecutor llega corriendo a su lugar. Nadie se teletransporta. Se saca cuando pasó la pausa mínima y los que tienen marca llegaron a 2 m de ella, o al tope pase lo que pase (`pausa_seg` y `espera_max_seg`). Mientras dura la parada nadie toca la pelota y los rivales respetan la distancia (9,15 m; 2 m en el lateral; afuera del área en el saque de arco).
+**Las reanudaciones:** el juego se corta, la pelota que salió se repone en su lugar a 1 s y el ejecutor llega corriendo a su lugar. Nadie se teletransporta, salvo en el corte después de una tarjeta (ver la segunda revisión visual). Se saca cuando pasó la pausa mínima y los que tienen marca llegaron a 2 m de ella, o al tope pase lo que pase (`pausa_seg` y `espera_max_seg`). Mientras dura la parada nadie toca la pelota y los rivales respetan la distancia (9,15 m; 2 m en el lateral; afuera del área en el saque de arco).
 
 - **Ejecutor** (`MotorEspacial._elegir_ejecutor`): el arquero en el saque de arco; el de más centros en el córner y en el tiro libre que se cuelga; el de más tiros libres en el directo; el de más tiro en el penal. Los tres, de los que están a 22 m. En el lateral y en el tiro libre corto, el que antes llega.
 - **Lateral:** con las dos manos desde arriba de la cabeza (`Lateral_Prepara` y `Lateral`), en una parábola a un compañero libre entre 4 y 22 m. Sale desde la línea: con las manos afuera, la pelota que se soltaba contaba como otro lateral (297 seguidos en un partido).
@@ -644,9 +659,10 @@ Hecha en la nube. Test: `tests/test_reglas_v2.gd`. Medición: `tests/_diag_regla
 3. **Ventaja y bote a tierra:** el árbitro cobra toda falta (no da ventaja) y no hay bote a tierra: la lesión sale solo de una falta, y el lesionado se va en la parada siguiente.
 4. **Tanda en dos arcos:** cada equipo patea en el arco que atacó (el motor tiene a cada equipo atacando siempre el mismo arco).
 5. **El voleo del arquero casi no sale:** los rivales se alejan mientras tiene la pelota en las manos y casi siempre hay un compañero libre para la mano.
-6. **Vista:** no hay árbitro ni tarjeta en la cancha, ni repeticiones. El laboratorio dibuja todo lo demás; la integración con relato, estadísticas, HUD y minimapa (que leen `eventos`) es la etapa 8.
-7. **Teléfono:** bibliotecas de Linux, Windows y Android rearmadas. Falta comparar la huella de `test_reglas_v2` de Windows (7809787842291322285) con la de Linux y la del teléfono.
-8. **Fallas de la revisión visual:** el agarre del lateral, los controles que se escapan, la frenada, la recepción entre las piernas, la pelea lejos de la pelota y el saque de arco al lateral.
+6. **Vista:** el árbitro está y muestra las tarjetas. Faltan los asistentes, el cuarto árbitro con el tablero del cambio y las repeticiones. La integración con relato, estadísticas, HUD y minimapa (que leen `eventos`) es la etapa 8.
+7. **Bibliotecas:** Windows y Android rearmadas con los arreglos de la segunda revisión visual. **Falta rearmar la de Linux** en la nube y comparar la huella de `test_reglas_v2` (4235184708021746737 en Windows) con la de Linux y la del teléfono.
+8. **Fallas de la revisión visual que siguen:** los controles que se escapan, la frenada, la recepción entre las piernas, la pelea lejos de la pelota y el saque de arco al lateral. El lateral y las tarjetas están arreglados.
+9. **Tiempos por partido con estos arreglos:** la medición de arriba (`_diag_reglas_v2`) es anterior. Las tarjetas y los que salen suman espera: hay que volver a medir antes de calibrar.
 
 ### Etapa 7 — Calibración
 

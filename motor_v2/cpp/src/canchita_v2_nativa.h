@@ -113,13 +113,21 @@ public:
 	// Etapa 6: lo que pasó ({paso, tipo, equipo, jugador, otro, detalle, pos};
 	// jugador y otro son ids), el id y la energía de cada uno, los que se van
 	// ({id, equipo, pos, rumbo, rapidez, expulsado, accion, tiempo_accion}) y el estado del partido
-	// ({periodo, reloj, adicion, lado, parada, ejecutor, punto, goles_tanda,
-	// pateados_tanda}).
+	// ({periodo, reloj, adicion, lado, paso, corte, parada, ejecutor, punto,
+	// goles_tanda, pateados_tanda}).
 	Array eventos() const;
 	PackedInt32Array get_ids() const;
 	PackedFloat32Array get_energias() const;
 	Array get_afuera() const;
 	Dictionary get_estado() const;
+	// Laboratorio de reanudaciones (canchita.h, forzar_*). `tipo` es el nombre
+	// de la parada: "corner", "tiro_libre", "penal" o "lateral".
+	bool forzar_parada(const String &tipo, int64_t equipo, const Vector2 &pos);
+	bool forzar_falta(int64_t tarjeta, bool lesion);
+	bool forzar_fin_de_tiempo();
+	// El que tiene el lateral en las manos (-1 si nadie): la vista le dibuja
+	// la pelota entre las manos.
+	int64_t get_lateral_en_manos() const;
 	// PARTIDO: lo que pensó el cerebro.
 	Dictionary contadores_cerebro() const;
 	// Papel en la defensa de cada uno (cerebro.h, PapelDefensa).

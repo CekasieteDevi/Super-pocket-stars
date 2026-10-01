@@ -33,12 +33,19 @@ constexpr double ARQUERO_EN_LA_LINEA_M = 0.5;
 constexpr double AFUERA_M = 3.0;
 // El que entra espera en la línea, frente al banco (del lado de -z).
 constexpr double BANCO_Z = -(Cerebro::MEDIO_ANCHO + 1.0);
-// El saliente camina (MotorEspacial: el expulsado y el cambiado salen al paso).
-constexpr double FACTOR_SALIR = 0.35;
+// El que sale va al trote, el expulsado corriendo y el lesionado, al paso.
+// Con todos al paso (0,35, como en el motor espacial) el saque esperaba hasta
+// 17 s: en la revisión visual se hacía largo.
+constexpr double FACTOR_SALIR = 0.5;
+constexpr double FACTOR_SALIR_EXPULSADO = 0.85;
+constexpr double FACTOR_SALIR_LESIONADO = 0.35;
 // Detector de la etapa 6: el ejecutor que, lejos de su lugar y ya arrancado,
 // va a menos de esto, camina.
 constexpr double CAMINA_MS = 3.0;
 constexpr double ARRANCA_SEG = 0.8;
+// Después del corte de la tarjeta, cuánto falta para el saque: los 3 ticks
+// de VistaCancha3D._cortar_despues_de_tarjeta (LATERAL_PREPARA_TICKS).
+constexpr double CORTE_ANTES_DEL_SAQUE_SEG = 0.75;
 constexpr double CAMINA_SOSTENIDA_SEG = 0.5;
 // El que saca con el pie y no puede patear en este tiempo deja que saque otro.
 constexpr double SACANDO_MAX_SEG = 6.0;
@@ -91,6 +98,8 @@ void Canchita::_empezar_reglas() {
 	afuera.clear();
 	_entrando.clear();
 	_adelantados.clear();
+	_tarjeta_paso = -1;
+	corte_paso = -1;
 	_inicio_periodo = paso;
 	_adicion[0] = _adicion[1] = 0.0;
 	goles_tanda[0] = goles_tanda[1] = 0;
@@ -534,8 +543,12 @@ bool Canchita::_pensar_en_parada(int i) {
 	JugadorCanchita &j = jugadores[size_t(i)];
 	Cuerpo &c = j.cuerpo;
 	const Parada &p = _parada;
-	if (paso < j.en_el_piso_hasta) {
+	if (paso < j.en_el_piso_hasta || p.corte_en >= 0) {
+		// En el piso, o con tarjeta: la jugada queda cortada. Cada uno se
+		// queda donde está hasta el corte al saque. Yendo a sus lugares, el
+		// que saca y la barrera tapaban al árbitro y al de la tarjeta.
 		j.persigue = false;
+		j.toque = TOQUE_NADA;
 		c.ir_a(c.x, c.z, 0.3, true);
 		return true;
 	}
@@ -585,6 +598,17 @@ bool Canchita::_avanzar_parada() {
 		pelota.poner({ p.x, param_pelota.radio, p.z }, {}, {});
 		p.repuesta = true;
 		_cambio = true;
+	}
+	if (p.corte_en >= 0 && paso >= p.corte_en) {
+		// Con roja, el corte espera a que el expulsado cruce la línea.
+		bool saliendo = false;
+		for (const Saliente &s : afuera) {
+			saliendo = saliendo || (s.expulsado && std::abs(s.cuerpo.z) < _medio_z());
+		}
+		if (!saliendo) {
+			p.corte_en = -1;
+			_cortar_al_saque();
+		}
 	}
 	if (p.sacando) {
 		// El que falla el gesto vuelve a intentar; si en SACANDO_MAX_SEG no
@@ -658,6 +682,16 @@ bool Canchita::_avanzar_parada() {
 		} else {
 			ubicados = false;
 			k++;
+		}
+	}
+	// El que se va (expulsado, lesionado o cambiado) sale de la cancha antes
+	// del saque. Con el juego andando mientras caminaba hacia afuera, en la
+	// revisión visual no se veía que se iba.
+	if (periodo < TANDA) {
+		for (const Saliente &s : afuera) {
+			if (std::abs(s.cuerpo.z) < _medio_z()) {
+				ubicados = false;
+			}
 		}
 	}
 	if (llego && paso >= p.minimo && ubicados) {
@@ -978,6 +1012,89 @@ void Canchita::_decidir_saque(int i, V3 bola, double t_patada) {
 	j.tipo_pase = d.tipo;
 }
 
+// --- Laboratorio de reanudaciones ---
+
+bool Canchita::forzar_parada(int tipo, int equipo, double x, double z) {
+	if (!reglas || modo != PARTIDO || periodo >= TANDA || (equipo != 0 && equipo != 1)) {
+		return false;
+	}
+	double lado_z = z >= 0.0 ? 1.0 : -1.0;
+	double gx = Cerebro::MEDIO_LARGO * _ataca(equipo);
+	if (tipo == CORNER) {
+		// El mismo lugar que usa el partido: 0,3 m adentro del banderín.
+		x = _ataca(equipo) * (_medio_x() - 0.3);
+		z = lado_z * (_medio_z() - 0.3);
+		cuenta.corners++;
+	} else if (tipo == PENAL) {
+		x = gx - _ataca(equipo) * param_reglas.distancia_penal_m;
+		z = 0.0;
+		cuenta.penales++;
+	} else if (tipo == LATERAL) {
+		x = std::clamp(x, -_medio_x() + 1.0, _medio_x() - 1.0);
+		z = lado_z * _medio_z();
+		cuenta.laterales++;
+	} else if (tipo != TIRO_LIBRE) {
+		return false;
+	}
+	if (_remate.activo) {
+		_cerrar_remate(REMATE_OTRO);
+	}
+	_parar(tipo, equipo, x, z);
+	return true;
+}
+
+bool Canchita::forzar_falta(int tarjeta, bool lesion) {
+	if (!reglas || modo != PARTIDO || periodo >= TANDA || _parada.activa) {
+		return false;
+	}
+	auto cercano = [this](int equipo, double x, double z) {
+		int mejor = -1;
+		double d_mejor = 1e18;
+		for (size_t i = 0; i < jugadores.size(); i++) {
+			const JugadorCanchita &j = jugadores[i];
+			if (j.equipo != equipo || j.arquero || j.lesionado) {
+				continue;
+			}
+			double d = hipot(j.cuerpo.x - x, j.cuerpo.z - z);
+			if (d < d_mejor) {
+				d_mejor = d;
+				mejor = int(i);
+			}
+		}
+		return mejor;
+	};
+	// Espera un cruce de verdad: el que lleva la pelota con un rival a la
+	// distancia de la entrada. Forzada con el rival a 4 m, el que la recibía
+	// caía solo y no se veía ninguna falta.
+	if (poseedor < 0 || jugadores[size_t(poseedor)].arquero) {
+		return false;
+	}
+	int victima = poseedor;
+	const JugadorCanchita &jv = jugadores[size_t(victima)];
+	int infractor = cercano(1 - jv.equipo, jv.cuerpo.x, jv.cuerpo.z);
+	if (infractor < 0) {
+		return false;
+	}
+	Cuerpo &ci = jugadores[size_t(infractor)].cuerpo;
+	if (hipot(ci.x - jv.cuerpo.x, ci.z - jv.cuerpo.z) > param_reglas.entrada_dist_m) {
+		return false;
+	}
+	// El que la hace se tira (el gesto de la entrada), como en una falta del partido.
+	if (param_reglas.clip_entrada >= 0 && ci.clip < 0) {
+		ci.empezar(param_reglas.clip_entrada);
+	}
+	_falta(infractor, victima, 1.0, true, std::clamp(tarjeta, 0, 2), lesion ? 1 : 0);
+	return true;
+}
+
+bool Canchita::forzar_fin_de_tiempo() {
+	if (!reglas || modo != PARTIDO || periodo >= TANDA) {
+		return false;
+	}
+	_fin_de_tiempo();
+	return true;
+}
+
 // --- Reloj ---
 
 // Terminó el tiempo (con su agregado): se cierra cuando la pelota no está en
@@ -1070,12 +1187,21 @@ void Canchita::_fin_de_tiempo() {
 	}
 }
 
-// El lateral: la pelota en las manos, arriba de la cabeza.
+// El lateral: la pelota en las manos. El motor la lleva donde las manos la
+// sueltan (el punto de contacto del clip Lateral): de ahí sale, y la vista la
+// dibuja entre las manos mientras suben. Con 2,1 m fijos quedaba a 1 m de la
+// cabeza: las manos del modelo llegan a 0,99 m y la sueltan a 0,71 m.
 void Canchita::_llevar_lateral() {
 	const Cuerpo &c = jugadores[size_t(_parada.ejecutor)].cuerpo;
-	double s, co;
-	mate::seno_coseno(c.rumbo, s, co);
-	pelota.poner({ c.x + s * 0.1, param_reglas.lateral_alto_m, c.z + co * 0.1 }, { c.vx, 0.0, c.vz }, {});
+	V3 manos;
+	if (param_reglas.clip_lateral >= 0) {
+		manos = punto_de_contacto(c, clips[size_t(param_reglas.clip_lateral)], c.rumbo);
+	} else {
+		double s, co;
+		mate::seno_coseno(c.rumbo, s, co);
+		manos = { c.x + s * 0.1, param_reglas.lateral_alto_m, c.z + co * 0.1 };
+	}
+	pelota.poner(manos, { c.vx, 0.0, c.vz }, {});
 }
 
 // --- Energía ---
@@ -1105,6 +1231,15 @@ void Canchita::_desgastar() {
 	}
 	for (size_t k = 0; k < afuera.size();) {
 		Saliente &s = afuera[k];
+		if (!s.saliendo && paso >= s.espera_hasta) {
+			s.saliendo = true;
+			s.cuerpo.ir_a(s.x, s.z, s.factor, true);
+			// Mira adonde va. Seguía mirando la jugada (el `mira` que traía
+			// del partido) y salía de espaldas.
+			s.cuerpo.mira = true;
+			s.cuerpo.mira_x = s.x;
+			s.cuerpo.mira_z = s.z;
+		}
 		s.cuerpo.paso(param_cuerpo, clips, PASO_SEG);
 		if (hipot(s.cuerpo.x - s.x, s.cuerpo.z - s.z) < 0.5) {
 			afuera.erase(afuera.begin() + int64_t(k));
@@ -1148,7 +1283,7 @@ bool Canchita::_plan_entrada(int i) {
 // La falta: el que la recibe cae, se sortean la tarjeta y la lesión con la
 // gravedad del contacto, y se para el juego: tiro libre, o penal si fue en el
 // área del que la hizo.
-void Canchita::_falta(int infractor, int victima, double gravedad, bool de_entrada) {
+void Canchita::_falta(int infractor, int victima, double gravedad, bool de_entrada, int tarjeta, int lesion) {
 	const JugadorCanchita &jv = jugadores[size_t(victima)];
 	int eq_inf = jugadores[size_t(infractor)].equipo;
 	int eq_vic = jv.equipo;
@@ -1169,15 +1304,74 @@ void Canchita::_falta(int infractor, int victima, double gravedad, bool de_entra
 		_cerrar_remate(REMATE_OTRO);
 	}
 	_caer(victima, param_reglas.clip_caer, param_reglas.caido_seg);
-	_lesion(victima, gravedad);
+	if (lesion < 0) {
+		_lesion(victima, gravedad);
+	} else if (lesion > 0) {
+		_lesionar(victima);
+	}
 	// La tarjeta puede sacar al infractor de la cancha: los índices cambian.
-	_tarjeta(infractor, gravedad);
+	if (tarjeta < 0) {
+		_tarjeta(infractor, gravedad);
+	} else if (tarjeta > 0) {
+		_sacar_tarjeta(infractor, tarjeta >= 2);
+	}
 	if (penal) {
 		cuenta.penales++;
 		_parar(PENAL, eq_vic, gx - _ataca(eq_vic) * param_reglas.distancia_penal_m, 0.0);
 	} else {
 		_parar(TIRO_LIBRE, eq_vic, x, z);
 	}
+	if (_tarjeta_paso == paso) {
+		// El árbitro llega y la muestra; después la jugada se corta al saque.
+		_parada.corte_en = paso + pasos_de(param_reglas.tarjeta_seg);
+		_parada.minimo = std::max(_parada.minimo, _parada.corte_en + pasos_de(CORTE_ANTES_DEL_SAQUE_SEG));
+		_parada.tope = std::max(_parada.tope, _parada.minimo);
+	}
+}
+
+// Después de la tarjeta la jugada se corta al saque, como en la tele y como
+// en el motor espacial (VistaCancha3D._cortar_despues_de_tarjeta): cada uno
+// aparece en su lugar del saque. Con roja, el corte espera a que el expulsado
+// salga corriendo de la cancha. Es el único corte del partido, junto con el
+// entretiempo: en el resto nadie se teletransporta. Sin el corte, después de
+// la tarjeta se miraba a todos yendo a su lugar.
+void Canchita::_cortar_al_saque() {
+	_parada.minimo = std::max(_parada.minimo, paso + pasos_de(CORTE_ANTES_DEL_SAQUE_SEG));
+	_parada.tope = std::max(_parada.tope, _parada.minimo);
+	for (size_t i = 0; i < jugadores.size(); i++) {
+		JugadorCanchita &j = jugadores[i];
+		Cuerpo &c = j.cuerpo;
+		if (j.lesionado && paso < j.en_el_piso_hasta) {
+			// El lesionado sigue en el piso donde cayó.
+			continue;
+		}
+		j.en_el_piso_hasta = -1;
+		if (!_pensar_en_parada(int(i)) || !c.tiene_objetivo) {
+			continue;
+		}
+		// previa = actual: el detector de teletransportes no cuenta el corte.
+		c.x = c.previa_x = c.objetivo_x;
+		c.z = c.previa_z = c.objetivo_z;
+		c.vx = c.vz = 0.0;
+		c.clip = -1;
+		c.fase = SIN_ACCION;
+		double dx = (c.mira ? c.mira_x : _parada.x) - c.x, dz = (c.mira ? c.mira_z : _parada.z) - c.z;
+		if (dx * dx + dz * dz > 1e-6) {
+			c.rumbo = mate::arcotangente2(dx, dz);
+		}
+	}
+	// Los lugares del saque pueden encimar a dos (la barrera): se separan
+	// acá, adentro del corte. Si no, se empujaban hasta 0,47 m en el paso
+	// siguiente, a la vista.
+	for (int k = 0; k < 8; k++) {
+		_separar_cuerpos();
+	}
+	for (JugadorCanchita &j : jugadores) {
+		j.cuerpo.previa_x = j.cuerpo.x;
+		j.cuerpo.previa_z = j.cuerpo.z;
+	}
+	corte_paso = paso;
+	_cambio = true;
 }
 
 // MatchEngine._chequear_tarjeta: una tirada sobre el que hizo la falta. La
@@ -1189,10 +1383,20 @@ void Canchita::_tarjeta(int i, double gravedad) {
 	double p_roja = r.roja_por_falta * j.reglas.factor_roja * g * g;
 	double p_amarilla = r.amarilla_por_falta * j.reglas.factor_amarilla * g;
 	double tirada = _azar.uno();
-	bool roja = false, doble = false;
 	if (tirada < p_roja) {
-		roja = true;
+		_sacar_tarjeta(i, true);
 	} else if (tirada < p_roja + p_amarilla) {
+		_sacar_tarjeta(i, false);
+	}
+}
+
+// Amarilla o roja directa. La segunda amarilla es roja.
+void Canchita::_sacar_tarjeta(int i, bool roja) {
+	JugadorCanchita &j = jugadores[size_t(i)];
+	const ParametrosReglas &r = param_reglas;
+	_tarjeta_paso = paso;
+	bool doble = false;
+	if (!roja) {
 		j.amarillas++;
 		if (j.amarillas >= 2) {
 			roja = doble = true;
@@ -1233,6 +1437,12 @@ void Canchita::_lesion(int i, double factor) {
 	if (_azar.uno() >= p) {
 		return;
 	}
+	_lesionar(i);
+}
+
+void Canchita::_lesionar(int i) {
+	JugadorCanchita &j = jugadores[size_t(i)];
+	const ParametrosReglas &r = param_reglas;
 	j.lesionado = true;
 	cuenta.lesiones++;
 	_adicion[lado() & 1] += r.adicion_lesion_seg;
@@ -1272,7 +1482,21 @@ void Canchita::_quitar(int i, bool expulsado) {
 		s.cuerpo.clip = -1;
 		s.cuerpo.fase = SIN_ACCION;
 	}
-	s.cuerpo.ir_a(s.x, s.z, FACTOR_SALIR, true);
+	if (expulsado) {
+		// El expulsado se va al vestuario: por el medio de la banda de la
+		// cámara (+z en el primer tiempo; en el segundo la vista gira la
+		// cancha y es -z).
+		s.x = 0.0;
+		s.z = (lado() == 0 ? 1.0 : -1.0) * (_medio_z() + AFUERA_M);
+	}
+	s.factor = expulsado ? FACTOR_SALIR_EXPULSADO : (j.lesionado ? FACTOR_SALIR_LESIONADO : FACTOR_SALIR);
+	if (expulsado && _tarjeta_paso == paso) {
+		// Se queda donde está hasta que el árbitro llega y le muestra la roja,
+		// y después sale corriendo. Saliendo enseguida, se iba antes de que
+		// se viera la tarjeta.
+		s.espera_hasta = paso + pasos_de(param_reglas.tarjeta_seg);
+		s.cuerpo.ir_a(s.cuerpo.x, s.cuerpo.z, 0.3, true);
+	}
 	afuera.push_back(s);
 	jugadores.erase(jugadores.begin() + i);
 	cerebro.quitar(i);
@@ -1422,7 +1646,7 @@ void Canchita::_cambiar(int sale, size_t entra) {
 		s.cuerpo.clip = -1;
 		s.cuerpo.fase = SIN_ACCION;
 	}
-	s.cuerpo.ir_a(s.x, s.z, FACTOR_SALIR, true);
+	s.factor = j.lesionado ? FACTOR_SALIR_LESIONADO : FACTOR_SALIR;
 	afuera.push_back(s);
 	cuenta.cambios[e & 1]++;
 	_adicion[lado() & 1] += r.adicion_cambio_seg;

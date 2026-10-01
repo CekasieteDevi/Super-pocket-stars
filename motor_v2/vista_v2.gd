@@ -91,6 +91,19 @@ var sombras_redondas := false
 var personajes_con_sombra_sol := true
 var _manchas: SombrasRedondas
 var escala_3d := 1.0
+## Etapa 6: el árbitro (ArbitroV2). Se arma solo al dibujar un partido con
+## reglas (el que tiene get_tarjeta).
+var arbitro: ArbitroV2
+## El último corte al saque que ya se dibujó (PartidoVistoV2.get_corte).
+var _corte_visto := -1
+## Cuánto se acerca la cámara (1 = el encuadre del partido). El laboratorio
+## de reglas la acerca mientras el árbitro muestra la tarjeta: de lejos la
+## tarjeta (13 × 18 cm) casi no se ve.
+var acercamiento := 1.0
+var _acercamiento_actual := 1.0
+## Adónde mira la cámara en vez de la pelota (metros de la cancha), o null.
+## El laboratorio de reglas lo usa para mostrar al que sale de la cancha.
+var foco = null
 ## El arquero con la pelota en las manos (loop de 2 s).
 const ANIM_SOSTIENE := "Arquero_Sostiene"
 ## Sin los 22 jugadores: el laboratorio de la pelota (etapa 1) solo la mira a ella.
@@ -261,6 +274,17 @@ func _armar_ambiente() -> void:
 	_camara.current = true
 
 
+## Sigue donde estaba `otra` (la cámara, el árbitro y el corte ya visto): el
+## laboratorio de reglas arma la vista de nuevo cuando alguien entra o se va.
+func seguir_de(otra: VistaV2) -> void:
+	_centro = otra._centro
+	_acercamiento_actual = otra._acercamiento_actual
+	_corte_visto = otra._corte_visto
+	if otra.arbitro != null:
+		arbitro = ArbitroV2.new(_mundo_3d)
+		arbitro.copiar_de(otra.arbitro)
+
+
 ## `alfa`: cuánto del paso actual ya pasó (0 = el paso anterior, 1 = el actual).
 func dibujar(m: MundoV2, alfa: float, delta: float) -> void:
 	dibujar_estado(m.pos_previa, m.pos, m.rumbo, m.rapidez, m.pelota_previa, m.pelota_pos, alfa, delta)
@@ -292,12 +316,35 @@ func dibujar_cuerpos(c: Object, alfa: float, delta: float, foco: Vector2) -> voi
 ## La canchita de la etapa 3 (CanchitaV2Nativa): los cuerpos como
 ## dibujar_cuerpos, y la pelota con su giro. La cámara sigue a la pelota.
 func dibujar_canchita(c: Object, alfa: float, delta: float) -> void:
+	# Etapa 6: el corte al saque después de una tarjeta. La cámara salta a la
+	# pelota y las poses no se funden con las de antes del corte.
+	if c.has_method("get_corte") and c.get_corte() != _corte_visto:
+		_corte_visto = c.get_corte()
+		if _corte_visto >= 0:
+			var en: Vector3 = c.get_pelota_pos()
+			_centro = Vector2(en.x, en.z)
+			_acercamiento_actual = acercamiento
+			_sin_fundido.fill(1)
+			for i in _una_vez.size():
+				_una_vez[i] = {}
 	# La pelota primero: los pies van adonde quedó dibujada.
 	_pelota.visible = true
 	dibujar_pelota(c.get_pelota_previa(), c.get_pelota_pos(), alfa, delta, c.get_pelota_giro())
 	_ajustar_pies = true
 	_poner_cuerpos(c, alfa, delta)
 	_ajustar_pies = false
+	# Etapa 6: el lateral va entre las manos del que saca hasta que la suelta.
+	# El motor la lleva en el punto donde sale; dibujada ahí, las manos subían
+	# sin la pelota.
+	if c.has_method("get_tarjeta"):
+		if arbitro == null:
+			arbitro = ArbitroV2.new(_mundo_3d)
+		var bola: Vector3 = c.get_pelota_pos()
+		arbitro.dibujar(c.get_paso(), Vector2(bola.x, bola.z), c.get_tarjeta(), delta)
+	var saca: int = c.get_lateral_en_manos() if c.has_method("get_lateral_en_manos") else -1
+	if saca >= 0 and saca < _cantidad():
+		var p3 := _jugadores[saca]
+		_pelota.global_position = (DetectorPatinaV2.ancla_de(p3, "Mano_L") + DetectorPatinaV2.ancla_de(p3, "Mano_R")) * 0.5
 
 
 func _poner_cuerpos(c: Object, alfa: float, delta: float) -> void:
@@ -653,8 +700,11 @@ func _andar_de(i: int, v: float) -> String:
 ## El encuadre de VistaCancha3D (_mover_camara) con el zoom base, siguiendo
 ## a la pelota con suavizado.
 func _mover_camara(bola: Vector2, delta: float) -> void:
-	_centro = _centro.lerp(bola, clampf(delta * CamaraPartido.SUAVIZADO, 0.0, 1.0))
-	var ancho_m: float = maxf(size.x, 1.0) / CamaraPartido.PX_POR_METRO_BASE / CamaraPartido3D.ACERCAMIENTO
+	var destino: Vector2 = foco if foco != null else bola
+	_centro = _centro.lerp(destino, clampf(delta * CamaraPartido.SUAVIZADO, 0.0, 1.0))
+	_acercamiento_actual = lerpf(_acercamiento_actual, acercamiento, clampf(delta * CamaraPartido.SUAVIZADO, 0.0, 1.0))
+	var ancho_m: float = maxf(size.x, 1.0) / CamaraPartido.PX_POR_METRO_BASE / CamaraPartido3D.ACERCAMIENTO \
+		/ _acercamiento_actual
 	var distancia := ancho_m * 0.5 / tan(deg_to_rad(VistaCancha3D.FOV_HORIZONTAL) * 0.5)
 	var limite_x: float = ProyeccionPartido.MEDIO_LARGO + CamaraPartido.MARGEN_M - ancho_m * 0.5
 	var limite_y: float = ProyeccionPartido.MEDIO_ANCHO - CamaraPartido3D.MARGEN_LATERAL_M
