@@ -69,8 +69,8 @@ func _ready() -> void:
 	_etiqueta.add_theme_font_size_override("font_size", 24)
 	_etiqueta.add_theme_color_override("font_outline_color", Color.BLACK)
 	_etiqueta.add_theme_constant_override("outline_size", 6)
-	_siguiente()
 	add_child(_etiqueta)
+	_siguiente()
 
 
 ## El remate siguiente de la tanda, con una canchita y una vista nuevas.

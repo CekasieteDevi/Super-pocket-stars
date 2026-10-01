@@ -482,7 +482,12 @@ Hecha en la nube. Test: `tests/test_cerebro_v2.gd`. Medición: `tests/_diag_cere
 - **Qué:** elección de punto y tipo de remate; modelo de error por tiro, pie malo, postura y presión; arquero que predice el cruce, elige parado, estirada o salida y resuelve agarre, rebote o no llega; rebotes jugables. Se reusan las animaciones de arquero que ya existen.
 - **Pasa si:** porcentaje de remates al arco y de atajadas por división dentro de los rangos medidos hoy con `tests/_diag_embudo_remates.gd` (el arquero de primera ataja cerca del 63%).
 
-#### Resultado (2026-09-30): pasa en las divisiones parejas; falta la revisión visual
+#### Resultado (2026-09-30): pasa en las divisiones parejas
+
+- **Revisión visual (2026-09-30):** el usuario miró los dos laboratorios en la PC.
+  - `laboratorio_remate.tscn`: se ve muy bien. El remate, la comba, el globo, la estirada y el rebote se leen claros.
+  - `laboratorio_cerebro.tscn`: hay pases correctos, corridas y goles, pero el juego parece al azar. Hay mucho pelotazo a cualquier lado, autopases, centros sin nadie en el área y una defensa que no se coordina. Coincide con lo medido en la etapa 4: del 40 al 48% de los pases son globos y se pierde del 32 al 42% (el motor espacial pierde el 15%). El usuario decidió seguir con la etapa 6 y dejar esto para la calibración de la etapa 7.
+  - El laboratorio de remates tiraba `move_child` al arrancar: la etiqueta se movía antes de entrar al árbol. Ahora entra antes del primer remate.
 
 Hecha en la PC. Test: `tests/test_remate_v2.gd`. Mediciones: `tests/_diag_remates_v2.gd` (el embudo por división) y `tests/_diag_arquero_v2.gd` (remates sueltos contra el arquero).
 
@@ -545,7 +550,7 @@ El motor actual y el abstracto salen de `_diag_embudo_remates.gd` (40 partidos p
 2. **Cabezazos:** 1,4 a 3,3 por partido y casi ningún gol (el motor actual: 0,9 y 40% de gol). Salen a 9-14 m/s y el arquero los agarra.
 3. **Costo:** 5,9 µs por paso en esta PC: unos 1,9 s por partido sin vista. En el teléfono serían unos 5 s (2,6 veces la PC en la etapa 1), por encima de los 3 s del presupuesto, como ya pasaba en la etapa 4. `apuntar` corre solo al patear.
 4. **Teléfono:** bibliotecas de Windows y Android rearmadas; la de Linux quedó vieja. Falta comparar la huella del partido V2 en la PC y en el teléfono (hasta ahora solo el banco de la etapa 0).
-5. **Revisión visual:** `motor_v2/laboratorio_remate.tscn` (una tanda de 12 remates contra el arquero) y `laboratorio_cerebro.tscn` (el partido con arqueros y goles).
+5. **Juego al azar en el partido:** ver la revisión visual. Pelotazos, autopases, centros sin nadie y defensa sin coordinar. Es la etapa 7.
 6. **Clips:** no hay volea de costado ni cabezazo en carrera; el saque del arquero con la mano y el voleo quedan para la etapa 6.
 
 ### Etapa 6 — Reglas y pelota parada
