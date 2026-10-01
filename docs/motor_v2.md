@@ -558,7 +558,22 @@ El motor actual y el abstracto salen de `_diag_embudo_remates.gd` (40 partidos p
 - **Qué:** laterales, saques de arco, córners, faltas por contacto, tarjetas, offside, penales y tanda, cambios, lesiones, entretiempo con cambio de lado. Se reusa la lógica de ubicación de `_ubicar_para_el_balon_parado`, barrera y ejecutor.
 - **Pasa si:** un partido de 90 minutos completo sin intervención, con todas las reanudaciones, y sin ningún corte de cámara por un jugador que camina 17 ticks hasta la línea.
 
-#### Resultado (2026-10-01): pasa sin vista; falta la revisión visual
+#### Resultado (2026-10-01): pasa sin vista; la revisión visual encuentra fallas de juego
+
+- **Revisión visual (2026-10-01):** el usuario miró `laboratorio_reglas.tscn` en la PC. Bibliotecas de Windows y Android rearmadas. `test_reglas_v2` da en Windows la huella 7809787842291322285. El usuario ve esto:
+  - **Lateral:** las manos no agarran la pelota. La pelota queda a 1 m de la cabeza del que saca.
+  - **Saque de arco:** el arquero se la pasa a los laterales y la pelota se les va siempre al lateral.
+  - **Controles:** la pelota se les escapa en casi todos los controles. Después del control le queda a otro jugador.
+  - **Control de pecho:** la pelota se va lejos antes de que el jugador vuelva a correr, y la pierde.
+  - **Recepción:** al recibir un pase la pelota se mete un momento entre las piernas y el jugador no puede correr rápido.
+  - **Frenada:** los jugadores resbalan como en hielo. No frenan a tiempo para controlar.
+  - **Pelota suelta lejos:** dos jugadores pelean entre ellos lejos de la pelota. Otro jugador llega y se la lleva.
+  - **Ataque por la banda:** nadie sube al área cuando un compañero avanza por la banda.
+  - **Remates:** nadie le pega al arco.
+  - **Pases y centros:** muchos son pelotazos a cualquier lado. Nadie cabecea.
+  - **Conducción:** el jugador patea la pelota adelante y corre detrás de ella. El cerebro no tiene una decisión de "adelantar la pelota": es la conducción por toques a máxima velocidad.
+  - **Sin revisar:** el usuario no vio goles, córners, tiros libres, penales, faltas, tarjetas, cambios ni segundo tiempo. El juego es tan al azar que en lo que miró no pasó nada de eso. El laboratorio sin pantalla da lo mismo en los primeros 10 minutos de su semilla: 0 goles, 6 laterales y 1 falta. Para revisar esas reanudaciones hay que apurar a x16 o armar un laboratorio que las fuerce.
+  - Pelotazos, centros sin nadie y defensa sin coordinar ya estaban anotados en la revisión de la etapa 5. Controles, frenada, recepción y lateral son nuevos.
 
 Hecha en la nube. Test: `tests/test_reglas_v2.gd`. Medición: `tests/_diag_reglas_v2.gd` (varias semillas). Laboratorio: `motor_v2/laboratorio_reglas.tscn`.
 
@@ -630,7 +645,8 @@ Hecha en la nube. Test: `tests/test_reglas_v2.gd`. Medición: `tests/_diag_regla
 4. **Tanda en dos arcos:** cada equipo patea en el arco que atacó (el motor tiene a cada equipo atacando siempre el mismo arco).
 5. **El voleo del arquero casi no sale:** los rivales se alejan mientras tiene la pelota en las manos y casi siempre hay un compañero libre para la mano.
 6. **Vista:** no hay árbitro ni tarjeta en la cancha, ni repeticiones. El laboratorio dibuja todo lo demás; la integración con relato, estadísticas, HUD y minimapa (que leen `eventos`) es la etapa 8.
-7. **Teléfono:** la biblioteca de Linux está rearmada; faltan rearmar las de Windows y Android en la PC y la revisión visual.
+7. **Teléfono:** bibliotecas de Linux, Windows y Android rearmadas. Falta comparar la huella de `test_reglas_v2` de Windows (7809787842291322285) con la de Linux y la del teléfono.
+8. **Fallas de la revisión visual:** el agarre del lateral, los controles que se escapan, la frenada, la recepción entre las piernas, la pelea lejos de la pelota y el saque de arco al lateral.
 
 ### Etapa 7 — Calibración
 
