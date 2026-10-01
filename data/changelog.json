@@ -1,4 +1,5 @@
 [
+	{"version": "0.7.85", "fecha": "2026-10-01", "cambio": "El árbitro y las tarjetas del motor nuevo ya andan en los teléfonos Android."},
 	{"version": "0.7.84", "fecha": "2026-10-01", "cambio": "El árbitro y las tarjetas del motor nuevo ya andan en computadoras con Windows."},
 	{"version": "0.7.83", "fecha": "2026-10-01", "cambio": "En el motor nuevo el árbitro muestra las tarjetas, el expulsado se va al vestuario y el lateral se saca con la pelota en las manos."},
 	{"version": "0.7.82", "fecha": "2026-10-01", "cambio": "Queda anotado lo que se vio al mirar los partidos con reglas del motor nuevo: los controles y los laterales todavía fallan."},
