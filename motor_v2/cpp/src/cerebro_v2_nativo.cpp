@@ -189,6 +189,7 @@ const Entrada NUEVOS[] = {
 	{ "cerebro", "riesgo_margen_seguro", &PesosCerebro::riesgo_margen_seguro },
 	{ "cerebro", "entrada_ventaja_seg", &PesosCerebro::entrada_ventaja_seg },
 	{ "cerebro", "castigo_corte", &PesosCerebro::castigo_corte },
+	{ "cerebro", "castigo_centro", &PesosCerebro::castigo_centro },
 	{ "cerebro", "remate_temperatura", &PesosCerebro::remate_temperatura },
 };
 

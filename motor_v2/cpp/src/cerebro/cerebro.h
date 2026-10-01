@@ -217,7 +217,8 @@ struct PesosCerebro {
 	double riesgo_rapidez_pase = 8.5;
 	double riesgo_margen_seguro = 0.5;
 	double entrada_ventaja_seg = 0.5;
-	double castigo_corte = 1.0;
+	double castigo_corte = 1.5;
+	double castigo_centro = 0.85;
 	double remate_temperatura = 0.05;
 	// No sale de ningún JSON: es toque.reaccion_seg, que la canchita le copia
 	// al empezar (una sola fuente de verdad).
@@ -385,6 +386,11 @@ public:
 	static constexpr double MEDIO_LARGO = 52.5;
 	static constexpr double MEDIO_ANCHO = 34.0;
 	static constexpr double AREA_LARGO = 16.5;
+	// factor_geometria desde el que el tiro es claro: se patea aunque todavía
+	// no se pueda pasar. Es el de remate.primera_geometria (data/fisica_v2.json),
+	// con el que se le pega de primera. Con 0,2 el arquero de la división 10
+	// atajaba el 65% (tests/test_remate_v2.gd pide 30 a 63%).
+	static constexpr double TIRO_CLARO = 0.3;
 	static constexpr double AREA_MEDIO_ANCHO = 20.16;
 	static constexpr double LIMITE_X = 43.5;
 	// Un tick del motor espacial: los pesos que vienen contados en ticks.

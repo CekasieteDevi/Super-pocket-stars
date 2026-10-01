@@ -154,6 +154,12 @@ func get_tarjeta() -> Dictionary:
 	return {}
 
 
+## La parada en curso para el árbitro: {tipo, punto}, con el punto ya girado.
+func get_parada() -> Dictionary:
+	var e: Dictionary = partido.get_estado()
+	return {"tipo": str(e["parada"]), "punto": _girar(e["punto"])}
+
+
 func get_lateral_en_manos() -> int:
 	return partido.get_lateral_en_manos()
 

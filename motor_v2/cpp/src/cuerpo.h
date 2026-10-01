@@ -36,6 +36,8 @@ struct ParametrosCuerpo {
 	double reserva_para_frenar = 0.5;
 	double piso_sprint = 0.85;
 	double ventana_contacto_seg = 0.1;
+	// Frenada del que llega a su lugar sin apuro (Cuerpo::suave).
+	double frenada_suave = 2.5;
 };
 
 // Un clip de data/acciones_v2.json, lo que el cuerpo necesita de él.
@@ -87,10 +89,21 @@ struct Cuerpo {
 	double objetivo_x = 0.0, objetivo_z = 0.0;
 	double factor = 1.0;
 	bool frenar = false;
+	// Llega sin apuro: frena con frenada_suave en vez de frenada. Es el que
+	// se acomoda sin la pelota. ir_a lo apaga; lo prende quien lo pide.
+	bool suave = false;
 	bool mira = false;
 	double mira_x = 0.0, mira_z = 0.0;
 
 	int clip = -1;
+	// El gesto sigue pero ya no lo traba: se puede mover aunque el clip no
+	// sea de los que se hacen corriendo (después de un control de pecho o de
+	// cabeza, o de errarle a la pelota). empezar lo apaga.
+	bool suelto = false;
+	// El gesto se detiene `sosten_seg` segundos cuando llega a `sosten_en`
+	// (el que cae queda en el piso). empezar lo apaga.
+	double sosten_en = -1.0;
+	double sosten_seg = 0.0;
 	double tiempo_accion = 0.0;
 	FaseAccion fase = SIN_ACCION;
 	uint32_t eventos = 0;

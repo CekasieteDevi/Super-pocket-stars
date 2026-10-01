@@ -121,6 +121,8 @@ struct ParametrosReglas {
 	double lateral_min_ms = 9.0, lateral_max_ms = 15.0;
 	double lateral_elevacion_rad = 0.5;
 	double lateral_alto_m = 0.71;
+	// Con la pelota ya en las manos, cuánto espera antes de lanzarla.
+	double lateral_espera_seg = 1.5;
 	double lateral_alcance_m = 22.0;
 	// Ejecutores: el mejor de los que están a esto de la pelota
 	// (MotorEspacial.DIST_MAX_AL_EJECUTOR); si no, el más cercano.
@@ -142,7 +144,7 @@ struct ParametrosReglas {
 	// El que contiene a esto o menos de la pelota del rival se puede tirar a
 	// quitarla: chance por cada vez que piensa, por quite (0..100).
 	double entrada_dist_m = 2.0;
-	double entrada_prob = 0.2;
+	double entrada_prob = 0.6;
 	// El que ya tiene amarilla se tira con esta fracción de la chance.
 	double entrada_amonestado = 0.4;
 	// El pie de la entrada que pasa a esto del medio del rival le pega en
@@ -156,7 +158,7 @@ struct ParametrosReglas {
 	// al otro con esta chance si su pie pasa por las piernas del rival.
 	double cruce_falta_prob = 0.3;
 	// El que recibe la falta queda en el piso esto.
-	double caido_seg = 1.25;
+	double caido_seg = 2.5;
 
 	// --- Tarjetas ---
 	// Chance de amarilla y de roja directa por falta, con gravedad 1. Cada

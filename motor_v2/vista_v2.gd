@@ -30,6 +30,32 @@ const ARRANQUE_DESDE_MS := VistaCancha3D.ANDAR_TROTA_HASTA_MS
 ## Gira con Giro_90 o Giro_180 el que está quieto y le falta girar esto o más;
 ## desde GIRO_180_DESDE, media vuelta.
 const GIRO_DESDE := deg_to_rad(60.0)
+## Ajuste de cuerpo (etapa 6): el motor deja tocar la pelota con la frente o
+## con las manos aunque el punto del clip quede a unos decímetros (cabecea
+## hasta toque.cabeza_hasta, 1,8 m, con la frente del chibi a 0,97 m; el
+## arquero ataja hasta arquero.tolerancia_max_m y salto_estirada_m). La vista
+## lleva el modelo entero para que ese punto llegue a la pelota en el
+## contacto: salta y se estira. Sin esto el cabezazo y la atajada se veían
+## errados aunque el motor los contara. Empieza AJUSTE_CUERPO_ANTES_SEG antes
+## del contacto y se suelta AJUSTE_CUERPO_DESPUES_SEG después.
+const AJUSTE_CUERPO_ANTES_SEG := 0.3
+const AJUSTE_CUERPO_DESPUES_SEG := 0.35
+## Lo más que sube y lo más que se corre en el piso.
+const AJUSTE_CUERPO_SUBE_M := 0.9
+const AJUSTE_CUERPO_PISO_M := 0.6
+## Clip -> [segundo del contacto, [anclas]] de los que tocan con la frente o
+## con las manos.
+var _contacto_cuerpo := {}
+## Lo que se corrió cada uno en el contacto (ver _ajustar_cuerpo).
+var _corrido := {}
+## Frenada: cuánto de más puede faltar para parar sobre lo que da la rapidez
+## (v² / 2·frenada) y seguir siendo una frenada. La rampa de a pasos del cuerpo
+## deja hasta v·dt/2 de diferencia (6 cm a 7 m/s).
+const FRENADA_HOLGURA_M := 0.25
+## Frenada: si el clip no avanza durante este tiempo con el cuerpo andando a
+## más que esto, deja la frenada y vuelve a los loops de andar.
+const FRENADA_TRABADA_SEG := 0.05
+const FRENADA_TRABADA_MS := 0.3
 const GIRO_180_DESDE := deg_to_rad(135.0)
 ## Media vuelta corriendo: el objetivo queda a esto o más de la carrera. El
 ## cuerpo la da frenando en línea recta (Cuerpo::_moverse, giro_acel).
@@ -65,6 +91,10 @@ var _frenada := 6.0
 ## vieja (cadera girada en el esqueleto) y el modelo ya girado sumaban el
 ## giro dos veces y el pie barría 0,36 m en un cuadro.
 var _sin_fundido := PackedByteArray()
+## La rapidez del paso anterior de cada uno y cuánto la bajó (m/s²): la
+## Frenada empieza solo si el cuerpo está frenando de verdad.
+var _v_previa := PackedFloat32Array()
+var _desacelera := PackedFloat32Array()
 ## Después de la media vuelta anda hacia adelante aunque el rumbo del cuerpo
 ## todavía mire atrás (ver _dibujar_jugadores).
 var _adelante := PackedByteArray()
@@ -193,6 +223,8 @@ func _ready() -> void:
 	_rumbo_modelo.resize(_cantidad())
 	_una_vez.resize(_cantidad())
 	_sin_fundido.resize(_cantidad())
+	_v_previa.resize(_cantidad())
+	_desacelera.resize(_cantidad())
 	_adelante.resize(_cantidad())
 	_frenada = float(FisicaV2.parametros_cuerpo()["frenada"])
 	_giro_acel = float(FisicaV2.parametros_cuerpo()["giro_acel"])
@@ -202,6 +234,9 @@ func _ready() -> void:
 		var c: Dictionary = clips[nombre]
 		if c["contacto"] != null and str(c["ancla"]) in ["Pie_R", "Pie_L"]:
 			_contacto_pie[nombre] = [float(c["contacto"]) * float(c["duracion"]), str(c["ancla"])]
+		if c["contacto"] != null and str(c["ancla"]) in ["Frente", "manos"]:
+			_contacto_cuerpo[nombre] = [float(c["contacto"]) * float(c["duracion"]),
+				["Mano_L", "Mano_R"] if str(c["ancla"]) == "manos" else ["Frente"]]
 		if not c.has("metros"):
 			continue
 		_cinta[nombre] = c
@@ -340,8 +375,13 @@ func dibujar_canchita(c: Object, alfa: float, delta: float) -> void:
 		if arbitro == null:
 			arbitro = ArbitroV2.new(_mundo_3d)
 		var bola: Vector3 = c.get_pelota_pos()
-		arbitro.dibujar(c.get_paso(), Vector2(bola.x, bola.z), c.get_tarjeta(), delta)
+		arbitro.dibujar(c.get_paso(), Vector2(bola.x, bola.z), c.get_tarjeta(), delta, c.get_parada())
+	# En las manos (el lateral o el arquero que la agarró): se dibuja entre las
+	# manos del modelo. El motor la lleva en un punto fijo delante del pecho;
+	# dibujada ahí, con el arquero tirado en el piso la pelota flotaba.
 	var saca: int = c.get_lateral_en_manos() if c.has_method("get_lateral_en_manos") else -1
+	if saca < 0 and c.has_method("get_en_manos"):
+		saca = c.get_en_manos()
 	if saca >= 0 and saca < _cantidad():
 		var p3 := _jugadores[saca]
 		_pelota.global_position = (DetectorPatinaV2.ancla_de(p3, "Mano_L") + DetectorPatinaV2.ancla_de(p3, "Mano_R")) * 0.5
@@ -381,6 +421,9 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 		if _manchas != null:
 			_manchas.poner_jugador(i, p3.position)
 		var v: float = rapidez[i]
+		if not is_equal_approx(v, _v_previa[i]):
+			_desacelera[i] = (_v_previa[i] - v) / MundoV2.PASO_SEG
+			_v_previa[i] = v
 		var accion: String = acciones[i][0] if i < acciones.size() else ""
 		var hace_gesto := accion != "" and p3.tiene(accion)
 		var paso := pos[i] - pos_previa[i]
@@ -401,6 +444,8 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 			_adelante[i] = 0
 		if hace_gesto:
 			_una_vez[i] = {}
+		else:
+			_corrido.erase(i)
 		var una_vez := [] if hace_gesto else _una_vez_de(i, p3, v, paso, rumbo[i],
 			intenciones[i] if i < intenciones.size() else [], delta)
 		if una_vez.is_empty() or una_vez[2] == null:
@@ -411,6 +456,8 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 			p3.poner(accion, float(acciones[i][1]), delta)
 			if _ajustar_pies and _contacto_pie.has(accion):
 				_ajustar_pie(p3, accion, float(acciones[i][1]))
+			if _ajustar_pies and _contacto_cuerpo.has(accion):
+				_ajustar_cuerpo(i, p3, accion, float(acciones[i][1]))
 			p3.poner_cara(p3.cara, Jugador3D.Gesto.NORMAL, _tiempo)
 			continue
 		var fundido := -1.0 if _sin_fundido[i] else delta
@@ -444,6 +491,26 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 			tiempo = fposmod(_ciclos[i], 1.0) * p3.duracion(anim)
 		p3.poner(anim, tiempo, fundido)
 		p3.poner_cara(p3.cara, Jugador3D.Gesto.NORMAL, _tiempo)
+
+
+## Lleva el modelo entero para que la frente o las manos lleguen a la pelota
+## en el contacto. Antes del contacto apunta a la pelota de ese cuadro;
+## después se queda con lo que se había corrido y lo suelta de a poco.
+func _ajustar_cuerpo(i: int, p3: Jugador3D, accion: String, segundo: float) -> void:
+	var contacto: float = _contacto_cuerpo[accion][0]
+	var peso := smoothstep(contacto - AJUSTE_CUERPO_ANTES_SEG, contacto, segundo) \
+		* (1.0 - smoothstep(contacto, contacto + AJUSTE_CUERPO_DESPUES_SEG, segundo))
+	if peso <= 0.0:
+		return
+	if segundo <= contacto or not _corrido.has(i):
+		var punto := Vector3.ZERO
+		for ancla in _contacto_cuerpo[accion][1]:
+			punto += DetectorPatinaV2.ancla_de(p3, ancla)
+		punto /= float((_contacto_cuerpo[accion][1] as Array).size())
+		var falta := _pelota.position - punto
+		var piso := Vector2(falta.x, falta.z).limit_length(AJUSTE_CUERPO_PISO_M)
+		_corrido[i] = Vector3(piso.x, clampf(falta.y, 0.0, AJUSTE_CUERPO_SUBE_M), piso.y)
+	p3.position += (_corrido[i] as Vector3) * peso
 
 
 ## Lleva el pie del gesto al borde de la pelota cerca del contacto: gira el
@@ -503,9 +570,29 @@ func _una_vez_de(i: int, p3: Jugador3D, v: float, paso: Vector2, rumbo: float, i
 			# llegaba al final 6 cm antes de que el cuerpo parara.
 			var parar := float(intencion[1])
 			sigue = parar >= 0.0 and parar <= float(c["metros"]) - float(u["desde"]) + 0.3 and _sentido[i] == 0
+			# Sigue frenando solo si va a parar: a esta rapidez le alcanzan los
+			# metros que faltan. El que sigue a un objetivo que se mueve (una
+			# marca, la pelota) lo tiene siempre a menos de un metro y no frena
+			# nunca: quedaba con la pose de la frenada mientras el cuerpo
+			# avanzaba a 2,4 m/s, el 14% del tiempo del partido, con el pie
+			# patinando 1,45 m/s ("juegan en hielo").
+			if sigue and parar > v * v / (2.0 * _frenada) + FRENADA_HOLGURA_M:
+				sigue = false
+			# Si el cerebro le acercó el objetivo, el cuerpo lo pasa frenando:
+			# le faltan los metros que da su rapidez, no los del objetivo. Con
+			# los del objetivo el clip llegaba al final con el cuerpo a 3 m/s.
+			parar = maxf(parar, v * v / (2.0 * _frenada))
 			u["metros"] = float(c["metros"]) - clampf(parar, 0.0, float(c["metros"]))
 			if v > 0.05:
-				u["t"] = maxf(float(u["t"]), _segundo_de(avance, float(u["metros"]), dur))
+				var t_nuevo := maxf(float(u["t"]), _segundo_de(avance, float(u["metros"]), dur))
+				# El clip no avanza y el cuerpo sí: no está frenando (sigue a
+				# un objetivo que se le aleja). Era el 40% de los cuadros de
+				# Frenada del partido, con el pie patinando 2,5 m/s.
+				var trabado := t_nuevo <= float(u["t"]) + 1e-4 and v > FRENADA_TRABADA_MS
+				u["trabado"] = float(u.get("trabado", 0.0)) + delta if trabado else 0.0
+				if float(u["trabado"]) > FRENADA_TRABADA_SEG:
+					sigue = false
+				u["t"] = t_nuevo
 			else:
 				# Parado: el final (junta los pies) va con el reloj. Si ya tiene
 				# que girar, deja el lugar al giro: juntando los pies con el
@@ -607,9 +694,14 @@ func _empezar_una_vez(i: int, p3: Jugador3D, v: float, paso: Vector2, rumbo: flo
 	# Frenada: ya frenando (le quedan menos metros que los que tarda en
 	# parar) y le quedan a lo sumo los del clip. Si quedan menos, el clip
 	# arranca más adelante: el pie apoya donde el clip lo tiene a esos metros.
+	# Y está bajando la rapidez: el que persigue a un objetivo que se mueve va
+	# siempre a la distancia de frenado de él, sin frenar. Entraba a la Frenada
+	# y quedaba con el clip quieto y el pie patinando.
 	if corre and absf(hacia_objetivo) < PI / 3.0 and p3.tiene("Frenada") and parar >= 0.0 \
-			and parar <= v * v / (2.0 * _frenada) + 0.05 and parar <= float(_cinta["Frenada"]["metros"]):
-		var desde := float(_cinta["Frenada"]["metros"]) - parar
+			and parar <= v * v / (2.0 * _frenada) + 0.05 and parar <= float(_cinta["Frenada"]["metros"]) \
+			and _desacelera[i] >= 0.5 * _frenada:
+		# Los metros que le faltan de verdad (ver "frenada" en _una_vez_de).
+		var desde := float(_cinta["Frenada"]["metros"]) - minf(maxf(parar, v * v / (2.0 * _frenada)), float(_cinta["Frenada"]["metros"]))
 		return {"tipo": "frenada", "clip": "Frenada", "metros": desde, "desde": desde,
 			"t": _segundo_de(_cinta["Frenada"]["avance_m"], desde, p3.duracion("Frenada"))}
 	return {}

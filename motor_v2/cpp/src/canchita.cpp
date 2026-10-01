@@ -22,6 +22,10 @@ constexpr double ALCANCE_RIVAL_M = 0.45;
 constexpr double FACTOR_RECIBIR = 0.8;
 // Disputada: el rival llega hasta esto después que él.
 constexpr double DISPUTA_SEG = 0.8;
+// El que se acomoda a menos de esto de su lugar llega sin apuro (Cuerpo::suave).
+constexpr double ACOMODA_SUAVE_M = 5.0;
+// Si el encuentro con la pelota queda a más de esto sin apurarse, va a fondo.
+constexpr double ENCUENTRO_LEJOS_SEG = 1.2;
 // Pase al espacio: a lo sumo esto al costado del receptor.
 constexpr double TANGENTE_MAX_M = 2.5;
 // El defensor va a la pelota controlada solo si llega esto antes que el que
@@ -31,6 +35,14 @@ constexpr double GANA_CARRERA_SEG = 0.1;
 constexpr double CONTENER_M = 1.5;
 // El que acaba de patear no vuelve a ir a la pelota enseguida.
 constexpr int DESCANSO_PATEADOR = 30;
+// El que dio el pase no va a buscarlo mientras viaja hacia un compañero.
+// Con el descanso solo (0,5 s), el pase largo que nadie recibía lo iba a
+// buscar él: en la revisión visual, un autopase.
+constexpr int DESCANSO_PASE_PROPIO = 150;
+// La predicción de la pelota se rehace cuando le quedan estos pasos (1 s).
+constexpr int TRAYECTORIA_MARGEN = 60;
+// Con el arco a tiro, cada cuánto vuelve a decidir el que conduce.
+constexpr double DECIDE_A_TIRO_SEG = 0.5;
 // Rondo: corte o pelota afuera, y se vuelve a empezar 1 s después; la
 // pelota sale 2 m afuera del cuadrado (los de afuera están sobre la línea).
 constexpr int RONDO_ESPERA_CORTE = 60;
@@ -303,7 +315,11 @@ void Canchita::avanzar() {
 		_remate.palo = true;
 	}
 	_reglas();
-	if (_cambio) {
+	// La predicción llega a HORIZONTE pasos (5 s). Si en ese tiempo nadie
+	// toca la pelota y sigue moviéndose, hay que rehacerla: todos iban al
+	// último punto previsto, le pegaban al aire a 7 m de la pelota y el
+	// partido quedaba trabado (un pase largo que rodó más de 5 s).
+	if (_cambio || paso - _tray_paso >= HORIZONTE - TRAYECTORIA_MARGEN) {
 		_nueva_trayectoria();
 	}
 	_medir();
@@ -367,6 +383,10 @@ void Canchita::_analizar() {
 		for (size_t i = 0; i < jugadores.size(); i++) {
 			const JugadorCanchita &j = jugadores[i];
 			if (j.equipo != e || paso - j.pateo_en < DESCANSO_PATEADOR) {
+				continue;
+			}
+			if (_pase_activo && int(i) == _pateador && _receptor >= 0 && _receptor != int(i)
+					&& paso - j.pateo_en < DESCANSO_PASE_PROPIO) {
 				continue;
 			}
 			// Etapa 5: el arquero sale solo a la pelota que alcanza en su área
@@ -579,7 +599,17 @@ void Canchita::_plan_tocar(int i) {
 	int k;
 	double t;
 	_alcance(i, factor, k, t);
-	if (factor < 1.0 && k == int(trayectoria.pos.size()) - 1) {
+	// Si sin apurarse la alcanza recién lejos (o no la alcanza), va a fondo
+	// y la toma antes. Detrás de un pelotazo que rodaba a 5 m/s el más
+	// cercano la seguía a 3 m, a la misma rapidez, 5 segundos sin tocarla
+	// (93 pelotas sueltas de más de 2,5 s en 36 minutos).
+	// Solo con la pelota que se aleja de él: a la que viene la espera en su
+	// punto (y la recibe con el pecho o la cabeza si llega alta).
+	bool se_aleja = pelota.vel.x * (pelota.pos.x - c.x) + pelota.vel.z * (pelota.pos.z - c.z) > 0.0;
+	if (factor < 1.0 && !poseedor_ && se_aleja && (k == int(trayectoria.pos.size()) - 1 || t > ENCUENTRO_LEJOS_SEG)) {
+		_alcance(i, 1.0, k, t);
+		factor = 1.0;
+	} else if (factor < 1.0 && k == int(trayectoria.pos.size()) - 1) {
 		_alcance(i, 1.0, k, t);
 	}
 	V3 p = k >= 0 ? trayectoria.pos[size_t(k)] : pelota.pos;
@@ -673,7 +703,7 @@ void Canchita::_plan_tocar(int i) {
 	double bx = p.x - corre.x, bz = p.z - corre.z;
 	double dist = hipot(bx - c.x, bz - c.z);
 	double necesita = dist / std::max(t, 0.05) / vmax * 1.15;
-	double f = disputada ? 1.0 : std::clamp(necesita, 0.25, 1.0);
+	double f = disputada || factor >= 1.0 ? 1.0 : std::clamp(necesita, 0.25, 1.0);
 	c.ir_a(bx, bz, f, necesita < 0.25);
 	c.mira = true;
 	c.mira_x = p.x;
@@ -826,7 +856,7 @@ void Canchita::_decidir(int i, V3 bola, double t_patada) {
 		j.dir_z = (qz - bola.z) / l;
 	}
 	// Más largo con espacio, más corto con mejor control.
-	double espacio = std::clamp((presion - 2.0) / 4.0, 0.0, 1.0);
+	double espacio = _espacio_adelante(i, bola, j.dir_x, j.dir_z);
 	double largo = (param_toque.toque_corto_m + (param_toque.toque_largo_m - param_toque.toque_corto_m) * espacio)
 			* (1.2 - 0.4 * j.control / 100.0);
 	// Con lo que corre ahora (más lo que acelera en un segundo), no con su
@@ -1007,6 +1037,26 @@ double Canchita::_rapidez_conduce(double corre, double largo) {
 	return Perfiles::rapidez_de(40);
 }
 
+// Cuánto lugar hay para adelantarse la pelota hacia (dx, dz), de 0 a 1. El
+// rival que está adelante cuenta desde el doble de lejos que el de atrás: la
+// pelota va hacia él y él viene. Con solo la distancia (lleno a 6 m), el que
+// controlaba corriendo se la adelantaba a un rival que venía de frente a 7-10 m
+// y se la sacaba en 0,6 s (tests/_diag_sensaciones_v2.gd).
+double Canchita::_espacio_adelante(int i, V3 bola, double dx, double dz) const {
+	int equipo = jugadores[size_t(i)].equipo;
+	double cerca = 1e9;
+	for (const JugadorCanchita &o : jugadores) {
+		if (o.equipo == equipo) {
+			continue;
+		}
+		double ex = o.cuerpo.x - bola.x, ez = o.cuerpo.z - bola.z;
+		double d = hipot(ex, ez);
+		bool adelante = d > 1e-6 && (ex * dx + ez * dz) / d > 0.3;
+		cerca = std::min(cerca, adelante ? d : d * 2.0);
+	}
+	return std::clamp((cerca - 4.0) / 8.0, 0.0, 1.0);
+}
+
 double Canchita::_rival_mas_cerca(int i, double x, double z) const {
 	int equipo = jugadores[size_t(i)].equipo;
 	double d = 1e9;
@@ -1147,6 +1197,12 @@ void Canchita::_ubicar(int i) {
 	qx = std::clamp(qx, -_medio_x() - 0.5, _medio_x() + 0.5);
 	qz = std::clamp(qz, -_medio_z() - 0.5, _medio_z() + 0.5);
 	c.ir_a(qx, qz, factor, frenar);
+	// En el partido el que se acomoda cerca llega sin apuro (el arquero no:
+	// su lugar en la línea decide si llega a la pelota). Solo a menos de
+	// ACOMODA_SUAVE_M: con todos los que se acomodan frenando suave, el que
+	// volvía a defender llegaba tarde y había 40% más de goles (15,7 contra
+	// 11,2 en 40 minutos, tests/_diag_reglas_v2.gd).
+	c.suave = modo == PARTIDO && !j.arquero && hipot(qx - c.x, qz - c.z) < ACOMODA_SUAVE_M;
 	c.mira = true;
 	c.mira_x = bola.x;
 	c.mira_z = bola.z;
@@ -1292,6 +1348,10 @@ void Canchita::_gatillo(int i) {
 				// La entrada va a la pelota del piso (el punto de Barrida es el
 				// de la tibia, a 0,37 m: con su alto no tocaba ninguna).
 				alto_ok = p.y <= param_toque.pie_hasta + param_toque.tolerancia_alto_m;
+			} else if (clip == param_remate.clip_cabeza) {
+				// El cabezazo al arco: en toda la franja de la cabeza (salta).
+				alto_ok = p.y >= param_toque.pecho_hasta - param_toque.tolerancia_alto_m
+						&& p.y <= param_toque.cabeza_hasta + param_toque.tolerancia_alto_m;
 			} else {
 				alto_ok = std::abs(clips[size_t(clip)].punto_y - p.y) <= param_toque.tolerancia_alto_m;
 			}
@@ -1391,6 +1451,10 @@ bool Canchita::_resolver_toques() {
 			alto_ok = alto >= desde - tol && bajo <= hasta + tol;
 		} else if (j.toque == TOQUE_ENTRADA) {
 			alto_ok = std::min(pelota.previa.y, pelota.pos.y) <= param_toque.pie_hasta + param_toque.tolerancia_alto_m;
+		} else if (j.clip_toque == param_remate.clip_cabeza) {
+			double bajo = std::min(pelota.previa.y, pelota.pos.y), alto = std::max(pelota.previa.y, pelota.pos.y);
+			alto_ok = alto >= param_toque.pecho_hasta - param_toque.tolerancia_alto_m
+					&& bajo <= param_toque.cabeza_hasta + param_toque.tolerancia_alto_m;
 		} else {
 			alto_ok = std::min(std::abs(pelota.previa.y - q.y), std::abs(pelota.pos.y - q.y)) <= param_toque.tolerancia_alto_m;
 		}
@@ -1459,6 +1523,13 @@ bool Canchita::_resolver_toques() {
 			cuenta.fallos++;
 			if (j.toque == TOQUE_ATAJADA) {
 				cuenta.atajadas_falladas++;
+			}
+			if (j.toque == TOQUE_CONTROL) {
+				// Erró el control: sale a buscarla sin esperar al gesto. Pecho y
+				// Cabecear no dejan moverse hasta que terminan (0,75 y 0,5 s):
+				// el que erraba un pase por arriba quedaba clavado mientras la
+				// pelota picaba y se iba (revisión visual: "quedan bobos").
+				j.cuerpo.suelto = true;
 			}
 		}
 	}
@@ -1635,11 +1706,31 @@ void Canchita::_tocar(int i, double distancia) {
 			double dificil = (0.5 + vin / 15.0) * (parte == PIE ? 1.0 : 1.3) * apretado;
 			double torpeza = 1.0 - 0.8 * j.control / 100.0;
 			angulo = rumbo_de(j.dir_x, j.dir_z) + _azar.normal() * param_toque.error_control_rad * torpeza * dificil;
-			rapidez = param_toque.control_ms + std::abs(_azar.normal()) * param_toque.error_control_ms * torpeza * dificil;
+			// El que controla corriendo se la lleva: sale para quedarle
+			// toque_corto_m adelante a lo que corre hacia ahí. Con control_ms
+			// fijo (1,5 m/s) el que llegaba a 5 m/s la pasaba de largo: tenía
+			// que frenar y volver, y el rival se la sacaba el 18% de las veces
+			// (tests/_diag_sensaciones_v2.gd).
+			double sd, cd;
+			mate::seno_coseno(angulo, sd, cd);
+			// Lo que corre hacia ahí, hasta lo que va a correr llevándola
+			// (conduccion_factor de su punta): con la rapidez a la que
+			// llegaba, la pelota salía a 7 m/s y se le iba 1,2 m.
+			double lleva = std::clamp(c.vx * sd + c.vz * cd, 0.0, c.vel_max * c.cansancio * param_toque.conduccion_factor);
+			// Con un rival cerca la deja más cerca del pie (como la conducción).
+			double largo = param_toque.toque_corto_m * (0.3 + 0.7 * _espacio_adelante(i, pelota.pos, sd, cd));
+			double base = std::max(param_toque.control_ms, _rapidez_conduce(lleva, largo));
+			rapidez = base + std::abs(_azar.normal()) * param_toque.error_control_ms * torpeza * dificil;
 			// Pecho, muslo y cabeza la bajan: sale más lenta y cae.
 			if (parte != PIE) {
 				rapidez *= 0.7;
 				vertical = parte == CABEZA ? 1.0 : 0.3;
+				// Y sigue jugando: esos gestos no dejan moverse hasta que
+				// terminan, y la pelota que bajaba se le iba antes de que
+				// pudiera volver a correr (revisión visual de la etapa 6).
+				if (!entrada) {
+					j.cuerpo.suelto = true;
+				}
 			}
 			if (entrada) {
 				// Etapa 6: la entrada no la controla, la saca: sale suelta hacia
@@ -1723,6 +1814,7 @@ void Canchita::_tocar(int i, double distancia) {
 	j.rapidez_pase = 0.0;
 	j.tipo_pase = DEC_NADA;
 	j.inmune_hasta = paso + int64_t(param_toque.sin_rebote_seg / PASO_SEG + 0.5);
+	_rebote_equipo = -1;
 	ultimo_toque = i;
 	ultimo_tipo = entrada ? TOQUE_NADA : tipo;
 	_visto_paso = paso + _reaccion_pasos;
@@ -1775,6 +1867,11 @@ bool Canchita::_rebotes() {
 		pelota.vel.z = rz + c.vz;
 		cuenta.rebotes_cuerpo++;
 		j.inmune_hasta = paso + 10;
+		// El rebote también es tocarla: si después sale, saca el otro equipo
+		// (y el remate que rebota en un defensor y se va es córner). Sin esto
+		// contaba el toque anterior: la pelota que rebotaba en uno y se iba
+		// por la banda la sacaba él mismo.
+		_rebote_equipo = j.equipo;
 		// Etapa 5: el remate que pega en el arquero es atajada (aunque siga
 		// hacia el arco: se decide cuando termina); en un rival, bloqueo.
 		if (_remate.activo && j.equipo != _remate.equipo) {
@@ -2074,6 +2171,11 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 		double vale = cerebro.pesos.decision_vigencia_seg;
 		if (j.decision.tipo == DEC_CONDUCIR) {
 			vale = puede_pasar ? cadencia : std::max(cadencia - tiene, PASO_SEG);
+			// Con un tiro claro vuelve a mirar seguido: conduciendo 1 o 2 s
+			// sin decidir entraba al área sin patear.
+			if (cerebro.factor_geometria(bola.x, bola.z, j.equipo) >= Cerebro::TIRO_CLARO) {
+				vale = std::min(vale, DECIDE_A_TIRO_SEG);
+			}
 		}
 		j.decision_hasta = paso + std::max<int64_t>(1, int64_t(vale / PASO_SEG + 0.5));
 	}
@@ -2383,6 +2485,9 @@ bool Canchita::_reglas_partido() {
 		cuenta.pases_afuera++;
 	}
 	int toco = ultimo_toque >= 0 ? jugadores[size_t(ultimo_toque)].equipo : equipo_con_pelota;
+	if (_rebote_equipo >= 0) {
+		toco = _rebote_equipo;
+	}
 	if (std::abs(pelota.pos.x) > _medio_x() + param_pelota.radio) {
 		// Por el fondo: el equipo 1 defiende el arco de +x.
 		int defiende = pelota.pos.x > 0.0 ? 1 : 0;
@@ -2811,6 +2916,7 @@ void Canchita::_atajar(int i, double distancia) {
 	j.pensar_ya = true;
 	j.hay_decision = false;
 	j.inmune_hasta = paso + int64_t(param_toque.sin_rebote_seg / PASO_SEG + 0.5);
+	_rebote_equipo = -1;
 	ultimo_toque = i;
 	ultimo_tipo = agarra ? TOQUE_CONTROL : TOQUE_ATAJADA;
 	_desde_control = paso;

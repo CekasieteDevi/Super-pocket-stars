@@ -43,6 +43,9 @@ constexpr double FACTOR_SALIR_LESIONADO = 0.35;
 // va a menos de esto, camina.
 constexpr double CAMINA_MS = 3.0;
 constexpr double ARRANCA_SEG = 0.8;
+// En qué parte del clip de caer el jugador está en el piso (medido en
+// jugador.glb: el pecho a 2 cm del piso entre el 30 y el 50% de Caer).
+constexpr double EN_EL_PISO_DEL_CLIP = 0.4;
 // Después del corte de la tarjeta, cuánto falta para el saque: los 3 ticks
 // de VistaCancha3D._cortar_despues_de_tarjeta (LATERAL_PREPARA_TICKS).
 constexpr double CORTE_ANTES_DEL_SAQUE_SEG = 0.75;
@@ -170,6 +173,7 @@ void Canchita::_parar(int tipo, int equipo, double x, double z, int64_t demora) 
 	_mano = SaqueMano();
 	_saque_medio_en = -1;
 	_adelantados.clear();
+	_rebote_equipo = -1;
 	_reinicio_hasta = NUNCA;
 	for (JugadorCanchita &j : jugadores) {
 		j.toque_pendiente = false;
@@ -661,6 +665,7 @@ bool Canchita::_avanzar_parada() {
 	if (p.tipo == LATERAL && llego && !p.en_manos) {
 		// Levanta la pelota y se prepara.
 		p.en_manos = true;
+		p.en_manos_desde = paso;
 		if (r.clip_lateral_prepara >= 0) {
 			je.cuerpo.empezar(r.clip_lateral_prepara);
 		}
@@ -693,6 +698,10 @@ bool Canchita::_avanzar_parada() {
 				ubicados = false;
 			}
 		}
+	}
+	// El lateral: con la pelota en las manos busca a quién dársela.
+	if (p.tipo == LATERAL && (!p.en_manos || paso < p.en_manos_desde + pasos_de(r.lateral_espera_seg))) {
+		ubicados = false;
 	}
 	if (llego && paso >= p.minimo && ubicados) {
 		_ejecutar_parada();
@@ -1457,6 +1466,14 @@ void Canchita::_caer(int i, int clip, double segundos) {
 	c.fase = SIN_ACCION;
 	if (clip >= 0) {
 		c.empezar(clip);
+		// El clip cae y se levanta de corrido (Caer: en el piso del 30 al 50%
+		// de sus 1,25 s). Se detiene en el piso lo que sobra de `segundos`: sin
+		// eso estaba 0,25 s tirado y en la revisión visual no se lo veía caer.
+		double dura = clips[size_t(clip)].duracion;
+		if (segundos > dura) {
+			c.sosten_en = dura * EN_EL_PISO_DEL_CLIP;
+			c.sosten_seg = segundos - dura;
+		}
 	}
 	j.toque_pendiente = false;
 	j.persigue = false;

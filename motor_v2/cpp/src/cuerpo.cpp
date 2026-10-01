@@ -16,6 +16,7 @@ void Cuerpo::ir_a(double px, double pz, double factor_, bool frenar_) {
 	objetivo_z = pz;
 	factor = factor_;
 	frenar = frenar_;
+	suave = false;
 }
 
 bool Cuerpo::empezar(int indice_clip) {
@@ -23,6 +24,9 @@ bool Cuerpo::empezar(int indice_clip) {
 		return false;
 	}
 	clip = indice_clip;
+	suelto = false;
+	sosten_en = -1.0;
+	sosten_seg = 0.0;
 	tiempo_accion = 0.0;
 	fase = SIN_ACCION;
 	return true;
@@ -35,7 +39,7 @@ void Cuerpo::paso(const ParametrosCuerpo &p, const std::vector<Clip> &clips, dou
 	double rapidez_previa = rapidez();
 	// Un gesto que no se hace corriendo (cabecear, barrerse, atajar) no deja
 	// acelerar ni cambiar de rumbo: el cuerpo frena y mira adonde miraba.
-	bool trabado = clip >= 0 && !clips[size_t(clip)].mueve;
+	bool trabado = clip >= 0 && !clips[size_t(clip)].mueve && !suelto;
 	_moverse(p, trabado, dt);
 	_girar(p, trabado, dt);
 	_gastar(p, rapidez_previa, dt);
@@ -88,8 +92,13 @@ void Cuerpo::_moverse(const ParametrosCuerpo &p, bool trabado, double dt) {
 		// baja frenada·dt por paso recorre v²/2a + v·dt/2. Con la rampa
 		// continua (v² = 2·a·d) llegaba a casi 1 m/s y se clavaba en el punto
 		// (etapa 3: frenar en seco); así llega a menos de frenada·dt.
-		double medio = p.frenada * dt * 0.5;
-		tope = std::min(tope, std::sqrt(medio * medio + 2.0 * p.frenada * dist) - medio);
+		// El que se acomoda sin apuro (suave) empieza a frenar antes y más
+		// despacio. Con la frenada entera, el que tenía su lugar a 2,5 m
+		// picaba hasta 4 m/s y frenaba de golpe, y así cada vez que el lugar
+		// se corría: en la revisión visual "juegan en hielo".
+		double a = suave ? p.frenada_suave : p.frenada;
+		double medio = a * dt * 0.5;
+		tope = std::min(tope, std::sqrt(medio * medio + 2.0 * a * dist) - medio);
 	}
 	double acel = aceleracion * cansancio;
 	// Parado acelera más que cerca de su punta, como un velocista.
@@ -219,6 +228,10 @@ void Cuerpo::_gastar(const ParametrosCuerpo &p, double rapidez_previa, double dt
 void Cuerpo::_avanzar_accion(const ParametrosCuerpo &p, const std::vector<Clip> &clips, double dt) {
 	const Clip &c = clips[size_t(clip)];
 	FaseAccion antes = fase;
+	if (sosten_seg > 0.0 && tiempo_accion >= sosten_en) {
+		sosten_seg -= dt;
+		return;
+	}
 	tiempo_accion += dt;
 	FaseAccion ahora = PREPARACION;
 	if (c.contacto_seg >= 0.0) {

@@ -179,6 +179,7 @@ const NumeroReglas NUMEROS_REGLAS[] = {
 	{ "lateral_max_ms", &motor_v2::ParametrosReglas::lateral_max_ms },
 	{ "lateral_elevacion_rad", &motor_v2::ParametrosReglas::lateral_elevacion_rad },
 	{ "lateral_alto_m", &motor_v2::ParametrosReglas::lateral_alto_m },
+	{ "lateral_espera_seg", &motor_v2::ParametrosReglas::lateral_espera_seg },
 	{ "lateral_alcance_m", &motor_v2::ParametrosReglas::lateral_alcance_m },
 	{ "ejecutor_max_m", &motor_v2::ParametrosReglas::ejecutor_max_m },
 	{ "rango_libre_malo", &motor_v2::ParametrosReglas::rango_libre_malo },

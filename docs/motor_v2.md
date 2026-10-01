@@ -588,7 +588,35 @@ El motor actual y el abstracto salen de `_diag_embudo_remates.gd` (40 partidos p
   - **Laboratorio:** la cámara se queda con el jugador mientras el árbitro muestra la tarjeta y se acerca (`VistaV2.acercamiento`); después sigue al que sale. Al armar la vista de nuevo (alguien entra o se va) la pantalla quedaba gris un cuadro: la vista vieja ahora tapa a la nueva hasta que dibuja.
   - **Test:** la prueba de expulsiones de `test_reglas_v2` subía `roja_por_falta` y esperaba que salieran rojas: daba de 0 a 8 según la semilla. Ahora fuerza dos rojas y una lesión, y controla que el saque espere al que se va.
   - **Huella:** el arreglo del lateral cambia el partido. `test_reglas_v2` da 4235184708021746737 en Windows (antes 7809787842291322285).
-  - **Visto por el usuario:** la roja queda bien. Falta que mire el resto del guion con estos arreglos.
+  - **Visto por el usuario:** la roja y el resto del guion se ven bien.
+- **Tercera revisión visual (2026-10-01): cómo se juega.** El usuario miró partidos enteros en `laboratorio_reglas.tscn` y marcó lo que se veía mal. Cada arreglo se midió antes y después con la misma semilla: `tests/_diag_sensaciones_v2.gd` (4 partidos de 15 min, semilla 20261010) y `tests/_diag_reglas_v2.gd` (6 partidos de 20 + 20 min).
+
+  | Lo que vio el usuario | Antes | Después |
+  | --- | --- | --- |
+  | Después de un control la pelota la toca un rival o sale | 18% | 10% |
+  | Rapidez del que controla sin rivales a 6 m (1,5 s siguientes) | 2,7 m/s | 5,1 m/s |
+  | Segundos con la pose de Frenada (22 jugadores, 120 s) | 284 s | 16 s |
+  | Pie que patina en Frenada | 1,2 m/s | 0,44 m/s |
+  | Del momento en que levanta el lateral al saque | 0,58 s | 1,5 s |
+  | Controles de cabeza en 120 min / cabezazos al arco | 25 / 2 | 85 / 6 |
+
+  - **Control ("la pelota tiene manteca"):** el control salía siempre a `control_ms` (1,5 m/s) y el que llegaba a 5 m/s la pasaba de largo. Ahora sale para quedarle `toque_corto_m` adelante a lo que corre (`Canchita::_tocar`), y más corta si hay un rival adelante (`_espacio_adelante`: el rival de adelante cuenta desde el doble de lejos que el de atrás). La conducción usa el mismo espacio y `toque_largo_m` baja de 1,8 a 1,4.
+  - **"Juegan en hielo":** el que se acomodaba sin la pelota picaba a fondo para moverse 2 o 3 m y frenaba de golpe, una y otra vez. Ahora el que tiene su lugar a menos de 5 m llega frenando con `frenada_suave` (2,5 m/s², `Cuerpo::suave`). Con todos frenando suave había 40% más de goles: por eso es solo de cerca. En la vista, la Frenada empieza solo si el cuerpo está frenando de verdad y se suelta si el clip queda quieto.
+  - **Pelota larga que nadie toma:** el más cercano la seguía al trote, a 3 m, 5 s sin alcanzarla. Ahora va a fondo si la pelota se aleja y el encuentro queda a más de 1,2 s.
+  - **Predicción de la pelota (bug del motor):** la predicción llega a 5 s. Si nadie tocaba la pelota en ese tiempo, todos iban al último punto previsto y le pegaban al aire a 7 m: el partido quedaba trabado. Ahora se rehace cuando le queda 1 s.
+  - **No pateaban hasta tener un rival encima:** durante la cadencia del control (0,5 a 2,25 s) el cerebro solo dejaba conducir, salvo con un rival a 4 m. Ahora el tiro claro (`Cerebro::TIRO_CLARO`, el `factor_geometria` de `remate.primera_geometria`) se patea siempre, y con un tiro claro el que conduce vuelve a decidir cada 0,5 s.
+  - **Centros a nadie:** el centro vale 5 a 8 de utilidad (5,5 por la intención de centro del plan) y el riesgo le restaba 1. Ahora lo multiplica (`castigo_centro`). No se centra a menos de 11 m del arco, y el centro al punto genérico del área pide que el compañero llegue.
+  - **Pase atrás hacia el arco propio:** no se da si la línea del pase cruza el arco.
+  - **El que pasa no va a buscar su pase** durante 2,5 s si va hacia un compañero.
+  - **Pelota por arriba:** Pecho y Cabecear no dejaban moverse hasta terminar (0,75 y 0,5 s). Ahora el gesto sigue pero el cuerpo queda suelto (`Cuerpo::suelto`) después del toque o del error. `cabeza_hasta` pasa de 1,3 a 1,8 m: cabecean saltando, y la vista lleva la frente a la pelota (`VistaV2._ajustar_cuerpo`).
+  - **Lateral:** con la pelota en las manos espera `lateral_espera_seg` (1,5 s). El rebote en el cuerpo cuenta como último toque para saber quién saca (y el remate que rebota en un defensor es córner).
+  - **Faltas:** el clip Caer se levanta solo y el jugador estaba 0,25 s en el piso. Ahora el clip se detiene en el piso (`Cuerpo::sosten_en`) y `caido_seg` pasa de 1,25 a 2,5.
+  - **Entradas:** con la pelota más cerca del pie bajaron de 75 a 32 cada 40 minutos. `entrada_prob` pasa de 0,2 a 0,6: quedan 51, con 23 limpias y 12 faltas (antes 29 y 14,5).
+  - **Árbitro:** mueve las piernas al correr (quedaba quieto en los cuadros en que el partido no avanzaba) y en una pelota parada se corre de la jugada (en el penal, al borde del área).
+  - **Arquero:** la pelota agarrada se dibuja entre sus manos, y la vista lo estira para que las manos lleguen a la pelota que el motor da por atajada.
+  - **Tests:** `test_cerebro_v2` miraba el plan de defensa viejo justo después de un cambio de posesión (pasaba por la semilla). Las huellas de `test_reglas_v2`, `test_remate_v2` y `test_cerebro_v2` cambian; `test_reglas_v2` da 8365591512941735158 en Windows.
+  - **El balance cambió:** 14,2 goles y 52 remates cada 40 minutos (antes 8,8 y 31). El ataque ya no pierde la pelota sola. Es lo primero de la etapa 7.
+  - **Sin arreglar (lo vio el usuario):** defiende uno solo y el resto vuelve a su zona; los delanteros no presionan la salida; siguen los pelotazos (33% de los pases); en los córners gana casi siempre el que defiende (8 de 10) y el 23% de los cabezazos erra. Falta que el usuario confirme en pantalla el árbitro, las atajadas y los cabezazos.
 
 Hecha en la nube. Test: `tests/test_reglas_v2.gd`. Medición: `tests/_diag_reglas_v2.gd` (varias semillas). Laboratorio: `motor_v2/laboratorio_reglas.tscn`.
 
@@ -660,9 +688,9 @@ Hecha en la nube. Test: `tests/test_reglas_v2.gd`. Medición: `tests/_diag_regla
 4. **Tanda en dos arcos:** cada equipo patea en el arco que atacó (el motor tiene a cada equipo atacando siempre el mismo arco).
 5. **El voleo del arquero casi no sale:** los rivales se alejan mientras tiene la pelota en las manos y casi siempre hay un compañero libre para la mano.
 6. **Vista:** el árbitro está y muestra las tarjetas. Faltan los asistentes, el cuarto árbitro con el tablero del cambio y las repeticiones. La integración con relato, estadísticas, HUD y minimapa (que leen `eventos`) es la etapa 8.
-7. **Bibliotecas:** Windows y Android rearmadas con los arreglos de la segunda revisión visual. **Falta rearmar la de Linux** en la nube y comparar la huella de `test_reglas_v2` (4235184708021746737 en Windows) con la de Linux y la del teléfono.
-8. **Fallas de la revisión visual que siguen:** los controles que se escapan, la frenada, la recepción entre las piernas, la pelea lejos de la pelota y el saque de arco al lateral. El lateral y las tarjetas están arreglados.
-9. **Tiempos por partido con estos arreglos:** la medición de arriba (`_diag_reglas_v2`) es anterior. Las tarjetas y los que salen suman espera: hay que volver a medir antes de calibrar.
+7. **Bibliotecas:** Windows y Android rearmadas con los arreglos de la tercera revisión visual. **Falta rearmar la de Linux** en la nube y comparar la huella de `test_reglas_v2` (8365591512941735158 en Windows) con la de Linux y la del teléfono.
+8. **Fallas de la revisión visual que siguen:** ver "Sin arreglar" en la tercera revisión visual. La defensa (más de uno defendiendo y presión de los delanteros) es un rediseño del plan heredado del motor espacial y conviene hacerlo antes de calibrar.
+9. **Las mediciones de arriba son anteriores a la segunda y la tercera revisión visual:** goles, remates, entradas, faltas y tiempos de parada cambiaron. La etapa 7 empieza midiendo de nuevo.
 
 ### Etapa 7 — Calibración
 

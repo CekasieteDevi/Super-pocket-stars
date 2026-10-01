@@ -18,6 +18,14 @@ const DISTANCIA_M := OficialesPartido.DISTANCIA_ARBITRO_M
 ## No sale a correr por cada metro que se mueve la pelota.
 const HOLGURA_M := 3.0
 const ACELERACION := 6.0
+## En el penal: metros detrás del punto penal (hacia el medio) y hacia la
+## banda de enfrente a la cámara.
+const PENAL_ATRAS_M := 6.0
+const PENAL_AL_COSTADO_M := 14.0
+## En las otras pelotas paradas: a esta distancia de la pelota (un poco más
+## que la barrera, 9,15 m) y girado esto de la línea al medio de la cancha.
+const PARADA_M := 11.0
+const PARADA_GIRO_RAD := 0.6
 ## Lo más que tarda en llegar al jugador (VistaCancha3D.TARJETA_CORRE_MAX_TICKS).
 const CORRE_MAX_SEG := VistaCancha3D.TARJETA_CORRE_MAX_TICKS * MotorEspacial.TICK_SEG
 const CORRE_MIN_SEG := MotorEspacial.TICK_SEG
@@ -54,7 +62,8 @@ func _init(mundo: Node3D) -> void:
 
 ## `paso`: el paso del partido. `bola`: la pelota en la cancha ya girada.
 ## `tarjeta`: {} o {paso, roja, pos} de la última tarjeta (PartidoVistoV2.get_tarjeta).
-func dibujar(paso: int, bola: Vector2, tarjeta: Dictionary, delta: float) -> void:
+## `parada`: {tipo, punto} de la parada en curso (PartidoVistoV2.get_parada).
+func dibujar(paso: int, bola: Vector2, tarjeta: Dictionary, delta: float, parada := {}) -> void:
 	var dt := 0.0 if _paso < 0 or paso < _paso else float(paso - _paso) * PASO_SEG
 	if paso < _paso:
 		# Otro partido: vuelve a su lugar.
@@ -69,7 +78,20 @@ func dibujar(paso: int, bola: Vector2, tarjeta: Dictionary, delta: float) -> voi
 		return
 	var al_medio := (-bola).normalized() if bola.length() > 1.0 else Vector2(0.0, -1.0)
 	var destino := bola + al_medio * DISTANCIA_M
-	if _pos.distance_to(destino) < HOLGURA_M:
+	var tipo := str(parada.get("tipo", "nada"))
+	if tipo == "penal":
+		# Al borde del área, del lado de la banda de enfrente a la cámara:
+		# siguiendo a la pelota quedaba parado entre el que patea y el arco.
+		var punto: Vector2 = parada["punto"]
+		destino = Vector2(punto.x - signf(punto.x) * PENAL_ATRAS_M, -PENAL_AL_COSTADO_M)
+	elif tipo != "nada" and tipo != "saque_medio":
+		# En una pelota parada, a la distancia de la barrera y corrido hacia
+		# la banda de enfrente: no tapa al que saca.
+		var punto: Vector2 = parada["punto"]
+		var hacia := (-punto).normalized() if punto.length() > 1.0 else Vector2(0.0, -1.0)
+		destino = punto + hacia.rotated(PARADA_GIRO_RAD * (1.0 if hacia.x * hacia.y >= 0.0 else -1.0)) * PARADA_M
+		destino.y = clampf(destino.y, -ProyeccionPartido.MEDIO_ANCHO + 2.0, ProyeccionPartido.MEDIO_ANCHO - 2.0)
+	elif _pos.distance_to(destino) < HOLGURA_M:
 		destino = _pos
 	var falta := _pos.distance_to(destino)
 	# Frena para llegar parado: v² = 2·a·d.
@@ -103,7 +125,11 @@ func _con_tarjeta(tarjeta: Dictionary, desde: float, dt: float, delta: float) ->
 	_pos = _desde_pos.lerp(_lugar, smoothstep(0.0, _corre_seg, desde))
 	var avance := _pos.distance_to(antes)
 	_metros += avance
-	_rapidez = avance / dt if dt > 0.0 else 0.0
+	# En los cuadros en que el partido no avanzó (dt = 0) queda la rapidez de
+	# antes. Puesta en 0, el modelo pasaba a quieto un cuadro de cada dos y
+	# llegaba deslizándose, sin mover las piernas.
+	if dt > 0.0:
+		_rapidez = avance / dt
 	modelo.position = Vector3(_pos.x, 0.0, _pos.y)
 	if desde < _corre_seg:
 		if avance > 1e-4:

@@ -24,6 +24,14 @@ constexpr double PRESION_SIN_PERSECUCION = 0.35;
 constexpr double CONO_SOLO_M = 15.0;
 constexpr double ULTIMO_TERCIO = Cerebro::LARGO / 3.0;
 constexpr double ULTIMO_TRAMO_BANDA = 24.0;
+// Pase hacia el arco propio: no se da si la línea del pase cruza el arco (más
+// el margen) y el que lo recibe está a menos de PASE_ATRAS_CERCA_M de su línea
+// de fondo. ARCO_MEDIO_ANCHO_M es pelota.arco_medio_ancho (data/fisica_v2.json).
+constexpr double ARCO_MEDIO_ANCHO_M = 3.66;
+constexpr double PASE_ATRAS_MARGEN_M = 2.5;
+constexpr double PASE_ATRAS_CERCA_M = 30.0;
+// A menos de esto del arco (el punto penal) no se centra.
+constexpr double CENTRO_DESDE_M = 11.0;
 constexpr double PROFUNDIDAD_DEL_NUEVE_AL_CENTRO = 8.0;
 constexpr double ARQUERO_X_MIN = 51.8;
 constexpr double ARQUERO_X_MAX = 36.0;
@@ -794,7 +802,11 @@ void Cerebro::_evaluar(const Mundo &m, int i, std::vector<Opcion> &op) const {
 	double max_largo = _por_atributo(i, AT_FUERZA, pesos.max_pelotazo_debil, pesos.max_pelotazo_fuerte, 1.0);
 	bool frente_al_arco = _en_el_area(x, z, equipo) && factor_angulo(x, z, equipo) >= pesos.angulo_minimo_tiro_libre;
 	bool puede_centrar = f.bruto[AT_CENTROS] >= pesos.centros_minimo && std::abs(z) >= pesos.banda_para_centrar
-			&& mi_valor >= pesos.avance_para_centrar && std::abs(ax - x) <= ULTIMO_TRAMO_BANDA && !frente_al_arco;
+			&& mi_valor >= pesos.avance_para_centrar && std::abs(ax - x) <= ULTIMO_TRAMO_BANDA && !frente_al_arco
+			// A menos del punto penal no se centra: se patea o se da el pase.
+			// El centro vale 5 a 8 de utilidad y el remate 2: a 8 m del arco,
+			// con ángulo cerrado, tiraba un centro (revisión visual, etapa 6).
+			&& dist(x, z, ax, 0.0) > CENTRO_DESDE_M;
 	int fallback_centro = _fallback_centro(m, equipo, i);
 	bool sabe_pared = f.bruto[AT_PASES] >= pesos.pases_minimo_pared;
 	double dist_max_muro = _por_atributo(i, AT_PASES, pesos.pared_muro_cerca, pesos.pared_muro_lejos);
@@ -886,9 +898,14 @@ void Cerebro::_evaluar(const Mundo &m, int i, std::vector<Opcion> &op) const {
 				pz = corrida.z;
 			}
 		} else if (puede_centrar && r == fallback_centro) {
-			hay_centro = true;
 			px = ax - s * 10.0;
 			pz = std::clamp(c.z, -AREA_MEDIO_ANCHO, AREA_MEDIO_ANCHO);
+			// Solo si llega al punto mientras viaja la pelota (la misma cuenta
+			// que la del que corre al área): sin esto el centro iba a un lugar
+			// del área donde no había nadie.
+			double dc = dist(x, z, px, pz);
+			double vel = _por_atributo(i, atributo_pase(dc), pesos.vel_pase_min, pesos.vel_pase_max);
+			hay_centro = dist(c.x, c.z, px, pz) <= c.vel_max * dc / std::max(vel, 1.0) * 0.75 + 1.5;
 		}
 		double alcance_centro = r == fallback_centro ? std::max(max_largo, 45.0) : max_largo;
 		if (hay_centro && dist(x, z, px, pz) <= alcance_centro) {
@@ -941,7 +958,19 @@ void Cerebro::_evaluar(const Mundo &m, int i, std::vector<Opcion> &op) const {
 				&& mi_valor > 0.45) {
 			u += 0.5 * (1.0 - riesgo) * (1.0 - presion_normalizada(m, c.x, c.z, equipo));
 		}
+		// El pase que va hacia el arco propio no se da: si el que lo recibe
+		// (o el arquero) lo erra, es gol en contra. En la revisión visual de
+		// la etapa 6 un pase atrás casi lo fue.
+		bool al_arco_propio = false;
 		{
+			double gx = -ax;
+			double hacia = (c.x - x) * (gx - x);
+			if (hacia > 1e-6 && std::abs(gx - c.x) <= PASE_ATRAS_CERCA_M) {
+				double zc = z + (c.z - z) * (gx - x) / (c.x - x);
+				al_arco_propio = std::abs(zc) <= ARCO_MEDIO_ANCHO_M + PASE_ATRAS_MARGEN_M;
+			}
+		}
+		if (!al_arco_propio) {
 			Opcion o;
 			o.tipo = DEC_PASE;
 			o.receptor = r;
@@ -1019,7 +1048,11 @@ void Cerebro::_evaluar(const Mundo &m, int i, std::vector<Opcion> &op) const {
 			}
 			const JugadorVisto &r = m.jugadores[size_t(o.receptor)];
 			double margen = planeador->margen_globo(i, o.tiene_punto ? o.x : r.x, o.tiene_punto ? o.z : r.z);
-			o.utilidad -= pesos.castigo_corte * _riesgo_de_margen(margen);
+			if (o.tipo == DEC_CENTRO) {
+				o.utilidad *= 1.0 - pesos.castigo_centro * _riesgo_de_margen(margen);
+			} else {
+				o.utilidad -= pesos.castigo_corte * _riesgo_de_margen(margen);
+			}
 		}
 	}
 }
@@ -1329,8 +1362,22 @@ Decision Cerebro::decidir(const Mundo &m, int i, bool puede_pasar, Azar &azar) {
 		return dec;
 	}
 	std::vector<Opcion> op;
-	if (puede_pasar || f.rol == ARQ) {
-		_evaluar(m, i, op);
+	_evaluar(m, i, op);
+	if (!puede_pasar && f.rol != ARQ) {
+		// Todavía no puede pasarla (la cadencia del control), pero patear al
+		// arco sí. Sin esto, con espacio solo podía conducir durante 0,5 a
+		// 2,25 s: llegaba al área y no pateaba hasta tener un rival a 4 m
+		// (revisión visual de la etapa 6).
+		std::vector<Opcion> solo;
+		for (const Opcion &o : op) {
+			// Solo el tiro claro: con cualquier tiro a su alcance había 55
+			// remates cada 40 minutos (antes 44) y el arquero atajaba el 65%.
+			bool claro = o.tipo == DEC_REMATE && factor_geometria(p.x, p.z, equipo) >= TIRO_CLARO;
+			if (claro || o.tipo == DEC_CONDUCIR) {
+				solo.push_back(o);
+			}
+		}
+		op.swap(solo);
 	}
 	if (!op.empty()) {
 		double presion = presion_normalizada(m, p.x, p.z, equipo);

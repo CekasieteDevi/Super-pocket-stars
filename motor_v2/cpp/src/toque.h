@@ -31,7 +31,7 @@ struct ParametrosToque {
 	double pie_hasta = 0.32;
 	double muslo_hasta = 0.55;
 	double pecho_hasta = 0.85;
-	double cabeza_hasta = 1.3;
+	double cabeza_hasta = 1.8;
 	double llegada_pase_ms = 7.0;
 	double pase_min_ms = 4.0;
 	double pase_max_ms = 26.0;
@@ -42,7 +42,7 @@ struct ParametrosToque {
 	double control_ms = 1.5;
 	double error_control_rad = 0.4;
 	double error_control_ms = 1.5;
-	double toque_largo_m = 1.8;
+	double toque_largo_m = 1.4;
 	double toque_corto_m = 0.8;
 	double conduccion_factor = 0.75;
 	double sin_rebote_seg = 0.3;

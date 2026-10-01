@@ -486,6 +486,9 @@ private:
 	int64_t _tray_paso = 0;
 	// Desde qué paso los demás ya vieron la pelota nueva (reacción).
 	int64_t _visto_paso = 0;
+	// El equipo del último que la pelota le rebotó en el cuerpo después del
+	// último toque (-1 si nadie): cuenta para saber quién saca si sale.
+	int _rebote_equipo = -1;
 	// Paso de la última tarjeta: la parada de esa falta espera al árbitro.
 	int64_t _tarjeta_paso = -1;
 	int _reaccion_pasos = 12;
@@ -555,8 +558,9 @@ private:
 		int64_t minimo = 0;
 		int64_t tope = 0;
 		bool repuesta = false;
-		// Lateral: la tiene en las manos y arrancó el lanzamiento.
+		// Lateral: la tiene en las manos (desde qué paso) y arrancó el lanzamiento.
 		bool en_manos = false;
+		int64_t en_manos_desde = 0;
 		bool lanzando = false;
 		// Saque con el pie: ya es el poseedor y va a patear (desde este paso).
 		bool sacando = false;
@@ -637,6 +641,7 @@ private:
 	double _rapidez_raso(double d, int &k);
 	double _rapidez_globo(double d, int &k);
 	double _rapidez_conduce(double corre, double largo);
+	double _espacio_adelante(int i, V3 bola, double dx, double dz) const;
 	double _rival_mas_cerca(int i, double x, double z) const;
 	double _claridad(V3 bola, double x, double z, int equipo) const;
 

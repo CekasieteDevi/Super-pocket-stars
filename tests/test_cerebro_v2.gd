@@ -87,9 +87,21 @@ func _defensa() -> void:
 		c.simular(240)
 		if c.get_poseedor() < 0:
 			continue
-		muestras += 1
 		var defiende: int = 1 - int(c.get_equipo_con_pelota())
 		var papeles: PackedInt32Array = c.get_papeles()
+		# El plan de defensa se rehace cada 6 pasos. Si la pelota acaba de
+		# cambiar de equipo, los papeles todavía son los del plan anterior
+		# (los tiene el equipo que ahora ataca): se mira el plan siguiente.
+		var del_que_defiende := false
+		for i in papeles.size():
+			if equipos[i] == defiende and papeles[i] != 0:
+				del_que_defiende = true
+		if not del_que_defiende:
+			c.simular(6)
+			if c.get_poseedor() < 0 or 1 - int(c.get_equipo_con_pelota()) != defiende:
+				continue
+			papeles = c.get_papeles()
+		muestras += 1
 		var pos: PackedVector2Array = c.get_pos()
 		var b: Vector3 = c.get_pelota_pos()
 		var bola := Vector2(b.x, b.z)

@@ -28,6 +28,7 @@ void godot::leer_parametros_cuerpo(const Dictionary &d, motor_v2::ParametrosCuer
 	leer(d, "reserva_para_frenar", p.reserva_para_frenar);
 	leer(d, "piso_sprint", p.piso_sprint);
 	leer(d, "ventana_contacto_seg", p.ventana_contacto_seg);
+	leer(d, "frenada_suave", p.frenada_suave);
 }
 
 // Las claves de un Dictionary de Godot salen en el orden en que se cargaron;
