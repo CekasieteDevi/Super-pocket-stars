@@ -1,4 +1,5 @@
 [
+	{"version": "0.7.80", "fecha": "2026-10-01", "cambio": "Las reglas y la pelota parada del motor nuevo ya andan en computadoras con Windows."},
 	{"version": "0.7.79", "fecha": "2026-10-01", "cambio": "El motor nuevo ya juega partidos enteros con reglas: laterales, córners, faltas, tarjetas, offside, penales, cambios y entretiempo."},
 	{"version": "0.7.78", "fecha": "2026-10-01", "cambio": "El motor nuevo vuelve a andar en Linux con los remates y los arqueros."},
 	{"version": "0.7.77", "fecha": "2026-09-30", "cambio": "La prueba de remates del motor nuevo ya no muestra un error al arrancar."},
