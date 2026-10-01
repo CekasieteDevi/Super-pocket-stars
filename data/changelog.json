@@ -1,4 +1,5 @@
 [
+	{"version": "0.7.78", "fecha": "2026-10-01", "cambio": "El motor nuevo vuelve a andar en Linux con los remates y los arqueros."},
 	{"version": "0.7.77", "fecha": "2026-09-30", "cambio": "La prueba de remates del motor nuevo ya no muestra un error al arrancar."},
 	{"version": "0.7.76", "fecha": "2026-09-30", "cambio": "En el motor nuevo los jugadores ya patean al arco y los arqueros atajan, dan rebotes o no llegan."},
 	{"version": "0.7.75", "fecha": "2026-09-30", "cambio": "Los jugadores que piensan del motor nuevo ya andan en los teléfonos Android."},
