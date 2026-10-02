@@ -1292,6 +1292,55 @@ Cada estilo de local contra el Juego directo, 100 partidos:
 - **Qué:** el juego usa el V2 para los partidos del usuario, mirados o simulados; relato, estadísticas, HUD y minimapa leen sus eventos. Se borran el modo 2D, `vista_partido.gd`, `coreografia_partido.gd`, los `_preparar_*` y el motor espacial. Prueba larga en el teléfono (temperatura, batería, memoria).
 - **Pasa si:** se cumple la definición de hecho del Resumen.
 
+#### Resultado (2026-10-02): el juego usa el V2 y pasa la prueba del teléfono; falta el corte
+
+**Qué se hizo:**
+
+- **El puente** (`motor_v2/motor_v2.gd`, `MotorV2.simular`): juega el partido entero sin vista y devuelve lo mismo que `MotorEspacial.simular`: marcador, goleadores con su asistencia, registro, eventos para el relato y las estadísticas, experiencia, y los equipos (`Team`) con las tarjetas, las suspensiones, las lesiones, los cambios y la energía del partido. `Liga.jugar_fecha` y `Copa.jugar_partido` lo llaman para el partido del usuario.
+- **La receta** (`CerebroV2.receta` y `armar_de_receta`): todo lo que hace falta para armar el partido, como datos. El V2 no deja fotogramas: la pantalla arma el mismo partido con la receta y lo juega de nuevo. La receta viaja en el lugar de los fotogramas (`MotorV2.receta_de`), así no hubo que tocar la liga, las copas ni `GameState`.
+- **La pantalla** (`motor_v2/vista_partido_v2.gd`, `VistaPartidoV2`): juega la receta en vivo y la dibuja con `VistaV2`. Reusa el marcador y los controles (`HudPartido`), el minimapa y el relato. Los eventos traen el paso del motor en que pasaron y se cuentan cuando el partido llega a ese paso. Cada club sale con sus colores, sus números y el pelo de cada jugador.
+- **El alargue:** el cruce empatado juega dos tiempos de 15 minutos (`ALARGUE_1` y `ALARGUE_2` en `reglas.h`) y, si sigue empatado, la tanda. Antes el V2 iba directo a los penales.
+- **En el motor (C++):** el evento del gol trae al que asistió; el gol que entra hasta 3 s después de un remate es del que remató aunque se desvíe; los registros de pases y remates llevan el id del jugador; `energias_por_id` da la energía con la que terminó cada uno, también el que salió.
+- **Laboratorio y banco:** `motor_v2/laboratorio_partido.tscn` (el partido como lo ve el juego, sin entrar a una partida) y `motor_v2/banco_etapa8.tscn` (la prueba del teléfono).
+- **Test:** `tests/test_motor_v2_puente.gd`: goleadores que cierran con el marcador, expulsados y suspensiones, cambios, energía, eventos que el relato y las estadísticas leen, la receta que repite el partido y los empates de copa que se definen.
+
+**La prueba en el teléfono** (ZTE Z2357N, `banco_etapa8`, tres partidos seguidos en tiempo real):
+
+| Medida | Resultado | Presupuesto |
+| --- | --- | --- |
+| Partido sin vista | 0,38 s de media, 0,40 el peor (en la PC, 0,11 s) | 3 s |
+| Misma semilla, mismo partido | Huella 2972481124117576335 en la PC y en el teléfono | Igual |
+| Simulación por cuadro | 0,02 ms (un paso de 20 µs por cuadro) | 4 ms |
+| Dibujo | 59,3 fps de media en 984 s; la peor muestra de 30 s, 53,6 | 60 fps |
+| Primer medio minuto y último | 57,3 y 60,0 fps: no baja con el calor | No baja |
+| Cuadros lentos (más de 33 ms) | 138 en 984 s; el peor, 148 ms | — |
+| Memoria | 153 MB al empezar, 194 MB desde el segundo partido | — |
+| Batería y temperatura | Del 58 al 54% y de 24,0 a 28,5 °C en 16 minutos | — |
+
+- Con la sombra del sol prendida para el estadio daba 42 fps y 236 llamadas de dibujo. `VistaPartidoV2` la apaga, como la vista actual del juego: 110 llamadas.
+- Los cuadros lentos son los cambios: la vista se arma de nuevo cuando alguien entra o sale.
+
+**En la PC:** un partido sin vista tarda 180 ms con el V2 y 998 ms con el motor espacial (con la regresión corriendo al lado). La regresión completa pasa: 0 fallas de 176.
+
+**Pasa si, uno por uno** (la definición de hecho del Resumen):
+
+- **Sin correcciones ni teletransportes:** pasa (etapa 7: 0 correcciones y `SALTO_PELOTA` = 0 en 6.400 partidos).
+- **La pelota con física propia:** pasa (etapa 1).
+- **Goles, tiros, posesión, pases y faltas en rango:** pasa en las diez divisiones (etapa 7).
+- **60 fps y 4 ms de simulación por cuadro en el teléfono:** pasa (59,3 fps y 0,02 ms).
+- **Simular sin mirar en menos de 3 s por partido:** pasa (0,38 s).
+- **Misma semilla, mismo partido en PC y Android:** pasa.
+
+**Qué falta:**
+
+1. **El corte:** borrar el modo 2D, `vista_partido.gd`, `coreografia_partido.gd`, los `_preparar_*` y el motor espacial. No se hizo. El V2 todavía lee del motor espacial sus pesos y constantes (`FisicaV2`, `VistaV2`, `ArbitroV2`), el laboratorio de animaciones de la interfaz (`core/laboratorio.gd`) genera fotogramas con él, la calibración lo usa de referencia (`tests/_diag_calibracion_v2.gd`) y más de cien tests lo prueban. Es un paso aparte y no se puede deshacer fácil.
+2. **La experiencia por lo que hizo cada uno:** el V2 la reparte por puesto y minutos (`MatchEngine.xp_estimada`), como el motor abstracto. El motor espacial la sacaba de las acciones.
+3. **El relato:** no cuenta los quites ni los centros (el motor no los anota como eventos) y los pases no llevan el minuto.
+4. **La pantalla:** el estadio es siempre el mismo (no cambia con la cancha del local), no hay festejo en el banderín y los cambios traban un cuadro (148 ms).
+5. **Jugadas preparadas** (`core/jugadas.gd`): del V2 solo salen las paredes y el contragolpe; las de pelota parada no.
+6. **La biblioteca de Linux** sigue sin probarse.
+7. **Revisión visual** en una partida de verdad: un partido de liga y uno de copa.
+
 **Herramientas que acompañan todas las etapas:** un detector nuevo que mide sobre el mundo (no sobre la vista) `SALTO_PELOTA`, `ENCIMADOS` (cápsulas superpuestas), `PATINA` (pie que desliza), `ESPERA` (jugador quieto con la pelota viniendo a él) y ms por frame; y una grabación por semilla que se puede reproducir y rebobinar para ver cualquier minuto.
 
 **Dónde se hace cada etapa:** 0 (teléfono por adb) y 2 (Blender) en la PC del usuario; 1, 3, 4, 5, 6 y 7 se pueden hacer en la nube (Claude Cloud) con Godot sin pantalla; la revisión visual de cada etapa, en la PC.

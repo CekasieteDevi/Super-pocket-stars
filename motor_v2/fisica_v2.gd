@@ -164,7 +164,7 @@ static func parametros_arquero() -> Dictionary:
 ## ejecutor del motor espacial, el entretiempo ("esfuerzo"), las franjas de
 ## Cansancio y los cambios de Team. `tanda`: si el partido empatado se define
 ## por penales.
-static func parametros_reglas(tanda := false) -> Dictionary:
+static func parametros_reglas(tanda := false, alargue := false) -> Dictionary:
 	var p: Dictionary = (datos()["reglas"] as Dictionary).duplicate(true)
 	var fisica: Dictionary = MotorEspacial.pesos()["fisica"]
 	for clave in ["rango_libre_malo", "rango_libre_bueno", "angulo_minimo_tiro_libre", "dist_libre_al_area",
@@ -190,6 +190,8 @@ static func parametros_reglas(tanda := false) -> Dictionary:
 	p["energia_minima"] = Cansancio.ENERGIA_MINIMA
 	p["cambios_max"] = Team.MAX_CAMBIOS
 	p["tanda"] = tanda
+	p["alargue"] = alargue
+	p["minutos_alargue"] = MotorEspacial.MINUTOS_MOSTRADOS_POR_TIEMPO_ALARGUE
 	return p
 
 

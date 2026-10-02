@@ -283,31 +283,15 @@ func _ultimo_evento(tipos: Array) -> Array:
 	return [INF, {}]
 
 
-## Adónde mira la cámara: al que sale de la cancha y después al que entra por
-## él; null (la pelota) si no sale nadie.
+## Adónde mira la cámara (PartidoVistoV2.foco): la tarjeta, el expulsado o el
+## cambio; null (la pelota) si no pasa nada de eso.
 func _foco() -> Variant:
-	var ids := _visto.ids()
-	var pos := _visto.get_pos()
-	# Primero la tarjeta: la cámara se queda en la jugada (donde fue la falta)
-	# mientras el árbitro llega y la muestra. Yendo al árbitro saltaba y no
-	# se veía la falta.
-	if _con_tarjeta():
-		return _visto.get_tarjeta()["pos"]
-	# El expulsado: hasta el corte al saque.
-	var sale := _ultimo_evento(["roja"])
-	if not sale[1].is_empty() and int(_partido.get_estado()["corte"]) < int(sale[1]["paso"]):
-		var i := ids.rfind(int(sale[1]["jugador"]))
-		if i >= _partido.cantidad():
-			return pos[i]
-	# El cambio: al que sale hasta que cruza la raya, y después al que entra
-	# hasta que pisa la cancha.
-	return _visto.foco_de_cambio()
+	return _visto.foco(_tarjeta_seg)
 
 
 ## El árbitro está yendo a mostrar una tarjeta o mostrándola.
 func _con_tarjeta() -> bool:
-	var tarjeta := _visto.get_tarjeta()
-	return not tarjeta.is_empty() and float(_pasos - int(tarjeta["paso"])) * PASO_SEG < _tarjeta_seg
+	return not _visto.tarjeta_en_curso(_tarjeta_seg).is_empty()
 
 
 func _mostrar_tarjeta() -> void:

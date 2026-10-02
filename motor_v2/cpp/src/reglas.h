@@ -38,8 +38,12 @@ enum TipoLibre : int {
 enum Periodo : int {
 	PRIMER_TIEMPO = 0,
 	SEGUNDO_TIEMPO = 1,
-	TANDA = 2,
-	TERMINADO = 3,
+	// Etapa 8: el alargue de un cruce empatado (dos tiempos de
+	// minutos_alargue), antes de la tanda.
+	ALARGUE_1 = 2,
+	ALARGUE_2 = 3,
+	TANDA = 4,
+	TERMINADO = 5,
 };
 
 // Lo que el partido registra para el relato y las estadísticas.
@@ -243,6 +247,11 @@ struct ParametrosReglas {
 	// adivina con esta chance (si no, al otro).
 	double penal_adivina = 0.55;
 	bool tanda = false;
+	// Etapa 8: si el partido empatado juega antes dos tiempos de alargue, y
+	// cuántos minutos del reloj mostrado dura cada uno (MotorEspacial.
+	// MINUTOS_MOSTRADOS_POR_TIEMPO_ALARGUE).
+	bool alargue = false;
+	double minutos_alargue = 15.0;
 	int tanda_pateadores = 5;
 
 	// Clips (índices en los clips del cuerpo); los pone quien configura.

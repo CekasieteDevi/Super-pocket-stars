@@ -87,6 +87,9 @@ var check_rotacion: CheckBox
 const OPCIONES_CAMBIOS := ["equilibrado", "descanso", "rendimiento"]
 const ETIQUETAS_CAMBIOS := {"equilibrado": "Equilibrado", "descanso": "Priorizar descanso", "rendimiento": "Priorizar rendimiento"}
 var vista_partido: VistaPartido
+## El partido del Motor V2 (docs/motor_v2.md, etapa 8). Comparte el panel con
+## `vista_partido`: se ve una o la otra.
+var vista_partido_v2: VistaPartidoV2
 var resumen_partido: CenterContainer
 var contenedor_resumen: VBoxContainer
 var capa_resumen_partido: CanvasLayer
@@ -2555,6 +2558,13 @@ func _construir_panel_partido_animado(padre: Control) -> void:
 		# asegura que el panel ya quedo en el ultimo fotograma antes de mostrar
 		# el cartel de estadisticas.
 		call_deferred("_mostrar_resumen_partido"))
+
+	vista_partido_v2 = VistaPartidoV2.new()
+	vista_partido_v2.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vista_partido_v2.visible = false
+	panel.add_child(vista_partido_v2)
+	vista_partido_v2.hud.menu_pedido.connect(_volver_al_club)
+	vista_partido_v2.terminado.connect(func(): call_deferred("_mostrar_resumen_partido"))
 
 	_construir_resumen_partido(self)
 
@@ -7093,6 +7103,8 @@ func _reproducir_laboratorio(clave: String) -> void:
 	paneles["partido_animado"].visible = true
 	if resumen_partido != null:
 		resumen_partido.visible = false
+	vista_partido.visible = true
+	vista_partido_v2.visible = false
 	var colores := ColoresClub.par_equipos(copia_local, copia_visitante)
 	_aplicar_simulacion()
 	vista_partido.iniciar(
@@ -8657,6 +8669,8 @@ func _on_velocidad_partido_seleccionada(indice: int) -> void:
 	velocidad_partido_elegida = float(OPCIONES_VELOCIDAD_PARTIDO[indice])
 	if vista_partido != null and is_instance_valid(vista_partido):
 		vista_partido.velocidad = velocidad_partido_elegida
+	if vista_partido_v2 != null and is_instance_valid(vista_partido_v2):
+		vista_partido_v2.velocidad = velocidad_partido_elegida
 	_guardar_opciones()
 
 
@@ -9413,6 +9427,15 @@ func _mostrar_partido_animado() -> void:
 	var local: Team = _equipo_por_nombre(str(r["local"]))
 	var visitante: Team = _equipo_por_nombre(str(r["visitante"]))
 	if local == null or visitante == null:
+		return
+	# El partido del Motor V2 no trae fotogramas: trae la receta, y su vista
+	# lo vuelve a jugar.
+	var receta := MotorV2.receta_de(GameState.ultimos_fotogramas)
+	vista_partido.visible = receta.is_empty()
+	vista_partido_v2.visible = not receta.is_empty()
+	if not receta.is_empty():
+		vista_partido_v2.iniciar(receta, GameState.ultimos_eventos, local, visitante)
+		vista_partido_v2.velocidad = velocidad_partido_elegida
 		return
 	var colores := ColoresClub.par_equipos(local, visitante)
 	_aplicar_simulacion()

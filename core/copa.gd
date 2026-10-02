@@ -127,7 +127,7 @@ static func jugar_partido(home: Team, away: Team, rng: RandomNumberGenerator,
 		# se banca un equipo con huecos.
 		Alineacion.arreglar(home)
 		Alineacion.arreglar(away)
-		r = MotorEspacial.simular(home, away, rng, true, es_eliminatoria)
+		r = MotorV2.simular(home, away, rng, true, es_eliminatoria)
 	else:
 		r = MatchEngine.simular(home, away, rng, false)
 	home.en_copa = false

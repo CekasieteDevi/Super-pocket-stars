@@ -99,6 +99,14 @@ double Canchita::escala_reloj() const {
 	return param_reglas.minutos_tiempo * 60.0 / std::max(param_reglas.segundos_tiempo, 1.0);
 }
 
+// Un tiempo del alargue dura lo que le toca por sus minutos mostrados.
+double Canchita::segundos_periodo() const {
+	if (periodo == ALARGUE_1 || periodo == ALARGUE_2) {
+		return param_reglas.segundos_tiempo * param_reglas.minutos_alargue / std::max(param_reglas.minutos_tiempo, 1.0);
+	}
+	return param_reglas.segundos_tiempo;
+}
+
 // En segundos del reloj mostrado.
 double Canchita::adicion_seg() const {
 	return std::clamp(_adicion[lado() & 1], param_reglas.adicion_min_seg, param_reglas.adicion_max_seg);
@@ -106,7 +114,18 @@ double Canchita::adicion_seg() const {
 
 // El minuto que muestra el reloj (0 a 90 y el agregado).
 double Canchita::minuto() const {
-	return (periodo == PRIMER_TIEMPO ? 0.0 : param_reglas.minutos_tiempo) + reloj_seg() * escala_reloj() / 60.0;
+	double desde = 0.0;
+	if (periodo == SEGUNDO_TIEMPO) {
+		desde = param_reglas.minutos_tiempo;
+	} else if (periodo == ALARGUE_1) {
+		desde = param_reglas.minutos_tiempo * 2.0;
+	} else if (periodo == ALARGUE_2) {
+		desde = param_reglas.minutos_tiempo * 2.0 + param_reglas.minutos_alargue;
+	} else if (periodo >= TANDA) {
+		// La tanda y el final: el reloj queda donde terminó el juego.
+		return _minuto_final;
+	}
+	return desde + reloj_seg() * escala_reloj() / 60.0;
 }
 
 void Canchita::_anotar(int tipo, int equipo, int jugador, int otro, int detalle, double x, double z) {
@@ -127,6 +146,7 @@ void Canchita::_empezar_reglas() {
 	periodo = PRIMER_TIEMPO;
 	eventos.clear();
 	afuera.clear();
+	energia_al_salir.clear();
 	_entrando.clear();
 	_adelantados.clear();
 	_tarjeta_paso = -1;
@@ -1187,7 +1207,7 @@ bool Canchita::_reloj() {
 	if (periodo >= TANDA) {
 		return false;
 	}
-	double fin = param_reglas.segundos_tiempo + adicion_seg() / escala_reloj();
+	double fin = segundos_periodo() + adicion_seg() / escala_reloj();
 	double t = reloj_seg();
 	if (t < fin) {
 		return false;
@@ -1207,11 +1227,17 @@ bool Canchita::_reloj() {
 
 void Canchita::_fin_de_tiempo() {
 	_anotar(EV_FIN_TIEMPO, 0, -1, -1, periodo, pelota.pos.x, pelota.pos.z);
+	_minuto_final = minuto();
 	if (_remate.activo) {
 		_cerrar_remate(REMATE_OTRO);
 	}
-	if (periodo == PRIMER_TIEMPO) {
-		periodo = SEGUNDO_TIEMPO;
+	// Etapa 8: el cruce empatado a los 90 juega el alargue; después, la tanda.
+	bool empate = cuenta.goles[0] == cuenta.goles[1];
+	bool sigue = periodo == PRIMER_TIEMPO || (periodo == SEGUNDO_TIEMPO && param_reglas.alargue && empate)
+			|| periodo == ALARGUE_1;
+	if (sigue) {
+		bool entretiempo = periodo == PRIMER_TIEMPO;
+		periodo = periodo + 1;
 		_inicio_periodo = paso;
 		_pasos_parados = 0;
 		// Cambian de lado. El motor sigue con el equipo 0 atacando hacia +x y
@@ -1220,10 +1246,13 @@ void Canchita::_fin_de_tiempo() {
 		ParametrosPelota pp = pelota.param;
 		pp.viento = { -pp.viento.x, pp.viento.y, -pp.viento.z };
 		pelota.configurar(pp);
-		// MotorEspacial._recuperar_entretiempo: recupera parte de lo perdido.
+		// MotorEspacial._recuperar_entretiempo: recupera parte de lo perdido
+		// (solo en el entretiempo, no en los descansos del alargue).
 		for (JugadorCanchita &j : jugadores) {
-			double perdida = std::max(j.reglas.energia - j.energia, 0.0);
-			j.energia += std::min(perdida * param_reglas.recuperacion_entretiempo, param_reglas.tope_entretiempo);
+			if (entretiempo) {
+				double perdida = std::max(j.reglas.energia - j.energia, 0.0);
+				j.energia += std::min(perdida * param_reglas.recuperacion_entretiempo, param_reglas.tope_entretiempo);
+			}
 			j.en_el_piso_hasta = -1;
 		}
 		_parada = Parada();
@@ -1234,7 +1263,8 @@ void Canchita::_fin_de_tiempo() {
 		_en_manos = -1;
 		_remate = Remate();
 		// Vuelven del vestuario: cada uno aparece en su lugar del saque.
-		int saca = 1 - _saco_primero;
+		// Saca el que no sacó el tiempo anterior.
+		int saca = periodo == SEGUNDO_TIEMPO || periodo == ALARGUE_2 ? 1 - _saco_primero : _saco_primero;
 		for (size_t i = 0; i < jugadores.size(); i++) {
 			JugadorCanchita &j = jugadores[i];
 			Cuerpo &c = j.cuerpo;
@@ -1257,7 +1287,7 @@ void Canchita::_fin_de_tiempo() {
 		_parar(SAQUE_MEDIO, saca, 0.0, 0.0);
 		return;
 	}
-	if (periodo == SEGUNDO_TIEMPO && param_reglas.tanda && cuenta.goles[0] == cuenta.goles[1]) {
+	if ((periodo == SEGUNDO_TIEMPO || periodo == ALARGUE_2) && param_reglas.tanda && empate) {
 		_empezar_tanda();
 		return;
 	}
@@ -1594,6 +1624,7 @@ void Canchita::_quitar(int i, bool expulsado) {
 	s.equipo = j.equipo;
 	s.id = j.reglas.id;
 	s.expulsado = expulsado;
+	energia_al_salir.push_back({ j.reglas.id, j.energia });
 	s.x = j.cuerpo.x;
 	s.z = (j.cuerpo.z >= 0.0 ? 1.0 : -1.0) * (_medio_z() + AFUERA_M);
 	// El lesionado termina de caer (el gesto sigue) y después camina.
@@ -1767,6 +1798,7 @@ void Canchita::_cambiar(int sale, size_t entra) {
 		s.cuerpo.fase = SIN_ACCION;
 	}
 	s.factor = j.lesionado ? FACTOR_SALIR_LESIONADO : FACTOR_SALIR;
+	energia_al_salir.push_back({ j.reglas.id, j.energia });
 	afuera.push_back(s);
 	cuenta.cambios[e & 1]++;
 	_adicion[lado() & 1] += r.adicion_cambio_seg;

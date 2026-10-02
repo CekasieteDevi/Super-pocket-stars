@@ -273,6 +273,9 @@ struct RegistroPase {
 	int64_t paso = 0, paso_fin = 0;
 	int equipo = 0;
 	int pateador = -1, receptor = -1;
+	// Ids de Player (FichaReglas.id) del que lo da y del que lo termina
+	// tocando (-1 si nadie): los índices cambian cuando alguien sale.
+	int pateador_id = -1, toca_id = -1;
 	// DEC_* del cerebro (DEC_NADA: de primera, sin decisión).
 	int tipo = 0;
 	bool globo = false, al_espacio = false, de_primera = false;
@@ -305,6 +308,9 @@ struct RegistroPase {
 struct RegistroRemate {
 	int equipo = 0;
 	int pateador = -1;
+	// Id de Player del que remata y minuto del reloj mostrado.
+	int pateador_id = -1;
+	double minuto = 0.0;
 	int golpe = 0;
 	bool de_primera = false;
 	double desde_x = 0.0, desde_z = 0.0;
@@ -500,6 +506,9 @@ public:
 	bool reglas = false;
 	std::vector<EventoPartido> eventos;
 	std::vector<Suplente> banco;
+	// Etapa 8: la energía con la que se fue cada uno que salió de la cancha
+	// (cambiado, lesionado o expulsado): id de Player y energía.
+	std::vector<std::pair<int, double>> energia_al_salir;
 	std::vector<Saliente> afuera;
 	// Los que entraron por un cambio y todavía no pisaron la cancha.
 	const std::vector<int> &entrando() const {
@@ -515,11 +524,14 @@ public:
 	double escala_reloj() const;
 	double adicion_seg() const;
 	double minuto() const;
-	// 0 en el primer tiempo, 1 en el segundo: la vista gira la cancha 180°
-	// (el motor sigue con el equipo 0 atacando hacia +x).
+	// 0 en el primer tiempo (y en el primero del alargue), 1 en el segundo: la
+	// vista gira la cancha 180° (el motor sigue con el equipo 0 atacando
+	// hacia +x).
 	int lado() const {
-		return periodo == PRIMER_TIEMPO ? 0 : 1;
+		return periodo == PRIMER_TIEMPO || periodo == ALARGUE_1 ? 0 : 1;
 	}
+	// Segundos de verdad que dura el periodo en curso, sin el agregado.
+	double segundos_periodo() const;
 	bool terminado() const {
 		return periodo == TERMINADO;
 	}
@@ -690,6 +702,12 @@ private:
 	// El pase abierto en registro_pases (-1 si no hay).
 	int _pase_reg = -1;
 	int _separa_tipo = -1, _separa_de = -1;
+	// Etapa 8, la asistencia: el último pase entre compañeros, por id (quién
+	// lo dio y quién lo recibió). Se borra cuando la toca el rival.
+	int _asistente_id = -1, _asistido_id = -1;
+	// El último remate: quién (id), de qué equipo y en qué paso.
+	int _gol_de_id = -1, _gol_de_equipo = -1;
+	int64_t _gol_de_paso = -1000000;
 	int _entrada_de = -1;
 	double _separa_max = 0.0;
 	void _cerrar_separacion(int equipo_que_sigue);
@@ -717,6 +735,8 @@ private:
 	SaqueMano _mano;
 	// Un equipo quedó con menos de siete: el partido se suspende.
 	bool _suspendido = false;
+	// El minuto del reloj mostrado en que terminó el último periodo jugado.
+	double _minuto_final = 0.0;
 
 	double _medio_x() const;
 	double _medio_z() const;

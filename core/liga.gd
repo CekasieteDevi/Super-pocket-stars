@@ -241,7 +241,7 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 			# siguen con el motor abstracto, que es más rápido y alcanza:
 			# la profundidad asimétrica es deliberada, ver
 			# docs/motor_espacial.md.
-			r = MotorEspacial.simular(home, away, rng, true)
+			r = MotorV2.simular(home, away, rng, true)
 		else:
 			r = MatchEngine.simular(home, away, rng, false)
 

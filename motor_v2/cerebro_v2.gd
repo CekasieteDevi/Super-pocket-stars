@@ -43,20 +43,40 @@ static func armar_partido(semilla: int, estilo_local := "", estilo_visitante := 
 ## (etapa 6) cada uno lleva lo que leen las reglas (FisicaV2.reglas_de) y el
 ## banco (Team.banco) va como suplentes.
 static func armar(local: Team, visitante: Team, semilla: int, reglas := false, tanda := false) -> Object:
-	var c: Object = ClassDB.instantiate("CanchitaV2Nativa")
-	c.configurar(FisicaV2.parametros(), FisicaV2.parametros_cuerpo(), FisicaV2.clips(), FisicaV2.parametros_toque())
-	c.configurar_cerebro(MotorEspacial.pesos(), FisicaV2.parametros_cerebro())
-	c.configurar_remate(FisicaV2.parametros_remate(), FisicaV2.parametros_arquero())
-	if reglas:
-		c.configurar_reglas(FisicaV2.parametros_reglas(tanda))
+	return armar_de_receta(receta(local, visitante, semilla, reglas, tanda))
+
+
+## Etapa 8: todo lo que hace falta para armar un partido, como datos. Con la
+## misma receta sale el mismo partido: el juego lo simula entero sin vista
+## para tener el resultado y la pantalla lo vuelve a armar para mirarlo. Los
+## equipos (Team) cambian con el partido (energía, lesiones, cambios); la
+## receta es la foto de antes.
+##
+## `calidad_cancha` y `clima`: los de FisicaV2.parametros (el césped del local
+## y el clima del partido). Sin ellos, la pelota de fábrica.
+## `alargue`: el empate juega antes dos tiempos de alargue (los cruces del juego).
+static func receta(local: Team, visitante: Team, semilla: int, reglas := false, tanda := false,
+		calidad_cancha := 0.0, clima := "", alargue := false) -> Dictionary:
+	var r := {
+		"semilla": semilla,
+		"pelota": FisicaV2.parametros(calidad_cancha, clima),
+		"cuerpo": FisicaV2.parametros_cuerpo(),
+		"clips": FisicaV2.clips(),
+		"toque": FisicaV2.parametros_toque(),
+		"pesos": MotorEspacial.pesos(),
+		"cerebro": FisicaV2.parametros_cerebro(),
+		"remate": FisicaV2.parametros_remate(),
+		"arquero": FisicaV2.parametros_arquero(),
+		"reglas": FisicaV2.parametros_reglas(tanda, alargue) if reglas else {},
+		"planes": [], "clubes": [], "titulares": [[], []], "suplentes": [[], []],
+	}
 	var nivel := MatchEngine.nivel_partido(local, visitante)
 	var equipos := [local, visitante]
 	for e in 2:
 		var equipo: Team = equipos[e]
 		var rival: Team = equipos[1 - e]
-		c.configurar_plan(e, plan_de(equipo, rival))
-		if reglas:
-			c.configurar_reglas_equipo(e, FisicaV2.reglas_del_club(equipo))
+		r["planes"].append(plan_de(equipo, rival))
+		r["clubes"].append(FisicaV2.reglas_del_club(equipo) if reglas else {})
 		var slots := Formaciones.slots(equipo.formacion)
 		# Etapa 7: el equipo que es mejor que el nivel del partido llega antes
 		# a todo. Es del equipo entero: por jugador, en un partido parejo el
@@ -64,16 +84,42 @@ static func armar(local: Team, visitante: Team, semilla: int, reglas := false, t
 		var puntos := equipo.media_equipo() - nivel
 		var ventaja := FisicaV2.ventaja_de_nivel(puntos, nivel)
 		for i in mini(equipo.jugadores.size(), slots.size()):
+			# El que no puede jugar (lesionado o suspendido) deja el puesto
+			# vacío: el equipo sale con uno menos, como en Team.reset_partido.
+			if not equipo.puede_jugar(int(equipo.jugadores[i]["id"])):
+				continue
 			var f := ficha_de(equipo.jugadores[i], str(slots[i]["rol"]), slots[i]["base"], nivel, ventaja, puntos)
 			if reglas:
 				f["reglas"] = FisicaV2.reglas_de(equipo.jugadores[i], equipo, rival)
-			c.agregar(e, f)
+			r["titulares"][e].append(f)
 		if reglas:
 			for j in equipo.banco:
+				if not equipo.puede_jugar(int(j["id"])):
+					continue
 				var f := ficha_de(j, str(j["posicion"]), Vector2.ZERO, nivel, ventaja, puntos)
 				f["reglas"] = FisicaV2.reglas_de(j, equipo, rival)
-				c.agregar_suplente(e, f)
-	c.empezar(CanchitaV2Nativa.PARTIDO, semilla)
+				r["suplentes"][e].append(f)
+	return r
+
+
+## El partido de una receta, listo para avanzar.
+static func armar_de_receta(r: Dictionary) -> Object:
+	var c: Object = ClassDB.instantiate("CanchitaV2Nativa")
+	c.configurar(r["pelota"], r["cuerpo"], r["clips"], r["toque"])
+	c.configurar_cerebro(r["pesos"], r["cerebro"])
+	c.configurar_remate(r["remate"], r["arquero"])
+	var reglas: bool = not (r["reglas"] as Dictionary).is_empty()
+	if reglas:
+		c.configurar_reglas(r["reglas"])
+	for e in 2:
+		c.configurar_plan(e, r["planes"][e])
+		if reglas:
+			c.configurar_reglas_equipo(e, r["clubes"][e])
+		for f in r["titulares"][e]:
+			c.agregar(e, f)
+		for f in r["suplentes"][e]:
+			c.agregar_suplente(e, f)
+	c.empezar(CanchitaV2Nativa.PARTIDO, int(r["semilla"]))
 	return c
 
 

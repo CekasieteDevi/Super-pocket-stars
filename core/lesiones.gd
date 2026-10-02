@@ -59,7 +59,13 @@ static func intentar_lesion(jugador: Dictionary, resistencia_pct: float, rng: Ra
 	var riesgo := evaluar_riesgo(jugador, resistencia_pct, instalaciones_medicas, carga_entrenamiento)
 	if rng.randf() >= riesgo:
 		return {}
+	return sortear(jugador, rng)
 
+
+## Qué lesión es y cuántos días, sin sortear si se lesiona. Lo usa el Motor V2
+## (MotorV2): ahí la lesión sale del contacto en la cancha y acá solo falta
+## saber cuál.
+static func sortear(jugador: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 	var es_arquero: bool = jugador["posicion"] == "ARQ"
 	var candidatas := []
 	var total_peso := 0.0

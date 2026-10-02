@@ -124,6 +124,36 @@ func foco_de_cambio() -> Variant:
 	return _girar(pos[entrando[0]]) if entrando[0] < pos.size() else null
 
 
+## La tarjeta que el árbitro está yendo a mostrar o mostrando ({} si no hay):
+## dura `tarjeta_seg` desde que se cobra (reglas.tarjeta_seg).
+func tarjeta_en_curso(tarjeta_seg: float) -> Dictionary:
+	var tarjeta := get_tarjeta()
+	if tarjeta.is_empty() or float(get_paso() - int(tarjeta["paso"])) / 60.0 >= tarjeta_seg:
+		return {}
+	return tarjeta
+
+
+## Adónde mira la cámara en vez de la pelota (metros, ya girado), o null:
+## - Mientras el árbitro muestra una tarjeta, donde fue la falta.
+## - El expulsado, hasta el corte al saque.
+## - En un cambio, el que sale y después el que entra (foco_de_cambio).
+func foco(tarjeta_seg: float) -> Variant:
+	var tarjeta := tarjeta_en_curso(tarjeta_seg)
+	if not tarjeta.is_empty():
+		return tarjeta["pos"]
+	var eventos: Array = partido.eventos()
+	for k in range(eventos.size() - 1, -1, -1):
+		var e: Dictionary = eventos[k]
+		if e["tipo"] != "roja":
+			continue
+		if get_corte() < int(e["paso"]):
+			var i := ids().rfind(int(e["jugador"]))
+			if i >= _cantidad:
+				return get_pos()[i]
+		break
+	return foco_de_cambio()
+
+
 func _de_afuera(i: int) -> bool:
 	return i >= _cantidad
 

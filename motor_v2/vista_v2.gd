@@ -148,6 +148,10 @@ var arqueros := PackedInt32Array()
 ## Etapa 6: el id de cada uno (get_ids de CanchitaV2Nativa) para su cara y su
 ## peinado: el que entra en un cambio es otro. Vacío: de su lugar.
 var ids := PackedInt32Array()
+## Etapa 8: la ropa de cada uno, en el orden de `equipos`: {camiseta, short,
+## pelo, numero}. Vacío (los laboratorios): los colores de prueba y el número
+## según el orden.
+var ropa: Array = []
 ## Clip -> [segundo del contacto, ancla] de los que tocan con el pie.
 var _contacto_pie := {}
 var _giro_alcance := 1.0
@@ -209,8 +213,13 @@ func _ready() -> void:
 		var camiseta: Color = colores[equipo]
 		if arquero:
 			camiseta = Color("2f9e44") if equipo == 0 else Color("e8a33a")
-		p.colorear(camiseta, Color(0, 0, 0, 0), Color("3b2618"))
-		p.poner_numero(numero[equipo])
+		if i < ropa.size():
+			var r: Dictionary = ropa[i]
+			p.colorear(r["camiseta"], r.get("short", Color.TRANSPARENT), r.get("pelo", Color("3b2618")))
+			p.poner_numero(int(r.get("numero", numero[equipo])))
+		else:
+			p.colorear(camiseta, Color(0, 0, 0, 0), Color("3b2618"))
+			p.poner_numero(numero[equipo])
 		p.poner_cara(Jugador3D.cara_de(id), Jugador3D.Gesto.NORMAL)
 		if not arquero:
 			p.poner_peinado(Jugador3D.peinado_de(id))
@@ -787,6 +796,15 @@ func _andar_de(i: int, v: float) -> String:
 		nuevo = "Caminar"
 	_andar[i] = nuevo
 	return nuevo
+
+
+## Etapa 8: el rectángulo de cancha (metros) que muestra la cámara, para el
+## minimapa. Es el ancho que encuadra _mover_camara, con el alto que le toca
+## por la forma de la pantalla.
+func encuadre_metros() -> Rect2:
+	var ancho_m: float = maxf(size.x, 1.0) / CamaraPartido.PX_POR_METRO_BASE / CamaraPartido3D.ACERCAMIENTO 		/ maxf(_acercamiento_actual, 0.01)
+	var alto_m := ancho_m * maxf(size.y, 1.0) / maxf(size.x, 1.0)
+	return Rect2(_centro - Vector2(ancho_m, alto_m) * 0.5, Vector2(ancho_m, alto_m))
 
 
 ## El encuadre de VistaCancha3D (_mover_camara) con el zoom base, siguiendo

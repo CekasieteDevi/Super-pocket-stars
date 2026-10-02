@@ -1,3 +1,6 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+# Sobras del enlazador de Windows al armar la extensión del Motor V2
+motor_v2/bin/*.exp
+motor_v2/bin/*.lib

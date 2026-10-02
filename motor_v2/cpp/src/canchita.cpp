@@ -43,6 +43,9 @@ constexpr int DESCANSO_PASE_PROPIO = 150;
 constexpr int TRAYECTORIA_MARGEN = 60;
 // Con el arco a tiro, cada cuánto vuelve a decidir el que conduce.
 constexpr double DECIDE_A_TIRO_SEG = 0.5;
+// El gol que entra hasta esto después de un remate (3 s) es del que remató,
+// aunque la pelota se haya desviado en el camino.
+constexpr int64_t GOL_DEL_REMATE_PASOS = 180;
 // El control mira este largo adelante para no mandarla afuera (toque.control_raya_m).
 constexpr double CONTROL_MIRA_M = 4.0;
 // Rondo: corte o pelota afuera, y se vuelve a empezar 1 s después; la
@@ -1717,7 +1720,16 @@ void Canchita::_tocar(int i, double distancia) {
 		reg.toque_fin = j.toque;
 		reg.parte_fin = j.parte;
 		reg.alto_fin = pelota.pos.y;
+		reg.toca_id = _id(i);
 		_cerrar_pase(!ataca ? PASE_CORTE : (i == _receptor ? PASE_COMPLETO : (i == _pateador ? PASE_PROPIO : PASE_OTRO)));
+	}
+	// La asistencia: el pase de un compañero que termina en este toque.
+	if (!ataca) {
+		_asistente_id = _asistido_id = -1;
+	} else if (pase_en_juego && _pateador >= 0 && _pateador != i && _pateador < int(jugadores.size())
+			&& jugadores[size_t(_pateador)].equipo == j.equipo) {
+		_asistente_id = _id(_pateador);
+		_asistido_id = _id(i);
 	}
 	int tipo = j.toque;
 	int receptor_previo = _receptor;
@@ -1850,6 +1862,7 @@ void Canchita::_tocar(int i, double distancia) {
 				reg.paso = paso;
 				reg.equipo = j.equipo;
 				reg.pateador = i;
+				reg.pateador_id = _id(i);
 				reg.receptor = j.receptor;
 				reg.tipo = j.tipo_pase;
 				reg.globo = j.globo;
@@ -3492,6 +3505,11 @@ void Canchita::_patear_al_arco(int i, bool de_primera, double apretado) {
 	RegistroRemate reg;
 	reg.equipo = j.equipo;
 	reg.pateador = i;
+	reg.pateador_id = _id(i);
+	_gol_de_id = reg.pateador_id;
+	_gol_de_equipo = j.equipo;
+	_gol_de_paso = paso;
+	reg.minuto = reglas ? minuto() : double(paso) * PASO_SEG / 60.0;
 	reg.golpe = golpe;
 	reg.de_primera = de_primera;
 	reg.desde_x = desde.x;
@@ -3550,7 +3568,16 @@ void Canchita::_gol(int marca) {
 	cuenta.goles[marca & 1]++;
 	if (reglas && modo == PARTIDO) {
 		int autor = _remate.activo && _remate.equipo == marca ? _id(_remate.pateador) : -1;
-		_anotar(EV_GOL, marca, autor, -1, _remate.activo && _remate.penal ? 1 : 0, pelota.pos.x, pelota.pos.z);
+		// El remate que se desvía en un rival (o da en el palo) y entra ya
+		// cerró como remate, pero el gol es del que pateó. Sin esto quedaba
+		// sin autor, como un gol en contra, y la tabla de goleadores no
+		// cerraba con la de posiciones (tests/test_estadisticas_liga.gd).
+		if (autor < 0 && _gol_de_id >= 0 && _gol_de_equipo == marca && paso - _gol_de_paso <= GOL_DEL_REMATE_PASOS) {
+			autor = _gol_de_id;
+		}
+		// `otro`: el que le dio el pase (la asistencia), -1 si no hubo.
+		int asistente = autor >= 0 && autor == _asistido_id && !_remate.penal ? _asistente_id : -1;
+		_anotar(EV_GOL, marca, autor, asistente, _remate.activo && _remate.penal ? 1 : 0, pelota.pos.x, pelota.pos.z);
 		_adicion[lado() & 1] += param_reglas.adicion_gol_seg;
 		if (_remate.activo && _remate.penal && _remate.equipo == marca) {
 			cuenta.penales_gol++;

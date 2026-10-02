@@ -119,6 +119,7 @@ public:
 	Array eventos() const;
 	PackedInt32Array get_ids() const;
 	PackedFloat32Array get_energias() const;
+	Dictionary energias_por_id() const;
 	Array get_afuera() const;
 	Dictionary get_estado() const;
 	// Laboratorio de reanudaciones (canchita.h, forzar_*). `tipo` es el nombre

@@ -71,7 +71,7 @@ func _numeros_como_el_json() -> void:
 			distintos.append("%s: C++ %s, JSON %s" % [clave, valor, del_json])
 	for clave in json:
 		var s := str(clave)
-		if not s.begins_with("clip_") and s != "tanda" and not fabrica.has(clave):
+		if not s.begins_with("clip_") and s != "tanda" and s != "alargue" and not fabrica.has(clave):
 			distintos.append("%s del JSON no lo lee el C++" % s)
 	_ok(distintos.is_empty(), "reglas.h tiene los mismos valores que FisicaV2.parametros_reglas() %s" % [distintos])
 

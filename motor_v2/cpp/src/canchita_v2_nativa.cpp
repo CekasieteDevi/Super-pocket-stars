@@ -162,6 +162,7 @@ struct NumeroReglas {
 };
 const NumeroReglas NUMEROS_REGLAS[] = {
 	{ "minutos_tiempo", &motor_v2::ParametrosReglas::minutos_tiempo },
+	{ "minutos_alargue", &motor_v2::ParametrosReglas::minutos_alargue },
 	{ "segundos_tiempo", &motor_v2::ParametrosReglas::segundos_tiempo },
 	{ "cierre_max_seg", &motor_v2::ParametrosReglas::cierre_max_seg },
 	{ "adicion_min_seg", &motor_v2::ParametrosReglas::adicion_min_seg },
@@ -297,6 +298,9 @@ void godot::leer_parametros_reglas(const Dictionary &d, const std::vector<String
 	}
 	if (d.has("menos_en_directo")) {
 		p.menos_en_directo = int(d["menos_en_directo"]);
+	}
+	if (d.has("alargue")) {
+		p.alargue = bool(d["alargue"]);
 	}
 	if (d.has("tanda")) {
 		p.tanda = bool(d["tanda"]);
@@ -874,6 +878,22 @@ PackedInt32Array CanchitaV2Nativa::get_ids() const {
 	return r;
 }
 
+// Etapa 8: la energía de todos al terminar, por id de Player: los que están
+// en la cancha, los que salieron (con la que se fueron) y el banco.
+Dictionary CanchitaV2Nativa::energias_por_id() const {
+	Dictionary d;
+	for (const motor_v2::Suplente &s : _c.banco) {
+		d[s.jugador.reglas.id] = s.jugador.reglas.energia;
+	}
+	for (const std::pair<int, double> &e : _c.energia_al_salir) {
+		d[e.first] = e.second;
+	}
+	for (const motor_v2::JugadorCanchita &j : _c.jugadores) {
+		d[j.reglas.id] = j.energia;
+	}
+	return d;
+}
+
 PackedFloat32Array CanchitaV2Nativa::get_energias() const {
 	PackedFloat32Array r;
 	for (const motor_v2::JugadorCanchita &j : _c.jugadores) {
@@ -901,8 +921,8 @@ Array CanchitaV2Nativa::get_afuera() const {
 
 Dictionary CanchitaV2Nativa::get_estado() const {
 	Dictionary d;
-	const char *periodos[4] = { "primer_tiempo", "segundo_tiempo", "tanda", "terminado" };
-	d["periodo"] = periodos[std::clamp(_c.periodo, 0, 3)];
+	const char *periodos[6] = { "primer_tiempo", "segundo_tiempo", "alargue_1", "alargue_2", "tanda", "terminado" };
+	d["periodo"] = periodos[std::clamp(_c.periodo, 0, 5)];
 	d["reloj"] = _c.reloj_seg();
 	d["minuto"] = _c.minuto();
 	d["adicion"] = _c.adicion_seg();
@@ -954,6 +974,8 @@ Array CanchitaV2Nativa::registro_pases() const {
 		d["paso_fin"] = g.paso_fin;
 		d["equipo"] = g.equipo;
 		d["pateador"] = g.pateador;
+		d["pateador_id"] = g.pateador_id;
+		d["toca_id"] = g.toca_id;
 		d["receptor"] = g.receptor;
 		d["tipo"] = g.tipo;
 		d["globo"] = g.globo;
@@ -985,6 +1007,9 @@ Array CanchitaV2Nativa::registro_remates() const {
 		Dictionary d;
 		d["equipo"] = g.equipo;
 		d["pateador"] = g.pateador;
+		d["pateador_id"] = g.pateador_id;
+		d["minuto"] = g.minuto;
+		d["paso"] = g.paso_remate;
 		d["golpe"] = g.golpe;
 		d["de_primera"] = g.de_primera;
 		d["desde"] = Vector2(real_t(g.desde_x), real_t(g.desde_z));
@@ -1114,6 +1139,7 @@ void CanchitaV2Nativa::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("eventos"), &CanchitaV2Nativa::eventos);
 	ClassDB::bind_method(D_METHOD("get_ids"), &CanchitaV2Nativa::get_ids);
 	ClassDB::bind_method(D_METHOD("get_energias"), &CanchitaV2Nativa::get_energias);
+	ClassDB::bind_method(D_METHOD("energias_por_id"), &CanchitaV2Nativa::energias_por_id);
 	ClassDB::bind_method(D_METHOD("get_afuera"), &CanchitaV2Nativa::get_afuera);
 	ClassDB::bind_method(D_METHOD("get_estado"), &CanchitaV2Nativa::get_estado);
 	ClassDB::bind_method(D_METHOD("forzar_parada", "tipo", "equipo", "pos"), &CanchitaV2Nativa::forzar_parada);
