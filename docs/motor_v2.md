@@ -1369,8 +1369,9 @@ Cada estilo de local contra el Juego directo, 100 partidos:
    | Quinta, armonía −5 contra +5 | −0,42 | −0,38 |
 
    - Entran una sola vez, al armar el partido, y por equipo. Lo que el motor espacial aplicaba por duelo (la química de a pares, el rasgo del DT según el marcador y el minuto, el capitán) queda promediado.
-7. **La biblioteca de Linux:** descartada (2026-10-02). El juego sale para Android y se desarrolla en Windows; la nube ya no se usa. Se sacaron la biblioteca, su entrada en `motor_v2.gdextension` y `motor_v2/cpp/zig`.
-8. **Revisión visual** en una partida de verdad: un partido de liga y uno de copa.
+7. **Los pateadores que elige el club y el penal:** hecho (2026-10-02). El V2 no leía Equipo > Roles: el córner, el tiro libre y el penal los sacaba siempre el mejor de los que estaban cerca. Ahora el elegido saca si está en la cancha (`FichaReglas.designado`; el penal, esté donde esté; lo demás, hasta 80 m, como en el motor espacial). El penal se patea con el tiro que dan los rasgos (`Personalidad.bonus_penal`) y el ejercicio de penales. Test: `tests/test_jugadas_v2.gd`.
+8. **La biblioteca de Linux:** descartada (2026-10-02). El juego sale para Android y se desarrolla en Windows; la nube ya no se usa. Se sacaron la biblioteca, su entrada en `motor_v2.gdextension` y `motor_v2/cpp/zig`.
+9. **Revisión visual** en una partida de verdad: un partido de liga y uno de copa.
 
 **Herramientas que acompañan todas las etapas:** un detector nuevo que mide sobre el mundo (no sobre la vista) `SALTO_PELOTA`, `ENCIMADOS` (cápsulas superpuestas), `PATINA` (pie que desliza), `ESPERA` (jugador quieto con la pelota viniendo a él) y ms por frame; y una grabación por semilla que se puede reproducir y rebobinar para ver cualquier minuto.
 

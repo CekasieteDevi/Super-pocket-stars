@@ -69,6 +69,60 @@ func _init() -> void:
 				_ok(int(r["al_socio"]) >= int(r["jugadas"]) * 0.6 and int(r["remata_socio"]) >= int(r["jugadas"]) * 0.4,
 					"amague: el saque va al socio %d veces y el socio remata %d" % [r["al_socio"], r["remata_socio"]])
 
+	# Los pateadores que elige el club (Equipo > Roles): el córner, el tiro
+	# libre y el penal los saca el elegido, no el mejor de los que están cerca.
+	for caso in [["corner", Roles.CORNERS], ["tiro_libre", Roles.LIBRES_CERCA], ["penal", Roles.PENALES]]:
+		var del_elegido := 0
+		var sacados := 0
+		for k in 8:
+			var rng_r := RandomNumberGenerator.new()
+			rng_r.seed = SEED + 300 + k
+			var home: Team = Team.generar("Local", rng_r, 0)
+			var away: Team = Team.generar("Visitante", rng_r, 1000)
+			home.jugadas_aprendidas.clear()
+			away.jugadas_aprendidas.clear()
+			# El peor en eso de los que juegan del medio para arriba (los de
+			# atrás quedan a más de 80 m del córner): nunca es el que el
+			# motor elegiría solo.
+			var elegido := -1
+			var peor := INF
+			for j in home.jugadores:
+				if str(j["posicion"]) in ["ARQ", "DFC", "LAT"]:
+					continue
+				var valor := float(j["atributos"][Roles.ATRIBUTO[caso[1]]])
+				if valor < peor:
+					peor = valor
+					elegido = int(j["id"])
+			Roles.asignar(home, caso[1], elegido)
+			home.reset_partido()
+			away.reset_partido()
+			var c: Object = CerebroV2.armar(home, away, SEED + 300 + k, true)
+			c.simular(60 * 8)
+			var en := Vector2(ProyeccionPartido.MEDIO_LARGO, ProyeccionPartido.MEDIO_ANCHO)
+			if caso[0] == "tiro_libre":
+				en = Vector2(ProyeccionPartido.MEDIO_LARGO - 20.0, 0.0)
+			elif caso[0] == "penal":
+				en = Vector2(ProyeccionPartido.MEDIO_LARGO - 11.0, 0.0)
+			if not c.forzar_parada(caso[0], 0, en):
+				continue
+			var antes: int = (c.eventos() as Array).size()
+			for paso in 60 * 30:
+				c.avanzar()
+				var saco := false
+				for ev in (c.eventos() as Array).slice(antes):
+					if str(ev["tipo"]) == "saque":
+						saco = true
+						sacados += 1
+						if int(ev["jugador"]) == elegido:
+							del_elegido += 1
+				if saco:
+					break
+		# El tiro libre no siempre va al arco: si al elegido no le da la
+		# pierna se cuelga o se juega corto, y eso lo saca otro.
+		var minimo := sacados / 2 if caso[0] == "tiro_libre" else sacados - 2
+		_ok(sacados >= 6 and del_elegido >= minimo,
+			"%s: el elegido por el club saca %d de %d" % [caso[0], del_elegido, sacados])
+
 	# El puente: el relato cuenta las jugadas.
 	var relatadas := {}
 	for n in 10:

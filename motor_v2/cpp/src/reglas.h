@@ -320,6 +320,21 @@ struct FichaReglas {
 	int rol = 3;
 	// Para el cambio: la media del jugador (MatchEngine._mejor_suplente_para).
 	double media = 50.0;
+	// Etapa 8: las pelotas paradas para las que el club lo eligió (Equipo >
+	// Roles), como suma de Designado. 0 = ninguna.
+	int designado = 0;
+	// Etapa 8: el penal se patea con tiro × penal_factor + penal_puntos
+	// (Personalidad.bonus_penal y el ejercicio de penales).
+	double penal_factor = 1.0;
+	double penal_puntos = 0.0;
+};
+
+// Para qué pelota parada eligió el club a un jugador (Roles.CLAVES).
+enum Designado : int {
+	DESIGNADO_PENALES = 1,
+	DESIGNADO_CORNERS = 2,
+	DESIGNADO_LIBRES_CERCA = 4,
+	DESIGNADO_LIBRES_LEJOS = 8,
 };
 
 } // namespace motor_v2

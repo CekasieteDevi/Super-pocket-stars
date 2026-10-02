@@ -211,6 +211,24 @@ static func reglas_del_club(equipo: Team) -> Dictionary:
 	}
 
 
+## Designado de reglas.h: la suma de las pelotas paradas para las que el club
+## eligió a este jugador (Equipo > Roles). 0 = ninguna: saca el mejor de los
+## que están cerca.
+const DESIGNADO := {Roles.PENALES: 1, Roles.CORNERS: 2, Roles.LIBRES_CERCA: 4, Roles.LIBRES_LEJOS: 8}
+## Un punto de duelo (Duel.resolver) vale esto en puntos de atributo: la
+## pendiente de Duel.p_base en el empate es 100·ln(10)/(4·25) = 2,3 puntos de
+## duelo por punto de atributo.
+const PUNTOS_DE_ATRIBUTO_POR_DUELO := 0.434
+
+
+static func _designado(jugador: Dictionary, equipo: Team) -> int:
+	var suma := 0
+	for clave in DESIGNADO:
+		if Roles.explicito(equipo, clave, []) == int(jugador["id"]):
+			suma += int(DESIGNADO[clave])
+	return suma
+
+
 ## Lo de un jugador que leen las reglas (etapa 6): su id, lo que multiplica
 ## las tarjetas (MatchEngine._chequear_tarjeta), el riesgo de lesión
 ## descansado (MatchEngine._chequear_lesion), el desgaste por minuto
@@ -233,6 +251,12 @@ static func reglas_de(jugador: Dictionary, equipo: Team, rival: Team) -> Diction
 			* Cansancio.factor_atributo_energia(float(a.get("energia", 50.0)))
 			* Clima.factor_energia(equipo.clima_partido) * Entrenamiento.factor_desgaste(equipo),
 		"energia": equipo.resistencia_pct(int(jugador["id"])),
+		"designado": _designado(jugador, equipo),
+		# El penal: Pícaro y Clutch suman, Frágil mental resta
+		# (Personalidad.bonus_penal), y el ejercicio de penales suma sus puntos
+		# de duelo, pasados a puntos de atributo.
+		"penal_factor": 1.0 + Personalidad.bonus_penal(jugador),
+		"penal_puntos": Entrenamiento.bonus_duelo(equipo, "tiro", Entrenamiento.SITUACION_PENAL) * PUNTOS_DE_ATRIBUTO_POR_DUELO,
 		"quite": float(a.get("quite", 50.0)),
 		"barrida": float(a.get("barrida", 50.0)),
 		"tiros_libres": float(a.get("tiros_libres", 50.0)),

@@ -71,6 +71,10 @@ constexpr double LATERAL_LENTO_SEG = 17 * 0.25;
 // caminando (festejo).
 constexpr double FACTOR_MARCA = 0.9;
 constexpr double FACTOR_FESTEJO = 0.5;
+// Etapa 8: hasta qué distancia va a sacar el que eligió el club. Eran 80 m en
+// el motor espacial: con los 22 m de cualquier ejecutor, el elegido llegaba
+// el 10% de las veces y elegir pateador no servía.
+constexpr double DESIGNADO_MAX_M = 80.0;
 // Etapa 8, jugadas preparadas (core/jugadas.gd). Córner corto: a cuánto de
 // las dos rayas espera el socio (queda a 7 m del banderín; los rivales, a
 // 9,15). Córner en bloque: cuántos se juntan, dónde (metros del fondo y del
@@ -321,6 +325,30 @@ int Canchita::_elegir_ejecutor(int tipo, int equipo, double x, double z, int tip
 		const std::vector<int> &orden = _orden_tanda[equipo & 1];
 		if (!orden.empty()) {
 			return orden[size_t(pateados_tanda[equipo & 1]) % orden.size()];
+		}
+	}
+	// El que eligió el club para esta pelota parada (Equipo > Roles), si está
+	// en la cancha. El penal lo patea esté donde esté; a las otras va si está
+	// a menos de DESIGNADO_MAX_M (más lejos saca el que está cerca, como
+	// cuando el especialista quedó en la otra punta).
+	int marca = 0;
+	if (tipo == PENAL) {
+		marca = DESIGNADO_PENALES;
+	} else if (tipo == CORNER) {
+		marca = DESIGNADO_CORNERS;
+	} else if (tipo == TIRO_LIBRE && tipo_libre == LIBRE_DIRECTO) {
+		marca = DESIGNADO_LIBRES_CERCA;
+	} else if (tipo == TIRO_LIBRE && tipo_libre == LIBRE_CENTRO) {
+		marca = DESIGNADO_LIBRES_LEJOS;
+	}
+	for (size_t i = 0; marca != 0 && i < jugadores.size(); i++) {
+		const JugadorCanchita &j = jugadores[i];
+		if (j.equipo != equipo || j.arquero || paso < j.en_el_piso_hasta || int(i) == excluir
+				|| !(j.reglas.designado & marca)) {
+			continue;
+		}
+		if (tipo == PENAL || hipot(j.cuerpo.x - x, j.cuerpo.z - z) <= DESIGNADO_MAX_M) {
+			return int(i);
 		}
 	}
 	int mejor = -1, cerca = -1;

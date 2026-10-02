@@ -269,6 +269,9 @@ void leer_ficha_reglas(const Dictionary &fisico, motor_v2::FichaReglas &f) {
 	leer(d, "salto", f.salto);
 	leer(d, "amenaza", f.amenaza);
 	leer(d, "media", f.media);
+	f.designado = int(d.get("designado", 0));
+	leer(d, "penal_factor", f.penal_factor);
+	leer(d, "penal_puntos", f.penal_puntos);
 	String rol = fisico.get("rol", "MC");
 	const char *roles[motor_v2::ROLES] = { "ARQ", "DFC", "LAT", "MC", "MCO", "EXT", "DC" };
 	for (int k = 0; k < motor_v2::ROLES; k++) {

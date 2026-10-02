@@ -3550,7 +3550,16 @@ void Canchita::_patear_al_arco(int i, bool de_primera, double apretado) {
 		double lateral = (meta.z - desde.z) / std::max(hipot(meta.x - desde.x, meta.z - desde.z), 1e-6) * _ataca(j.equipo);
 		cruce = lateral * double(j.pie_malo_lado) >= 0.0 ? 0.0 : std::abs(lateral);
 	}
-	double sigma = _error_remate(j, golpe, de_lado, desde.y, llega, apretado, cruce);
+	// El penal (también el de la tanda): con el tiro que le dan sus rasgos y
+	// el ejercicio de penales.
+	JugadorCanchita de_penal;
+	const JugadorCanchita *patea = &j;
+	if (reglas && _parada.activa && _parada.tipo == PENAL && i == _parada.ejecutor) {
+		de_penal = j;
+		de_penal.tiro = std::clamp(j.tiro * j.reglas.penal_factor + j.reglas.penal_puntos, 0.0, 100.0);
+		patea = &de_penal;
+	}
+	double sigma = _error_remate(*patea, golpe, de_lado, desde.y, llega, apretado, cruce);
 	rumbo += _azar.normal() * sigma;
 	elev += _azar.normal() * sigma * r.error_vertical;
 	double atributo = std::clamp(golpe == REMATE_CABEZA ? j.cabezazo : j.tiro, 0.0, 100.0);
