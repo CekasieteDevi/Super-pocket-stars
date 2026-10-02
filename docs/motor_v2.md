@@ -1334,8 +1334,8 @@ Cada estilo de local contra el Juego directo, 100 partidos:
 **Qué falta:**
 
 1. **El corte:** borrar el modo 2D, `vista_partido.gd`, `coreografia_partido.gd`, los `_preparar_*` y el motor espacial. No se hizo. El V2 todavía lee del motor espacial sus pesos y constantes (`FisicaV2`, `VistaV2`, `ArbitroV2`), el laboratorio de animaciones de la interfaz (`core/laboratorio.gd`) genera fotogramas con él, la calibración lo usa de referencia (`tests/_diag_calibracion_v2.gd`) y más de cien tests lo prueban. Es un paso aparte y no se puede deshacer fácil.
-2. **La experiencia por lo que hizo cada uno:** el V2 la reparte por puesto y minutos (`MatchEngine.xp_estimada`), como el motor abstracto. El motor espacial la sacaba de las acciones.
-3. **El relato:** no cuenta los quites ni los centros (el motor no los anota como eventos) y los pases no llevan el minuto.
+2. **La experiencia por lo que hizo cada uno:** hecho (2026-10-02). `MotorV2._experiencia` reparte como `MotorEspacial.xp_normalizada`: el 55% por lo que hizo (pases, pelotazos, centros, remates, cabezazos, quites, barridas, controles perdidos y atajadas) y el 45% por el puesto, por los minutos jugados. El total sigue siendo un punto por partido entero.
+3. **El relato:** hecho (2026-10-02). El motor anota el quite al que tenía la pelota dominada (`EV_QUITE`, 12 por partido) y el pase lleva su minuto. El puente arma el evento del centro (quién lo gana, quién lo despeja o si lo descuelga el arquero) con el registro de pases.
 4. **La pantalla:** el estadio es siempre el mismo (no cambia con la cancha del local), no hay festejo en el banderín y los cambios traban un cuadro (148 ms).
 5. **Jugadas preparadas** (`core/jugadas.gd`): del V2 solo salen las paredes y el contragolpe; las de pelota parada no.
 6. **La biblioteca de Linux:** descartada (2026-10-02). El juego sale para Android y se desarrolla en Windows; la nube ya no se usa. Se sacaron la biblioteca, su entrada en `motor_v2.gdextension` y `motor_v2/cpp/zig`.

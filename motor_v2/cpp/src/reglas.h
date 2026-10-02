@@ -64,7 +64,11 @@ enum TipoEvento : int {
 	EV_FIN_TIEMPO = 8,
 	// Un penal de la tanda: `detalle` 1 si fue gol.
 	EV_PENAL_TANDA = 9,
-	EVENTOS = 10,
+	// Etapa 8: `jugador` le sacó la pelota a `otro`, que la tenía dominada
+	// (venía de un control o de una conducción). `detalle` 1 si fue con una
+	// entrada al piso.
+	EV_QUITE = 10,
+	EVENTOS = 11,
 };
 
 struct EventoPartido {

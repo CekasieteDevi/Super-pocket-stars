@@ -17,6 +17,9 @@ func _init() -> void:
 	var cambios := 0
 	var lesiones := 0
 	var relatados := 0
+	var quites := 0
+	var centros := 0
+	var pases_con_minuto := 0
 	for n in PARTIDOS:
 		var rng := RandomNumberGenerator.new()
 		rng.seed = SEED + n
@@ -79,6 +82,12 @@ func _init() -> void:
 			paso_previo = int(ev["paso"])
 			if RelatoPartido.importancia(ev) > RelatoPartido.NADA and RelatoPartido.linea(ev, nombres) != "":
 				relatados += 1
+			match str(ev["tipo"]):
+				"gambeta": quites += 1
+				"centro": centros += 1
+				"pase":
+					if int(ev["minuto"]) > 0:
+						pases_con_minuto += 1
 		_ok(en_orden, "%s: los eventos van en orden" % texto)
 		var stats: Dictionary = EstadisticasPartido.calcular(r["eventos"], home.nombre, away.nombre)
 		var pases := int(stats[home.nombre]["pases_intentados"]) + int(stats[away.nombre]["pases_intentados"])
@@ -87,6 +96,31 @@ func _init() -> void:
 			"%s: las estadísticas cuentan %d pases y %d tiros" % [texto, pases, tiros])
 		_ok(not (r["xp"]["home"] as Dictionary).is_empty() and not (r["xp"]["away"] as Dictionary).is_empty(),
 			"%s: hay experiencia para los dos equipos" % texto)
+		# La experiencia: nadie pasa de un punto por partido, el que jugó los
+		# 90 se lleva uno entero y alguno entrenó algo que su puesto no pide
+		# (sale de lo que hizo, no solo del puesto).
+		var pesos: Dictionary = PlayerGenerator.get_weights()
+		var maximo := 0.0
+		var enteros := 0
+		var por_accion := 0
+		for lado in ["home", "away"]:
+			var equipo: Team = home if lado == "home" else away
+			for id in r["xp"][lado]:
+				var total := 0.0
+				var perfil: Dictionary = {}
+				for j in equipo.todos_los_jugadores():
+					if int(j["id"]) == int(id):
+						perfil = pesos.get(j["posicion"], {})
+				for a in r["xp"][lado][id]:
+					total += float(r["xp"][lado][id][a])
+					if float(perfil.get(a, 0.0)) <= 0.0:
+						por_accion += 1
+				maximo = maxf(maximo, total)
+				if absf(total - 1.0) < 0.001:
+					enteros += 1
+		_ok(maximo <= 1.001 and enteros >= 10 and por_accion > 0,
+			"%s: experiencia de a lo sumo 1 punto (%.2f), %d con el partido entero, %d atributos por lo que hicieron" % [
+				texto, maximo, enteros, por_accion])
 
 		# La receta da el mismo partido.
 		if n < 3:
@@ -101,6 +135,8 @@ func _init() -> void:
 				"%s: la receta vuelve a dar el mismo partido" % texto)
 	_ok(cambios > 0, "en %d partidos hay cambios (%d)" % [PARTIDOS, cambios])
 	_ok(relatados > PARTIDOS * 5, "el relato cuenta %d momentos" % relatados)
+	_ok(quites > PARTIDOS and centros > 0 and pases_con_minuto > PARTIDOS * 10,
+		"el relato tiene %d quites, %d centros y %d pases con su minuto" % [quites, centros, pases_con_minuto])
 	print("rojas %d, cambios %d, lesiones %d" % [rojas, cambios, lesiones])
 
 	# Eliminación directa: si empatan, hay tanda y un ganador.

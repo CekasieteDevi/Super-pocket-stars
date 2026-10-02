@@ -278,6 +278,8 @@ struct RegistroPase {
 	int pateador_id = -1, toca_id = -1;
 	// DEC_* del cerebro (DEC_NADA: de primera, sin decisión).
 	int tipo = 0;
+	// Minuto del reloj mostrado en que salió.
+	double minuto = 0.0;
 	bool globo = false, al_espacio = false, de_primera = false;
 	double x = 0.0, z = 0.0, meta_x = 0.0, meta_z = 0.0;
 	// 0 = hacia donde mira el que la da, 1 = de espaldas.

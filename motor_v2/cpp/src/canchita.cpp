@@ -1863,6 +1863,7 @@ void Canchita::_tocar(int i, double distancia) {
 				reg.equipo = j.equipo;
 				reg.pateador = i;
 				reg.pateador_id = _id(i);
+				reg.minuto = reglas ? minuto() : double(paso) * PASO_SEG / 60.0;
 				reg.receptor = j.receptor;
 				reg.tipo = j.tipo_pase;
 				reg.globo = j.globo;
@@ -2014,6 +2015,12 @@ void Canchita::_tocar(int i, double distancia) {
 			cuenta.corte_mas_lejos_m = std::max(cuenta.corte_mas_lejos_m, distancia);
 		} else {
 			cuenta.quites++;
+			// Para el relato y la experiencia: solo el quite al que la tenía
+			// dominada. La pelota suelta que agarra un rival no es un quite.
+			if (reglas && modo == PARTIDO && ultimo_toque >= 0 && ultimo_toque != i
+					&& (ultimo_tipo == TOQUE_CONDUCE || ultimo_tipo == TOQUE_CONTROL)) {
+				_anotar(EV_QUITE, j.equipo, _id(i), _id(ultimo_toque), entrada ? 1 : 0, pelota.pos.x, pelota.pos.z);
+			}
 			if (ultimo_tipo == TOQUE_CONDUCE) {
 				cuenta.quites_conduccion++;
 			} else if (ultimo_tipo == TOQUE_CONTROL) {
@@ -3233,6 +3240,7 @@ void Canchita::_atajar(int i, double distancia) {
 	bool vuela = _es_estirada(j.clip_arquero);
 	bool es_remate = _remate.activo && _remate.equipo != e;
 	if (_pase_reg >= 0) {
+		registro_pases[size_t(_pase_reg)].toca_id = _id(i);
 		_cerrar_pase(PASE_ARQUERO);
 	}
 	double vin = std::sqrt(pelota.vel.x * pelota.vel.x + pelota.vel.y * pelota.vel.y + pelota.vel.z * pelota.vel.z);

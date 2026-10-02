@@ -230,7 +230,7 @@ const NumeroReglas NUMEROS_REGLAS[] = {
 const char *PARADAS[motor_v2::PARADAS] = { "nada", "saque_medio", "lateral", "saque_arco", "corner", "tiro_libre",
 	"penal" };
 const char *EVENTOS[motor_v2::EVENTOS] = { "saque", "gol", "falta", "amarilla", "roja", "offside", "lesion", "cambio",
-	"fin_tiempo", "penal_tanda" };
+	"fin_tiempo", "penal_tanda", "quite" };
 
 void leer_cuatro(const Dictionary &d, const char *clave, double *destino) {
 	if (!d.has(clave)) {
@@ -978,6 +978,7 @@ Array CanchitaV2Nativa::registro_pases() const {
 		d["toca_id"] = g.toca_id;
 		d["receptor"] = g.receptor;
 		d["tipo"] = g.tipo;
+		d["minuto"] = g.minuto;
 		d["globo"] = g.globo;
 		d["al_espacio"] = g.al_espacio;
 		d["de_primera"] = g.de_primera;
