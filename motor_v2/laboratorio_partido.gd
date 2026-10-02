@@ -10,7 +10,10 @@ extends Control
 ## `velocidad=N`, `cancha=N` (la calidad de la cancha del local, -8 a 3: cambia
 ## el estadio), `saltar=pasos` (arranca con el partido ya en ese paso del motor; -1 = dos
 ## segundos antes del primer gol),
-## `capturas=carpeta` con `cada=segundos` y `dura=segundos`
+## `jugada=id` (el local sabe esa jugada de core/jugadas.gd y la usa siempre;
+## con `saltar=-1` arranca seis segundos antes de la primera vez que sale),
+## `forzar=corner` o `forzar=tiro_libre` (a los dos segundos el local tiene esa
+## pelota parada), `capturas=carpeta` con `cada=segundos` y `dura=segundos`
 ## (guarda imágenes y sale).
 
 const SEMILLA := 20261201
@@ -30,6 +33,8 @@ func _ready() -> void:
 	var velocidad := 1.0
 	var cancha := NAN
 	var saltar := 0
+	var jugada := ""
+	var forzar := ""
 	for arg in OS.get_cmdline_user_args():
 		var p := arg.split("=", true, 1)
 		if p.size() != 2:
@@ -40,6 +45,8 @@ func _ready() -> void:
 			"velocidad": velocidad = float(p[1])
 			"cancha": cancha = float(p[1])
 			"saltar": saltar = int(p[1])
+			"jugada": jugada = p[1]
+			"forzar": forzar = p[1]
 			"capturas": _capturas = p[1]
 			"cada": _cada = float(p[1])
 			"dura": _dura = float(p[1])
@@ -51,6 +58,10 @@ func _ready() -> void:
 		NivelDivision.realizacion(division))
 	if not is_nan(cancha):
 		local.calidad_cancha = cancha
+	if jugada != "":
+		local.jugadas_aprendidas.append(jugada)
+		for id in Jugadas.USO:
+			Jugadas.USO[id] = 1.0
 	var r: Dictionary = MotorV2.simular(local, visitante, rng, true)
 	print("[lab_partido] %s %d - %d %s, %d eventos" % [local.nombre, r["goles_local"], r["goles_visitante"],
 		visitante.nombre, (r["eventos"] as Array).size()])
@@ -61,11 +72,19 @@ func _ready() -> void:
 	if saltar < 0:
 		# Negativo: hasta dos segundos antes del primer gol.
 		for ev in r["eventos"]:
-			if str(ev["resultado"]) == "gol":
+			if jugada != "" and str(ev["tipo"]) == "jugada" and str(ev.get("jugada", "")) == jugada:
+				saltar = maxi(int(ev["paso"]) - 360, 0)
+				break
+			if jugada == "" and str(ev["resultado"]) == "gol":
 				saltar = maxi(int(ev["paso"]) - 120, 0)
 				break
+		print("[lab_partido] salta al paso %d" % saltar)
 	if saltar > 0:
 		_vista._partido.simular(saltar)
+	if forzar != "":
+		_vista._partido.simular(120)
+		var en := Vector2(ProyeccionPartido.MEDIO_LARGO, ProyeccionPartido.MEDIO_ANCHO) if forzar == "corner" 			else Vector2(ProyeccionPartido.MEDIO_LARGO - 22.0, 6.0)
+		print("[lab_partido] forzar %s: %s" % [forzar, str(_vista._partido.forzar_parada(forzar, 0, en))])
 	_vista.hud.menu_pedido.connect(func(): get_tree().quit())
 	_vista.terminado.connect(func(): print("[lab_partido] terminado"))
 

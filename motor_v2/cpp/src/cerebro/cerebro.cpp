@@ -1911,7 +1911,8 @@ void Cerebro::_calcular_lineas(const Mundo &m) {
 			cuantos++;
 		}
 		if (cuantos > 0) {
-			_linea_defensiva[e] = suma / double(cuantos);
+			// Jugada "defensa adelantada": la línea da un paso al frente.
+			_linea_defensiva[e] = suma / double(cuantos) + (e == 0 ? 1.0 : -1.0) * planes[e].paso_defensa;
 		}
 	}
 }

@@ -232,7 +232,7 @@ const NumeroReglas NUMEROS_REGLAS[] = {
 const char *PARADAS[motor_v2::PARADAS] = { "nada", "saque_medio", "lateral", "saque_arco", "corner", "tiro_libre",
 	"penal" };
 const char *EVENTOS[motor_v2::EVENTOS] = { "saque", "gol", "falta", "amarilla", "roja", "offside", "lesion", "cambio",
-	"fin_tiempo", "penal_tanda", "quite" };
+	"fin_tiempo", "penal_tanda", "quite", "jugada" };
 
 void leer_cuatro(const Dictionary &d, const char *clave, double *destino) {
 	if (!d.has(clave)) {

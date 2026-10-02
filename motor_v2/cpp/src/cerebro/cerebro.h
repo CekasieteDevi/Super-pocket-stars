@@ -278,6 +278,17 @@ struct PlanEquipo {
 	double extra_pared = 0.0;
 	// Jugadas.EXTRA_CONTRAGOLPE * Jugadas.factor(..., CONTRAGOLPE).
 	double extra_contragolpe = 0.0;
+	// Etapa 8, el resto de las jugadas preparadas (core/jugadas.gd).
+	// Defensa adelantada: metros que la línea se para más arriba sin la
+	// pelota (Jugadas.PASO_DEFENSA * factor).
+	double paso_defensa = 0.0;
+	// Presión tras pérdida: cuánto más lejos (en segundos de llegada) sale el
+	// segundo hombre a la pelota mientras dura la transición del rival
+	// ((Jugadas.RADIO_CONTRAPRESION - 1) * factor).
+	double contrapresion = 0.0;
+	// Probabilidad de usar cada jugada de pelota parada (Jugadas.USO si el
+	// club la sabe, 0 si no).
+	double corner_corto = 0.0, corner_bloque = 0.0, amague = 0.0;
 	// 0 sin rasgo, 1 Loco, 2 Conservador (Team.dt["rasgo"]).
 	int rasgo_dt = 0;
 };
@@ -445,6 +456,10 @@ public:
 
 	PesosCerebro pesos;
 	PlanEquipo planes[2];
+	// Cuánto le queda de transición a `equipo` (0..1; 0 = no está saliendo).
+	double transicion_de(const Mundo &m, int equipo) const {
+		return _transicion(m, equipo);
+	}
 	// Si hay, el riesgo de los pases sale de su física (ver Planeador).
 	Planeador *planeador = nullptr;
 	std::vector<FichaCerebro> fichas;

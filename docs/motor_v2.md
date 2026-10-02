@@ -1340,7 +1340,24 @@ Cada estilo de local contra el Juego directo, 100 partidos:
    - **Estadio:** `VistaV2.poner_estadio` saca del modelo las tribunas, las torres o los carteles según el nivel de la cancha del local (`VistaCancha.nivel_estadio_desde_calidad`) y seca el pasto. El potrero queda sin nada alrededor.
    - **Festejo:** el que hizo el gol y los tres compañeros más cercanos corren al banderín y festejan (`reglas.festejo_seg` = 7 s); después hay un corte al saque del medio, como después de una tarjeta. Medido en 19 goles (`tests/_diag_festejo_v2.gd`): 18 llegan y festejan 1,8 s; la parada dura 8,8 s.
    - **Cambios:** `VistaV2.recomponer` arma solo el modelo del que entra. Antes armaba la vista entera (148 ms en el teléfono). Falta volver a medirlo en el teléfono.
-5. **Jugadas preparadas** (`core/jugadas.gd`): del V2 solo salen las paredes y el contragolpe; las de pelota parada no.
+5. **Jugadas preparadas** (`core/jugadas.gd`): hecho (2026-10-02). Las siete salen del V2. Test: `tests/test_jugadas_v2.gd`. Medición: `tests/_diag_jugadas_v2.gd`.
+   - **Córner corto:** el compañero más cercano de los que esperan afuera del área se para a 7 m del banderín. El que saca se la toca y él centra apenas la controla.
+   - **Córner en bloque:** suben al menos cuatro, se juntan en el segundo palo y arrancan juntos cuando el que saca va a la pelota. El centro va adonde llegan.
+   - **Amague de tiro libre:** el de más tiro se para a 4 m de la pelota, del lado del medio. El que saca se la toca y él le pega de primera, con el error de una pelota quieta.
+   - **Defensa adelantada:** la línea defensiva se para 1,5 m más arriba (`PlanEquipo.paso_defensa`).
+   - **Presión tras pérdida:** mientras el rival sale de la recuperación, el segundo hombre va a la pelota desde un 35% más lejos (`PlanEquipo.contrapresion`).
+   - El saque espera 4 s más cuando hay jugada. Si el socio no llegó a su lugar, se saca normal.
+   - El motor anota `EV_JUGADA` y el puente lo pasa al relato.
+
+   | Medida (el local sabe la jugada, el rival no) | Sin jugada | Con jugada |
+   | --- | --- | --- |
+   | Goles en los 10 s después de 400 córners forzados | 11,5% | Corto 13,0%; en bloque 14,8% |
+   | Goles en los 10 s después de 400 tiros libres de frente forzados | 11,5% | Amague 16,3% |
+   | Offsides del rival por partido (400 partidos, división 3) | 0,10 | Defensa adelantada 0,13 |
+   | Quites por partido y diferencia de gol (400 partidos) | 6,9 y +0,02 | Presión tras pérdida 7,2 y +0,06 |
+
+   - Las de córner salen poco: hay 0,3 córners por equipo por partido. Su valor está en verse, como en el motor espacial.
+   - La calibración (`tests/_diag_calibracion_v2.gd`) arma clubes sin jugadas: no cambia.
 6. **La biblioteca de Linux:** descartada (2026-10-02). El juego sale para Android y se desarrolla en Windows; la nube ya no se usa. Se sacaron la biblioteca, su entrada en `motor_v2.gdextension` y `motor_v2/cpp/zig`.
 7. **Revisión visual** en una partida de verdad: un partido de liga y uno de copa.
 

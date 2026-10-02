@@ -68,7 +68,21 @@ enum TipoEvento : int {
 	// (venía de un control o de una conducción). `detalle` 1 si fue con una
 	// entrada al piso.
 	EV_QUITE = 10,
-	EVENTOS = 11,
+	// Etapa 8: salió una jugada preparada (core/jugadas.gd). `detalle` es la
+	// Jugada; `jugador`, el que saca o el que recupera; `otro`, el socio.
+	EV_JUGADA = 11,
+	EVENTOS = 12,
+};
+
+// Las jugadas preparadas que se ven en la cancha (core/jugadas.gd). Paredes y
+// Contragolpe entran por el plan del cerebro y no dejan evento.
+enum Jugada : int {
+	JUGADA_NADA = 0,
+	JUGADA_CORNER_CORTO = 1,
+	JUGADA_CORNER_BLOQUE = 2,
+	JUGADA_AMAGUE = 3,
+	JUGADA_DEFENSA_ADELANTADA = 4,
+	JUGADA_CONTRAPRESION = 5,
 };
 
 struct EventoPartido {

@@ -693,11 +693,26 @@ private:
 		int64_t llego_en = -1;
 		// Con tarjeta: el paso del corte al saque (-1 si no hay).
 		int64_t corte_en = -1;
+		// Etapa 8: la jugada preparada de esta pelota parada (Jugada) y el
+		// socio: el que recibe el córner corto o le pega en el amague (-1 si
+		// no hay).
+		int jugada = JUGADA_NADA;
+		int socio = -1;
 		// Etapa 8: hay festejo en el banderín (hasta reponer_en) y dónde.
 		bool festeja = false;
 		double festejo_x = 0.0, festejo_z = 0.0;
 	};
 	Parada _parada;
+	// Córner en bloque: los que se juntan en el segundo palo (índices).
+	std::vector<int> _bloque;
+	// Amague de tiro libre: el que le pega de primera (id) y hasta qué paso.
+	int _amague_id = -1;
+	int64_t _amague_hasta = -1;
+	// Córner corto: el socio (id) centra apenas la controla, hasta este paso.
+	int _corto_id = -1;
+	int64_t _corto_hasta = -1;
+	void _elegir_jugada();
+	bool _socio_valido() const;
 	// Los que festejan (ids de Player): primero el que hizo el gol.
 	std::vector<int> _festejan;
 	void _empezar_festejo(int autor);

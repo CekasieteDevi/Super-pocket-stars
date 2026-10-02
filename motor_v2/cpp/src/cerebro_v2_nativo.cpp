@@ -284,6 +284,11 @@ void godot::leer_plan_equipo(const Dictionary &d, motor_v2::PlanEquipo &p) {
 	leer(d, "defensivo", p.defensivo);
 	leer(d, "extra_pared", p.extra_pared);
 	leer(d, "extra_contragolpe", p.extra_contragolpe);
+	leer(d, "paso_defensa", p.paso_defensa);
+	leer(d, "contrapresion", p.contrapresion);
+	leer(d, "corner_corto", p.corner_corto);
+	leer(d, "corner_bloque", p.corner_bloque);
+	leer(d, "amague", p.amague);
 	if (d.has("rasgo_dt")) {
 		String r = d["rasgo_dt"];
 		p.rasgo_dt = r == "Loco" ? 1 : (r == "Conservador" ? 2 : 0);

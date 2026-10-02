@@ -123,8 +123,13 @@ static func armar_de_receta(r: Dictionary) -> Object:
 	return c
 
 
-## El plan de juego del estilo (Estilos) y las jugadas de juego abierto que
-## sabe el club (Jugadas), como los lee MotorEspacial.
+## La clave del plan (PlanEquipo, en C++) de cada jugada de pelota parada.
+const CLAVE_DE_JUGADA := {Jugadas.CORNER_CORTO: "corner_corto", Jugadas.CORNER_BLOQUE: "corner_bloque",
+	Jugadas.AMAGUE: "amague"}
+
+
+## El plan de juego del estilo (Estilos) y las jugadas que sabe el club
+## (Jugadas), como los lee MotorEspacial.
 static func plan_de(equipo: Team, rival: Team) -> Dictionary:
 	var p: Dictionary = Estilos.plan(equipo.estilo).duplicate()
 	p["retroceso"] = Estilos.retroceso_sin_pelota(equipo.estilo) - Estilos.RETROCESO_DEFAULT
@@ -135,6 +140,11 @@ static func plan_de(equipo: Team, rival: Team) -> Dictionary:
 	p["defensivo"] = equipo.estilo == "Defensivo"
 	p["extra_pared"] = Jugadas.UTILIDAD_PARED * Jugadas.factor(equipo, rival, Jugadas.PAREDES)
 	p["extra_contragolpe"] = Jugadas.EXTRA_CONTRAGOLPE * Jugadas.factor(equipo, rival, Jugadas.CONTRAGOLPE)
+	p["paso_defensa"] = Jugadas.PASO_DEFENSA * Jugadas.factor(equipo, rival, Jugadas.DEFENSA_ADELANTADA)
+	p["contrapresion"] = (Jugadas.RADIO_CONTRAPRESION - 1.0) * Jugadas.factor(equipo, rival, Jugadas.CONTRAPRESION)
+	# Las de pelota parada: la probabilidad de usarla si el club la sabe.
+	for id in [Jugadas.CORNER_CORTO, Jugadas.CORNER_BLOQUE, Jugadas.AMAGUE]:
+		p[CLAVE_DE_JUGADA[id]] = float(Jugadas.USO[id]) if Jugadas.sabe(equipo, id) else 0.0
 	p["rasgo_dt"] = str(equipo.dt.get("rasgo", "")) if not equipo.dt.is_empty() else ""
 	return p
 

@@ -476,6 +476,11 @@ void Canchita::_analizar() {
 	if (modo == PARTIDO && poseedor >= 0 && !reinicio) {
 		int defiende = 1 - jugadores[size_t(poseedor)].equipo;
 		double mejor_t = cerebro.pesos.contrapresion_seg;
+		// Jugada "presión tras pérdida": mientras el rival sale de la
+		// recuperación, el segundo hombre va desde más lejos.
+		if (cerebro.planes[defiende & 1].contrapresion > 0.0 && cerebro.transicion_de(_mundo, 1 - defiende) > 0.0) {
+			mejor_t *= 1.0 + cerebro.planes[defiende & 1].contrapresion;
+		}
 		for (size_t i = 0; i < jugadores.size(); i++) {
 			const JugadorCanchita &j = jugadores[i];
 			if (j.equipo != defiende || j.arquero || int(i) == _perseguidor[defiende]) {
@@ -2020,6 +2025,10 @@ void Canchita::_tocar(int i, double distancia) {
 			if (reglas && modo == PARTIDO && ultimo_toque >= 0 && ultimo_toque != i
 					&& (ultimo_tipo == TOQUE_CONDUCE || ultimo_tipo == TOQUE_CONTROL)) {
 				_anotar(EV_QUITE, j.equipo, _id(i), _id(ultimo_toque), entrada ? 1 : 0, pelota.pos.x, pelota.pos.z);
+				if (cerebro.planes[j.equipo & 1].contrapresion > 0.0 && cerebro.transicion_de(_mundo, 1 - j.equipo) > 0.0) {
+					// La recuperó enseguida: salió la presión tras pérdida.
+					_anotar(EV_JUGADA, j.equipo, _id(i), -1, JUGADA_CONTRAPRESION, pelota.pos.x, pelota.pos.z);
+				}
 			}
 			if (ultimo_tipo == TOQUE_CONDUCE) {
 				cuenta.quites_conduccion++;
@@ -2486,6 +2495,43 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 	JugadorCanchita &j = jugadores[size_t(i)];
 	double tiene = double(paso - _desde_control) * PASO_SEG;
 	double cadencia = cerebro.cadencia_seg(i);
+	if (_corto_id >= 0 && _id(i) == _corto_id) {
+		// Córner corto: el socio centra apenas la controla, al de más amenaza
+		// de los que quedaron en el área. Decidiendo como en el juego abierto
+		// se la llevaba o la tocaba atrás y el área se vaciaba (7,3% de gol
+		// contra 12,0% del córner colgado, tests/_diag_jugadas_v2.gd).
+		// Lo decide cada vez que piensa hasta que centra: la decisión vence
+		// antes de que vuelva a tocar la pelota.
+		bool a_tiempo = paso <= _corto_hasta;
+		if (!a_tiempo) {
+			_corto_id = -1;
+		}
+		int mejor = -1;
+		double amenaza = -1e9;
+		double gx = Cerebro::MEDIO_LARGO * _ataca(j.equipo);
+		for (size_t k = 0; a_tiempo && k < jugadores.size(); k++) {
+			const JugadorCanchita &o = jugadores[k];
+			if (o.equipo != j.equipo || int(k) == i || o.arquero || std::abs(gx - o.cuerpo.x) > Cerebro::AREA_LARGO
+					|| std::abs(o.cuerpo.z) > Cerebro::AREA_MEDIO_ANCHO) {
+				continue;
+			}
+			if (o.reglas.amenaza > amenaza) {
+				amenaza = o.reglas.amenaza;
+				mejor = int(k);
+			}
+		}
+		if (mejor >= 0) {
+			Decision d;
+			d.tipo = DEC_CENTRO;
+			d.receptor = mejor;
+			d.tiene_punto = true;
+			d.x = jugadores[size_t(mejor)].cuerpo.x;
+			d.z = jugadores[size_t(mejor)].cuerpo.z;
+			j.decision = d;
+			j.hay_decision = true;
+			j.decision_hasta = paso + int64_t(cerebro.pesos.decision_vigencia_seg / PASO_SEG + 0.5);
+		}
+	}
 	if (!j.hay_decision || paso >= j.decision_hasta) {
 		// El motor espacial aguantaba la cadencia con la pelota pegada al pie y
 		// el robo era un duelo. Acá la conducción la deja suelta entre toques:
@@ -3383,8 +3429,10 @@ bool Canchita::_decidir_remate_de_primera(int i, V3 bola, double t) {
 		j.toque = TOQUE_REMATE;
 		return true;
 	}
-	if (modo != PARTIDO || !cerebro.alcanza_para_tirar(i, bola.x, bola.z)
-			|| cerebro.factor_geometria(bola.x, bola.z, j.equipo) < param_remate.primera_geometria) {
+	// Amague de tiro libre: el socio le pega de primera sí o sí.
+	bool amague = modo == PARTIDO && _amague_id >= 0 && _id(i) == _amague_id && paso <= _amague_hasta;
+	if (modo != PARTIDO || (!amague && (!cerebro.alcanza_para_tirar(i, bola.x, bola.z)
+			|| cerebro.factor_geometria(bola.x, bola.z, j.equipo) < param_remate.primera_geometria))) {
 		return false;
 	}
 	_plan_bola = bola;
@@ -3484,6 +3532,18 @@ void Canchita::_patear_al_arco(int i, bool de_primera, double apretado) {
 	double de_lado = std::abs(mate::envolver(rumbo - c.rumbo)) / mate::PI;
 	double llega = de_primera ? std::sqrt(pelota.vel.x * pelota.vel.x + pelota.vel.y * pelota.vel.y + pelota.vel.z * pelota.vel.z)
 							  : 0.0;
+	if (_amague_id >= 0 && _id(i) == _amague_id) {
+		// El amague está ensayado: el pase llega medido y él ya está
+		// perfilado. Le pega como a una pelota quieta y de frente. Con el
+		// error del remate de primera el amague rendía menos que patear
+		// directo (8,3% contra 12,0% de 300 tiros libres,
+		// tests/_diag_jugadas_v2.gd). Pateó: la jugada terminó.
+		if (de_primera && paso <= _amague_hasta) {
+			llega = 0.0;
+			de_lado = 0.0;
+		}
+		_amague_id = -1;
+	}
 	double cruce = 0.0;
 	if (j.pie_malo_lado != 0) {
 		// Cruzarla hacia el lado de su pie malo (Cerebro::_cruce_al_pie_malo).

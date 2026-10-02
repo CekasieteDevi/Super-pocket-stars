@@ -29,6 +29,9 @@ const GOLPE_EFECTO := 2
 const GOLPE_CABEZA := 4
 ## `detalle` del evento "saque": qué parada fue (PARADAS del motor).
 const PARADA_CORNER := 4
+## `detalle` del evento "jugada": la Jugada del motor (reglas.h).
+const JUGADAS := ["", Jugadas.CORNER_CORTO, Jugadas.CORNER_BLOQUE, Jugadas.AMAGUE, Jugadas.DEFENSA_ADELANTADA,
+	Jugadas.CONTRAPRESION]
 
 
 ## Los mismos argumentos y el mismo resultado que MotorEspacial.simular. Con
@@ -146,6 +149,10 @@ static func _resultado(c: Object, home: Team, away: Team, rng: RandomNumberGener
 					equipo.nombre, str(quien.get("posicion", ""))])
 			"offside":
 				eventos.append(_evento(paso, minuto, "offside", equipo, rival, quien, ""))
+			"jugada":
+				var linea_j := _evento(paso, minuto, "jugada", equipo, rival, quien, "")
+				linea_j["jugada"] = str(JUGADAS[clampi(int(ev["detalle"]), 0, JUGADAS.size() - 1)])
+				eventos.append(linea_j)
 			"quite":
 				# `jugador` se la sacó a `otro`. El relato lo cuenta como la
 				# gambeta que pierde el que la tenía (como el motor espacial).

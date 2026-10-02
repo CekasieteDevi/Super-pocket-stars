@@ -1,4 +1,5 @@
 [
+	{"version": "0.7.94", "fecha": "2026-10-02", "cambio": "En el motor nuevo se ven todas las jugadas preparadas: córner corto, córner en bloque, amague de tiro libre, defensa adelantada y presión tras pérdida."},
 	{"version": "0.7.93", "fecha": "2026-10-02", "cambio": "En el partido nuevo se ve el estadio del local, los jugadores festejan el gol en el banderín y los cambios ya no traban la imagen."},
 	{"version": "0.7.92", "fecha": "2026-10-02", "cambio": "El motor nuevo anota los quites, los centros y los pases de cada jugador: el relato los cuenta y la experiencia sale de lo que hizo cada uno."},
 	{"version": "0.7.91", "fecha": "2026-10-02", "cambio": "El motor nuevo ya no trae la versión de Linux: el juego sale para Android y Windows."},

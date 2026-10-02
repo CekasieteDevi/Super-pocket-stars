@@ -71,6 +71,29 @@ constexpr double LATERAL_LENTO_SEG = 17 * 0.25;
 // caminando (festejo).
 constexpr double FACTOR_MARCA = 0.9;
 constexpr double FACTOR_FESTEJO = 0.5;
+// Etapa 8, jugadas preparadas (core/jugadas.gd). Córner corto: a cuánto de
+// las dos rayas espera el socio (queda a 7 m del banderín; los rivales, a
+// 9,15). Córner en bloque: cuántos se juntan, dónde (metros del fondo y del
+// medio del arco, del lado del segundo palo) y adónde arrancan y va el centro.
+// Amague: a cuánto de la pelota se para el que le pega.
+constexpr double CORTO_ADENTRO_M = 5.0;
+constexpr int BLOQUE_CUANTOS = 5;
+constexpr double BLOQUE_DEL_FONDO_M = 9.0;
+constexpr double BLOQUE_DEL_MEDIO_M = 6.0;
+constexpr double BLOQUE_LLEGA_DEL_FONDO_M = 8.0;
+constexpr double BLOQUE_LLEGA_DEL_MEDIO_M = 3.0;
+constexpr double AMAGUE_AL_COSTADO_M = 4.0;
+constexpr double AMAGUE_SEG = 3.0;
+// Córner corto: hasta cuándo después del saque el socio centra sí o sí.
+constexpr double CORTO_SEG = 4.0;
+// Segundos de más que el saque espera cuando hay jugada. Sin esto, en 8 de 8
+// córners forzados el socio no llegaba a su lugar antes del saque
+// (tests/_diag_jugadas_v2.gd).
+constexpr double JUGADA_ESPERA_SEG = 4.0;
+// A cuánto de su lugar el socio ya sirve para la jugada.
+constexpr double SOCIO_EN_SU_LUGAR_M = 2.5;
+// Córner en bloque: suben por lo menos estos.
+constexpr int BLOQUE_MINIMO = 4;
 // Etapa 8, el festejo en el banderín: a cuánto de las dos rayas se para el
 // que hizo el gol y a cuánto de su lugar ya festeja.
 constexpr double FESTEJO_DEL_BANDERIN_M = 2.5;
@@ -239,10 +262,48 @@ void Canchita::_parar(int tipo, int equipo, double x, double z, int64_t demora) 
 		j.toque = TOQUE_NADA;
 	}
 	_parada.ejecutor = _elegir_ejecutor(tipo, equipo, _parada.x, _parada.z, _parada.tipo_libre);
+	_elegir_jugada();
 	_lugar_del_ejecutor();
 	_marcar_parada();
 	_visto_paso = paso;
 	_cambio = true;
+}
+
+// Jugadas.elegir_corner y Jugadas.se_usa: si el club sabe alguna jugada para
+// esta pelota parada, esta vez la usa con su probabilidad. Tira el azar solo
+// si sabe alguna: el partido de los que no saben ninguna no cambia.
+void Canchita::_elegir_jugada() {
+	Parada &p = _parada;
+	p.jugada = JUGADA_NADA;
+	p.socio = -1;
+	if (p.tanda || periodo >= TANDA) {
+		return;
+	}
+	const PlanEquipo &plan = cerebro.planes[p.equipo & 1];
+	if (p.tipo == CORNER) {
+		bool corto = plan.corner_corto > 0.0, bloque = plan.corner_bloque > 0.0;
+		if (!corto && !bloque) {
+			return;
+		}
+		bool elige_corto = corto && (!bloque || _azar.uno() < 0.5);
+		if (_azar.uno() < (elige_corto ? plan.corner_corto : plan.corner_bloque)) {
+			p.jugada = elige_corto ? JUGADA_CORNER_CORTO : JUGADA_CORNER_BLOQUE;
+		}
+	} else if (p.tipo == TIRO_LIBRE && p.tipo_libre == LIBRE_DIRECTO && plan.amague > 0.0) {
+		if (_azar.uno() < plan.amague) {
+			p.jugada = JUGADA_AMAGUE;
+		}
+	}
+	// La jugada se arma: el saque espera un poco más a que lleguen.
+	if (p.jugada != JUGADA_NADA) {
+		p.tope += pasos_de(JUGADA_ESPERA_SEG);
+	}
+}
+
+bool Canchita::_socio_valido() const {
+	const Parada &p = _parada;
+	return p.socio >= 0 && p.socio < int(jugadores.size()) && p.socio != p.ejecutor
+			&& jugadores[size_t(p.socio)].equipo == p.equipo;
 }
 
 // Quién saca (MotorEspacial._elegir_ejecutor): el arquero el saque de arco;
@@ -391,7 +452,9 @@ void Canchita::_marcar_parada() {
 	_marca_x.assign(n, 0.0);
 	_marca_z.assign(n, 0.0);
 	_tiene_marca.assign(n, 0);
-	const Parada &p = _parada;
+	_bloque.clear();
+	Parada &p = _parada;
+	p.socio = -1;
 	const ParametrosReglas &r = param_reglas;
 	int ataca = p.equipo, defiende = 1 - p.equipo;
 	double s = _ataca(ataca);
@@ -414,6 +477,33 @@ void Canchita::_marcar_parada() {
 			return;
 		case CORNER:
 			_marcar_area(ataca, r.suben_corner[ataca & 1]);
+			if (p.jugada == JUGADA_CORNER_CORTO) {
+				// Córner corto: de los que esperan afuera del área, el que está
+				// más cerca se acerca al banderín, más acá de los 9,15 de los
+				// rivales. Con el de mejor pase, el saque salía antes de que
+				// llegara (venía de 40 m) y el pase se iba largo.
+				double sx = p.x - s * CORTO_ADENTRO_M, sz = p.z - (p.z >= 0.0 ? 1.0 : -1.0) * CORTO_ADENTRO_M;
+				int mejor = -1;
+				double cerca = 1e18;
+				for (size_t i = 0; i < n; i++) {
+					const JugadorCanchita &j = jugadores[i];
+					if (j.equipo != ataca || j.arquero || int(i) == p.ejecutor || !_tiene_marca[i]
+							|| std::abs(gx - _marca_x[i]) <= Cerebro::AREA_LARGO) {
+						continue;
+					}
+					double d = hipot(j.cuerpo.x - sx, j.cuerpo.z - sz);
+					if (d < cerca) {
+						cerca = d;
+						mejor = int(i);
+					}
+				}
+				if (mejor >= 0) {
+					p.socio = mejor;
+					marcar(size_t(mejor), sx, sz);
+				} else {
+					p.jugada = JUGADA_NADA;
+				}
+			}
 			break;
 		case TIRO_LIBRE:
 			if (p.tipo_libre == LIBRE_DIRECTO) {
@@ -447,6 +537,32 @@ void Canchita::_marcar_parada() {
 					marcar(size_t(mejor), px - hz * lado, pz + hx * lado);
 				}
 				_marcar_area(ataca, std::max(r.suben_corner[ataca & 1] - r.menos_en_directo, 2));
+				if (p.jugada == JUGADA_AMAGUE) {
+					// Amague: el de más tiro se para al costado de la pelota,
+					// del lado del medio de la cancha, donde la barrera no tapa.
+					int mejor = -1;
+					double tiro = -1.0;
+					for (size_t i = 0; i < n; i++) {
+						const JugadorCanchita &j = jugadores[i];
+						if (j.equipo != ataca || j.arquero || int(i) == p.ejecutor || paso < j.en_el_piso_hasta) {
+							continue;
+						}
+						if (j.tiro > tiro) {
+							tiro = j.tiro;
+							mejor = int(i);
+						}
+					}
+					if (mejor >= 0) {
+						double nx = -hz, nz = hx;
+						double lado = (p.z + nz * AMAGUE_AL_COSTADO_M) * (p.z + nz * AMAGUE_AL_COSTADO_M)
+								<= (p.z - nz * AMAGUE_AL_COSTADO_M) * (p.z - nz * AMAGUE_AL_COSTADO_M) ? 1.0 : -1.0;
+						p.socio = mejor;
+						marcar(size_t(mejor), p.x + nx * lado * AMAGUE_AL_COSTADO_M - hx * 0.5,
+								p.z + nz * lado * AMAGUE_AL_COSTADO_M - hz * 0.5);
+					} else {
+						p.jugada = JUGADA_NADA;
+					}
+				}
 			} else if (p.tipo_libre == LIBRE_CENTRO) {
 				_marcar_area(ataca, std::max(r.suben_corner[ataca & 1] - r.menos_en_centro, 2));
 			}
@@ -540,11 +656,22 @@ void Canchita::_marcar_area(int ataca, int suben) {
 	std::stable_sort(candidatos.begin(), candidatos.end(), [&](int a, int b) {
 		return jugadores[size_t(a)].reglas.amenaza > jugadores[size_t(b)].reglas.amenaza;
 	});
+	if (_parada.tipo == CORNER && _parada.jugada == JUGADA_CORNER_BLOQUE) {
+		suben = std::max(suben, BLOQUE_MINIMO);
+	}
 	int tope = std::min(suben, std::max(int(candidatos.size()) - 1, 0));
 	std::vector<int> arriba;
 	for (int k = 0; k < int(candidatos.size()); k++) {
 		size_t i = size_t(candidatos[size_t(k)]);
-		if (k < tope) {
+		if (k < tope && _parada.tipo == CORNER && _parada.jugada == JUGADA_CORNER_BLOQUE && k < BLOQUE_CUANTOS) {
+			// Córner en bloque: se juntan en el segundo palo.
+			double lejos = _parada.z >= 0.0 ? -1.0 : 1.0;
+			_marca_x[i] = gx - s * (BLOQUE_DEL_FONDO_M + double(k % 2));
+			_marca_z[i] = lejos * (BLOQUE_DEL_MEDIO_M + 0.9 * double(k / 2));
+			_tiene_marca[i] = 1;
+			arriba.push_back(int(i));
+			_bloque.push_back(int(i));
+		} else if (k < tope) {
 			_marca_x[i] = gx - s * (r.area_desde_m + (r.area_hasta_m - r.area_desde_m) * _azar.uno());
 			_marca_z[i] = (_azar.uno() - 0.5) * r.area_ancho_m;
 			_tiene_marca[i] = 1;
@@ -726,11 +853,27 @@ bool Canchita::_pensar_en_parada(int i) {
 		}
 		return true;
 	}
+	if (p.sacando && p.jugada == JUGADA_CORNER_BLOQUE) {
+		for (size_t k = 0; k < _bloque.size(); k++) {
+			if (_bloque[k] != i) {
+				continue;
+			}
+			// El bloque arranca a la vez hacia el área chica.
+			double s = _ataca(p.equipo), lejos = p.z >= 0.0 ? -1.0 : 1.0;
+			j.persigue = false;
+			j.toque = TOQUE_NADA;
+			c.ir_a(Cerebro::MEDIO_LARGO * s - s * (BLOQUE_LLEGA_DEL_FONDO_M + double(k % 2)),
+					lejos * (BLOQUE_LLEGA_DEL_MEDIO_M - 0.9 * double(k / 2)), 1.0, false);
+			return true;
+		}
+	}
 	if (size_t(i) < _tiene_marca.size() && _tiene_marca[size_t(i)]) {
 		j.persigue = false;
 		j.toque = TOQUE_NADA;
 		bool festejo = p.tipo == SAQUE_MEDIO && paso < p.reponer_en;
-		c.ir_a(_marca_x[size_t(i)], _marca_z[size_t(i)], festejo ? FACTOR_FESTEJO : FACTOR_MARCA, true);
+		// El socio de la jugada va corriendo: el saque lo espera a él.
+		bool socio = p.jugada != JUGADA_NADA && i == p.socio;
+		c.ir_a(_marca_x[size_t(i)], _marca_z[size_t(i)], festejo ? FACTOR_FESTEJO : (socio ? 1.0 : FACTOR_MARCA), true);
 		c.mira = true;
 		c.mira_x = p.x;
 		c.mira_z = p.z;
@@ -1117,6 +1260,18 @@ void Canchita::_termina_saque(int i) {
 	Parada p = _parada;
 	cuenta.saques[p.tipo]++;
 	_anotar(EV_SAQUE, p.equipo, _id(i), -1, p.tipo, p.x, p.z);
+	if (p.jugada != JUGADA_NADA) {
+		bool con_socio = p.socio >= 0 && p.socio < int(jugadores.size());
+		_anotar(EV_JUGADA, p.equipo, _id(i), con_socio ? _id(p.socio) : -1, p.jugada, p.x, p.z);
+		if (p.jugada == JUGADA_AMAGUE && con_socio) {
+			_amague_id = _id(p.socio);
+			_amague_hasta = paso + pasos_de(AMAGUE_SEG);
+		}
+		if (p.jugada == JUGADA_CORNER_CORTO && con_socio) {
+			_corto_id = _id(p.socio);
+			_corto_hasta = paso + pasos_de(CORTO_SEG);
+		}
+	}
 	_parada = Parada();
 	_reinicio_hasta = paso;
 	if (p.tipo == PENAL) {
@@ -1141,7 +1296,20 @@ void Canchita::_decidir_saque(int i, V3 bola, double t_patada) {
 		Decision d;
 		bool al_arco = p.tipo == PENAL || (p.tipo == TIRO_LIBRE && p.tipo_libre == LIBRE_DIRECTO);
 		bool centro = p.tipo == CORNER || (p.tipo == TIRO_LIBRE && p.tipo_libre == LIBRE_CENTRO);
-		if (al_arco) {
+		bool con_socio = (p.jugada == JUGADA_CORNER_CORTO || p.jugada == JUGADA_AMAGUE) && _socio_valido();
+		if (con_socio) {
+			// El socio tiene que estar en su lugar: si no llegó, se saca normal.
+			const Cuerpo &cs = jugadores[size_t(p.socio)].cuerpo;
+			if (hipot(cs.x - _marca_x[size_t(p.socio)], cs.z - _marca_z[size_t(p.socio)]) > SOCIO_EN_SU_LUGAR_M) {
+				con_socio = false;
+				_parada.jugada = JUGADA_NADA;
+			}
+		}
+		if (con_socio) {
+			// Córner corto o amague: al socio, al pie.
+			d.tipo = DEC_PASE;
+			d.receptor = p.socio;
+		} else if (al_arco) {
 			d = cerebro.elegir_remate(_mundo, i, false, _azar);
 		} else if (centro) {
 			int mejor = -1;
@@ -1166,6 +1334,11 @@ void Canchita::_decidir_saque(int i, V3 bola, double t_patada) {
 			} else {
 				d.x = Cerebro::MEDIO_LARGO * _ataca(j.equipo) - _ataca(j.equipo) * 9.0;
 				d.z = 0.0;
+			}
+			if (p.jugada == JUGADA_CORNER_BLOQUE && !_bloque.empty()) {
+				// Al borde del área chica del segundo palo, adonde arranca el bloque.
+				d.x = Cerebro::MEDIO_LARGO * _ataca(j.equipo) - _ataca(j.equipo) * BLOQUE_LLEGA_DEL_FONDO_M;
+				d.z = (p.z >= 0.0 ? -1.0 : 1.0) * BLOQUE_LLEGA_DEL_MEDIO_M;
 			}
 		} else {
 			d = cerebro.decidir(_mundo, i, true, _azar);
@@ -1964,6 +2137,9 @@ bool Canchita::_offside_al_tocar(int i) {
 	const JugadorCanchita &j = jugadores[size_t(i)];
 	cuenta.offsides_cobrados[j.equipo & 1]++;
 	_anotar(EV_OFFSIDE, j.equipo, _id(i), -1, 0, j.cuerpo.x, j.cuerpo.z);
+	if (cerebro.planes[(1 - j.equipo) & 1].paso_defensa > 0.0) {
+		_anotar(EV_JUGADA, 1 - j.equipo, -1, -1, JUGADA_DEFENSA_ADELANTADA, j.cuerpo.x, j.cuerpo.z);
+	}
 	_adelantados.clear();
 	jugadores[size_t(i)].toque_pendiente = false;
 	jugadores[size_t(i)].persigue = false;
