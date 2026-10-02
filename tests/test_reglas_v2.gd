@@ -7,6 +7,8 @@ extends SceneTree
 ##   arco, córner, tiro libre). Cada parada se ejecuta. Nadie camina hasta la
 ##   línea para sacar un lateral (lo que la vista 3D actual corta) y nadie
 ##   aparece encima de la pelota.
+## - Etapa 7: el partido dura de verdad 2 minutos por tiempo y el reloj
+##   muestra 0-90. Para que aparezca todo se juegan 40 partidos.
 ## - Sin correcciones de la pelota, sin SALTO_PELOTA y sin teletransportes de
 ##   jugador (más de 0,5 m entre pasos, docs/motor_v2.md "Definición de hecho").
 ## - Hay faltas que salen del contacto, tarjetas, offside cobrado, cambios y
@@ -15,13 +17,16 @@ extends SceneTree
 ## - Misma semilla = mismo partido.
 
 const SEED := 20261010
-## Tres partidos de 90 minutos: con uno solo, el penal o la roja pueden no
-## aparecer (0,9 penales y 0,2 rojas por partido, tests/_diag_reglas_v2.gd).
-const PARTIDOS := 3
-## Lo que tiene que haber sumando los tres (unos 24 faltas, 3,5 amarillas y 3
+## Cuarenta partidos del juego (4 minutos de verdad cada uno): con pocos, el
+## penal puede no aparecer (0,1 por partido, tests/_diag_calibracion_v2.gd).
+const PARTIDOS := 40
+## Lo que tiene que haber sumando todos (unas 2,3 faltas, 1,1 amarillas y 0,15
 ## offside por partido en la medición).
-const FALTAS_MIN := 30
-const AMARILLAS_MIN := 3
+## Lo más que puede marcar el reloj: 90, más 5 de adición, más los 22,5 s de
+## verdad que puede seguir un tiempo con la jugada sin cerrar (8,4 minutos).
+const MINUTO_MAX := 104.0
+const FALTAS_MIN := 50
+const AMARILLAS_MIN := 20
 ## Más que esto entre dos pasos es un teletransporte.
 const SALTO_MAX_M := 0.5
 
@@ -77,20 +82,27 @@ func _partidos() -> void:
 		var semilla := SEED + n
 		var c: Object = CerebroV2.armar_partido(semilla, "", "", -1, -1, true)
 		var cantidad_inicial: int = c.cantidad()
-		var pasos := _hasta_el_final(c, 60 * 60 * 120)
+		var pasos := _hasta_el_final(c, 60 * 60 * 15)
 		var k: Dictionary = c.contadores()
 		var e: Dictionary = c.get_estado()
 		var minutos := pasos / 3600.0
 		var eventos: Array = c.eventos()
 		var fines := eventos.filter(func(v): return v["tipo"] == "fin_tiempo").size()
-		_ok(e["periodo"] == "terminado" and fines == 2 and minutos >= 92.0 and minutos <= 101.0,
-			"semilla %d: el partido termina solo, con dos tiempos y su agregado (%.1f min, %d fines)" % [
-				semilla, minutos, fines])
-		# Cada parada se ejecutó (la que estaba armada al final no cuenta).
+		# Dos minutos de verdad por tiempo, más lo que esperan las paradas: el
+		# reloj corre solo con la pelota en juego. Un saque que no sale deja el
+		# partido colgado (pasaba en el saque inicial, 5 de 60 partidos).
+		var fuera := eventos.filter(func(v): return float(v["minuto"]) < 0.0 or float(v["minuto"]) > MINUTO_MAX).size()
+		_ok(e["periodo"] == "terminado" and fines == 2 and minutos >= 4.0 and minutos <= 8.0
+				and float(e["minuto"]) >= 90.0 and fuera == 0,
+			"semilla %d: termina solo, con dos tiempos, en %.1f min de verdad y con el reloj en %.0f' (%d fines)" % [
+				semilla, minutos, e["minuto"], fines])
+		# Cada parada se ejecutó. La que estaba armada al final de cada tiempo no
+		# cuenta: pueden ser dos del mismo tipo (semilla 20261021: los dos
+		# tiempos terminan con la pelota saliendo por el fondo).
 		var sin_sacar := []
 		for t in ["saque_medio", "lateral", "saque_arco", "corner", "tiro_libre", "penal"]:
 			var resto: int = int(k["paradas_" + t]) - int(k["saques_" + t])
-			if resto < 0 or resto > 1:
+			if resto < 0 or resto > 2:
 				sin_sacar.append("%s %d/%d" % [t, k["saques_" + t], k["paradas_" + t]])
 		_ok(sin_sacar.is_empty(), "semilla %d: cada reanudación se sacó %s" % [semilla, sin_sacar])
 		_ok(int(k["camina_lateral"]) == 0 and int(k["saques_de_lejos"]) == 0,
@@ -151,7 +163,7 @@ func _expulsiones() -> void:
 	var en_cancha_ok := true
 	var sin_esperar := 0
 	var medio_ancho := ProyeccionPartido.MEDIO_ANCHO
-	while str(c.get_estado()["periodo"]) != "terminado" and pasos < 60 * 60 * 60:
+	while str(c.get_estado()["periodo"]) != "terminado" and pasos < 60 * 60 * 150:
 		c.avanzar()
 		pasos += 1
 		if not pedidas.is_empty() and pasos >= float(pedidas[0][0]) * 3600.0 				and c.forzar_falta(int(pedidas[0][1]), bool(pedidas[0][2])):
@@ -174,8 +186,8 @@ func _expulsiones() -> void:
 	var menos: int = inicial - c.cantidad()
 	_ok(pedidas.is_empty() and str(c.get_estado()["periodo"]) == "terminado" and rojas >= 2 and int(k["lesiones"]) >= 1
 			and menos >= rojas and menos <= rojas + int(k["lesiones"]) and en_cancha_ok,
-		"con %d rojas y %d lesiones el partido termina, con %d en cancha y sin ids repetidos" % [rojas, k["lesiones"],
-			c.cantidad()])
+		"con %d rojas y %d lesiones el partido termina, con %d en cancha y sin ids repetidos (faltan pedir %d, %s, ids %s, %.0f min)" % [
+			rojas, k["lesiones"], c.cantidad(), pedidas.size(), c.get_estado()["periodo"], en_cancha_ok, pasos / 3600.0])
 	_ok(salidas > 0 and int(k["correcciones"]) == 0 and float(k["peor_salto_cuerpo_m"]) < SALTO_MAX_M,
 		"los que se van salen por sus medios (hasta %d a la vez) y nadie salta (peor %.2f m)" % [salidas,
 			k["peor_salto_cuerpo_m"]])
@@ -183,6 +195,7 @@ func _expulsiones() -> void:
 
 
 ## Un partido corto empatado se define por penales y la tanda tiene ganador.
+## Dos minutos por tiempo: lo que dura de verdad el partido del juego.
 func _tanda() -> void:
 	var jugadas := 0
 	for n in 20:
@@ -214,10 +227,13 @@ func _huellas() -> void:
 	_ok(huellas[0] == huellas[1], "misma semilla, mismo partido (%s)" % huellas[0])
 
 
+## Un partido con `minutos` de verdad por tiempo y el reloj a la par (sin la
+## ficción del 0-90).
 static func _corto(semilla: int, minutos: float, tanda: bool) -> Object:
 	var c: Object = CerebroV2.armar_partido(semilla, "", "", -1, -1, true, tanda)
 	var r := FisicaV2.parametros_reglas(tanda)
 	r["minutos_tiempo"] = minutos
+	r["segundos_tiempo"] = minutos * 60.0
 	c.configurar_reglas(r)
 	c.empezar(CanchitaV2Nativa.PARTIDO, semilla)
 	return c

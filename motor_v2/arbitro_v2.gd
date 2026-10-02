@@ -22,10 +22,16 @@ const ACELERACION := 6.0
 ## banda de enfrente a la cámara.
 const PENAL_ATRAS_M := 6.0
 const PENAL_AL_COSTADO_M := 14.0
-## En las otras pelotas paradas: a esta distancia de la pelota (un poco más
-## que la barrera, 9,15 m) y girado esto de la línea al medio de la cancha.
+## En el córner: a esta distancia de la pelota (un poco más que la barrera,
+## 9,15 m) y girado esto de la línea al medio de la cancha.
 const PARADA_M := 11.0
 const PARADA_GIRO_RAD := 0.6
+## En el tiro libre, el lateral y el saque de arco: detrás de la pelota (del
+## lado del arco del que saca) y al costado, hacia la banda de enfrente a la
+## cámara. Hacia el medio de la cancha quedaba parado en la línea del pase:
+## en la revisión visual de la etapa 7, "el juez se mete en el medio".
+const PARADA_ATRAS_M := 4.0
+const PARADA_AL_COSTADO_M := 8.0
 ## Lo más que tarda en llegar al jugador (VistaCancha3D.TARJETA_CORRE_MAX_TICKS).
 const CORRE_MAX_SEG := VistaCancha3D.TARJETA_CORRE_MAX_TICKS * MotorEspacial.TICK_SEG
 const CORRE_MIN_SEG := MotorEspacial.TICK_SEG
@@ -84,9 +90,17 @@ func dibujar(paso: int, bola: Vector2, tarjeta: Dictionary, delta: float, parada
 		# siguiendo a la pelota quedaba parado entre el que patea y el arco.
 		var punto: Vector2 = parada["punto"]
 		destino = Vector2(punto.x - signf(punto.x) * PENAL_ATRAS_M, -PENAL_AL_COSTADO_M)
+	elif tipo == "tiro_libre" or tipo == "lateral" or tipo == "saque_arco":
+		var punto: Vector2 = parada["punto"]
+		# Hacia la banda de enfrente, salvo que la pelota ya esté contra ella.
+		var medio_ancho := ProyeccionPartido.MEDIO_ANCHO
+		var costado := 1.0 if punto.y < -medio_ancho + PARADA_AL_COSTADO_M + 2.0 else -1.0
+		destino = punto + Vector2(-float(parada.get("ataca", 1.0)) * PARADA_ATRAS_M, costado * PARADA_AL_COSTADO_M)
+		destino.x = clampf(destino.x, -ProyeccionPartido.MEDIO_LARGO + 2.0, ProyeccionPartido.MEDIO_LARGO - 2.0)
+		destino.y = clampf(destino.y, -medio_ancho + 2.0, medio_ancho - 2.0)
 	elif tipo != "nada" and tipo != "saque_medio":
-		# En una pelota parada, a la distancia de la barrera y corrido hacia
-		# la banda de enfrente: no tapa al que saca.
+		# En el córner, a la distancia de la barrera y corrido hacia la banda
+		# de enfrente: no tapa al que saca.
 		var punto: Vector2 = parada["punto"]
 		var hacia := (-punto).normalized() if punto.length() > 1.0 else Vector2(0.0, -1.0)
 		destino = punto + hacia.rotated(PARADA_GIRO_RAD * (1.0 if hacia.x * hacia.y >= 0.0 else -1.0)) * PARADA_M

@@ -148,12 +148,27 @@ func _partido() -> void:
 	_ok(float(m["dispersion_linea"]) <= 5.0, "la línea de atrás se para junta: ±%.1f m" % m["dispersion_linea"])
 	# Pases al espacio que salen solos: al hueco o a la corrida que el cerebro
 	# ya había preparado, y alguno llega.
-	_ok(int(k["pases_al_espacio"]) >= 8, "pases al espacio: %d (al menos 8)" % k["pases_al_espacio"])
-	_ok(int(k["pases_al_espacio_completos"]) >= 3, "pases al espacio que llegan: %d (al menos 3)" % k["pases_al_espacio_completos"])
+	# Etapa 7: el pase que el planeador ve cortado ya no se ofrece
+	# (cerebro.riesgo_maximo). Antes salían 14,6 pases al hueco por partido y
+	# se cortaba el 46%; ahora son pocos (de 1 a 6 en estos 10 minutos, según la
+	# semilla) y la pared todavía menos. Con un solo partido el test pasaba o
+	# fallaba por ruido: se suman tres.
+	var raros := {"pases_al_espacio": int(k["pases_al_espacio"]),
+		"pases_al_espacio_completos": int(k["pases_al_espacio_completos"]), "pared": int(d["pared"])}
+	for n in [1, 2]:
+		var otro: Object = CerebroV2.armar_partido(SEED + 20 + n)
+		otro.simular(int(SEGUNDOS * 60.0))
+		raros["pases_al_espacio"] += int(otro.contadores()["pases_al_espacio"])
+		raros["pases_al_espacio_completos"] += int(otro.contadores()["pases_al_espacio_completos"])
+		raros["pared"] += int(otro.contadores_cerebro()["pared"])
+	_ok(raros["pases_al_espacio"] >= 3, "pases al espacio en tres partidos: %d (al menos 3)" % raros["pases_al_espacio"])
+	_ok(raros["pases_al_espacio_completos"] >= 1,
+		"pases al espacio que llegan en tres partidos: %d (al menos 1)" % raros["pases_al_espacio_completos"])
+	_ok(raros["pared"] >= 1, "el poseedor elige pared en tres partidos (%d)" % raros["pared"])
 	_ok(int(d["desmarque_ruptura"]) > 0 and int(d["apoyos_de_grilla"]) > 0,
 		"hay rupturas (%d) y apoyos de la grilla (%d)" % [d["desmarque_ruptura"], d["apoyos_de_grilla"]])
 	# Todas las decisiones del poseedor aparecen.
-	for tipo in ["conducir", "pase", "pase_hueco", "pase_largo", "pared", "remate"]:
+	for tipo in ["conducir", "pase", "pase_hueco", "pase_largo", "remate"]:
 		_ok(int(d[tipo]) > 0, "el poseedor elige %s (%d)" % [tipo, d[tipo]])
 	# Lo de la etapa 3 sigue valiendo con 22 jugadores y el cerebro.
 	_ok(int(k["correcciones"]) == 0 and int(k["saltos_pelota"]) == 0,

@@ -61,6 +61,8 @@ void godot::leer_parametros_toque(const Dictionary &d, const std::vector<String>
 	leer(d, "toque_largo_m", p.toque_largo_m);
 	leer(d, "toque_corto_m", p.toque_corto_m);
 	leer(d, "conduccion_factor", p.conduccion_factor);
+	leer(d, "conduce_gana_seg", p.conduce_gana_seg);
+	leer(d, "control_raya_m", p.control_raya_m);
 	leer(d, "sin_rebote_seg", p.sin_rebote_seg);
 	leer(d, "margen_seguro_seg", p.margen_seguro_seg);
 	leer(d, "giro_alcance_rad", p.giro_alcance_rad);
@@ -100,6 +102,8 @@ const NumeroRemate NUMEROS_REMATE[] = {
 	{ "error_rapidez", &motor_v2::ParametrosRemate::error_rapidez },
 	{ "primera_ms", &motor_v2::ParametrosRemate::primera_ms },
 	{ "pie_malo", &motor_v2::ParametrosRemate::pie_malo },
+	{ "cabeza_marcado", &motor_v2::ParametrosRemate::cabeza_marcado },
+	{ "primera_marcado", &motor_v2::ParametrosRemate::primera_marcado },
 	{ "alto_factor", &motor_v2::ParametrosRemate::alto_factor },
 	{ "primera_geometria", &motor_v2::ParametrosRemate::primera_geometria },
 };
@@ -158,6 +162,8 @@ struct NumeroReglas {
 };
 const NumeroReglas NUMEROS_REGLAS[] = {
 	{ "minutos_tiempo", &motor_v2::ParametrosReglas::minutos_tiempo },
+	{ "segundos_tiempo", &motor_v2::ParametrosReglas::segundos_tiempo },
+	{ "cierre_max_seg", &motor_v2::ParametrosReglas::cierre_max_seg },
 	{ "adicion_min_seg", &motor_v2::ParametrosReglas::adicion_min_seg },
 	{ "adicion_max_seg", &motor_v2::ParametrosReglas::adicion_max_seg },
 	{ "adicion_gol_seg", &motor_v2::ParametrosReglas::adicion_gol_seg },
@@ -194,8 +200,16 @@ const NumeroReglas NUMEROS_REGLAS[] = {
 	{ "entrada_prob", &motor_v2::ParametrosReglas::entrada_prob },
 	{ "entrada_amonestado", &motor_v2::ParametrosReglas::entrada_amonestado },
 	{ "falta_radio_m", &motor_v2::ParametrosReglas::falta_radio_m },
-	{ "gravedad_rapidez_ms", &motor_v2::ParametrosReglas::gravedad_rapidez_ms },
+	{ "gravedad_a_fondo", &motor_v2::ParametrosReglas::gravedad_a_fondo },
 	{ "gravedad_desde_atras", &motor_v2::ParametrosReglas::gravedad_desde_atras },
+	{ "entrada_de_atras", &motor_v2::ParametrosReglas::entrada_de_atras },
+	{ "falta_torpeza", &motor_v2::ParametrosReglas::falta_torpeza },
+	{ "entrada_en_area", &motor_v2::ParametrosReglas::entrada_en_area },
+	{ "entrada_sobrado", &motor_v2::ParametrosReglas::entrada_sobrado },
+	{ "entrada_tumba", &motor_v2::ParametrosReglas::entrada_tumba },
+	{ "entrada_por_quite", &motor_v2::ParametrosReglas::entrada_por_quite },
+	{ "entrada_alcance_m", &motor_v2::ParametrosReglas::entrada_alcance_m },
+	{ "entrada_tumba_m", &motor_v2::ParametrosReglas::entrada_tumba_m },
 	{ "cruce_falta_prob", &motor_v2::ParametrosReglas::cruce_falta_prob },
 	{ "caido_seg", &motor_v2::ParametrosReglas::caido_seg },
 	{ "amarilla_por_falta", &motor_v2::ParametrosReglas::amarilla_por_falta },
@@ -677,6 +691,35 @@ Dictionary CanchitaV2Nativa::contadores() const {
 	Dictionary d;
 	d["pases"] = k.pases;
 	d["pases_globo"] = k.pases_globo;
+	d["pases_despeje"] = k.pases_despeje;
+	d["salidas_pase"] = k.salidas_pase;
+	d["salidas_conduce"] = k.salidas_conduce;
+	d["salidas_control"] = k.salidas_control;
+	d["salidas_remate"] = k.salidas_remate;
+	d["salidas_rebote"] = k.salidas_rebote;
+	d["salidas_otra"] = k.salidas_otra;
+	d["conduce_pasos"] = k.conduce_pasos;
+	d["conduce_lejos"] = k.conduce_lejos;
+	d["conduce_metros"] = k.conduce_metros;
+	d["conduce_corre"] = k.conduce_corre;
+	d["conduce_max_m"] = k.conduce_max_m;
+	for (int t = 0; t < 2; t++) {
+		for (int f = 0; f < 5; f++) {
+			d[String(t == 0 ? "separa_control_" : "separa_conduce_") + String::num_int64(f)] = k.separa[t][f];
+			d[String(t == 0 ? "pierde_control_" : "pierde_conduce_") + String::num_int64(f)] = k.separa_pierde[t][f];
+		}
+	}
+	d["lleva_pasos"] = k.lleva_pasos;
+	{
+		const char *decisiones[motor_v2::DECISIONES] = { "nada", "conducir", "pase", "pase_hueco", "pase_largo", "centro",
+			"pared", "despeje", "remate" };
+		for (int f = 0; f < 3; f++) {
+			for (int t = 0; t < motor_v2::DECISIONES; t++) {
+				d[String("libre") + String::num_int64(f) + "_" + decisiones[t]] = k.via_libre[f][t];
+			}
+		}
+	}
+	d["lleva_a_fondo"] = k.lleva_a_fondo;
 	d["completados"] = k.completados;
 	d["completados_otro"] = k.completados_otro;
 	d["de_primera"] = k.de_primera;
@@ -693,6 +736,16 @@ Dictionary CanchitaV2Nativa::contadores() const {
 	d["pecho"] = k.recepciones[motor_v2::PECHO];
 	d["cabeza"] = k.recepciones[motor_v2::CABEZA];
 	d["fallos"] = k.fallos;
+	{
+		const char *partes[4] = { "pie", "muslo", "pecho", "cabeza" };
+		for (int p = 0; p < 4; p++) {
+			d[String("gestos_") + partes[p]] = k.gestos_parte[p];
+			d[String("fallos_") + partes[p]] = k.fallos_parte[p];
+			d[String("fallos_lejos_") + partes[p]] = k.fallos_lejos[p];
+			d[String("fallos_altura_") + partes[p]] = k.fallos_altura[p];
+			d[String("fallos_metros_") + partes[p]] = k.fallos_metros[p];
+		}
+	}
 	d["cruces_perdidos"] = k.cruces_perdidos;
 	d["rebotes_cuerpo"] = k.rebotes_cuerpo;
 	d["correcciones"] = k.correcciones;
@@ -764,6 +817,10 @@ Dictionary CanchitaV2Nativa::contadores() const {
 	d["laterales_lentos"] = k.laterales_lentos;
 	d["entradas"] = k.entradas;
 	d["entradas_limpias"] = k.entradas_limpias;
+	d["entrada_gana"] = k.entrada_gana;
+	d["entradas_tumban"] = k.entradas_tumban;
+	d["entrada_pierde"] = k.entrada_pierde;
+	d["entrada_afuera"] = k.entrada_afuera;
 	d["faltas_0"] = k.faltas[0];
 	d["faltas_1"] = k.faltas[1];
 	d["faltas_entrada"] = k.faltas_entrada;
@@ -797,6 +854,7 @@ Array CanchitaV2Nativa::eventos() const {
 	for (const motor_v2::EventoPartido &e : _c.eventos) {
 		Dictionary d;
 		d["paso"] = e.paso;
+		d["minuto"] = e.minuto;
 		d["tipo"] = EVENTOS[std::clamp(e.tipo, 0, motor_v2::EVENTOS - 1)];
 		d["equipo"] = e.equipo;
 		d["jugador"] = e.jugador;
@@ -846,13 +904,20 @@ Dictionary CanchitaV2Nativa::get_estado() const {
 	const char *periodos[4] = { "primer_tiempo", "segundo_tiempo", "tanda", "terminado" };
 	d["periodo"] = periodos[std::clamp(_c.periodo, 0, 3)];
 	d["reloj"] = _c.reloj_seg();
+	d["minuto"] = _c.minuto();
 	d["adicion"] = _c.adicion_seg();
 	d["lado"] = _c.lado();
 	d["suspendido"] = _c.suspendido();
 	d["paso"] = _c.paso;
 	d["corte"] = _c.corte_paso;
+	PackedInt32Array entrando;
+	for (int e : _c.entrando()) {
+		entrando.push_back(e);
+	}
+	d["entrando"] = entrando;
 	d["parada"] = PARADAS[std::clamp(_c.parada_tipo(), 0, motor_v2::PARADAS - 1)];
 	d["ejecutor"] = _c.parada_ejecutor();
+	d["saca"] = _c.parada_equipo();
 	motor_v2::V3 p = _c.parada_punto();
 	d["punto"] = Vector2(real_t(p.x), real_t(p.z));
 	d["goles_tanda"] = Vector2i(_c.goles_tanda[0], _c.goles_tanda[1]);
@@ -879,6 +944,39 @@ bool CanchitaV2Nativa::forzar_fin_de_tiempo() {
 
 int64_t CanchitaV2Nativa::get_lateral_en_manos() const {
 	return _c.lateral_en_manos();
+}
+
+Array CanchitaV2Nativa::registro_pases() const {
+	Array r;
+	for (const motor_v2::RegistroPase &g : _c.registro_pases) {
+		Dictionary d;
+		d["paso"] = g.paso;
+		d["paso_fin"] = g.paso_fin;
+		d["equipo"] = g.equipo;
+		d["pateador"] = g.pateador;
+		d["receptor"] = g.receptor;
+		d["tipo"] = g.tipo;
+		d["globo"] = g.globo;
+		d["al_espacio"] = g.al_espacio;
+		d["de_primera"] = g.de_primera;
+		d["desde"] = Vector2(real_t(g.x), real_t(g.z));
+		d["meta"] = Vector2(real_t(g.meta_x), real_t(g.meta_z));
+		d["de_lado"] = g.de_lado;
+		d["presion_m"] = g.presion_m;
+		d["receptor_al_punto_m"] = g.receptor_al_punto_m;
+		d["margen"] = g.margen;
+		d["resultado"] = g.resultado;
+		d["receptor_a_pelota_m"] = g.receptor_a_pelota_m;
+		d["receptor_iba"] = g.receptor_iba;
+		d["afuera"] = g.afuera;
+		d["toque_fin"] = g.toque_fin;
+		d["parte_fin"] = g.parte_fin;
+		d["alto_fin"] = g.alto_fin;
+		d["error_m"] = g.error_m;
+		d["pasos_receptor_iba"] = g.pasos_receptor_iba;
+		r.push_back(d);
+	}
+	return r;
 }
 
 Array CanchitaV2Nativa::registro_remates() const {
@@ -913,6 +1011,12 @@ Dictionary CanchitaV2Nativa::contadores_cerebro() const {
 		d[decisiones[t]] = k.decisiones[t];
 	}
 	d["corridas_preparadas"] = k.corridas_preparadas;
+	for (int f = 0; f < 4; f++) {
+		for (int t = 0; t < motor_v2::DECISIONES; t++) {
+			d[String("zona") + String::num_int64(f) + "_" + decisiones[t]] = k.en_zona[f][t];
+		}
+		d[String("zona") + String::num_int64(f) + "_con_tiro"] = k.zona_con_tiro[f];
+	}
 	d["desmarque_apoyo"] = k.desmarques[motor_v2::DES_APOYO];
 	d["desmarque_ruptura"] = k.desmarques[motor_v2::DES_RUPTURA];
 	d["desmarque_arrastre"] = k.desmarques[motor_v2::DES_ARRASTRE];
@@ -980,6 +1084,9 @@ Dictionary CanchitaV2Nativa::ultima_decision() const {
 	Dictionary d;
 	d["decisor"] = _c.cerebro.ultimo_decisor;
 	d["temperatura"] = _c.cerebro.ultima_temperatura;
+	d["puede_pasar"] = _c.cerebro.ultimo_puede_pasar;
+	d["ofrecidas"] = _c.cerebro.ultimas_ofrecidas;
+	d["cortados"] = _c.cerebro.ultimos_cortados;
 	Array opciones;
 	for (const motor_v2::OpcionVista &o : _c.cerebro.ultimas_opciones) {
 		Dictionary v;
@@ -1065,6 +1172,7 @@ void CanchitaV2Nativa::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("prediccion"), &CanchitaV2Nativa::prediccion);
 	ClassDB::bind_method(D_METHOD("contadores"), &CanchitaV2Nativa::contadores);
 	ClassDB::bind_method(D_METHOD("registro_remates"), &CanchitaV2Nativa::registro_remates);
+	ClassDB::bind_method(D_METHOD("registro_pases"), &CanchitaV2Nativa::registro_pases);
 	ClassDB::bind_method(D_METHOD("huella"), &CanchitaV2Nativa::huella);
 	const StringName clase = get_class_static();
 	ClassDB::bind_integer_constant(clase, "", "RONDO", motor_v2::RONDO);

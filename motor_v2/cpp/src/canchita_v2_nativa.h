@@ -110,6 +110,7 @@ public:
 	Dictionary contadores() const;
 	// Etapa 5: cada remate (canchita.h, RegistroRemate).
 	Array registro_remates() const;
+	Array registro_pases() const;
 	// Etapa 6: lo que pasó ({paso, tipo, equipo, jugador, otro, detalle, pos};
 	// jugador y otro son ids), el id y la energía de cada uno, los que se van
 	// ({id, equipo, pos, rumbo, rapidez, expulsado, accion, tiempo_accion}) y el estado del partido

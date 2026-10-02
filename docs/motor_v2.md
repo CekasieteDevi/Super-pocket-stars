@@ -697,6 +697,596 @@ Hecha en la nube. Test: `tests/test_reglas_v2.gd`. Medición: `tests/_diag_regla
 - **Qué:** 200 partidos por división sin vista. Se ajustan `utility_pesos.json` y el modelo de error hasta que goles, remates, posesión, pases, faltas y tarjetas caigan en los rangos del motor actual (sección 11 de `docs/motor_espacial.md`) y el mejor equipo gane lo que tiene que ganar.
 - **Pasa si:** el reporte por división queda dentro de rangos en dos semillas distintas.
 
+#### Resultado (2026-10-01): pasa por división en dos semillas; el cruce de tres divisiones queda corto
+
+Hecha en la PC. Medición: `tests/_diag_calibracion_v2.gd` (el reporte). Tests: `tests/test_reglas_v2.gd` y `tests/test_remate_v2.gd`.
+
+**Decisión del usuario (2026-10-01): el partido dura 4 minutos de verdad.**
+
+- El motor espacial juega 2 minutos de verdad por tiempo y el reloj muestra 0-90 (`MotorEspacial.SEGUNDOS_POR_MITAD`). El V2 jugaba 45 minutos de verdad por tiempo.
+- Con 90 minutos de verdad el V2 daba 35 goles, 115 remates y 1.146 pases por partido. Los mismos 4 minutos del motor espacial dan 1,6 goles, 5 remates y 51 pases (el motor espacial: 1,5, 7 y 45).
+- El V2 ahora dura lo mismo. `FisicaV2.parametros_reglas()` pasa `segundos_tiempo` (120) y `minutos_tiempo` (45) desde las constantes del motor espacial: una sola fuente.
+- **Reloj mostrado:** `Canchita::minuto()` (0 a 90 y el agregado). `get_estado()["minuto"]` y cada evento (`minuto`) lo traen. La urgencia del marcador, los cambios desde el minuto 55 y el desgaste por minuto usan ese reloj.
+- **El reloj corre solo con la pelota en juego.** En una pelota parada espera (`_pasos_parados`). Así una tarjeta de 4,5 s no se come 100 segundos del reloj mostrado. Un partido dura de verdad 5,3 minutos de media y 6,4 el más largo (300 partidos).
+- **Adición:** los `adicion_*_seg` son segundos del reloj mostrado (60 s son 2,7 s de verdad).
+- **Cierre:** un tiempo cumplido sigue como mucho `cierre_max_seg` (22,5 s, los `TICKS_DE_DESCUENTO` del motor espacial) si la jugada no está tranquila.
+- **Costo:** 0,21 s por partido sin vista en la PC, con 16 procesos a la vez (el de 90 minutos, 3,5 s). En el teléfono no se midió: con las 2,6 veces de la etapa 1 son unos 0,6 s, dentro del presupuesto de 3 s.
+
+**Dos bugs que tapaba el reloj.** Con el reloj corriendo siempre, un saque que no salía terminaba igual a los 45 minutos y el partido quedaba vacío. Con el reloj parado en las paradas, el partido no termina: así aparecieron.
+
+- **Saque inicial:** el delantero de punta arrancaba 0,6 m adentro de la mitad rival, cruzado con el del otro equipo. Los dos se empujaban de frente y el saque no salía (5 de 60 partidos). Ahora arrancan en el lugar de cualquier saque del medio (`_ubicar_saque_del_medio`).
+- **Saque del medio:** sacaba el que antes llegaba. Con un volante más rápido que el de punta, el volante chocaba de atrás con el de punta y no llegaba (8 de 300 partidos desparejos). Ahora saca el más cercano. Además, pasado el tope se elige a otro ejecutor, no al mismo.
+- El reporte cuenta los partidos colgados (más de 20 minutos de verdad): 0 en 6.400.
+
+**Qué se compara.** Los mismos planteles y la misma semilla en los dos motores, ida y vuelta. 16 parejas: las 10 divisiones parejas, 3 de divisiones vecinas (el caso de una liga) y 3 con tres divisiones de diferencia (un cruce de copa). El rango de cada cosa va alrededor del motor espacial:
+
+| Cosa | Rango |
+| --- | --- |
+| Goles, remates, pases completos | ± 20% |
+| Pases intentados (sin los despejes), faltas | ± 25% |
+| Amarillas | ± 30% (o 0,3) |
+| Rojas | ± 0,08 |
+| Posesión de A | ± 5 puntos |
+| Puntos de A (solo divisiones distintas) | ± 0,3 |
+| Diferencia de gol de A (solo divisiones distintas) | ± 20% (o 0,4) |
+
+Remates al arco, offside y penales se muestran y no cuentan: la etapa pide goles, remates, posesión, pases, faltas y tarjetas. Con 200 partidos el error de la media de los goles es 0,1 (5%).
+
+**Qué se ajustó**, de a una cosa, midiendo antes y después con la misma semilla. El porqué de cada número está en `data/fisica_v2.json` (`_notas`).
+
+| Qué | Antes | Ahora | Motor espacial | Cómo |
+| --- | --- | --- | --- | --- |
+| Primera le gana a cuarta | 56% | 90% | 98% | `nivel.rapidez_por_punto` y `rapidez_tope` |
+| Quinta le gana a sexta | — | 66% | 64% | lo mismo |
+| Goles en D1 / D5 / D10 | 2,11 / 1,45 / 1,18 | 2,26 / 2,00 / 1,56 | 2,31 / 2,26 / 1,65 | remates más fuertes, arquero que reacciona más tarde y con reflejos absolutos |
+| Remates en D1 / D5 / D10 | 7,0 / 5,5 / 4,4 | 7,7 / 6,1 / 4,8 | 8,2 / 7,3 / 5,1 | `cerebro.tiro_factor` 1,8 y `remate.primera_geometria` 0,2 |
+| Remates que van al arco | 68% | 60% | 56% | `remate.error_rad` 0,15 |
+| Faltas en D1 / D5 / D10 | 0,78 / 0,87 / 0,94 | 1,95 / 2,43 / 2,64 | 2,24 / 2,44 / 3,13 | entradas desde 3,6 m, nunca de atrás, y el torpe hace más faltas |
+| Amarillas en D1 / D5 / D10 | 0,22 / 0,22 / 0,23 | 0,91 / 1,15 / 1,25 | 0,95 / 1,00 / 1,36 | `amarilla_por_falta` 0,46 y la gravedad contra la punta del que entra |
+| Faltas del favorito / del otro (D5 contra D8) | 3,3 / 0,3 | 2,7 entre los dos | 2,5 entre los dos | `entrada_sobrado`: el más rápido no se tira |
+
+- **Lo que hace ganar al mejor es la rapidez.** Se probó cada palanca en primera contra cuarta. Estirar el error de pase y de control cuatro veces: gana el 60% (antes 54%). Estirar el remate y el arquero tres veces: 59%. Darle 18% más de punta al mejor y 18% menos al otro: 93%.
+- **La ventaja es del equipo, con tope de 20%.** Por jugador y sin tope, en un partido parejo el mejor corría a 11,4 m/s y el peor a 3,4.
+- **Código nuevo en C++:** `segundos_tiempo`, `cierre_max_seg`, `entrada_de_atras`, `entrada_sobrado`, `entrada_en_area`, `falta_torpeza` y `gravedad_a_fondo` (`reglas.h`); `tiro_factor` (`cerebro.h`); el contador `pases_despeje`. `gravedad_rapidez_ms` se va.
+
+**Semilla 97000, 200 partidos por división (V2 / motor espacial):**
+
+| División | Goles | Remates | Posesión de A | Pases | Completos | Faltas | Amarillas | Rojas | Veredicto |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| D1 | 2,26 / 2,31 | 7,66 / 8,15 | 50,8% / 49,0% | 49,7 / 45,8 | 33,8 / 36,8 | 1,95 / 2,24 | 0,91 / 0,95 | 0,04 / 0,04 | pasa |
+| D2 | 2,03 / 2,21 | 7,15 / 7,91 | 50,3% / 48,5% | 50,6 / 45,9 | 33,8 / 36,7 | 2,15 / 2,23 | 1,00 / 1,06 | 0,05 / 0,07 | pasa |
+| D3 | 2,10 / 2,22 | 6,79 / 7,63 | 51,2% / 49,0% | 52,1 / 46,1 | 34,6 / 36,6 | 2,23 / 2,29 | 1,00 / 1,01 | 0,07 / 0,10 | pasa |
+| D4 | 2,02 / 2,13 | 6,44 / 7,46 | 50,9% / 49,6% | 52,6 / 46,0 | 35,4 / 36,5 | 2,20 / 2,31 | 1,05 / 1,01 | 0,07 / 0,07 | pasa |
+| D5 | 2,00 / 2,26 | 6,08 / 7,29 | 51,0% / 49,4% | 53,7 / 46,2 | 36,0 / 36,9 | 2,43 / 2,44 | 1,15 / 1,00 | 0,04 / 0,06 | pasa |
+| D6 | 1,70 / 1,75 | 5,62 / 6,76 | 50,5% / 49,5% | 51,3 / 46,3 | 34,6 / 36,3 | 2,32 / 2,65 | 1,09 / 1,14 | 0,06 / 0,07 | pasa |
+| D7 | 1,89 / 1,92 | 5,72 / 6,22 | 51,2% / 50,2% | 50,7 / 45,6 | 34,8 / 36,3 | 2,58 / 2,63 | 1,16 / 1,14 | 0,09 / 0,10 | pasa |
+| D8 | 1,59 / 1,72 | 5,08 / 6,12 | 51,5% / 49,7% | 47,8 / 44,5 | 32,9 / 35,3 | 2,45 / 2,69 | 1,16 / 1,19 | 0,07 / 0,07 | pasa |
+| D9 | 1,53 / 1,78 | 4,79 / 5,34 | 51,6% / 50,2% | 47,1 / 43,9 | 33,3 / 34,5 | 2,54 / 3,02 | 1,21 / 1,26 | 0,08 / 0,09 | pasa |
+| D10 | 1,56 / 1,65 | 4,79 / 5,12 | 50,9% / 49,8% | 44,6 / 42,6 | 31,1 / 33,6 | 2,64 / 3,13 | 1,25 / 1,36 | 0,09 / 0,10 | pasa |
+
+| Pareja | Goles | Gana A | Puntos de A | Diferencia de gol de A | Posesión de A | Faltas | Veredicto |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| D1/D2 | 2,35 / 2,48 | 54% / 59% | 1,88 / 2,00 | 0,70 / 1,00 | 51,5% / 51,9% | 2,33 / 2,25 | pasa |
+| D5/D6 | 2,17 / 2,33 | 66% / 64% | 2,23 / 2,14 | 1,22 / 1,25 | 53,0% / 52,3% | 2,52 / 2,50 | pasa |
+| D10/D9 | 1,91 / 1,89 | 4% / 15% | 0,39 / 0,70 | -1,24 / -1,08 | 48,0% / 46,6% | 2,67 / 3,10 | no pasa (puntos_a) |
+| D1/D4 | 3,04 / 4,12 | 90% / 98% | 2,78 / 2,96 | 2,56 / 3,82 | 52,9% / 59,1% | 2,25 / 2,20 | no pasa (goles, posesion_a, dif_a) |
+| D5/D8 | 2,94 / 3,38 | 93% / 93% | 2,85 / 2,84 | 2,54 / 3,15 | 54,0% / 56,7% | 2,67 / 2,46 | no pasa (amarillas) |
+| D10/D7 | 3,38 / 3,07 | 0% / 1% | 0,02 / 0,10 | -3,17 / -2,87 | 45,1% / 42,3% | 2,56 / 2,68 | pasa |
+
+**Semilla 20261001, 200 partidos por división (V2 / motor espacial):**
+
+| División | Goles | Remates | Posesión de A | Pases | Completos | Faltas | Amarillas | Rojas | Veredicto |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| D1 | 2,36 / 2,31 | 7,92 / 8,34 | 51,0% / 49,4% | 49,5 / 45,7 | 33,9 / 36,9 | 2,02 / 1,89 | 0,94 / 0,85 | 0,04 / 0,01 | pasa |
+| D2 | 2,29 / 2,34 | 7,39 / 8,09 | 50,8% / 49,5% | 51,7 / 45,9 | 35,0 / 36,6 | 2,27 / 2,12 | 1,14 / 0,91 | 0,05 / 0,08 | pasa |
+| D3 | 2,24 / 2,13 | 6,96 / 7,92 | 50,9% / 49,6% | 52,5 / 45,9 | 35,1 / 36,7 | 2,23 / 2,15 | 0,98 / 0,96 | 0,04 / 0,06 | pasa |
+| D4 | 1,98 / 2,06 | 6,42 / 7,42 | 50,6% / 48,5% | 52,1 / 46,3 | 34,9 / 36,5 | 2,19 / 2,33 | 1,18 / 1,14 | 0,06 / 0,06 | pasa |
+| D5 | 2,00 / 2,21 | 6,17 / 7,34 | 51,0% / 49,4% | 52,8 / 46,5 | 35,5 / 36,5 | 2,40 / 2,40 | 1,21 / 1,09 | 0,08 / 0,05 | pasa |
+| D6 | 1,89 / 1,95 | 6,21 / 6,92 | 51,4% / 50,3% | 52,0 / 46,4 | 35,1 / 36,6 | 2,53 / 2,44 | 1,18 / 1,09 | 0,06 / 0,06 | pasa |
+| D7 | 1,83 / 1,75 | 5,72 / 6,36 | 50,3% / 49,0% | 51,5 / 45,6 | 34,8 / 36,0 | 2,69 / 2,67 | 1,22 / 1,23 | 0,06 / 0,08 | pasa |
+| D8 | 1,69 / 1,63 | 5,45 / 5,92 | 50,6% / 49,7% | 48,2 / 44,6 | 33,2 / 35,2 | 2,50 / 2,74 | 1,25 / 1,25 | 0,07 / 0,07 | pasa |
+| D9 | 1,73 / 1,63 | 5,26 / 5,43 | 51,7% / 50,3% | 46,8 / 43,5 | 32,8 / 34,5 | 2,94 / 2,98 | 1,39 / 1,35 | 0,09 / 0,10 | pasa |
+| D10 | 1,45 / 1,55 | 4,75 / 5,03 | 51,1% / 49,1% | 44,9 / 41,9 | 31,9 / 33,2 | 2,54 / 3,13 | 1,03 / 1,43 | 0,04 / 0,12 | pasa |
+
+| Pareja | Goles | Gana A | Puntos de A | Diferencia de gol de A | Posesión de A | Faltas | Veredicto |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| D1/D2 | 2,25 / 2,56 | 63% / 65% | 2,10 / 2,14 | 0,98 / 1,10 | 51,6% / 52,1% | 2,09 / 2,01 | pasa |
+| D5/D6 | 2,19 / 2,25 | 69% / 65% | 2,29 / 2,13 | 1,25 / 1,08 | 52,6% / 53,1% | 2,48 / 2,44 | pasa |
+| D10/D9 | 1,95 / 1,78 | 8% / 14% | 0,46 / 0,67 | -1,16 / -0,95 | 48,0% / 46,7% | 2,73 / 2,96 | pasa |
+| D1/D4 | 3,00 / 4,16 | 90% / 96% | 2,78 / 2,90 | 2,40 / 3,94 | 52,4% / 59,1% | 2,39 / 2,19 | no pasa (goles, posesion_a, dif_a) |
+| D5/D8 | 3,09 / 3,58 | 93% / 94% | 2,85 / 2,87 | 2,77 / 3,34 | 54,3% / 58,0% | 2,43 / 2,31 | pasa |
+| D10/D7 | 3,56 / 3,19 | 0% / 2% | 0,04 / 0,14 | -3,32 / -2,94 | 45,9% / 42,5% | 2,51 / 2,70 | pasa |
+
+**Pasa si, uno por uno:**
+
+- **El reporte por división queda dentro de rangos en dos semillas distintas:** pasa. Las 10 divisiones, en las semillas 97000 y 20261001.
+- **El mejor equipo gana lo que tiene que ganar, en una liga:** pasa. Divisiones vecinas: 5 de 6 dentro de rango. En D10 contra D9 de la semilla 97000 el favorito suma de más (0,39 puntos para el otro contra 0,70; el rango es 0,3).
+- **El mejor equipo gana lo que tiene que ganar, con tres divisiones de diferencia:** pasa en D5/D8 y D10/D7 (3 de 4; en una, las amarillas quedan 0,36 arriba). **No pasa en D1/D4:** el favorito gana el 90% (98%) por 2,5 goles (3,8), con 53% de posesión (59%). Es el tope de 20% de rapidez: con la ventaja por jugador y sin tope ganaba el 98% por 3,2 goles, con jugadores a 12 m/s.
+- **Sin correcciones:** 0 correcciones, `SALTO_PELOTA` = 0 y 0 partidos colgados en 6.400 partidos.
+
+**Qué falta:**
+
+1. **Pases que se pierden:** el V2 completa el 67% de los pases (el motor espacial, el 80%). Los rivales cortan unos 20 pases por partido. Las palancas del planeador (`riesgo_margen_seguro`, `castigo_corte`), el pase más firme y la reacción más lenta no lo mueven. Es la defensa heredada del motor espacial: lo que vio el usuario en la etapa 6 ("juego al azar", pelotazos) sigue.
+2. **Globos:** del 30 al 37% de los pases. No se midieron contra el motor espacial.
+3. **D1 contra D4:** ver arriba. Decisión abierta: subir el tope de rapidez, o buscar otra palanca que no sea la rapidez.
+4. **Offside:** 0,06 a 0,21 por partido en parejos (el motor espacial: 0,05 a 0,14) y 0,25 a 0,36 en los desparejos (0,11 a 0,17). El favorito, más rápido, queda adelantado.
+5. **Bibliotecas:** Windows y Android rearmadas. **Falta rearmar la de Linux.** `test_reglas_v2` da en Windows la huella 4552426272061715690 (cambia: reloj, saque del medio y valores nuevos). Falta compararla con la del teléfono.
+6. **Revisión visual:** el usuario no miró todavía el partido de 4 minutos en `laboratorio_reglas.tscn`. Remates más fuertes, entradas desde más lejos y la ventaja de rapidez cambian cómo se ve.
+7. **`Cerebro::TIRO_CLARO`** sigue en 0,3 y `remate.primera_geometria` pasó a 0,2: ya no son el mismo número.
+
+#### Resultado (2026-10-01): revisión visual del partido de 4 minutos
+
+El usuario miró `laboratorio_reglas.tscn` y marcó siete fallas. Medición nueva: `tests/_diag_pases_v2.gd` (cómo termina cada pase, por tipo). Los números son de 200 partidos de quinta, semilla 97000, salvo que diga otra cosa. **Las tablas, el "pasa si" y el "qué falta" del resultado de arriba quedaron viejos: valen los de acá.**
+
+**Herramientas nuevas:**
+
+- **`CanchitaV2Nativa.registro_pases()`:** cada pase del partido. Trae quién lo da, a quién, el tipo (la decisión del cerebro), el margen que le dio el planeador al patear y cómo termina: lo toca el receptor, otro compañero, el mismo, un rival, el arquero o nadie.
+- **Contadores de gestos:** `gestos_<parte>` y `fallos_<parte>` (pie, muslo, pecho, cabeza), y de los que erran, cuántos quedaron lejos en el piso o a otra altura.
+- **`laboratorio_reglas.tscn`:** `cada=N` y `dura=N` cambian cada cuánto captura y hasta cuándo. Con `cada=0.1` se ve un gesto cuadro por cuadro.
+
+| Lo que vio el usuario | Qué era | Antes | Después |
+| --- | --- | --- | --- |
+| Pases a la nada; el que la da va a buscar su pase | El cerebro elegía pases que el planeador ya veía cortados | 14,6 pases al hueco por partido, 46% cortados | 0,56 por partido, 22% cortados |
+| Lo mismo | — | Llega a un compañero el 61% de los pases | 72% (el pase a los pies, 87%) |
+| La pasan de taco para atrás | El que patea va derecho a la pelota y la manda adonde sea | 43% de los pases de espaldas a adonde mira | 20% |
+| Sacan del medio antes de que todos estén en su lado | El saque esperaba 6 s como mucho | — | Espera a que cada uno cruce la mitad (11 a 14 s después del gol) |
+| El que la pierde cerca se vuelve a su puesto | Solo presionaba uno, el del plan de defensa | — | También va el que llega a la pelota en menos de 1 s |
+| El lateral sale de la panza | Al terminar `Lateral_Prepara` los brazos bajaban; y llegaba de espaldas a la cancha | — | Gira hacia la cancha, levanta la pelota y la sostiene hasta lanzarla |
+| El juez se mete en el medio en las faltas | Se paraba hacia el medio de la cancha, en la línea del pase | — | Detrás de la pelota y al costado, hacia la banda de enfrente |
+| No cabecean los centros, le erran | Ver "Qué falta" | El que lo espera lo toca el 14% | 13%: sin arreglar |
+
+**Pases:**
+
+- **El dato:** el margen del planeador predice bien. Con margen negativo (un rival llega antes) se cortaba el 57% de los pases al hueco; con más de 0,5 s, el 8%. El cerebro elegía igual 11 de cada 14,6 con margen negativo: la seguridad era un término más de la utilidad.
+- **`cerebro.riesgo_maximo` (0,8):** el pase, el pase al hueco, la pared y el globo con más riesgo que eso no se ofrecen.
+- **El margen mira también el punto de llegada (`Canchita::_margen_destino`):** en el pase al espacio y en el globo cuenta el rival que llega al punto antes que el receptor, no solo el que corta el camino de la pelota.
+- **`cerebro.pase_seguro_extra` (3):** con el tope solo, los pases bajaban de 56 a 36 por partido (el motor espacial: 46). El que no tenía pase seguro conducía. Con el premio al pase seguro son 41.
+- **`cerebro.castigo_espaldas` (3):** el pase de espaldas a adonde mira pierde utilidad.
+- **Los despejes no cuentan como pases** en el reporte de calibración (`pases_despeje`): el motor espacial no los cuenta.
+
+**Saque del medio:**
+
+- Espera a que cada uno esté en su mitad, hasta 30 s. El reloj espera en las paradas: no cuesta tiempo de juego.
+- **Bug de esta misma etapa:** pasado el tope se elegía a otro ejecutor aunque el primero ya estuviera en su lugar esperando a los demás. El que dejaba de sacar se quedaba sin lugar y se iba a atacar. Ahora se cambia solo si no llegó, y se vuelven a marcar los lugares.
+
+**Presión (`cerebro.contrapresion_seg`, 1 s):** `Canchita::_segundo`. Con dos presionando las faltas subían a 3,3-3,8 por partido: `entrada_dist_m` baja de 3,6 a 2,8 y `entrada_en_area` de 0,5 a 0,35.
+
+**Lateral:**
+
+- `Cuerpo::sosten_en` detiene `Lateral_Prepara` con la pelota arriba hasta el saque (el clip dura 0,75 s y la espera 1,5 s).
+- Levanta la pelota cuando ya gira hacia la cancha (a 0,5 rad), o a los 2 s de llegar.
+- Con la pelota en las manos saca desde donde quedó: el que llegaba rápido frenaba 1,7 m más allá, dejaba de "haber llegado" y el lateral no salía.
+
+**Recalibración.** Con estos cambios subieron los goles y bajaron los pases. Se ajustó: reacción del arquero 0,44-0,21 s (era 0,5-0,25) y `nivel.rapidez_tope` 0,25 (era 0,2).
+
+**Semilla 97000, 200 partidos por división (V2 / motor espacial):**
+
+| División | Goles | Remates | Posesión de A | Pases | Completos | Faltas | Amarillas | Rojas | Veredicto |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| D1 | 2,14 / 2,31 | 7,43 / 8,15 | 49,7% / 49,0% | 37,6 / 45,8 | 32,9 / 36,8 | 1,72 / 2,24 | 0,70 / 0,95 | 0,01 / 0,04 | pasa |
+| D2 | 2,31 / 2,21 | 7,51 / 7,91 | 49,8% / 48,5% | 39,1 / 45,9 | 33,7 / 36,7 | 2,22 / 2,23 | 1,01 / 1,06 | 0,05 / 0,07 | pasa |
+| D3 | 2,19 / 2,22 | 7,26 / 7,63 | 50,3% / 49,0% | 40,2 / 46,1 | 33,7 / 36,6 | 2,04 / 2,29 | 0,94 / 1,01 | 0,03 / 0,10 | pasa |
+| D4 | 2,15 / 2,13 | 6,59 / 7,46 | 51,0% / 49,6% | 41,2 / 46,0 | 33,9 / 36,5 | 2,23 / 2,31 | 0,94 / 1,01 | 0,06 / 0,07 | pasa |
+| D5 | 2,04 / 2,26 | 6,55 / 7,29 | 50,6% / 49,4% | 40,8 / 46,2 | 33,5 / 36,9 | 2,36 / 2,44 | 1,03 / 1,00 | 0,04 / 0,06 | pasa |
+| D6 | 1,92 / 1,75 | 6,33 / 6,76 | 50,4% / 49,5% | 41,3 / 46,3 | 33,5 / 36,3 | 2,46 / 2,65 | 1,14 / 1,14 | 0,06 / 0,07 | pasa |
+| D7 | 1,99 / 1,92 | 6,32 / 6,22 | 50,9% / 50,2% | 42,1 / 45,6 | 34,0 / 36,3 | 2,56 / 2,63 | 1,19 / 1,14 | 0,06 / 0,10 | pasa |
+| D8 | 1,78 / 1,72 | 5,55 / 6,12 | 50,7% / 49,7% | 42,0 / 44,5 | 34,0 / 35,3 | 2,61 / 2,69 | 1,16 / 1,19 | 0,08 / 0,07 | pasa |
+| D9 | 1,71 / 1,78 | 5,11 / 5,34 | 51,0% / 50,2% | 41,5 / 43,9 | 33,3 / 34,5 | 2,81 / 3,02 | 1,17 / 1,26 | 0,05 / 0,09 | pasa |
+| D10 | 1,67 / 1,65 | 5,12 / 5,12 | 51,0% / 49,8% | 41,1 / 42,6 | 32,4 / 33,6 | 2,75 / 3,13 | 1,19 / 1,36 | 0,06 / 0,10 | pasa |
+
+| Pareja | Goles | Gana A | Puntos de A | Diferencia de gol de A | Posesión de A | Faltas | Veredicto |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| D1/D2 | 2,26 / 2,48 | 53% / 59% | 1,87 / 2,00 | 0,72 / 1,00 | 51,5% / 51,9% | 2,17 / 2,25 | pasa |
+| D5/D6 | 2,02 / 2,33 | 61% / 64% | 2,07 / 2,14 | 0,85 / 1,25 | 52,4% / 52,3% | 2,54 / 2,50 | pasa |
+| D10/D9 | 1,82 / 1,89 | 12% / 15% | 0,61 / 0,70 | -0,88 / -1,08 | 48,2% / 46,6% | 2,65 / 3,10 | pasa |
+| D1/D4 | 2,59 / 4,12 | 84% / 98% | 2,66 / 2,96 | 1,99 / 3,82 | 54,3% / 59,1% | 1,96 / 2,20 | no pasa (goles, remates, dif_a) |
+| D5/D8 | 2,89 / 3,38 | 91% / 93% | 2,81 / 2,84 | 2,66 / 3,15 | 57,3% / 56,7% | 2,25 / 2,46 | pasa |
+| D10/D7 | 2,77 / 3,07 | 1% / 1% | 0,12 / 0,10 | -2,54 / -2,87 | 42,2% / 42,3% | 2,45 / 2,68 | pasa |
+
+**Semilla 20261001, 200 partidos por división (V2 / motor espacial):**
+
+| División | Goles | Remates | Posesión de A | Pases | Completos | Faltas | Amarillas | Rojas | Veredicto |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| D1 | 2,40 / 2,31 | 8,28 / 8,34 | 50,2% / 49,4% | 37,5 / 45,7 | 33,3 / 36,9 | 2,10 / 1,89 | 0,91 / 0,85 | 0,04 / 0,01 | pasa |
+| D2 | 2,13 / 2,34 | 7,33 / 8,09 | 49,4% / 49,5% | 38,1 / 45,9 | 33,0 / 36,6 | 1,94 / 2,12 | 0,85 / 0,91 | 0,05 / 0,08 | pasa |
+| D3 | 2,10 / 2,13 | 7,13 / 7,92 | 50,0% / 49,6% | 40,1 / 45,9 | 33,4 / 36,7 | 2,08 / 2,15 | 0,86 / 0,96 | 0,04 / 0,06 | pasa |
+| D4 | 1,98 / 2,06 | 6,83 / 7,42 | 50,5% / 48,5% | 40,3 / 46,3 | 33,3 / 36,5 | 2,42 / 2,33 | 0,98 / 1,14 | 0,07 / 0,06 | pasa |
+| D5 | 1,95 / 2,21 | 6,56 / 7,34 | 51,3% / 49,4% | 41,5 / 46,5 | 33,8 / 36,5 | 2,50 / 2,40 | 1,14 / 1,09 | 0,05 / 0,05 | pasa |
+| D6 | 2,09 / 1,95 | 6,47 / 6,92 | 50,9% / 50,3% | 41,7 / 46,4 | 33,7 / 36,6 | 2,77 / 2,44 | 1,28 / 1,09 | 0,08 / 0,06 | pasa |
+| D7 | 1,84 / 1,75 | 5,84 / 6,36 | 50,4% / 49,0% | 41,9 / 45,6 | 33,9 / 36,0 | 2,59 / 2,67 | 1,13 / 1,23 | 0,07 / 0,08 | pasa |
+| D8 | 1,85 / 1,63 | 5,88 / 5,92 | 50,9% / 49,7% | 42,0 / 44,6 | 33,9 / 35,2 | 2,95 / 2,74 | 1,28 / 1,25 | 0,07 / 0,07 | pasa |
+| D9 | 1,62 / 1,63 | 5,04 / 5,43 | 51,5% / 50,3% | 41,6 / 43,5 | 33,7 / 34,5 | 2,81 / 2,98 | 1,21 / 1,35 | 0,05 / 0,10 | pasa |
+| D10 | 1,57 / 1,55 | 4,75 / 5,03 | 51,4% / 49,1% | 41,9 / 41,9 | 33,1 / 33,2 | 2,92 / 3,13 | 1,44 / 1,43 | 0,04 / 0,12 | pasa |
+
+| Pareja | Goles | Gana A | Puntos de A | Diferencia de gol de A | Posesión de A | Faltas | Veredicto |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| D1/D2 | 2,13 / 2,56 | 56% / 65% | 1,95 / 2,14 | 0,73 / 1,10 | 51,6% / 52,1% | 2,23 / 2,01 | pasa |
+| D5/D6 | 2,15 / 2,25 | 61% / 65% | 2,06 / 2,13 | 0,91 / 1,08 | 52,9% / 53,1% | 2,59 / 2,44 | pasa |
+| D10/D9 | 1,75 / 1,78 | 10% / 14% | 0,59 / 0,67 | -0,94 / -0,95 | 48,6% / 46,7% | 2,89 / 2,96 | pasa |
+| D1/D4 | 2,77 / 4,16 | 86% / 96% | 2,71 / 2,90 | 2,29 / 3,94 | 54,0% / 59,1% | 2,00 / 2,19 | no pasa (goles, posesion_a, dif_a) |
+| D5/D8 | 3,06 / 3,58 | 94% / 94% | 2,88 / 2,87 | 2,71 / 3,34 | 57,4% / 58,0% | 2,10 / 2,31 | pasa |
+| D10/D7 | 2,90 / 3,19 | 1% / 2% | 0,12 / 0,14 | -2,60 / -2,94 | 43,0% / 42,5% | 2,34 / 2,70 | pasa |
+
+**Pasa si, uno por uno:**
+
+- **El reporte por división queda dentro de rangos en dos semillas distintas:** pasa. Las 10 divisiones, en las semillas 97000 y 20261001.
+- **El mejor equipo gana lo que tiene que ganar:** pasa en las divisiones vecinas (6 de 6) y con tres divisiones de diferencia en D5/D8 y D10/D7 (4 de 4). **No pasa en D1/D4:** el favorito gana el 84 a 86% (96 a 98%) por 2,0 a 2,3 goles (3,8 a 3,9), con 54% de posesión (59%).
+- **Sin correcciones:** 0 correcciones, `SALTO_PELOTA` = 0 y 0 partidos colgados en 6.400 partidos.
+
+**Qué falta:**
+
+1. **Centros y cabezazos:** el que espera el centro lo toca el 13% de las veces; un rival, el 46%; rebota en un cuerpo o se va, el 25%. Salen 0,23 cabezazos al arco por partido y 0,01 goles de cabeza (el motor espacial: 0,9 y 0,36). El 16% de los gestos de cabeza erra, a 0,9 m de la pelota: casi todos son el que pierde el salto. Se probó que el centro llegue a la altura de la cabeza y que caiga 1,5 m antes del que lo espera: no cambió nada y se deshizo. Los defensores se paran del lado del arco de cada atacante y llegan antes. Falta que el atacante ataque la pelota.
+2. **D1 contra D4:** el pase seguro le deja la pelota más tiempo al equipo débil y la diferencia bajó de 2,5 a 2,0-2,3 goles. Decisión abierta: otra palanca además de la rapidez.
+3. **El pasador y su pase:** el que da el pase no va a buscarlo durante 2,5 s (`DESCANSO_PASE_PROPIO`). Con el 87% de los pases a los pies llegando, se ve menos; no se tocó.
+4. **Rival pegado al que saca el lateral:** en las capturas un rival queda a menos de 2 m. No se tocó.
+5. **Pelotazos:** un tercio de los pases son globos (largos, centros y despejes). Los despejes son 5,9 por partido (el motor espacial: 2 a 4).
+6. **Bibliotecas:** Windows y Android rearmadas. **Falta rearmar la de Linux** y comparar la huella de `test_reglas_v2` (3043848228211673396 en Windows) con la del teléfono.
+7. **Revisión visual:** el usuario tiene que mirar de nuevo. El lateral y el árbitro se revisaron en capturas; el saque del medio, la presión y los pases, solo con números.
+
+#### Resultado (2026-10-01): segunda revisión visual, conducción, remates y cabezazos
+
+El usuario miró otra vez `laboratorio_reglas.tscn` y marcó seis fallas. Mediciones nuevas: `tests/_diag_juego_v2.gd` (por qué sale la pelota, la conducción, la gente en el área, la altura de los remates) y `tests/_diag_corners_v2.gd` (200 córners forzados: quién toca primero el centro y cómo). Los números son de 200 partidos de quinta, semilla 97000. **Las tablas, el "pasa si" y el "qué falta" del resultado de arriba quedaron viejos: valen los de acá.**
+
+| Lo que vio el usuario | Qué era | Antes | Después |
+| --- | --- | --- | --- |
+| No cabecean | El gesto de cabecear arrancaba tarde | En 200 córners toca primero el que ataca el 11%; cabezazo al arco en el 5% | 53% y 40% |
+| Lo mismo, en el partido | — | 0,23 cabezazos al arco por partido | 1,24 (0,11 goles) |
+| Adelantan la pelota y la corren a fondo | El toque que cambia de dirección salía como si ya corriera para ese lado | Pelota a más de 2,5 m del que la lleva el 15% del tiempo | 4,5% |
+| Corren por la banda y se les va | Lo mismo, más el toque largo | Sale de la cancha conduciendo 1,95 veces por partido; pelota a 1,51 m de media | 0,69 veces; 0,90 m |
+| La tiran afuera en los pases | El pelotazo y el centro caían donde nadie los jugaba | Sale de un pase 1,32 veces por partido | 0,60 |
+| Se la dan al rival | El pelotazo no se podía bajar de cabeza ni de pecho | Llega a un compañero el 72% de los pases | 78% (el pase a los pies, 87%; el pelotazo, 87%, antes 57%) |
+| Los tiros son siempre rastreros | El que remata elegía casi siempre el punto más seguro | 74% rasos, 24% a media altura, 3% altos | 48%, 35% y 17% |
+| No va nadie al área | Solo dos podían correr al frente a la vez | 0,87 compañeros en el área; ninguno el 50% del tiempo | 1,28; ninguno el 42%: mejora poco |
+
+**Cabezazos (lo que más cambió):**
+
+- **El bug:** `Canchita::_gatillo` elegía con qué parte tocar mirando la pelota 8 pasos adelante (0,13 s). El contacto de `Cabecear` es a 0,29 s. El gesto arrancaba cuando la pelota estaba por entrar a la franja de la cabeza y al contacto ya había bajado al pecho o al pie. En 200 córners arrancaban 0,4 gestos de cabeza por córner y la pelota rebotaba 1,4 veces en un cuerpo.
+- **El arreglo:** cada parte se prueba con la pelota en el cuadro de contacto de su propio clip, de arriba para abajo. Vale para todo lo que llega por arriba: el pelotazo ahora se baja de cabeza o de pecho.
+- **Centro tendido (`cerebro.centro_elevacion_rad` 0,3 y `centro_alto_m` 1,3):** un perfil de vuelo propio (`Perfiles::CENTRO`). El córner con el globo de 34° subía a 7-9 m y caía casi vertical. Si tendido no llega, va el globo.
+- **Saltan todos (`cerebro.centro_al_que_llega`):** al centro va todo el que lo puede cabecear moviéndose 3 m como mucho, de los dos equipos. Antes iba uno por equipo.
+- **Dos que saltan no se hacen falta:** el cruce cuenta como falta solo con la pierna.
+- **Gestos de cabeza:** 17 por partido (antes 4); erra el 10% (antes 15-19%).
+
+**Conducción:**
+
+- **El toque según lo que corre hacia ese lado** (`Canchita::_decidir_partido`): la rapidez del toque usaba la rapidez del jugador sin mirar para dónde. El que cambiaba de dirección mandaba la pelota a 7 m/s hacia el lado nuevo, frenaba de 6,5 a 4,3 m/s en 0,2 s para dar la vuelta y picaba a buscarla. Pasaba 169 veces en 20 partidos.
+- **El próximo toque posible** (`_alcance`, `no_antes`): el que conduce apunta al punto donde puede volver a tocarla (cuando termina el gesto y llega el contacto del siguiente), no a la pelota recién tocada.
+- **`toque.toque_largo_m` 0,8 y `toque_corto_m` 0,5** (eran 1,4 y 0,8).
+
+**Remates:** `cerebro.remate_temperatura` 0,15 (era 0,05) y `remate.error_vertical` 0,4 (era 0,6). También se reparten más los golpes: colocado 2,4 por partido, fuerte 1,5, con efecto 1,35, globo 0,9.
+
+**Área:** `cerebro.llegada_area_extra` (2). Con la pelota por la banda (a más de 16 m del eje) en el último tercio, el 9, los extremos y los volantes van al área aunque esté llena, desde 38 m, y el cupo de corridas sube de 2 a 4.
+
+**Recalibración.** Estos arreglos emparejaron a los equipos: con el pase seguro y la pelota pegada al pie, la rapidez dejó de alcanzar (primera le ganaba a cuarta el 67% aun en el tope) y décima completaba tantos pases como primera.
+
+- **`nivel.tecnica_por_punto` (6):** los puntos de media que el equipo le saca al nivel del partido, por 6, se suman a pases y control. `nivel.rapidez_por_punto` sube a 0,05.
+- **Error técnico:** `toque.error_pase_rad` 0,16 (era 0,1), `error_control_rad` 0,65 y `error_control_ms` 2,4 (eran 0,4 y 1,5).
+- **Faltas:** `entrada_dist_m` 2,0, `falta_radio_m` 0,42 y `falta_torpeza` 1,5. Con la pelota pegada al pie las entradas se duplicaron.
+- **Remates:** `cerebro.tiro_factor` 1,2 y `remate.primera_geometria` 0,25. Los cabezazos suman 1,2 remates por partido.
+
+**Semilla 97000, 200 partidos por división (V2 / motor espacial):**
+
+| División | Goles | Remates | Posesión de A | Pases | Completos | Faltas | Amarillas | Rojas | Veredicto |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| D1 | 2,17 / 2,31 | 8,34 / 8,15 | 49,6% / 49,0% | 41,5 / 45,8 | 38,5 / 36,8 | 2,21 / 2,24 | 0,94 / 0,95 | 0,07 / 0,04 | pasa |
+| D2 | 2,25 / 2,21 | 7,89 / 7,91 | 49,9% / 48,5% | 43,5 / 45,9 | 39,9 / 36,7 | 2,19 / 2,23 | 0,94 / 1,06 | 0,03 / 0,07 | pasa |
+| D3 | 2,06 / 2,22 | 7,90 / 7,63 | 49,9% / 49,0% | 44,6 / 46,1 | 40,1 / 36,6 | 2,29 / 2,29 | 0,95 / 1,01 | 0,07 / 0,10 | pasa |
+| D4 | 2,07 / 2,13 | 7,63 / 7,46 | 49,6% / 49,6% | 45,7 / 46,0 | 40,7 / 36,5 | 2,36 / 2,31 | 1,05 / 1,01 | 0,06 / 0,07 | pasa |
+| D5 | 2,06 / 2,26 | 7,42 / 7,29 | 49,9% / 49,4% | 46,6 / 46,2 | 41,2 / 36,9 | 2,42 / 2,44 | 1,00 / 1,00 | 0,07 / 0,06 | pasa |
+| D6 | 1,93 / 1,75 | 7,03 / 6,76 | 49,7% / 49,5% | 46,8 / 46,3 | 41,1 / 36,3 | 2,32 / 2,65 | 1,08 / 1,14 | 0,04 / 0,07 | pasa |
+| D7 | 1,94 / 1,92 | 6,78 / 6,22 | 50,2% / 50,2% | 47,3 / 45,6 | 40,4 / 36,3 | 2,61 / 2,63 | 1,16 / 1,14 | 0,04 / 0,10 | pasa |
+| D8 | 1,90 / 1,72 | 6,57 / 6,12 | 51,1% / 49,7% | 46,9 / 44,5 | 40,2 / 35,3 | 2,43 / 2,69 | 1,09 / 1,19 | 0,07 / 0,07 | pasa |
+| D9 | 1,87 / 1,78 | 6,34 / 5,34 | 50,2% / 50,2% | 46,5 / 43,9 | 38,3 / 34,5 | 2,48 / 3,02 | 1,09 / 1,26 | 0,04 / 0,09 | pasa |
+| D10 | 1,75 / 1,65 | 5,61 / 5,12 | 49,9% / 49,8% | 46,5 / 42,6 | 37,9 / 33,6 | 2,45 / 3,13 | 1,07 / 1,36 | 0,05 / 0,10 | pasa |
+
+| Pareja | Goles | Gana A | Puntos de A | Diferencia de gol de A | Posesión de A | Faltas | Veredicto |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| D1/D2 | 2,00 / 2,48 | 50% / 59% | 1,80 / 2,00 | 0,56 / 1,00 | 51,8% / 51,9% | 2,23 / 2,25 | no pasa (dif_a) |
+| D5/D6 | 1,93 / 2,33 | 67% / 64% | 2,23 / 2,14 | 1,03 / 1,25 | 53,8% / 52,3% | 2,31 / 2,50 | pasa |
+| D10/D9 | 1,91 / 1,89 | 6% / 15% | 0,47 / 0,70 | -1,15 / -1,08 | 45,6% / 46,6% | 2,47 / 3,10 | pasa |
+| D1/D4 | 2,84 / 4,12 | 88% / 98% | 2,70 / 2,96 | 2,23 / 3,82 | 55,5% / 59,1% | 1,79 / 2,20 | no pasa (goles, dif_a) |
+| D5/D8 | 2,94 / 3,38 | 96% / 93% | 2,90 / 2,84 | 2,75 / 3,15 | 58,8% / 56,7% | 1,77 / 2,46 | no pasa (pases_completos, faltas) |
+| D10/D7 | 3,10 / 3,07 | 0% / 1% | 0,03 / 0,10 | -2,96 / -2,87 | 39,9% / 42,3% | 1,77 / 2,68 | no pasa (remates, pases_completos, faltas, amarillas) |
+
+**Semilla 20261001, 200 partidos por división (V2 / motor espacial):**
+
+| División | Goles | Remates | Posesión de A | Pases | Completos | Faltas | Amarillas | Rojas | Veredicto |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| D1 | 2,04 / 2,31 | 7,89 / 8,34 | 50,2% / 49,4% | 41,4 / 45,7 | 38,9 / 36,9 | 2,15 / 1,89 | 0,89 / 0,85 | 0,04 / 0,01 | pasa |
+| D2 | 2,19 / 2,34 | 7,95 / 8,09 | 49,7% / 49,5% | 43,2 / 45,9 | 39,7 / 36,6 | 2,28 / 2,12 | 1,10 / 0,91 | 0,06 / 0,08 | pasa |
+| D3 | 2,13 / 2,13 | 7,77 / 7,92 | 49,4% / 49,6% | 44,7 / 45,9 | 40,4 / 36,7 | 2,37 / 2,15 | 0,93 / 0,96 | 0,06 / 0,06 | pasa |
+| D4 | 1,87 / 2,06 | 7,67 / 7,42 | 49,2% / 48,5% | 46,0 / 46,3 | 40,8 / 36,5 | 2,38 / 2,33 | 1,11 / 1,14 | 0,04 / 0,06 | pasa |
+| D5 | 2,00 / 2,21 | 7,42 / 7,34 | 50,2% / 49,4% | 45,6 / 46,5 | 40,2 / 36,5 | 2,55 / 2,40 | 1,11 / 1,09 | 0,06 / 0,05 | pasa |
+| D6 | 2,13 / 1,95 | 7,26 / 6,92 | 50,5% / 50,3% | 47,4 / 46,4 | 41,3 / 36,6 | 2,57 / 2,44 | 1,17 / 1,09 | 0,09 / 0,06 | pasa |
+| D7 | 1,91 / 1,75 | 6,82 / 6,36 | 50,8% / 49,0% | 47,7 / 45,6 | 40,6 / 36,0 | 2,65 / 2,67 | 1,26 / 1,23 | 0,04 / 0,08 | pasa |
+| D8 | 1,79 / 1,63 | 6,57 / 5,92 | 50,5% / 49,7% | 47,3 / 44,6 | 40,0 / 35,2 | 2,62 / 2,74 | 1,18 / 1,25 | 0,04 / 0,07 | pasa |
+| D9 | 1,83 / 1,63 | 6,04 / 5,43 | 51,4% / 50,3% | 47,7 / 43,5 | 39,5 / 34,5 | 2,59 / 2,98 | 1,13 / 1,35 | 0,07 / 0,10 | pasa |
+| D10 | 1,75 / 1,55 | 5,67 / 5,03 | 50,2% / 49,1% | 46,9 / 41,9 | 38,2 / 33,2 | 2,94 / 3,13 | 1,35 / 1,43 | 0,07 / 0,12 | pasa |
+
+| Pareja | Goles | Gana A | Puntos de A | Diferencia de gol de A | Posesión de A | Faltas | Veredicto |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| D1/D2 | 2,15 / 2,56 | 61% / 65% | 2,04 / 2,14 | 0,77 / 1,10 | 51,1% / 52,1% | 2,20 / 2,01 | pasa |
+| D5/D6 | 2,07 / 2,25 | 67% / 65% | 2,25 / 2,13 | 1,16 / 1,08 | 53,6% / 53,1% | 2,25 / 2,44 | pasa |
+| D10/D9 | 2,06 / 1,78 | 7% / 14% | 0,46 / 0,67 | -1,21 / -0,95 | 46,6% / 46,7% | 2,34 / 2,96 | pasa |
+| D1/D4 | 2,56 / 4,16 | 82% / 96% | 2,63 / 2,90 | 2,07 / 3,94 | 56,3% / 59,1% | 1,80 / 2,19 | no pasa (goles, dif_a) |
+| D5/D8 | 3,18 / 3,58 | 96% / 94% | 2,90 / 2,87 | 2,90 / 3,34 | 59,1% / 58,0% | 1,90 / 2,31 | no pasa (pases_completos) |
+| D10/D7 | 3,20 / 3,19 | 0% / 2% | 0,02 / 0,14 | -3,11 / -2,94 | 40,7% / 42,5% | 1,78 / 2,70 | no pasa (remates, pases_completos, faltas, amarillas) |
+
+**Pasa si, uno por uno:**
+
+- **El reporte por división queda dentro de rangos en dos semillas distintas:** pasa. Las 10 divisiones, en las semillas 97000 y 20261001.
+- **El mejor equipo gana lo que tiene que ganar, en una liga:** pasa en 5 de 6 parejas de divisiones vecinas. En D1/D2 de la semilla 97000 la diferencia de gol queda en 0,56 contra 1,00 (el rango es 0,4).
+- **Con tres divisiones de diferencia:** el favorito gana lo que tiene que ganar en D5/D8 y D10/D7 (93 a 100% contra 93 a 99%), pero esas parejas quedan fuera de rango en pases completos (+25%), faltas (-28%) y, en D10/D7, remates. **No pasa en D1/D4:** gana el 82 a 88% (96 a 98%) por 2,1 a 2,2 goles (3,8 a 3,9).
+- **Sin correcciones:** 0 correcciones, `SALTO_PELOTA` = 0 y 0 partidos colgados en 6.400 partidos.
+
+**Qué falta:**
+
+1. **El área en los ataques por la banda:** 1,28 compañeros contra 4,1 rivales, y ninguno el 42% del tiempo. La línea del offside deja a los que llegan en el borde y la corrida dura 3 s como mucho. Subir el cupo a 6 no cambió nada.
+2. **Goles de córner:** 8,5% de los córners terminan en gol (en el fútbol real, 3%). Hay 0,8 córners por partido: pesa poco, pero se va a ver.
+3. **Partidos de tres divisiones de diferencia:** ver arriba. `entrada_sobrado` le baja las entradas al favorito y el otro no llega a la pelota: quedan pocas faltas.
+4. **Pelota afuera después de un control:** 1,25 veces por partido (subió con el error de control más grande).
+5. **Bibliotecas:** Windows, Android y Linux rearmadas. La de Linux se armó en la PC con Zig (ver "Cómo se arma la extensión") y **no se probó**: en la PC no hay un Linux donde cargarla. Falta correr `test_reglas_v2` en la nube y en el teléfono y comparar la huella con la de Windows (2608213419897894886).
+6. **Revisión visual:** el usuario tiene que mirar de nuevo. Todo lo de esta vuelta se verificó con números; en pantalla no se miró nada.
+
+#### Resultado (2026-10-02): tercera revisión visual, decisiones, barridas y cambios
+
+El usuario miró otra vez `laboratorio_reglas.tscn` y marcó seis cosas. Dos mediciones nuevas: `tests/_diag_traza_v2.gd` (escribe, jugada por jugada, qué decide el que tiene la pelota cerca del arco y con qué opciones) y `tests/_diag_estilos_v2.gd` (los mismos planteles con cada estilo). `tests/_diag_juego_v2.gd` mide además cuánto se aleja la pelota después de cada toque, qué se decide con el arco a tiro y qué pasa con cada barrida. Los números son de quinta, semilla 97000. **Las tablas, el "pasa si" y el "qué falta" del resultado de arriba quedaron viejos: valen los de acá.**
+
+| Lo que vio el usuario | Qué era | Antes | Después |
+| --- | --- | --- | --- |
+| Adelantan la pelota y la corren a fondo | El toque que cambia de dirección salía a 5 m/s contra lo que él corría | Pelota a más de 2,5 m del que la lleva el 4,4% del tiempo; a más de 2 m después del 9% de los toques | 0,6%; 3% |
+| Corren por la banda y se les va | Decidía cada 1,5 s y corría 10 m entre una decisión y otra; el control cerca de la raya salía con su error | Sale de la cancha conduciendo 0,73 veces por partido; de un control, 1,18 | 0,12 y 0,47 |
+| No patean con vía libre | La geometría del remate da cero con más de 56 grados: el que entraba al área en diagonal seguía hasta la línea de fondo | 3,3 decisiones por partido en el área sin rivales delante | 4,0; con el arco a tiro patea el 70 a 92% |
+| Las barridas no sacan la pelota | El que la llevaba quedaba parado al lado de la pelota suelta | De 2,4 barridas limpias, se la queda el equipo del que barre 1 de cada 4 | De 4,7, 2 de cada 3 |
+| El cambio no se ve | La cámara seguía 4 s al que sale; el lesionado tardaba hasta 11 s en cruzar la cancha | — | La cámara lo sigue hasta la raya y después al que entra |
+| No hay identidad de juego | Ver "Identidad de juego" | Tiki taka 26 pases, Contragolpe 21 | 27 y 18 |
+
+**La traza encontró tres cosas que los contadores no mostraban:**
+
+- **Decide cada 1,5 s.** La conducción valía hasta la cadencia del control (0,5 a 2,25 s). A 6,5 m/s son 10 m sin mirar: el que iba por la banda llegaba a la línea de fondo con una sola opción (conducir). `cerebro.conduce_decide_seg` (0,6).
+- **El remate no estaba entre las opciones.** `factor_angulo` da cero cuando la distancia al eje pasa una vez y media la distancia a la línea de fondo. A 3 m del fondo y 7 m del eje ve 28 grados de arco, y no podía patear.
+- **Los carriles lo sacan hacia la banda.** De los tres carriles de conducción gana el más libre, que es el de afuera: el defensor lo lleva a la raya.
+
+**Conducción:**
+
+- **La rapidez del toque con signo** (`Canchita::_decidir_partido`, `toque.conduce_gana_seg` 0,15): cuenta lo que corre hacia donde manda la pelota, con signo. El que va para el otro lado primero tiene que frenar: la media vuelta deja la pelota casi quieta. Antes sumaba medio segundo de aceleración y los toques que giraban 110 a 140 grados salían a 5 m/s.
+- **Probado y descartado:** que el toque no gire más de 70 grados. La pelota no se alejaba, pero salía de la cancha 1,07 veces por partido conduciendo y los quites al que conduce bajaban de 6,8 a 2,4.
+- **El control mira la raya** (`toque.control_raya_m` 1,5): el punto adonde la manda, 4 m adelante, se trae adentro de la cancha.
+- **Espera a los compañeros** (`cerebro.conduce_espera` 0,6, `Cerebro::ritmo_de_conduccion`): el que se adelantó a su equipo baja el ritmo. A fondo: de contra, encarando o con un rival a menos de 2,5 m. Pesa poco: con un marcador cerca va casi siempre a fondo.
+
+**Remates:**
+
+- **Encara** (`cerebro.via_libre_m` 22, `Cerebro::encara`): sin rivales de campo en el triángulo que va de él a los dos palos, a menos de 22 m del arco, conduce derecho al arco y a fondo, y no se la da al que no queda mejor parado. Sin presión sigue (`conducir_libre_extra` 2,5); con un rival encima patea.
+- **El arco que ve de cerca** (`cerebro.tiro_de_cerca`, `Cerebro::geometria_de_cerca`): a menos de 18 m cuenta el ángulo entre los dos palos (de 13 a 45 grados).
+- **Probado y descartado:** la chance de gol del planeador (`valor_remate`) como utilidad del remate. Sirve para comparar puntos del arco, pero de lejos da 0,2 a 0,7 (el globo por arriba del arquero) y pateaban desde 35 m.
+- `valor_remate` estira el error de lado con el ángulo: desde el costado el remate valía lo mismo que de frente.
+
+**Barridas:**
+
+- **El que la llevaba cae** (`reglas.entrada_tumba` 0,8): la entrada que saca la pelota tumba al que la llevaba, sin falta.
+- **La pierna llega más lejos** (`reglas.entrada_alcance_m` 0,45; el control llega a 0,3). Las barridas que no tocan nada bajan del 23% al 14%.
+- **Se tira más el torpe** (`reglas.entrada_por_quite` -0,5): con el bueno tirándose más, primera hacía 3,1 faltas y décima 2,1 (el motor espacial: 2,2 y 3,1).
+- Por partido: 8,5 barridas; 4,7 sacan la pelota, 2,6 son falta y 1,2 no tocan nada. `entrada_prob` 0,65, `entrada_sobrado` 0 y `amarilla_por_falta` 0,56.
+
+**Cambios:** `PartidoVistoV2.foco_de_cambio` da adónde mirar: el que sale hasta que cruza la raya y después el que entra. El que sale corre (`FACTOR_SALIR` 0,7) y el lesionado trota (0,5). Revisado en capturas con `solo=lesión`.
+
+**Identidad de juego.** El plan no tiene una etapa para esto. Los estilos (`Estilos.PLANES`) ya llegan al cerebro y se miden con `tests/_diag_estilos_v2.gd`:
+
+| Estilo | Pases | Largo del pase | Pelotazos | Bloque sin pelota | Goles a favor y en contra |
+| --- | --- | --- | --- | --- | --- |
+| Tiki taka | 26,5 | 13,5 m | 1,0 | 39,4 m | 0,89 y 1,06 |
+| Contragolpe | 17,9 | 18,7 m | 3,9 | 36,6 m | 1,12 y 1,00 |
+| Juego directo | 18,4 | 17,8 m | 3,1 | 39,0 m | 1,04 y 1,08 |
+| Presión alta | 24,2 | 15,6 m | 2,7 | 43,3 m | 1,08 y 1,21 |
+| Defensivo | 18,8 | 16,5 m | 2,5 | 35,3 m | 1,14 y 1,05 |
+| Físico | 19,9 | 17,5 m | 3,4 | 39,3 m | 1,08 y 1,04 |
+
+`cerebro.estilo_fuerza` (1,5) multiplica lo que el plan se aparta del estilo medio. Mueve poco: la posesión queda en 50% para los seis y el Tiki taka pierde contra el Juego directo. Una identidad de verdad (posesión, altura y momento de la presión, ritmo) pide una etapa propia antes de la etapa 8.
+
+**Recalibración.** Los arreglos movieron todo: más pases (se decide más seguido), mejores remates y barridas que sacan la pelota.
+
+- **Pases:** `cerebro.pase_seguro_extra` 0,4 (era 3). Con 3, el pase seguro valía 3,7 y conducir 1,2: el que tenía el camino libre la tocaba al costado.
+- **Remates:** `cerebro.tiro_factor` 0,75.
+- **Un punto de media pesa según el nivel** (`nivel.referencia` 55 y `nivel.exponente` 1,5, `FisicaV2.peso_del_nivel`). Con el mismo peso en todas las divisiones, primera le sacaba 0,4 goles a segunda (el motor espacial: 1,0) y novena le sacaba 1,6 a décima (1,0). La física del V2 usa los atributos absolutos y el motor espacial los relativos al nivel del partido.
+
+V2 / motor espacial, 200 partidos por pareja. Los puntos y la diferencia de A no se miran en las divisiones parejas.
+
+Semilla 97000:
+
+| Partido | Goles | Remates | Pases completos | Faltas | Amarillas | Puntos de A | Diferencia de A | Fuera de rango |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| D1/D1 | 2,16 / 2,31 | 9,31 / 8,15 | 38,23 / 36,76 | 2,03 / 2,24 | 0,89 / 0,95 | 1,11 / 1,39 | -0,37 / -0,09 | — |
+| D2/D2 | 2,23 / 2,21 | 9,09 / 7,91 | 38,50 / 36,72 | 2,35 / 2,23 | 0,96 / 1,06 | 0,94 / 1,20 | -0,52 / -0,17 | — |
+| D3/D3 | 2,14 / 2,22 | 8,97 / 7,63 | 39,85 / 36,65 | 2,27 / 2,29 | 1,01 / 1,01 | 1,10 / 1,32 | -0,38 / -0,14 | rojas |
+| D4/D4 | 1,94 / 2,13 | 8,29 / 7,46 | 40,04 / 36,49 | 2,38 / 2,31 | 1,03 / 1,01 | 1,00 / 1,36 | -0,45 / -0,07 | — |
+| D5/D5 | 2,00 / 2,26 | 8,21 / 7,29 | 39,88 / 36,87 | 2,68 / 2,44 | 1,20 / 1,00 | 1,20 / 1,27 | -0,21 / -0,10 | — |
+| D6/D6 | 2,05 / 1,75 | 7,82 / 6,76 | 38,99 / 36,33 | 2,47 / 2,65 | 1,16 / 1,14 | 1,11 / 1,36 | -0,28 / -0,03 | — |
+| D7/D7 | 1,75 / 1,92 | 7,61 / 6,22 | 38,60 / 36,26 | 2,75 / 2,63 | 1,26 / 1,14 | 1,08 / 1,21 | -0,39 / -0,20 | remate |
+| D8/D8 | 1,87 / 1,72 | 7,39 / 6,12 | 37,41 / 35,31 | 2,66 / 2,69 | 1,06 / 1,19 | 1,11 / 1,32 | -0,30 / -0,09 | remate |
+| D9/D9 | 1,65 / 1,78 | 6,50 / 5,34 | 37,25 / 34,50 | 2,75 / 3,02 | 1,22 / 1,26 | 1,20 / 1,28 | -0,11 / -0,01 | remate, offsid |
+| D10/D10 | 1,63 / 1,65 | 6,21 / 5,12 | 36,11 / 33,63 | 2,91 / 3,13 | 1,32 / 1,36 | 1,13 / 1,31 | -0,23 / -0,04 | remate, offsid |
+| D1/D4 | 3,71 / 4,12 | 10,80 / 8,74 | 45,97 / 36,91 | 1,60 / 2,20 | 0,68 / 0,98 | 2,96 / 2,96 | 3,63 / 3,82 | remate, pases_, faltas, offsid |
+| D5/D8 | 3,04 / 3,38 | 9,40 / 7,96 | 45,48 / 36,58 | 2,48 / 2,46 | 1,12 / 1,01 | 2,87 / 2,84 | 2,78 / 3,15 | pases_, offsid |
+| D10/D7 | 2,83 / 3,07 | 9,36 / 7,21 | 35,45 / 34,46 | 2,58 / 2,68 | 1,15 / 1,20 | 0,11 / 0,10 | -2,59 / -2,87 | remate, offsid |
+| D1/D2 | 2,21 / 2,48 | 8,55 / 8,07 | 42,01 / 36,37 | 1,98 / 2,25 | 0,90 / 0,93 | 2,23 / 2,00 | 1,22 / 1,00 | — |
+| D5/D6 | 2,08 / 2,33 | 8,20 / 7,05 | 42,72 / 37,09 | 2,50 / 2,50 | 1,25 / 1,16 | 2,19 / 2,14 | 1,13 / 1,25 | — |
+| D10/D9 | 1,85 / 1,89 | 7,00 / 5,57 | 35,17 / 34,02 | 2,60 / 3,10 | 1,15 / 1,45 | 0,52 / 0,70 | -1,10 / -1,08 | remate, offsid |
+
+Semilla 20261001:
+
+| Partido | Goles | Remates | Pases completos | Faltas | Amarillas | Puntos de A | Diferencia de A | Fuera de rango |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| D1/D1 | 2,10 / 2,31 | 9,36 / 8,34 | 38,35 / 36,87 | 2,10 / 1,89 | 0,85 / 0,85 | 1,17 / 1,19 | -0,26 / -0,38 | — |
+| D2/D2 | 2,13 / 2,34 | 8,97 / 8,09 | 39,10 / 36,58 | 2,37 / 2,12 | 0,95 / 0,91 | 1,15 / 1,38 | -0,38 / -0,12 | — |
+| D3/D3 | 1,98 / 2,13 | 8,73 / 7,92 | 39,23 / 36,74 | 2,52 / 2,15 | 1,09 / 0,96 | 1,06 / 1,48 | -0,40 / 0,16 | — |
+| D4/D4 | 1,99 / 2,06 | 8,48 / 7,42 | 39,17 / 36,45 | 2,48 / 2,33 | 1,13 / 1,14 | 1,13 / 1,27 | -0,26 / -0,16 | — |
+| D5/D5 | 2,09 / 2,21 | 8,36 / 7,34 | 39,70 / 36,55 | 2,54 / 2,40 | 1,20 / 1,09 | 0,98 / 1,40 | -0,51 / -0,19 | — |
+| D6/D6 | 2,00 / 1,95 | 8,16 / 6,92 | 39,66 / 36,59 | 2,69 / 2,44 | 1,18 / 1,09 | 1,01 / 1,35 | -0,35 / -0,01 | penale |
+| D7/D7 | 1,80 / 1,75 | 7,38 / 6,36 | 38,23 / 36,03 | 2,70 / 2,67 | 1,27 / 1,23 | 1,07 / 1,27 | -0,34 / -0,01 | — |
+| D8/D8 | 1,69 / 1,63 | 6,88 / 5,92 | 38,58 / 35,17 | 2,86 / 2,74 | 1,26 / 1,25 | 1,14 / 1,32 | -0,12 / -0,04 | — |
+| D9/D9 | 1,72 / 1,63 | 6,52 / 5,43 | 37,35 / 34,54 | 3,01 / 2,98 | 1,31 / 1,35 | 1,10 / 1,33 | -0,19 / -0,01 | remate, offsid |
+| D10/D10 | 1,49 / 1,55 | 6,04 / 5,03 | 35,98 / 33,19 | 2,66 / 3,13 | 1,22 / 1,43 | 1,02 / 1,33 | -0,32 / -0,03 | remate |
+| D1/D4 | 3,79 / 4,16 | 10,86 / 8,73 | 45,97 / 36,91 | 1,67 / 2,19 | 0,77 / 1,04 | 3,00 / 2,90 | 3,67 / 3,94 | remate, pases_, offsid |
+| D5/D8 | 3,02 / 3,58 | 9,46 / 8,05 | 44,60 / 36,81 | 2,44 / 2,31 | 1,08 / 0,94 | 2,90 / 2,87 | 2,77 / 3,34 | pases_, offsid |
+| D10/D7 | 3,10 / 3,19 | 9,35 / 7,34 | 35,16 / 34,05 | 2,53 / 2,70 | 1,08 / 1,25 | 0,10 / 0,14 | -2,83 / -2,94 | remate, al_arc, offsid |
+| D1/D2 | 2,15 / 2,56 | 8,65 / 8,23 | 42,23 / 36,27 | 1,90 / 2,01 | 0,81 / 0,89 | 2,35 / 2,14 | 1,30 / 1,10 | — |
+| D5/D6 | 2,29 / 2,25 | 8,07 / 7,32 | 42,76 / 36,91 | 2,61 / 2,44 | 1,25 / 1,10 | 2,38 / 2,13 | 1,37 / 1,08 | — |
+| D10/D9 | 2,00 / 1,78 | 7,07 / 5,48 | 35,84 / 34,31 | 2,79 / 2,96 | 1,19 / 1,25 | 0,59 / 0,67 | -1,22 / -0,95 | remate, offsid, penale |
+
+**Pasa si, uno por uno:**
+
+- **El reporte por división queda dentro de rangos en dos semillas distintas:** goles, pases, faltas, tarjetas y posesión, sí, en las diez divisiones. **Los remates no, de séptima para abajo:** 20 a 26% arriba (el rango es 20%). Los offsides pasan el piso en novena y décima (0,3 contra 0,1).
+- **El mejor equipo gana lo que tiene que ganar:** pasa en las seis parejas desparejas y en las dos semillas (puntos y diferencia de gol). Antes no pasaba en D1/D4.
+- **Con tres divisiones de diferencia** quedan fuera de rango los pases completos (+24%) y los remates.
+- **Sin correcciones:** 0 correcciones, `SALTO_PELOTA` = 0 y 0 partidos colgados en 6.400 partidos.
+
+**Qué falta:**
+
+1. **Identidad de juego:** ver arriba. El Tiki taka quedó débil.
+2. **El área en los ataques por la banda:** 0,87 compañeros contra 3,5 rivales, y ninguno el 54% del tiempo. Los volantes quedan 20 a 30 m detrás de la pelota (las anclas del motor espacial) y el que corre la banda muchas veces es el 9.
+3. **Remates de séptima para abajo:** ver arriba.
+4. **Goles de córner:** 8,5% de los córners terminan en gol (en el fútbol real, 3%).
+5. **Bibliotecas:** Windows, Android y Linux rearmadas. La de Linux **no se probó** (ver el resultado anterior).
+6. **Revisión visual:** el usuario tiene que mirar de nuevo. De esta vuelta solo el cambio se miró en capturas.
+
+#### Resultado (2026-10-02): el área, los remates de abajo y los córners
+
+Tres de las cosas que quedaban abiertas en el resultado de arriba. Números de quinta, semilla 97000. **Las tablas, el "pasa si" y el "qué falta" del resultado de arriba quedaron viejos: valen los de acá** (la identidad de juego tiene su etapa, la 7b).
+
+| Qué | Qué era | Antes | Después |
+| --- | --- | --- | --- |
+| El área vacía en los ataques por la banda | La llegada guardaba el destino ya recortado por el offside y se caía si el área estaba llena de rivales | Con la pelota a menos de 10 m del fondo: 2,0 compañeros en el área, ninguno el 17% | 2,25; ninguno el 8% |
+| Lo mismo, a 20-10 m del fondo | — | 0,95; ninguno el 46% | 1,13; ninguno el 36% |
+| Remates de séptima para abajo | Tiros de muy lejos (con el arco a más de 25 m) | 20 a 26% arriba del motor espacial | 3 a 12% arriba: en rango |
+| Goles de córner | El cabezazo marcado y el remate de primera en el área llena entraban demasiado | 8,5% de los córners | 4,0% (1.000 córners; en el fútbol real, 3%) |
+
+**El área:**
+
+- **La medición engañaba.** `tests/_diag_juego_v2.gd` contaba desde los 30 m del fondo. Ahí la línea del offside está fuera del área y nadie puede estar adentro: es normal. Ahora mide por tramo (30-20 m, 20-10 y menos de 10) y en cada centro: cuando sale un centro hay 3,3 compañeros en el área, y ninguno el 1% de las veces.
+- **El destino deseado** (`PlanDesmarque.deseo_x`, `Cerebro::_desmarque_sigue_vivo`): la llegada guarda adónde quiere ir antes de recortar por el offside. La línea baja con la pelota y el que llega sigue hasta adentro. Antes se quedaba en el borde.
+- **No se cae por el área llena:** el desmarque moría si en el destino había mucha presión. La llegada al área no.
+- **Dura mientras la pelota siga por la banda** en el último tercio (antes 3 s como mucho).
+- **Espera** (`Cerebro::ritmo_de_conduccion`): el que va por la banda sin nadie para el centro baja el ritmo, sea cual sea el estilo.
+- **Probado y descartado:** más llegadas a la vez (4 de más en vez de 2) y desde más lejos (45 m en vez de 38): no cambia nada. La llegada persistente sin el destino deseado empeoraba (1,55 compañeros con la pelota a menos de 10 m).
+- Con la pelota a 20-10 m del fondo el área sigue vacía el 36% del tiempo: la línea del offside deja a los que llegan en el borde. El que lleva la pelota por la banda es el 9 el 31% de las veces.
+
+**Remates:** `cerebro.tiro_desde` (0,15): con menos geometría que esa el remate no se ofrece. Con la mínima del motor espacial (0,03) salían 1,6 remates por partido con el arco a más de 25 m, casi sin gol.
+
+**Córners** (`tests/_diag_corners_v2.gd` dice ahora de qué remates salen los goles):
+
+- `remate.cabeza_marcado` (3): el cabezazo con un rival encima sale peor. Los cabezazos del córner (desde 11 m, con el rival a 1 m) entraban el 14%; ahora el 3%.
+- `remate.primera_marcado` (2): lo mismo para el remate de pie de primera.
+- **Probado y descartado:** que el arquero salga a cortar el centro (el centro cae a 8 m o más del arco: no llega a ninguno), pararlo en el medio del arco y correr al que marca hacia el lado de la pelota. Ninguno movió nada.
+
+V2 / motor espacial, 200 partidos por pareja, con todo lo de este resultado y lo de la etapa 7b. Los puntos y la diferencia de A no se miran en las divisiones parejas.
+
+Semilla 97000:
+
+| Partido | Goles | Remates | Pases completos | Faltas | Amarillas | Puntos de A | Diferencia de A | Fuera de rango |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| D1/D1 | 2,17 / 2,31 | 8,39 / 8,15 | 37,62 / 36,76 | 2,11 / 2,24 | 0,85 / 0,95 | 1,24 / 1,39 | -0,14 / -0,09 | — |
+| D2/D2 | 2,25 / 2,21 | 8,10 / 7,91 | 38,05 / 36,72 | 2,27 / 2,23 | 0,89 / 1,06 | 1,24 / 1,20 | -0,22 / -0,17 | — |
+| D3/D3 | 2,28 / 2,22 | 7,88 / 7,63 | 38,53 / 36,65 | 2,67 / 2,29 | 1,01 / 1,01 | 1,20 / 1,32 | -0,12 / -0,14 | — |
+| D4/D4 | 2,22 / 2,13 | 7,83 / 7,46 | 39,13 / 36,49 | 2,81 / 2,31 | 1,02 / 1,01 | 1,08 / 1,36 | -0,35 / -0,07 | — |
+| D5/D5 | 1,99 / 2,26 | 7,11 / 7,29 | 39,20 / 36,87 | 2,74 / 2,44 | 1,05 / 1,00 | 1,31 / 1,27 | -0,07 / -0,10 | — |
+| D6/D6 | 2,17 / 1,75 | 7,14 / 6,76 | 38,81 / 36,33 | 2,77 / 2,65 | 1,13 / 1,14 | 1,33 / 1,36 | -0,01 / -0,03 | goles |
+| D7/D7 | 2,02 / 1,92 | 6,57 / 6,22 | 38,70 / 36,26 | 2,75 / 2,63 | 1,11 / 1,14 | 1,27 / 1,21 | -0,05 / -0,20 | — |
+| D8/D8 | 1,93 / 1,72 | 6,45 / 6,12 | 37,97 / 35,31 | 2,69 / 2,69 | 0,96 / 1,19 | 1,36 / 1,32 | 0,07 / -0,09 | — |
+| D9/D9 | 1,73 / 1,78 | 5,79 / 5,34 | 36,59 / 34,50 | 2,82 / 3,02 | 0,97 / 1,26 | 1,33 / 1,28 | 0,03 / -0,01 | — |
+| D10/D10 | 1,67 / 1,65 | 5,71 / 5,12 | 35,92 / 33,63 | 2,67 / 3,13 | 1,01 / 1,36 | 1,41 / 1,31 | 0,10 / -0,04 | offsid |
+| D1/D4 | 3,90 / 4,12 | 10,97 / 8,74 | 47,17 / 36,91 | 1,44 / 2,20 | 0,46 / 0,98 | 2,97 / 2,96 | 3,83 / 3,82 | remate, pases_, faltas, amaril, offsid |
+| D5/D8 | 3,15 / 3,38 | 9,84 / 7,96 | 45,91 / 36,58 | 2,31 / 2,46 | 0,84 / 1,01 | 2,90 / 2,84 | 2,92 / 3,15 | remate, pases_, offsid |
+| D10/D7 | 2,86 / 3,07 | 8,09 / 7,21 | 35,17 / 34,46 | 2,94 / 2,68 | 1,07 / 1,20 | 0,13 / 0,10 | -2,46 / -2,87 | offsid |
+| D1/D2 | 2,21 / 2,48 | 8,00 / 8,07 | 40,80 / 36,37 | 2,42 / 2,25 | 0,93 / 0,93 | 2,14 / 2,00 | 1,02 / 1,00 | — |
+| D5/D6 | 2,12 / 2,33 | 7,43 / 7,05 | 41,67 / 37,09 | 2,63 / 2,50 | 1,12 / 1,16 | 2,31 / 2,14 | 1,38 / 1,25 | — |
+| D10/D9 | 1,83 / 1,89 | 5,86 / 5,57 | 34,76 / 34,02 | 2,84 / 3,10 | 1,14 / 1,45 | 0,72 / 0,70 | -0,75 / -1,08 | offsid |
+
+Semilla 20261001:
+
+| Partido | Goles | Remates | Pases completos | Faltas | Amarillas | Puntos de A | Diferencia de A | Fuera de rango |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| D1/D1 | 2,26 / 2,31 | 8,18 / 8,34 | 37,81 / 36,87 | 2,17 / 1,89 | 0,81 / 0,85 | 1,15 / 1,19 | -0,29 / -0,38 | — |
+| D2/D2 | 2,36 / 2,34 | 8,51 / 8,09 | 37,95 / 36,58 | 2,41 / 2,12 | 1,06 / 0,91 | 1,23 / 1,38 | -0,23 / -0,12 | — |
+| D3/D3 | 2,38 / 2,13 | 8,21 / 7,92 | 38,23 / 36,74 | 2,57 / 2,15 | 0,95 / 0,96 | 1,17 / 1,48 | -0,38 / 0,16 | — |
+| D4/D4 | 2,25 / 2,06 | 7,95 / 7,42 | 39,39 / 36,45 | 2,88 / 2,33 | 1,14 / 1,14 | 1,22 / 1,27 | -0,26 / -0,16 | — |
+| D5/D5 | 2,15 / 2,21 | 7,56 / 7,34 | 38,54 / 36,55 | 2,96 / 2,40 | 1,12 / 1,09 | 1,43 / 1,40 | 0,03 / -0,19 | — |
+| D6/D6 | 1,90 / 1,95 | 6,98 / 6,92 | 38,56 / 36,59 | 2,88 / 2,44 | 1,04 / 1,09 | 1,37 / 1,35 | -0,01 / -0,01 | — |
+| D7/D7 | 1,86 / 1,75 | 6,32 / 6,36 | 38,10 / 36,03 | 2,77 / 2,67 | 1,23 / 1,23 | 1,35 / 1,27 | 0,06 / -0,01 | — |
+| D8/D8 | 1,92 / 1,63 | 6,50 / 5,92 | 37,83 / 35,17 | 2,85 / 2,74 | 1,11 / 1,25 | 1,57 / 1,32 | 0,27 / -0,04 | offsid |
+| D9/D9 | 1,66 / 1,63 | 5,62 / 5,43 | 36,92 / 34,54 | 2,92 / 2,98 | 1,15 / 1,35 | 1,51 / 1,33 | 0,18 / -0,01 | offsid |
+| D10/D10 | 1,57 / 1,55 | 5,63 / 5,03 | 36,07 / 33,19 | 2,68 / 3,13 | 1,13 / 1,43 | 1,55 / 1,33 | 0,26 / -0,03 | penale |
+| D1/D4 | 4,01 / 4,16 | 11,18 / 8,73 | 45,84 / 36,91 | 1,29 / 2,19 | 0,40 / 1,04 | 2,96 / 2,90 | 3,95 / 3,94 | remate, pases_, faltas, amaril, offsid |
+| D5/D8 | 3,04 / 3,58 | 9,16 / 8,05 | 45,49 / 36,81 | 2,42 / 2,31 | 0,94 / 0,94 | 2,87 / 2,87 | 2,77 / 3,34 | pases_, offsid |
+| D10/D7 | 2,83 / 3,19 | 8,06 / 7,34 | 35,15 / 34,05 | 2,63 / 2,70 | 1,01 / 1,25 | 0,14 / 0,14 | -2,38 / -2,94 | offsid |
+| D1/D2 | 2,27 / 2,56 | 7,75 / 8,23 | 42,13 / 36,27 | 2,15 / 2,01 | 0,75 / 0,89 | 2,19 / 2,14 | 1,13 / 1,10 | — |
+| D5/D6 | 2,35 / 2,25 | 7,84 / 7,32 | 41,59 / 36,91 | 2,61 / 2,44 | 1,13 / 1,10 | 2,37 / 2,13 | 1,41 / 1,08 | offsid |
+| D10/D9 | 1,87 / 1,78 | 6,06 / 5,48 | 35,14 / 34,31 | 2,84 / 2,96 | 1,10 / 1,25 | 0,82 / 0,67 | -0,66 / -0,95 | offsid |
+
+**Pasa si, uno por uno:**
+
+- **El reporte por división queda dentro de rangos en dos semillas distintas:** pasa en las diez divisiones: goles, remates, pases, faltas, tarjetas y posesión. Quedan sueltos un offside (0,3 contra 0,1; el piso es 0,2) y un gol de más en sexta en una semilla.
+- **El mejor equipo gana lo que tiene que ganar:** pasa en las seis parejas desparejas y en las dos semillas.
+- **Con tres divisiones de diferencia** quedan fuera de rango los pases completos (+25%), los remates en D1/D4 (+26%) y las faltas y amarillas en D1/D4.
+- **Sin correcciones:** 0 correcciones, `SALTO_PELOTA` = 0 y 0 partidos colgados en 6.400 partidos.
+
+**Qué falta:**
+
+1. **Partidos de tres divisiones de diferencia:** ver arriba. El que es mucho peor no llega a presionar ni a hacer falta.
+2. **Offsides:** 0,25 a 0,3 por partido en las divisiones parejas y 0,6 con tres divisiones de diferencia (el motor espacial: 0,1).
+3. **Posesión por estilo:** ver la etapa 7b.
+4. **Bibliotecas:** Windows, Android y Linux rearmadas. `test_reglas_v2` da en Windows la huella 5962262427658054405. La de Linux se arma en la PC con Zig y **falta cargarla en un Linux** (en la PC no hay) y comparar la huella; lo mismo en el teléfono.
+5. **Revisión visual:** el usuario tiene que mirar de nuevo.
+
+### Etapa 7b — Identidad de juego
+
+- **Qué:** que el estilo del club (`Estilos`, seis estilos) se vea en la cancha y que ninguno pierda por sistema. Medición: `tests/_diag_estilos_v2.gd` (cada estilo contra el Juego directo, y `todos=1`: todos contra todos, de local y de visitante).
+- **Pasa si:** en el todos contra todos ningún estilo saca ni pierde más de 0,15 goles por partido; y el estilo se distingue en pases, largo del pase, pelotazos y altura del bloque.
+
+#### Resultado (2026-10-02): pasa; la posesión no separa a los estilos
+
+Quinta división, semilla 97000. Todos contra todos, 40 partidos por cruce (400 por estilo):
+
+| Estilo | Puntos | Goles a favor | En contra | Diferencia | Antes | Posesión | Remates | Pases |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Tiki taka | 1,27 | 1,01 | 1,04 | -0,03 | -0,24 | 50,6% | 3,63 | 27,2 |
+| Contragolpe | 1,47 | 1,10 | 0,98 | +0,12 | +0,16 | 49,2% | 3,75 | 17,7 |
+| Juego directo | 1,41 | 1,08 | 1,03 | +0,05 | +0,20 | 50,3% | 3,93 | 18,8 |
+| Presión alta | 1,35 | 1,11 | 1,12 | -0,01 | -0,11 | 50,7% | 3,77 | 25,6 |
+| Defensivo | 1,33 | 0,99 | 1,00 | -0,01 | -0,17 | 48,9% | 3,43 | 18,5 |
+| Físico | 1,32 | 1,06 | 1,18 | -0,12 | +0,15 | 50,3% | 4,00 | 19,3 |
+
+Cada estilo de local contra el Juego directo, 100 partidos:
+
+| Estilo | Pases | Llegan | Largo del pase | Pelotazos | Centros | Bloque sin pelota | Goles a favor y en contra |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Tiki taka | 25,9 | 84% | 13,8 m | 0,9 | 1,6 | 39,7 m | 1,07 y 1,05 |
+| Contragolpe | 17,2 | 80% | 19,0 m | 3,8 | 2,2 | 36,5 m | 1,11 y 1,09 |
+| Juego directo | 17,7 | 78% | 18,3 m | 3,0 | 2,8 | 39,2 m | 1,01 y 1,01 |
+| Presión alta | 24,0 | 82% | 15,2 m | 2,1 | 2,2 | 41,9 m | 1,15 y 1,22 |
+| Defensivo | 18,1 | 81% | 17,0 m | 2,8 | 2,0 | 35,0 m | 1,03 y 0,97 |
+| Físico | 19,4 | 79% | 17,6 m | 2,9 | 2,7 | 39,4 m | 0,98 y 1,13 |
+
+**Por qué perdía el Tiki taka** (`tests/_diag_traza_v2.gd` con `resumen=1`: qué decide un equipo según la zona):
+
+- **Se quedaba tocando en su campo.** Tomaba 43 decisiones por partido a más de 60 m del fondo rival y 15 a menos de 25 m; el Juego directo, 36 y 34. El pase para atrás, que es el más seguro, cobraba todo el premio del estilo.
+- **Perdía la pelota igual que los demás:** cada seis pases. La posesión no le alcanzaba para defenderse.
+
+**Qué se hizo** (todo en `data/fisica_v2.json`, "cerebro"; cuenta lo que el plan se aparta del estilo medio, por `estilo_fuerza`):
+
+- `estilo_pase_seguro` (3) y `estilo_riesgo` (0,3): el equipo de toque valora más el pase seguro y no da el arriesgado; el vertical, al revés.
+- `estilo_atras` (0,6): el pase para atrás lleva solo parte del premio del estilo.
+- `estilo_hueco` (1): el pase al hueco es también del equipo de toque (el último pase), no solo del vertical.
+- `estilo_precision` (0,7, `Cerebro::error_de_estilo`): el equipo de toque falla menos el pase raso y el control; el vertical, más. Es lo que lo balancea: con 0,4 el Tiki taka quedaba en -0,24 y con 0,7 en +0,09.
+- Cerca del arco el premio al toque se apaga: no le gana al remate.
+
+**Probado y descartado:** que el equipo de toque conduzca menos (`estilo_conduce`) o suelte la pelota cuando lo aprietan. Cuanto más tocaba, peor le iba: -0,47 y -0,69 goles por partido.
+
+**Qué falta:**
+
+1. **La posesión no separa a los estilos:** 49 a 51% para los seis. El equipo de toque da 27 pases y el vertical 18, pero los dos tienen la pelota el mismo tiempo: el de toque la pasa y el vertical la conduce. Para que el Tiki taka llegue a 55-60% tiene que perder menos la pelota (hoy 84% de pases llegan) o recuperarla antes.
+2. **Presión:** el bloque de la Presión alta está 7 m más arriba que el del Defensivo, pero no se midió dónde recupera la pelota cada uno.
+3. **Revisión visual:** falta mirar un partido de cada estilo.
+
 ### Etapa 8 — Integración y corte
 
 - **Qué:** el juego usa el V2 para los partidos del usuario, mirados o simulados; relato, estadísticas, HUD y minimapa leen sus eventos. Se borran el modo 2D, `vista_partido.gd`, `coreografia_partido.gd`, los `_preparar_*` y el motor espacial. Prueba larga en el teléfono (temperatura, batería, memoria).
@@ -725,7 +1315,8 @@ Reglas para todas las etapas. Salen de lo que midió la etapa 0.
 1. Instalá scons: `python -m pip install scons`.
 2. Cloná godot-cpp v10 fuera del repo: `git clone --depth 1 https://github.com/godotengine/godot-cpp` (en la PC está en `D:/dev-tools/godot-cpp`). Poné su ruta en la variable `GODOT_CPP`.
 3. Desde `motor_v2/cpp`, ejecutá `python -m SCons api_version=4.7 target=template_release platform=<windows|linux|android>` (Android además `arch=arm64 ANDROID_HOME=... ndk_version=28.2.13676358`).
-4. La biblioteca sale en `motor_v2/bin/`. `SConstruct` compila `src/*.cpp` y `src/cerebro/*.cpp`. Después de agregar clases nuevas, ejecutá `<godot> --path . --headless --editor --quit` para que Godot las registre.
+4. Para armar la de Linux desde Windows (etapa 7): bajá Zig (un compilador que cruza a Linux; en la PC está en `D:/dev-tools/zig-x86_64-windows-0.16.0`) y sumá `platform=linux custom_tools=<ruta completa a motor_v2/cpp/zig> ZIG=<ruta a zig.exe>`. `motor_v2/cpp/zig/linux.py` le dice a godot-cpp que compile con Zig contra glibc 2.31. En una PC con Linux no hace falta.
+5. La biblioteca sale en `motor_v2/bin/`. `SConstruct` compila `src/*.cpp` y `src/cerebro/*.cpp`. Después de agregar clases nuevas, ejecutá `<godot> --path . --headless --editor --quit` para que Godot las registre.
 
 ### Trabajar en la nube
 
@@ -774,6 +1365,8 @@ El riesgo más grande era el rendimiento de GDScript en el teléfono; la etapa 0
 - [x] GDScript o C++ para mundo y cuerpo: C++ (GDExtension). La etapa 0 midió 25 s por partido sin vista en el teléfono con GDScript y 1,5 s con C++.
 - [x] El cerebro también va en C++: en GDScript a 10 Hz costaría ~3,7 s por partido en el teléfono (estimado en la etapa 0). Decisión del usuario: todo el motor en C++.
 - [x] Sombras en el teléfono: sin sombra del sol, con una mancha bajo cada jugador y la pelota (`match/3d/sombras_redondas.gd`, una sola llamada de dibujo). En el teléfono: 59,5 fps, contra 39,5 con el sol. Dejar el sol solo para el estadio no alcanza: 41,5 fps con 4 cortes y 51 con 1. Ya está en la vista del juego actual (0.7.60).
+- [x] Cuánto dura un partido del V2: 4 minutos de verdad (2 por tiempo) con el reloj mostrando 0-90, como el motor espacial. Decisión del usuario en la etapa 7.
+- [ ] Primera contra cuarta: el favorito gana el 90% por 2,5 goles y el motor espacial el 98% por 3,8. ¿Se sube el tope de rapidez (20%) o se busca otra palanca? Ver la etapa 7.
 - [ ] Si el V2 sin vista resulta lento, ¿los partidos del usuario que se simulan sin mirar pueden ir por `match_engine.gd`? Contradice la decisión 5 del motor espacial ("un solo motor para tus partidos").
 - [ ] Repeticiones de goles: ¿entran en la etapa 8 o después?
 - [ ] Cámara: ¿se mantiene la actual o se pasa a una de transmisión (lateral alta, como FIFA 10)?

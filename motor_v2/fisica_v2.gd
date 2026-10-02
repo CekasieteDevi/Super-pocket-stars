@@ -87,6 +87,38 @@ static func fisico_de(atributos: Dictionary, energia := 1.0) -> Dictionary:
 	}
 
 
+## Etapa 7: por cuánto se multiplican la punta y la aceleración de un jugador
+## según cuántos puntos de media le saca al nivel del partido
+## (MatchEngine.nivel_partido). data/fisica_v2.json, "nivel".
+## `nivel`: el del partido; cada punto pesa según peso_del_nivel.
+static func ventaja_de_nivel(puntos: float, nivel := -1.0) -> float:
+	var n: Dictionary = datos()["nivel"]
+	var peso := peso_del_nivel(nivel)
+	var tope := float(n["rapidez_tope"]) * peso
+	return 1.0 + clampf(float(n["rapidez_por_punto"]) * puntos * peso, -tope, tope)
+
+
+## Etapa 7: cuánto pesa un punto de media según el nivel del partido:
+## (nivel / nivel.referencia) ^ nivel.exponente. Un punto pesa más arriba que
+## abajo. Con el mismo peso en todas las divisiones, primera le sacaba 0,4
+## goles a segunda (el motor espacial: 1,0) y novena le sacaba 1,6 a décima
+## (1,0): la física del V2 usa los atributos absolutos y el motor espacial los
+## relativos al nivel del partido. Sin `nivel` (o con exponente 0), 1.
+static func peso_del_nivel(nivel: float) -> float:
+	var n: Dictionary = datos()["nivel"]
+	var exponente := float(n.get("exponente", 0.0))
+	if nivel <= 0.0 or exponente == 0.0:
+		return 1.0
+	return pow(nivel / float(n["referencia"]), exponente)
+
+
+## Etapa 7: puntos que se suman (o restan) a pases y control según cuántos
+## puntos de media le saca el equipo al nivel del partido. data/fisica_v2.json,
+## "nivel".
+static func tecnica_de_nivel(puntos: float, nivel := -1.0) -> float:
+	return float(datos()["nivel"].get("tecnica_por_punto", 0.0)) * puntos * peso_del_nivel(nivel)
+
+
 ## Los del toque (etapa 3; CanchitaV2Nativa.configurar): data/fisica_v2.json,
 ## "toque". Los clips van por nombre y el motor los busca en clips().
 static func parametros_toque() -> Dictionary:
@@ -141,6 +173,11 @@ static func parametros_reglas(tanda := false) -> Dictionary:
 	var esfuerzo := MotorEspacial.pesos_esfuerzo()
 	p["recuperacion_entretiempo"] = float(esfuerzo["recuperacion_entretiempo"])
 	p["tope_entretiempo"] = float(esfuerzo["tope_entretiempo"])
+	# El partido dura de verdad lo mismo que en el motor espacial (2 minutos por
+	# tiempo) y el reloj muestra 0-90: decisión del usuario en la etapa 7.
+	p["segundos_tiempo"] = MotorEspacial.SEGUNDOS_POR_MITAD
+	p["minutos_tiempo"] = MotorEspacial.MINUTOS_MOSTRADOS_POR_MITAD
+	p["cierre_max_seg"] = float(MotorEspacial.TICKS_DE_DESCUENTO) * MotorEspacial.TICK_SEG
 	p["distancia_penal_m"] = MotorEspacial.DIST_PENAL
 	p["radio_circulo_m"] = MotorEspacial.RADIO_CIRCULO
 	p["ejecutor_max_m"] = MotorEspacial.DIST_MAX_AL_EJECUTOR

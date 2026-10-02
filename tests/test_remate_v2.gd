@@ -28,6 +28,10 @@ const ATAJADAS := Vector2(30.0, 63.0)
 const PARTIDOS := 6
 const MINUTOS_PARTIDO := 40.0
 
+## Error de puntería de las series contra el arquero (el del juego es 0,15).
+const ERROR_SERIE_RAD := 0.03
+const REMATES_FUERTES := 60
+
 var fallos := 0
 
 
@@ -132,7 +136,11 @@ func _arquero() -> void:
 func _serie(distancia: float, lateral: float, alto: float, veces: int) -> Dictionary:
 	var r := {"gol": 0, "atajado": 0, "palo": 0, "estiradas": 0}
 	for k in veces:
-		var c := _cancha(SEED + k, FisicaV2.parametros_remate(), true)
+		# Casi sin error: la serie mide al arquero, no la puntería del que patea
+		# (con el error de la etapa 7 la mitad de estos remates se iba afuera).
+		var remate := FisicaV2.parametros_remate()
+		remate["error_rad"] = ERROR_SERIE_RAD
+		var c := _cancha(SEED + k, remate, true)
 		var x := 52.5 - distancia
 		c.poner_jugador(0, Vector2(x - 0.6, 0.0), PI * 0.5)
 		c.poner_jugador(1, Vector2(51.7, 0.0), -PI * 0.5)
@@ -157,7 +165,9 @@ func _rebote_y_manos() -> void:
 	var manos := 0
 	var pegada := true
 	var correcciones := 0
-	for k in 30:
+	# 60 remates: con el remate fuerte de la etapa 7 (25 a 33 m/s, antes 22 a
+	# 29) el arquero retiene menos y en 30 agarraba solo 2.
+	for k in REMATES_FUERTES:
 		var c := _cancha(SEED + 100 + k, FisicaV2.parametros_remate(), true)
 		# Un compañero espera el rebote en el punto penal.
 		var a := {"velocidad": 70.0, "aceleracion": 70.0, "agilidad": 70.0, "pases": 70.0, "control": 70.0}
@@ -189,7 +199,7 @@ func _rebote_y_manos() -> void:
 				en_juego += 1
 		if en_manos:
 			manos += 1
-	_ok(rebotes >= 3, "el arquero da rebotes (%d de 30 remates fuertes)" % rebotes)
+	_ok(rebotes >= 3, "el arquero da rebotes (%d de %d remates fuertes)" % [rebotes, REMATES_FUERTES])
 	_ok(en_juego >= 1, "el rebote queda en juego: el atacante la vuelve a tocar en %d de %d" % [en_juego, rebotes])
 	_ok(manos >= 3 and pegada, "la que agarra la lleva en las manos, pegada al cuerpo (%d veces)" % manos)
 	_ok(correcciones == 0, "sin correcciones ni saltos de la pelota (%d)" % correcciones)

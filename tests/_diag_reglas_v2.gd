@@ -5,6 +5,10 @@ extends SceneTree
 ## tarjetas, offside, cambios, lesiones, goles) y cuánto esperó cada parada.
 ##
 ##   <godot> --path . --headless --script tests/_diag_reglas_v2.gd -- [semilla=N] [partidos=N] [tanda] [minutos=N]
+##
+## `minutos`: minutos de verdad por tiempo (45 = un partido de 90 minutos de
+## verdad, para que aparezca todo). Sin el argumento, el partido del juego: 2
+## minutos de verdad por tiempo con el reloj mostrando 0-90 (etapa 7).
 
 const SEED := 20261010
 
@@ -12,7 +16,7 @@ const SEED := 20261010
 func _init() -> void:
 	var semilla := SEED
 	var partidos := 1
-	var minutos := 45.0
+	var minutos := 0.0
 	var tanda := false
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("semilla="):
@@ -26,14 +30,15 @@ func _init() -> void:
 	var suma := {}
 	for n in partidos:
 		var c: Object = CerebroV2.armar_partido(semilla + n, "", "", -1, -1, true, tanda)
-		if minutos != 45.0:
+		if minutos > 0.0:
 			var r := FisicaV2.parametros_reglas(tanda)
 			r["minutos_tiempo"] = minutos
+			r["segundos_tiempo"] = minutos * 60.0
 			c.configurar_reglas(r)
 			c.empezar(CanchitaV2Nativa.PARTIDO, semilla + n)
 		var t0 := Time.get_ticks_msec()
 		var pasos := 0
-		while str(c.get_estado()["periodo"]) != "terminado" and pasos < 60 * 60 * 200:
+		while str(c.get_estado()["periodo"]) != "terminado" and pasos < 60 * 60 * 150:
 			c.simular(600)
 			pasos += 600
 		var dura := (Time.get_ticks_msec() - t0) / 1000.0

@@ -85,31 +85,34 @@ int Perfil::paso_a(double d) const {
 	return a;
 }
 
-void Perfiles::configurar(const ParametrosPelota &p, double elevacion_globo, int pasos) {
+void Perfiles::configurar(const ParametrosPelota &p, double elevacion_globo, int pasos, double elevacion_centro) {
 	_param = p;
 	_param.viento = V3{};
-	_elevacion_globo = elevacion_globo;
+	_elevacion[RASO] = 0.0;
+	_elevacion[GLOBO] = elevacion_globo;
+	_elevacion[CENTRO] = elevacion_centro > 0.0 ? elevacion_centro : elevacion_globo;
 	_pasos = pasos;
-	_raso.clear();
-	_globo.clear();
-	_hecho_raso.clear();
-	_hecho_globo.clear();
+	for (int t = 0; t < TIPOS; t++) {
+		_lista[t].clear();
+		_hecho[t].clear();
+	}
 }
 
 double Perfiles::rapidez_de(int indice) {
 	return PASO_RAPIDEZ * double(indice);
 }
 
-const Perfil &Perfiles::de(double rapidez, bool globo) {
+const Perfil &Perfiles::de(double rapidez, int tipo) {
 	int i = std::max(1, int(rapidez / PASO_RAPIDEZ + 0.5));
-	std::vector<Perfil> &lista = globo ? _globo : _raso;
-	std::vector<bool> &hecho = globo ? _hecho_globo : _hecho_raso;
+	int t = std::clamp(tipo, 0, TIPOS - 1);
+	std::vector<Perfil> &lista = _lista[t];
+	std::vector<bool> &hecho = _hecho[t];
 	if (int(lista.size()) <= i) {
 		lista.resize(size_t(i) + 1);
 		hecho.resize(size_t(i) + 1, false);
 	}
 	if (!hecho[size_t(i)]) {
-		_armar(lista[size_t(i)], rapidez_de(i), globo ? _elevacion_globo : 0.0);
+		_armar(lista[size_t(i)], rapidez_de(i), _elevacion[t]);
 		hecho[size_t(i)] = true;
 	}
 	return lista[size_t(i)];

@@ -36,15 +36,20 @@ struct ParametrosToque {
 	double pase_min_ms = 4.0;
 	double pase_max_ms = 26.0;
 	double elevacion_globo = 0.6;
-	double error_pase_rad = 0.1;
+	double error_pase_rad = 0.16;
 	double error_pase_rapidez = 0.12;
 	double presion_m = 3.0;
 	double control_ms = 1.5;
-	double error_control_rad = 0.4;
-	double error_control_ms = 1.5;
-	double toque_largo_m = 1.4;
-	double toque_corto_m = 0.8;
+	double error_control_rad = 0.65;
+	double error_control_ms = 2.4;
+	double toque_largo_m = 0.8;
+	double toque_corto_m = 0.5;
 	double conduccion_factor = 0.75;
+	// El control no manda la pelota a menos de esto de una raya (0 = no mira).
+	double control_raya_m = 1.5;
+	// Los segundos de aceleración que cuenta la rapidez del toque de
+	// conducción.
+	double conduce_gana_seg = 0.15;
 	double sin_rebote_seg = 0.3;
 	double margen_seguro_seg = 0.25;
 	double giro_alcance_rad = 1.0;
@@ -101,19 +106,22 @@ class Perfiles {
 public:
 	static constexpr double PASO_RAPIDEZ = 0.5;
 
-	void configurar(const ParametrosPelota &p, double elevacion_globo, int pasos);
+	// Qué pelota: rasante, globo (elevacion_globo) o centro tendido
+	// (elevacion_centro).
+	enum Tipo { RASO = 0, GLOBO = 1, CENTRO = 2, TIPOS = 3 };
+
+	void configurar(const ParametrosPelota &p, double elevacion_globo, int pasos, double elevacion_centro = 0.0);
 	// El perfil de la rapidez más cercana de la grilla (de a PASO_RAPIDEZ).
-	const Perfil &de(double rapidez, bool globo);
+	// `tipo`: Tipo (false y true valen RASO y GLOBO).
+	const Perfil &de(double rapidez, int tipo);
 	static double rapidez_de(int indice);
 
 private:
 	ParametrosPelota _param;
-	double _elevacion_globo = 0.6;
+	double _elevacion[TIPOS] = { 0.0, 0.6, 0.6 };
 	int _pasos = 0;
-	std::vector<Perfil> _raso;
-	std::vector<Perfil> _globo;
-	std::vector<bool> _hecho_raso;
-	std::vector<bool> _hecho_globo;
+	std::vector<Perfil> _lista[TIPOS];
+	std::vector<bool> _hecho[TIPOS];
 	void _armar(Perfil &perfil, double rapidez, double elevacion);
 };
 

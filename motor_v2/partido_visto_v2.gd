@@ -97,6 +97,33 @@ func get_rapidez() -> PackedFloat32Array:
 	return r
 
 
+## Adónde mirar mientras alguien sale o entra por un cambio (metros de la
+## cancha, ya girado), o null si no hay nadie. Primero el que sale y todavía
+## está adentro (el que más lejos está de su raya); cuando salieron todos, el
+## que entra y todavía no pisó la cancha. El saque espera a los dos: mirando
+## la pelota se veía a todos parados sin saber por qué (tercera revisión
+## visual de la etapa 7). El expulsado no cuenta: lo sigue el que muestra la
+## tarjeta.
+func foco_de_cambio() -> Variant:
+	var mejor = null
+	var falta := 0.0
+	for a in _afuera:
+		if bool(a.get("expulsado", false)):
+			continue
+		var p: Vector2 = a["pos"]
+		var adentro := ProyeccionPartido.MEDIO_ANCHO - absf(p.y)
+		if adentro > falta:
+			falta = adentro
+			mejor = _girar(p)
+	if mejor != null:
+		return mejor
+	var entrando: PackedInt32Array = partido.get_estado().get("entrando", PackedInt32Array())
+	if entrando.is_empty():
+		return null
+	var pos: PackedVector2Array = partido.get_pos()
+	return _girar(pos[entrando[0]]) if entrando[0] < pos.size() else null
+
+
 func _de_afuera(i: int) -> bool:
 	return i >= _cantidad
 
@@ -154,10 +181,12 @@ func get_tarjeta() -> Dictionary:
 	return {}
 
 
-## La parada en curso para el árbitro: {tipo, punto}, con el punto ya girado.
+## La parada en curso para el árbitro: {tipo, punto, ataca}, con el punto ya
+## girado. `ataca`: hacia dónde ataca en la pantalla el que saca (+1 o -1 en x).
 func get_parada() -> Dictionary:
 	var e: Dictionary = partido.get_estado()
-	return {"tipo": str(e["parada"]), "punto": _girar(e["punto"])}
+	var ataca := (1.0 if int(e.get("saca", 0)) == 0 else -1.0) * _signo
+	return {"tipo": str(e["parada"]), "punto": _girar(e["punto"]), "ataca": ataca}
 
 
 func get_lateral_en_manos() -> int:

@@ -70,14 +70,13 @@ const JUEGO_ANTES_SEG := 4.0
 
 ## Cuánto se ve la tarjeta arriba.
 const TARJETA_SEG := 3.0
-## Cuánto sigue la cámara al que sale antes de pasar al que entra.
-const MIRA_AL_QUE_SALE_SEG := 4.0
-## Cuánto sigue al que entra.
-const MIRA_AL_QUE_ENTRA_SEG := 6.0
 ## Cuánto se acerca la cámara mientras el árbitro muestra la tarjeta.
 const ACERCAMIENTO_TARJETA := 1.9
 
 const CAPTURA_CADA_SEG := 0.5
+## `cada=N` y `dura=N` cambian cada cuánto se captura y hasta cuándo.
+var _captura_cada := CAPTURA_CADA_SEG
+var _captura_dura := CAPTURA_DURA_SEG
 const CAPTURA_DURA_SEG := 13.0
 
 ## Con el guion: fuerza las reanudaciones una atrás de la otra.
@@ -125,6 +124,10 @@ func _ready() -> void:
 			solo = arg.get_slice("=", 1)
 		elif arg.begins_with("capturas="):
 			_capturas = arg.get_slice("=", 1)
+		elif arg.begins_with("cada="):
+			_captura_cada = float(arg.get_slice("=", 1))
+		elif arg.begins_with("dura="):
+			_captura_dura = float(arg.get_slice("=", 1))
 	if solo != "":
 		_escenas = ESCENAS.filter(func(e): return solo in str(e["nombre"]))
 	if DisplayServer.get_name() == "headless":
@@ -263,11 +266,11 @@ func _capturar() -> void:
 	if _capturas == "" or _forzada_en < 0:
 		return
 	var desde := float(_pasos - _forzada_en) * PASO_SEG
-	if desde >= float(_capturadas) * CAPTURA_CADA_SEG:
+	if desde >= float(_capturadas) * _captura_cada:
 		await RenderingServer.frame_post_draw
-		get_viewport().get_texture().get_image().save_png("%s/captura_%02d.png" % [_capturas, _capturadas])
+		get_viewport().get_texture().get_image().save_png("%s/captura_%03d.png" % [_capturas, _capturadas])
 		_capturadas += 1
-	if desde > CAPTURA_DURA_SEG:
+	if desde > _captura_dura:
 		get_tree().quit()
 
 
@@ -290,19 +293,15 @@ func _foco() -> Variant:
 	# se veía la falta.
 	if _con_tarjeta():
 		return _visto.get_tarjeta()["pos"]
-	var cambio := _ultimo_evento(["cambio"])
-	if float(cambio[0]) > MIRA_AL_QUE_SALE_SEG and float(cambio[0]) < MIRA_AL_QUE_SALE_SEG + MIRA_AL_QUE_ENTRA_SEG:
-		var entra := ids.find(int(cambio[1]["otro"]))
-		if entra >= 0:
-			return pos[entra]
-	# El expulsado: hasta el corte al saque. El cambiado: MIRA_AL_QUE_SALE_SEG.
-	var sale := _ultimo_evento(["roja", "cambio"])
-	var expulsado: bool = sale[1].get("tipo", "") == "roja" and int(_partido.get_estado()["corte"]) < int(sale[1]["paso"])
-	if expulsado or (sale[1].get("tipo", "") == "cambio" and float(sale[0]) <= MIRA_AL_QUE_SALE_SEG):
+	# El expulsado: hasta el corte al saque.
+	var sale := _ultimo_evento(["roja"])
+	if not sale[1].is_empty() and int(_partido.get_estado()["corte"]) < int(sale[1]["paso"]):
 		var i := ids.rfind(int(sale[1]["jugador"]))
 		if i >= _partido.cantidad():
 			return pos[i]
-	return null
+	# El cambio: al que sale hasta que cruza la raya, y después al que entra
+	# hasta que pisa la cancha.
+	return _visto.foco_de_cambio()
 
 
 ## El árbitro está yendo a mostrar una tarjeta o mostrándola.
@@ -323,7 +322,8 @@ func _texto() -> String:
 	var e: Dictionary = _partido.get_estado()
 	var k: Dictionary = _partido.contadores()
 	var goles: PackedInt32Array = _partido.get_goles()
-	var reloj := float(e["reloj"]) + (45.0 * 60.0 if e["periodo"] != "primer_tiempo" else 0.0)
+	# El reloj mostrado (0 a 90): el partido dura de verdad 2 minutos por tiempo.
+	var reloj := float(e["minuto"]) * 60.0
 	var t := "Semilla %d · %s %d:%02d (+%d) · x%d (R: otro, flechas: velocidad)\n" % [_semilla, e["periodo"],
 		int(reloj) / 60, int(reloj) % 60, int(float(e["adicion"]) / 60.0), VELOCIDADES[_velocidad]]
 	if guion:
@@ -345,7 +345,7 @@ func _texto() -> String:
 		k["offsides_cobrados_1"], k["cambios_0"], k["cambios_1"]]
 	var eventos: Array = _partido.eventos().filter(func(v): return v["tipo"] != "saque")
 	for v in eventos.slice(maxi(0, eventos.size() - 5)):
-		var minuto := int(float(v["paso"]) * PASO_SEG / 60.0)
+		var minuto := int(float(v["minuto"]))
 		t += "%d' %s (%s)\n" % [minuto, NOMBRE_EVENTO.get(str(v["tipo"]), v["tipo"]),
 			"local" if int(v["equipo"]) == 0 else "visitante"]
 	return t

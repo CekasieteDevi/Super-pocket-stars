@@ -24,6 +24,30 @@ constexpr double PRESION_SIN_PERSECUCION = 0.35;
 constexpr double CONO_SOLO_M = 15.0;
 constexpr double ULTIMO_TERCIO = Cerebro::LARGO / 3.0;
 constexpr double ULTIMO_TRAMO_BANDA = 24.0;
+// Etapa 7: la pelota va "por la banda" a más de esto del eje de la cancha (el
+// borde del área está a 20), y al área se llega desde esto como mucho.
+constexpr double BANDA_DEL_CENTRO_M = 16.0;
+// ritmo_de_conduccion: acompaña el compañero a menos de ACOMPANA_M y no más de
+// ACOMPANA_ATRAS_M por detrás; con ACOMPANAN_PLENO va a su ritmo. Por la banda
+// cuentan los que están a menos de CERCA_DEL_ARCO_M del medio del arco.
+constexpr double ACOMPANA_M = 25.0;
+constexpr double ACOMPANA_ATRAS_M = 8.0;
+constexpr double ACOMPANAN_PLENO = 3.0;
+constexpr double CERCA_DEL_ARCO_M = 22.0;
+constexpr double ENCIMA_M = 2.5;
+// La media de asociación y de verticalidad de los seis estilos (Estilos.PLANES).
+constexpr double ASOCIACION_MEDIA = 0.41;
+// Un pase es para atrás si pierde más que esto de valor de posición (unos 3 m).
+constexpr double PASE_PARA_ATRAS = -0.03;
+constexpr double VERTICALIDAD_MEDIA = 0.63;
+// geometria_de_cerca: 13 y 45 grados de arco a la vista, a menos de DE_CERCA_M
+// del medio del arco (más lejos manda el alcance de su tiro).
+constexpr double DE_CERCA_M = 18.0;
+constexpr double APERTURA_NULA_RAD = 0.23;
+constexpr double APERTURA_PLENA_RAD = 0.79;
+constexpr double LLEGADA_DESDE_M = 38.0;
+constexpr int LLEGADAS_DE_MAS = 2;
+constexpr double LLEGADA_SIGUE_SEG = 0.5;
 // Pase hacia el arco propio: no se da si la línea del pase cruza el arco (más
 // el margen) y el que lo recibe está a menos de PASE_ATRAS_CERCA_M de su línea
 // de fondo. ARCO_MEDIO_ANCHO_M es pelota.arco_medio_ancho (data/fisica_v2.json).
@@ -764,20 +788,50 @@ void Cerebro::_evaluar(const Mundo &m, int i, std::vector<Opcion> &op) const {
 	double cx, cz;
 	_corredor_elegido(m, i, cx, cz);
 	double camino_libre = 1.0 - riesgo_linea(m, x, z, cx, cz, equipo);
+	double mi_geometria = factor_geometria(x, z, equipo);
+	// Identidad del estilo en el pase (tests/_diag_estilos_v2.gd): el equipo
+	// de toque valora más el pase seguro y no da el arriesgado; el vertical,
+	// al revés. Lo que el plan se aparta del estilo medio, por estilo_fuerza.
+	double asociacion_de_mas = pesos.estilo_fuerza * (plan.asociacion - ASOCIACION_MEDIA);
+	double seguro_extra = std::max(pesos.pase_seguro_extra
+			+ pesos.estilo_pase_seguro * asociacion_de_mas * clamp01(1.0 - mi_geometria / TIRO_CLARO), 0.0);
+	double riesgo_maximo = std::clamp(pesos.riesgo_maximo - pesos.estilo_riesgo * asociacion_de_mas, 0.3, 0.95);
+	// Con el arco a tiro y sin rivales de campo en el medio.
+	bool libre = encara(m, i);
 	if (!es_arquero) {
 		Opcion o;
 		o.tipo = DEC_CONDUCIR;
 		o.utilidad = pesos.conducir_base + pesos.conducir_espacio * (1.0 - presion)
 				+ pesos.conducir_progreso * (1.0 - mi_valor) + pesos.conducir_camino * camino_libre;
+		if (libre) {
+			// Sin presión sigue hasta quedar bien parado; con un rival encima patea.
+			o.utilidad += pesos.conducir_libre_extra * (1.0 - presion);
+		}
 		op.push_back(o);
 	}
 	// Tirar (etapa 5): el alcance según su tiro solo habilita el intento; la
 	// utilidad mira la misma geometría para todos, así tener más pierna no
 	// vuelve mejor jugada un tiro de lejos (BUG-007 del motor espacial).
-	if (!es_arquero && alcanza_para_tirar(i, x, z)) {
+	// Tercera revisión visual de la etapa 7 ("no patean con vía libre"): la
+	// geometría del motor espacial da cero con más de 56 grados de ángulo, y
+	// el que entraba al área por el costado no tenía el remate entre las
+	// opciones: seguía hasta la línea de fondo. De cerca cuenta además cuánto
+	// arco ve (geometria_de_cerca). Probado y descartado: la chance de gol del
+	// planeador (valor_remate) como utilidad; sirve para comparar puntos del
+	// arco, pero de lejos da 0,2 a 0,7 (el globo por arriba del arquero) y
+	// pateaban desde 35 m.
+	double tiro = mi_geometria;
+	if (planeador && pesos.tiro_de_cerca > 0.0) {
+		tiro = std::max(tiro, pesos.tiro_de_cerca * geometria_de_cerca(x, z, equipo));
+	}
+	// De muy lejos no patea: con la geometría mínima del motor espacial (0,03)
+	// salían 1,6 remates por partido con el arco a más de 25 m, casi sin gol, y
+	// los remates quedaban 13 a 22% arriba del motor espacial.
+	if (!es_arquero && (alcanza_para_tirar(i, x, z) || tiro > pesos.geometria_minima_tiro)
+			&& (!planeador || tiro >= pesos.tiro_desde)) {
 		Opcion o;
 		o.tipo = DEC_REMATE;
-		o.utilidad = pesos.tiro_base + pesos.tiro_geometria * factor_geometria(x, z, equipo);
+		o.utilidad = (pesos.tiro_base + pesos.tiro_geometria * tiro) * pesos.tiro_factor;
 		if (f.egoista) {
 			o.utilidad *= pesos.egoista_tiro;
 		}
@@ -946,6 +1000,13 @@ void Cerebro::_evaluar(const Mundo &m, int i, std::vector<Opcion> &op) const {
 		double u = pesos.pase_base + pesos.pase_progreso * progreso_r + pesos.pase_seguridad * (1.0 - riesgo)
 				- pesos.pase_distancia * (d / max_dist);
 		u += ventaja_cambio * 0.9 * (1.0 - riesgo);
+		if (planeador) {
+			// El pase para atrás no lleva el premio del estilo: con él, el
+			// equipo de toque se quedaba tocando en su campo (43 decisiones por
+			// partido a más de 60 m del fondo rival y 15 a menos de 25; el Juego
+			// directo, 36 y 34: tests/_diag_traza_v2.gd, resumen=1).
+			u += (progreso_r < PASE_PARA_ATRAS ? std::min(seguro_extra, pesos.pase_seguro_extra) : seguro_extra) * (1.0 - riesgo);
+		}
 		if (progreso_r < 0.0) {
 			u -= pesos.pase_retroceso_libre * (-progreso_r) * camino_libre * (1.0 - presion);
 		}
@@ -970,7 +1031,15 @@ void Cerebro::_evaluar(const Mundo &m, int i, std::vector<Opcion> &op) const {
 				al_arco_propio = std::abs(zc) <= ARCO_MEDIO_ANCHO_M + PASE_ATRAS_MARGEN_M;
 			}
 		}
-		if (!al_arco_propio) {
+		// El pase que el planeador ya ve cortado no se ofrece: la seguridad
+		// era un término más de la utilidad y el softmax lo elegía igual. De
+		// 14,6 pases al hueco por partido, 11 salían con un rival llegando
+		// antes y se cortaba el 57% (tests/_diag_pases_v2.gd).
+		bool cortado = planeador && riesgo > riesgo_maximo;
+		if (cortado) {
+			_cortados++;
+		}
+		if (!al_arco_propio && !cortado) {
 			Opcion o;
 			o.tipo = DEC_PASE;
 			o.receptor = r;
@@ -996,7 +1065,7 @@ void Cerebro::_evaluar(const Mundo &m, int i, std::vector<Opcion> &op) const {
 				op.push_back(o);
 			}
 		}
-		if (sabe_pared && !es_arquero && d <= dist_max_muro && rival_delante != -1) {
+		if (sabe_pared && !es_arquero && d <= dist_max_muro && rival_delante != -1 && !cortado) {
 			double rx, rz;
 			_punto_retorno_pared(x, z, equipo, avance_pared, rx, rz);
 			Opcion o;
@@ -1024,6 +1093,9 @@ void Cerebro::_evaluar(const Mundo &m, int i, std::vector<Opcion> &op) const {
 		}
 		double riesgo_h = planeador ? _riesgo_de_margen(planeador->margen_al_punto(i, r, hx, hz))
 									: _riesgo_pase(m, x, z, hx, hz, equipo);
+		if (planeador && riesgo_h > riesgo_maximo) {
+			continue;
+		}
 		double uh = pesos.hueco_base + pesos.hueco_progreso * (valor_posicion(hx, hz, equipo) - mi_valor)
 				+ pesos.hueco_seguridad * (1.0 - riesgo_h) - pesos.hueco_distancia * (dh / max_dist);
 		Opcion o;
@@ -1042,17 +1114,63 @@ void Cerebro::_evaluar(const Mundo &m, int i, std::vector<Opcion> &op) const {
 	// (lectura_pase_largo). Sin esto se cortaba el 50% de los globos y eran
 	// la mitad de los pases (tests/_diag_cerebro_v2.gd).
 	if (planeador && pesos.castigo_corte > 0.0) {
+		std::vector<Opcion> quedan;
 		for (Opcion &o : op) {
 			if (o.tipo != DEC_PASE_LARGO && o.tipo != DEC_CENTRO) {
+				quedan.push_back(o);
 				continue;
 			}
 			const JugadorVisto &r = m.jugadores[size_t(o.receptor)];
-			double margen = planeador->margen_globo(i, o.tiene_punto ? o.x : r.x, o.tiene_punto ? o.z : r.z);
-			if (o.tipo == DEC_CENTRO) {
-				o.utilidad *= 1.0 - pesos.castigo_centro * _riesgo_de_margen(margen);
-			} else {
-				o.utilidad -= pesos.castigo_corte * _riesgo_de_margen(margen);
+			double margen = planeador->margen_globo(i, o.receptor, o.tiene_punto ? o.x : r.x, o.tiene_punto ? o.z : r.z);
+			double riesgo = _riesgo_de_margen(margen);
+			// El globo que cae donde un rival llega antes tampoco se ofrece.
+			if (riesgo > pesos.riesgo_maximo) {
+				continue;
 			}
+			if (o.tipo == DEC_CENTRO) {
+				o.utilidad *= 1.0 - pesos.castigo_centro * riesgo;
+			} else {
+				o.utilidad -= pesos.castigo_corte * riesgo;
+			}
+			quedan.push_back(o);
+		}
+		op.swap(quedan);
+	}
+	if (libre) {
+		std::vector<Opcion> quedan;
+		for (const Opcion &o : op) {
+			if (es_pase(o.tipo) || o.tipo == DEC_CENTRO || o.tipo == DEC_PARED) {
+				bool con_punto = o.tiene_punto && o.tipo != DEC_PARED;
+				double dx = con_punto ? o.x : m.jugadores[size_t(o.receptor)].x;
+				double dz = con_punto ? o.z : m.jugadores[size_t(o.receptor)].z;
+				if (factor_geometria(dx, dz, equipo) <= mi_geometria) {
+					continue;
+				}
+			}
+			quedan.push_back(o);
+		}
+		op.swap(quedan);
+	}
+	// De espaldas no se pasa: el que patea va derecho a la pelota y la manda
+	// adonde sea, y el 43% de los pases salía hacia atrás de adonde miraba (de
+	// taco, en la revisión visual de la etapa 7). Pierde utilidad lo que pasa
+	// de un pase de costado.
+	if (planeador && pesos.castigo_espaldas > 0.0) {
+		const JugadorVisto &yo = m.jugadores[size_t(i)];
+		for (Opcion &o : op) {
+			if (!es_pase(o.tipo) && o.tipo != DEC_CENTRO && o.tipo != DEC_PARED) {
+				continue;
+			}
+			bool con_punto = o.tiene_punto && o.tipo != DEC_PARED;
+			double dx = (con_punto ? o.x : m.jugadores[size_t(o.receptor)].x) - x;
+			double dz = (con_punto ? o.z : m.jugadores[size_t(o.receptor)].z) - z;
+			double l = std::sqrt(dx * dx + dz * dz);
+			if (l < 1e-6) {
+				continue;
+			}
+			// 1 de frente, -1 de espaldas.
+			double frente = (dx * yo.mira_x + dz * yo.mira_z) / l;
+			o.utilidad -= pesos.castigo_espaldas * clamp01(-frente);
 		}
 	}
 }
@@ -1215,6 +1333,12 @@ void Cerebro::_ponderar(const Mundo &m, int i, std::vector<Opcion> &op, double p
 	const PlanEquipo &plan = planes[equipo & 1];
 	const PlanEquipo &rival = planes[(equipo + 1) & 1];
 	double transicion = _transicion(m, equipo) * plan.transicion;
+	// La identidad del estilo, más marcada con estilo_fuerza: lo que el plan se
+	// aparta del estilo medio se multiplica. Con 1 (el motor espacial), Tiki
+	// taka daba 26 pases por partido y Contragolpe 21 (tests/_diag_estilos_v2.gd).
+	double asociacion = ASOCIACION_MEDIA + pesos.estilo_fuerza * (plan.asociacion - ASOCIACION_MEDIA);
+	double lejos_del_arco = planeador ? clamp01(1.0 - factor_geometria(p.x, p.z, equipo) / TIRO_CLARO) : 1.0;
+	double verticalidad = VERTICALIDAD_MEDIA + pesos.estilo_fuerza * (plan.verticalidad - VERTICALIDAD_MEDIA);
 	bool contra_presion = plan.contragolpe && rival.presion_alta && transicion > 0.0;
 	int grupos[DECISIONES] = {};
 	for (const Opcion &o : op) {
@@ -1237,16 +1361,16 @@ void Cerebro::_ponderar(const Mundo &m, int i, std::vector<Opcion> &op, double p
 	for (Opcion &o : op) {
 		double ajuste = -0.35 * temp * mate::logaritmo(double(grupos[o.tipo]));
 		if (o.tipo == DEC_CONDUCIR) {
-			ajuste += 0.45 * camino * (1.0 - presion) * (1.0 - plan.asociacion);
+			ajuste += 0.45 * camino * (1.0 - presion) * (1.0 - asociacion);
 			ajuste += transicion * camino * 0.6;
 			if (contra_presion) {
 				ajuste += 0.50 * transicion * camino;
 			}
-			ajuste -= plan.asociacion * 0.2;
+			ajuste -= asociacion * 0.2;
 			ajuste += _ajuste_de_ritmo(fase, o.tipo, 0.0, 0.0, 0.0, false, camino);
 			ajuste += _ajuste_de_perfil(i, -1, o.tipo, 0.0, 0.0, 0.0, presion, camino);
 		} else if (o.tipo == DEC_PARED) {
-			ajuste += plan.asociacion * 0.55;
+			ajuste += asociacion * 0.55;
 			ajuste += _ajuste_de_perfil(i, -1, o.tipo, 0.0, 0.0, 0.0, presion, camino);
 		} else if (es_pase(o.tipo)) {
 			const JugadorVisto &r = m.jugadores[size_t(o.receptor)];
@@ -1256,19 +1380,27 @@ void Cerebro::_ponderar(const Mundo &m, int i, std::vector<Opcion> &op, double p
 			double libertad = 1.0 - presion_normalizada(m, dx, dz, equipo);
 			bool cambio = p.z * dz < 0.0 && std::abs(p.z - dz) >= AREA_MEDIO_ANCHO;
 			if (o.tipo == DEC_PASE) {
-				ajuste += plan.asociacion * 1.15 * libertad * clamp01(1.0 - d / 35.0);
+				// Cerca del arco el toque no le gana al remate: el equipo de toque
+				// seguía pasándola con el arco a tiro (2,3 remates por partido
+				// contra 3,8 del Juego directo, tests/_diag_estilos_v2.gd).
+				ajuste += asociacion * 1.15 * libertad * clamp01(1.0 - d / 35.0) * lejos_del_arco
+						* (planeador && adelante < -2.0 ? pesos.estilo_atras : 1.0);
 				ajuste -= (1.0 - libertad) * 0.55;
 				if (adelante < -2.0 && !o.pase_atras_al_area) {
 					ajuste -= camino * (1.0 - presion) * (0.45 + transicion);
 				}
 			} else if (o.tipo == DEC_PASE_HUECO) {
-				ajuste += (plan.verticalidad * 0.35 + transicion * 0.8) * libertad * clamp01(adelante / 15.0);
+				// El pase al hueco es de los dos: del vertical y del de toque (el
+				// último pase). Con la verticalidad sola, el Tiki taka casi no
+				// lo daba y no llegaba al arco.
+				double filtra = planeador ? std::max(verticalidad, asociacion * pesos.estilo_hueco) : verticalidad;
+				ajuste += (filtra * 0.35 + transicion * 0.8) * libertad * clamp01(adelante / 15.0);
 				if (contra_presion) {
 					ajuste += 0.65 * transicion * libertad * clamp01(adelante / 15.0);
 				}
 			} else {
-				ajuste += plan.verticalidad * 0.3 + transicion * 0.45;
-				ajuste -= plan.asociacion * 0.6;
+				ajuste += verticalidad * 0.3 + transicion * 0.45;
+				ajuste -= asociacion * 0.6;
 				if (contra_presion) {
 					ajuste += 0.40 * transicion * libertad;
 				}
@@ -1362,7 +1494,11 @@ Decision Cerebro::decidir(const Mundo &m, int i, bool puede_pasar, Azar &azar) {
 		return dec;
 	}
 	std::vector<Opcion> op;
+	_cortados = 0;
 	_evaluar(m, i, op);
+	ultimo_puede_pasar = puede_pasar;
+	ultimas_ofrecidas = int(op.size());
+	ultimos_cortados = _cortados;
 	if (!puede_pasar && f.rol != ARQ) {
 		// Todavía no puede pasarla (la cadencia del control), pero patear al
 		// arco sí. Sin esto, con espacio solo podía conducir durante 0,5 a
@@ -1496,8 +1632,15 @@ Decision Cerebro::decidir(const Mundo &m, int i, bool puede_pasar, Azar &azar) {
 		if (dx == 0.0 && dz == 0.0) {
 			dx = s;
 		}
+		if (encara(m, i)) {
+			// Derecho al arco: los carriles lo sacaban hacia la banda.
+			dx = MEDIO_LARGO * s - p.x;
+			dz = -p.z;
+			normalizar(dx, dz);
+		}
 		dec.dir_x = dx;
 		dec.dir_z = dz;
+		dec.ritmo = ritmo_de_conduccion(m, i);
 	} else if (o.tipo == DEC_DESPEJE) {
 		// Arriba y lejos, sin buscar a nadie: más lejos cuanto más pierna.
 		double largo = _por_atributo(i, AT_FUERZA, pesos.despeje_corto, pesos.despeje_largo, 1.0);
@@ -1513,6 +1656,19 @@ Decision Cerebro::decidir(const Mundo &m, int i, bool puede_pasar, Azar &azar) {
 		dec.golpe = r.golpe;
 	}
 	cuenta.decisiones[dec.tipo]++;
+	{
+		double geo = factor_geometria(p.x, p.z, equipo);
+		if (geo >= 0.05 && f.rol != ARQ) {
+			int franja = geo < 0.15 ? 0 : (geo < 0.3 ? 1 : (geo < 0.5 ? 2 : 3));
+			cuenta.en_zona[franja][dec.tipo]++;
+			for (const Opcion &q : op) {
+				if (q.tipo == DEC_REMATE) {
+					cuenta.zona_con_tiro[franja]++;
+					break;
+				}
+			}
+		}
+	}
 	if (dec.corrida_preparada) {
 		cuenta.corridas_preparadas++;
 	}
@@ -2404,23 +2560,35 @@ void Cerebro::_candidatos_desmarque(const Mundo &m, int i, int poseedor, double 
 		}
 	}
 	// Llegar al punto del pase atrás cuando la pelota está en la banda, cerca del fondo.
-	if (std::abs(d.z) >= pesos.banda_para_centrar && std::abs(ax - d.x) < ULTIMO_TRAMO_BANDA
+	// Etapa 7: con la pelota por la banda en el último tercio, el 9, los
+	// extremos y los volantes van al área aunque esté llena de defensores (es
+	// donde tienen que estar) y desde más lejos. Con el último tramo de 24 m,
+	// el destino a 22 m como mucho y sin presión, había 0,96 compañeros en el
+	// área contra 4,1 rivales, y ninguno el 47% del tiempo
+	// (tests/_diag_juego_v2.gd).
+	bool por_la_banda = std::abs(d.z) >= BANDA_DEL_CENTRO_M && std::abs(ax - d.x) < ULTIMO_TERCIO;
+	bool cerca_del_fondo = std::abs(d.z) >= pesos.banda_para_centrar && std::abs(ax - d.x) < ULTIMO_TRAMO_BANDA;
+	if ((cerca_del_fondo || (por_la_banda && pesos.llegada_area_extra > 0.0))
 			&& (rol == MC || rol == MCO || rol == DC || rol == EXT)) {
+		bool nuevo = pesos.llegada_area_extra > 0.0;
 		for (double lateral : { -6.0, 0.0, 6.0 }) {
 			double profundidad = std::clamp(std::abs(ax - d.x) + 4.0, 11.0, 16.0);
-			if (rol == DC) {
+			if (rol == DC || (nuevo && rol == EXT)) {
 				profundidad = PROFUNDIDAD_DEL_NUEVE_AL_CENTRO;
 			}
 			double lx, lz;
 			_destino_legal(ax - s * profundidad, lateral, equipo, lx, lz);
-			if (dist(e.x, e.z, lx, lz) > 22.0 || (lx - e.x) * s < -2.0) {
+			if (dist(e.x, e.z, lx, lz) > (nuevo ? LLEGADA_DESDE_M : 22.0) || (lx - e.x) * s < -2.0) {
 				continue;
 			}
-			if (presion_normalizada(m, lx, lz, equipo) > 0.55) {
+			if (!nuevo && presion_normalizada(m, lx, lz, equipo) > 0.55) {
 				continue;
 			}
-			Candidato &c = agregar(DES_LLEGADA, lx, lz, poseedor, 0.8);
-			c.plan.pase_atras = true;
+			Candidato &c = agregar(DES_LLEGADA, lx, lz, poseedor, nuevo ? pesos.llegada_area_extra : 0.8);
+			c.plan.pase_atras = cerca_del_fondo;
+			c.plan.tiene_deseo = nuevo;
+			c.plan.deseo_x = ax - s * profundidad;
+			c.plan.deseo_z = lateral;
 		}
 	}
 	// Apoyo alrededor del ancla.
@@ -2519,6 +2687,18 @@ void Cerebro::_candidatos_desmarque(const Mundo &m, int i, int poseedor, double 
 
 bool Cerebro::_desmarque_sigue_vivo(const Mundo &m, int i) {
 	PlanDesmarque &plan = _desmarques[size_t(i)];
+	// La llegada al área dura mientras la pelota siga por la banda en el
+	// último tercio. Con el tope de 3 s el que llegaba se volvía a su lugar y
+	// salía de nuevo: con la pelota a 20-10 m del fondo había 0,95 compañeros
+	// en el área y ninguno el 46% del tiempo (tests/_diag_juego_v2.gd).
+	if (pesos.llegada_area_extra > 0.0 && plan.tipo == DES_LLEGADA && m.poseedor >= 0
+			&& fichas[size_t(m.poseedor)].equipo == fichas[size_t(i)].equipo) {
+		const JugadorVisto &d = m.jugadores[size_t(m.poseedor)];
+		double ax = MEDIO_LARGO * signo(fichas[size_t(i)].equipo);
+		if (std::abs(d.z) >= BANDA_DEL_CENTRO_M && std::abs(ax - d.x) < ULTIMO_TERCIO) {
+			plan.hasta = std::max(plan.hasta, m.segundos + LLEGADA_SIGUE_SEG);
+		}
+	}
 	if (m.segundos >= plan.hasta) {
 		return false;
 	}
@@ -2527,8 +2707,13 @@ bool Cerebro::_desmarque_sigue_vivo(const Mundo &m, int i) {
 		return false;
 	}
 	double lx, lz;
-	_destino_legal(plan.x, plan.z, fichas[size_t(i)].equipo, lx, lz);
-	if (presion_normalizada(m, lx, lz, fichas[size_t(i)].equipo) > PRESION_DESTINO_INVIABLE) {
+	// La llegada al área guarda adónde quiere ir: la línea del offside baja
+	// con la pelota y el que llega sigue hasta adentro. Con el destino
+	// recortado al planear, se quedaba en el borde. Tampoco se cae porque el
+	// área esté llena de rivales: es donde tiene que estar.
+	bool al_area = pesos.llegada_area_extra > 0.0 && plan.tiene_deseo;
+	_destino_legal(al_area ? plan.deseo_x : plan.x, al_area ? plan.deseo_z : plan.z, fichas[size_t(i)].equipo, lx, lz);
+	if (!al_area && presion_normalizada(m, lx, lz, fichas[size_t(i)].equipo) > PRESION_DESTINO_INVIABLE) {
 		return false;
 	}
 	plan.x = lx;
@@ -2653,6 +2838,15 @@ void Cerebro::_planificar_desmarques(const Mundo &m, int ataca) {
 		}
 	}
 	int cupo = _cupo_de_rupturas(ataca);
+	{
+		// Etapa 7: con la pelota por la banda en el último tercio van más al
+		// área. Con el cupo de siempre corrían dos y el área quedaba vacía.
+		const JugadorVisto &d = m.jugadores[size_t(poseedor)];
+		double ax = MEDIO_LARGO * signo(ataca);
+		if (pesos.llegada_area_extra > 0.0 && std::abs(d.z) >= BANDA_DEL_CENTRO_M && std::abs(ax - d.x) < ULTIMO_TERCIO) {
+			cupo += LLEGADAS_DE_MAS;
+		}
+	}
 	while (!pendientes.empty()) {
 		int elegido = -1;
 		size_t mejor_c = 0;
@@ -2700,6 +2894,113 @@ bool Cerebro::alcanza_para_tirar(int i, double x, double z) const {
 	double rango = _por_atributo(i, AT_TIRO, pesos.rango_tiro_malo, pesos.rango_tiro_bueno, pesos.mezcla_fisica_rango_tiro);
 	double f_dist = clamp01(1.0 - (dist(x, z, ax, 0.0) - 5.0) / std::max(rango, 1.0));
 	return f_dist * factor_angulo(x, z, equipo) > pesos.geometria_minima_tiro;
+}
+
+double Cerebro::ritmo_de_conduccion(const Mundo &m, int i) const {
+	if (pesos.conduce_espera <= 0.0) {
+		return 1.0;
+	}
+	const FichaCerebro &f = fichas[size_t(i)];
+	const JugadorVisto &p = m.jugadores[size_t(i)];
+	int equipo = f.equipo;
+	double s = signo(equipo);
+	double ax = MEDIO_LARGO * s;
+	const PlanEquipo &plan = planes[equipo & 1];
+	if (_solo_frente_al_arco(m, i) || encara(m, i)) {
+		return 1.0;
+	}
+	// Los que lo acompañan: compañeros de campo cerca, a su altura o adelante.
+	// Por la banda en el último tercio cuentan los que ya están cerca del arco:
+	// son los que van a recibir el centro.
+	bool por_la_banda = std::abs(p.z) >= BANDA_DEL_CENTRO_M && std::abs(ax - p.x) < ULTIMO_TERCIO;
+	int acompanan = 0;
+	for (size_t c = 0; c < fichas.size(); c++) {
+		if (int(c) == i || fichas[c].equipo != equipo || fichas[c].rol == ARQ) {
+			continue;
+		}
+		const JugadorVisto &q = m.jugadores[c];
+		if (por_la_banda ? dist(q.x, q.z, ax, 0.0) <= CERCA_DEL_ARCO_M
+						 : ((q.x - p.x) * s >= -ACOMPANA_ATRAS_M && dist(p.x, p.z, q.x, q.z) <= ACOMPANA_M)) {
+			acompanan++;
+		}
+	}
+	if (por_la_banda && acompanan == 0) {
+		// Por la banda y sin nadie para el centro: espera, aunque salga de
+		// contra y sea cual sea el estilo. Llegaba solo a la línea de fondo.
+		for (size_t o = 0; o < fichas.size(); o++) {
+			if (fichas[o].equipo != equipo && dist(p.x, p.z, m.jugadores[o].x, m.jugadores[o].z) < ENCIMA_M) {
+				return 1.0;
+			}
+		}
+		return 1.0 - pesos.conduce_espera;
+	}
+	double apoyo = clamp01(double(acompanan) / ACOMPANAN_PLENO);
+	// El equipo vertical espera menos.
+	double espera = pesos.conduce_espera * (1.0 - 0.5 * plan.verticalidad);
+	double ritmo = lerp(1.0 - espera, 1.0, apoyo);
+	ritmo = std::max(ritmo, _transicion(m, equipo) * plan.transicion);
+	// Con un rival encima se escapa a fondo. El que lo acompaña de lejos no
+	// cuenta: con la presión normalizada (cuenta desde 8 m) el que llevaba un
+	// marcador a 3,5 m corría siempre a fondo.
+	for (size_t o = 0; o < fichas.size(); o++) {
+		if (fichas[o].equipo != equipo && dist(p.x, p.z, m.jugadores[o].x, m.jugadores[o].z) < ENCIMA_M) {
+			return 1.0;
+		}
+	}
+	return std::clamp(ritmo, 1.0 - pesos.conduce_espera, 1.0);
+}
+
+// Encara: tiene la vía libre a menos de via_libre_m del arco. Va derecho al
+// arco, a fondo, y no se la da al que no queda mejor parado que él.
+// Por cuánto se multiplica el error del pase y del control de un equipo según
+// su estilo: el que entrena el toque falla menos el pase corto y el vertical
+// más. Sin esto la posesión daba 50% para los seis estilos: todos perdían la
+// pelota cada seis pases (tests/_diag_estilos_v2.gd).
+double Cerebro::error_de_estilo(int equipo) const {
+	double de_mas = pesos.estilo_fuerza * (planes[equipo & 1].asociacion - ASOCIACION_MEDIA);
+	return std::clamp(1.0 - pesos.estilo_precision * de_mas, 0.4, 1.5);
+}
+
+bool Cerebro::encara(const Mundo &m, int i) const {
+	const FichaCerebro &f = fichas[size_t(i)];
+	const JugadorVisto &p = m.jugadores[size_t(i)];
+	return f.rol != ARQ && pesos.via_libre_m > 0.0 && dist(p.x, p.z, MEDIO_LARGO * signo(f.equipo), 0.0) <= pesos.via_libre_m
+			&& via_libre(m, i);
+}
+
+bool Cerebro::via_libre(const Mundo &m, int i) const {
+	const JugadorVisto &p = m.jugadores[size_t(i)];
+	int equipo = fichas[size_t(i)].equipo;
+	double largo = MEDIO_LARGO * signo(equipo) - p.x;
+	if (std::abs(largo) < 1.0) {
+		return false;
+	}
+	for (size_t o = 0; o < fichas.size(); o++) {
+		if (fichas[o].equipo == equipo || fichas[o].rol == ARQ) {
+			continue;
+		}
+		double t = (m.jugadores[o].x - p.x) / largo;
+		if (t <= 0.0 || t >= 1.0) {
+			continue;
+		}
+		// El triángulo se cierra hacia el medio del arco.
+		if (std::abs(m.jugadores[o].z - p.z * (1.0 - t)) <= (ARCO_MEDIO_ANCHO_M + 1.0) * t + 1.0) {
+			return false;
+		}
+	}
+	return true;
+}
+
+// Cuánto arco ve desde (x, z): el ángulo entre los dos palos, de APERTURA_NULA
+// (lo que se ve de frente desde 26 m) a APERTURA_PLENA. A 3 m de la línea de
+// fondo y 7 m del eje ve 28 grados de arco (0,47); factor_geometria da 0.
+double Cerebro::geometria_de_cerca(double x, double z, int equipo) const {
+	if (dist(x, z, MEDIO_LARGO * signo(equipo), 0.0) > DE_CERCA_M) {
+		return 0.0;
+	}
+	double fondo = std::max(std::abs(MEDIO_LARGO * signo(equipo) - x), 0.3);
+	double apertura = std::abs(mate::arcotangente2(z + ARCO_MEDIO_ANCHO_M, fondo) - mate::arcotangente2(z - ARCO_MEDIO_ANCHO_M, fondo));
+	return clamp01((apertura - APERTURA_NULA_RAD) / (APERTURA_PLENA_RAD - APERTURA_NULA_RAD));
 }
 
 Decision Cerebro::elegir_remate(const Mundo &m, int i, bool solo_cabeza, Azar &azar) const {

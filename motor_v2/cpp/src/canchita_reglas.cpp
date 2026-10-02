@@ -33,12 +33,13 @@ constexpr double ARQUERO_EN_LA_LINEA_M = 0.5;
 constexpr double AFUERA_M = 3.0;
 // El que entra espera en la línea, frente al banco (del lado de -z).
 constexpr double BANCO_Z = -(Cerebro::MEDIO_ANCHO + 1.0);
-// El que sale va al trote, el expulsado corriendo y el lesionado, al paso.
-// Con todos al paso (0,35, como en el motor espacial) el saque esperaba hasta
-// 17 s: en la revisión visual se hacía largo.
-constexpr double FACTOR_SALIR = 0.5;
+// El que sale va corriendo, como el expulsado, y el lesionado al trote. Con
+// todos al paso (0,35, como en el motor espacial) el saque esperaba hasta
+// 17 s. Con 0,5 y 0,35 el lesionado tardaba 11 s en cruzar la cancha: en la
+// tercera revisión visual de la etapa 7 se veía a los demás parados esperando.
+constexpr double FACTOR_SALIR = 0.7;
 constexpr double FACTOR_SALIR_EXPULSADO = 0.85;
-constexpr double FACTOR_SALIR_LESIONADO = 0.35;
+constexpr double FACTOR_SALIR_LESIONADO = 0.5;
 // Detector de la etapa 6: el ejecutor que, lejos de su lugar y ya arrancado,
 // va a menos de esto, camina.
 constexpr double CAMINA_MS = 3.0;
@@ -52,6 +53,19 @@ constexpr double CORTE_ANTES_DEL_SAQUE_SEG = 0.75;
 constexpr double CAMINA_SOSTENIDA_SEG = 0.5;
 // El que saca con el pie y no puede patear en este tiempo deja que saque otro.
 constexpr double SACANDO_MAX_SEG = 6.0;
+// Lateral: en qué parte de Lateral_Prepara ya tiene la pelota arriba, y lo
+// máximo que la sostiene ahí (el saque lo corta antes).
+constexpr double LATERAL_ARRIBA_DEL_CLIP = 0.95;
+// Lateral: cuánto puede faltarle girar hacia la cancha para levantar la pelota.
+constexpr double LATERAL_DE_FRENTE_RAD = 0.5;
+// Y lo máximo que se espera a que gire desde que llegó.
+constexpr double LATERAL_GIRA_MAX_SEG = 2.0;
+constexpr double SOSTEN_LATERAL_SEG = 30.0;
+// Saque del medio: cuánto puede pasarse de la mitad de la cancha uno que ya
+// está en su lado, y lo máximo que se espera a que todos vuelvan (cruzar la
+// cancha entera al trote son unos 20 s).
+constexpr double EN_SU_MITAD_M = 0.5;
+constexpr double SAQUE_MEDIO_MAX_SEG = 30.0;
 constexpr double LATERAL_LENTO_SEG = 17 * 0.25;
 // El que va a su marca de una pelota parada trota firme; después del gol,
 // caminando (festejo).
@@ -74,17 +88,31 @@ void Canchita::agregar_suplente(int equipo, const JugadorCanchita &j, const Fich
 	banco.push_back(s);
 }
 
+// Segundos de verdad con la pelota en juego en este tiempo.
 double Canchita::reloj_seg() const {
-	return double(paso - _inicio_periodo) * PASO_SEG;
+	return double(paso - _inicio_periodo - _pasos_parados) * PASO_SEG;
 }
 
+// Segundos del reloj mostrado por cada segundo de verdad (22,5 con dos
+// minutos de verdad por tiempo).
+double Canchita::escala_reloj() const {
+	return param_reglas.minutos_tiempo * 60.0 / std::max(param_reglas.segundos_tiempo, 1.0);
+}
+
+// En segundos del reloj mostrado.
 double Canchita::adicion_seg() const {
 	return std::clamp(_adicion[lado() & 1], param_reglas.adicion_min_seg, param_reglas.adicion_max_seg);
+}
+
+// El minuto que muestra el reloj (0 a 90 y el agregado).
+double Canchita::minuto() const {
+	return (periodo == PRIMER_TIEMPO ? 0.0 : param_reglas.minutos_tiempo) + reloj_seg() * escala_reloj() / 60.0;
 }
 
 void Canchita::_anotar(int tipo, int equipo, int jugador, int otro, int detalle, double x, double z) {
 	EventoPartido e;
 	e.paso = paso;
+	e.minuto = minuto();
 	e.tipo = tipo;
 	e.equipo = equipo;
 	e.jugador = jugador;
@@ -104,6 +132,7 @@ void Canchita::_empezar_reglas() {
 	_tarjeta_paso = -1;
 	corte_paso = -1;
 	_inicio_periodo = paso;
+	_pasos_parados = 0;
 	_adicion[0] = _adicion[1] = 0.0;
 	goles_tanda[0] = goles_tanda[1] = 0;
 	pateados_tanda[0] = pateados_tanda[1] = 0;
@@ -193,7 +222,7 @@ void Canchita::_parar(int tipo, int equipo, double x, double z, int64_t demora) 
 // el mejor en lo suyo de los que están cerca el córner y el tiro libre que
 // se cuelga o va al arco; el de más tiro el penal; el que antes llega, el
 // lateral y el tiro libre corto. Nunca uno que está en el piso.
-int Canchita::_elegir_ejecutor(int tipo, int equipo, double x, double z, int tipo_libre) const {
+int Canchita::_elegir_ejecutor(int tipo, int equipo, double x, double z, int tipo_libre, int excluir) const {
 	if (tipo == SAQUE_ARCO) {
 		int a = arquero_de(equipo);
 		if (a >= 0) {
@@ -210,11 +239,19 @@ int Canchita::_elegir_ejecutor(int tipo, int equipo, double x, double z, int tip
 	double mejor_valor = -1e9, t_cerca = 1e18;
 	for (size_t i = 0; i < jugadores.size(); i++) {
 		const JugadorCanchita &j = jugadores[i];
-		if (j.equipo != equipo || j.arquero || paso < j.en_el_piso_hasta) {
+		if (j.equipo != equipo || j.arquero || paso < j.en_el_piso_hasta || int(i) == excluir) {
 			continue;
 		}
 		double d = hipot(j.cuerpo.x - x, j.cuerpo.z - z);
 		double t = tiempo_de_llegada(j.cuerpo, x, z, param_reglas.llegada_m);
+		if (tipo == SAQUE_MEDIO) {
+			// El más cercano, no el que antes llega: todos están parados en
+			// su casillero y el de punta queda justo entre el volante y la
+			// pelota. Con el volante más rápido sacaba él, chocaba de atrás
+			// con el de punta y el saque no salía nunca (8 de 300 partidos
+			// desparejos, semilla 97000).
+			t = d;
+		}
 		if (t < t_cerca) {
 			t_cerca = t;
 			cerca = int(i);
@@ -640,10 +677,19 @@ bool Canchita::_avanzar_parada() {
 		return true;
 	}
 	// El que no llega (lo trabaron, se lesionó): pasado el tope, otro.
-	if (p.ejecutor < 0 || paso > p.tope + pasos_de(10.0)) {
-		p.ejecutor = _elegir_ejecutor(p.tipo == SAQUE_ARCO ? TIRO_LIBRE : p.tipo, p.equipo, p.x, p.z, LIBRE_CORTO);
+	// Solo si no llegó: el que ya está en su lugar espera a los demás (al que
+	// sale en un cambio, a los que vuelven a su mitad).
+	bool no_llega = p.ejecutor >= 0 && paso > p.tope + pasos_de(10.0) && !p.en_manos
+			&& hipot(jugadores[size_t(p.ejecutor)].cuerpo.x - p.lugar_x, jugadores[size_t(p.ejecutor)].cuerpo.z - p.lugar_z)
+					> r.llegada_m;
+	if (p.ejecutor < 0 || no_llega) {
+		// Otro, no el mismo: si lo traba un cuerpo, lo va a seguir trabando.
+		p.ejecutor = _elegir_ejecutor(p.tipo == SAQUE_ARCO ? TIRO_LIBRE : p.tipo, p.equipo, p.x, p.z, LIBRE_CORTO,
+				p.ejecutor);
 		p.tope = paso + pasos_de(r.espera_max_seg[p.tipo]);
 		_lugar_del_ejecutor();
+		// El que dejó de sacar necesita su lugar: sin marca se iba a atacar.
+		_marcar_parada();
 		if (p.ejecutor < 0) {
 			return true;
 		}
@@ -662,12 +708,25 @@ bool Canchita::_avanzar_parada() {
 	} else {
 		p.lento_pasos = 0;
 	}
-	if (p.tipo == LATERAL && llego && !p.en_manos) {
+	// De frente a la cancha: el que llegaba corriendo hacia la línea levantaba
+	// la pelota de espaldas (el gesto no deja girar) y el lateral salía para
+	// atrás de adonde miraba (revisión visual de la etapa 7).
+	bool de_frente = std::abs(mate::envolver(rumbo_de(p.x - c.x, -c.z) - c.rumbo)) <= LATERAL_DE_FRENTE_RAD;
+	if (llego && p.llego_en < 0) {
+		p.llego_en = paso;
+	}
+	if (p.tipo == LATERAL && llego && !p.en_manos && (de_frente || paso > p.llego_en + pasos_de(LATERAL_GIRA_MAX_SEG))) {
 		// Levanta la pelota y se prepara.
 		p.en_manos = true;
 		p.en_manos_desde = paso;
-		if (r.clip_lateral_prepara >= 0) {
-			je.cuerpo.empezar(r.clip_lateral_prepara);
+		if (r.clip_lateral_prepara >= 0 && je.cuerpo.empezar(r.clip_lateral_prepara)) {
+			// Se queda con la pelota arriba hasta que la lanza. Lateral_Prepara
+			// dura 0,75 s y la espera 1,5 s: al terminar el clip los brazos
+			// bajaban y la pelota, que la vista dibuja entre las manos, quedaba
+			// en la panza hasta el saque (revisión visual de la etapa 7).
+			Cuerpo &ce = je.cuerpo;
+			ce.sosten_en = clips[size_t(r.clip_lateral_prepara)].duracion * LATERAL_ARRIBA_DEL_CLIP;
+			ce.sosten_seg = SOSTEN_LATERAL_SEG;
 		}
 	}
 	bool ubicados = true;
@@ -675,6 +734,19 @@ bool Canchita::_avanzar_parada() {
 		for (size_t k = 0; k < jugadores.size() && ubicados; k++) {
 			if (k < _tiene_marca.size() && _tiene_marca[k]
 					&& hipot(jugadores[k].cuerpo.x - _marca_x[k], jugadores[k].cuerpo.z - _marca_z[k]) > r.ubicado_m) {
+				ubicados = false;
+			}
+		}
+	}
+	// El saque del medio espera a que cada uno esté en su mitad, aunque pase
+	// el tope: con el tope de 6 s se sacaba con los delanteros todavía
+	// volviendo del área rival (revisión visual de la etapa 7). El reloj
+	// espera en las paradas, así que no cuesta tiempo de juego.
+	if (p.tipo == SAQUE_MEDIO && paso < p.desde + pasos_de(SAQUE_MEDIO_MAX_SEG)) {
+		for (size_t k = 0; k < jugadores.size() && ubicados; k++) {
+			const JugadorCanchita &jk = jugadores[k];
+			// El lesionado no vuelve: queda en el piso hasta que lo cambian.
+			if (int(k) != p.ejecutor && !jk.lesionado && jk.cuerpo.x * _ataca(jk.equipo) > EN_SU_MITAD_M) {
 				ubicados = false;
 			}
 		}
@@ -703,7 +775,10 @@ bool Canchita::_avanzar_parada() {
 	if (p.tipo == LATERAL && (!p.en_manos || paso < p.en_manos_desde + pasos_de(r.lateral_espera_seg))) {
 		ubicados = false;
 	}
-	if (llego && paso >= p.minimo && ubicados) {
+	// Con la pelota ya en las manos saca desde donde quedó: el que llegaba
+	// rápido frenaba 1,7 m más allá de su lugar con el gesto empezado, dejaba
+	// de "haber llegado" y el lateral no salía.
+	if ((llego || p.en_manos) && paso >= p.minimo && ubicados) {
 		_ejecutar_parada();
 	}
 	return true;
@@ -1112,7 +1187,7 @@ bool Canchita::_reloj() {
 	if (periodo >= TANDA) {
 		return false;
 	}
-	double fin = param_reglas.minutos_tiempo * 60.0 + adicion_seg();
+	double fin = param_reglas.segundos_tiempo + adicion_seg() / escala_reloj();
 	double t = reloj_seg();
 	if (t < fin) {
 		return false;
@@ -1123,7 +1198,7 @@ bool Canchita::_reloj() {
 	} else {
 		tranquilo = !_remate.activo && _en_manos < 0 && std::abs(pelota.pos.x) < Cerebro::MEDIO_LARGO - 30.0;
 	}
-	if (!tranquilo && t < fin + 30.0) {
+	if (!tranquilo && t < fin + param_reglas.cierre_max_seg) {
 		return false;
 	}
 	_fin_de_tiempo();
@@ -1138,6 +1213,7 @@ void Canchita::_fin_de_tiempo() {
 	if (periodo == PRIMER_TIEMPO) {
 		periodo = SEGUNDO_TIEMPO;
 		_inicio_periodo = paso;
+		_pasos_parados = 0;
 		// Cambian de lado. El motor sigue con el equipo 0 atacando hacia +x y
 		// la vista gira la cancha (lado()); lo único que no gira es el viento:
 		// para el motor da la vuelta.
@@ -1221,12 +1297,15 @@ void Canchita::_llevar_lateral() {
 // salen caminan hasta afuera.
 void Canchita::_desgastar() {
 	const ParametrosReglas &r = param_reglas;
-	bool corre_reloj = periodo < TANDA;
+	// El desgaste es por minuto del reloj mostrado, como en el motor espacial:
+	// con el reloj parado (una pelota parada) nadie se cansa.
+	bool corre_reloj = periodo < TANDA && !_parada.activa;
+	double por_paso = escala_reloj() / 60.0 * PASO_SEG;
 	for (JugadorCanchita &j : jugadores) {
 		Cuerpo &c = j.cuerpo;
 		if (corre_reloj) {
 			double f = c.rapidez() / std::max(c.vel_max, 0.1);
-			j.energia -= j.reglas.desgaste_minuto / 60.0 * PASO_SEG * (r.esfuerzo_base + r.esfuerzo_carrera * f * f);
+			j.energia -= j.reglas.desgaste_minuto * por_paso * (r.esfuerzo_base + r.esfuerzo_carrera * f * f);
 			j.energia = std::max(j.energia, r.energia_minima);
 		}
 		int franja = 3;
@@ -1276,7 +1355,30 @@ bool Canchita::_plan_entrada(int i) {
 	}
 	double quite = std::clamp((j.reglas.quite + j.reglas.barrida) * 0.5 / 100.0, 0.0, 1.0);
 	double cuidado = j.amarillas > 0 ? param_reglas.entrada_amonestado : 1.0;
-	if (_azar.uno() >= param_reglas.entrada_prob * (0.5 + quite) * cuidado) {
+	// De atrás no se tira: va hacia donde mira el que lleva la pelota (la
+	// misma cuenta que la gravedad de la falta). El favorito, más rápido,
+	// alcanzaba de atrás al que conducía y se barría: en quinta contra octava
+	// hacía 3,3 faltas por partido y el otro 0,3 (el motor espacial, 1,2 cada
+	// uno), con 0,3 rojas.
+	const Cuerpo &cp = jugadores[size_t(poseedor)].cuerpo;
+	double sp, cp_;
+	mate::seno_coseno(cp.rumbo, sp, cp_);
+	double v = j.cuerpo.rapidez();
+	double atras = v > 0.1 ? std::clamp((j.cuerpo.vx * sp + j.cuerpo.vz * cp_) / v, 0.0, 1.0) : 0.0;
+	cuidado *= 1.0 - param_reglas.entrada_de_atras * atras;
+	// El que es más rápido que el que lleva la pelota no necesita tirarse. En
+	// un partido desparejo el favorito hacía 3,3 faltas y el otro 0,3 (el
+	// motor espacial: 1,2 cada uno).
+	double sobra = j.cuerpo.vel_max / std::max(cp.vel_max, 0.1) - 1.0;
+	cuidado *= std::clamp(1.0 - param_reglas.entrada_sobrado * sobra, 0.1, 1.0);
+	// En su área se cuida: la falta es penal.
+	double gx = Cerebro::MEDIO_LARGO * _ataca(1 - j.equipo);
+	if (std::abs(gx - pelota.pos.x) <= Cerebro::AREA_LARGO && std::abs(pelota.pos.z) <= Cerebro::AREA_MEDIO_ANCHO) {
+		cuidado *= param_reglas.entrada_en_area;
+	}
+	// Cuánto pesa el quite en las ganas de tirarse: con 1 el bueno se tira más
+	// (0,5 + quite); con 0 todos igual; con menos de 0 se tira más el torpe.
+	if (_azar.uno() >= param_reglas.entrada_prob * (1.0 + param_reglas.entrada_por_quite * (quite - 0.5)) * cuidado) {
 		return false;
 	}
 	j.entra = true;
@@ -1532,6 +1634,7 @@ void Canchita::_quitar(int i, bool expulsado) {
 	ajustar(_pateador);
 	ajustar(_perseguidor[0]);
 	ajustar(_perseguidor[1]);
+	_segundo[0] = _segundo[1] = -1;
 	ajustar(_en_manos);
 	ajustar(_remate.pateador);
 	ajustar(_parada.ejecutor);
@@ -1581,7 +1684,7 @@ void Canchita::_hacer_cambios(bool entretiempo) {
 		return;
 	}
 	const ParametrosReglas &r = param_reglas;
-	double minuto = (periodo == PRIMER_TIEMPO ? 0.0 : r.minutos_tiempo) + reloj_seg() / 60.0;
+	double minuto = this->minuto();
 	for (int e = 0; e < 2; e++) {
 		std::vector<char> probado(jugadores.size(), 0);
 		while (cuenta.cambios[e] < r.cambios_max) {

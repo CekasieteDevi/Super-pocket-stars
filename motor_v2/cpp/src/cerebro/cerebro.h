@@ -219,7 +219,44 @@ struct PesosCerebro {
 	double entrada_ventaja_seg = 0.5;
 	double castigo_corte = 1.5;
 	double castigo_centro = 0.85;
-	double remate_temperatura = 0.05;
+	double remate_temperatura = 0.15;
+	// Etapa 7: el pase con más riesgo que esto (1 − margen / riesgo_margen_seguro)
+	// no se ofrece. 0,8 es un margen de 0,1 s sobre el rival que mejor corta.
+	double riesgo_maximo = 0.8;
+	// Etapa 7: utilidad de más del pase a los pies según lo seguro que es.
+	double pase_seguro_extra = 0.4;
+	double conducir_libre_extra = 2.5;
+	double conduce_espera = 0.6;
+	double estilo_fuerza = 1.5;
+	double estilo_pase_seguro = 3.0;
+	double estilo_riesgo = 0.3;
+	double estilo_hueco = 1.0;
+	double estilo_atras = 0.6;
+	double estilo_precision = 0.7;
+	double tiro_de_cerca = 1.0;
+	double tiro_desde = 0.15;
+	double conduce_decide_seg = 0.6;
+	double via_libre_m = 22.0;
+	// Etapa 7: utilidad que pierde el pase de espaldas a adonde mira (entero
+	// de espaldas; de costado, nada).
+	double castigo_espaldas = 3.0;
+	// Etapa 7: además del que presiona, va a la pelota del rival el que llega
+	// en menos de esto (segundos). 0 = nadie más.
+	double contrapresion_seg = 1.0;
+	// Etapa 7: valor de más de la corrida al área cuando la pelota va por la
+	// banda en el último tercio. 0 = como en el motor espacial.
+	double llegada_area_extra = 2.0;
+	// Etapa 7: el centro tendido. Sale a centro_elevacion_rad y llega al punto
+	// a centro_alto_m. Con 0 en cualquiera de los dos es un globo como el
+	// pelotazo.
+	double centro_alto_m = 1.3;
+	double centro_elevacion_rad = 0.3;
+	// Etapa 7: 1 = al centro va el compañero que antes llega; 0 = el que lo
+	// esperaba, salvo que otro llegue medio segundo antes (como cualquier pase).
+	double centro_al_que_llega = 1.0;
+	// Etapa 7: multiplica la utilidad del remate (tiro.base y tiro.geometria
+	// son del motor espacial y los dos motores los leen).
+	double tiro_factor = 0.75;
 	// No sale de ningún JSON: es toque.reaccion_seg, que la canchita le copia
 	// al empezar (una sola fuente de verdad).
 	double reaccion_seg = 0.2;
@@ -309,7 +346,7 @@ public:
 	virtual double margen_al_punto(int de, int a, double x, double z) = 0;
 	// Lo mismo para un globo que cae en (x, z): solo cuenta donde vuela a la
 	// altura de la cabeza o menos.
-	virtual double margen_globo(int de, double x, double z) = 0;
+	virtual double margen_globo(int de, int a, double x, double z) = 0;
 	// Etapa 5: qué tan bueno es un remate de `de` al punto (alto, lateral) del
 	// arco rival con el golpe `tipo` (remate.h): la chance de que vaya adentro
 	// y el arquero no llegue, con el mismo error y el mismo arquero que
@@ -327,8 +364,10 @@ struct Decision {
 	double retorno_x = 0.0, retorno_z = 0.0;
 	double utilidad = 0.0;
 	double probabilidad = 1.0;
-	// Conducir: hacia dónde.
+	// Conducir: hacia dónde, y cuánto de su rapidez de conducción usa
+	// (Cerebro::ritmo_de_conduccion).
 	double dir_x = 1.0, dir_z = 0.0;
+	double ritmo = 1.0;
 	// Viene de un desmarque preparado (pase al espacio que "sale solo").
 	bool corrida_preparada = false;
 	// Remate: el golpe (TipoRemate de remate.h) y el alto del punto del arco
@@ -359,6 +398,9 @@ struct PlanDesmarque {
 	// Sale de la grilla de apoyo (nuevo, Simple Soccer).
 	bool de_grilla = false;
 	double espacio_x = 0.0, espacio_z = 0.0;
+	// La llegada al área: adónde quiere ir, antes de recortar por el offside.
+	bool tiene_deseo = false;
+	double deseo_x = 0.0, deseo_z = 0.0;
 };
 
 // Una opción que pesó el poseedor, con su utilidad final (para ver por qué
@@ -374,6 +416,11 @@ struct OpcionVista {
 struct ContadoresCerebro {
 	int64_t decisiones[DECISIONES] = {};
 	int64_t corridas_preparadas = 0;
+	// Qué decide el que tiene la pelota según el factor_geometria de donde
+	// está: franjas de 0,05 a 0,15, a 0,3, a 0,5 y más. `zona_con_tiro`: las
+	// veces que el remate estaba entre las opciones.
+	int64_t en_zona[4][DECISIONES] = {};
+	int64_t zona_con_tiro[4] = {};
 	int64_t desmarques[4] = {};
 	int64_t fases_ritmo[3] = {};
 	int64_t apoyos_de_grilla = 0;
@@ -404,6 +451,11 @@ public:
 	ContadoresCerebro cuenta;
 	// La última decisión: quién, con qué temperatura y entre qué opciones.
 	int ultimo_decisor = -1;
+	// Para la traza (tests/_diag_traza_v2.gd): si podía pasar, cuántas opciones
+	// tenía antes de filtrar y cuántos pases descartó por cortados.
+	bool ultimo_puede_pasar = true;
+	int ultimas_ofrecidas = 0, ultimos_cortados = 0;
+	mutable int _cortados = 0;
 	double ultima_temperatura = 0.0;
 	std::vector<OpcionVista> ultimas_opciones;
 
@@ -431,6 +483,16 @@ public:
 	// Si le da el alcance para tirar desde (x, z) (factor_geometria con su
 	// rango de tiro, rango_tiro_malo a rango_tiro_bueno).
 	bool alcanza_para_tirar(int i, double x, double z) const;
+	// Sin ningún rival de campo en el triángulo que va de `i` a los dos palos
+	// del arco rival (un metro más ancho de cada lado).
+	bool via_libre(const Mundo &m, int i) const;
+	bool encara(const Mundo &m, int i) const;
+	double error_de_estilo(int equipo) const;
+	double geometria_de_cerca(double x, double z, int equipo) const;
+	// Cuánto de su rapidez de conducción usa el que lleva la pelota (de
+	// 1 − conduce_espera a 1). A fondo: de contra, con el arco libre o con un
+	// rival encima. El que se adelantó a su equipo lo espera.
+	double ritmo_de_conduccion(const Mundo &m, int i) const;
 	// El que sale a presionar al poseedor (-1 si nadie).
 	int presionante(int equipo_defensor) const {
 		return _defensa[equipo_defensor & 1].presionante;

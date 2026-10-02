@@ -92,6 +92,30 @@ enum ResultadoRemate : int {
 struct ContadoresCanchita {
 	int64_t pases = 0;
 	int64_t pases_globo = 0;
+	// Los pases que son un despeje (no buscan a nadie). El motor espacial no
+	// los cuenta como pases intentados.
+	int64_t pases_despeje = 0;
+	// La pelota que sale de la cancha, según lo último que le pasó: un pase,
+	// una conducción, un control, un remate, un rebote en un cuerpo u otra cosa.
+	int64_t salidas_pase = 0, salidas_conduce = 0, salidas_control = 0, salidas_remate = 0, salidas_rebote = 0,
+			salidas_otra = 0;
+	// Conducción: pasos con la pelota conducida, metros del que la lleva a la
+	// pelota (suma), pasos con la pelota a más de CONDUCE_LEJOS_M y lo que
+	// corre contra su punta (suma).
+	int64_t conduce_pasos = 0, conduce_lejos = 0;
+	double conduce_metros = 0.0, conduce_corre = 0.0, conduce_max_m = 0.0;
+	// Lo más lejos que se le va la pelota al que la tiene después de cada
+	// toque suyo, hasta el toque siguiente: [control, conducción] por franja
+	// (menos de 1 m, 1 a 2, 2 a 3, 3 a 5, más de 5). `separa_pierde`: los que
+	// terminan con la pelota del rival o afuera. `lleva_a_fondo`: pasos del
+	// que la tiene a más del 90% de su punta.
+	int64_t separa[2][5] = {};
+	int64_t separa_pierde[2][5] = {};
+	int64_t lleva_pasos = 0, lleva_a_fondo = 0;
+	// Qué decide el que tiene la pelota sin ningún rival de campo entre él y
+	// el arco (_via_libre), según la distancia al arco: menos de 16,5 m, hasta
+	// 25, hasta 35.
+	int64_t via_libre[3][DECISIONES] = {};
 	int64_t completados = 0;
 	// Lo recibió un compañero que no era el buscado.
 	int64_t completados_otro = 0;
@@ -108,6 +132,14 @@ struct ContadoresCanchita {
 	int64_t recepciones[4] = { 0, 0, 0, 0 };
 	// Gestos que abrieron la ventana y no llegaron a la pelota.
 	int64_t fallos = 0;
+	// Gestos de recibir o rematar que empezaron y los que erraron, por parte;
+	// de los que erraron, los que quedaron lejos en el piso y los que quedaron
+	// a otra altura.
+	int64_t gestos_parte[4] = { 0, 0, 0, 0 };
+	int64_t fallos_parte[4] = { 0, 0, 0, 0 };
+	int64_t fallos_lejos[4] = { 0, 0, 0, 0 };
+	int64_t fallos_altura[4] = { 0, 0, 0, 0 };
+	double fallos_metros[4] = { 0.0, 0.0, 0.0, 0.0 };
 	// Tenía la ventana abierta pero otro la tocó primero.
 	int64_t cruces_perdidos = 0;
 	int64_t rebotes_cuerpo = 0;
@@ -198,6 +230,10 @@ struct ContadoresCanchita {
 	int64_t laterales_lentos = 0;
 	int64_t entradas = 0;
 	int64_t entradas_limpias = 0;
+	// Después de una entrada que saca la pelota: el toque siguiente es del
+	// equipo del que entró, del otro, o la pelota sale.
+	int64_t entrada_gana = 0, entrada_pierde = 0, entrada_afuera = 0;
+	int64_t entradas_tumban = 0;
 	int64_t faltas[2] = { 0, 0 };
 	int64_t faltas_entrada = 0;
 	int64_t faltas_cruce = 0;
@@ -218,6 +254,50 @@ struct ContadoresCanchita {
 	int64_t arquero_mano = 0;
 	int64_t arquero_voleo = 0;
 	int64_t arquero_pie = 0;
+};
+
+// Un pase, para el diagnóstico (tests/_diag_pases_v2.gd): quién, a quién, de
+// qué tipo y cómo terminó.
+enum ResultadoPase {
+	PASE_ABIERTO = -1,
+	PASE_COMPLETO = 0, // lo toca el receptor
+	PASE_OTRO, // lo toca otro compañero
+	PASE_PROPIO, // lo vuelve a tocar el que lo dio
+	PASE_CORTE, // lo toca un rival
+	PASE_SUELTO, // nadie lo toca: sale o se para el juego
+	PASE_ARQUERO, // lo agarra o lo rechaza el arquero rival con las manos
+	RESULTADOS_PASE,
+};
+
+struct RegistroPase {
+	int64_t paso = 0, paso_fin = 0;
+	int equipo = 0;
+	int pateador = -1, receptor = -1;
+	// DEC_* del cerebro (DEC_NADA: de primera, sin decisión).
+	int tipo = 0;
+	bool globo = false, al_espacio = false, de_primera = false;
+	double x = 0.0, z = 0.0, meta_x = 0.0, meta_z = 0.0;
+	// 0 = hacia donde mira el que la da, 1 = de espaldas.
+	double de_lado = 0.0;
+	// Rival más cercano al que la da y metros del receptor al punto, al patear.
+	double presion_m = 0.0, receptor_al_punto_m = 0.0;
+	// El margen que le da el planeador al patear (segundos; < 0 = un rival
+	// llega antes).
+	double margen = 0.0;
+	int resultado = PASE_ABIERTO;
+	// Al terminar: metros del receptor a la pelota y si iba a buscarla.
+	double receptor_a_pelota_m = 0.0;
+	bool receptor_iba = false;
+	// Salió de la cancha sin que la toque nadie.
+	bool afuera = false;
+	// El toque que lo terminó: qué iba a hacer (TOQUE_*), con qué parte y a
+	// qué altura estaba la pelota. -1 si no lo tocó nadie.
+	int toque_fin = -1, parte_fin = -1;
+	double alto_fin = 0.0;
+	// Al terminar: metros del punto pedido a donde quedó la pelota.
+	double error_m = 0.0;
+	// Pasos del pase en los que el receptor iba a la pelota y los que duró.
+	int64_t pasos_receptor_iba = 0;
 };
 
 // Un remate, para el diagnóstico (tests/_diag_remates_v2.gd): de dónde salió,
@@ -273,6 +353,10 @@ struct JugadorCanchita {
 	int clip_toque = -1;
 	int parte = PIE;
 	bool toque_pendiente = false;
+	// Con la ventana abierta: lo más cerca que pasó la pelota de su punto de
+	// contacto (en el piso) y si alguna vez estuvo a la altura.
+	double toque_d_min = 1e9;
+	bool toque_alto_ok = false;
 	// Pase: al punto (meta_x, meta_z), a `receptor`, raso o globo.
 	double meta_x = 0.0, meta_z = 0.0;
 	int receptor = -1;
@@ -318,6 +402,9 @@ struct JugadorCanchita {
 	// sigue en eso hasta este paso.
 	bool entra = false;
 	int64_t entrada_hasta = -1;
+	// Cuánto de su rapidez de conducción usa (la decisión de conducir del
+	// cerebro; 1 si la última no fue conducir).
+	double ritmo_conduce = 1.0;
 };
 
 // Etapa 6: el que se va de la cancha (expulsado, cambiado o lesionado). Ya no
@@ -377,6 +464,7 @@ public:
 	ContadoresCanchita cuenta;
 	// Etapa 5: cada remate del partido.
 	std::vector<RegistroRemate> registro;
+	std::vector<RegistroPase> registro_pases;
 	int modo = RONDO;
 	int64_t paso = 0;
 	int equipo_con_pelota = 0;
@@ -413,6 +501,10 @@ public:
 	std::vector<EventoPartido> eventos;
 	std::vector<Suplente> banco;
 	std::vector<Saliente> afuera;
+	// Los que entraron por un cambio y todavía no pisaron la cancha.
+	const std::vector<int> &entrando() const {
+		return _entrando;
+	}
 	int periodo = PRIMER_TIEMPO;
 	int goles_tanda[2] = { 0, 0 };
 	int pateados_tanda[2] = { 0, 0 };
@@ -420,7 +512,9 @@ public:
 	void agregar_suplente(int equipo, const JugadorCanchita &j, const FichaCerebro &f);
 	// Segundos de juego del tiempo que se está jugando y su agregado.
 	double reloj_seg() const;
+	double escala_reloj() const;
 	double adicion_seg() const;
+	double minuto() const;
 	// 0 en el primer tiempo, 1 en el segundo: la vista gira la cancha 180°
 	// (el motor sigue con el equipo 0 atacando hacia +x).
 	int lado() const {
@@ -435,6 +529,9 @@ public:
 	// La parada en curso (PARADA_NADA si se juega).
 	int parada_tipo() const {
 		return _parada.activa ? _parada.tipo : PARADA_NADA;
+	}
+	int parada_equipo() const {
+		return _parada.activa ? _parada.equipo : -1;
 	}
 	int parada_ejecutor() const {
 		return _parada.activa ? _parada.ejecutor : -1;
@@ -468,7 +565,8 @@ public:
 	// desde la pelota y el momento de la patada del que está decidiendo.
 	double margen_pase(int de, int a) override;
 	double margen_al_punto(int de, int a, double x, double z) override;
-	double margen_globo(int de, double x, double z) override;
+	double margen_globo(int de, int a, double x, double z) override;
+	double _margen_destino(int de, double x, double z, double t_juntos) const;
 	double valor_remate(int de, int tipo, double alto, double lateral) override;
 	// El receptor del pase que viaja (-1 si no hay pase).
 	int receptor() const {
@@ -495,6 +593,8 @@ private:
 	std::vector<int> _k_llega;
 	std::vector<double> _t_llega;
 	int _perseguidor[2] = { -1, -1 };
+	// El segundo que va a la pelota que tiene el rival: el que la tiene al lado.
+	int _segundo[2] = { -1, -1 };
 	bool _pase_activo = false;
 	int _pateador = -1;
 	int _receptor = -1;
@@ -573,6 +673,8 @@ private:
 		bool tanda = false;
 		// Pasos seguidos que el ejecutor va caminando (detector).
 		int64_t lento_pasos = 0;
+		// El paso en que el ejecutor llegó a su lugar (-1 si todavía no).
+		int64_t llego_en = -1;
 		// Con tarjeta: el paso del corte al saque (-1 si no hay).
 		int64_t corte_en = -1;
 	};
@@ -582,7 +684,21 @@ private:
 	std::vector<char> _tiene_marca;
 	// Los que estaban en offside en el cuadro del último pase.
 	std::vector<int> _adelantados;
+	// El pase en vuelo es un centro: lo va a buscar el que antes llega, no el
+	// que lo esperaba.
+	bool _pase_centro = false;
+	// El pase abierto en registro_pases (-1 si no hay).
+	int _pase_reg = -1;
+	int _separa_tipo = -1, _separa_de = -1;
+	int _entrada_de = -1;
+	double _separa_max = 0.0;
+	void _cerrar_separacion(int equipo_que_sigue);
+	void _cerrar_pase(int resultado);
+	bool _salio_remate = false;
+	bool _remate_reciente() const;
 	int64_t _inicio_periodo = 0;
+	// Pasos de este tiempo con el reloj parado (una pelota parada).
+	int64_t _pasos_parados = 0;
 	double _adicion[2] = { 0.0, 0.0 };
 	int _saco_primero = 0;
 	// La tanda: el orden de cada equipo y por dónde va.
@@ -611,7 +727,7 @@ private:
 
 	void _pensar();
 	void _analizar();
-	void _alcance(int i, double factor, int &k, double &t) const;
+	void _alcance(int i, double factor, int &k, double &t, int no_antes = 0) const;
 	void _pensar_jugador(int i);
 	void _plan_tocar(int i);
 	void _decidir(int i, V3 bola, double t_patada);
@@ -639,7 +755,8 @@ private:
 	Pase _planear_pase(int i, V3 bola, double t_patada, int solo = -1);
 	double _margen(int i, V3 bola, double dx, double dz, const Perfil &perfil, int k_fin, double t_patada) const;
 	double _rapidez_raso(double d, int &k);
-	double _rapidez_globo(double d, int &k);
+	double _rapidez_globo(double d, int &k, bool centro = false);
+	bool _centro_tendido(double d);
 	double _rapidez_conduce(double corre, double largo);
 	double _espacio_adelante(int i, V3 bola, double dx, double dz) const;
 	double _rival_mas_cerca(int i, double x, double z) const;
@@ -699,7 +816,7 @@ private:
 	// Etapa 6 (canchita_reglas.cpp).
 	void _empezar_reglas();
 	void _parar(int tipo, int equipo, double x, double z, int64_t demora = 0);
-	int _elegir_ejecutor(int tipo, int equipo, double x, double z, int tipo_libre) const;
+	int _elegir_ejecutor(int tipo, int equipo, double x, double z, int tipo_libre, int excluir = -1) const;
 	int _tipo_de_libre(int equipo, double x, double z) const;
 	void _lugar_del_ejecutor();
 	void _marcar_parada();

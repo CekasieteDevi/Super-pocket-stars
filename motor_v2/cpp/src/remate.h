@@ -34,9 +34,9 @@ struct ParametrosRemate {
 	// Rapidez de salida (m/s) con el atributo en 0 y en 100 (relativo al
 	// nivel del partido): tiro para colocado, efecto y globo; golpe para el
 	// fuerte; cabezazo para la cabeza.
-	double colocado_min_ms = 16.0, colocado_max_ms = 21.0;
-	double fuerte_min_ms = 22.0, fuerte_max_ms = 29.0;
-	double efecto_min_ms = 19.0, efecto_max_ms = 24.0;
+	double colocado_min_ms = 19.0, colocado_max_ms = 25.0;
+	double fuerte_min_ms = 25.0, fuerte_max_ms = 33.0;
+	double efecto_min_ms = 22.0, efecto_max_ms = 28.0;
 	double cabeza_min_ms = 9.0, cabeza_max_ms = 14.0;
 	// Giro de costado del remate con efecto (rad/s).
 	double giro_efecto = 45.0;
@@ -44,8 +44,8 @@ struct ParametrosRemate {
 	double elevacion_globo = 0.7;
 	// Error del ángulo (desvío estándar, rad) con el atributo en 0; con 100
 	// es el 20%. El vertical es una fracción del horizontal.
-	double error_rad = 0.12;
-	double error_vertical = 0.6;
+	double error_rad = 0.15;
+	double error_vertical = 0.4;
 	double error_rapidez = 0.06;
 	// Cuánto multiplica el error cada tipo de golpe.
 	double error_tipo[TIPOS_REMATE] = { 0.8, 1.3, 1.1, 1.2, 1.4 };
@@ -54,11 +54,15 @@ struct ParametrosRemate {
 	double primera_ms = 25.0;
 	// Cruzarla hacia el lado del pie malo: hasta 1 + pie_malo.
 	double pie_malo = 0.5;
+	// El cabezazo con un rival encima: hasta 1 + cabeza_marcado.
+	double cabeza_marcado = 3.0;
+	// El remate de pie de primera con un rival encima: hasta 1 + primera_marcado.
+	double primera_marcado = 2.0;
 	// La pelota a la altura de la rodilla o más (volea): 1 + alto_factor.
 	double alto_factor = 0.5;
 	// Desde qué distancia al arco (m) remata de primera un receptor, y qué
 	// factor_geometria necesita.
-	double primera_geometria = 0.3;
+	double primera_geometria = 0.25;
 	// Clips (índices en los clips del cuerpo); los pone quien configura.
 	int clip_pie = -1;
 	int clip_efecto = -1;
@@ -84,7 +88,7 @@ enum ClipArquero : int {
 // reusan data/utility_pesos.json ("arquero"), los del motor espacial.
 struct ParametrosArquero {
 	// Lo que tarda en leer el remate: con reflejos 0 y con 100.
-	double reaccion_lenta_seg = 0.35, reaccion_rapida_seg = 0.12;
+	double reaccion_lenta_seg = 0.44, reaccion_rapida_seg = 0.21;
 	// Cuánto puede errarle la mano a la pelota en el piso y tocarla igual:
 	// con estirada 0 y con 100 (el ajuste de mano de la vista lo tapa).
 	double tolerancia_min_m = 0.25, tolerancia_max_m = 0.5;

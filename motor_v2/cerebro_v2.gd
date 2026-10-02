@@ -58,14 +58,19 @@ static func armar(local: Team, visitante: Team, semilla: int, reglas := false, t
 		if reglas:
 			c.configurar_reglas_equipo(e, FisicaV2.reglas_del_club(equipo))
 		var slots := Formaciones.slots(equipo.formacion)
+		# Etapa 7: el equipo que es mejor que el nivel del partido llega antes
+		# a todo. Es del equipo entero: por jugador, en un partido parejo el
+		# mejor corría a 11,4 m/s y el peor a 3,4.
+		var puntos := equipo.media_equipo() - nivel
+		var ventaja := FisicaV2.ventaja_de_nivel(puntos, nivel)
 		for i in mini(equipo.jugadores.size(), slots.size()):
-			var f := ficha_de(equipo.jugadores[i], str(slots[i]["rol"]), slots[i]["base"], nivel)
+			var f := ficha_de(equipo.jugadores[i], str(slots[i]["rol"]), slots[i]["base"], nivel, ventaja, puntos)
 			if reglas:
 				f["reglas"] = FisicaV2.reglas_de(equipo.jugadores[i], equipo, rival)
 			c.agregar(e, f)
 		if reglas:
 			for j in equipo.banco:
-				var f := ficha_de(j, str(j["posicion"]), Vector2.ZERO, nivel)
+				var f := ficha_de(j, str(j["posicion"]), Vector2.ZERO, nivel, ventaja, puntos)
 				f["reglas"] = FisicaV2.reglas_de(j, equipo, rival)
 				c.agregar_suplente(e, f)
 	c.empezar(CanchitaV2Nativa.PARTIDO, semilla)
@@ -91,12 +96,27 @@ static func plan_de(equipo: Team, rival: Team) -> Dictionary:
 ## Lo que necesitan el cuerpo (FisicaV2.jugador_de) y el cerebro: rol y
 ## casillero del slot, los atributos tal cual y relativos al nivel del partido
 ## (MatchEngine.relativo_al_nivel) y los rasgos que cambian decisiones.
-static func ficha_de(jugador: Dictionary, rol: String, base: Vector2, nivel: float) -> Dictionary:
+##
+## `ventaja` (etapa 7): FisicaV2.ventaja_de_nivel del equipo. Multiplica la
+## punta y la aceleración.
+## `puntos`: los puntos de media que el equipo le saca al nivel del partido.
+## Corren los pases y el control (FisicaV2.tecnica_de_nivel).
+static func ficha_de(jugador: Dictionary, rol: String, base: Vector2, nivel: float, ventaja := 1.0, puntos := 0.0) -> Dictionary:
 	var atributos: Dictionary = jugador["atributos"]
 	var f := FisicaV2.jugador_de(atributos)
+	f["vel_max"] = float(f["vel_max"]) * ventaja
+	f["aceleracion"] = float(f["aceleracion"]) * ventaja
+	var tecnica := FisicaV2.tecnica_de_nivel(puntos, nivel)
+	f["pases"] = clampf(float(f["pases"]) + tecnica, 0.0, 100.0)
+	f["control"] = clampf(float(f["control"]) + tecnica, 0.0, 100.0)
 	var relativos := {}
 	for clave in atributos:
 		relativos[clave] = MatchEngine.relativo_al_nivel(float(atributos[clave]), nivel)
+	# Etapa 7: los reflejos del arquero no son solo relativos al partido. El de
+	# primera reacciona antes que el de décima también en un partido parejo.
+	if relativos.has("reflejos"):
+		relativos["reflejos"] = lerpf(float(relativos["reflejos"]), float(atributos["reflejos"]),
+			float(FisicaV2.datos()["nivel"]["mezcla_reflejos"]))
 	f["rol"] = rol
 	f["base"] = base
 	f["atributos"] = atributos

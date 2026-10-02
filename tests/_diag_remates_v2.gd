@@ -12,7 +12,7 @@ extends SceneTree
 const SEED := 97000
 ## Las mismas parejas que _diag_embudo_remates.gd (división 0 = primera).
 const ESCENARIOS := [[0, 0], [0, 3], [4, 4], [4, 7], [9, 9], [9, 6]]
-const ESTILOS := [["Tiki taka", "Juego directo"], ["Presion alta", "Contragolpe"]]
+const ESTILOS := [["Tiki taka", "Juego directo"], ["Presión alta", "Contragolpe"]]
 
 
 func _init() -> void:

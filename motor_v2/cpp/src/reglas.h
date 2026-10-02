@@ -65,6 +65,8 @@ enum TipoEvento : int {
 
 struct EventoPartido {
 	int64_t paso = 0;
+	// El minuto del reloj mostrado (Canchita::minuto).
+	double minuto = 0.0;
 	int tipo = EV_SAQUE;
 	int equipo = 0;
 	// Ids de Player (FichaReglas.id); -1 si no aplica.
@@ -80,7 +82,19 @@ struct EventoPartido {
 // tests/test_reglas_v2.gd falla si se separan.
 struct ParametrosReglas {
 	// --- Reloj ---
+	// Lo que MUESTRA el reloj por tiempo. El partido dura de verdad
+	// segundos_tiempo por tiempo (MotorEspacial.SEGUNDOS_POR_MITAD): el reloj
+	// 0-90 es ficción, como en el motor espacial. Con 45 minutos de verdad
+	// (etapa 6) salían 35 goles, 115 remates y 1.146 pases por partido; los
+	// mismos 4 minutos del motor espacial dan 1,6, 5 y 51 (él: 1,5, 7 y 45).
+	// El reloj corre solo con la pelota en juego: en una pelota parada espera.
+	// Todo lo que está en minutos o en segundos de adición es del reloj
+	// mostrado.
 	double minutos_tiempo = 45.0;
+	double segundos_tiempo = 120.0;
+	// Segundos de verdad que sigue un tiempo cumplido si la jugada no está
+	// tranquila. TICKS_DE_DESCUENTO del motor espacial son 22,5 s.
+	double cierre_max_seg = 22.5;
 	// El tiempo agregado de cada tiempo: un mínimo, más lo que suma cada
 	// interrupción, hasta un tope.
 	double adicion_min_seg = 60.0;
@@ -144,16 +158,35 @@ struct ParametrosReglas {
 	// El que contiene a esto o menos de la pelota del rival se puede tirar a
 	// quitarla: chance por cada vez que piensa, por quite (0..100).
 	double entrada_dist_m = 2.0;
-	double entrada_prob = 0.6;
+	double entrada_prob = 0.55;
 	// El que ya tiene amarilla se tira con esta fracción de la chance.
 	double entrada_amonestado = 0.4;
 	// El pie de la entrada que pasa a esto del medio del rival le pega en
 	// las piernas: falta.
-	double falta_radio_m = 0.35;
+	double falta_radio_m = 0.42;
 	// Gravedad: la rapidez del que entra sobre esta, por 1 + desde_atras
 	// si entra de atrás.
-	double gravedad_rapidez_ms = 6.0;
+	// La gravedad del que entra a su punta (a media carrera, la mitad).
+	double gravedad_a_fondo = 1.2;
 	double gravedad_desde_atras = 1.0;
+	// Cuánto baja la chance de tirarse por cada 100% de punta que le saca al
+	// que lleva la pelota.
+	double entrada_sobrado = 0.0;
+	// La entrada que saca la pelota tumba al que la llevaba (sin falta) con
+	// esta chance, si está a menos de entrada_tumba_m de la pelota.
+	double entrada_tumba = 0.8;
+	double entrada_por_quite = -0.5;
+	// Hasta dónde llega la pierna de la entrada a la pelota (el control llega
+	// a toque.tolerancia_m).
+	double entrada_alcance_m = 0.45;
+	double entrada_tumba_m = 1.5;
+	// Por cuánto se multiplica la chance de tirarse en el área propia.
+	double entrada_en_area = 0.35;
+	// El radio de la falta crece con la torpeza del que entra: × (1 +
+	// falta_torpeza × (1 − (quite + barrida) / 200)).
+	double falta_torpeza = 1.5;
+	// Cuánto baja la chance de tirarse el que llega de atrás (1 = nunca).
+	double entrada_de_atras = 1.0;
 	// Dos que llegan a la misma pelota en el mismo paso: el que pierde le pega
 	// al otro con esta chance si su pie pasa por las piernas del rival.
 	double cruce_falta_prob = 0.3;
@@ -164,8 +197,8 @@ struct ParametrosReglas {
 	// Chance de amarilla y de roja directa por falta, con gravedad 1. Cada
 	// jugador la multiplica por su FichaReglas (árbitro, clásico,
 	// personalidad); la gravedad multiplica la amarilla y, al cuadrado, la roja.
-	double amarilla_por_falta = 0.18;
-	double roja_por_falta = 0.0036;
+	double amarilla_por_falta = 0.48;
+	double roja_por_falta = 0.0092;
 
 	// --- Lesiones ---
 	// La chance de lesión del que recibe la falta: FichaReglas.riesgo_lesion
