@@ -213,6 +213,8 @@ const NumeroReglas NUMEROS_REGLAS[] = {
 	{ "entrada_tumba_m", &motor_v2::ParametrosReglas::entrada_tumba_m },
 	{ "cruce_falta_prob", &motor_v2::ParametrosReglas::cruce_falta_prob },
 	{ "caido_seg", &motor_v2::ParametrosReglas::caido_seg },
+	{ "festejo_seg", &motor_v2::ParametrosReglas::festejo_seg },
+	{ "festejo_grupo", &motor_v2::ParametrosReglas::festejo_grupo },
 	{ "amarilla_por_falta", &motor_v2::ParametrosReglas::amarilla_por_falta },
 	{ "roja_por_falta", &motor_v2::ParametrosReglas::roja_por_falta },
 	{ "lesion_por_contacto", &motor_v2::ParametrosReglas::lesion_por_contacto },
@@ -314,7 +316,8 @@ void godot::leer_parametros_reglas(const Dictionary &d, const std::vector<String
 	} clips[] = { { "clip_lateral", &p.clip_lateral }, { "clip_lateral_prepara", &p.clip_lateral_prepara },
 		{ "clip_entrada", &p.clip_entrada }, { "clip_caer", &p.clip_caer }, { "clip_levantarse", &p.clip_levantarse },
 		{ "clip_lesionado", &p.clip_lesionado }, { "clip_saque_arco", &p.clip_saque_arco },
-		{ "clip_arquero_lanza", &p.clip_arquero_lanza }, { "clip_arquero_voleo", &p.clip_arquero_voleo } };
+		{ "clip_arquero_lanza", &p.clip_arquero_lanza }, { "clip_arquero_voleo", &p.clip_arquero_voleo },
+		{ "clip_festejar", &p.clip_festejar } };
 	for (auto &c : clips) {
 		if (d.has(c.clave)) {
 			*c.campo = indice(nombres, d[c.clave]);
@@ -935,6 +938,8 @@ Dictionary CanchitaV2Nativa::get_estado() const {
 		entrando.push_back(e);
 	}
 	d["entrando"] = entrando;
+	// El que festeja el gol (índice), -1 si no hay festejo.
+	d["festeja"] = _c.festeja();
 	d["parada"] = PARADAS[std::clamp(_c.parada_tipo(), 0, motor_v2::PARADAS - 1)];
 	d["ejecutor"] = _c.parada_ejecutor();
 	d["saca"] = _c.parada_equipo();

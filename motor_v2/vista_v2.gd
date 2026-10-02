@@ -69,6 +69,22 @@ const MEDIA_VUELTA_DESDE := deg_to_rad(150.0)
 const AJUSTE_ANTES_SEG := 0.15
 const AJUSTE_DESPUES_SEG := 0.1
 
+## Etapa 8: el estadio según la cancha del local
+## (VistaCancha.nivel_estadio_desde_calidad). Qué partes del modelo
+## (assets/3d/estadio.glb) no tiene cada nivel y cuánto se seca el pasto
+## (0 = el verde del modelo, 1 = COLOR_PASTO_SECO). "" o un nivel que no está
+## acá: el estadio entero.
+const ESTADIO_SIN := {
+	"potrero": ["Tribunas", "Torres_Luz", "Carteles"],
+	"barrial": ["Tribunas", "Torres_Luz"],
+	"regular": ["Torres_Luz"],
+}
+const PASTO_SECO := {"potrero": 0.5, "barrial": 0.35, "regular": 0.15}
+const COLOR_PASTO_SECO := Color("9a8a4a")
+const PARTES_ESTADIO := ["Tribunas", "Torres_Luz", "Carteles"]
+const MATERIALES_PASTO := ["Cesped", "Cesped_2"]
+var nivel_estadio := ""
+var _estadio: Node3D
 var _viewport: SubViewport
 var _mundo_3d: Node3D
 var _camara: Camera3D
@@ -107,6 +123,8 @@ var _sentido := PackedInt32Array()
 ## El rumbo que muestra cada modelo (ver _rumbo_mostrado).
 var _rumbo_modelo := PackedFloat32Array()
 var _rumbo_listo := false
+## Los que entraron en `recomponer` y todavía no tienen rumbo de modelo.
+var _sin_rumbo := {}
 var _andar: Array[String] = []
 var _centro := Vector2.ZERO
 var _tiempo := 0.0
@@ -174,11 +192,12 @@ func _ready() -> void:
 	_mundo_3d = Node3D.new()
 	_viewport.add_child(_mundo_3d)
 	_armar_ambiente()
-	var estadio: Node3D = (load(ESCENA_ESTADIO) as PackedScene).instantiate()
-	_mundo_3d.add_child(estadio)
-	Materiales3D.aplicar(estadio, {}, ["Arco_Red"])
-	Materiales3D.cortar_lado_camara(estadio, ProyeccionPartido.MEDIO_ANCHO + VistaCancha3D.DETRAS_DE_BANDA_M,
+	_estadio = (load(ESCENA_ESTADIO) as PackedScene).instantiate()
+	_mundo_3d.add_child(_estadio)
+	Materiales3D.aplicar(_estadio, {}, ["Arco_Red"])
+	Materiales3D.cortar_lado_camara(_estadio, ProyeccionPartido.MEDIO_ANCHO + VistaCancha3D.DETRAS_DE_BANDA_M,
 		VistaCancha3D.MATERIALES_PISO)
+	poner_estadio(nivel_estadio)
 	var fondo := MeshInstance3D.new()
 	var plano := PlaneMesh.new()
 	plano.size = Vector2(400.0, 400.0)
@@ -197,35 +216,10 @@ func _ready() -> void:
 		_sin_sombra_sol(_pelota)
 	if not con_jugadores:
 		return
-	var jugador := load(ESCENA_JUGADOR) as PackedScene
-	var golero := load(ESCENA_GOLERO) as PackedScene
-	var colores := ColoresClub.par("Atlético Prueba", "Deportivo Banco")
 	var numero := [0, 0]
 	for i in _cantidad():
-		var arquero := _es_arquero(i)
-		var equipo := _equipo(i)
-		numero[equipo] += 1
-		var p := Jugador3D.new(golero if arquero else jugador)
-		_mundo_3d.add_child(p)
-		var id := i if equipo == 0 else 1000 + i
-		if i < ids.size() and ids[i] >= 0:
-			id = ids[i]
-		var camiseta: Color = colores[equipo]
-		if arquero:
-			camiseta = Color("2f9e44") if equipo == 0 else Color("e8a33a")
-		if i < ropa.size():
-			var r: Dictionary = ropa[i]
-			p.colorear(r["camiseta"], r.get("short", Color.TRANSPARENT), r.get("pelo", Color("3b2618")))
-			p.poner_numero(int(r.get("numero", numero[equipo])))
-		else:
-			p.colorear(camiseta, Color(0, 0, 0, 0), Color("3b2618"))
-			p.poner_numero(numero[equipo])
-		p.poner_cara(Jugador3D.cara_de(id), Jugador3D.Gesto.NORMAL)
-		if not arquero:
-			p.poner_peinado(Jugador3D.peinado_de(id))
-		_jugadores.append(p)
-		if not personajes_con_sombra_sol:
-			_sin_sombra_sol(p)
+		numero[_equipo(i)] += 1
+		_jugadores.append(_crear_jugador(i, numero[_equipo(i)]))
 		_andar.append("Respirar")
 	_ciclos.resize(_cantidad())
 	_sentido.resize(_cantidad())
@@ -251,6 +245,121 @@ func _ready() -> void:
 		_cinta[nombre] = c
 		if c["bucle"]:
 			_metros_ciclo[nombre] = float(c["metros"])
+
+
+## Muestra el estadio del nivel `nivel`: saca las tribunas, las torres o los
+## carteles que ese nivel no tiene y seca el pasto.
+func poner_estadio(nivel: String) -> void:
+	nivel_estadio = nivel
+	if _estadio == null:
+		return
+	var sin: Array = ESTADIO_SIN.get(nivel, [])
+	for parte in PARTES_ESTADIO:
+		var nodo := _estadio.find_child(parte, true, false) as Node3D
+		if nodo != null:
+			nodo.visible = not sin.has(parte)
+	var seco := float(PASTO_SECO.get(nivel, 0.0))
+	for nodo in _estadio.find_children("*", "MeshInstance3D", true, false):
+		var mi := nodo as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		for i in mi.mesh.get_surface_count():
+			var original := mi.mesh.surface_get_material(i)
+			if original != null and original.resource_name in MATERIALES_PASTO:
+				var color := Materiales3D.color_de(original)
+				mi.set_surface_override_material(i, Materiales3D.toon_compartido(original.resource_name,
+					color.lerp(COLOR_PASTO_SECO, seco)))
+
+
+## El modelo del jugador `i`, con su ropa, su cara y su peinado. `numero`: el
+## que lleva si no hay `ropa` (los laboratorios).
+func _crear_jugador(i: int, numero: int) -> Jugador3D:
+	var arquero := _es_arquero(i)
+	var equipo := _equipo(i)
+	var p := Jugador3D.new(load(ESCENA_GOLERO if arquero else ESCENA_JUGADOR) as PackedScene)
+	_mundo_3d.add_child(p)
+	var id := i if equipo == 0 else 1000 + i
+	if i < ids.size() and ids[i] >= 0:
+		id = ids[i]
+	if i < ropa.size():
+		var r: Dictionary = ropa[i]
+		p.colorear(r["camiseta"], r.get("short", Color.TRANSPARENT), r.get("pelo", Color("3b2618")))
+		p.poner_numero(int(r.get("numero", numero)))
+	else:
+		var camiseta: Color = ColoresClub.par("Atlético Prueba", "Deportivo Banco")[equipo]
+		if arquero:
+			camiseta = Color("2f9e44") if equipo == 0 else Color("e8a33a")
+		p.colorear(camiseta, Color(0, 0, 0, 0), Color("3b2618"))
+		p.poner_numero(numero)
+	p.poner_cara(Jugador3D.cara_de(id), Jugador3D.Gesto.NORMAL)
+	if not arquero:
+		p.poner_peinado(Jugador3D.peinado_de(id))
+	if not personajes_con_sombra_sol:
+		_sin_sombra_sol(p)
+	return p
+
+
+## Etapa 8: cambian los que están en la cancha (un cambio, un expulsado que
+## termina de salir). Los que siguen conservan su modelo y lo que venían
+## haciendo; solo se arma el modelo del que entra. Armar la vista entera
+## (estadio y 22 modelos) trababa un cuadro 148 ms en el teléfono
+## (motor_v2/banco_etapa8.gd). Hace falta `ids` para saber quién es quién.
+func recomponer(equipos_n: PackedInt32Array, arqueros_n: PackedInt32Array, ids_n: PackedInt32Array, ropa_n: Array) -> void:
+	var viejo := {}
+	for i in mini(ids.size(), _jugadores.size()):
+		viejo[ids[i]] = i
+	var era_arquero := arqueros.duplicate()
+	var jugadores_v := _jugadores.duplicate()
+	var andar_v := _andar.duplicate()
+	var una_vez_v := _una_vez.duplicate()
+	var ciclos_v := _ciclos.duplicate()
+	var sentido_v := _sentido.duplicate()
+	var rumbo_v := _rumbo_modelo.duplicate()
+	var v_previa_v := _v_previa.duplicate()
+	var desacelera_v := _desacelera.duplicate()
+	var adelante_v := _adelante.duplicate()
+	equipos = equipos_n
+	arqueros = arqueros_n
+	ids = ids_n
+	ropa = ropa_n
+	var n := _cantidad()
+	_jugadores.clear()
+	_andar.clear()
+	_una_vez.clear()
+	for lista in [_ciclos, _sentido, _rumbo_modelo, _v_previa, _desacelera, _adelante, _sin_fundido]:
+		lista.resize(n)
+		lista.fill(0)
+	_corrido.clear()
+	_sin_rumbo.clear()
+	var usados := {}
+	for i in n:
+		var k: int = viejo.get(ids[i], -1)
+		# El que pasa a ser arquero (o deja de serlo) cambia de modelo.
+		if k >= 0 and (k < era_arquero.size() and era_arquero[k] == 1) == _es_arquero(i):
+			usados[k] = true
+			_jugadores.append(jugadores_v[k])
+			_andar.append(andar_v[k])
+			_una_vez.append(una_vez_v[k])
+			_ciclos[i] = ciclos_v[k]
+			_sentido[i] = sentido_v[k]
+			_rumbo_modelo[i] = rumbo_v[k]
+			_v_previa[i] = v_previa_v[k]
+			_desacelera[i] = desacelera_v[k]
+			_adelante[i] = adelante_v[k]
+		else:
+			_jugadores.append(_crear_jugador(i, 0))
+			_andar.append("Respirar")
+			_una_vez.append({})
+			# Aparece ya mirando adonde mira: sin el giro desde el rumbo 0.
+			_sin_fundido[i] = 1
+			_sin_rumbo[i] = true
+	for k in jugadores_v.size():
+		if not usados.has(k):
+			(jugadores_v[k] as Node).queue_free()
+	if _manchas != null:
+		_manchas.queue_free()
+		_manchas = SombrasRedondas.new(n + 1)
+		_mundo_3d.add_child(_manchas)
 
 
 func _cantidad() -> int:
@@ -761,6 +870,10 @@ func _rumbo_mostrado(i: int, rumbo: float, paso: Vector2, v: float, hace_gesto: 
 	var meta := rumbo
 	if not hace_gesto and v >= VistaCancha3D.VELOCIDAD_PARA_PIERNAS and paso.length_squared() > 1e-10:
 		meta = atan2(paso.x, paso.y) - float(ANGULO_DE_SENTIDO[_sentido[i]])
+	if _sin_rumbo.has(i):
+		_sin_rumbo.erase(i)
+		_rumbo_modelo[i] = meta
+		return meta
 	if not _rumbo_listo:
 		_rumbo_modelo[i] = meta
 		_rumbo_listo = i == _cantidad() - 1

@@ -7,7 +7,10 @@ extends Control
 ## partida.
 ##
 ## Argumentos (después de `--`): `semilla=N`, `division=N` (0 = primera),
-## `velocidad=N`, `capturas=carpeta` con `cada=segundos` y `dura=segundos`
+## `velocidad=N`, `cancha=N` (la calidad de la cancha del local, -8 a 3: cambia
+## el estadio), `saltar=pasos` (arranca con el partido ya en ese paso del motor; -1 = dos
+## segundos antes del primer gol),
+## `capturas=carpeta` con `cada=segundos` y `dura=segundos`
 ## (guarda imágenes y sale).
 
 const SEMILLA := 20261201
@@ -25,6 +28,8 @@ func _ready() -> void:
 	var semilla := SEMILLA
 	var division := 4
 	var velocidad := 1.0
+	var cancha := NAN
+	var saltar := 0
 	for arg in OS.get_cmdline_user_args():
 		var p := arg.split("=", true, 1)
 		if p.size() != 2:
@@ -33,6 +38,8 @@ func _ready() -> void:
 			"semilla": semilla = int(p[1])
 			"division": division = int(p[1])
 			"velocidad": velocidad = float(p[1])
+			"cancha": cancha = float(p[1])
+			"saltar": saltar = int(p[1])
 			"capturas": _capturas = p[1]
 			"cada": _cada = float(p[1])
 			"dura": _dura = float(p[1])
@@ -42,6 +49,8 @@ func _ready() -> void:
 		NivelDivision.realizacion(division))
 	var visitante: Team = Team.generar("Deportivo Banco", rng, 1000, NivelDivision.potencial(division), "Uruguay",
 		NivelDivision.realizacion(division))
+	if not is_nan(cancha):
+		local.calidad_cancha = cancha
 	var r: Dictionary = MotorV2.simular(local, visitante, rng, true)
 	print("[lab_partido] %s %d - %d %s, %d eventos" % [local.nombre, r["goles_local"], r["goles_visitante"],
 		visitante.nombre, (r["eventos"] as Array).size()])
@@ -49,6 +58,14 @@ func _ready() -> void:
 	add_child(_vista)
 	_vista.iniciar(r["receta_v2"], r["eventos"], local, visitante)
 	_vista.velocidad = velocidad
+	if saltar < 0:
+		# Negativo: hasta dos segundos antes del primer gol.
+		for ev in r["eventos"]:
+			if str(ev["resultado"]) == "gol":
+				saltar = maxi(int(ev["paso"]) - 120, 0)
+				break
+	if saltar > 0:
+		_vista._partido.simular(saltar)
 	_vista.hud.menu_pedido.connect(func(): get_tree().quit())
 	_vista.terminado.connect(func(): print("[lab_partido] terminado"))
 

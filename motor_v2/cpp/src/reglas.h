@@ -257,6 +257,12 @@ struct ParametrosReglas {
 	bool alargue = false;
 	double minutos_alargue = 15.0;
 	int tanda_pateadores = 5;
+	// Etapa 8, el festejo: después del gol el que lo hizo y los festejo_grupo
+	// - 1 compañeros más cercanos corren al banderín de ese lado y festejan
+	// hasta festejo_seg; después, corte al saque del medio. 0 = sin festejo
+	// (los 3 s de FESTEJO_PASOS caminando al medio).
+	double festejo_seg = 7.0;
+	double festejo_grupo = 4.0;
 
 	// Clips (índices en los clips del cuerpo); los pone quien configura.
 	int clip_lateral = -1;
@@ -268,6 +274,7 @@ struct ParametrosReglas {
 	int clip_saque_arco = -1;
 	int clip_arquero_lanza = -1;
 	int clip_arquero_voleo = -1;
+	int clip_festejar = -1;
 };
 
 // Lo que las reglas necesitan de cada jugador y no cambia en el partido.

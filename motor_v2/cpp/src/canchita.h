@@ -547,6 +547,8 @@ public:
 	int parada_equipo() const {
 		return _parada.activa ? _parada.equipo : -1;
 	}
+	// El índice del que festeja el gol, -1 si no hay festejo.
+	int festeja() const;
 	int parada_ejecutor() const {
 		return _parada.activa ? _parada.ejecutor : -1;
 	}
@@ -691,8 +693,15 @@ private:
 		int64_t llego_en = -1;
 		// Con tarjeta: el paso del corte al saque (-1 si no hay).
 		int64_t corte_en = -1;
+		// Etapa 8: hay festejo en el banderín (hasta reponer_en) y dónde.
+		bool festeja = false;
+		double festejo_x = 0.0, festejo_z = 0.0;
 	};
 	Parada _parada;
+	// Los que festejan (ids de Player): primero el que hizo el gol.
+	std::vector<int> _festejan;
+	void _empezar_festejo(int autor);
+	int _puesto_en_festejo(int i) const;
 	// Adónde va cada uno en la parada (si tiene_marca).
 	std::vector<double> _marca_x, _marca_z;
 	std::vector<char> _tiene_marca;

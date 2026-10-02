@@ -71,6 +71,13 @@ constexpr double LATERAL_LENTO_SEG = 17 * 0.25;
 // caminando (festejo).
 constexpr double FACTOR_MARCA = 0.9;
 constexpr double FACTOR_FESTEJO = 0.5;
+// Etapa 8, el festejo en el banderín: a cuánto de las dos rayas se para el
+// que hizo el gol y a cuánto de su lugar ya festeja.
+constexpr double FESTEJO_DEL_BANDERIN_M = 2.5;
+constexpr double FESTEJO_LLEGA_M = 1.0;
+// Dónde se para cada uno del grupo respecto del goleador: metros hacia el
+// medio de la cancha (a lo largo, a lo ancho).
+constexpr double FESTEJO_RONDA[5][2] = { { 0.0, 0.0 }, { 1.6, 0.3 }, { 0.4, 1.7 }, { 1.9, 1.8 }, { 3.0, 0.9 } };
 // Detrás de la pelota se para el ejecutor de un saque con el pie; en el
 // penal, a esto para tomar carrera.
 constexpr double DETRAS_DE_LA_PELOTA_M = 0.6;
@@ -591,6 +598,74 @@ void Canchita::_marcar_area(int ataca, int suben) {
 	}
 }
 
+// El festejo del gol: el goleador y los compañeros más cercanos van al
+// banderín del lado por donde fue el gol. La parada dura festejo_seg en vez
+// de FESTEJO_PASOS y termina con un corte al saque del medio.
+void Canchita::_empezar_festejo(int autor) {
+	const ParametrosReglas &r = param_reglas;
+	_festejan.clear();
+	if (autor < 0 || r.festejo_seg <= 0.0) {
+		return;
+	}
+	Parada &p = _parada;
+	int64_t extra = pasos_de(r.festejo_seg) - FESTEJO_PASOS;
+	if (extra > 0) {
+		p.reponer_en += extra;
+		p.minimo += extra;
+		p.tope += extra;
+	}
+	const JugadorCanchita &a = jugadores[size_t(autor)];
+	p.festeja = true;
+	p.festejo_x = _ataca(a.equipo) * (_medio_x() - FESTEJO_DEL_BANDERIN_M);
+	p.festejo_z = (a.cuerpo.z >= 0.0 ? 1.0 : -1.0) * (_medio_z() - FESTEJO_DEL_BANDERIN_M);
+	_festejan.push_back(_id(autor));
+	int cuantos = std::clamp(int(r.festejo_grupo), 1, 5);
+	std::vector<char> va(jugadores.size(), 0);
+	va[size_t(autor)] = 1;
+	for (int k = 1; k < cuantos; k++) {
+		int mejor = -1;
+		double d_mejor = 1e18;
+		for (size_t i = 0; i < jugadores.size(); i++) {
+			const JugadorCanchita &j = jugadores[i];
+			if (va[i] || j.equipo != a.equipo || j.arquero || paso < j.en_el_piso_hasta) {
+				continue;
+			}
+			double d = hipot(j.cuerpo.x - a.cuerpo.x, j.cuerpo.z - a.cuerpo.z);
+			if (d < d_mejor) {
+				d_mejor = d;
+				mejor = int(i);
+			}
+		}
+		if (mejor < 0) {
+			break;
+		}
+		va[size_t(mejor)] = 1;
+		_festejan.push_back(_id(mejor));
+	}
+}
+
+int Canchita::_puesto_en_festejo(int i) const {
+	int id = _id(i);
+	for (size_t k = 0; k < _festejan.size(); k++) {
+		if (_festejan[k] == id) {
+			return int(k);
+		}
+	}
+	return -1;
+}
+
+int Canchita::festeja() const {
+	if (!(reglas && _parada.activa && _parada.festeja) || _festejan.empty()) {
+		return -1;
+	}
+	for (size_t i = 0; i < jugadores.size(); i++) {
+		if (_id(int(i)) == _festejan[0]) {
+			return int(i);
+		}
+	}
+	return -1;
+}
+
 double Canchita::_distancia_parada(int i) const {
 	if (!(reglas && _parada.activa)) {
 		return jugadores[size_t(i)].equipo != equipo_con_pelota ? 5.0 : 0.0;
@@ -611,6 +686,26 @@ bool Canchita::_pensar_en_parada(int i) {
 		j.persigue = false;
 		j.toque = TOQUE_NADA;
 		c.ir_a(c.x, c.z, 0.3, true);
+		return true;
+	}
+	int puesto = p.festeja ? _puesto_en_festejo(i) : -1;
+	if (puesto >= 0) {
+		// Al banderín, y ahí festeja de cara a la tribuna.
+		j.persigue = false;
+		j.toque = TOQUE_NADA;
+		double sx = p.festejo_x >= 0.0 ? 1.0 : -1.0, sz = p.festejo_z >= 0.0 ? 1.0 : -1.0;
+		double tx = p.festejo_x - sx * FESTEJO_RONDA[puesto][0], tz = p.festejo_z - sz * FESTEJO_RONDA[puesto][1];
+		if (hipot(c.x - tx, c.z - tz) <= FESTEJO_LLEGA_M) {
+			c.ir_a(c.x, c.z, 0.3, true);
+			if (c.clip < 0 && param_reglas.clip_festejar >= 0 && c.rapidez() < 0.5) {
+				c.empezar(param_reglas.clip_festejar);
+			}
+		} else {
+			c.ir_a(tx, tz, 1.0, true);
+		}
+		c.mira = true;
+		c.mira_x = p.festejo_x + sx * 10.0;
+		c.mira_z = p.festejo_z + sz * 10.0;
 		return true;
 	}
 	if (i == p.ejecutor) {
@@ -659,6 +754,13 @@ bool Canchita::_avanzar_parada() {
 		pelota.poner({ p.x, param_pelota.radio, p.z }, {}, {});
 		p.repuesta = true;
 		_cambio = true;
+	}
+	if (p.festeja && paso >= p.reponer_en) {
+		// Terminó el festejo: corte al saque del medio (desde el banderín son
+		// 50 m hasta su mitad).
+		p.festeja = false;
+		_festejan.clear();
+		_cortar_al_saque();
 	}
 	if (p.corte_en >= 0 && paso >= p.corte_en) {
 		// Con roja, el corte espera a que el expulsado cruce la línea.

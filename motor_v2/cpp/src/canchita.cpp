@@ -3574,8 +3574,9 @@ void Canchita::_gol(int marca) {
 		return;
 	}
 	cuenta.goles[marca & 1]++;
+	int autor = -1;
 	if (reglas && modo == PARTIDO) {
-		int autor = _remate.activo && _remate.equipo == marca ? _id(_remate.pateador) : -1;
+		autor = _remate.activo && _remate.equipo == marca ? _id(_remate.pateador) : -1;
 		// El remate que se desvía en un rival (o da en el palo) y entra ya
 		// cerró como remate, pero el gol es del que pateó. Sin esto quedaba
 		// sin autor, como un gol en contra, y la tabla de goleadores no
@@ -3622,6 +3623,12 @@ void Canchita::_gol(int marca) {
 		// Etapa 6: festejo y después el saque del medio, con el que saca
 		// llegando a la pelota.
 		_parar(SAQUE_MEDIO, 1 - (marca & 1), 0.0, 0.0, FESTEJO_PASOS);
+		for (size_t i = 0; autor >= 0 && i < jugadores.size(); i++) {
+			if (_id(int(i)) == autor && jugadores[i].equipo == (marca & 1)) {
+				_empezar_festejo(int(i));
+				break;
+			}
+		}
 		return;
 	}
 	_saque_medio_en = paso + FESTEJO_PASOS;

@@ -141,6 +141,12 @@ func foco(tarjeta_seg: float) -> Variant:
 	var tarjeta := tarjeta_en_curso(tarjeta_seg)
 	if not tarjeta.is_empty():
 		return tarjeta["pos"]
+	# El festejo del gol: la cámara va con el que lo hizo.
+	var festeja := int(partido.get_estado().get("festeja", -1))
+	if festeja >= 0:
+		var en: PackedVector2Array = partido.get_pos()
+		if festeja < en.size():
+			return _girar(en[festeja])
 	var eventos: Array = partido.eventos()
 	for k in range(eventos.size() - 1, -1, -1):
 		var e: Dictionary = eventos[k]

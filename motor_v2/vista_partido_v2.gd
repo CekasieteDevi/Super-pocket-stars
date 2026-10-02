@@ -38,6 +38,8 @@ var _eventos: Array = []
 var _idx_evento := 0
 var _acumulado := 0.0
 var _composicion := PackedInt32Array()
+## El estadio del local (VistaV2.poner_estadio).
+var _nivel_estadio := ""
 var _terminado := true
 var _nombres: Dictionary = {}
 ## Lo que no cambia en el partido: el color de cada equipo, el del arquero y,
@@ -87,6 +89,7 @@ func iniciar(receta: Dictionary, eventos: Array, local: Team, visitante: Team) -
 	_parpadeo_restante = 0.0
 	_corte_visto = -1
 	_tarjeta_seg = float((receta["reglas"] as Dictionary).get("tarjeta_seg", 4.5))
+	_nivel_estadio = VistaCancha.nivel_estadio_desde_calidad(local.calidad_cancha)
 	_nombres = VistaPartido.construir_nombres(local, visitante)
 	var colores := ColoresClub.par_equipos(local, visitante)
 	_camisetas = [colores[0], colores[1]]
@@ -116,19 +119,37 @@ static func _corto(equipo: Team) -> String:
 	return corto if corto != "" else equipo.nombre
 
 
-## La vista tiene un Jugador3D por cada uno: si alguien entra o se va, se arma
-## de nuevo con los que hay (como motor_v2/laboratorio_reglas.gd).
+## La vista tiene un Jugador3D por cada uno. Si alguien entra o se va, la
+## vista cambia solo a esos (VistaV2.recomponer): armarla entera trababa un
+## cuadro 148 ms en el teléfono.
 func _rearmar_vista() -> void:
 	_visto.actualizar()
 	var ids := _visto.ids()
 	if ids == _composicion and vista != null:
 		return
 	_composicion = ids
-	var vieja := vista
+	var equipos := _visto.equipos()
+	var arqueros := _visto.arqueros()
+	var ropa := []
+	for i in ids.size():
+		var e := int(equipos[i])
+		var dato: Dictionary = _por_id.get(int(ids[i]), {})
+		ropa.append({
+			"camiseta": _arqueros[e] if int(arqueros[i]) == 1 else _camisetas[e],
+			"short": _shorts[e],
+			"pelo": dato.get("pelo", Color("3b2618")),
+			"numero": int(dato.get("numero", 0)),
+		})
+	if vista != null:
+		vista.recomponer(equipos, arqueros, ids, ropa)
+		vista.poner_estadio(_nivel_estadio)
+		return
 	vista = VistaV2.new()
-	vista.equipos = _visto.equipos()
-	vista.arqueros = _visto.arqueros()
+	vista.nivel_estadio = _nivel_estadio
+	vista.equipos = equipos
+	vista.arqueros = arqueros
 	vista.ids = ids
+	vista.ropa = ropa
 	# Como la vista del juego: sin la sombra del sol en los personajes y con
 	# una mancha debajo de cada uno (docs/motor_v2.md, etapa 0).
 	# En el teléfono, con el sol prendido solo para el estadio el banco de la
@@ -136,31 +157,10 @@ func _rearmar_vista() -> void:
 	vista.sombras = false
 	vista.sombras_redondas = true
 	vista.personajes_con_sombra_sol = false
-	var ropa := []
-	for i in ids.size():
-		var e := int(vista.equipos[i])
-		var dato: Dictionary = _por_id.get(int(ids[i]), {})
-		ropa.append({
-			"camiseta": _arqueros[e] if int(vista.arqueros[i]) == 1 else _camisetas[e],
-			"short": _shorts[e],
-			"pelo": dato.get("pelo", Color("3b2618")),
-			"numero": int(dato.get("numero", 0)),
-		})
-	vista.ropa = ropa
 	vista.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(vista)
-	# Atrás de todo: la vieja, el minimapa y el marcador quedan arriba.
+	# Atrás de todo: el minimapa y el marcador quedan arriba.
 	move_child(vista, 0)
-	if vieja != null:
-		vista.seguir_de(vieja)
-		_soltar(vieja)
-
-
-## La vista vieja tapa a la nueva hasta que la nueva dibujó su primer cuadro.
-func _soltar(vieja: VistaV2) -> void:
-	await get_tree().process_frame
-	await get_tree().process_frame
-	vieja.queue_free()
 
 
 func _fin() -> bool:
