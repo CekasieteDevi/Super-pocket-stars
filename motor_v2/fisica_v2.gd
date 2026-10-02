@@ -112,6 +112,13 @@ static func peso_del_nivel(nivel: float) -> float:
 	return pow(nivel / float(n["referencia"]), exponente)
 
 
+## Etapa 8: los puntos de media que valen los puntos de duelo de los
+## modificadores de equipo (MatchEngine.modificador_de_equipo).
+## data/fisica_v2.json, "nivel".
+static func puntos_de_modificador(puntos_de_duelo: float) -> float:
+	return float(datos()["nivel"].get("puntos_por_modificador", 0.0)) * puntos_de_duelo
+
+
 ## Etapa 7: puntos que se suman (o restan) a pases y control según cuántos
 ## puntos de media le saca el equipo al nivel del partido. data/fisica_v2.json,
 ## "nivel".

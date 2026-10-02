@@ -228,6 +228,31 @@ static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atri
 	return {"A": bloque_a, "B": bloque_b, "C": bloque_c, "D": bloque_d}
 
 
+## Los atributos de los duelos de un partido: los del que ataca y los del que
+## defiende. modificador_de_equipo promedia sobre todos.
+const ATRIBUTOS_DE_DUELO := ["control", "pases", "tiro", "cabezazo", "quite", "barrida", "salto", "reflejos"]
+## El minuto en que se miran los modificadores que cambian con el reloj.
+const MINUTO_MEDIO := 45
+
+
+## Lo que suman los bloques A a D de `equipo` contra `rival`, en puntos de
+## duelo, promediado entre los titulares y los atributos de duelo. Es para el
+## motor que no resuelve duelos (MotorV2): ahí la localía, la forma del día,
+## la armonía, la racha, la familiaridad táctica, el choque de estilos, el
+## clima, la cancha, el público y los rasgos entran una sola vez, al armar el
+## partido, como puntos de más o de menos del equipo (CerebroV2.receta).
+static func modificador_de_equipo(equipo: Team, rival: Team, rng: RandomNumberGenerator) -> float:
+	var total := 0.0
+	var cuantos := 0
+	for jugador in equipo.jugadores:
+		if not equipo.puede_jugar(int(jugador["id"])):
+			continue
+		for atributo in ATRIBUTOS_DE_DUELO:
+			total += Duel._mod_total(_bloques_equipo(equipo, rival, jugador, atributo, MINUTO_MEDIO, rng))
+			cuantos += 1
+	return total / float(cuantos) if cuantos > 0 else 0.0
+
+
 ## §2.3: tira riesgo de lesión para un jugador que acaba de participar en un
 ## duelo. No lo saca de la cancha al toque (eso requeriría parar el
 ## partido); queda indisponible para el resto de esta acción y de

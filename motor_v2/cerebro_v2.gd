@@ -72,6 +72,16 @@ static func receta(local: Team, visitante: Team, semilla: int, reglas := false, 
 	}
 	var nivel := MatchEngine.nivel_partido(local, visitante)
 	var equipos := [local, visitante]
+	# Los modificadores de equipo (localía, forma del día, armonía, racha,
+	# familiaridad, estilos, clima, público...). El motor no resuelve duelos:
+	# entran como puntos de media del que tiene más contra el que tiene menos.
+	# Con su propio azar (el clásico tira una variación): el del partido queda
+	# para el motor.
+	var azar := RandomNumberGenerator.new()
+	azar.seed = semilla
+	var modificador := [MatchEngine.modificador_de_equipo(local, visitante, azar),
+		MatchEngine.modificador_de_equipo(visitante, local, azar)]
+	var modificador_medio: float = (modificador[0] + modificador[1]) * 0.5
 	for e in 2:
 		var equipo: Team = equipos[e]
 		var rival: Team = equipos[1 - e]
@@ -81,7 +91,7 @@ static func receta(local: Team, visitante: Team, semilla: int, reglas := false, 
 		# Etapa 7: el equipo que es mejor que el nivel del partido llega antes
 		# a todo. Es del equipo entero: por jugador, en un partido parejo el
 		# mejor corría a 11,4 m/s y el peor a 3,4.
-		var puntos := equipo.media_equipo() - nivel
+		var puntos := equipo.media_equipo() - nivel + FisicaV2.puntos_de_modificador(modificador[e] - modificador_medio)
 		var ventaja := FisicaV2.ventaja_de_nivel(puntos, nivel)
 		for i in mini(equipo.jugadores.size(), slots.size()):
 			# El que no puede jugar (lesionado o suspendido) deja el puesto

@@ -134,6 +134,32 @@ func _init() -> void:
 					and int(c.get_estado()["paso"]) == int(r["stats"]["pasos"]),
 				"%s: la receta vuelve a dar el mismo partido" % texto)
 	_ok(cambios > 0, "en %d partidos hay cambios (%d)" % [PARTIDOS, cambios])
+
+	# Los modificadores de equipo: el mismo club corre más de local que de
+	# visitante, y más con la armonía a favor (MatchEngine.modificador_de_equipo).
+	var rng_m := RandomNumberGenerator.new()
+	rng_m.seed = SEED + 900
+	var a: Team = Team.generar("Local", rng_m, 0)
+	var b: Team = Team.generar("Visitante", rng_m, 1000)
+	a.reset_partido()
+	b.reset_partido()
+	a.armonia = 0.0
+	b.armonia = 0.0
+	a.local = true
+	b.local = false
+	var de_local := float(CerebroV2.receta(a, b, SEED, true)["titulares"][0][0]["vel_max"])
+	var azar := RandomNumberGenerator.new()
+	azar.seed = SEED
+	var ventaja := MatchEngine.modificador_de_equipo(a, b, azar) - MatchEngine.modificador_de_equipo(b, a, azar)
+	a.local = false
+	b.local = true
+	var de_visitante := float(CerebroV2.receta(a, b, SEED, true)["titulares"][0][0]["vel_max"])
+	a.armonia = 5.0
+	b.armonia = -5.0
+	var con_armonia := float(CerebroV2.receta(a, b, SEED, true)["titulares"][0][0]["vel_max"])
+	_ok(ventaja >= 5.0 and de_local > de_visitante and con_armonia > de_visitante,
+		"el local tiene %.1f puntos de duelo a favor y corre a %.2f m/s (de visitante, a %.2f; con la armonía a favor, a %.2f)" % [
+			ventaja, de_local, de_visitante, con_armonia])
 	_ok(relatados > PARTIDOS * 5, "el relato cuenta %d momentos" % relatados)
 	_ok(quites > PARTIDOS and centros > 0 and pases_con_minuto > PARTIDOS * 10,
 		"el relato tiene %d quites, %d centros y %d pases con su minuto" % [quites, centros, pases_con_minuto])

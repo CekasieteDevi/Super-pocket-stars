@@ -1358,8 +1358,19 @@ Cada estilo de local contra el Juego directo, 100 partidos:
 
    - Las de córner salen poco: hay 0,3 córners por equipo por partido. Su valor está en verse, como en el motor espacial.
    - La calibración (`tests/_diag_calibracion_v2.gd`) arma clubes sin jugadas: no cambia.
-6. **La biblioteca de Linux:** descartada (2026-10-02). El juego sale para Android y se desarrolla en Windows; la nube ya no se usa. Se sacaron la biblioteca, su entrada en `motor_v2.gdextension` y `motor_v2/cpp/zig`.
-7. **Revisión visual** en una partida de verdad: un partido de liga y uno de copa.
+6. **Los modificadores de equipo:** hecho (2026-10-02). El V2 no aplicaba los bloques A a D de `MatchEngine._bloques_equipo` (localía, forma del día, armonía, racha, familiaridad táctica, choque de estilos, clima, cancha, público, rasgos): el local sacaba −0,06 goles por partido y el motor espacial, +0,49. Ahora `MatchEngine.modificador_de_equipo` los promedia por equipo y `CerebroV2.receta` los suma a los puntos de media (`nivel.puntos_por_modificador` = 0,5 de `data/fisica_v2.json`). Medición: `tests/_diag_localia_v2.gd`.
+
+   | Diferencia de gol del local | Motor espacial | V2 |
+   | --- | --- | --- |
+   | Primera (300 y 600 partidos) | +0,55 | +0,56 |
+   | Quinta (400 y 1.000) | +0,49 | +0,55 |
+   | Décima (300 y 600) | +0,47 | +0,42 |
+   | Quinta, armonía +5 contra −5 | +1,36 | +1,56 |
+   | Quinta, armonía −5 contra +5 | −0,42 | −0,38 |
+
+   - Entran una sola vez, al armar el partido, y por equipo. Lo que el motor espacial aplicaba por duelo (la química de a pares, el rasgo del DT según el marcador y el minuto, el capitán) queda promediado.
+7. **La biblioteca de Linux:** descartada (2026-10-02). El juego sale para Android y se desarrolla en Windows; la nube ya no se usa. Se sacaron la biblioteca, su entrada en `motor_v2.gdextension` y `motor_v2/cpp/zig`.
+8. **Revisión visual** en una partida de verdad: un partido de liga y uno de copa.
 
 **Herramientas que acompañan todas las etapas:** un detector nuevo que mide sobre el mundo (no sobre la vista) `SALTO_PELOTA`, `ENCIMADOS` (cápsulas superpuestas), `PATINA` (pie que desliza), `ESPERA` (jugador quieto con la pelota viniendo a él) y ms por frame; y una grabación por semilla que se puede reproducir y rebobinar para ver cualquier minuto.
 
