@@ -1338,12 +1338,12 @@ Cada estilo de local contra el Juego directo, 100 partidos:
 3. **El relato:** no cuenta los quites ni los centros (el motor no los anota como eventos) y los pases no llevan el minuto.
 4. **La pantalla:** el estadio es siempre el mismo (no cambia con la cancha del local), no hay festejo en el banderín y los cambios traban un cuadro (148 ms).
 5. **Jugadas preparadas** (`core/jugadas.gd`): del V2 solo salen las paredes y el contragolpe; las de pelota parada no.
-6. **La biblioteca de Linux** sigue sin probarse.
+6. **La biblioteca de Linux:** descartada (2026-10-02). El juego sale para Android y se desarrolla en Windows; la nube ya no se usa. Se sacaron la biblioteca, su entrada en `motor_v2.gdextension` y `motor_v2/cpp/zig`.
 7. **Revisión visual** en una partida de verdad: un partido de liga y uno de copa.
 
 **Herramientas que acompañan todas las etapas:** un detector nuevo que mide sobre el mundo (no sobre la vista) `SALTO_PELOTA`, `ENCIMADOS` (cápsulas superpuestas), `PATINA` (pie que desliza), `ESPERA` (jugador quieto con la pelota viniendo a él) y ms por frame; y una grabación por semilla que se puede reproducir y rebobinar para ver cualquier minuto.
 
-**Dónde se hace cada etapa:** 0 (teléfono por adb) y 2 (Blender) en la PC del usuario; 1, 3, 4, 5, 6 y 7 se pueden hacer en la nube (Claude Cloud) con Godot sin pantalla; la revisión visual de cada etapa, en la PC.
+**Dónde se hace cada etapa:** todas en la PC del usuario. Las etapas 1 y 3 a 6 se hicieron en la nube (Linux); desde el 2026-10-02 la nube no se usa y no hay biblioteca de Linux.
 
 ## Cómo se escribe el C++
 
@@ -1352,7 +1352,7 @@ Reglas para todas las etapas. Salen de lo que midió la etapa 0.
 - **Todo el motor en C++.** Mundo, cuerpo, cerebro, reglas y registro van en `motor_v2/cpp/src/`. GDScript solo lee el estado (posiciones, acciones, eventos) para dibujar y contar. Nada de lógica del partido en GDScript.
 - **Paso fijo de 1/60 s** para mundo y cuerpo; el cerebro piensa cada 6 pasos, escalonado. Nada depende de los fps.
 - **Sin matemática del sistema.** Solo `std::sqrt` (IEEE 754 la redondea igual en todos lados). Seno, coseno y arcotangente salen de `matematica_fija.h`. Si hace falta otra (exp, pow, log), se escribe ahí con +, −, ×, ÷ y raíz. Sin esto, el mismo partido termina distinto en la PC y en Android.
-- **`-ffp-contract=off`** en todo lo que no compila MSVC (Android y Linux): sin eso clang junta a*b + c en una FMA que redondea distinto. Ya está en `SConstruct`.
+- **`-ffp-contract=off`** en todo lo que no compila MSVC (Android): sin eso clang junta a*b + c en una FMA que redondea distinto. Ya está en `SConstruct`.
 - **Un solo generador al azar,** el PCG32 propio de `MundoV2Nativo` (no el `RandomNumberGenerator` de Godot), consumido siempre en el mismo orden.
 - **Estado en `double`,** en arreglos planos. Nada de iterar contenedores sin orden fijo (`unordered_map`) en algo que cambia el partido.
 - **Parámetros en `data/fisica_v2.json`:** GDScript lee el JSON y se lo pasa al motor al crearlo. Así se calibran sin recompilar.
@@ -1363,19 +1363,8 @@ Reglas para todas las etapas. Salen de lo que midió la etapa 0.
 
 1. Instalá scons: `python -m pip install scons`.
 2. Cloná godot-cpp v10 fuera del repo: `git clone --depth 1 https://github.com/godotengine/godot-cpp` (en la PC está en `D:/dev-tools/godot-cpp`). Poné su ruta en la variable `GODOT_CPP`.
-3. Desde `motor_v2/cpp`, ejecutá `python -m SCons api_version=4.7 target=template_release platform=<windows|linux|android>` (Android además `arch=arm64 ANDROID_HOME=... ndk_version=28.2.13676358`).
-4. Para armar la de Linux desde Windows (etapa 7): bajá Zig (un compilador que cruza a Linux; en la PC está en `D:/dev-tools/zig-x86_64-windows-0.16.0`) y sumá `platform=linux custom_tools=<ruta completa a motor_v2/cpp/zig> ZIG=<ruta a zig.exe>`. `motor_v2/cpp/zig/linux.py` le dice a godot-cpp que compile con Zig contra glibc 2.31. En una PC con Linux no hace falta.
-5. La biblioteca sale en `motor_v2/bin/`. `SConstruct` compila `src/*.cpp` y `src/cerebro/*.cpp`. Después de agregar clases nuevas, ejecutá `<godot> --path . --headless --editor --quit` para que Godot las registre.
-
-### Trabajar en la nube
-
-La sesión en la nube es Linux y no tiene pantalla, teléfono ni Blender.
-
-1. Bajá Godot 4.7.2 para Linux: `https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip`.
-2. Armá la extensión con `platform=linux` (pasos de arriba). `motor_v2/bin/motor_v2.gdextension` ya tiene la entrada de Linux.
-3. Corré los tests sin pantalla: `<godot> --path . --headless --script tests/<archivo>.gd`, y la regresión con `GODOT=<godot> bash tests/correr_regresion.sh <n>`.
-4. No se puede: armar la biblioteca de Windows ni la de Android, probar en el teléfono ni mirar cómo se ve. Si cambia el C++, las de `motor_v2/bin/` quedan viejas: anotalo en el commit ("falta rearmar Windows y Android") y se rearman en la PC.
-5. Commit y push a `graficos-3d` como siempre (changelog y regresión antes del commit).
+3. Desde `motor_v2/cpp`, ejecutá `python -m SCons api_version=4.7 target=template_release platform=<windows|android>` (Android además `arch=arm64 ANDROID_HOME=... ndk_version=28.2.13676358`).
+4. La biblioteca sale en `motor_v2/bin/`. `SConstruct` compila `src/*.cpp` y `src/cerebro/*.cpp`. Después de agregar clases nuevas, ejecutá `<godot> --path . --headless --editor --quit` para que Godot las registre.
 
 ## Presupuesto para Android
 

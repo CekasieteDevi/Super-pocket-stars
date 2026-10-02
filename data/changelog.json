@@ -1,4 +1,5 @@
 [
+	{"version": "0.7.91", "fecha": "2026-10-02", "cambio": "El motor nuevo ya no trae la versión de Linux: el juego sale para Android y Windows."},
 	{"version": "0.7.90", "fecha": "2026-10-02", "cambio": "Tus partidos de liga y de copa ya se juegan y se ven con el motor nuevo."},
 	{"version": "0.7.89", "fecha": "2026-10-02", "cambio": "En el motor nuevo el partido dura 4 minutos, los jugadores llevan la pelota pegada al pie, cabecean, patean con el arco libre y barren, y cada estilo de juego se nota en la cancha."},
 	{"version": "0.7.88", "fecha": "2026-10-01", "cambio": "Las mejoras de juego del motor nuevo ya andan en los teléfonos Android."},
