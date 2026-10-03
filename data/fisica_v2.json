@@ -55,6 +55,7 @@
 		"arquero_tolerancia": "tolerancia_min_m a tolerancia_max_m: cuánto puede errarle la mano a la pelota en el piso según estirada (el ajuste de mano de la vista lo tapa). tolerancia_alto_m: de alto; las estiradas suman salto_estirada_m arriba (la vista las dibuja con el salto del motor actual, SALTO_VUELO_M 0,53). giro_alcance_rad: cuánto gira el cuerpo para llevar la mano a la pelota.",
 		"arquero_agarre": "Retenerla: agarre_base + agarre_por_atributo × agarre (0..1) − agarre_por_rapidez por m/s arriba de rapidez_comoda_ms − castigo_estirada si se tiró − castigo_borde × qué tan al borde de la tolerancia la tocó. Si no la retiene, rebote: sale con rebote_factor de la rapidez (mínimo rebote_min_ms) hacia la cancha y al costado. Con la punta (más allá de roce_desde de la tolerancia y la pelota rápida) no la despeja: la desvía roce_desvio_rad hacia afuera y sigue con roce_conserva de su rapidez.",
 		"arquero_linea": "Sin remate encima se para sobre la bisectriz pelota-arco, adelante de la línea linea_por_metro por cada metro que la pelota está del arco, entre linea_m y linea_max_m. Parado en su área tapa con el cuerpo y los brazos: la pelota rebota contra un cilindro de radio_cuerpo_m y alto_cuerpo_m (los de campo, con las piernas: toque.radio_piernas 0,2 m y alto_cuerpo 1,25 m). retiene_seg: cuánto la tiene en las manos antes de soltarla para jugar.",
+		"clip_levanta": "La estirada termina con el arquero tirado 1,3 m al costado de su lugar (la cadera del clip). Con la pelota fuera de juego o en sus manos se levanta con clip_levanta_der o clip_levanta_izq (Arquero_Levanta, 1,5 s): antes pasaba de tirado a parado en un cuadro. Con la pelota suelta en juego se para enseguida. En 200 partidos de quinta (semilla 97000): 2,21 goles por partido antes, 2,15 después.",
 		"brazo_desde": "En la estirada toca con el brazo entero, del hombro a la mano: desde brazo_desde del camino del cuerpo a la mano. Solo con la mano (a 1,4 m del cuerpo en Atajar_Volando) las pelotas que pasaban a 0,5-0,9 m no las tocaba ni parado (±0,5 m) ni tirado: en el laboratorio un rasante al medio desde 16 m que se abría a 0,9 m entraba con el arquero estirado.",
 		"reglas": "Etapa 6 (docs/motor_v2.md, 'Etapa 6 — Reglas y pelota parada'). Reloj de dos tiempos, reanudaciones, offside, faltas por contacto, tarjetas, lesiones, cambios y tanda. Lo que ya existía sale de donde estaba: rango_libre_*, angulo_minimo_tiro_libre, dist_libre_al_area y dist_para_colgar_lejos de data/utility_pesos.json (fisica); distancia_penal_m y radio_circulo_m del motor espacial; franjas, desgaste y umbrales de Cansancio; tarjetas de MatchEngine y Arbitro. FisicaV2.parametros_reglas() los junta. motor_v2/cpp/src/reglas.h tiene los mismos valores; tests/test_reglas_v2.gd falla si se separan.",
 		"reglas_reloj": "Etapa 7. El partido dura de verdad lo que dura en el motor espacial (MotorEspacial.SEGUNDOS_POR_MITAD, 2 minutos por tiempo) y el reloj muestra 0-90 (MINUTOS_MOSTRADOS_POR_MITAD): FisicaV2.parametros_reglas() pasa los dos. Con 45 minutos de verdad por tiempo salían 35 goles, 115 remates y 1.146 pases por partido. El reloj corre solo con la pelota en juego. adicion_*_seg, cambio_desde_min y el desgaste por minuto son del reloj mostrado: 60 s de adición son 2,7 s de verdad.",
@@ -272,7 +273,9 @@
 		"clip_vuela_der": "Atajar_Volando",
 		"clip_vuela_izq": "Atajar_Volando_Izq",
 		"clip_vuela_alta_der": "Atajar_Volando_Alto",
-		"clip_vuela_alta_izq": "Atajar_Volando_Alto_Izq"
+		"clip_vuela_alta_izq": "Atajar_Volando_Alto_Izq",
+		"clip_levanta_der": "Arquero_Levanta",
+		"clip_levanta_izq": "Arquero_Levanta_Izq"
 	},
 	"reglas": {
 		"adicion_min_seg": 60.0,

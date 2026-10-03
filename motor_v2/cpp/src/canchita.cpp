@@ -298,8 +298,12 @@ void Canchita::avanzar() {
 	bool con_reglas = reglas && modo == PARTIDO;
 	if (con_reglas && periodo == TERMINADO) {
 		// Terminó: cada uno frena donde está y la pelota sigue con la física.
-		for (JugadorCanchita &j : jugadores) {
-			j.cuerpo.paso(param_cuerpo, clips, PASO_SEG);
+		for (size_t i = 0; i < jugadores.size(); i++) {
+			int clip_antes = jugadores[i].cuerpo.clip;
+			jugadores[i].cuerpo.paso(param_cuerpo, clips, PASO_SEG);
+			if (jugadores[i].arquero && (jugadores[i].cuerpo.eventos & TERMINA_ACCION)) {
+				_levantarse(int(i), clip_antes);
+			}
 		}
 		if (_en_manos < 0) {
 			pelota.avanzar();
@@ -308,9 +312,14 @@ void Canchita::avanzar() {
 		return;
 	}
 	_pensar();
-	for (JugadorCanchita &j : jugadores) {
+	for (size_t i = 0; i < jugadores.size(); i++) {
+		JugadorCanchita &j = jugadores[i];
+		int clip_antes = j.cuerpo.clip;
 		j.rapidez_previa = j.cuerpo.rapidez();
 		j.cuerpo.paso(param_cuerpo, clips, PASO_SEG);
+		if (j.arquero && (j.cuerpo.eventos & TERMINA_ACCION)) {
+			_levantarse(int(i), clip_antes);
+		}
 	}
 	_separar_cuerpos();
 	// En las manos del arquero la pelota no es de la física: va con él hasta
@@ -3379,6 +3388,40 @@ void Canchita::_atajar(int i, double distancia) {
 	_desde_control = paso;
 	_visto_paso = paso + _reaccion_pasos;
 	_cambio = true;
+}
+
+// La estirada termina con el arquero tirado, 1,3 m al costado de su lugar
+// (la cadera del clip; el cuerpo no se movió). Si la pelota no está en juego
+// (gol, afuera, final) o la tiene en las manos, se levanta con
+// Arquero_Levanta, que arranca en esa pose y termina parado en su lugar.
+// Sin esto el modelo pasaba de tirado a parado en un cuadro (revisión del
+// 2026-10-03: "cuando le meten gol se para instantáneamente"). Con la pelota
+// suelta en juego se para enseguida, como antes: tirado 1,5 s no llegaría a
+// ningún rebote y cambiaría cuántos goles hay.
+void Canchita::_levantarse(int i, int clip_terminado) {
+	const ParametrosArquero &a = param_arquero;
+	if (clip_terminado < 0) {
+		return;
+	}
+	int levanta = -1;
+	if (clip_terminado == a.clips[ATAJA_VUELA_DER] || clip_terminado == a.clips[ATAJA_VUELA_ALTA_DER]) {
+		levanta = a.clip_levanta_der;
+	} else if (clip_terminado == a.clips[ATAJA_VUELA_IZQ] || clip_terminado == a.clips[ATAJA_VUELA_ALTA_IZQ]) {
+		levanta = a.clip_levanta_izq;
+	}
+	bool fuera_de_juego = reglas && modo == PARTIDO && (_parada.activa || periodo == TERMINADO);
+	if (levanta < 0 || !(fuera_de_juego || _en_manos == i)) {
+		return;
+	}
+	if (!jugadores[size_t(i)].cuerpo.empezar(levanta)) {
+		return;
+	}
+	if (_en_manos == i) {
+		// No la suelta ni la saca hasta estar parado.
+		int64_t parado = paso + int64_t(clips[size_t(levanta)].duracion / PASO_SEG + 0.5);
+		_suelta_en = std::max(_suelta_en, parado);
+		_reinicio_hasta = std::max(_reinicio_hasta, _suelta_en + REINICIO_PASOS);
+	}
 }
 
 // La pelota va en las manos, adelante del pecho y a la rapidez del arquero.

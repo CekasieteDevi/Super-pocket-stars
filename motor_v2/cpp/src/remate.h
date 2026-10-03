@@ -139,6 +139,10 @@ struct ParametrosArquero {
 	// se aleja de la línea (data/utility_pesos.json, "arquero").
 	double ventaja_base = 0.25, ventaja_por_metro = 0.02;
 	int clips[CLIPS_ARQUERO] = { -1, -1, -1, -1, -1, -1, -1 };
+	// Se levanta después de tirarse hacia su derecha o su izquierda
+	// (Arquero_Levanta: arranca en la pose en que cae la estirada, 1,3 m al
+	// costado, y termina parado en su lugar). Ver Canchita::_levantarse.
+	int clip_levanta_der = -1, clip_levanta_izq = -1;
 };
 
 // Busca la patada (velocidad y giro) que lleva la pelota desde `desde` hasta

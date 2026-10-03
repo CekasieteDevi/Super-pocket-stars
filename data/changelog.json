@@ -1,4 +1,5 @@
 [
+	{"version": "0.8.01", "fecha": "2026-10-03", "cambio": "El arquero que se tira y recibe un gol se levanta del piso en vez de aparecer parado de golpe."},
 	{"version": "0.8.00", "fecha": "2026-10-03", "cambio": "Los jugadores ya no arrastran los pies al conducir la pelota ni al cambiar de paso, y el arquero camina en vez de deslizarse por el arco."},
 	{"version": "0.7.99", "fecha": "2026-10-02", "cambio": "La prueba del teléfono anota qué pasa en cada cuadro lento."},
 	{"version": "0.7.98", "fecha": "2026-10-02", "cambio": "Se borraron el modo 2D, el laboratorio de animaciones y el motor viejo: todos tus partidos se juegan y se ven en 3D con el motor nuevo."},

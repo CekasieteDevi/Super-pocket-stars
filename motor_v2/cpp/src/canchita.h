@@ -837,6 +837,7 @@ private:
 	double _tolerancia(int i, int clip) const;
 	double _tolerancia_alto(int clip, bool arriba) const;
 	bool _es_estirada(int clip_arquero) const;
+	void _levantarse(int i, int clip_terminado);
 	double _alto_minimo(int clip_arquero, const Clip &k) const;
 	double _distancia_al_brazo(const JugadorCanchita &j, const Cuerpo &c, V3 mano, V3 a, V3 b) const;
 	// De su punta, lo que corre para acomodarse sin darse vuelta.

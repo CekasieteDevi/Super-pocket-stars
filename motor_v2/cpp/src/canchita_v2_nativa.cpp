@@ -396,6 +396,12 @@ void godot::leer_parametros_arquero(const Dictionary &d, const std::vector<Strin
 			p.clips[k] = indice(nombres, d[CLIPS_ARQUERO[k]]);
 		}
 	}
+	if (d.has("clip_levanta_der")) {
+		p.clip_levanta_der = indice(nombres, d["clip_levanta_der"]);
+	}
+	if (d.has("clip_levanta_izq")) {
+		p.clip_levanta_izq = indice(nombres, d["clip_levanta_izq"]);
+	}
 }
 
 void CanchitaV2Nativa::configurar_remate(const Dictionary &remate, const Dictionary &arquero) {
