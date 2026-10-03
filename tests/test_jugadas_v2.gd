@@ -123,9 +123,16 @@ func _init() -> void:
 		_ok(sacados >= 6 and del_elegido >= minimo,
 			"%s: el elegido por el club saca %d de %d" % [caso[0], del_elegido, sacados])
 
-	# El puente: el relato cuenta las jugadas.
+	# El puente: el relato cuenta las jugadas. La defensa adelantada se
+	# relata cuando el rival cae en offside (0,13 por partido): en 10
+	# partidos no salía una de cada cuatro veces y el test fallaba por la
+	# semilla. Sigue hasta verlas o hasta 40 partidos (0,5% de no verla).
 	var relatadas := {}
-	for n in 10:
+	var jugados := 0
+	for n in 40:
+		if relatadas.has(Jugadas.CONTRAPRESION) and relatadas.has(Jugadas.DEFENSA_ADELANTADA):
+			break
+		jugados += 1
 		var rng_p := RandomNumberGenerator.new()
 		rng_p.seed = SEED + 100 + n
 		var home: Team = Team.generar("Local", rng_p, 0)
@@ -141,7 +148,7 @@ func _init() -> void:
 				_ok(false, "el evento de jugada '%s' se puede relatar" % id)
 			relatadas[id] = int(relatadas.get(id, 0)) + 1
 	_ok(relatadas.has(Jugadas.CONTRAPRESION) and relatadas.has(Jugadas.DEFENSA_ADELANTADA),
-		"en 10 partidos el relato cuenta jugadas: %s" % str(relatadas))
+		"en %d partidos el relato cuenta jugadas: %s" % [jugados, str(relatadas)])
 	print("FALLOS=%d" % _fallos)
 	quit()
 

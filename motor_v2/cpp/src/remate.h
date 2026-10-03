@@ -37,7 +37,7 @@ struct ParametrosRemate {
 	double colocado_min_ms = 19.0, colocado_max_ms = 25.0;
 	double fuerte_min_ms = 25.0, fuerte_max_ms = 33.0;
 	double efecto_min_ms = 22.0, efecto_max_ms = 28.0;
-	double cabeza_min_ms = 9.0, cabeza_max_ms = 14.0;
+	double cabeza_min_ms = 13.0, cabeza_max_ms = 20.0;
 	// Giro de costado del remate con efecto (rad/s).
 	double giro_efecto = 45.0;
 	// Ángulo de salida del globo (rad): la rapidez la busca `apuntar`.
