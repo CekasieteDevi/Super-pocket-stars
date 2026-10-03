@@ -1,4 +1,5 @@
 [
+	{"version": "0.7.97", "fecha": "2026-10-02", "cambio": "En la tanda de penales todos patean al mismo arco y se convierten tantos penales como en el resto de la liga."},
 	{"version": "0.7.96", "fecha": "2026-10-02", "cambio": "En el motor nuevo los cÃ³rners, los tiros libres y los penales los patea el jugador que elegiste en Roles."},
 	{"version": "0.7.95", "fecha": "2026-10-02", "cambio": "En el motor nuevo vuelven a pesar la localía, la forma del día, la armonía, la racha y la familiaridad con la táctica."},
 	{"version": "0.7.94", "fecha": "2026-10-02", "cambio": "En el motor nuevo se ven todas las jugadas preparadas: córner corto, córner en bloque, amague de tiro libre, defensa adelantada y presión tras pérdida."},

@@ -1306,6 +1306,7 @@ void Canchita::_termina_saque(int i) {
 		_remate.penal = true;
 		if (p.tanda) {
 			_tanda_pateo = true;
+			_tanda_id = _id(i);
 		}
 	}
 }
@@ -2242,7 +2243,7 @@ bool Canchita::_avanzar_tanda() {
 	if (gol) {
 		goles_tanda[e]++;
 	}
-	_anotar(EV_PENAL_TANDA, e, -1, -1, gol ? 1 : 0, pelota.pos.x, pelota.pos.z);
+	_anotar(EV_PENAL_TANDA, e, _tanda_id, -1, gol ? 1 : 0, pelota.pos.x, pelota.pos.z);
 	_turno_tanda++;
 	int n = param_reglas.tanda_pateadores;
 	bool fin = false;

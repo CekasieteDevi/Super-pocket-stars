@@ -228,6 +228,7 @@ const NumeroReglas NUMEROS_REGLAS[] = {
 	{ "voleo_m", &motor_v2::ParametrosReglas::voleo_m },
 	{ "juega_m", &motor_v2::ParametrosReglas::juega_m },
 	{ "penal_adivina", &motor_v2::ParametrosReglas::penal_adivina },
+	{ "penal_error", &motor_v2::ParametrosReglas::penal_error },
 };
 const char *PARADAS[motor_v2::PARADAS] = { "nada", "saque_medio", "lateral", "saque_arco", "corner", "tiro_libre",
 	"penal" };

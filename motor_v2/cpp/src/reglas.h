@@ -271,6 +271,9 @@ struct ParametrosReglas {
 	bool alargue = false;
 	double minutos_alargue = 15.0;
 	int tanda_pateadores = 5;
+	// Etapa 8: multiplica el error del remate en el penal (también el de la
+	// tanda): se patea con la pelota quieta, sin nadie encima y ensayado.
+	double penal_error = 0.55;
 	// Etapa 8, el festejo: después del gol el que lo hizo y los festejo_grupo
 	// - 1 compañeros más cercanos corren al banderín de ese lado y festejan
 	// hasta festejo_seg; después, corte al saque del medio. 0 = sin festejo

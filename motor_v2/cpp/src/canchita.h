@@ -749,6 +749,9 @@ private:
 	std::vector<int> _orden_tanda[2];
 	int _turno_tanda = 0;
 	bool _tanda_pateo = false;
+	// Etapa 8: el id del que pateó el penal de la tanda en curso (para el
+	// evento y la lista de la tanda).
+	int _tanda_id = -1;
 	// Los que entraron y todavía no pisaron la cancha.
 	std::vector<int> _entrando;
 	// El arquero que saca con la mano o de voleo (arrancó el gesto).

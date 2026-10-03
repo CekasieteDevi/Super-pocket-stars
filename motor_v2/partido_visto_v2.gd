@@ -11,6 +11,12 @@ extends RefCounted
 
 var partido: Object
 var _signo := 1.0
+## En la tanda los dos equipos patean al mismo arco. El motor no cambia de
+## lado (cada uno patea al arco que ataca): la vista gira la cancha según quién
+## patea y hace un corte entre un penal y el otro. Sin esto la cámara cruzaba
+## la cancha en cada penal.
+var _signo_tanda := 1.0
+var _cortes_tanda := 0
 var _afuera: Array = []
 var _cantidad := 0
 
@@ -21,7 +27,16 @@ func _init(c: Object) -> void:
 
 ## Lee lo que cambia en el cuadro: el lado y los que se van.
 func actualizar() -> void:
-	_signo = -1.0 if int(partido.get_estado()["lado"]) == 1 else 1.0
+	var estado: Dictionary = partido.get_estado()
+	_signo = -1.0 if int(estado["lado"]) == 1 else 1.0
+	if str(estado["periodo"]) == "tanda":
+		# Se gira cuando se arma el penal, no mientras la pelota va al arco.
+		if str(estado["parada"]) == "penal":
+			var del_que_patea := 1.0 if int(estado["saca"]) == 0 else -1.0
+			if del_que_patea != _signo_tanda:
+				_signo_tanda = del_que_patea
+				_cortes_tanda += 1
+		_signo = _signo_tanda
 	_afuera = partido.get_afuera()
 	_cantidad = partido.cantidad()
 
@@ -199,7 +214,8 @@ func get_paso() -> int:
 
 ## Paso del último corte al saque después de una tarjeta (-1 si no hubo).
 func get_corte() -> int:
-	return int(partido.get_estado()["corte"])
+	# El giro de la tanda también es un corte (otro número cada vez).
+	return int(partido.get_estado()["corte"]) + _cortes_tanda * 10000000
 
 
 ## La última tarjeta para el árbitro (ArbitroV2): {paso, roja, pos}, con el

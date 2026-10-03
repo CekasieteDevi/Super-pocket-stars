@@ -3560,6 +3560,9 @@ void Canchita::_patear_al_arco(int i, bool de_primera, double apretado) {
 		patea = &de_penal;
 	}
 	double sigma = _error_remate(*patea, golpe, de_lado, desde.y, llega, apretado, cruce);
+	if (patea != &j) {
+		sigma *= param_reglas.penal_error;
+	}
 	rumbo += _azar.normal() * sigma;
 	elev += _azar.normal() * sigma * r.error_vertical;
 	double atributo = std::clamp(golpe == REMATE_CABEZA ? j.cabezazo : j.tiro, 0.0, 100.0);
