@@ -13,7 +13,7 @@ extends Control
 ## Imprime todo con el prefijo [banco_v2] (en el teléfono sale en logcat) y
 ## sale solo. La temperatura y la batería se leen por adb antes y después.
 ## Argumentos (después de `--`): `sin_vista=N` (5), `partidos=N` (3),
-## `velocidad=N` (1), `semilla=N`, `division=N` (4).
+## `velocidad=N` (1), `semilla=N`, `division=N` (4), `clavados=0`.
 
 const PREFIJO := "[banco_v2]"
 const SEMILLA := 20261008
@@ -40,6 +40,9 @@ var _ms_vista := 0.0
 var _escala := 1.0
 var _msaa := -1
 var _sin := PackedStringArray()
+## `clavados=0`: sin el pie clavado (Jugador3D.clavar_pies), para medir cuánto
+## le suma al código de la pantalla.
+var _clavados := true
 var _ms_motor := 0.0
 var _suma_ms_vista := 0.0
 var _peor_ms_vista := 0.0
@@ -75,6 +78,7 @@ func _ready() -> void:
 			"escala": _escala = float(p[1])
 			"msaa": _msaa = int(p[1])
 			"sin": _sin = p[1].split(",")
+			"clavados": _clavados = int(p[1]) != 0
 	print("%s etapa 8: %s, %s, %d núcleos, pantalla %s" % [PREFIJO, OS.get_name(), OS.get_model_name(),
 		OS.get_processor_count(), str(DisplayServer.screen_get_size())])
 	await get_tree().process_frame
@@ -136,9 +140,15 @@ func _siguiente_partido() -> void:
 		return
 	var c := _clubes(_semilla + 100 + _jugados)
 	var r: Dictionary = MotorV2.simular(c[0], c[1], c[2], true)
+	# El primer partido arma la malla de la cara y de cada peinado que aparece
+	# (Jugador3D._con_peinado): se anota cuánto de armar la pantalla es eso.
+	var desde := Time.get_ticks_usec()
+	var mallas_antes := Jugador3D.usec_mallas
 	_vista = VistaPartidoV2.new()
 	add_child(_vista)
 	_vista.iniciar(r["receta_v2"], r["eventos"], c[0], c[1])
+	print("%s   armar la pantalla del partido: %.0f ms, de eso las mallas de la cara y los peinados %.0f ms" % [PREFIJO,
+		float(Time.get_ticks_usec() - desde) / 1000.0, float(Jugador3D.usec_mallas - mallas_antes) / 1000.0])
 	_vista.velocidad = _velocidad
 	_vista.terminado.connect(_termino, CONNECT_ONE_SHOT)
 	# El banco avanza la pantalla a mano para medir cuánto tarda su código.
@@ -146,6 +156,7 @@ func _siguiente_partido() -> void:
 	RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
 	if _vista.vista != null:
 		var v: VistaV2 = _vista.vista
+		v.pies_clavados = _clavados
 		RenderingServer.viewport_set_measure_render_time(v._viewport.get_viewport_rid(), true)
 		v._viewport.scaling_3d_scale = _escala
 		if _msaa >= 0:

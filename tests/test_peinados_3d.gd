@@ -63,7 +63,7 @@ func _probar_glb(ruta: String) -> void:
 			sin_pelo += 1
 		# La malla trae solo los vértices que dibuja: la placa mueve con el
 		# esqueleto todos los de la malla, y con los 33.155 del GLB (los diez
-		# peinados) el teléfono se trababa (Jugador3D._compactar).
+		# peinados) el teléfono se trababa (Jugador3D._preparar).
 		var malla := (j.find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D).mesh
 		var datos := malla.surface_get_arrays(0)
 		var usados := {}

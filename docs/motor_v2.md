@@ -1412,10 +1412,60 @@ El usuario miró partidos en el teléfono (APK) y marcó ocho cosas. Cada arregl
 - **El arreglo.** `Jugador3D._compactar` arma la malla de cada peinado solo con los vértices que usa (unos 175 mil por cuadro en total). Se ve igual. `tests/test_peinados_3d.gd` lo controla.
 - **Cómo se mide de nuevo.** El banco se exporta como app aparte (`uy.cekasiete.bancov2`) con `run/main_scene` en `banco_etapa8.tscn` y los argumentos en `command_line/extra_args`. Argumentos nuevos: `fps=N`, `escala=N`, `msaa=N` y `sin=hud,minimapa,manchas,estadio,jugadores`. Cada cuadro lento anota el código de la pantalla, el motor, el dibujo en la CPU, la pelota y los triángulos.
 
+#### Resultado (2026-10-03): pie clavado, arquero que se levanta en juego y mallas más rápidas
+
+Cinco pendientes de la revisión del teléfono. Hecho en la PC y medido en el teléfono (ZTE Z2357N) con `banco_etapa8`.
+
+**1 y 2. El pie apoyado queda clavado en la cancha.** Derecho, los clips en cinta ya dejan quieto el pie apoyado. Se movía por tres causas: el modelo gira con el pie apoyado lejos del centro, la marcha cambia de dirección y los fundidos mezclan dos pasos.
+
+- **Pie clavado** (`Jugador3D.clavar_pies`): el pie apoyado queda en el punto de la cancha donde pisó y la pierna se dobla para llegar (IK de dos huesos, `_doblar_pierna`). La cadera baja hasta 5 cm si la pierna no alcanza. Si el pie queda a más de 10 cm de donde lo pone el clip, da un paso corto (0,12 s, levanta 4 cm).
+- **Cuándo un pie está apoyado** (`Jugador3D._apoyo_de`): sale de las pistas del clip. Apoyado es el pie que casi no se mueve contra el piso de la cinta (`avance_m`). Por la altura sola no se puede: en Caminar el pie en el aire sube 2 a 3 cm, menos que el pie de Trotar cuando despega.
+- **El modelo mira según el clip que muestra** (`VistaV2._rumbo_mostrado`): el clip de costado sigue hasta medio ciclo después de que cambia el sentido de la marcha. Con el modelo ya girando hacia adelante, las piernas andaban cruzadas (10° a 13° de desvío medio; ahora 1°).
+- **El giro de 90° va atado al fundido** (`VistaV2._giro_al_cambiar`): de costado a adelante el modelo gira lo mismo que pesa el clip nuevo.
+- **`Correr_Costado_Der` va medio ciclo corrido** (`Jugador3D.arranca_con_el_otro_pie`): es el espejo de `_Izq` y arranca con el otro pie. Al pasar a Trotar se fundían dos pasos con el pie cambiado.
+- **Solo en cámara:** la vista clava los pies de los que la cámara muestra (`VistaV2._en_camara`). Costo en la PC: el código de la pantalla pasa de 0,55 a 0,71 ms por cuadro (`tests/_diag_cuadros_lentos_v2.gd`).
+- **Costo en el teléfono** (un partido, `fps=60`, semilla 20261108): el código de la pantalla pasa de 3,73 ms por cuadro (`clavados=0`) a 4,25 y 4,27 ms (dos corridas). En los dos casos da 60,0 fps y 0 cuadros de más de 33 ms.
+- **Detector PATINA:** el suelo de cada clip arranca en el del clip (`Jugador3D.suelo_de`). Antes, hasta ver el clip entero contaba como apoyado el pie que iba por el aire.
+
+Un partido de quinta, semilla 20261201 (`tests/_diag_patina_partido_v2.gd`; `clavados=0` mide sin el pie clavado):
+
+| Pie apoyado | Antes | Después |
+| --- | --- | --- |
+| Correr_Costado_Izq / Der | 50% / 41% de lo que avanza el cuerpo | 5% / 4% |
+| Correr_Espaldas | 44% | 3% |
+| Caminar | 33% | 13% |
+| Trotar / Correr | 10% / 7% | 2% / 2% |
+| Media_Vuelta_Izq / Der | 40% / 38% | 7% / 7% |
+| Fundidos, todos | 2.035 m | 223 m |
+| De costado a Trotar (498 cambios) | 336 m (0,67 m por cambio) | 61 m (0,12 m) |
+
+En `laboratorio_cuerpo.tscn -- segundos=60` sin pantalla: de costado 1% y 2%, de espaldas 1%, Caminar 8% y los fundidos 0,48 m/s (antes 1,2). Pasan el umbral del 15%. Test: `tests/test_vista_cinta_v2.gd` (de costado a adelante y caminando con cambios de rumbo).
+
+**3. El arquero que da rebote se levanta.** Con la pelota en juego el motor lo para enseguida para que llegue al rebote (`Canchita::_levantarse`). El modelo pasaba de tirado, con la cadera 1,3 m al costado, a parado en 0,15 s. Ahora la vista le hace el final de `Arquero_Levanta` en 0,5 s (`VistaV2.LEVANTA_RAPIDA_SEG`). El modelo se queda donde cayó y alcanza al cuerpo al apoyar el pie. El motor no cambia: los goles son los mismos y no hay que rearmar las bibliotecas. Test: `tests/test_vista_cinta_v2.gd`.
+
+**4. La salida del arquero a los centros tiene test.** `tests/test_arquero_salidas_v2.gd`: un arquero solo y un centro que cae al área chica, diez semillas por caso. Al centro a la altura de las manos (1,2 y 1,8 m) salen el de achique 100 y el de achique 0 y lo tocan. Al que pasa por arriba (2,7 y 3,1 m) el de achique 100 no sale y al de achique 0 le pasa por arriba las diez veces.
+
+**5. Las mallas de la cara y los peinados.** El primer partido arma la malla de cada peinado que aparece. `Jugador3D._preparar` arma una sola vez lo que comparten todos (el cuerpo sin la cara modelada) y cada peinado solo suma su pelo. Antes cada peinado recorría la malla entera. Las mallas son las mismas, triángulo por triángulo.
+
+| En la PC (`tests/_diag_mallas_3d.gd`) | Antes | Después |
+| --- | --- | --- |
+| Armar la pantalla del primer partido | 183 ms | 88 ms |
+| De eso, las mallas (10 peinados y el arquero) | 160 ms | 53 ms |
+| Armar la pantalla del segundo partido | 23 ms | 23 ms |
+
+| En el teléfono (`banco_etapa8`, `partidos=2 velocidad=16`) | Antes | Después |
+| --- | --- | --- |
+| Armar la pantalla del primer partido | 951 ms | 405 a 437 ms (tres corridas) |
+| De eso, las mallas | sin dato (unos 780 ms: la diferencia) | 255 a 259 ms |
+| Armar la pantalla del segundo partido | 70 ms | 66 ms |
+
+El banco anota la medida en la línea "armar la pantalla del partido".
+
 **Qué falta:**
 
-1. Los fundidos al cambiar de sentido (de costado a adelante) todavía arrastran el pie: el modelo gira 90° con el pie apoyado lejos del centro.
-2. Revisión visual de esta vuelta en el teléfono.
+1. Revisión visual de esta vuelta en el teléfono.
+2. `Giro_90_Izq/Der` con el cuerpo andando (0,2 a 0,3 m/s) todavía desliza: 35 m por partido.
+3. `Trotar -> Frenada` entra sin esperar el pie del clip: 17 m por partido.
 
 **Herramientas que acompañan todas las etapas:** un detector nuevo que mide sobre el mundo (no sobre la vista) `SALTO_PELOTA`, `ENCIMADOS` (cápsulas superpuestas), `PATINA` (pie que desliza), `ESPERA` (jugador quieto con la pelota viniendo a él) y ms por frame; y una grabación por semilla que se puede reproducir y rebobinar para ver cualquier minuto.
 

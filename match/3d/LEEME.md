@@ -41,7 +41,17 @@ historial de git (este archivo hasta la versión 0.7.96).
   del contacto. Lo arma `VistaV2._piernas_de_carrera`.
 - El arquero está en guardia solo casi quieto; andando usa los clips en
   cinta, también de costado y de espaldas.
-- `tests/_diag_patina_partido_v2.gd` mide el patinaje por clip en un partido.
+- `Jugador3D.clavar_pies`: el pie apoyado queda clavado en el punto de la
+  cancha donde pisó y la pierna se dobla para llegar. Va después de `poner`,
+  solo para los que la cámara muestra. `_apoyo_de` saca de las pistas del clip
+  qué pie está apoyado en cada cuadro.
+- El modelo mira según el clip que muestra. Al cambiar de sentido (de
+  costado a adelante) gira los 90° junto con el fundido
+  (`VistaV2._giro_al_cambiar`).
+- El arquero que se tiró y sigue jugando se levanta con el final de
+  `Arquero_Levanta` en 0,5 s. Lo hace la vista: el motor ya lo tiene parado.
+- `tests/_diag_patina_partido_v2.gd` mide el patinaje por clip en un partido
+  (`clavados=0`: sin el pie clavado).
 
 ## Laboratorios
 
@@ -57,7 +67,7 @@ atlas `assets/3d/caras.png`, 20 caras (filas) por 5 gestos (columnas):
 normal, feliz, dolor, triste y parpadeo. Lo genera `tools/generar_caras.py`
 (Python con Pillow); `--muestra ruta.png` guarda una hoja para revisar.
 
-- `Jugador3D._con_cara` saca de la malla la cara modelada (plano y cachetes
+- `Jugador3D._preparar` saca de la malla la cara modelada (plano y cachetes
   arriba de 1.15 m) y le da a la piel de la cabeza el UV2 del rectángulo
   `RECT_CARA` visto de frente. El alfa del color del vértice marca el frente:
   sin eso la cara salía también en la nuca. Se hace una vez por malla.

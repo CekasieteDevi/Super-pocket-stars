@@ -74,12 +74,14 @@ const ESPALDA_NORMAL_Z := -0.2
 const CANTIDAD_PEINADOS := 10
 const PEINADO_OFICIAL := 2
 
-## Color de piel de cada malla, leído una vez de sus vértices.
-static var _pieles := {}
-## Malla original -> la misma sin la cara modelada y con el UV2 de la cara.
-static var _mallas_con_cara := {}
-## Malla con cara -> {peinado: la misma con solo ese peinado}.
+## Malla del GLB -> lo que se arma una sola vez con ella (ver _preparar).
+static var _preparadas := {}
+## Malla del GLB -> {peinado: la malla de ese peinado}.
 static var _mallas_con_peinado := {}
+## Microsegundos que llevó armar mallas desde que arrancó el juego: el primer
+## partido arma la de cada peinado que aparece. Lo lee el banco del teléfono
+## (motor_v2/banco_etapa8.gd) y tests/_diag_mallas_3d.gd.
+static var usec_mallas := 0
 
 var _material: ShaderMaterial
 var _mallas: Array[MeshInstance3D] = []
@@ -203,9 +205,11 @@ func _init(escena: PackedScene) -> void:
 		Vector2(1.0 / float(Gesto.size()), 1.0 / float(CANTIDAD_CARAS)))
 	for nodo in modelo.find_children("*", "MeshInstance3D", true, false):
 		var mi := nodo as MeshInstance3D
-		_material.set_shader_parameter("piel", _piel_de(mi.mesh))
+		var desde := Time.get_ticks_usec()
+		_material.set_shader_parameter("piel", _preparar(mi.mesh)["piel"])
+		usec_mallas += Time.get_ticks_usec() - desde
 		_mallas.append(mi)
-		_mallas_base.append(_con_cara(mi.mesh))
+		_mallas_base.append(mi.mesh)
 		mi.material_override = _material
 	poner_peinado(0)
 	poner_cara(0, Gesto.NORMAL)
@@ -304,29 +308,152 @@ func poner_cara(n: int, g: int, segundos: float = -1.0) -> void:
 		Vector2(float(g) / float(Gesto.size()), float(n) / float(CANTIDAD_CARAS)))
 
 
-## La malla del GLB trae la cara modelada (ojos, boca, lengua y cachetes)
-## y es una sola para todos. Se saca esa geometría y a la piel de la cara se
-## le da el UV2 del rectángulo RECT_CARA y, en el alfa del color, si mira al
-## frente. La espalda de la camiseta, igual con RECT_NUMERO (el dorsal). Se
-## hace una vez por malla: los 22 jugadores comparten el resultado.
-static func _con_cara(malla: Mesh) -> Mesh:
-	if _mallas_con_cara.has(malla):
-		return _mallas_con_cara[malla]
+## La malla de `malla` (la del GLB) para el peinado `n`: sin la cara
+## modelada, sin el pelo de los otros peinados y solo con los vértices que
+## usa. Se hace una vez por malla y peinado: los que tienen el mismo peinado
+## comparten el resultado.
+static func _con_peinado(malla: Mesh, n: int) -> Mesh:
+	if not _mallas_con_peinado.has(malla):
+		_mallas_con_peinado[malla] = {}
+	var hechas: Dictionary = _mallas_con_peinado[malla]
+	if hechas.has(n):
+		return hechas[n]
+	var desde := Time.get_ticks_usec()
+	var base := _preparar(malla)
+	var datos: Array = base["datos"]
+	var total: int = base["total"]
+	# El cuerpo ya está juntado: acá se suman los vértices del pelo.
+	var nuevo_de: PackedInt32Array = (base["nuevo_de"] as PackedInt32Array).duplicate()
+	var cuantos: int = base["cuantos"]
+	var pelo: PackedInt32Array = base["pelo"][n] if n < (base["pelo"] as Array).size() else PackedInt32Array()
+	var viejos := PackedInt32Array()
+	var indices_pelo := PackedInt32Array()
+	indices_pelo.resize(pelo.size())
+	for k in pelo.size():
+		var v := pelo[k]
+		if nuevo_de[v] < 0:
+			nuevo_de[v] = cuantos + viejos.size()
+			viejos.append(v)
+		indices_pelo[k] = nuevo_de[v]
+	var del_pelo := _juntar(datos, viejos, total)
+	_marcar_cara_y_dorsal(del_pelo, false)
+	var salida: Array = base["cuerpo"]
+	salida = salida.duplicate()
+	for a in salida.size():
+		if a != Mesh.ARRAY_INDEX and salida[a] != null:
+			salida[a] = salida[a].duplicate()
+			salida[a].append_array(del_pelo[a])
+	var indices: PackedInt32Array = (base["indices"] as PackedInt32Array).duplicate()
+	indices.append_array(indices_pelo)
+	salida[Mesh.ARRAY_INDEX] = indices
+	var nueva := ArrayMesh.new()
+	nueva.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, salida, [], {},
+		malla.surface_get_format(0) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS)
+	hechas[n] = nueva
+	usec_mallas += Time.get_ticks_usec() - desde
+	return nueva
+
+
+## Lo que se arma una sola vez con la malla del GLB, que es una para todos y
+## trae la cara modelada (ojos, boca, lengua y cachetes) y el pelo de los diez
+## peinados: 33.155 vértices, y cada jugador usa de 4.900 a 10.000.
+## - `cuerpo` e `indices`: lo que dibujan todos (sin la cara modelada y sin
+##   pelo), solo con los vértices que usa. La placa mueve con el esqueleto
+##   TODOS los vértices de la malla en cada cuadro, se dibujen o no: con 23
+##   personajes y la malla entera eran 760 mil por cuadro. En el teléfono
+##   (Mali-G57) no terminaba los cuadros con todos amontonados en el área y
+##   la pantalla se trababa 35 a 80 ms (medido con motor_v2/banco_etapa8.gd y
+##   simpleperf: el hilo esperaba un buffer libre).
+## - `pelo`: los triángulos de cada peinado, para sumarlos en _con_peinado.
+## - `piel`: el color de cualquier vértice de tipo piel. Hace falta aparte
+##   porque los cachetes se mezclan sobre ella.
+## Antes cada peinado recorría la malla entera (los 61 mil triángulos y los 33
+## mil vértices): armar la cara y los once peinados de un partido llevaba
+## 166 ms en la PC; así, 56 (tests/_diag_mallas_3d.gd).
+static func _preparar(malla: Mesh) -> Dictionary:
+	if _preparadas.has(malla):
+		return _preparadas[malla]
 	var datos := malla.surface_get_arrays(0)
+	var uv: PackedVector2Array = datos[Mesh.ARRAY_TEX_UV]
+	var indices: PackedInt32Array = datos[Mesh.ARRAY_INDEX]
+	var total := uv.size()
+	var uv2 := PackedVector2Array()
+	uv2.resize(total)
+	datos[Mesh.ARRAY_TEX_UV2] = uv2
+	# Por vértice: 0 lo dibujan todos, 1 es de la cara modelada (no se dibuja),
+	# 2 + n es pelo del peinado n. El pelo se marca recién al sumarlo.
+	var de := _marcar_cara_y_dorsal(datos, true)
+	var piel := Color.WHITE
+	var colores: PackedColorArray = datos[Mesh.ARRAY_COLOR]
+	for i in total:
+		if de[i] != 0:
+			continue
+		if roundi(uv[i].x) == TIPO_PIEL:
+			piel = Color(colores[i], 1.0)
+			break
+	var pelo := []
+	for n in CANTIDAD_PEINADOS:
+		pelo.append(PackedInt32Array())
+	var nuevo_de := PackedInt32Array()
+	nuevo_de.resize(total)
+	nuevo_de.fill(-1)
+	var viejos := PackedInt32Array()
+	var del_cuerpo := PackedInt32Array()
+	for t in range(0, indices.size(), 3):
+		var a := indices[t]
+		var b := indices[t + 1]
+		var c := indices[t + 2]
+		if de[a] == 1 or de[b] == 1 or de[c] == 1:
+			continue
+		if de[a] >= 2:
+			if de[a] - 2 < CANTIDAD_PEINADOS:
+				var del_peinado: PackedInt32Array = pelo[de[a] - 2]
+				del_peinado.append(a)
+				del_peinado.append(b)
+				del_peinado.append(c)
+			continue
+		# Vértice por vértice y sin armar una lista por triángulo: son 61 mil.
+		if nuevo_de[a] < 0:
+			nuevo_de[a] = viejos.size()
+			viejos.append(a)
+		if nuevo_de[b] < 0:
+			nuevo_de[b] = viejos.size()
+			viejos.append(b)
+		if nuevo_de[c] < 0:
+			nuevo_de[c] = viejos.size()
+			viejos.append(c)
+		del_cuerpo.append(nuevo_de[a])
+		del_cuerpo.append(nuevo_de[b])
+		del_cuerpo.append(nuevo_de[c])
+	var preparada := {"datos": datos, "total": total, "cuerpo": _juntar(datos, viejos, total), "indices": del_cuerpo,
+		"nuevo_de": nuevo_de, "cuantos": viejos.size(), "pelo": pelo, "piel": piel}
+	_preparadas[malla] = preparada
+	return preparada
+
+
+## A la piel de la cara le da el UV2 del rectángulo RECT_CARA y, en el alfa
+## del color, si mira al frente. A la espalda de la camiseta, igual con
+## RECT_NUMERO (el dorsal). Devuelve, por vértice, 0 si se dibuja, 1 si es de
+## la cara modelada y 2 + n si es pelo del peinado n. Con `saltea_pelo` deja
+## el pelo sin tocar (25 mil de los 33 mil vértices de la malla).
+static func _marcar_cara_y_dorsal(datos: Array, saltea_pelo: bool) -> PackedByteArray:
 	var pos: PackedVector3Array = datos[Mesh.ARRAY_VERTEX]
 	var normales: PackedVector3Array = datos[Mesh.ARRAY_NORMAL]
 	var uv: PackedVector2Array = datos[Mesh.ARRAY_TEX_UV]
 	var colores: PackedColorArray = datos[Mesh.ARRAY_COLOR]
-	var indices: PackedInt32Array = datos[Mesh.ARRAY_INDEX]
-	var uv2 := PackedVector2Array()
-	uv2.resize(pos.size())
-	var de_la_cara := PackedByteArray()
-	de_la_cara.resize(pos.size())
+	var uv2: PackedVector2Array = datos[Mesh.ARRAY_TEX_UV2]
+	var de := PackedByteArray()
+	de.resize(pos.size())
 	for i in pos.size():
+		if uv[i].y < -0.5:
+			de[i] = 2 + (-roundi(uv[i].y) - 1)
+			if saltea_pelo:
+				continue
 		var tipo := roundi(uv[i].x)
 		var en_cabeza := pos[i].y > CARA_DESDE_Y
 		# El plano también pinta las líneas del escudo, pero ese va en el pecho.
-		de_la_cara[i] = 1 if en_cabeza and (tipo == TIPO_PLANO or tipo == TIPO_CACHETES) else 0
+		if en_cabeza and (tipo == TIPO_PLANO or tipo == TIPO_CACHETES):
+			de[i] = 1
 		uv2[i] = Vector2((pos[i].x - RECT_CARA.position.x) / RECT_CARA.size.x,
 			(RECT_CARA.end.y - pos[i].y) / RECT_CARA.size.y)
 		var c := colores[i]
@@ -337,65 +464,14 @@ static func _con_cara(malla: Mesh) -> Mesh:
 				(RECT_NUMERO.end.y - pos[i].y) / RECT_NUMERO.size.y)
 			c.a = 1.0
 		colores[i] = c
-	var sin_cara := PackedInt32Array()
-	for t in range(0, indices.size(), 3):
-		if de_la_cara[indices[t]] == 0 and de_la_cara[indices[t + 1]] == 0 and de_la_cara[indices[t + 2]] == 0:
-			sin_cara.append_array([indices[t], indices[t + 1], indices[t + 2]])
 	datos[Mesh.ARRAY_COLOR] = colores
 	datos[Mesh.ARRAY_TEX_UV2] = uv2
-	datos[Mesh.ARRAY_INDEX] = sin_cara
-	var nueva := ArrayMesh.new()
-	nueva.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, datos)
-	_mallas_con_cara[malla] = nueva
-	return nueva
+	return de
 
 
-## La malla sin el pelo de los otros peinados. Se hace una vez por malla y
-## peinado: los que tienen el mismo peinado comparten el resultado.
-static func _con_peinado(malla: Mesh, n: int) -> Mesh:
-	if not _mallas_con_peinado.has(malla):
-		_mallas_con_peinado[malla] = {}
-	var hechas: Dictionary = _mallas_con_peinado[malla]
-	if hechas.has(n):
-		return hechas[n]
-	var datos := malla.surface_get_arrays(0)
-	var uv: PackedVector2Array = datos[Mesh.ARRAY_TEX_UV]
-	var indices: PackedInt32Array = datos[Mesh.ARRAY_INDEX]
-	var quedan := PackedInt32Array()
-	for t in range(0, indices.size(), 3):
-		var v := uv[indices[t]].y
-		if v > -0.5 or -roundi(v) - 1 == n:
-			quedan.append_array([indices[t], indices[t + 1], indices[t + 2]])
-	datos[Mesh.ARRAY_INDEX] = quedan
-	var nueva := ArrayMesh.new()
-	nueva.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, _compactar(datos), [], {},
-		malla.surface_get_format(0) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS)
-	hechas[n] = nueva
-	return nueva
-
-
-## Los mismos triángulos, solo con los vértices que usan. La malla del GLB
-## trae los diez peinados y la cara modelada: 33.155 vértices, y cada jugador
-## usa de 4.900 a 10.000. La placa mueve con el esqueleto TODOS los vértices
-## de la malla en cada cuadro, se dibujen o no: con 23 personajes eran 760 mil
-## por cuadro. En el teléfono (Mali-G57) no terminaba los cuadros con todos
-## amontonados en el área y la pantalla se trababa 35 a 80 ms (medido con
-## motor_v2/banco_etapa8.gd y simpleperf: el hilo esperaba un buffer libre).
-static func _compactar(datos: Array) -> Array:
-	var indices: PackedInt32Array = datos[Mesh.ARRAY_INDEX]
-	var total: int = (datos[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
-	var nuevo_de := PackedInt32Array()
-	nuevo_de.resize(total)
-	nuevo_de.fill(-1)
-	var viejos := PackedInt32Array()
-	var nuevos_indices := PackedInt32Array()
-	nuevos_indices.resize(indices.size())
-	for k in indices.size():
-		var v := indices[k]
-		if nuevo_de[v] < 0:
-			nuevo_de[v] = viejos.size()
-			viejos.append(v)
-		nuevos_indices[k] = nuevo_de[v]
+## Los arreglos de `datos` (los de una malla de `total` vértices) solo con
+## los vértices `viejos`, en ese orden. Sin los índices.
+static func _juntar(datos: Array, viejos: PackedInt32Array, total: int) -> Array:
 	var salida := datos.duplicate()
 	var cuantos := viejos.size()
 	for a in datos.size():
@@ -446,25 +522,9 @@ static func _compactar(datos: Array) -> Array:
 						di[k * por_i + c] = oi[viejos[k] * por_i + c]
 				salida[a] = di
 			_:
-				push_error("Jugador3D._compactar: arreglo %d de tipo %d sin compactar" % [a, typeof(datos[a])])
-	salida[Mesh.ARRAY_INDEX] = nuevos_indices
+				push_error("Jugador3D._juntar: arreglo %d de tipo %d sin juntar" % [a, typeof(datos[a])])
+	salida[Mesh.ARRAY_INDEX] = null
 	return salida
-
-
-## El color de la piel es el de cualquier vértice de tipo piel (U = 4). Hace
-## falta aparte porque los cachetes se mezclan sobre ella.
-static func _piel_de(malla: Mesh) -> Color:
-	if not _pieles.has(malla):
-		var piel := Color.WHITE
-		var datos := malla.surface_get_arrays(0)
-		var uv: PackedVector2Array = datos[Mesh.ARRAY_TEX_UV]
-		var colores: PackedColorArray = datos[Mesh.ARRAY_COLOR]
-		for i in mini(uv.size(), colores.size()):
-			if roundi(uv[i].x) == 4:
-				piel = colores[i]
-				break
-		_pieles[malla] = piel
-	return _pieles[malla]
 
 
 ## Posición en el mundo de un anclaje del GLB (Mano_L, Frente, Pie_R...). Son
