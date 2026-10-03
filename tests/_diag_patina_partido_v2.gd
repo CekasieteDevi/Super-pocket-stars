@@ -7,7 +7,8 @@ extends SceneTree
 ## apoyado desliza una parte grande de lo que avanza el cuerpo.
 ##
 ## Argumentos (después de `--`): `semilla=N`, `division=N`, `segundos=N`
-## (segundos de partido; 0 = entero), `saltar=pasos`.
+## (segundos de partido; 0 = entero), `saltar=pasos`, `clavados=0` (sin el pie
+## clavado, Jugador3D.clavar_pies).
 
 const SEED := 20261201
 const PREFIJO := "[patina_partido]"
@@ -40,6 +41,7 @@ func _armar() -> void:
 	var division := 4
 	var segundos := 0.0
 	var saltar := 0
+	var clavados := true
 	for arg in OS.get_cmdline_user_args():
 		var p := arg.split("=", true, 1)
 		if p.size() != 2:
@@ -49,6 +51,7 @@ func _armar() -> void:
 			"division": division = int(p[1])
 			"segundos": segundos = float(p[1])
 			"saltar": saltar = int(p[1])
+			"clavados": clavados = int(p[1]) != 0
 	var rng := RandomNumberGenerator.new()
 	rng.seed = semilla
 	var local: Team = Team.generar("Atlético Prueba", rng, 0, NivelDivision.potencial(division), "Uruguay",
@@ -61,6 +64,9 @@ func _armar() -> void:
 	root.add_child(_vista)
 	_vista.iniciar(r["receta_v2"], r["eventos"], local, visitante)
 	_vista.set_process(false)
+	_vista.vista.pies_clavados = clavados
+	# Mide a los 22, también a los que la cámara no muestra.
+	_vista.vista.clavar_fuera_de_camara = true
 	if saltar > 0:
 		_vista._partido.simular(saltar)
 	_tope = int(segundos * 60.0) if segundos > 0.0 else 1 << 30

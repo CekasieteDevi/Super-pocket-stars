@@ -15,6 +15,10 @@ extends SceneTree
 ## apoyado no patina lo que avanza el cuerpo (las piernas van con la
 ## carrera, Jugador3D.piernas_de, y el arquero no se desliza en guardia).
 ## Con el gesto entero el toque daba 28% y el arquero en guardia, 200%.
+## Uno anda de costado mirando lejos y después corre hacia donde iba, y otro
+## camina: el pie apoyado queda clavado (Jugador3D.clavar_pies) y el modelo
+## gira los 90° junto con el fundido. Sin eso, de costado deslizaba el 5% y
+## 0,89 m en cada cambio a correr (ahora 0,19), y caminando el 27% (ahora 3%).
 
 const SEED := 20260930
 const PASO := 1.0 / 60.0
@@ -22,6 +26,8 @@ const JUGADOR := 3
 const PIQUE := 6
 const CONDUCE := 8
 const ARQUERO := 11
+const DE_COSTADO := [14, 17, 20]
+const CAMINA := 16
 const APOYO_M := DetectorPatinaV2.APOYO_M
 
 var fallos := 0
@@ -35,6 +41,8 @@ func _init() -> void:
 		return
 	var vista := VistaV2.new()
 	vista.size = Vector2(640, 360)
+	# Los que se miden andan lejos de donde mira la cámara.
+	vista.clavar_fuera_de_camara = true
 	root.add_child(vista)
 	process_frame.connect(_probar.bind(vista), CONNECT_ONE_SHOT)
 
@@ -83,6 +91,8 @@ func _probar(vista: VistaV2) -> void:
 			_ok(r < 0.15, "%s: el pie apoyado desliza el %.0f%% de lo que avanza el cuerpo (%.2f de %.2f m)"
 				% [clip, 100.0 * r, patina[clip], metros.get(clip, 0.0)])
 	_media_vuelta(c, vista)
+	_de_costado_a_adelante(c, vista)
+	_caminando(c, vista)
 	_gestos_corriendo(vista)
 	print("FALLOS=%d" % fallos)
 	quit(1 if fallos else 0)
@@ -111,6 +121,76 @@ func _media_vuelta(c: Object, vista: VistaV2) -> void:
 			var r := float(medida["patina"][clip]) / maxf(float(medida["metros"].get(clip, 0.0)), 0.01)
 			_ok(r < 0.15, "%s: el pie apoyado desliza el %.0f%% de lo que recorre el cuerpo (%.2f de %.2f m)"
 				% [clip, 100.0 * r, medida["patina"][clip], medida["metros"][clip]])
+
+
+## Tres jugadores: cada uno anda de costado a 1,6 m/s mirando lejos (por
+## debajo de rapidez_para_girar el cuerpo no gira hacia donde va) y sale al
+## trote hacia donde iba. Mide con el detector PATINA, como el partido.
+func _de_costado_a_adelante(c: Object, vista: VistaV2) -> void:
+	var de_costado := DetectorPatinaV2.new()
+	var cambio := DetectorPatinaV2.new()
+	var metros_costado := 0.0
+	var cambios := 0
+	var miran := 0
+	for j in DE_COSTADO:
+		var p3: Jugador3D = vista._jugadores[j]
+		var inicio: Vector2 = c.get_pos()[j]
+		c.mirar_a(j, inicio + Vector2(0.0, 60.0))
+		c.ir_a(j, inicio + Vector2(40.0, 0.0), 0.2, false)
+		for k in 150:
+			c.avanzar()
+			vista.dibujar_cuerpos(c, 1.0, PASO, Vector2.ZERO)
+			if k >= 60:
+				de_costado.medir([p3], PASO)
+				if p3._anim_actual == "Correr_Costado_Izq" and p3._mezcla >= 1.0:
+					metros_costado += float(c.get_rapidez()[j]) * PASO
+		c.ir_a(j, c.get_pos()[j] + Vector2(40.0, 0.0), 0.45, false)
+		# El cambio: medio segundo desde que deja el clip de costado.
+		var desde := -1
+		for k in 120:
+			c.avanzar()
+			vista.dibujar_cuerpos(c, 1.0, PASO, Vector2.ZERO)
+			if desde < 0 and p3._anim_actual != "Correr_Costado_Izq":
+				desde = k
+				cambios += 1
+			if desde >= 0 and k - desde < 30:
+				cambio.medir([p3], PASO)
+		if absf(wrapf(p3.rotation.y - PI * 0.5, -PI, PI)) < 0.2:
+			miran += 1
+	var patina: float = (de_costado.por_clip.get("Correr_Costado_Izq", [0.0, 0.0]) as Array)[0]
+	_ok(cambios == DE_COSTADO.size() and metros_costado > 5.0 and patina < 0.1 * metros_costado,
+		"de costado el pie apoyado desliza el %.0f%% de lo que avanza el cuerpo (%.2f de %.2f m)"
+		% [100.0 * patina / maxf(metros_costado, 0.01), patina, metros_costado])
+	var total := 0.0
+	for clip in cambio.por_clip:
+		total += float(cambio.por_clip[clip][0])
+	_ok(total / DE_COSTADO.size() < 0.3,
+		"al girar de costado a adelante el pie apoyado desliza %.2f m por cambio" % (total / DE_COSTADO.size()))
+	_ok(miran == DE_COSTADO.size(), "y el modelo queda mirando adonde fue (%d de %d)" % [miran, DE_COSTADO.size()])
+
+
+## Camina 5 s a 1,6 m/s hacia donde mira, cambiando de rumbo 40° cada segundo
+## (como el que acompaña la jugada).
+func _caminando(c: Object, vista: VistaV2) -> void:
+	var p3: Jugador3D = vista._jugadores[CAMINA]
+	var detector := DetectorPatinaV2.new()
+	var metros := 0.0
+	for tramo in 6:
+		var en: Vector2 = c.get_pos()[CAMINA]
+		var hacia := Vector2(0.0, 40.0).rotated(deg_to_rad(40.0 if tramo % 2 == 0 else -40.0))
+		c.mirar_a(CAMINA, en + hacia)
+		c.ir_a(CAMINA, en + hacia, 0.2, false)
+		for k in 60:
+			c.avanzar()
+			vista.dibujar_cuerpos(c, 1.0, PASO, Vector2.ZERO)
+			if tramo == 0:
+				continue
+			detector.medir([p3], PASO)
+			if p3._anim_actual == "Caminar" and p3._mezcla >= 1.0:
+				metros += float(c.get_rapidez()[CAMINA]) * PASO
+	var patina: float = (detector.por_clip.get("Caminar", [0.0, 0.0]) as Array)[0]
+	_ok(metros > 5.0 and patina < 0.15 * metros, "caminando el pie apoyado desliza el %.0f%% de lo que avanza el cuerpo (%.2f de %.2f m)"
+		% [100.0 * patina / maxf(metros, 0.01), patina, metros])
 
 
 ## Sin motor: la vista recibe las posiciones de dos que andan derecho. El

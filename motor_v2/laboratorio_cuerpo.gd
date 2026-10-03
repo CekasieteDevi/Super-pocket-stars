@@ -55,6 +55,8 @@ func _ready() -> void:
 	_vista.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(_vista)
 	if DisplayServer.get_name() == "headless":
+		# Mide a los 22, también a los que la cámara no muestra.
+		_vista.clavar_fuera_de_camara = true
 		await get_tree().process_frame
 		_medir(segundos)
 		get_tree().quit()

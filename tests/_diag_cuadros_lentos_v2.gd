@@ -7,7 +7,9 @@ extends SceneTree
 ## de los que hacen un gesto) y los cuadros que pasan de 4, 8 y 16 ms.
 ##
 ## Argumentos (después de `--`): `semilla=N`, `division=N`, `segundos=N`
-## (segundos de partido que mira; 0 = entero), `saltar=pasos`.
+## (segundos de partido que mira; 0 = entero), `saltar=pasos`, `clavados=0` (sin el
+## pie clavado, Jugador3D.clavar_pies), `todos=1` (clava también a los que la
+## cámara no muestra).
 
 const SEED := 20261201
 const PREFIJO := "[cuadros_lentos]"
@@ -33,6 +35,8 @@ func _armar() -> void:
 	var semilla := SEED
 	var division := 4
 	var saltar := 0
+	var clavados := true
+	var todos := false
 	for arg in OS.get_cmdline_user_args():
 		var p := arg.split("=", true, 1)
 		if p.size() != 2:
@@ -43,6 +47,8 @@ func _armar() -> void:
 			"segundos": _segundos = float(p[1])
 			"saltar": saltar = int(p[1])
 			"umbral": _umbral = float(p[1])
+			"clavados": clavados = int(p[1]) != 0
+			"todos": todos = int(p[1]) != 0
 	var rng := RandomNumberGenerator.new()
 	rng.seed = semilla
 	var local: Team = Team.generar("Atlético Prueba", rng, 0, NivelDivision.potencial(division), "Uruguay",
@@ -55,6 +61,8 @@ func _armar() -> void:
 	root.add_child(_vista)
 	_vista.iniciar(r["receta_v2"], r["eventos"], local, visitante)
 	_vista.set_process(false)
+	_vista.vista.pies_clavados = clavados
+	_vista.vista.clavar_fuera_de_camara = todos
 	if saltar > 0:
 		_vista._partido.simular(saltar)
 	_tope = int(_segundos * 60.0) if _segundos > 0.0 else 1 << 30

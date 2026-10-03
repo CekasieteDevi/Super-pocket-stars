@@ -17,6 +17,7 @@ const ESCENA_PELOTA := Cancha3D.ESCENA_PELOTA
 ## el clip en cinta que anda así. 0 es adelante: lo elige _andar_de.
 const ANGULO_DE_SENTIDO := {0: 0.0, 1: PI * 0.5, -1: -PI * 0.5, 2: PI}
 const CLIP_DE_SENTIDO := {1: "Correr_Costado_Izq", -1: "Correr_Costado_Der", 2: "Correr_Espaldas"}
+const SENTIDO_DE_CLIP := {"Correr_Costado_Izq": 1, "Correr_Costado_Der": -1, "Correr_Espaldas": 2}
 ## Para no cambiar de clip a cada rato cerca de 45°.
 const HISTERESIS_SENTIDO := deg_to_rad(10.0)
 ## Qué tan rápido gira el modelo hacia el rumbo que muestra. Más rápido que
@@ -100,6 +101,8 @@ var _jugadores: Array[Jugador3D] = []
 ## pasando por debajo en la fase 0: cambiar de clip no cambia de pie.
 var _ciclos := PackedFloat32Array()
 var _metros_ciclo := {}
+## Loop -> 0,5 si arranca con el otro pie (Jugador3D.arranca_con_el_otro_pie).
+var _medio_ciclo := {}
 ## Los clips en cinta de data/acciones_v2.json (loops y de una vez).
 var _cinta := {}
 ## El clip de una vez que hace cada uno ({} = ninguno): tipo, clip, segundo
@@ -126,6 +129,9 @@ var _giro_acel := 12.0
 var _sentido := PackedInt32Array()
 ## El rumbo que muestra cada modelo (ver _rumbo_mostrado).
 var _rumbo_modelo := PackedFloat32Array()
+## El giro de 90° que cada modelo da junto con el fundido ({} = ninguno; ver
+## _giro_al_cambiar).
+var _giro_fundido: Array[Dictionary] = []
 var _rumbo_listo := false
 ## Los que entraron en `recomponer` y todavía no tienen rumbo de modelo.
 var _sin_rumbo := {}
@@ -143,6 +149,19 @@ var sombras_redondas := false
 var personajes_con_sombra_sol := true
 var _manchas: SombrasRedondas
 var escala_3d := 1.0
+## El pie apoyado queda clavado en la cancha (Jugador3D.clavar_pies). Se apaga
+## para medir cuánto patina sin eso (tests/_diag_patina_partido_v2.gd).
+var pies_clavados := true
+## Clava también los pies de los que la cámara no muestra. En el juego no:
+## clavar los 22 suma 0,2 ms por cuadro en la PC (de 0,55 a 0,76,
+## tests/_diag_cuadros_lentos_v2.gd) y solo los de la cámara, 0,15. En el
+## teléfono, solo los de la cámara suman 0,5 ms (de 3,73 a 4,25,
+## motor_v2/banco_etapa8.gd). Las mediciones lo prenden para medir a todos.
+var clavar_fuera_de_camara := false
+## Cuánto más ancho que la pantalla es lo que cuenta como "en cámara" (parte
+## del ancho) y cuántos metros más: el que entra ya viene con los pies clavados.
+const MARGEN_CAMARA := 1.15
+const MARGEN_CAMARA_M := 1.5
 ## Etapa 6: el árbitro (ArbitroV2). Se arma solo al dibujar un partido con
 ## reglas (el que tiene get_tarjeta).
 var arbitro: ArbitroV2
@@ -246,6 +265,7 @@ func _ready() -> void:
 	_sentido.resize(_cantidad())
 	_rumbo_modelo.resize(_cantidad())
 	_una_vez.resize(_cantidad())
+	_giro_fundido.resize(_cantidad())
 	_sin_fundido.resize(_cantidad())
 	_v_previa.resize(_cantidad())
 	_desacelera.resize(_cantidad())
@@ -351,6 +371,8 @@ func recomponer(equipos_n: PackedInt32Array, arqueros_n: PackedInt32Array, ids_n
 	_jugadores.clear()
 	_andar.clear()
 	_una_vez.clear()
+	_giro_fundido.clear()
+	_giro_fundido.resize(n)
 	for lista in [_ciclos, _sentido, _rumbo_modelo, _v_previa, _desacelera, _adelante, _sin_fundido]:
 		lista.resize(n)
 		lista.fill(0)
@@ -591,16 +613,18 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 			_corrido.erase(i)
 		var una_vez := [] if hace_gesto else _una_vez_de(i, p3, v, paso, rumbo[i],
 			intenciones[i] if i < intenciones.size() else [], delta)
-		if una_vez.is_empty() or una_vez[2] == null:
-			p3.rotation.y = _rumbo_mostrado(i, rumbo[i], paso, v, hace_gesto, delta)
-		else:
-			p3.rotation.y = una_vez[2]
+		if hace_gesto or not una_vez.is_empty():
+			# Los gestos y los clips de una vez andan hacia adelante.
+			_giro_fundido[i] = {}
+			p3.rotation.y = _rumbo_mostrado(i, rumbo[i], paso, v, hace_gesto, delta, 0) \
+				if una_vez.is_empty() or una_vez[2] == null else una_vez[2]
 		if hace_gesto:
 			p3.poner(accion, float(acciones[i][1]), delta)
 			if _ajustar_pies and _contacto_cuerpo.has(accion):
 				_ajustar_cuerpo(i, p3, accion, float(acciones[i][1]))
 			if _gesto_corriendo.has(accion) and v >= Cancha3D.VELOCIDAD_PARA_PIERNAS 					and p3.position.y < GESTO_PIERNAS_HASTA_ALTO_M:
 				_piernas_de_carrera(i, p3, accion, float(acciones[i][1]), v, delta)
+			_clavar_pies(p3, delta, false)
 			if _ajustar_pies and _contacto_pie.has(accion):
 				_ajustar_pie(p3, accion, float(acciones[i][1]))
 			p3.poner_cara(p3.cara, Jugador3D.Gesto.NORMAL, _tiempo)
@@ -609,6 +633,7 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 		_sin_fundido[i] = 0
 		if not una_vez.is_empty():
 			p3.poner(una_vez[0], una_vez[1], fundido)
+			_clavar_pies(p3, fundido)
 			p3.poner_cara(p3.cara, Jugador3D.Gesto.NORMAL, _tiempo)
 			continue
 		var anim := _andar_de(i, v)
@@ -628,14 +653,60 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 			var otra := _ciclos[i] + v * delta / float(_metros_ciclo[actual])
 			if floorf(_ciclos[i] * 2.0) == floorf(otra * 2.0):
 				anim = actual
+		# El modelo mira según el clip que muestra, no según el sentido de la
+		# marcha: el clip de costado sigue hasta medio ciclo después de que
+		# cambia el sentido, y con el modelo ya girando hacia adelante andaba
+		# cruzado a la marcha.
+		var sentido_clip: int = SENTIDO_DE_CLIP.get(anim, 0)
+		if anim != actual:
+			_giro_fundido[i] = _giro_al_cambiar(i, actual, sentido_clip, paso, v)
 		var tiempo: float
 		if anim == Cancha3D.ANIM_QUIETO or anim == "Golero_Guardia":
 			tiempo = fposmod(_tiempo + float(i) * 0.37, maxf(p3.duracion(anim), 0.01))
 		else:
 			_ciclos[i] += v * delta / float(_metros_ciclo.get(anim, Cancha3D.METROS_POR_CICLO))
-			tiempo = fposmod(_ciclos[i], 1.0) * p3.duracion(anim)
+			if not _medio_ciclo.has(anim):
+				_medio_ciclo[anim] = 0.5 if p3.arranca_con_el_otro_pie(anim) else 0.0
+			tiempo = fposmod(_ciclos[i] + float(_medio_ciclo[anim]), 1.0) * p3.duracion(anim)
 		p3.poner(anim, tiempo, fundido)
+		var giro: Dictionary = _giro_fundido[i]
+		if not giro.is_empty() and p3._mezcla < 1.0 and p3._anim_vieja != "" \
+				and v >= Cancha3D.VELOCIDAD_PARA_PIERNAS and paso.length_squared() > 1e-10:
+			# Con el clip viejo pesando 1 - w y el nuevo w, los dos a 90°, las
+			# piernas andan hacia atan(w / (1 - w)) entre uno y otro.
+			var w := smoothstep(0.0, 1.0, p3._mezcla)
+			var parte := atan2(w, 1.0 - w) / (PI * 0.5)
+			_rumbo_modelo[i] = wrapf(atan2(paso.x, paso.y) - float(giro["angulo"]) - float(giro["giro"]) * parte
+				+ float(giro["error"]) * (1.0 - parte), -PI, PI)
+			p3.rotation.y = _rumbo_modelo[i]
+		else:
+			_giro_fundido[i] = {}
+			p3.rotation.y = _rumbo_mostrado(i, rumbo[i], paso, v, false, delta, sentido_clip)
+		_clavar_pies(p3, fundido)
 		p3.poner_cara(p3.cara, Jugador3D.Gesto.NORMAL, _tiempo)
+
+
+## Clava los pies apoyados de `p3` (Jugador3D.clavar_pies) si la cámara lo
+## muestra; si no, los suelta.
+func _clavar_pies(p3: Jugador3D, segundos: float, clava := true) -> void:
+	if not pies_clavados:
+		return
+	if clavar_fuera_de_camara or _en_camara(p3.position):
+		p3.clavar_pies(segundos, clava)
+	else:
+		p3.clavar_pies(-1.0)
+
+
+## ¿La cámara muestra el punto `en` (o le falta poco)? Con la cámara del
+## cuadro anterior: en un cuadro no se mueve más que el margen.
+func _en_camara(en: Vector3) -> bool:
+	var local := _camara.global_transform.affine_inverse() * en
+	if local.z >= 0.0:
+		return false
+	var medio_ancho := -local.z * tan(deg_to_rad(Cancha3D.FOV_HORIZONTAL) * 0.5)
+	var medio_alto := medio_ancho * maxf(size.y, 1.0) / maxf(size.x, 1.0)
+	return absf(local.x) <= medio_ancho * MARGEN_CAMARA + MARGEN_CAMARA_M \
+		and absf(local.y) <= medio_alto * MARGEN_CAMARA + MARGEN_CAMARA_M
 
 
 ## Debajo de un gesto que se hace corriendo, la cadera y las piernas van
@@ -917,10 +988,12 @@ static func _sentido_de(actual: int, relativo: float) -> int:
 ## El rumbo del modelo. Andando, el clip avanza justo hacia donde va el
 ## cuerpo: el modelo gira lo que falta (a lo sumo 45° más la histéresis)
 ## para que el pie apoyado no patine de costado. Llega girando, no de golpe.
-func _rumbo_mostrado(i: int, rumbo: float, paso: Vector2, v: float, hace_gesto: bool, delta: float) -> float:
+## `sentido`: hacia dónde anda el clip que muestra (una clave de ANGULO_DE_SENTIDO).
+func _rumbo_mostrado(i: int, rumbo: float, paso: Vector2, v: float, hace_gesto: bool, delta: float,
+		sentido: int) -> float:
 	var meta := rumbo
 	if not hace_gesto and v >= Cancha3D.VELOCIDAD_PARA_PIERNAS and paso.length_squared() > 1e-10:
-		meta = atan2(paso.x, paso.y) - float(ANGULO_DE_SENTIDO[_sentido[i]])
+		meta = atan2(paso.x, paso.y) - float(ANGULO_DE_SENTIDO[sentido])
 	if _sin_rumbo.has(i):
 		_sin_rumbo.erase(i)
 		_rumbo_modelo[i] = meta
@@ -933,6 +1006,24 @@ func _rumbo_mostrado(i: int, rumbo: float, paso: Vector2, v: float, hace_gesto: 
 	var tope := GIRO_MODELO_RAD_S * delta
 	_rumbo_modelo[i] = wrapf(_rumbo_modelo[i] + clampf(dif, -tope, tope), -PI, PI)
 	return _rumbo_modelo[i]
+
+
+## Al pasar de un clip de andar a otro que anda a 90° (de costado a
+## adelante), el modelo gira esos 90°. Girando a su ritmo (GIRO_MODELO_RAD_S)
+## mientras los clips se funden al suyo, las piernas andaban cruzadas a la
+## marcha y el pie apoyado barría 0,6 m en cada cambio (335 m por partido,
+## tests/_diag_patina_partido_v2.gd). Acá el giro va atado al fundido (ver
+## _dibujar_jugadores). Devuelve {} si el cambio no es de 90°; si no, el
+## ángulo del clip viejo, lo que gira y lo que el modelo venía corrido.
+func _giro_al_cambiar(i: int, clip_viejo: String, sentido_nuevo: int, paso: Vector2, v: float) -> Dictionary:
+	if not _metros_ciclo.has(clip_viejo) or v < Cancha3D.VELOCIDAD_PARA_PIERNAS or paso.length_squared() <= 1e-10:
+		return {}
+	var angulo := float(ANGULO_DE_SENTIDO[SENTIDO_DE_CLIP.get(clip_viejo, 0)])
+	var giro := wrapf(float(ANGULO_DE_SENTIDO[sentido_nuevo]) - angulo, -PI, PI)
+	if not is_equal_approx(absf(giro), PI * 0.5):
+		return {}
+	return {"angulo": angulo, "giro": giro,
+		"error": wrapf(_rumbo_modelo[i] - (atan2(paso.x, paso.y) - angulo), -PI, PI)}
 
 
 ## `giro` (rad/s, del motor) hace girar el modelo: sin él no se ve el efecto.

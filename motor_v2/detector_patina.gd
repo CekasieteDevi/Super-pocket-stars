@@ -10,11 +10,15 @@ extends RefCounted
 ## Un pie cuenta como apoyado si está a menos de APOYO_M del punto más bajo
 ## que tocó un pie en ese clip. Con un solo suelo para todos, una barrida o
 ## una caída lo bajaba 4 cm y en Correr el pie apoyado ya no contaba.
+## El suelo arranca en el del clip (Jugador3D.suelo_de) y baja con lo que se
+## ve: debajo de un gesto corriendo las piernas son las de la carrera, que
+## apoyan más abajo. Sin el del clip, hasta verlo entero contaba como apoyado
+## el pie que iba por el aire (en un fundido a un clip no visto, los dos).
 ## Mientras el modelo funde un clip con otro (Jugador3D._mezcla < 1) el pie
 ## cuenta aparte, en FUNDIDO: ahí patina por la mezcla de dos poses, no por
 ## el clip, y el suelo no se toma de esos cuadros.
 
-const APOYO_M := 0.015
+const APOYO_M := Jugador3D.APOYO_M
 const PIES := ["Pie_L", "Pie_R"]
 const FUNDIDO := "(fundido)"
 
@@ -32,6 +36,10 @@ func medir(jugadores: Array, delta: float) -> void:
 		return
 	for p3: Jugador3D in jugadores:
 		var anim := p3._anim_actual
+		if not p3.tiene(anim):
+			continue
+		if not _suelo.has(anim):
+			_suelo[anim] = p3.suelo_de(anim)
 		var fundiendo := p3._mezcla < 1.0
 		var previos: Dictionary = _previos.get(p3, {})
 		var ahora := {}
@@ -39,12 +47,12 @@ func medir(jugadores: Array, delta: float) -> void:
 			var punto := ancla_de(p3, pie)
 			ahora[pie] = punto
 			if not fundiendo:
-				_suelo[anim] = minf(float(_suelo.get(anim, INF)), punto.y - p3.global_position.y)
+				_suelo[anim] = minf(float(_suelo[anim]), punto.y - p3.global_position.y)
 			if not previos.has(pie):
 				continue
 			var antes: Vector3 = previos[pie]
 			var alto := minf(punto.y, antes.y) - p3.global_position.y
-			if alto > float(_suelo.get(anim, INF)) + APOYO_M:
+			if alto > float(_suelo[anim]) + APOYO_M:
 				continue
 			var cubo := FUNDIDO if fundiendo else anim
 			var dato: Array = por_clip.get(cubo, [0.0, 0.0])

@@ -64,6 +64,8 @@ func _armar() -> void:
 	if _vista != null:
 		_vista.queue_free()
 	_vista = VistaV2.new()
+	# Sin pantalla mide a todos, también a los que la cámara no muestra.
+	_vista.clavar_fuera_de_camara = DisplayServer.get_name() == "headless"
 	_vista.equipos = _canchita.get_equipos()
 	_vista.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(_vista)
