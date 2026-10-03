@@ -15,6 +15,8 @@ const PREFIJO := "[dibujo]"
 var _vista: VistaPartidoV2
 var _segundos := 60.0
 var _velocidad := 1.0
+## Desde cuántos ms se anota un cuadro (`umbral=N`).
+var _umbral_ms := 25.0
 var _tiempo := 0.0
 var _armado := false
 var _cuadros := 0
@@ -36,6 +38,7 @@ func _armar() -> void:
 			"division": division = int(p[1])
 			"segundos": _segundos = float(p[1])
 			"velocidad": _velocidad = float(p[1])
+			"umbral": _umbral_ms = float(p[1])
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	root.size = Vector2i(1280, 720)
 	RenderingServer.viewport_set_measure_render_time(root.get_viewport_rid(), true)
@@ -74,10 +77,10 @@ func _process(delta: float) -> bool:
 	dato[4] += RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME)
 	dato[5] += RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME)
 	_por_franja[franja] = dato
-	if delta * 1000.0 > 25.0:
+	if delta * 1000.0 > _umbral_ms:
 		_peores.append({"ms": snappedf(delta * 1000.0, 0.1), "gpu": snappedf(gpu, 0.1), "cpu": snappedf(cpu, 0.1),
 			"t": snappedf(_tiempo, 0.01), "x": snappedf(bola.x, 0.1), "z": snappedf(bola.z, 0.1),
-			"parada": str(_vista._partido.get_estado()["parada"])})
+			"parada": str(_vista._partido.get_estado()["parada"]), "paso": int(_vista._partido.get_estado()["paso"])})
 	if _tiempo > _segundos or _vista._terminado:
 		_informar()
 		return true
@@ -92,6 +95,6 @@ func _informar() -> void:
 		var d: Array = _por_franja[f]
 		print("%s x %d..%d m: %d cuadros, %.2f ms de media, GPU %.2f ms, peor %.1f ms, %.0f llamadas, %.0f mil triángulos" % [
 			PREFIJO, f * 10, f * 10 + 10, d[0], d[1] / d[0], d[2] / d[0], d[3], d[4] / d[0], d[5] / d[0] / 1000.0])
-	for p in _peores.slice(0, 40):
+	for p in _peores.slice(0, 80):
 		print("%s %s" % [PREFIJO, str(p)])
 	print("FALLOS=0")

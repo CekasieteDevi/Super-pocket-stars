@@ -293,9 +293,87 @@ static func _con_peinado(malla: Mesh, n: int) -> Mesh:
 			quedan.append_array([indices[t], indices[t + 1], indices[t + 2]])
 	datos[Mesh.ARRAY_INDEX] = quedan
 	var nueva := ArrayMesh.new()
-	nueva.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, datos)
+	nueva.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, _compactar(datos), [], {},
+		malla.surface_get_format(0) & Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS)
 	hechas[n] = nueva
 	return nueva
+
+
+## Los mismos triángulos, solo con los vértices que usan. La malla del GLB
+## trae los diez peinados y la cara modelada: 33.155 vértices, y cada jugador
+## usa de 4.900 a 10.000. La placa mueve con el esqueleto TODOS los vértices
+## de la malla en cada cuadro, se dibujen o no: con 23 personajes eran 760 mil
+## por cuadro. En el teléfono (Mali-G57) no terminaba los cuadros con todos
+## amontonados en el área y la pantalla se trababa 35 a 80 ms (medido con
+## motor_v2/banco_etapa8.gd y simpleperf: el hilo esperaba un buffer libre).
+static func _compactar(datos: Array) -> Array:
+	var indices: PackedInt32Array = datos[Mesh.ARRAY_INDEX]
+	var total: int = (datos[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+	var nuevo_de := PackedInt32Array()
+	nuevo_de.resize(total)
+	nuevo_de.fill(-1)
+	var viejos := PackedInt32Array()
+	var nuevos_indices := PackedInt32Array()
+	nuevos_indices.resize(indices.size())
+	for k in indices.size():
+		var v := indices[k]
+		if nuevo_de[v] < 0:
+			nuevo_de[v] = viejos.size()
+			viejos.append(v)
+		nuevos_indices[k] = nuevo_de[v]
+	var salida := datos.duplicate()
+	var cuantos := viejos.size()
+	for a in datos.size():
+		if a == Mesh.ARRAY_INDEX or datos[a] == null:
+			continue
+		# Cada tipo aparte: con el arreglo sin tipo cada copia pasa por Variant
+		# y armar los peinados de un partido tarda más.
+		match typeof(datos[a]):
+			TYPE_PACKED_VECTOR3_ARRAY:
+				var o3: PackedVector3Array = datos[a]
+				var d3 := PackedVector3Array()
+				d3.resize(cuantos)
+				for k in cuantos:
+					d3[k] = o3[viejos[k]]
+				salida[a] = d3
+			TYPE_PACKED_VECTOR2_ARRAY:
+				var o2: PackedVector2Array = datos[a]
+				var d2 := PackedVector2Array()
+				d2.resize(cuantos)
+				for k in cuantos:
+					d2[k] = o2[viejos[k]]
+				salida[a] = d2
+			TYPE_PACKED_COLOR_ARRAY:
+				var oc: PackedColorArray = datos[a]
+				var dc := PackedColorArray()
+				dc.resize(cuantos)
+				for k in cuantos:
+					dc[k] = oc[viejos[k]]
+				salida[a] = dc
+			TYPE_PACKED_FLOAT32_ARRAY:
+				# Tangentes (4 por vértice) y pesos (4 u 8).
+				var of: PackedFloat32Array = datos[a]
+				var por_f := of.size() / total
+				var df := PackedFloat32Array()
+				df.resize(cuantos * por_f)
+				for k in cuantos:
+					for c in por_f:
+						df[k * por_f + c] = of[viejos[k] * por_f + c]
+				salida[a] = df
+			TYPE_PACKED_INT32_ARRAY:
+				# Huesos (4 u 8 por vértice).
+				var oi: PackedInt32Array = datos[a]
+				var por_i := oi.size() / total
+				var di := PackedInt32Array()
+				di.resize(cuantos * por_i)
+				for k in cuantos:
+					for c in por_i:
+						di[k * por_i + c] = oi[viejos[k] * por_i + c]
+				salida[a] = di
+			_:
+				push_error("Jugador3D._compactar: arreglo %d de tipo %d sin compactar" % [a, typeof(datos[a])])
+	salida[Mesh.ARRAY_INDEX] = nuevos_indices
+	return salida
 
 
 ## El color de la piel es el de cualquier vértice de tipo piel (U = 4). Hace

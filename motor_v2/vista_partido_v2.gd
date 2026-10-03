@@ -32,6 +32,10 @@ var hud: HudPartido
 var velocidad := 1.0
 var pausado := false
 
+## Lo que tardaron los pasos del motor en el último cuadro (ms): lo lee el
+## banco del teléfono (motor_v2/banco_etapa8.gd).
+var ms_motor := 0.0
+
 var _partido: Object
 var _visto: PartidoVistoV2
 var _eventos: Array = []
@@ -176,10 +180,12 @@ func _process(delta: float) -> void:
 	_avanzar_efectos(delta)
 	_acumulado += delta * velocidad
 	var pasos := 0
+	var t0 := Time.get_ticks_usec()
 	while _acumulado >= PASO_SEG and pasos < PASOS_POR_CUADRO_MAX and not _fin():
 		_partido.avanzar()
 		_acumulado -= PASO_SEG
 		pasos += 1
+	ms_motor = float(Time.get_ticks_usec() - t0) / 1000.0
 	_acumulado = minf(_acumulado, PASO_SEG)
 	_narrar()
 	_rearmar_vista()

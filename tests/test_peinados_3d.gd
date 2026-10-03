@@ -61,6 +61,17 @@ func _probar_glb(ruta: String) -> void:
 			tamanos[n] = true
 		if n == 0:
 			sin_pelo += 1
+		# La malla trae solo los vértices que dibuja: la placa mueve con el
+		# esqueleto todos los de la malla, y con los 33.155 del GLB (los diez
+		# peinados) el teléfono se trababa (Jugador3D._compactar).
+		var malla := (j.find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D).mesh
+		var datos := malla.surface_get_arrays(0)
+		var usados := {}
+		for i in (datos[Mesh.ARRAY_INDEX] as PackedInt32Array):
+			usados[i] = true
+		var vertices: int = (datos[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+		_ok(usados.size() == vertices and vertices < 12000,
+			"%s peinado %d: la malla tiene solo los vértices que usa (%d de %d)" % [nombre, k, usados.size(), vertices])
 	_ok(sin_pelo == 1 and tamanos.size() == Jugador3D.CANTIDAD_PEINADOS - 1,
 		"%s: 9 peinados con malla propia, todas distintas" % nombre)
 	var otro := Jugador3D.new(load(ruta) as PackedScene)

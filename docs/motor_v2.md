@@ -1388,7 +1388,7 @@ El usuario miró partidos en el teléfono (APK) y marcó ocho cosas. Cada arregl
 | Arrastran los pies al moverse | Los gestos corriendo (el toque de la conducción, el remate, el pecho) están hechos en el lugar; los fundidos partían de una pose congelada; el arquero se deslizaba en guardia hasta 1,6 m/s | Toque de la conducción: 100 m patinados por partido; pecho 32 m; guardia del arquero 296 m | 9 m, 3 m y 66 m |
 | Control de pelota, estadísticas | El usuario decide ver las estadísticas cuando esté el juego completo | — | — |
 | Cabezazos con poca fuerza | `remate.cabeza_*_ms` 9-14 m/s | Córner con gol 3,1%; entra el 2% de los cabezazos | 13-20 m/s: 3,8% y 4% |
-| Tirones en remates, córners y tiros libres | Sin medir en el teléfono (ver abajo) | — | — |
+| Tirones en remates, córners y tiros libres | La placa movía los 33.155 vértices de la malla de cada jugador (ver abajo) | 36 a 41 cuadros de más de 33 ms por partido | 0 |
 | Voleas: centros que se pierden al controlarlos | El centro se jugaba de primera solo desde `primera_geometria` | 1,69 remates de primera con la pelota en el aire por partido | `primera_geometria_centro` 0,15: 1,91 |
 | El arquero se para de golpe después del gol | La estirada deja la cadera 1,3 m al costado y el cuerpo no se movió | Tirado a parado en un cuadro | `Arquero_Levanta` con la pelota fuera de juego o en las manos |
 | Cabecean cuando la quieren bajar de pecho | La cabeza del chibi empieza a 0,87 m; el control de una pelota a esa altura era de cabeza | ~200 controles de cabeza debajo de 1,3 m en 40 partidos | ~30; van de pecho con un salto (`toque.pecho_control_hasta` 1,3 m) |
@@ -1399,13 +1399,23 @@ El usuario miró partidos en el teléfono (APK) y marcó ocho cosas. Cada arregl
 - **Goles sin autor:** el pase o el centro que entra directo es gol del que lo dio. Quedan los goles en contra de verdad: 6 de 659 en 300 partidos. `test_estadisticas_liga` los acepta (pasaba por la semilla).
 - **`test_jugadas_v2`** sigue hasta 40 partidos para ver la defensa adelantada: en 10 no salía una de cada cuatro semillas.
 
-**Los tirones (sin arreglar).** En la PC no aparecen. El motor tarda 2,5 ms en el peor paso (el saque inicial) y la vista en GDScript 2,9 ms en el peor cuadro (`tests/_diag_pasos_lentos_v2.gd`, `tests/_diag_cuadros_lentos_v2.gd`). Con el render, el peor cuadro es de 4,9 ms (`tests/_diag_dibujo_v2.gd`). Cerca del arco rival se dibujan 260 mil triángulos contra 170 mil en el medio: todos los jugadores entran en el cuadro. La sospecha es la placa del teléfono. `banco_etapa8` anota ahora en cada cuadro lento dónde está la pelota, cuántos jugadores entran en el cuadro, las llamadas de dibujo y los triángulos. Falta correrlo con el teléfono conectado.
+**Los tirones (arreglado, 2026-10-03).** En la PC no aparecen: el motor tarda 2,5 ms en el peor paso y la vista 2,9 ms en el peor cuadro (`tests/_diag_pasos_lentos_v2.gd`, `tests/_diag_cuadros_lentos_v2.gd`, `tests/_diag_dibujo_v2.gd`). Medido en el teléfono con `banco_etapa8` (un partido, `fps=60`, semilla 20261108):
+
+| Medida | Antes | Con media resolución y sin MSAA | Con las mallas compactas |
+| --- | --- | --- | --- |
+| Cuadros de más de 33 ms | 36 a 41 | 13 | 0 |
+| Peor cuadro | 83 ms | 100 ms | 25 ms |
+| Código de la pantalla por cuadro (motor) | 3,98 ms (0,1 a 0,5) | 3,82 ms | 3,63 ms |
+
+- **Dónde se iba el tiempo.** En los tirones el código de la pantalla tarda 3 a 7 ms: el resto es espera. `simpleperf` con `--trace-offcpu` muestra al hilo principal bloqueado en `BufferQueueProducer::waitForFreeSlotThenRelock` (dentro de `glDrawArrays` del driver Mali) en 39 de 41 tirones: la placa no terminaba los cuadros y la pantalla no devolvía un buffer libre. Caían en rachas de medio segundo con todos los jugadores en cuadro cerca de un arco: remates, córners y tiros libres.
+- **La causa.** La malla del GLB trae los diez peinados y la cara modelada: 33.155 vértices. Cada jugador dibuja 4.900 a 10.000, pero la placa mueve con el esqueleto todos los vértices de la malla en cada cuadro: 760 mil con 23 personajes.
+- **El arreglo.** `Jugador3D._compactar` arma la malla de cada peinado solo con los vértices que usa (unos 175 mil por cuadro en total). Se ve igual. `tests/test_peinados_3d.gd` lo controla.
+- **Cómo se mide de nuevo.** El banco se exporta como app aparte (`uy.cekasiete.bancov2`) con `run/main_scene` en `banco_etapa8.tscn` y los argumentos en `command_line/extra_args`. Argumentos nuevos: `fps=N`, `escala=N`, `msaa=N` y `sin=hud,minimapa,manchas,estadio,jugadores`. Cada cuadro lento anota el código de la pantalla, el motor, el dibujo en la CPU, la pelota y los triángulos.
 
 **Qué falta:**
 
-1. Medir los tirones en el teléfono con `banco_etapa8`.
-2. Los fundidos al cambiar de sentido (de costado a adelante) todavía arrastran el pie: el modelo gira 90° con el pie apoyado lejos del centro.
-3. Revisión visual de esta vuelta en el teléfono.
+1. Los fundidos al cambiar de sentido (de costado a adelante) todavía arrastran el pie: el modelo gira 90° con el pie apoyado lejos del centro.
+2. Revisión visual de esta vuelta en el teléfono.
 
 **Herramientas que acompañan todas las etapas:** un detector nuevo que mide sobre el mundo (no sobre la vista) `SALTO_PELOTA`, `ENCIMADOS` (cápsulas superpuestas), `PATINA` (pie que desliza), `ESPERA` (jugador quieto con la pelota viniendo a él) y ms por frame; y una grabación por semilla que se puede reproducir y rebobinar para ver cualquier minuto.
 

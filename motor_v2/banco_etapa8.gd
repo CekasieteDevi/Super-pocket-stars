@@ -30,6 +30,19 @@ var _division := 4
 var _sin_vista := 5
 var _partidos := 3
 var _velocidad := 1.0
+## Tope de cuadros por segundo (`fps=N`; 0 = sin tope). El juego usa 60.
+var _fps := 0
+## Lo que tardó el código de la pantalla en el último cuadro, y de eso el motor.
+var _ms_vista := 0.0
+## Perillas para ver qué pesa en el dibujo: `escala=N` (resolución del 3D),
+## `msaa=0|2|4` (-1 = el de la vista) y `sin=a,b` para sacar partes: `hud`,
+## `minimapa`, `manchas` (las sombras redondas), `estadio`, `jugadores`.
+var _escala := 1.0
+var _msaa := -1
+var _sin := PackedStringArray()
+var _ms_motor := 0.0
+var _suma_ms_vista := 0.0
+var _peor_ms_vista := 0.0
 
 var _vista: VistaPartidoV2
 var _jugados := 0
@@ -58,9 +71,15 @@ func _ready() -> void:
 			"velocidad": _velocidad = float(p[1])
 			"semilla": _semilla = int(p[1])
 			"division": _division = int(p[1])
+			"fps": _fps = int(p[1])
+			"escala": _escala = float(p[1])
+			"msaa": _msaa = int(p[1])
+			"sin": _sin = p[1].split(",")
 	print("%s etapa 8: %s, %s, %d núcleos, pantalla %s" % [PREFIJO, OS.get_name(), OS.get_model_name(),
 		OS.get_processor_count(), str(DisplayServer.screen_get_size())])
 	await get_tree().process_frame
+	if _fps > 0:
+		Engine.max_fps = _fps
 	_medir_sin_vista()
 	if _partidos <= 0:
 		_salir()
@@ -122,6 +141,24 @@ func _siguiente_partido() -> void:
 	_vista.iniciar(r["receta_v2"], r["eventos"], c[0], c[1])
 	_vista.velocidad = _velocidad
 	_vista.terminado.connect(_termino, CONNECT_ONE_SHOT)
+	# El banco avanza la pantalla a mano para medir cuánto tarda su código.
+	_vista.set_process(false)
+	RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
+	if _vista.vista != null:
+		var v: VistaV2 = _vista.vista
+		RenderingServer.viewport_set_measure_render_time(v._viewport.get_viewport_rid(), true)
+		v._viewport.scaling_3d_scale = _escala
+		if _msaa >= 0:
+			v._viewport.msaa_3d = {0: Viewport.MSAA_DISABLED, 2: Viewport.MSAA_2X, 4: Viewport.MSAA_4X}.get(_msaa, Viewport.MSAA_2X)
+		if _sin.has("manchas") and v._manchas != null:
+			v._manchas.visible = false
+		if _sin.has("estadio") and v._estadio != null:
+			v._estadio.visible = false
+		if _sin.has("jugadores"):
+			for j in v._jugadores:
+				j.visible = false
+	_vista.hud.visible = not _sin.has("hud")
+	_vista.minimapa.visible = not _sin.has("minimapa")
 	_eventos_vistos = 0
 	_jugadores_antes = 0
 	print("%s con vista, partido %d de %d: %d-%d, memoria %.0f MB" % [PREFIJO, _jugados + 1, _partidos, r["goles_local"],
@@ -136,6 +173,13 @@ func _termino() -> void:
 func _process(delta: float) -> void:
 	if _vista == null:
 		return
+	# Lo del cuadro anterior: es el que duró `delta`.
+	var ms_vista := _ms_vista
+	var ms_motor := _ms_motor
+	var t0 := Time.get_ticks_usec()
+	_vista._process(delta)
+	_ms_vista = float(Time.get_ticks_usec() - t0) / 1000.0
+	_ms_motor = _vista.ms_motor
 	_cuadros += 1
 	if _cuadros <= CUADROS_DE_CALENTAMIENTO:
 		return
@@ -143,6 +187,8 @@ func _process(delta: float) -> void:
 	_tiempo_muestra += delta
 	_cuadros_muestra += 1
 	_peor_cuadro_ms = maxf(_peor_cuadro_ms, delta * 1000.0)
+	_suma_ms_vista += ms_vista
+	_peor_ms_vista = maxf(_peor_ms_vista, ms_vista)
 	# Un cuadro lento: más de dos cuadros de 60 fps. Se anota qué pasó en el
 	# cuadro anterior (el lento es el que lo dibuja): eventos del motor y si
 	# cambiaron los que están en la cancha.
@@ -167,8 +213,17 @@ func _process(delta: float) -> void:
 			for p in _vista._visto.get_pos():
 				if encuadre.has_point(p):
 					en_cuadro += 1
-		print("%s   cuadro lento de %.0f ms en el paso %d (%s, %s), pelota en x %.0f z %.0f, %d en cuadro, %d llamadas, %d mil triángulos: %s" % [
+		# Cuánto del cuadro fue el código de la pantalla (y, de eso, el motor) y
+		# cuánto el dibujo, en la CPU y en la placa.
+		var dibujo_cpu := RenderingServer.viewport_get_measured_render_time_cpu(get_viewport().get_viewport_rid())
+		var dibujo_gpu := RenderingServer.viewport_get_measured_render_time_gpu(get_viewport().get_viewport_rid())
+		if _vista.vista != null:
+			dibujo_cpu += RenderingServer.viewport_get_measured_render_time_cpu(_vista.vista._viewport.get_viewport_rid())
+			dibujo_gpu += RenderingServer.viewport_get_measured_render_time_gpu(_vista.vista._viewport.get_viewport_rid())
+		print("%s   cuadro lento de %.0f ms en el paso %d (%s, %s): pantalla %.1f ms (motor %.1f), dibujo CPU %.1f y placa %.1f, proceso %.1f, armado %.1f; pelota en x %.0f z %.0f, %d en cuadro, %d llamadas, %d mil triángulos: %s" % [
 			PREFIJO, delta * 1000.0, int(estado.get("paso", -1)), str(estado.get("periodo", "")), str(estado.get("parada", "")),
+			ms_vista, ms_motor, dibujo_cpu, dibujo_gpu, Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
+			RenderingServer.get_frame_setup_time_cpu(),
 			bola.x, bola.z, en_cuadro, int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
 			int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)) / 1000, ", ".join(que)])
 	_eventos_vistos = eventos.size()
@@ -198,6 +253,8 @@ func _resumen() -> void:
 	print("%s con vista: %d partidos en %.0f s; %.1f fps de media, %.1f la peor muestra; primera muestra %.1f, última %.1f; %d cuadros lentos (más de 33 ms), el peor de %.0f ms; memoria al final %.0f MB" % [
 		PREFIJO, _partidos, _tiempo_total, suma / n, peor, primero, ultimo, _lentos, _peor_cuadro_ms,
 		OS.get_static_memory_usage() / 1048576.0])
+	print("%s código de la pantalla por cuadro: %.2f ms de media, %.1f el peor" % [PREFIJO,
+		_suma_ms_vista / maxf(float(_cuadros - CUADROS_DE_CALENTAMIENTO), 1.0), _peor_ms_vista])
 
 
 func _salir() -> void:
