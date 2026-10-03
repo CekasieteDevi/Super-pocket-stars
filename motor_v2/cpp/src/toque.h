@@ -31,6 +31,11 @@ struct ParametrosToque {
 	double pie_hasta = 0.32;
 	double muslo_hasta = 0.55;
 	double pecho_hasta = 0.85;
+	// El que recibe (un control, no un remate ni un pase de cabeza) usa el
+	// pecho hasta acá: la cabeza del chibi empieza a 0,87 m y una pelota a la
+	// altura de su cara la paraba de cabeza (revisión del 2026-10-03: "parece
+	// que cabecean cuando la quieren bajar de pecho"). La vista lo hace saltar.
+	double pecho_control_hasta = 1.3;
 	double cabeza_hasta = 1.8;
 	double llegada_pase_ms = 7.0;
 	double pase_min_ms = 4.0;

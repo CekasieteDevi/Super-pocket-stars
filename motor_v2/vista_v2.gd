@@ -39,6 +39,11 @@ const GIRO_DESDE := deg_to_rad(60.0)
 ## del contacto y se suelta AJUSTE_CUERPO_DESPUES_SEG después.
 const AJUSTE_CUERPO_ANTES_SEG := 0.3
 const AJUSTE_CUERPO_DESPUES_SEG := 0.35
+## El clip que toca en su primer cuadro (Pecho) no tiene antes: el salto
+## sube en este tiempo después del contacto, siguiendo a la pelota. El motor
+## para de pecho pelotas hasta toque.pecho_control_hasta (1,3 m), con el
+## punto del pecho del chibi a 0,72 m.
+const AJUSTE_CUERPO_SUBE_SEG := 0.1
 ## Lo más que sube y lo más que se corre en el piso.
 const AJUSTE_CUERPO_SUBE_M := 0.9
 const AJUSTE_CUERPO_PISO_M := 0.6
@@ -257,9 +262,9 @@ func _ready() -> void:
 			var lado := str(c["ancla"]).right(1) if str(c["ancla"]) in ["Pie_R", "Pie_L"] else ""
 			var en := float(c["contacto"]) * float(c["duracion"]) if c["contacto"] != null and lado != "" else -1.0
 			_gesto_corriendo[nombre] = [en, lado]
-		if c["contacto"] != null and str(c["ancla"]) in ["Frente", "manos"]:
+		if c["contacto"] != null and str(c["ancla"]) in ["Frente", "manos", "Pecho"]:
 			_contacto_cuerpo[nombre] = [float(c["contacto"]) * float(c["duracion"]),
-				["Mano_L", "Mano_R"] if str(c["ancla"]) == "manos" else ["Frente"]]
+				["Mano_L", "Mano_R"] if str(c["ancla"]) == "manos" else [str(c["ancla"])]]
 		if not c.has("metros"):
 			continue
 		_cinta[nombre] = c
@@ -652,16 +657,21 @@ func _piernas_de_carrera(i: int, p3: Jugador3D, accion: String, segundo: float, 
 	p3.piernas_de(andar, fposmod(_ciclos[i], 1.0) * p3.duracion(andar), peso, str(dato[1]), peso_gesto)
 
 
-## Lleva el modelo entero para que la frente o las manos lleguen a la pelota
+## Lleva el modelo entero para que la frente, el pecho o las manos lleguen a la pelota
 ## en el contacto. Antes del contacto apunta a la pelota de ese cuadro;
 ## después se queda con lo que se había corrido y lo suelta de a poco.
 func _ajustar_cuerpo(i: int, p3: Jugador3D, accion: String, segundo: float) -> void:
 	var contacto: float = _contacto_cuerpo[accion][0]
 	var peso := smoothstep(contacto - AJUSTE_CUERPO_ANTES_SEG, contacto, segundo) \
 		* (1.0 - smoothstep(contacto, contacto + AJUSTE_CUERPO_DESPUES_SEG, segundo))
+	# Hasta este segundo sigue a la pelota; después se queda con lo corrido.
+	var sigue := contacto
+	if contacto < AJUSTE_CUERPO_SUBE_SEG:
+		sigue = contacto + AJUSTE_CUERPO_SUBE_SEG
+		peso = smoothstep(contacto, sigue, segundo) * (1.0 - smoothstep(sigue, sigue + AJUSTE_CUERPO_DESPUES_SEG, segundo))
 	if peso <= 0.0:
 		return
-	if segundo <= contacto or not _corrido.has(i):
+	if segundo <= sigue or not _corrido.has(i):
 		var punto := Vector3.ZERO
 		for ancla in _contacto_cuerpo[accion][1]:
 			punto += DetectorPatinaV2.ancla_de(p3, ancla)

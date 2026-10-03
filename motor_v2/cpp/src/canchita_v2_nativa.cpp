@@ -47,6 +47,7 @@ void godot::leer_parametros_toque(const Dictionary &d, const std::vector<String>
 	leer(d, "pie_hasta", p.pie_hasta);
 	leer(d, "muslo_hasta", p.muslo_hasta);
 	leer(d, "pecho_hasta", p.pecho_hasta);
+	leer(d, "pecho_control_hasta", p.pecho_control_hasta);
 	leer(d, "cabeza_hasta", p.cabeza_hasta);
 	leer(d, "llegada_pase_ms", p.llegada_pase_ms);
 	leer(d, "pase_min_ms", p.pase_min_ms);

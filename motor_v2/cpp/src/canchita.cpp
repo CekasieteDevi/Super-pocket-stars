@@ -1312,9 +1312,10 @@ void Canchita::_ubicar(int i) {
 	c.mira_z = bola.z;
 }
 
-void Canchita::_franja(Parte parte, double &desde, double &hasta) const {
-	const double limites[5] = { 0.0, param_toque.pie_hasta, param_toque.muslo_hasta, param_toque.pecho_hasta,
-		param_toque.cabeza_hasta };
+// `control`: la franja del que recibe, con el pecho hasta pecho_control_hasta.
+void Canchita::_franja(Parte parte, double &desde, double &hasta, bool control) const {
+	double pecho = control ? std::max(param_toque.pecho_hasta, param_toque.pecho_control_hasta) : param_toque.pecho_hasta;
+	const double limites[5] = { 0.0, param_toque.pie_hasta, param_toque.muslo_hasta, pecho, param_toque.cabeza_hasta };
 	int k = std::clamp(int(parte), 0, 3);
 	desde = limites[k];
 	hasta = limites[k + 1];
@@ -1348,8 +1349,19 @@ int Canchita::_clip_de_parte(const JugadorCanchita &j, Parte parte) const {
 	return parte == NINGUNA ? -1 : param_toque.clip_recepcion[parte];
 }
 
+// La parte con que la toca a esta altura: la del que recibe va con el pecho
+// hasta pecho_control_hasta.
+Parte Canchita::_parte_de(const JugadorCanchita &j, double alto) const {
+	if (j.toque != TOQUE_CONTROL) {
+		return parte_para(param_toque, alto);
+	}
+	ParametrosToque p = param_toque;
+	p.pecho_hasta = std::max(p.pecho_hasta, p.pecho_control_hasta);
+	return parte_para(p, alto);
+}
+
 int Canchita::_clip_para(const JugadorCanchita &j, double alto) const {
-	return _clip_de_parte(j, parte_para(param_toque, alto));
+	return _clip_de_parte(j, _parte_de(j, alto));
 }
 
 // El pie llega un poco de costado (el ajuste de pie de la vista lo tapa):
@@ -1409,7 +1421,7 @@ void Canchita::_gatillo(int i) {
 				continue;
 			}
 			double tcc = std::max(clips[size_t(cc)].contacto_seg, 0.0);
-			if (parte_para(param_toque, _bola_en(paso + int64_t(tcc / PASO_SEG + 0.5)).y) == candidata) {
+			if (_parte_de(j, _bola_en(paso + int64_t(tcc / PASO_SEG + 0.5)).y) == candidata) {
 				parte = candidata;
 				break;
 			}
@@ -1431,7 +1443,7 @@ void Canchita::_gatillo(int i) {
 		double tc = std::max(clips[size_t(clip)].contacto_seg, 0.0);
 		V3 p = _bola_en(paso + int64_t(tc / PASO_SEG + 0.5));
 		if (por_altura && vuelta == 0) {
-			Parte otra = parte_para(param_toque, p.y);
+			Parte otra = _parte_de(j, p.y);
 			if (otra == NINGUNA) {
 				return;
 			}
@@ -1467,7 +1479,7 @@ void Canchita::_gatillo(int i) {
 						&& p.y <= clips[size_t(clip)].punto_y + _tolerancia_alto(j.clip_arquero, true);
 			} else if (j.toque == TOQUE_CONTROL) {
 				double desde, hasta;
-				_franja(parte, desde, hasta);
+				_franja(parte, desde, hasta, true);
 				alto_ok = p.y >= desde - param_toque.tolerancia_alto_m && p.y <= hasta + param_toque.tolerancia_alto_m;
 			} else if (j.toque == TOQUE_ENTRADA) {
 				// La entrada va a la pelota del piso (el punto de Barrida es el
@@ -1596,7 +1608,7 @@ bool Canchita::_resolver_toques() {
 			// recibe (su franja, más la tolerancia): la cabeza no para una
 			// pelota que ya bajó al pie.
 			double desde, hasta;
-			_franja(Parte(j.parte), desde, hasta);
+			_franja(Parte(j.parte), desde, hasta, true);
 			double tol = param_toque.tolerancia_alto_m;
 			double bajo = std::min(pelota.previa.y, pelota.pos.y), alto = std::max(pelota.previa.y, pelota.pos.y);
 			alto_ok = alto >= desde - tol && bajo <= hasta + tol;

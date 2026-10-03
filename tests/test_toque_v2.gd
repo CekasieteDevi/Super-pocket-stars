@@ -60,12 +60,14 @@ func _prediccion_exacta() -> void:
 
 ## Pelotas que llegan a distintas alturas a uno parado: las cuatro partes
 ## aparecen, cada toque con el clip de su parte, y la parte es la de la
-## altura de la pelota en ese momento.
+## altura de la pelota en ese momento. El que recibe usa el pecho hasta
+## toque.pecho_control_hasta (la cabeza del chibi empieza a 0,87 m).
 func _recepcion_por_altura() -> void:
 	var clip_de := {"pie": _toque["clip_recepcion"][0], "muslo": _toque["clip_recepcion"][1],
 		"pecho": _toque["clip_recepcion"][2], "cabeza": _toque["clip_recepcion"][3]}
 	var hasta := {"pie": float(_toque["pie_hasta"]), "muslo": float(_toque["muslo_hasta"]),
-		"pecho": float(_toque["pecho_hasta"]), "cabeza": float(_toque["cabeza_hasta"])}
+		"pecho": maxf(float(_toque["pecho_hasta"]), float(_toque["pecho_control_hasta"])),
+		"cabeza": float(_toque["cabeza_hasta"])}
 	var vistas := {}
 	var mal := []
 	for vi in range(8, 17):

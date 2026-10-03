@@ -791,7 +791,8 @@ private:
 	void _gatillo(int i);
 	int _clip_para(const JugadorCanchita &j, double alto) const;
 	int _clip_de_parte(const JugadorCanchita &j, Parte parte) const;
-	void _franja(Parte parte, double &desde, double &hasta) const;
+	void _franja(Parte parte, double &desde, double &hasta, bool control = false) const;
+	Parte _parte_de(const JugadorCanchita &j, double alto) const;
 	double _rumbo_al_tocar(const Cuerpo &c, double rumbo, double x, double z) const;
 	void _orientar(int i, V3 bola);
 
