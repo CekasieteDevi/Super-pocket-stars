@@ -157,8 +157,20 @@ func _process(delta: float) -> void:
 		if jugadores != _jugadores_antes:
 			que.append("composición %d -> %d" % [_jugadores_antes, jugadores])
 		var estado: Dictionary = partido.get_estado() if partido != null else {}
-		print("%s   cuadro lento de %.0f ms en el paso %d (%s, %s): %s" % [PREFIJO, delta * 1000.0, int(estado.get("paso", -1)),
-			str(estado.get("periodo", "")), str(estado.get("parada", "")), ", ".join(que)])
+		# Dónde mira la cámara y cuántos entran en el cuadro: en el teléfono
+		# los tirones se ven en remates, córners y tiros libres (revisión del
+		# 2026-10-03), cerca del arco y con todos amontonados en el área.
+		var bola: Vector3 = _vista._visto.get_pelota_pos() if _vista._visto != null else Vector3.ZERO
+		var encuadre: Rect2 = _vista.vista.encuadre_metros() if _vista.vista != null else Rect2()
+		var en_cuadro := 0
+		if _vista._visto != null:
+			for p in _vista._visto.get_pos():
+				if encuadre.has_point(p):
+					en_cuadro += 1
+		print("%s   cuadro lento de %.0f ms en el paso %d (%s, %s), pelota en x %.0f z %.0f, %d en cuadro, %d llamadas, %d mil triángulos: %s" % [
+			PREFIJO, delta * 1000.0, int(estado.get("paso", -1)), str(estado.get("periodo", "")), str(estado.get("parada", "")),
+			bola.x, bola.z, en_cuadro, int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
+			int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)) / 1000, ", ".join(que)])
 	_eventos_vistos = eventos.size()
 	_jugadores_antes = jugadores
 	if _tiempo_muestra >= MUESTRA_SEG:

@@ -30,6 +30,19 @@ historial de git (este archivo hasta la versión 0.7.96).
   `sombra_redonda.gdshader`: los shaders.
 - `BUGS_1.1.00.md`: el registro de errores de la vista vieja (histórico).
 
+## Pies que no patinan
+
+- `Jugador3D.poner` funde con el clip viejo andando a su ritmo, no con una
+  pose congelada. Los loops salen de `data/acciones_v2.json` (el GLB no trae
+  el loop de los clips de andar).
+- `Jugador3D.piernas_de`: debajo de un gesto hecho en el lugar (el toque de
+  la conducción, el remate corriendo, el pecho), la cadera y las piernas van
+  con el clip de andar en cinta. La pierna que toca va con el gesto cerca
+  del contacto. Lo arma `VistaV2._piernas_de_carrera`.
+- El arquero está en guardia solo casi quieto; andando usa los clips en
+  cinta, también de costado y de espaldas.
+- `tests/_diag_patina_partido_v2.gd` mide el patinaje por clip en un partido.
+
 ## Laboratorios
 
 Las escenas de `motor_v2/` muestran cada parte sin entrar a una partida:

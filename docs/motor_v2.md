@@ -1379,6 +1379,34 @@ Cada estilo de local contra el Juego directo, 100 partidos:
 8. **La biblioteca de Linux:** descartada (2026-10-02). El juego sale para Android y se desarrolla en Windows; la nube ya no se usa. Se sacaron la biblioteca, su entrada en `motor_v2.gdextension` y `motor_v2/cpp/zig`.
 9. **Revisión visual** en una partida de verdad: un partido de liga y uno de copa.
 
+#### Resultado (2026-10-03): revisión en el teléfono
+
+El usuario miró partidos en el teléfono (APK) y marcó ocho cosas. Cada arreglo se midió antes y después con la misma semilla.
+
+| Lo que vio el usuario | Qué era | Antes | Después |
+| --- | --- | --- | --- |
+| Arrastran los pies al moverse | Los gestos corriendo (el toque de la conducción, el remate, el pecho) están hechos en el lugar; los fundidos partían de una pose congelada; el arquero se deslizaba en guardia hasta 1,6 m/s | Toque de la conducción: 100 m patinados por partido; pecho 32 m; guardia del arquero 296 m | 9 m, 3 m y 66 m |
+| Control de pelota, estadísticas | El usuario decide ver las estadísticas cuando esté el juego completo | — | — |
+| Cabezazos con poca fuerza | `remate.cabeza_*_ms` 9-14 m/s | Córner con gol 3,1%; entra el 2% de los cabezazos | 13-20 m/s: 3,8% y 4% |
+| Tirones en remates, córners y tiros libres | Sin medir en el teléfono (ver abajo) | — | — |
+| Voleas: centros que se pierden al controlarlos | El centro se jugaba de primera solo desde `primera_geometria` | 1,69 remates de primera con la pelota en el aire por partido | `primera_geometria_centro` 0,15: 1,91 |
+| El arquero se para de golpe después del gol | La estirada deja la cadera 1,3 m al costado y el cuerpo no se movió | Tirado a parado en un cuadro | `Arquero_Levanta` con la pelota fuera de juego o en las manos |
+| Cabecean cuando la quieren bajar de pecho | La cabeza del chibi empieza a 0,87 m; el control de una pelota a esa altura era de cabeza | ~200 controles de cabeza debajo de 1,3 m en 40 partidos | ~30; van de pecho con un salto (`toque.pecho_control_hasta` 1,3 m) |
+| El arquero sale y el centro le pasa por arriba | Se tiraba "a tiempo" aunque no llegara, a cualquier distancia | Primera: 0,40 salidas falladas por partido; décima: 0,30 | 0,28 y 0,20; el de poco achique calcula mal (`salida_error_*`) |
+
+- **Fundido con el clip viejo andando** (`Jugador3D.poner`): el clip viejo sigue a su ritmo mientras se funde. Trotar a Correr patinaba 51 m por partido; ahora 24.
+- **Piernas de la carrera** (`Jugador3D.piernas_de`, `VistaV2._piernas_de_carrera`): debajo de un gesto que se hace corriendo, la cadera y las piernas van con el clip de andar en cinta; la pierna que toca va con el gesto cerca del contacto.
+- **Goles sin autor:** el pase o el centro que entra directo es gol del que lo dio. Quedan los goles en contra de verdad: 6 de 659 en 300 partidos. `test_estadisticas_liga` los acepta (pasaba por la semilla).
+- **`test_jugadas_v2`** sigue hasta 40 partidos para ver la defensa adelantada: en 10 no salía una de cada cuatro semillas.
+
+**Los tirones (sin arreglar).** En la PC no aparecen. El motor tarda 2,5 ms en el peor paso (el saque inicial) y la vista en GDScript 2,9 ms en el peor cuadro (`tests/_diag_pasos_lentos_v2.gd`, `tests/_diag_cuadros_lentos_v2.gd`). Con el render, el peor cuadro es de 4,9 ms (`tests/_diag_dibujo_v2.gd`). Cerca del arco rival se dibujan 260 mil triángulos contra 170 mil en el medio: todos los jugadores entran en el cuadro. La sospecha es la placa del teléfono. `banco_etapa8` anota ahora en cada cuadro lento dónde está la pelota, cuántos jugadores entran en el cuadro, las llamadas de dibujo y los triángulos. Falta correrlo con el teléfono conectado.
+
+**Qué falta:**
+
+1. Medir los tirones en el teléfono con `banco_etapa8`.
+2. Los fundidos al cambiar de sentido (de costado a adelante) todavía arrastran el pie: el modelo gira 90° con el pie apoyado lejos del centro.
+3. Revisión visual de esta vuelta en el teléfono.
+
 **Herramientas que acompañan todas las etapas:** un detector nuevo que mide sobre el mundo (no sobre la vista) `SALTO_PELOTA`, `ENCIMADOS` (cápsulas superpuestas), `PATINA` (pie que desliza), `ESPERA` (jugador quieto con la pelota viniendo a él) y ms por frame; y una grabación por semilla que se puede reproducir y rebobinar para ver cualquier minuto.
 
 **Dónde se hace cada etapa:** todas en la PC del usuario. Las etapas 1 y 3 a 6 se hicieron en la nube (Linux); desde el 2026-10-02 la nube no se usa y no hay biblioteca de Linux.

@@ -1,4 +1,5 @@
 [
+	{"version": "0.8.07", "fecha": "2026-10-03", "cambio": "La prueba del teléfono anota dónde está la pelota y cuántos jugadores se ven en cada tirón."},
 	{"version": "0.8.06", "fecha": "2026-10-03", "cambio": "Los delanteros le pegan de primera, de volea o de cabeza, a más centros en vez de pararlos."},
 	{"version": "0.8.05", "fecha": "2026-10-03", "cambio": "El pase o el centro que entra directo al arco cuenta como gol del que lo dio, no como gol en contra."},
 	{"version": "0.8.04", "fecha": "2026-10-03", "cambio": "Los cabezazos al arco salen con más fuerza."},
