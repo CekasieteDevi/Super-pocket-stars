@@ -533,9 +533,15 @@ void Canchita::_alcance(int i, double factor, int &k, double &t, int no_antes) c
 	// era el 45% del costo del paso (tests/_diag_cerebro_v2.gd); en la
 	// canchita chica se sigue de a uno.
 	const int salto = modo == PARTIDO ? SALTO_ALCANCE : 1;
+	// El arquero en su área la juega con las manos: hasta donde cree que
+	// llegan (ver _alto_que_cree_alcanzar). Con la cabeza de los demás
+	// (1,8 m) salía a centros que pasaban 0,3 m por arriba de las manos.
+	const bool arquero = jugadores[size_t(i)].arquero;
+	const double manos = arquero ? _alto_que_cree_alcanzar(i) : 0.0;
 	auto llega = [&](int q, double &tq) {
 		const V3 &p = trayectoria.pos[size_t(q)];
-		if (p.y > param_toque.cabeza_hasta) {
+		double tope = arquero && _es_mi_area(i, p.x, p.z) ? manos : param_toque.cabeza_hasta;
+		if (p.y > tope) {
 			return false;
 		}
 		tq = double(_tray_paso + q + 1 - paso) * PASO_SEG;
@@ -1483,6 +1489,16 @@ void Canchita::_gatillo(int i) {
 			// El arquero se tira a tiempo aunque no vaya a llegar: esperando a
 			// quedar justo, el remate ya estaba adentro cuando arrancaba.
 			bool a_tiempo = ataja && paso + int64_t(tc / PASO_SEG + 0.5) >= j.paso_meta;
+			// Saliendo a una pelota que no es un remate (un centro, un rebote)
+			// se tira a tiempo solo si llega, o si calcula mal: el de poco
+			// achique cree que llega desde salida_error_m más lejos. Se tiraban
+			// todos a cualquier distancia, y en primera fallaban más salidas
+			// (0,40 por partido) que las que tocaban (0,29). Revisión del
+			// 2026-10-03: "le pasó por arriba; debería pasar cuando el golero
+			// es malo".
+			if (a_tiempo && !(_remate.activo && _remate.equipo != j.equipo)) {
+				a_tiempo = d[0] <= tolerancia + segun_atributo(j.achique, param_arquero.salida_error_m, 0.0);
+			}
 			if ((alto_ok && (d[0] <= gatillo || mejor_ahora || (quietos && d[0] <= tolerancia))) || a_tiempo) {
 				if (c.empezar(clip)) {
 					j.clip_toque = clip;
@@ -1676,6 +1692,14 @@ bool Canchita::_resolver_toques() {
 			}
 			if (j.toque == TOQUE_ATAJADA) {
 				cuenta.atajadas_falladas++;
+				if (!(_remate.activo && _remate.equipo != j.equipo)) {
+					cuenta.salidas_falladas++;
+					if (j.toque_d_min > _tolerancia(int(i), j.clip_arquero)) {
+						cuenta.salidas_lejos++;
+					} else if (!j.toque_alto_ok) {
+						cuenta.salidas_por_arriba++;
+					}
+				}
 			}
 			if (j.toque == TOQUE_CONTROL) {
 				// Erró el control: sale a buscarla sin esperar al gesto. Pecho y
@@ -3422,6 +3446,18 @@ void Canchita::_levantarse(int i, int clip_terminado) {
 		_suelta_en = std::max(_suelta_en, parado);
 		_reinicio_hasta = std::max(_reinicio_hasta, _suelta_en + REINICIO_PASOS);
 	}
+}
+
+// Hasta qué alto cree el arquero que llegan sus manos (atajando arriba): lo
+// que llegan de verdad (el gesto de atajar arriba, que es el más alto parado,
+// más su tolerancia de alto) más el error del que calcula mal. Revisión del
+// 2026-10-03: "salió a buscar un centro y le pasó por arriba; debería pasar
+// cuando el golero es malo".
+double Canchita::_alto_que_cree_alcanzar(int i) const {
+	const ParametrosArquero &a = param_arquero;
+	int clip = a.clips[ATAJA_ARRIBA];
+	double llega = (clip >= 0 ? clips[size_t(clip)].punto_y : param_toque.pecho_hasta) + _tolerancia_alto(ATAJA_ARRIBA, true);
+	return llega + segun_atributo(jugadores[size_t(i)].achique, a.salida_error_alto_m, 0.0);
 }
 
 // La pelota va en las manos, adelante del pecho y a la rapidez del arquero.

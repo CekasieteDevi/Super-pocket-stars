@@ -148,6 +148,8 @@ const NumeroArquero NUMEROS_ARQUERO[] = {
 	{ "achique_carril", &motor_v2::ParametrosArquero::achique_carril },
 	{ "ventaja_base", &motor_v2::ParametrosArquero::ventaja_base },
 	{ "ventaja_por_metro", &motor_v2::ParametrosArquero::ventaja_por_metro },
+	{ "salida_error_alto_m", &motor_v2::ParametrosArquero::salida_error_alto_m },
+	{ "salida_error_m", &motor_v2::ParametrosArquero::salida_error_m },
 };
 const char *CLIPS_ARQUERO[motor_v2::CLIPS_ARQUERO] = { "clip_agarra", "clip_abajo", "clip_arriba", "clip_vuela_der",
 	"clip_vuela_izq", "clip_vuela_alta_der", "clip_vuela_alta_izq" };
@@ -821,6 +823,9 @@ Dictionary CanchitaV2Nativa::contadores() const {
 	d["paradas"] = k.paradas;
 	d["salidas_arquero"] = k.salidas_arquero;
 	d["atajadas_falladas"] = k.atajadas_falladas;
+	d["salidas_falladas"] = k.salidas_falladas;
+	d["salidas_por_arriba"] = k.salidas_por_arriba;
+	d["salidas_lejos"] = k.salidas_lejos;
 	// Etapa 6: las reglas.
 	for (int t = 1; t < motor_v2::PARADAS; t++) {
 		String n = PARADAS[t];

@@ -138,6 +138,14 @@ struct ParametrosArquero {
 	// antes que el rival más rápido, más ventaja_por_metro por cada metro que
 	// se aleja de la línea (data/utility_pesos.json, "arquero").
 	double ventaja_base = 0.25, ventaja_por_metro = 0.02;
+	// Sale a una pelota alta de su área si la alcanza con las manos (el clip
+	// de atajar arriba más su tolerancia de alto). El que tiene poco achique
+	// la calcula mal: cree que llega salida_error_alto_m más arriba con
+	// achique 0 (nada con 100), sale y la pelota le pasa por arriba.
+	double salida_error_alto_m = 0.6;
+	// Y se tira sin llegar a la pelota hasta salida_error_m más lejos de lo
+	// que alcanza (con achique 0; nada con 100).
+	double salida_error_m = 1.5;
 	int clips[CLIPS_ARQUERO] = { -1, -1, -1, -1, -1, -1, -1 };
 	// Se levanta después de tirarse hacia su derecha o su izquierda
 	// (Arquero_Levanta: arranca en la pose en que cae la estirada, 1,3 m al

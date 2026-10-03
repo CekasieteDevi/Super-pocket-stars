@@ -211,6 +211,11 @@ struct ContadoresCanchita {
 	int64_t salidas_arquero = 0;
 	// Gestos de atajada que no llegaron a la pelota.
 	int64_t atajadas_falladas = 0;
+	// Las que fallan saliendo a una pelota que no es un remate (un centro).
+	int64_t salidas_falladas = 0;
+	// De esas, las que le pasaron por arriba de las manos y las que no
+	// alcanzó a tocar (lejos).
+	int64_t salidas_por_arriba = 0, salidas_lejos = 0;
 
 	// Etapa 6 (docs/motor_v2.md, "Pasa si"). Paradas por TipoParada: cuántas,
 	// cuántas se ejecutaron y los segundos desde que se cortó el juego hasta
@@ -838,6 +843,7 @@ private:
 	double _tolerancia_alto(int clip, bool arriba) const;
 	bool _es_estirada(int clip_arquero) const;
 	void _levantarse(int i, int clip_terminado);
+	double _alto_que_cree_alcanzar(int i) const;
 	double _alto_minimo(int clip_arquero, const Clip &k) const;
 	double _distancia_al_brazo(const JugadorCanchita &j, const Cuerpo &c, V3 mano, V3 a, V3 b) const;
 	// De su punta, lo que corre para acomodarse sin darse vuelta.
