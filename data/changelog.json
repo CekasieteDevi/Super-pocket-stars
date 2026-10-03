@@ -1,4 +1,5 @@
 [
+	{"version": "0.8.05", "fecha": "2026-10-03", "cambio": "El pase o el centro que entra directo al arco cuenta como gol del que lo dio, no como gol en contra."},
 	{"version": "0.8.04", "fecha": "2026-10-03", "cambio": "Los cabezazos al arco salen con más fuerza."},
 	{"version": "0.8.03", "fecha": "2026-10-03", "cambio": "Los jugadores bajan de pecho, con un saltito, las pelotas que les llegan a la altura de la cara en vez de cabecearlas."},
 	{"version": "0.8.02", "fecha": "2026-10-03", "cambio": "El arquero solo sale a los centros que puede agarrar; el que es malo a veces calcula mal y la pelota le pasa por arriba."},

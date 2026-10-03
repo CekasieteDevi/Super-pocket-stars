@@ -3747,6 +3747,13 @@ void Canchita::_gol(int marca) {
 		if (autor < 0 && _gol_de_id >= 0 && _gol_de_equipo == marca && paso - _gol_de_paso <= GOL_DEL_REMATE_PASOS) {
 			autor = _gol_de_id;
 		}
+		// El pase o el centro que entra sin que lo toque un rival es gol del
+		// que lo dio: quedaba como gol en contra (2 de cada 8 goles sin autor
+		// en 300 partidos). Si la tocó último un rival, sí es en contra.
+		if (autor < 0 && ultimo_toque >= 0 && ultimo_toque < int(jugadores.size())
+				&& jugadores[size_t(ultimo_toque)].equipo == (marca & 1)) {
+			autor = _id(ultimo_toque);
+		}
 		// `otro`: el que le dio el pase (la asistencia), -1 si no hubo.
 		int asistente = autor >= 0 && autor == _asistido_id && !_remate.penal ? _asistente_id : -1;
 		_anotar(EV_GOL, marca, autor, asistente, _remate.activo && _remate.penal ? 1 : 0, pelota.pos.x, pelota.pos.z);
