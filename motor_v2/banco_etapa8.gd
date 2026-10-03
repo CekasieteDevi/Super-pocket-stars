@@ -40,6 +40,10 @@ var _tiempo_total := 0.0
 var _fps_muestras := PackedFloat32Array()
 var _peor_cuadro_ms := 0.0
 var _lentos := 0
+## Para contar qué pasó en cada cuadro lento: los eventos y los jugadores que
+## había en el cuadro anterior.
+var _eventos_vistos := 0
+var _jugadores_antes := 0
 
 
 func _ready() -> void:
@@ -118,6 +122,8 @@ func _siguiente_partido() -> void:
 	_vista.iniciar(r["receta_v2"], r["eventos"], c[0], c[1])
 	_vista.velocidad = _velocidad
 	_vista.terminado.connect(_termino, CONNECT_ONE_SHOT)
+	_eventos_vistos = 0
+	_jugadores_antes = 0
 	print("%s con vista, partido %d de %d: %d-%d, memoria %.0f MB" % [PREFIJO, _jugados + 1, _partidos, r["goles_local"],
 		r["goles_visitante"], OS.get_static_memory_usage() / 1048576.0])
 
@@ -137,9 +143,24 @@ func _process(delta: float) -> void:
 	_tiempo_muestra += delta
 	_cuadros_muestra += 1
 	_peor_cuadro_ms = maxf(_peor_cuadro_ms, delta * 1000.0)
-	# Un cuadro lento: más de dos cuadros de 60 fps.
+	# Un cuadro lento: más de dos cuadros de 60 fps. Se anota qué pasó en el
+	# cuadro anterior (el lento es el que lo dibuja): eventos del motor y si
+	# cambiaron los que están en la cancha.
+	var partido: Object = _vista._partido
+	var eventos: Array = partido.eventos() if partido != null else []
+	var jugadores: int = _vista._composicion.size()
 	if delta > 2.0 / 60.0:
 		_lentos += 1
+		var que := []
+		for k in range(_eventos_vistos, eventos.size()):
+			que.append(str(eventos[k]["tipo"]))
+		if jugadores != _jugadores_antes:
+			que.append("composición %d -> %d" % [_jugadores_antes, jugadores])
+		var estado: Dictionary = partido.get_estado() if partido != null else {}
+		print("%s   cuadro lento de %.0f ms en el paso %d (%s, %s): %s" % [PREFIJO, delta * 1000.0, int(estado.get("paso", -1)),
+			str(estado.get("periodo", "")), str(estado.get("parada", "")), ", ".join(que)])
+	_eventos_vistos = eventos.size()
+	_jugadores_antes = jugadores
 	if _tiempo_muestra >= MUESTRA_SEG:
 		var fps := float(_cuadros_muestra) / _tiempo_muestra
 		_fps_muestras.append(fps)
