@@ -45,6 +45,10 @@ historial de git (este archivo hasta la versión 0.7.96).
   cancha donde pisó y la pierna se dobla para llegar. Va después de `poner`,
   solo para los que la cámara muestra. `_apoyo_de` saca de las pistas del clip
   qué pie está apoyado en cada cuadro.
+- En un fundido los pies no quedan más abajo que entre los dos clips
+  (`Jugador3D._fundir`). Mezclando dos pasos cruzados (de costado y adelante)
+  el muslo queda más vertical y el pie baja 3 a 5 cm: el pie del aire tocaba
+  el piso en medio del giro.
 - El modelo mira según el clip que muestra. Al cambiar de sentido (de
   costado a adelante) gira los 90° junto con el fundido
   (`VistaV2._giro_al_cambiar`).

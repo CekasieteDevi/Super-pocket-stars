@@ -19,7 +19,10 @@ extends SceneTree
 ## Uno anda de costado mirando lejos y después corre hacia donde iba, y otro
 ## camina: el pie apoyado queda clavado (Jugador3D.clavar_pies) y el modelo
 ## gira los 90° junto con el fundido. Sin eso, de costado deslizaba el 5% y
-## 0,89 m en cada cambio a correr (ahora 0,19), y caminando el 27% (ahora 3%).
+## 0,89 m en cada cambio a correr, y caminando el 27% (ahora 3%).
+## En el fundido de un paso de costado a uno hacia adelante los pies no quedan
+## más abajo que en los dos clips (Jugador3D._fundir): con eso el cambio pasa
+## de 0,19 m a 0,02.
 ## Uno camina, frena y mira al costado: entra al Giro_90 todavía andando y los
 ## pies no saltan (el giro entra con fundido). Otro pica y frena: la Frenada
 ## no entra en medio del fundido de Correr a Trotar.
@@ -40,6 +43,7 @@ const GIRA := 2
 const FRENA := 5
 const CONDUCE_GIRANDO := 9
 const VARIANTE := 1
+const FUNDE := 19
 const APOYO_M := DetectorPatinaV2.APOYO_M
 
 var fallos := 0
@@ -107,6 +111,7 @@ func _probar(vista: VistaV2) -> void:
 	_caminando(c, vista)
 	_giro_andando(c, vista)
 	_frenada_despues_del_fundido(c, vista)
+	_pies_en_el_fundido(vista)
 	_gestos_corriendo(vista)
 	_gesto_girando(vista)
 	_variantes(vista)
@@ -181,9 +186,42 @@ func _de_costado_a_adelante(c: Object, vista: VistaV2) -> void:
 	var total := 0.0
 	for clip in cambio.por_clip:
 		total += float(cambio.por_clip[clip][0])
-	_ok(total / DE_COSTADO.size() < 0.3,
+	_ok(total / DE_COSTADO.size() < 0.1,
 		"al girar de costado a adelante el pie apoyado desliza %.2f m por cambio" % (total / DE_COSTADO.size()))
 	_ok(miran == DE_COSTADO.size(), "y el modelo queda mirando adonde fue (%d de %d)" % [miran, DE_COSTADO.size()])
+
+
+## Sin motor ni pie clavado: uno anda de costado a 3,5 m/s y pasa a Trotar.
+## La mezcla gira cada hueso a mitad de camino: con dos pasos cruzados el
+## muslo queda más vertical que en los dos clips y el pie bajaba 3 a 5 cm. El
+## pie del aire tocaba el piso en medio del giro de 90°: 13,7 cm patinados por
+## cambio en un partido (tests/_diag_patina_partido_v2.gd).
+func _pies_en_el_fundido(vista: VistaV2) -> void:
+	var p3: Jugador3D = vista._jugadores[FUNDE]
+	var escala := p3._esqueleto.global_transform.basis.y.length()
+	var rapidez := 3.5
+	var ciclos := 0.0
+	# Unos cuadros de costado: el clip viejo sigue a su ritmo en el fundido.
+	p3.poner("Correr_Costado_Izq", 0.0, -1.0)
+	for k in 6:
+		ciclos += rapidez * PASO / float(vista._metros_ciclo["Correr_Costado_Izq"])
+		p3.poner("Correr_Costado_Izq", fposmod(ciclos, 1.0) * p3.duracion("Correr_Costado_Izq"), PASO)
+	var peor := 0.0
+	var cuadros := 0
+	for k in 12:
+		ciclos += rapidez * PASO / float(vista._metros_ciclo["Trotar"])
+		p3.poner("Trotar", fposmod(ciclos, 1.0) * p3.duracion("Trotar"), PASO)
+		if p3._mezcla >= 1.0:
+			break
+		cuadros += 1
+		var vieja := p3._pose_de(p3._anim_vieja, p3._t_vieja)
+		var nueva := p3._pose_de("Trotar", p3._t_actual)
+		for pie in DetectorPatinaV2.PIES.size():
+			var en_clips := minf(p3._pie_en_pose(vieja, pie).y, p3._pie_en_pose(nueva, pie).y)
+			peor = maxf(peor, (en_clips - p3._pie_en_pose([], pie).y) * escala)
+	_ok(cuadros >= 5 and peor < 0.005,
+		"en el fundido de costado a adelante el pie no queda más abajo que en los dos clips (%.1f cm en %d cuadros)"
+		% [peor * 100.0, cuadros])
 
 
 ## Camina 5 s a 1,6 m/s hacia donde mira, cambiando de rumbo 40° cada segundo

@@ -192,6 +192,8 @@ var _apoyo_por_clip := {}
 ## cuadro: quedan acá para no armar dos listas por jugador y por cuadro.
 var _pie_en_clip: Array[Vector3] = [Vector3.ZERO, Vector3.ZERO]
 var _pie_destino: Array[Vector3] = [Vector3.ZERO, Vector3.ZERO]
+## Por pie: el alto que le toca en este cuadro de un fundido (ver _fundir).
+var _pie_alto_fundido := [0.0, 0.0]
 var cara := -1
 var gesto := Gesto.NORMAL
 var numero := -1
@@ -889,16 +891,7 @@ func _apoyo_de(anim: String) -> Dictionary:
 		var pose := _pose_de(anim, a.length * float(c) / float(cuadros))
 		var par: Array[Vector3] = []
 		for k in LADOS_PIE.size():
-			# Del pie a la cadera: cada hueso lleva el punto al espacio de su padre.
-			var punto := _apoyo_pie[k]
-			var b: int = _huesos_pierna[k][2]
-			while b >= 0:
-				var reposo := _esqueleto.get_bone_rest(b)
-				var dato: Array = pose[b]
-				var escala_hueso: Vector3 = dato[2] if dato[2] != null else reposo.basis.get_scale()
-				var giro: Quaternion = dato[1] if dato[1] != null else reposo.basis.get_rotation_quaternion()
-				punto = (dato[0] if dato[0] != null else reposo.origin) + giro * (punto * escala_hueso)
-				b = _esqueleto.get_bone_parent(b)
+			var punto := _pie_en_pose(pose, k)
 			bajo = minf(bajo, punto.y)
 			par.append(punto)
 		pies.append(par)
@@ -1058,12 +1051,58 @@ func _pose_de(anim: String, tiempo: float) -> Array:
 ## La pose que dejó seek() (la nueva) se lleva hacia la vieja: w=0 es la
 ## vieja, w=1 la nueva. Los huesos que en el clip viejo ya llevaban las
 ## piernas de la carrera no se funden con esa parte.
+##
+## Los pies no quedan más abajo que entre los dos clips. La mezcla gira cada
+## hueso a mitad de camino: con dos pasos cruzados (de costado y adelante) el
+## muslo queda más vertical que en los dos clips y el pie baja 3 a 5 cm. El
+## pie que iba por el aire tocaba el piso en medio del giro de 90° y el
+## apoyado seguía clavado cuando los dos clips ya lo levantaban: 13,7 cm
+## patinados en cada cambio de Correr_Costado a Trotar (73 m por partido) y
+## 225 m entre todos los fundidos. Con el pie al alto que le dan los clips,
+## 3,9 cm (21 m) y 88 m (tests/_diag_patina_partido_v2.gd, semilla 20261201).
+## Cuesta 0,04 ms por cuadro en la PC (de 0,74 a 0,78,
+## tests/_diag_cuadros_lentos_v2.gd).
 func _fundir(w: float) -> void:
 	var vieja_pose := _pose_vieja if _anim_vieja == "" else _pose_de(_anim_vieja, _t_vieja)
+	var con_pies: bool = not _huesos_pierna.is_empty() and not _huesos_pierna[0].has(-1) and not _huesos_pierna[1].has(-1) \
+		and vieja_pose.size() == _esqueleto.get_bone_count()
+	var alto := _pie_alto_fundido
+	if con_pies:
+		# Antes de mezclar: el esqueleto todavía tiene la pose del clip nuevo.
+		for k in LADOS_PIE.size():
+			var pie: int = _huesos_pierna[k][2]
+			alto[k] = lerpf(_pie_en_pose(vieja_pose, k).y, _pie_en_pose([], k).y, lerpf(w, 1.0, _peso_piernas_vieja[pie]))
 	for b in mini(vieja_pose.size(), _esqueleto.get_bone_count()):
 		var vieja: Array = vieja_pose[b]
 		var wb := lerpf(w, 1.0, _peso_piernas_vieja[b]) if b < _peso_piernas_vieja.size() else w
 		_mezclar_hueso(b, vieja, wb)
+	if con_pies:
+		for k in LADOS_PIE.size():
+			var punto := _pie_en_pose([], k)
+			var falta: float = alto[k] - punto.y
+			if falta > 0.0 and falta * falta >= CORRIDO_MIN_M2:
+				_doblar_pierna(_huesos_pierna[k][0], _huesos_pierna[k][1], punto, Vector3(punto.x, alto[k], punto.z))
+
+
+## Dónde queda el punto de apoyo del pie `k` (espacio del esqueleto) con
+## `pose` ([posición, rotación, escala] por hueso; null = la de reposo). Con
+## `pose` vacía, la pose que tiene el esqueleto ahora, sin pedirle la pose
+## global (que lo hace recalcular todos los huesos).
+func _pie_en_pose(pose: Array, k: int) -> Vector3:
+	var punto := _apoyo_pie[k]
+	var b: int = _huesos_pierna[k][2]
+	# Del pie a la cadera: cada hueso lleva el punto al espacio de su padre.
+	while b >= 0:
+		if pose.is_empty():
+			punto = _esqueleto.get_bone_pose(b) * punto
+		else:
+			var reposo := _esqueleto.get_bone_rest(b)
+			var dato: Array = pose[b]
+			var escala_hueso: Vector3 = dato[2] if dato[2] != null else reposo.basis.get_scale()
+			var giro: Quaternion = dato[1] if dato[1] != null else reposo.basis.get_rotation_quaternion()
+			punto = (dato[0] if dato[0] != null else reposo.origin) + giro * (punto * escala_hueso)
+		b = _esqueleto.get_bone_parent(b)
+	return punto
 
 
 ## Lleva el hueso `b` de la pose de `otra` ([posición, rotación, escala]) a
