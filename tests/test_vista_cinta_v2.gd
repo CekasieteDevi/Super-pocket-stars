@@ -15,6 +15,7 @@ extends SceneTree
 ## apoyado no patina lo que avanza el cuerpo (las piernas van con la
 ## carrera, Jugador3D.piernas_de, y el arquero no se desliza en guardia).
 ## Con el gesto entero el toque daba 28% y el arquero en guardia, 200%.
+## El arquero que se tira y sigue jugando se levanta con Arquero_Levanta.
 ## Uno anda de costado mirando lejos y después corre hacia donde iba, y otro
 ## camina: el pie apoyado queda clavado (Jugador3D.clavar_pies) y el modelo
 ## gira los 90° junto con el fundido. Sin eso, de costado deslizaba el 5% y
@@ -94,6 +95,7 @@ func _probar(vista: VistaV2) -> void:
 	_de_costado_a_adelante(c, vista)
 	_caminando(c, vista)
 	_gestos_corriendo(vista)
+	_arquero_se_levanta(vista)
 	print("FALLOS=%d" % fallos)
 	quit(1 if fallos else 0)
 
@@ -241,6 +243,59 @@ func _gestos_corriendo(vista: VistaV2) -> void:
 	_ok(en_guardia < 0.1 * total and patina < 0.3 * total,
 		"el arquero a 1 m/s de costado no anda en guardia (%.1f de %.1f m) y el pie desliza el %.0f%%"
 		% [en_guardia, total, 100.0 * patina / maxf(total, 0.01)])
+
+
+## Sin motor: el arquero se tira (Atajar_Volando) y, al terminar, el motor
+## lo deja sin gesto y sale a buscar el rebote (Canchita::_levantarse con la
+## pelota en juego). La vista lo levanta con Arquero_Levanta en medio
+## segundo; antes pasaba de tirado a parado en el fundido (0,15 s).
+func _arquero_se_levanta(vista: VistaV2) -> void:
+	var n := vista._cantidad()
+	var pos := PackedVector2Array()
+	var rumbo := PackedFloat32Array()
+	var rapidez := PackedFloat32Array()
+	for i in n:
+		var p := vista._jugadores[i].position
+		pos.append(Vector2(p.x, p.z))
+		rumbo.append(0.0)
+		rapidez.append(0.0)
+	var p3: Jugador3D = vista._jugadores[ARQUERO]
+	var parado := 0.0
+	var dur := p3.duracion("Atajar_Volando")
+	var clips := []
+	var alto_a_los := {}
+	var peor_salto := 0.0
+	var antes := Vector3.ZERO
+	for k in 150:
+		var previa := pos.duplicate()
+		var acciones := []
+		for i in n:
+			acciones.append(["", 0.0])
+		var t := (k - 30) * PASO
+		if k < 30:
+			parado = p3.hueso("Cadera").origin.y
+		elif t < dur:
+			acciones[ARQUERO] = ["Atajar_Volando", t]
+		else:
+			# Sale hacia el rebote, acelerando.
+			rapidez[ARQUERO] = minf(6.0 * (t - dur), 4.0)
+			pos[ARQUERO] += Vector2(0.0, float(rapidez[ARQUERO]) * PASO)
+		vista._dibujar_jugadores(previa, pos, rumbo, rapidez, acciones, 1.0, PASO)
+		var cadera := p3.hueso("Cadera").origin
+		if t >= dur:
+			if clips.is_empty() or clips[-1] != p3._anim_actual:
+				clips.append(p3._anim_actual)
+			peor_salto = maxf(peor_salto, Vector2(cadera.x - antes.x, cadera.z - antes.z).length())
+			for seg in [0.2, 0.8]:
+				if not alto_a_los.has(seg) and t - dur >= seg:
+					alto_a_los[seg] = cadera.y
+		antes = cadera
+	_ok(clips.size() >= 2 and str(clips[0]).begins_with("Arquero_Levanta") and not clips.has("Atajar_Volando"),
+		"el arquero que se tiró y sigue jugando se levanta con Arquero_Levanta (%s)" % [clips])
+	_ok(float(alto_a_los[0.2]) < 0.75 * parado and float(alto_a_los[0.8]) > 0.8 * parado,
+		"a los 0,2 s todavía se está levantando (la cadera a %.2f m de %.2f) y a los 0,8 s anda parado (%.2f m)"
+		% [alto_a_los[0.2], parado, alto_a_los[0.8]])
+	_ok(peor_salto < 0.12, "y la cadera no salta: se mueve a lo sumo %.2f m en un cuadro" % peor_salto)
 
 
 ## El pie apoyado de un jugador en un cuadro, por clip (como _pasos).

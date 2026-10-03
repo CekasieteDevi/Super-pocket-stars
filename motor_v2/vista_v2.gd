@@ -62,6 +62,21 @@ const FRENADA_HOLGURA_M := 0.25
 const FRENADA_TRABADA_SEG := 0.05
 const FRENADA_TRABADA_MS := 0.3
 const GIRO_180_DESDE := deg_to_rad(135.0)
+## El arquero que se tiró y dio rebote sigue jugando: el motor lo para
+## enseguida para que llegue a la pelota (Canchita::_levantarse) y el modelo
+## pasaba de tirado, con la cadera 1,3 m al costado, a parado en un fundido
+## (0,15 s). La vista le hace el final de Arquero_Levanta en este tiempo: el
+## motor no cambia y los goles tampoco. El clip arranca con el arquero hecho
+## bolita con la pelota hasta LEVANTA_DESDE_SEG (el cuadro 13): eso se saltea.
+## El modelo se queda donde cayó y alcanza al cuerpo, que ya corre, desde
+## LEVANTA_ALCANZA_DESDE del gesto (cuando apoya el pie).
+const LEVANTA_RAPIDA_SEG := 0.5
+const LEVANTA_DESDE_SEG := 0.5
+const LEVANTA_ALCANZA_DESDE := 0.5
+## Clip de estirada -> el clip con que se levanta (data/fisica_v2.json, "arquero").
+var _levanta_de := {}
+## El gesto que hacía cada uno en el cuadro anterior ("" = ninguno).
+var _gesto_previo: Array[String] = []
 ## Media vuelta corriendo: el objetivo queda a esto o más de la carrera. El
 ## cuerpo la da frenando en línea recta (Cuerpo::_moverse, giro_acel).
 const MEDIA_VUELTA_DESDE := deg_to_rad(150.0)
@@ -266,6 +281,12 @@ func _ready() -> void:
 	_rumbo_modelo.resize(_cantidad())
 	_una_vez.resize(_cantidad())
 	_giro_fundido.resize(_cantidad())
+	_gesto_previo.resize(_cantidad())
+	_gesto_previo.fill("")
+	var arquero := FisicaV2.parametros_arquero()
+	for lado in ["der", "izq"]:
+		for estirada in ["clip_vuela_", "clip_vuela_alta_"]:
+			_levanta_de[str(arquero[estirada + lado])] = str(arquero["clip_levanta_" + lado])
 	_sin_fundido.resize(_cantidad())
 	_v_previa.resize(_cantidad())
 	_desacelera.resize(_cantidad())
@@ -373,6 +394,8 @@ func recomponer(equipos_n: PackedInt32Array, arqueros_n: PackedInt32Array, ids_n
 	_una_vez.clear()
 	_giro_fundido.clear()
 	_giro_fundido.resize(n)
+	_gesto_previo.resize(n)
+	_gesto_previo.fill("")
 	for lista in [_ciclos, _sentido, _rumbo_modelo, _v_previa, _desacelera, _adelante, _sin_fundido]:
 		lista.resize(n)
 		lista.fill(0)
@@ -607,10 +630,15 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 					_sentido[i] = 0
 		if hace_gesto or v < Cancha3D.VELOCIDAD_PARA_PIERNAS:
 			_adelante[i] = 0
+		var gesto_previo := _gesto_previo[i]
+		_gesto_previo[i] = accion if hace_gesto else ""
 		if hace_gesto:
 			_una_vez[i] = {}
 		else:
 			_corrido.erase(i)
+			if _levanta_de.has(gesto_previo) and p3.tiene(_levanta_de[gesto_previo]):
+				_una_vez[i] = {"tipo": "levanta", "clip": _levanta_de[gesto_previo], "t": LEVANTA_DESDE_SEG,
+					"rumbo0": _rumbo_modelo[i], "en": p3.position}
 		var una_vez := [] if hace_gesto else _una_vez_de(i, p3, v, paso, rumbo[i],
 			intenciones[i] if i < intenciones.size() else [], delta)
 		if hace_gesto or not una_vez.is_empty():
@@ -632,8 +660,13 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 		var fundido := -1.0 if _sin_fundido[i] else delta
 		_sin_fundido[i] = 0
 		if not una_vez.is_empty():
+			var se_levanta: bool = _una_vez[i]["tipo"] == "levanta"
+			if se_levanta:
+				var parte := inverse_lerp(LEVANTA_DESDE_SEG, p3.duracion(una_vez[0]), una_vez[1])
+				p3.position = (_una_vez[i]["en"] as Vector3).lerp(p3.position,
+					smoothstep(LEVANTA_ALCANZA_DESDE, 1.0, parte))
 			p3.poner(una_vez[0], una_vez[1], fundido)
-			_clavar_pies(p3, fundido)
+			_clavar_pies(p3, fundido, not se_levanta)
 			p3.poner_cara(p3.cara, Jugador3D.Gesto.NORMAL, _tiempo)
 			continue
 		var anim := _andar_de(i, v)
@@ -789,9 +822,15 @@ func _una_vez_de(i: int, p3: Jugador3D, v: float, paso: Vector2, rumbo: float, i
 		if u.is_empty():
 			return []
 		_una_vez[i] = u
+	var dur := p3.duracion(u["clip"])
+	if u["tipo"] == "levanta":
+		u["t"] = float(u["t"]) + delta * (dur - LEVANTA_DESDE_SEG) / LEVANTA_RAPIDA_SEG
+		if float(u["t"]) >= dur:
+			_una_vez[i] = {}
+			return []
+		return [u["clip"], float(u["t"]), float(u["rumbo0"])]
 	var c: Dictionary = _cinta[u["clip"]]
 	var avance: Array = c["avance_m"]
-	var dur := p3.duracion(u["clip"])
 	u["metros"] = float(u["metros"]) + v * delta
 	var sigue := true
 	match u["tipo"]:

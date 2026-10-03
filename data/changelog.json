@@ -1,4 +1,5 @@
 [
+	{"version": "0.8.10", "fecha": "2026-10-03", "cambio": "El arquero que se tira y da rebote se levanta del piso en vez de aparecer parado."},
 	{"version": "0.8.09", "fecha": "2026-10-03", "cambio": "Los jugadores ya no arrastran los pies al andar de costado, de espaldas o caminando, ni al girar para salir corriendo."},
 	{"version": "0.8.08", "fecha": "2026-10-03", "cambio": "En el teléfono el partido ya no se traba en los remates, los córners y los tiros libres."},
 	{"version": "0.8.07", "fecha": "2026-10-03", "cambio": "La prueba del teléfono anota dónde está la pelota y cuántos jugadores se ven en cada tirón."},
