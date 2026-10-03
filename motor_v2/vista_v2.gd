@@ -124,10 +124,14 @@ var _cinta := {}
 ## del clip, metros recorridos y, en los giros, rumbo del principio y giro.
 var _una_vez: Array[Dictionary] = []
 var _frenada := 6.0
-## Cambia de clip sin fundido en este cuadro. Los giros empiezan y terminan
-## en la pose de Respirar pero con el modelo girado: fundiendo, la pose
-## vieja (cadera girada en el esqueleto) y el modelo ya girado sumaban el
-## giro dos veces y el pie barría 0,36 m en un cuadro.
+## Cambia de clip sin fundido en este cuadro. Los giros terminan en la pose
+## de Respirar pero con el modelo girado: fundiendo, la pose vieja (cadera
+## girada en el esqueleto) y el modelo ya girado sumaban el giro dos veces y
+## el pie barría 0,36 m en un cuadro. La entrada al giro sí funde: el modelo
+## todavía no giró, y el que entra andando viene de un clip de andar. Sin
+## fundido los pies saltaban 12 a 17 cm en ese cuadro, del paso a la pose
+## parada del giro: 29 de los 35 m que patinaba Giro_90 por partido
+## (tests/_diag_patina_partido_v2.gd).
 var _sin_fundido := PackedByteArray()
 ## La rapidez del paso anterior de cada uno y cuánto la bajó (m/s²): la
 ## Frenada empieza solo si el cuerpo está frenando de verdad.
@@ -964,7 +968,6 @@ func _empezar_una_vez(i: int, p3: Jugador3D, v: float, paso: Vector2, rumbo: flo
 			var tabla := []
 			for g in _cinta[clip]["giro_por_cuadro"]:
 				tabla.append(absf(float(g)))
-			_sin_fundido[i] = 1
 			return {"tipo": "giro", "clip": clip, "t": 0.0, "metros": 0.0, "rumbo0": _rumbo_modelo[i],
 				"rumbo_previo": rumbo, "girado": 0.0, "total": falta_girar, "tabla": tabla}
 	if quieto and v > 0.05 and buscada >= ARRANQUE_DESDE_MS and paso.length_squared() > 1e-12 \

@@ -29,6 +29,10 @@ const CONDUCE := 8
 const ARQUERO := 11
 const DE_COSTADO := [14, 17, 20]
 const CAMINA := 16
+const GIRA := 2
+const FRENA := 5
+const CONDUCE_GIRANDO := 9
+const VARIANTE := 1
 const APOYO_M := DetectorPatinaV2.APOYO_M
 
 var fallos := 0
@@ -94,6 +98,7 @@ func _probar(vista: VistaV2) -> void:
 	_media_vuelta(c, vista)
 	_de_costado_a_adelante(c, vista)
 	_caminando(c, vista)
+	_giro_andando(c, vista)
 	_gestos_corriendo(vista)
 	_arquero_se_levanta(vista)
 	print("FALLOS=%d" % fallos)
@@ -193,6 +198,53 @@ func _caminando(c: Object, vista: VistaV2) -> void:
 	var patina: float = (detector.por_clip.get("Caminar", [0.0, 0.0]) as Array)[0]
 	_ok(metros > 5.0 and patina < 0.15 * metros, "caminando el pie apoyado desliza el %.0f%% de lo que avanza el cuerpo (%.2f de %.2f m)"
 		% [100.0 * patina / maxf(metros, 0.01), patina, metros])
+
+
+## Camina 4 m, llega frenando y mira a su izquierda: por debajo de
+## VELOCIDAD_PARA_PIERNAS, todavía andando, entra al Giro_90. Sin fundido en
+## la entrada, los pies saltaban 12 a 17 cm en ese cuadro, del paso del clip
+## de andar a la pose parada del giro (29 de los 35 m que patinaba Giro_90 por
+## partido, tests/_diag_patina_partido_v2.gd).
+func _giro_andando(c: Object, vista: VistaV2) -> void:
+	var p3: Jugador3D = vista._jugadores[GIRA]
+	var inicio: Vector2 = c.get_pos()[GIRA]
+	var detector := DetectorPatinaV2.new()
+	c.mirar_a(GIRA, inicio + Vector2(0.0, 40.0))
+	c.ir_a(GIRA, inicio + Vector2(0.0, 4.0), 0.2, true)
+	var entro_andando := false
+	var peor := 0.0
+	var antes := {}
+	var camino := false
+	var miro := false
+	for k in 300:
+		# Mira al costado recién cuando deja de mover las piernas: girando antes, llega
+		# parado y ya girado.
+		var v: float = c.get_rapidez()[GIRA]
+		camino = camino or v > 1.0
+		if camino and not miro and v < Cancha3D.VELOCIDAD_PARA_PIERNAS + 0.05:
+			miro = true
+			c.mirar_a(GIRA, c.get_pos()[GIRA] + Vector2(40.0, 0.0))
+		c.avanzar()
+		var clip_antes := p3._anim_actual
+		vista.dibujar_cuerpos(c, 1.0, PASO, Vector2.ZERO)
+		var gira := p3._anim_actual.begins_with("Giro_90")
+		if gira and not clip_antes.begins_with("Giro_90"):
+			entro_andando = entro_andando or float(c.get_rapidez()[GIRA]) > 0.05
+			# El cuadro en que entra: cuánto se mueve cada pie que está en el piso.
+			for pie in DetectorPatinaV2.PIES:
+				var q := DetectorPatinaV2.ancla_de(p3, pie)
+				if antes.has(pie) and q.y <= p3.suelo_de(p3._anim_actual) + APOYO_M * 2.0:
+					peor = maxf(peor, Vector2(q.x - antes[pie].x, q.z - antes[pie].z).length())
+		for pie in DetectorPatinaV2.PIES:
+			antes[pie] = DetectorPatinaV2.ancla_de(p3, pie)
+		detector.medir([p3], PASO)
+	var patina := 0.0
+	for clip in detector.por_clip:
+		if str(clip).begins_with("Giro_90"):
+			patina += float(detector.por_clip[clip][0])
+	_ok(entro_andando and peor < 0.05 and patina < 0.1,
+		"el que frena y gira entra al Giro_90 andando sin que salten los pies (%.2f m en ese cuadro, %.2f m en el giro)"
+		% [peor, patina])
 
 
 ## Sin motor: la vista recibe las posiciones de dos que andan derecho. El

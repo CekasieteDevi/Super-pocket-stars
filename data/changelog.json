@@ -1,4 +1,5 @@
 [
+	{"version": "0.8.13", "fecha": "2026-10-03", "cambio": "Los pies ya no saltan cuando el jugador gira en el lugar mientras todavía se mueve."},
 	{"version": "0.8.12", "fecha": "2026-10-03", "cambio": "El primer partido abre más rápido: el peinado de cada jugador se arma en menos tiempo."},
 	{"version": "0.8.11", "fecha": "2026-10-03", "cambio": "Hay una prueba automática de cuándo el arquero sale a buscar un centro."},
 	{"version": "0.8.10", "fecha": "2026-10-03", "cambio": "El arquero que se tira y da rebote se levanta del piso en vez de aparecer parado."},
