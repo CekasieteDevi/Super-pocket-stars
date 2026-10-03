@@ -10,11 +10,18 @@ extends SceneTree
 ##   de 1,5 cm del punto más bajo del pie en ese clip).
 ## Otro pica y, a su punta, le piden volver: da Media_Vuelta y sigue con
 ## Correr, sin pasar por Correr_Espaldas ni de costado.
+## Uno conduce a 5 m/s tocando la pelota cada 0,75 s (Control_Corriendo,
+## hecho en el lugar) y el arquero se corre de costado a 1 m/s: el pie
+## apoyado no patina lo que avanza el cuerpo (las piernas van con la
+## carrera, Jugador3D.piernas_de, y el arquero no se desliza en guardia).
+## Con el gesto entero el toque daba 28% y el arquero en guardia, 200%.
 
 const SEED := 20260930
 const PASO := 1.0 / 60.0
 const JUGADOR := 3
 const PIQUE := 6
+const CONDUCE := 8
+const ARQUERO := 11
 const APOYO_M := DetectorPatinaV2.APOYO_M
 
 var fallos := 0
@@ -76,6 +83,7 @@ func _probar(vista: VistaV2) -> void:
 			_ok(r < 0.15, "%s: el pie apoyado desliza el %.0f%% de lo que avanza el cuerpo (%.2f de %.2f m)"
 				% [clip, 100.0 * r, patina[clip], metros.get(clip, 0.0)])
 	_media_vuelta(c, vista)
+	_gestos_corriendo(vista)
 	print("FALLOS=%d" % fallos)
 	quit(1 if fallos else 0)
 
@@ -103,6 +111,73 @@ func _media_vuelta(c: Object, vista: VistaV2) -> void:
 			var r := float(medida["patina"][clip]) / maxf(float(medida["metros"].get(clip, 0.0)), 0.01)
 			_ok(r < 0.15, "%s: el pie apoyado desliza el %.0f%% de lo que recorre el cuerpo (%.2f de %.2f m)"
 				% [clip, 100.0 * r, medida["patina"][clip], medida["metros"][clip]])
+
+
+## Sin motor: la vista recibe las posiciones de dos que andan derecho. El
+## que conduce hace Control_Corriendo cada 0,75 s; el arquero anda de costado.
+func _gestos_corriendo(vista: VistaV2) -> void:
+	var n := vista._cantidad()
+	var pos := PackedVector2Array()
+	var rumbo := PackedFloat32Array()
+	var rapidez := PackedFloat32Array()
+	for i in n:
+		var p := vista._jugadores[i].position
+		pos.append(Vector2(p.x, p.z))
+		rumbo.append(0.0)
+		rapidez.append(0.0)
+	pos[CONDUCE] = Vector2(-20.0, -20.0)
+	pos[ARQUERO] = Vector2(-45.0, 0.0)
+	rapidez[CONDUCE] = 5.0
+	rapidez[ARQUERO] = 1.0
+	var dur := vista._jugadores[CONDUCE].duracion("Control_Corriendo")
+	var medidas := {CONDUCE: {"previo": {}, "suelo": {}, "patina": {}, "metros": {}}, ARQUERO: {"previo": {}, "suelo": {},
+		"patina": {}, "metros": {}}}
+	for k in 300:
+		var previa := pos.duplicate()
+		pos[CONDUCE] += Vector2(0.0, 5.0 * PASO)
+		pos[ARQUERO] += Vector2(1.0 * PASO, 0.0)
+		var acciones := []
+		for i in n:
+			acciones.append(["", 0.0])
+		var t := fmod(k * PASO, 0.75)
+		if t < dur:
+			acciones[CONDUCE] = ["Control_Corriendo", t]
+		vista._dibujar_jugadores(previa, pos, rumbo, rapidez, acciones, 1.0, PASO)
+		if k < 60:
+			continue
+		for j in medidas:
+			_medir_pie(vista._jugadores[j], medidas[j], float(rapidez[j]) * PASO)
+	var m: Dictionary = medidas[CONDUCE]
+	var r := float(m["patina"].get("Control_Corriendo", 0.0)) / maxf(float(m["metros"].get("Control_Corriendo", 0.0)), 0.01)
+	_ok(m["metros"].has("Control_Corriendo") and r < 0.2,
+		"conduciendo a 5 m/s, en el toque el pie apoyado desliza el %.0f%% de lo que avanza el cuerpo" % (100.0 * r))
+	var a: Dictionary = medidas[ARQUERO]
+	var en_guardia := float(a["metros"].get("Golero_Guardia", 0.0))
+	var total := 0.0
+	var patina := 0.0
+	for clip in a["metros"]:
+		total += float(a["metros"][clip])
+		patina += float(a["patina"].get(clip, 0.0))
+	_ok(en_guardia < 0.1 * total and patina < 0.3 * total,
+		"el arquero a 1 m/s de costado no anda en guardia (%.1f de %.1f m) y el pie desliza el %.0f%%"
+		% [en_guardia, total, 100.0 * patina / maxf(total, 0.01)])
+
+
+## El pie apoyado de un jugador en un cuadro, por clip (como _pasos).
+func _medir_pie(p3: Jugador3D, m: Dictionary, avance: float) -> void:
+	var clip := p3._anim_actual
+	m["metros"][clip] = float(m["metros"].get(clip, 0.0)) + avance
+	for pie in DetectorPatinaV2.PIES:
+		var q := DetectorPatinaV2.ancla_de(p3, pie)
+		var alto := q.y - p3.global_position.y
+		if p3._mezcla >= 1.0:
+			m["suelo"][clip] = minf(float(m["suelo"].get(clip, INF)), alto)
+		var previo: Dictionary = m["previo"]
+		if previo.has(pie) and p3._mezcla >= 1.0:
+			var antes: Vector3 = previo[pie]
+			if minf(alto, antes.y - p3.global_position.y) <= float(m["suelo"][clip]) + APOYO_M:
+				m["patina"][clip] = float(m["patina"].get(clip, 0.0)) + Vector2(q.x - antes.x, q.z - antes.z).length()
+		previo[pie] = q
 
 
 ## Avanza el cuerpo y la vista, y mide el pie apoyado del jugador j por clip.

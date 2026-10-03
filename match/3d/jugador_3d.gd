@@ -33,6 +33,8 @@ var espejado := false:
 ## (segundos de partido). Sin esto, del último cuadro del regate al pique se
 ## veía el salto de pose.
 const MEZCLA_SEG := 0.15
+## Los huesos que toma piernas_de: la cadera lleva a las dos piernas.
+const HUESOS_PIERNAS := ["Cadera", "Muslo.L", "Pierna.L", "Pie.L", "Muslo.R", "Pierna.R", "Pie.R"]
 
 ## Las caras: una fila por cara y una columna por gesto (tools/generar_caras.py).
 const ATLAS_CARAS := preload("res://assets/3d/caras.png")
@@ -87,10 +89,32 @@ var _anclas := {}
 var _anim_actual := ""
 var _colores_actuales := []
 var _esqueleto: Skeleton3D
-## Pose de cada hueso al empezar la mezcla ([posición, rotación, escala]) y
-## cuánto va de la mezcla (1 = terminada).
-var _pose_vieja: Array = []
+## Cuánto va de la mezcla (1 = terminada). Mientras funde, el clip viejo
+## sigue andando a su ritmo (segundos de clip por segundo de partido) en vez
+## de quedar congelado: con la pose congelada el pie apoyado del clip viejo
+## viajaba con el cuerpo y el pie patinaba en cada cambio de clip (en un
+## partido, el 15% del tiempo de cada jugador; medido con
+## tests/_diag_patina_partido_v2.gd).
 var _mezcla := 1.0
+var _anim_vieja := ""
+var _t_vieja := 0.0
+var _ritmo_viejo := 0.0
+## El segundo del clip actual en el cuadro anterior y su ritmo.
+var _t_actual := 0.0
+var _ritmo := 0.0
+## Si cambia de clip en medio de otra mezcla, funde desde la pose de ese
+## momento ([posición, rotación, escala] por hueso), congelada: el clip
+## viejo ya no es uno solo.
+var _pose_vieja: Array = []
+## Animation -> [[pista, tipo, hueso]] de las pistas de huesos.
+static var _pistas := {}
+static var _bucles := {}
+## Piernas de la carrera debajo de un gesto (ver piernas_de): cuánto de la
+## carrera lleva cada hueso en este cuadro y en el clip viejo de la mezcla.
+## Al volver de un gesto así a la carrera, esas piernas ya son las de la
+## carrera: fundirlas con las del gesto devolvía el pie que patina.
+var _peso_piernas := PackedFloat32Array()
+var _peso_piernas_vieja := PackedFloat32Array()
 var cara := -1
 var gesto := Gesto.NORMAL
 var numero := -1
@@ -424,21 +448,59 @@ func poner(anim: String, tiempo: float, segundos: float = -1.0) -> void:
 		return
 	if not tiene(anim):
 		anim = Cancha3D.ANIM_QUIETO if tiene(Cancha3D.ANIM_QUIETO) else "Quieto"
+	tiempo = clampf(tiempo, 0.0, duracion(anim))
+	if _esqueleto != null and _peso_piernas.size() != _esqueleto.get_bone_count():
+		_peso_piernas.resize(_esqueleto.get_bone_count())
+		_peso_piernas_vieja.resize(_esqueleto.get_bone_count())
 	if anim != _anim_actual:
 		if _anim_actual != "" and segundos >= 0.0 and _esqueleto != null:
-			_guardar_pose()
+			if _mezcla < 1.0:
+				_guardar_pose()
+				_anim_vieja = ""
+				_peso_piernas_vieja.fill(0.0)
+			else:
+				_pose_vieja.clear()
+				_anim_vieja = _anim_actual
+				_t_vieja = _t_actual
+				_ritmo_viejo = _ritmo
+				_peso_piernas_vieja = _peso_piernas.duplicate()
 			_mezcla = 0.0
 		else:
 			_mezcla = 1.0
 		animador.play(anim)
 		_anim_actual = anim
+		_ritmo = 0.0
 	elif segundos < 0.0:
 		_mezcla = 1.0
 	else:
 		_mezcla = minf(1.0, _mezcla + segundos / MEZCLA_SEG)
-	animador.seek(clampf(tiempo, 0.0, duracion(anim)), true)
+		if segundos > 0.0:
+			var avance := tiempo - _t_actual
+			var largo := duracion(anim)
+			# Un loop que dio la vuelta.
+			if avance < -largo * 0.5 and _es_loop(anim):
+				avance += largo
+			_ritmo = clampf(avance / segundos, 0.0, 4.0)
+	_t_actual = tiempo
+	_peso_piernas.fill(0.0)
+	animador.seek(tiempo, true)
 	if _mezcla < 1.0:
+		if _anim_vieja != "":
+			_t_vieja += _ritmo_viejo * maxf(segundos, 0.0)
+			var largo_viejo := duracion(_anim_vieja)
+			_t_vieja = fposmod(_t_vieja, largo_viejo) if _es_loop(_anim_vieja) and largo_viejo > 0.0 				else minf(_t_vieja, largo_viejo)
 		_fundir(smoothstep(0.0, 1.0, _mezcla))
+
+
+## Los loops salen de data/acciones_v2.json: el GLB no trae marcado el loop
+## de Correr ni de los otros clips de andar (tools/medir_clips_v2.gd).
+func _es_loop(anim: String) -> bool:
+	if _bucles.is_empty():
+		var clips := FisicaV2.clips()
+		for nombre in clips:
+			if bool((clips[nombre] as Dictionary).get("bucle", false)):
+				_bucles[nombre] = true
+	return _bucles.has(anim)
 
 
 func _guardar_pose() -> void:
@@ -448,11 +510,70 @@ func _guardar_pose() -> void:
 			_esqueleto.get_bone_pose_scale(b)])
 
 
-## La pose que dejó seek() (la nueva) se lleva hacia la guardada: w=0 es la
-## vieja, w=1 la nueva.
+## La pose de `anim` en el segundo `tiempo`, por hueso ([posición,
+## rotación, escala]; null donde el clip no tiene pista), leída de las pistas
+## sin tocar el AnimationPlayer (que muestra otro clip).
+func _pose_de(anim: String, tiempo: float) -> Array:
+	var a := animador.get_animation(anim)
+	if not _pistas.has(a):
+		var lista := []
+		for t in a.get_track_count():
+			var tipo := a.track_get_type(t)
+			if tipo not in [Animation.TYPE_POSITION_3D, Animation.TYPE_ROTATION_3D, Animation.TYPE_SCALE_3D]:
+				continue
+			var hueso := _esqueleto.find_bone(a.track_get_path(t).get_concatenated_subnames())
+			if hueso >= 0:
+				lista.append([t, tipo, hueso])
+		_pistas[a] = lista
+	var pose := []
+	pose.resize(_esqueleto.get_bone_count())
+	for b in pose.size():
+		pose[b] = [null, null, null]
+	for p in _pistas[a]:
+		match p[1]:
+			Animation.TYPE_POSITION_3D: pose[p[2]][0] = a.position_track_interpolate(p[0], tiempo)
+			Animation.TYPE_ROTATION_3D: pose[p[2]][1] = a.rotation_track_interpolate(p[0], tiempo)
+			Animation.TYPE_SCALE_3D: pose[p[2]][2] = a.scale_track_interpolate(p[0], tiempo)
+	return pose
+
+
+## La pose que dejó seek() (la nueva) se lleva hacia la vieja: w=0 es la
+## vieja, w=1 la nueva. Los huesos que en el clip viejo ya llevaban las
+## piernas de la carrera no se funden con esa parte.
 func _fundir(w: float) -> void:
-	for b in mini(_pose_vieja.size(), _esqueleto.get_bone_count()):
-		var vieja: Array = _pose_vieja[b]
-		_esqueleto.set_bone_pose_position(b, (vieja[0] as Vector3).lerp(_esqueleto.get_bone_pose_position(b), w))
-		_esqueleto.set_bone_pose_rotation(b, (vieja[1] as Quaternion).slerp(_esqueleto.get_bone_pose_rotation(b), w))
-		_esqueleto.set_bone_pose_scale(b, (vieja[2] as Vector3).lerp(_esqueleto.get_bone_pose_scale(b), w))
+	var vieja_pose := _pose_vieja if _anim_vieja == "" else _pose_de(_anim_vieja, _t_vieja)
+	for b in mini(vieja_pose.size(), _esqueleto.get_bone_count()):
+		var vieja: Array = vieja_pose[b]
+		var wb := lerpf(w, 1.0, _peso_piernas_vieja[b]) if b < _peso_piernas_vieja.size() else w
+		_mezclar_hueso(b, vieja, wb)
+
+
+## Lleva el hueso `b` de la pose de `otra` ([posición, rotación, escala]) a
+## la que tiene: w=0 es `otra`, w=1 la de ahora.
+func _mezclar_hueso(b: int, otra: Array, w: float) -> void:
+	if otra[0] != null:
+		_esqueleto.set_bone_pose_position(b, (otra[0] as Vector3).lerp(_esqueleto.get_bone_pose_position(b), w))
+	if otra[1] != null:
+		_esqueleto.set_bone_pose_rotation(b, (otra[1] as Quaternion).slerp(_esqueleto.get_bone_pose_rotation(b), w))
+	if otra[2] != null:
+		_esqueleto.set_bone_pose_scale(b, (otra[2] as Vector3).lerp(_esqueleto.get_bone_pose_scale(b), w))
+
+
+## Piernas de la carrera debajo de un gesto (Motor V2): los gestos que se
+## hacen corriendo (el toque de la conducción, el remate corriendo, el pecho)
+## están hechos en el lugar, y con el cuerpo a 5 m/s el pie de apoyo
+## patinaba lo mismo que avanzaba el cuerpo. Acá la cadera y las piernas
+## toman la pose de `anim` (un clip de andar en cinta, en su segundo
+## `tiempo`) con `peso`; la pierna `lado` ("L", "R" o "" ninguna) sigue con
+## el gesto en `peso_gesto`, para que patee o toque. Va después de poner().
+func piernas_de(anim: String, tiempo: float, peso: float, lado := "", peso_gesto := 0.0) -> void:
+	if _esqueleto == null or peso <= 0.0 or not tiene(anim):
+		return
+	var carrera := _pose_de(anim, tiempo)
+	for nombre in HUESOS_PIERNAS:
+		var b := _esqueleto.find_bone(nombre)
+		if b < 0:
+			continue
+		var wb := peso * (1.0 - peso_gesto) if lado != "" and nombre.ends_with("." + lado) else peso
+		_mezclar_hueso(b, carrera[b], 1.0 - wb)
+		_peso_piernas[b] = wb

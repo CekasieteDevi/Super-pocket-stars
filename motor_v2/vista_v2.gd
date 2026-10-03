@@ -171,6 +171,23 @@ var ids := PackedInt32Array()
 var ropa: Array = []
 ## Clip -> [segundo del contacto, ancla] de los que tocan con el pie.
 var _contacto_pie := {}
+## Gestos que se hacen corriendo: clip -> [segundo del contacto (-1 sin
+## pierna que toca), lado de la pierna que toca ("L", "R" o "")]. Los que
+## data/acciones_v2.json marca con `mueve` y tocan con el pie, más el pecho y
+## el cabezazo (el cuerpo queda suelto después del toque, Cuerpo::suelto).
+## Están hechos en el lugar: con el cuerpo andando, la cadera y las piernas
+## van con la carrera (Jugador3D.piernas_de). En un partido el toque de la
+## conducción patinaba el pie de apoyo 6 m/s con el cuerpo a 4,9 m/s
+## (tests/_diag_patina_partido_v2.gd).
+var _gesto_corriendo := {}
+const GESTOS_SUELTOS := ["Pecho", "Cabecear"]
+## La pierna que toca va con el gesto desde este tiempo antes del contacto y
+## hasta este tiempo después; fuera de eso, con la carrera.
+const GESTO_PIERNA_ANTES_SEG := 0.2
+const GESTO_PIERNA_DESPUES_SEG := 0.15
+## Con el modelo levantado más que esto (un cabezazo saltando) las piernas
+## son las del gesto: corriendo en el aire se veía raro.
+const GESTO_PIERNAS_HASTA_ALTO_M := 0.15
 var _giro_alcance := 1.0
 ## Dibujando la canchita: los pies van a la pelota.
 var _ajustar_pies := false
@@ -236,6 +253,10 @@ func _ready() -> void:
 		var c: Dictionary = clips[nombre]
 		if c["contacto"] != null and str(c["ancla"]) in ["Pie_R", "Pie_L"]:
 			_contacto_pie[nombre] = [float(c["contacto"]) * float(c["duracion"]), str(c["ancla"])]
+		if (bool(c.get("mueve", false)) and str(c["ancla"]) in ["Pie_R", "Pie_L"]) or GESTOS_SUELTOS.has(nombre):
+			var lado := str(c["ancla"]).right(1) if str(c["ancla"]) in ["Pie_R", "Pie_L"] else ""
+			var en := float(c["contacto"]) * float(c["duracion"]) if c["contacto"] != null and lado != "" else -1.0
+			_gesto_corriendo[nombre] = [en, lado]
 		if c["contacto"] != null and str(c["ancla"]) in ["Frente", "manos"]:
 			_contacto_cuerpo[nombre] = [float(c["contacto"]) * float(c["duracion"]),
 				["Mano_L", "Mano_R"] if str(c["ancla"]) == "manos" else ["Frente"]]
@@ -571,10 +592,12 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 			p3.rotation.y = una_vez[2]
 		if hace_gesto:
 			p3.poner(accion, float(acciones[i][1]), delta)
-			if _ajustar_pies and _contacto_pie.has(accion):
-				_ajustar_pie(p3, accion, float(acciones[i][1]))
 			if _ajustar_pies and _contacto_cuerpo.has(accion):
 				_ajustar_cuerpo(i, p3, accion, float(acciones[i][1]))
+			if _gesto_corriendo.has(accion) and v >= Cancha3D.VELOCIDAD_PARA_PIERNAS 					and p3.position.y < GESTO_PIERNAS_HASTA_ALTO_M:
+				_piernas_de_carrera(i, p3, accion, float(acciones[i][1]), v, delta)
+			if _ajustar_pies and _contacto_pie.has(accion):
+				_ajustar_pie(p3, accion, float(acciones[i][1]))
 			p3.poner_cara(p3.cara, Jugador3D.Gesto.NORMAL, _tiempo)
 			continue
 		var fundido := -1.0 if _sin_fundido[i] else delta
@@ -608,6 +631,25 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 			tiempo = fposmod(_ciclos[i], 1.0) * p3.duracion(anim)
 		p3.poner(anim, tiempo, fundido)
 		p3.poner_cara(p3.cara, Jugador3D.Gesto.NORMAL, _tiempo)
+
+
+## Debajo de un gesto que se hace corriendo, la cadera y las piernas van
+## con el clip de andar que le toca a su rapidez, en su fase (avanza con los
+## metros, como cualquier clip en cinta): el pie de apoyo queda quieto en la
+## cancha. La pierna que toca la pelota va con el gesto cerca del contacto.
+## Entra de a poco con la rapidez: casi parado, el gesto entero.
+func _piernas_de_carrera(i: int, p3: Jugador3D, accion: String, segundo: float, v: float, delta: float) -> void:
+	var andar := _andar_de(i, v)
+	if not _metros_ciclo.has(andar):
+		return
+	_ciclos[i] += v * delta / float(_metros_ciclo[andar])
+	var dato: Array = _gesto_corriendo[accion]
+	var peso_gesto := 0.0
+	if float(dato[0]) >= 0.0:
+		var contacto := float(dato[0])
+		peso_gesto = smoothstep(contacto - GESTO_PIERNA_ANTES_SEG, contacto - GESTO_PIERNA_ANTES_SEG * 0.3, segundo) 			* (1.0 - smoothstep(contacto + GESTO_PIERNA_DESPUES_SEG * 0.3, contacto + GESTO_PIERNA_DESPUES_SEG, segundo))
+	var peso := smoothstep(Cancha3D.VELOCIDAD_PARA_PIERNAS, Cancha3D.VELOCIDAD_PARA_PIERNAS * 2.0, v)
+	p3.piernas_de(andar, fposmod(_ciclos[i], 1.0) * p3.duracion(andar), peso, str(dato[1]), peso_gesto)
 
 
 ## Lleva el modelo entero para que la frente o las manos lleguen a la pelota
@@ -898,13 +940,18 @@ func dibujar_pelota(pelota_previa: Vector3, pelota: Vector3, alfa: float, delta:
 	_mover_camara(Vector2(bola.x, bola.z), delta)
 
 
+## El arquero casi quieto está en guardia; andando usa los clips en cinta,
+## de costado o de espaldas como los demás. Con la guardia hasta 1,6 m/s
+## (ARQUERO_CORRE_MS, de cuando no había clips en cinta) el pie patinaba
+## 0,49 m/s con el arquero a 0,34 m/s de media (tests/_diag_patina_partido_v2.gd).
 func _andar_de(i: int, v: float) -> String:
-	if _es_arquero(i):
-		return "Correr" if v > Cancha3D.ARQUERO_CORRE_MS else "Golero_Guardia"
+	if _es_arquero(i) and v < Cancha3D.VELOCIDAD_PARA_PIERNAS:
+		_andar[i] = "Golero_Guardia"
+		return "Golero_Guardia"
 	var nuevo := Cancha3D.andar(_andar[i], v)
 	if v < Cancha3D.VELOCIDAD_PARA_PIERNAS:
 		nuevo = Cancha3D.ANIM_QUIETO
-	elif nuevo == Cancha3D.ANIM_QUIETO:
+	elif nuevo == Cancha3D.ANIM_QUIETO or nuevo == "Golero_Guardia":
 		nuevo = "Caminar"
 	_andar[i] = nuevo
 	return nuevo
