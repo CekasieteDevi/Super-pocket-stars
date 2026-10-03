@@ -117,6 +117,12 @@ static var _bucles := {}
 ## carrera: fundirlas con las del gesto devolvía el pie que patina.
 var _peso_piernas := PackedFloat32Array()
 var _peso_piernas_vieja := PackedFloat32Array()
+## El clip de andar que llevan esas piernas en este cuadro ("" = ninguno) y su
+## segundo: de ahí sale qué pie apoya debajo del gesto (ver clavar_pies).
+var _anim_piernas := ""
+var _t_piernas := 0.0
+## Por pie: en este cuadro va a la pelota (ver llevar_pie).
+var _pie_toca := [false, false]
 ## Pie clavado (ver clavar_pies). Para el detector PATINA un pie está apoyado
 ## a menos de esto del punto más bajo de un pie en su clip (metros de la
 ## cancha).
@@ -154,6 +160,9 @@ const SOLTAR_PIE_MS := 2.0
 ## Corrido menos que esto (0,1 mm, al cuadrado) el pie queda donde lo pone el
 ## clip, sin doblar la pierna.
 const CORRIDO_MIN_M2 := 1e-8
+## Debajo de un gesto corriendo, una pierna se clava si es de la carrera en
+## esta parte o más (ver piernas_de): menos es la pierna que toca la pelota.
+const PIERNA_DE_CARRERA_DESDE := 0.5
 const LADOS_PIE := ["L", "R"]
 ## Por pie (L, R): [muslo, pierna, pie] y el punto de apoyo (el nodo Pie_L o
 ## Pie_R del GLB) en el espacio del hueso del pie.
@@ -581,14 +590,19 @@ func llevar_pie(nombre_ancla: String, objetivo: Vector3, peso: float) -> void:
 	var pie := _esqueleto.find_bone("Pie." + lado)
 	if muslo < 0 or pierna < 0 or pie < 0:
 		return
+	_pie_toca[LADOS_PIE.find(lado)] = true
 	var al_esqueleto := _esqueleto.global_transform.affine_inverse()
-	var t := al_esqueleto * objetivo
+	# Adónde va el punto con este peso: entre donde lo pone el clip y el
+	# objetivo. Antes la segunda vuelta llevaba el pie entero al objetivo con
+	# cualquier peso: quedaba pegado a la pelota toda la ventana del ajuste y
+	# al terminar volvía de golpe, 30 a 55 cm en un cuadro.
+	var t := (al_esqueleto * ancla_de_pose(nombre_ancla)).lerp(al_esqueleto * objetivo, minf(peso, 1.0))
 	# Dos vueltas: el pie gira con la pierna y el punto de contacto no cae
 	# justo donde iba el tobillo; la segunda corrige lo que queda.
 	for vuelta in 2:
 		var a := _esqueleto.get_bone_global_pose(pie).origin
 		var e := al_esqueleto * ancla_de_pose(nombre_ancla)
-		_doblar_pierna(muslo, pierna, a, a + (t - e) * (peso if vuelta == 0 else 1.0))
+		_doblar_pierna(muslo, pierna, a, a + (t - e))
 
 
 ## Dobla muslo y pierna (IK de dos huesos) para que `punto`, que va pegado a
@@ -640,6 +654,12 @@ func _doblar_pierna(muslo: int, pierna: int, punto: Vector3, destino: Vector3) -
 ## Va después de poner(), en cada cuadro. `segundos`: los de partido desde el
 ## cuadro anterior; negativo (un corte) suelta los pies de golpe. `clava`
 ## false (un gesto): no clava, y el que estaba clavado vuelve al clip de a poco.
+##
+## Debajo de un gesto que se hace corriendo (va después de piernas_de) clava
+## el pie de la pierna que es de la carrera, con el apoyo de su clip de andar.
+## Sin clavarlo, el pie de apoyo del toque de la conducción patinaba 2,1 m/s
+## con el cuerpo a 5 m/s (51 m por partido): el modelo gira hacia la pelota
+## con el pie apoyado y la pierna que tocó vuelve a la carrera a ras del piso.
 func clavar_pies(segundos: float, clava := true) -> void:
 	if _esqueleto == null or animador == null or _huesos_pierna.is_empty() or _huesos_pierna[0].has(-1) \
 			or _huesos_pierna[1].has(-1):
@@ -666,28 +686,44 @@ func clavar_pies(segundos: float, clava := true) -> void:
 		var del_viejo := _apoyo_de(_anim_vieja)
 		suelo = lerpf(del_viejo["suelo"], suelo, smoothstep(0.0, 1.0, _mezcla))
 		pisa |= _pisa_en(del_viejo, _t_vieja)
+	# Debajo de un gesto que se hace corriendo (piernas_de) el suelo y el
+	# apoyo de cada pierna son los de su clip de andar.
+	var con_carrera := _anim_piernas != ""
+	var suelo_gesto := suelo
+	if con_carrera:
+		var de_carrera := _apoyo_de(_anim_piernas)
+		suelo = de_carrera["suelo"]
+		pisa = _pisa_en(de_carrera, _t_piernas)
 	# Dónde pone el clip cada pie (espacio del esqueleto).
 	var en_clip := _pie_en_clip
 	var quieto := _cadera_baja <= 1e-5
 	for k in LADOS_PIE.size():
 		en_clip[k] = _esqueleto.get_bone_global_pose(_huesos_pierna[k][2]) * _apoyo_pie[k]
+		var suelo_k := suelo
+		var clava_k := clava
+		if con_carrera:
+			# La pierna que toca la pelota es del gesto cerca del contacto: se
+			# clava recién cuando vuelve a ser de la carrera.
+			var de_carrera_k: float = _peso_piernas[_huesos_pierna[k][2]]
+			suelo_k = lerpf(suelo_gesto, suelo, de_carrera_k)
+			clava_k = clava and de_carrera_k >= PIERNA_DE_CARRERA_DESDE
 		# Apoyado: a menos de APOYO_M del suelo (lo que mide el detector) o,
 		# si el clip lo tiene quieto contra el piso, hasta el doble (el pie que
 		# despega sube antes de irse). El que venía clavado y pegado al suelo
 		# sigue clavado un cuadro más: despega derecho para arriba.
-		var pegado := en_clip[k].y <= suelo + apoyo
+		var pegado := en_clip[k].y <= suelo_k + apoyo
 		var despega: bool = _pie_clavado[k] and _pie_pegado[k]
 		_pie_pegado[k] = pegado
-		if clava and (pegado or despega or (pisa & (1 << k) != 0 and en_clip[k].y <= suelo + apoyo * 2.0)):
+		if clava_k and (pegado or despega or (pisa & (1 << k) != 0 and en_clip[k].y <= suelo_k + apoyo * 2.0)):
 			_pisar(k, al_mundo * en_clip[k], segundos)
 			# La pose de un fundido puede dejar el pie debajo del suelo.
-			_pie_corrido[k].y += maxf(suelo - en_clip[k].y, 0.0) * escala
+			_pie_corrido[k].y += maxf(suelo_k - en_clip[k].y, 0.0) * escala
 		else:
 			_pie_clavado[k] = false
 			_pie_paso[k] = {}
 			# Vuelve al clip recién con el pie en el aire: volviendo desde que
 			# despega, el pie todavía rozaba el piso y se lo veía barrer.
-			if en_clip[k].y > suelo + apoyo:
+			if en_clip[k].y > suelo_k + apoyo:
 				_pie_corrido[k] = _pie_corrido[k].move_toward(Vector3.ZERO, SOLTAR_PIE_MS * segundos)
 		_pie_tirante[k] = false
 		quieto = quieto and _pie_corrido[k].length_squared() < CORRIDO_MIN_M2
@@ -740,6 +776,26 @@ func clavar_pies(segundos: float, clava := true) -> void:
 ## en `anim`: el punto más bajo de un pie en el clip. Lo usa el detector PATINA.
 func suelo_de(anim: String) -> float:
 	return float(_apoyo_de(anim)["suelo"]) * _esqueleto.global_transform.basis.y.length()
+
+
+## Cuánto de la pierna del pie `k` (el orden de LADOS_PIE) es de la carrera
+## en este cuadro (ver piernas_de): 0 fuera de un gesto que se hace corriendo.
+func peso_carrera(k: int) -> float:
+	if _anim_piernas == "" or _huesos_pierna.is_empty() or _huesos_pierna[k][2] < 0:
+		return 0.0
+	return _peso_piernas[_huesos_pierna[k][2]]
+
+
+## El suelo del clip de andar que lleva las piernas debajo del gesto (como
+## suelo_de). Solo vale con peso_carrera(k) > 0.
+func suelo_del_pie(_k: int) -> float:
+	return suelo_de(_anim_piernas)
+
+
+## ¿El pie `k` va a la pelota en este cuadro (llevar_pie)? Ese pie viaja con
+## la pelota: no está apoyado aunque pase cerca del piso.
+func pie_en_la_pelota(k: int) -> bool:
+	return _pie_toca[k]
 
 
 ## Los loops de andar arrancan con el pie derecho pasando por debajo y el
@@ -942,6 +998,9 @@ func poner(anim: String, tiempo: float, segundos: float = -1.0) -> void:
 			_ritmo = clampf(avance / segundos, 0.0, 4.0)
 	_t_actual = tiempo
 	_peso_piernas.fill(0.0)
+	_anim_piernas = ""
+	_pie_toca[0] = false
+	_pie_toca[1] = false
 	animador.seek(tiempo, true)
 	if _mezcla < 1.0:
 		if _anim_vieja != "":
@@ -1025,14 +1084,44 @@ func _mezclar_hueso(b: int, otra: Array, w: float) -> void:
 ## toman la pose de `anim` (un clip de andar en cinta, en su segundo
 ## `tiempo`) con `peso`; la pierna `lado` ("L", "R" o "" ninguna) sigue con
 ## el gesto en `peso_gesto`, para que patee o toque. Va después de poner().
-func piernas_de(anim: String, tiempo: float, peso: float, lado := "", peso_gesto := 0.0) -> void:
+##
+## `contacto`: el segundo del gesto en que toca la pelota (negativo: no toca
+## con el pie). Después del contacto la pierna `lado` vuelve a la carrera
+## desde la pose del contacto, no desde la que sigue en el gesto: el gesto
+## apoya ese pie en el lugar y, con el cuerpo a 5 m/s, el pie iba a ras del
+## piso medio metro hasta que la carrera lo levantaba (38 de los 51 m que
+## patinaba el toque de la conducción, tests/_diag_patina_partido_v2.gd).
+func piernas_de(anim: String, tiempo: float, peso: float, lado := "", peso_gesto := 0.0, contacto := -1.0) -> void:
 	if _esqueleto == null or peso <= 0.0 or not tiene(anim):
 		return
 	var carrera := _pose_de(anim, tiempo)
+	_anim_piernas = anim
+	_t_piernas = tiempo
+	var en_contacto: Array = _pose_de(_anim_actual, contacto) if lado != "" and contacto >= 0.0 \
+		and _t_actual > contacto else []
+	# Mientras el gesto todavía se funde con el clip de antes, entra de a poco.
+	var ya_fundido := smoothstep(0.0, 1.0, _mezcla)
 	for nombre in HUESOS_PIERNAS:
 		var b := _esqueleto.find_bone(nombre)
 		if b < 0:
 			continue
+		if not en_contacto.is_empty() and nombre.ends_with("." + lado):
+			_mezclar_hueso(b, en_contacto[b], 1.0 - ya_fundido)
 		var wb := peso * (1.0 - peso_gesto) if lado != "" and nombre.ends_with("." + lado) else peso
 		_mezclar_hueso(b, carrera[b], 1.0 - wb)
 		_peso_piernas[b] = wb
+	# La pierna que va al toque o vuelve de él pasa por el aire: sube hasta
+	# PASO_CORTO_ALTO_M a mitad de camino. Fundiendo giros de huesos, entre la
+	# pierna estirada del remate y la doblada de la carrera sale una pierna
+	# estirada hacia abajo: el pie se hundía en el piso y barría 25 cm en un
+	# cuadro.
+	var k := LADOS_PIE.find(lado)
+	if k < 0 or peso_gesto <= 0.0 or peso_gesto >= 1.0 or _huesos_pierna.is_empty() or _huesos_pierna[k].has(-1):
+		return
+	var huesos: Array = _huesos_pierna[k]
+	var escala := _esqueleto.global_transform.basis.y.length()
+	var suelo := lerpf(_apoyo_de(_anim_actual)["suelo"], _apoyo_de(anim)["suelo"], _peso_piernas[huesos[2]])
+	var minimo := suelo + PASO_CORTO_ALTO_M / escala * sin(PI * peso_gesto) * peso
+	var punto := _esqueleto.get_bone_global_pose(huesos[2]) * _apoyo_pie[k]
+	if punto.y < minimo:
+		_doblar_pierna(huesos[0], huesos[1], punto, Vector3(punto.x, minimo, punto.z))

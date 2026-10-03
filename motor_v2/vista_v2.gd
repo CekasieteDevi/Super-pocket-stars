@@ -654,11 +654,18 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 			p3.poner(accion, float(acciones[i][1]), delta)
 			if _ajustar_pies and _contacto_cuerpo.has(accion):
 				_ajustar_cuerpo(i, p3, accion, float(acciones[i][1]))
-			if _gesto_corriendo.has(accion) and v >= Cancha3D.VELOCIDAD_PARA_PIERNAS 					and p3.position.y < GESTO_PIERNAS_HASTA_ALTO_M:
+			if _gesto_corriendo.has(accion) and v >= Cancha3D.VELOCIDAD_PARA_PIERNAS \
+					and p3.position.y < GESTO_PIERNAS_HASTA_ALTO_M:
 				_piernas_de_carrera(i, p3, accion, float(acciones[i][1]), v, delta)
-			_clavar_pies(p3, delta, false)
-			if _ajustar_pies and _contacto_pie.has(accion):
-				_ajustar_pie(p3, accion, float(acciones[i][1]))
+			# El giro hacia la pelota va antes de clavar: girando después, el pie
+			# de apoyo ya clavado giraba con el modelo (0,7 m/s en el toque de la
+			# conducción).
+			var peso_pie := _girar_al_toque(p3, accion, float(acciones[i][1])) \
+				if _ajustar_pies and _contacto_pie.has(accion) else 0.0
+			# Con las piernas de la carrera debajo, el pie de apoyo queda clavado.
+			_clavar_pies(p3, delta, p3._anim_piernas != "")
+			if peso_pie > 0.0:
+				_ajustar_pie(p3, accion, peso_pie)
 			p3.poner_cara(p3.cara, Jugador3D.Gesto.NORMAL, _tiempo)
 			continue
 		var fundido := -1.0 if _sin_fundido[i] else delta
@@ -762,7 +769,8 @@ func _piernas_de_carrera(i: int, p3: Jugador3D, accion: String, segundo: float, 
 		var contacto := float(dato[0])
 		peso_gesto = smoothstep(contacto - GESTO_PIERNA_ANTES_SEG, contacto - GESTO_PIERNA_ANTES_SEG * 0.3, segundo) 			* (1.0 - smoothstep(contacto + GESTO_PIERNA_DESPUES_SEG * 0.3, contacto + GESTO_PIERNA_DESPUES_SEG, segundo))
 	var peso := smoothstep(Cancha3D.VELOCIDAD_PARA_PIERNAS, Cancha3D.VELOCIDAD_PARA_PIERNAS * 2.0, v)
-	p3.piernas_de(andar, fposmod(_ciclos[i], 1.0) * p3.duracion(andar), peso, str(dato[1]), peso_gesto)
+	p3.piernas_de(andar, fposmod(_ciclos[i], 1.0) * p3.duracion(andar), peso, str(dato[1]), peso_gesto,
+		float(dato[0]))
 
 
 ## Lleva el modelo entero para que la frente, el pecho o las manos lleguen a la pelota
@@ -790,20 +798,28 @@ func _ajustar_cuerpo(i: int, p3: Jugador3D, accion: String, segundo: float) -> v
 	p3.position += (_corrido[i] as Vector3) * peso
 
 
-## Lleva el pie del gesto al borde de la pelota cerca del contacto: gira el
-## modelo hacia ella (lo que el motor le deja estirar) y dobla la pierna. No
-## mueve ni al jugador ni a la pelota.
-func _ajustar_pie(p3: Jugador3D, accion: String, segundo: float) -> void:
+## Cerca del contacto gira el modelo hacia la pelota, lo que el motor le deja
+## estirar el pie hacia un costado. Devuelve el peso del ajuste de pie en este
+## cuadro (0 fuera de la ventana del contacto).
+func _girar_al_toque(p3: Jugador3D, accion: String, segundo: float) -> float:
 	var contacto: float = _contacto_pie[accion][0]
 	var peso := smoothstep(contacto - AJUSTE_ANTES_SEG, contacto, segundo) \
 		* (1.0 - smoothstep(contacto, contacto + AJUSTE_DESPUES_SEG, segundo))
 	if peso <= 0.0:
-		return
+		return 0.0
 	var bola := _pelota.position
 	var hacia := Vector2(bola.x - p3.position.x, bola.z - p3.position.z)
 	if hacia.length_squared() > 1e-6:
 		var dif := clampf(wrapf(atan2(hacia.x, hacia.y) - p3.rotation.y, -PI, PI), -_giro_alcance, _giro_alcance)
 		p3.rotation.y += dif * peso
+	return peso
+
+
+## Lleva el pie del gesto al borde de la pelota cerca del contacto, doblando
+## la pierna (`peso` sale de _girar_al_toque). No mueve ni al jugador ni a la
+## pelota.
+func _ajustar_pie(p3: Jugador3D, accion: String, peso: float) -> void:
+	var bola := _pelota.position
 	var ancla: String = _contacto_pie[accion][1]
 	var pie := p3.ancla_de_pose(ancla)
 	var radio := MundoV2.RADIO_PELOTA * Cancha3D.ESCALA_PELOTA

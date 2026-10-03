@@ -1,4 +1,5 @@
 [
+	{"version": "0.8.15", "fecha": "2026-10-03", "cambio": "El pie de apoyo ya no patina cuando el jugador toca o patea la pelota corriendo."},
 	{"version": "0.8.14", "fecha": "2026-10-03", "cambio": "Los pies ya no patinan cuando el jugador que viene trotando frena."},
 	{"version": "0.8.13", "fecha": "2026-10-03", "cambio": "Los pies ya no saltan cuando el jugador gira en el lugar mientras todavía se mueve."},
 	{"version": "0.8.12", "fecha": "2026-10-03", "cambio": "El primer partido abre más rápido: el peinado de cada jugador se arma en menos tiempo."},

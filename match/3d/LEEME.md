@@ -50,6 +50,15 @@ historial de git (este archivo hasta la versión 0.7.96).
   (`VistaV2._giro_al_cambiar`).
 - El arquero que se tiró y sigue jugando se levanta con el final de
   `Arquero_Levanta` en 0,5 s. Lo hace la vista: el motor ya lo tiene parado.
+- Debajo de un gesto corriendo también se clava el pie de apoyo, con el apoyo
+  del clip de andar que lleva las piernas. El modelo gira hacia la pelota
+  antes de clavar (`VistaV2._girar_al_toque`). La pierna que tocó vuelve a la
+  carrera desde la pose del contacto y por el aire.
+- Los giros en el lugar entran con fundido y salen sin fundido. La Frenada
+  espera a que termine el fundido en curso: en medio de otro fundido, la pose
+  vieja queda congelada y el pie viaja con el cuerpo.
+- El detector PATINA no cuenta el pie que va a la pelota ni el del que
+  salta, y debajo de un gesto usa el suelo del clip de andar.
 - `tests/_diag_patina_partido_v2.gd` mide el patinaje por clip en un partido
   (`clavados=0`: sin el pie clavado).
 

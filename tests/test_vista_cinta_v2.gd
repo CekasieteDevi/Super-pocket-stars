@@ -101,6 +101,7 @@ func _probar(vista: VistaV2) -> void:
 	_giro_andando(c, vista)
 	_frenada_despues_del_fundido(c, vista)
 	_gestos_corriendo(vista)
+	_gesto_girando(vista)
 	_arquero_se_levanta(vista)
 	print("FALLOS=%d" % fallos)
 	quit(1 if fallos else 0)
@@ -269,6 +270,70 @@ func _frenada_despues_del_fundido(c: Object, vista: VistaV2) -> void:
 	_ok(entradas >= 1 and congeladas == 0,
 		"la Frenada entra con el clip de andar entero, no en medio de otro fundido (%d entradas, %d desde una pose congelada)"
 		% [entradas, congeladas])
+
+
+## Sin motor: uno conduce a 5 m/s girando 2 rad/s (el que encara doblando)
+## y toca cada 0,75 s. Mide el pie de la pierna que es de la carrera, contra
+## el suelo de su clip de andar. Sin clavarlo debajo del gesto deslizaba 0,22 m
+## en este recorrido (el 3% de lo que avanza el cuerpo); en un partido, con el
+## modelo girando hacia la pelota, el 43%.
+func _gesto_girando(vista: VistaV2) -> void:
+	var n := vista._cantidad()
+	var pos := PackedVector2Array()
+	var rumbo := PackedFloat32Array()
+	var rapidez := PackedFloat32Array()
+	for i in n:
+		var p := vista._jugadores[i].position
+		pos.append(Vector2(p.x, p.z))
+		rumbo.append(0.0)
+		rapidez.append(0.0)
+	pos[CONDUCE_GIRANDO] = Vector2(0.0, 20.0)
+	rapidez[CONDUCE_GIRANDO] = 5.0
+	var p3: Jugador3D = vista._jugadores[CONDUCE_GIRANDO]
+	var dur := p3.duracion("Control_Corriendo")
+	var metros := 0.0
+	var patina := 0.0
+	var clavado := 0
+	var antes := {}
+	for k in 360:
+		var previa := pos.duplicate()
+		rumbo[CONDUCE_GIRANDO] = wrapf(float(rumbo[CONDUCE_GIRANDO]) + 2.0 * PASO, -PI, PI)
+		pos[CONDUCE_GIRANDO] += Vector2(sin(rumbo[CONDUCE_GIRANDO]), cos(rumbo[CONDUCE_GIRANDO])) * 5.0 * PASO
+		var acciones := []
+		for i in n:
+			acciones.append(["", 0.0])
+		var t := fmod(k * PASO, 0.75)
+		if t < dur:
+			acciones[CONDUCE_GIRANDO] = ["Control_Corriendo", t]
+		vista._dibujar_jugadores(previa, pos, rumbo, rapidez, acciones, 1.0, PASO)
+		var en_gesto := k >= 60 and p3._anim_actual == "Control_Corriendo" and p3._mezcla >= 1.0
+		if en_gesto:
+			metros += 5.0 * PASO
+		for j in DetectorPatinaV2.PIES.size():
+			var q := DetectorPatinaV2.ancla_de(p3, DetectorPatinaV2.PIES[j])
+			if en_gesto and antes.has(j) and p3.peso_carrera(j) >= 0.99 \
+					and minf(q.y, antes[j].y) <= p3.suelo_del_pie(j) + APOYO_M:
+				patina += Vector2(q.x - antes[j].x, q.z - antes[j].z).length()
+				if p3._pie_clavado[j]:
+					clavado += 1
+			antes[j] = q
+	_ok(metros > 5.0 and clavado > 10 and patina < 0.015 * metros,
+		"conduciendo a 5 m/s y girando, en el toque el pie de apoyo queda clavado y desliza el %.1f%% de lo que avanza el cuerpo (%.2f de %.2f m)"
+		% [100.0 * patina / maxf(metros, 0.01), patina, metros])
+	# El ajuste de pie con medio peso lleva el pie a mitad de camino. Antes lo
+	# llevaba entero con cualquier peso y, al terminar el ajuste, el pie
+	# volvía de golpe (30 a 55 cm en un cuadro).
+	p3.poner("Control_Corriendo", 0.125, -1.0)
+	var pie := p3.ancla_de_pose("Pie_R")
+	var meta := pie + p3.global_transform.basis * Vector3(0.0, 0.05, 0.2)
+	p3.llevar_pie("Pie_R", meta, 0.5)
+	var medio := p3.ancla_de_pose("Pie_R")
+	p3.poner("Control_Corriendo", 0.125, -1.0)
+	p3.llevar_pie("Pie_R", meta, 1.0)
+	var entero := p3.ancla_de_pose("Pie_R")
+	_ok(medio.distance_to(pie.lerp(meta, 0.5)) < 0.03 and entero.distance_to(meta) < 0.05,
+		"el ajuste de pie con medio peso lleva el pie a mitad de camino (queda a %.2f m de la mitad; con el peso entero, a %.2f m de la pelota)"
+		% [medio.distance_to(pie.lerp(meta, 0.5)), entero.distance_to(meta)])
 
 
 ## Sin motor: la vista recibe las posiciones de dos que andan derecho. El

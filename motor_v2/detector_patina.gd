@@ -17,9 +17,22 @@ extends RefCounted
 ## Mientras el modelo funde un clip con otro (Jugador3D._mezcla < 1) el pie
 ## cuenta aparte, en FUNDIDO: ahí patina por la mezcla de dos poses, no por
 ## el clip, y el suelo no se toma de esos cuadros.
+##
+## En un gesto que se hace corriendo cada pie tiene su suelo
+## (Jugador3D.suelo_del_pie): la pierna de la carrera apoya donde apoya su
+## clip de andar. Con el suelo del gesto, que queda 4 cm más abajo que el de
+## Correr, el pie de apoyo no contaba nunca. Dos pies no cuentan como
+## apoyados: el que va a la pelota (Jugador3D.pie_en_la_pelota: viaja con
+## ella, no pisa) y el del que salta (el alto se mide desde la cancha, no
+## desde el modelo, que la vista levanta en el cabezazo). Con esos dos pies
+## adentro, Control_Corriendo daba 9,4 m patinados por partido y Cabecear 7,4
+## sin que el pie de apoyo se midiera (tests/_diag_patina_partido_v2.gd).
 
 const APOYO_M := Jugador3D.APOYO_M
+## En el orden de Jugador3D.LADOS_PIE.
 const PIES := ["Pie_L", "Pie_R"]
+## El alto de la cancha en el mundo: las vistas ponen a los jugadores en y = 0.
+const PISO_Y := 0.0
 const FUNDIDO := "(fundido)"
 
 ## jugador -> {pie: Vector3 del cuadro anterior}
@@ -43,16 +56,19 @@ func medir(jugadores: Array, delta: float) -> void:
 		var fundiendo := p3._mezcla < 1.0
 		var previos: Dictionary = _previos.get(p3, {})
 		var ahora := {}
-		for pie in PIES:
+		for k in PIES.size():
+			var pie: String = PIES[k]
 			var punto := ancla_de(p3, pie)
 			ahora[pie] = punto
-			if not fundiendo:
+			var de_carrera := p3.peso_carrera(k)
+			if not fundiendo and de_carrera <= 0.0:
 				_suelo[anim] = minf(float(_suelo[anim]), punto.y - p3.global_position.y)
-			if not previos.has(pie):
+			if not previos.has(pie) or p3.pie_en_la_pelota(k):
 				continue
 			var antes: Vector3 = previos[pie]
-			var alto := minf(punto.y, antes.y) - p3.global_position.y
-			if alto > float(_suelo[anim]) + APOYO_M:
+			var suelo := lerpf(float(_suelo[anim]), p3.suelo_del_pie(k), de_carrera) if de_carrera > 0.0 \
+				else float(_suelo[anim])
+			if minf(punto.y, antes.y) - PISO_Y > suelo + APOYO_M:
 				continue
 			var cubo := FUNDIDO if fundiendo else anim
 			var dato: Array = por_clip.get(cubo, [0.0, 0.0])
