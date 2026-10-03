@@ -979,7 +979,13 @@ func _empezar_una_vez(i: int, p3: Jugador3D, v: float, paso: Vector2, rumbo: flo
 	# Y está bajando la rapidez: el que persigue a un objetivo que se mueve va
 	# siempre a la distancia de frenado de él, sin frenar. Entraba a la Frenada
 	# y quedaba con el clip quieto y el pie patinando.
-	if corre and absf(hacia_objetivo) < PI / 3.0 and p3.tiene("Frenada") and parar >= 0.0 \
+	# Espera a que termine el fundido que esté en curso: el que frena pasa de
+	# Correr a Trotar justo antes (a 4 m/s; la Frenada entra a 3,6) y la Frenada
+	# entraba en medio de ese fundido, 302 de 396 veces por partido. Fundía
+	# desde la pose de ese momento, congelada, y el pie apoyado viajaba con el
+	# cuerpo: 15,6 de los 17,3 m que patinaba Trotar -> Frenada
+	# (tests/_diag_patina_partido_v2.gd).
+	if corre and p3._mezcla >= 1.0 and absf(hacia_objetivo) < PI / 3.0 and p3.tiene("Frenada") and parar >= 0.0 \
 			and parar <= v * v / (2.0 * _frenada) + 0.05 and parar <= float(_cinta["Frenada"]["metros"]) \
 			and _desacelera[i] >= 0.5 * _frenada:
 		# Los metros que le faltan de verdad (ver "frenada" en _una_vez_de).

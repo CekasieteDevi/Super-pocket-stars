@@ -99,6 +99,7 @@ func _probar(vista: VistaV2) -> void:
 	_de_costado_a_adelante(c, vista)
 	_caminando(c, vista)
 	_giro_andando(c, vista)
+	_frenada_despues_del_fundido(c, vista)
 	_gestos_corriendo(vista)
 	_arquero_se_levanta(vista)
 	print("FALLOS=%d" % fallos)
@@ -245,6 +246,29 @@ func _giro_andando(c: Object, vista: VistaV2) -> void:
 	_ok(entro_andando and peor < 0.05 and patina < 0.1,
 		"el que frena y gira entra al Giro_90 andando sin que salten los pies (%.2f m en ese cuadro, %.2f m en el giro)"
 		% [peor, patina])
+
+
+## Pica 14 m y llega frenando: pasa de Correr a Trotar a 4 m/s y la Frenada
+## entra a 3,6. Entrando en medio de ese fundido, fundía desde una pose
+## congelada (302 de 396 veces por partido: 15,6 m patinados).
+func _frenada_despues_del_fundido(c: Object, vista: VistaV2) -> void:
+	var p3: Jugador3D = vista._jugadores[FRENA]
+	var inicio: Vector2 = c.get_pos()[FRENA]
+	c.mirar_a(FRENA, inicio + Vector2(0.0, 40.0))
+	c.ir_a(FRENA, inicio + Vector2(0.0, 14.0), 1.0, true)
+	var entradas := 0
+	var congeladas := 0
+	for k in 360:
+		c.avanzar()
+		var clip_antes := p3._anim_actual
+		vista.dibujar_cuerpos(c, 1.0, PASO, Vector2.ZERO)
+		if p3._anim_actual == "Frenada" and clip_antes != "Frenada":
+			entradas += 1
+			if p3._anim_vieja == "":
+				congeladas += 1
+	_ok(entradas >= 1 and congeladas == 0,
+		"la Frenada entra con el clip de andar entero, no en medio de otro fundido (%d entradas, %d desde una pose congelada)"
+		% [entradas, congeladas])
 
 
 ## Sin motor: la vista recibe las posiciones de dos que andan derecho. El
