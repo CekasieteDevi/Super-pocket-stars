@@ -1,7 +1,8 @@
 extends SceneTree
 
 ## Jugadas preparadas (core/jugadas.gd): se aprenden de a una, quedan para
-## siempre, se guardan, la IA de arriba las sabe y en el partido se ven.
+## siempre, se guardan y la IA de arriba las sabe. Que se ven en el partido lo
+## prueba tests/test_jugadas_v2.gd.
 
 const SEED := 4410
 const PARTIDOS := 20
@@ -14,7 +15,6 @@ func _init() -> void:
 	_guardado()
 	_ia_por_division()
 	_bonus_abstracto()
-	_en_la_cancha()
 	print("FALLOS=%d" % fallos)
 	quit(1 if fallos else 0)
 
@@ -126,54 +126,6 @@ func _bonus_abstracto() -> void:
 	b.jugadas_aprendidas = [Jugadas.CONTRAPRESION]
 	_ok(is_equal_approx(Jugadas.bonus_abstracto(a, b, "quite"), solo * Jugadas.LECTURA_DEL_RIVAL),
 		"si el rival también la sabe, la ventaja se achica")
-
-
-## Cada jugada, puesta a usarse siempre, aparece en el partido: el equipo
-## que la sabe la ejecuta y el relato la cuenta. La defensa adelantada se
-## mide contra los mismos partidos sin ella.
-func _en_la_cancha() -> void:
-	var uso_original: Dictionary = Jugadas.USO.duplicate()
-	for id in Jugadas.USO:
-		Jugadas.USO[id] = 1.0
-	var con_trampa := 0
-	var sin_trampa := 0
-	for id in Jugadas.LISTA:
-		var usos := 0
-		var relatadas := 0
-		# El tiro libre directo a favor sale ~0,1 veces por partido: con 20
-		# partidos el amague aparecía 2 veces y un cambio de azar lo bajaba
-		# a 0 sin que la jugada se rompiera.
-		var partidos := PARTIDOS * 3 if id == Jugadas.AMAGUE else PARTIDOS
-		for i in range(partidos):
-			var res := _jugar(id, i)
-			var st: Dictionary = res["stats"]["jugadas"]
-			usos += int((st.get("local", {}) as Dictionary).get(id, 0))
-			for ev in res["eventos"]:
-				if str(ev.get("tipo", "")) == "jugada" and str(ev.get("jugada", "")) == id \
-						and RelatoPartido.linea(ev, {}) != "":
-					relatadas += 1
-			if id == Jugadas.DEFENSA_ADELANTADA:
-				con_trampa += int((st.get("offsides", {}) as Dictionary).get("visitante", 0))
-				sin_trampa += int((_jugar("", i)["stats"]["jugadas"].get("offsides", {}) as Dictionary).get("visitante", 0))
-		# Paredes y contragolpe pasan cada pocos segundos: se cuentan pero
-		# no se relatan.
-		var sin_relato: bool = id in [Jugadas.PAREDES, Jugadas.CONTRAGOLPE]
-		_ok(usos > 0 and (relatadas > 0 or sin_relato), "%s se usa en el partido (%d veces en %d partidos, %d relatadas)" % [
-			Jugadas.NOMBRE[id], usos, partidos, relatadas])
-	_ok(con_trampa > sin_trampa, "la defensa adelantada deja más rivales en offside (%d contra %d)" % [
-		con_trampa, sin_trampa])
-	for id in uso_original:
-		Jugadas.USO[id] = uso_original[id]
-
-
-func _jugar(id: String, i: int) -> Dictionary:
-	var a := _equipo("A", 0, SEED + 100 + i)
-	var b := _equipo("B", 400, SEED + 100 + i)
-	a.jugadas_aprendidas = [] if id == "" else [id]
-	b.jugadas_aprendidas = []
-	var rng := RandomNumberGenerator.new()
-	rng.seed = SEED * 3 + i
-	return MotorEspacial.simular(a, b, rng, false)
 
 
 func _ok(condicion: bool, mensaje: String) -> void:

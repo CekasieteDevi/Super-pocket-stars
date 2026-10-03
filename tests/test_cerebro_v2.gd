@@ -43,7 +43,7 @@ func _init() -> void:
 func _pesos_como_los_json() -> void:
 	var c: Object = ClassDB.instantiate("CanchitaV2Nativa")
 	var fabrica: Dictionary = c.pesos_cerebro_de_fabrica()
-	var pesos := MotorEspacial.pesos()
+	var pesos := BasePartido.pesos()
 	var distintos := []
 	for seccion in fabrica:
 		var json: Dictionary = FisicaV2.parametros_cerebro() if seccion == "cerebro" else pesos[seccion]

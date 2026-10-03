@@ -12,7 +12,7 @@ const ESCUDO_CLUB_SCRIPT = preload("res://ui/escudo_club.gd")
 ##
 ##   arriba izq: reloj + tiempo        arriba centro: marcador
 ##   borde izq: velocidades            arriba der: menú
-##   abajo izq: quién tiene la pelota  abajo der: minimapa (lo pone VistaPartido)
+##   abajo izq: quién tiene la pelota  abajo der: minimapa (lo pone VistaPartidoV2)
 
 signal velocidad_pedida(v: float)
 signal pausa_pedida
@@ -51,7 +51,7 @@ var poseedor := ""
 ## tanda no es un gol del partido: el 1-1 de los 120' se sigue mostrando.
 var tanda: Dictionary = {}
 
-## Relato: una línea por momento importante. La pone VistaPartido y la
+## Relato: una línea por momento importante. La pone VistaPartidoV2 y la
 ## sostiene unos segundos; `relato_alfa` la desvanece al final en vez de
 ## cortarla de golpe.
 var relato := ""

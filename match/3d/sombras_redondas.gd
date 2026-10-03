@@ -8,7 +8,7 @@ extends MultiMeshInstance3D
 ## manchas son una sola llamada de dibujo (MultiMesh).
 ##
 ## La mancha es una elipse corrida hacia donde cae la sombra del sol de la
-## vista (VistaCancha3D._armar_ambiente): así se lee del mismo lado que antes.
+## vista (VistaV2._armar_ambiente): así se lee del mismo lado que antes.
 
 const SHADER := preload("res://match/3d/sombra_redonda.gdshader")
 ## La luz viaja hacia (0.55, -0.75, -0.6): en el piso la sombra cae hacia
@@ -19,7 +19,7 @@ const HACIA_SOMBRA := Vector2(0.675, -0.737)
 const ANCHO_JUGADOR := 0.9
 const LARGO_JUGADOR := 1.9
 const CORRIDA_JUGADOR := 0.65
-## La pelota a 2x (VistaCancha3D.ESCALA_PELOTA): mancha de 0.5 m en el piso
+## La pelota a 2x (Cancha3D.ESCALA_PELOTA): mancha de 0.5 m en el piso
 ## que se achica y se aclara al subir.
 const ANCHO_PELOTA := 0.5
 const PELOTA_ALTURA_DESVANECE := 6.0

@@ -21,7 +21,7 @@ extends RefCounted
 ## conectados: Enfocado (mide mejor el desmarque y casi no se va en
 ## offside), Metódico (baja la temperatura del softmax — juega al libro y
 ## no improvisa) y Pie preferido (le baja las ganas de jugar hacia su
-## lado malo), los tres en core/motor_espacial.gd. El resto ya
+## lado malo), los tres en el cerebro del Motor V2 (CerebroV2.ficha_de). El resto ya
 ## engancha en algún lado real: bloque D del duelo (modificador_partido —
 ## incluye Protagonista, Dependiente e Impuntual), penales (bonus_penal,
 ## ver Penales.gd), tarjetas (factor_amarilla/factor_roja, ver
@@ -71,7 +71,7 @@ static func tiene(jugador: Dictionary, nombre: String) -> bool:
 
 
 ## +1 diestro, −1 zurdo. Lo usa el rasgo Pie preferido para saber cuál es
-## el lado malo (ver MotorEspacial._aplicar_pie_preferido).
+## el lado malo (ver Cerebro::_cruce_al_pie_malo, en motor_v2/cpp).
 ##
 ## Todavía no existe un campo `pie` en el jugador, así que se deriva del
 ## id: es estable entre partidos y entre guardados, o sea que un zurdo lo

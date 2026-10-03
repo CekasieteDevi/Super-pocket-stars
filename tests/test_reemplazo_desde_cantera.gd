@@ -126,7 +126,7 @@ func _test_sin_cantera_no_inventa_jugadores(rng: RandomNumberGenerator) -> void:
 
 ## El caso extremo: sin cantera Y sin banco, el once se achica. Se recorta
 ## por el final para que nadie mas cambie de slot (el slot i lo ocupa
-## jugadores[i], ver MotorEspacial).
+## jugadores[i], ver CerebroV2.receta).
 func _test_sin_banco_el_once_se_achica_por_el_final(rng: RandomNumberGenerator) -> void:
 	var equipo := Team.generar("ClubF", rng, 700)
 	equipo.cantera.clear()

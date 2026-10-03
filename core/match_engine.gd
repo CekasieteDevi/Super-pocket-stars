@@ -206,7 +206,7 @@ static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atri
 	# EQUIPO. `situacion` dice lo que el atributo solo no dice: que es un
 	# penal, o que el duelo es del MatchEngine (ver Entrenamiento.EQUIVALENCIA).
 	bloque_b += Entrenamiento.bonus_duelo(equipo, atributo, situacion)
-	# Jugadas preparadas: el MotorEspacial las juega en la cancha; aca, que
+	# Jugadas preparadas: el MotorV2 las juega en la cancha; aca, que
 	# no hay corners ni offsides, entra su equivalente (Jugadas.EQUIVALENCIA).
 	if situacion == Entrenamiento.SITUACION_ABSTRACTA:
 		bloque_b += Jugadas.bonus_abstracto(equipo, rival, atributo)
@@ -288,7 +288,7 @@ const CHANCE_ROJA_DIRECTA := 0.0004
 const CHANCE_AMARILLA := 0.02
 
 
-## `escala` multiplica las dos chances base. Existe porque MotorEspacial
+## `escala` multiplica las dos chances base. Existía porque el motor espacial (borrado)
 ## tira UNA vez por falta cobrada y este motor tira una vez por duelo:
 ## son frecuencias distintas y la chance por tirada tiene que serlo
 ## tambien para que las amarillas POR PARTIDO coincidan. El motor
@@ -532,8 +532,8 @@ static func _procesar_cambios_equipo(equipo: Team, minuto: int, con_log: bool, l
 			"jugador_posicion": saliente["posicion"], "resultado": motivo,
 			"saliente_id": saliente["id"], "entrante_id": entrante["id"],
 			"equipo_local": equipo.local,
-			"saliente_clave": MotorEspacial.clave_de(saliente["id"], equipo.local),
-			"entrante_clave": MotorEspacial.clave_de(entrante["id"], equipo.local),
+			"saliente_clave": BasePartido.clave_de(saliente["id"], equipo.local),
+			"entrante_clave": BasePartido.clave_de(entrante["id"], equipo.local),
 		})
 
 
@@ -624,7 +624,7 @@ static func simular(home: Team, away: Team, rng: RandomNumberGenerator, con_log:
 ## un jugador de este puesto".
 ##
 ## Es una aproximación, y a propósito: lo que NO puede ser aproximado es
-## el TOTAL. MotorEspacial normaliza a `minutos/90` por jugador y esto
+## el TOTAL. MotorV2 normaliza a `minutos/90` por jugador y esto
 ## entrega lo mismo, así que un titular crece igual de rápido juegue el
 ## usuario o la IA. Si los totales no coincidieran, el desbalance se
 ## acumularía temporada a temporada en vez de promediarse como los goles.
@@ -811,7 +811,7 @@ static func relativo_al_nivel(valor: float, nivel: float) -> float:
 ## la precisión, "afuera" baja cuanto mejor es el rematador. `tiro` viene
 ## ya normalizado al nivel del partido (ver relativo_al_nivel).
 ##
-## El palo sale de la franja de afuera, igual que en MotorEspacial: es un
+## El palo sale de la franja de afuera, igual que en el motor espacial (borrado): es un
 ## remate que se iba por poco. Así subir los palos no cambia cuántos
 ## remates van al arco. El coeficiente es el mismo "palo" del espacial;
 ## allá multiplica la mezcla técnica+geometría y acá el tiro, que andan
@@ -821,7 +821,7 @@ static func _resolver_destino(tiro: int, rng: RandomNumberGenerator) -> String:
 	# La franja que no va al arco incluye el 0,05·t del palo viejo: la
 	# puntería está calibrada con ese valor y la paridad de goles con él.
 	var chance_afuera: float = clamp(0.6 - 0.45 * t, 0.08, 0.6) + 0.05 * t
-	var chance_palo: float = minf(float(MotorEspacial.pesos()["tiro_resolucion"]["palo"]) * t, chance_afuera)
+	var chance_palo: float = minf(float(BasePartido.pesos()["tiro_resolucion"]["palo"]) * t, chance_afuera)
 	var chance_porteria: float = 1.0 - chance_afuera
 
 	var roll := rng.randf()

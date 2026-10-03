@@ -3,7 +3,7 @@ extends RefCounted
 
 ## Etapa 8 del Motor V2 (docs/motor_v2.md): el puente entre el motor nuevo y el
 ## resto del juego. `simular` juega el partido entero sin vista y devuelve lo
-## mismo que MotorEspacial.simular: marcador, goleadores, eventos para el
+## mismo que MatchEngine.simular: marcador, goleadores, eventos para el
 ## relato y las estadísticas, y los equipos (Team) con sus tarjetas, lesiones,
 ## cambios y energía del partido. En vez de fotogramas devuelve la receta
 ## (CerebroV2.receta): con ella la pantalla arma el mismo partido y lo juega
@@ -34,13 +34,12 @@ const JUGADAS := ["", Jugadas.CORNER_CORTO, Jugadas.CORNER_BLOQUE, Jugadas.AMAGU
 	Jugadas.CONTRAPRESION]
 
 
-## Los mismos argumentos y el mismo resultado que MotorEspacial.simular. Con
+## Los mismos argumentos y el mismo resultado que MatchEngine.simular. Con
 ## `definicion_directa` y empate a los 90 se juega el alargue y, si sigue
 ## empatado, la tanda.
 static func simular(home: Team, away: Team, rng: RandomNumberGenerator,
 		_con_fotogramas: bool = false, definicion_directa: bool = false) -> Dictionary:
-	# El mismo arranque (y las mismas tiradas del rng) que MotorEspacial y
-	# MatchEngine.
+	# El mismo arranque (y las mismas tiradas del rng) que MatchEngine.
 	home.reset_partido()
 	away.reset_partido()
 	home.local = true
@@ -74,10 +73,13 @@ static func receta_de(fotogramas: Array) -> Dictionary:
 ## resultado.
 static func _resultado(c: Object, home: Team, away: Team, rng: RandomNumberGenerator, receta: Dictionary) -> Dictionary:
 	var equipos := [home, away]
+	# Clave (BasePartido.clave_de) -> jugador y lado. Por clave y no por id: los
+	# ids no se repiten entre los clubes de una partida, pero sí entre dos
+	# clubes armados aparte (los tests arman los dos desde el id 0).
 	var plantel := {}
 	for e in 2:
 		for j in (equipos[e] as Team).todos_los_jugadores():
-			plantel[int(j["id"])] = {"jugador": j, "lado": e}
+			plantel[_clave(int(j["id"]), e)] = {"jugador": j, "lado": e, "id": int(j["id"])}
 	var eventos := []
 	var log := []
 	var goles_log := []
@@ -86,13 +88,13 @@ static func _resultado(c: Object, home: Team, away: Team, rng: RandomNumberGener
 	eventos.append(_evento(0, 0.0, "saque_inicial", home, away, {}, "1"))
 	var tanda := {"goles": [0, 0], "tandas": []}
 	var alargue := false
-	# Para la experiencia: qué hizo cada uno (id -> atributo -> veces) y en qué
-	# pasos estuvo en la cancha (id -> [entró, salió]; -1 = hasta el final).
+	# Para la experiencia: qué hizo cada uno (clave -> atributo -> veces) y en
+	# qué pasos estuvo en la cancha (clave -> [entró, salió]; -1 = hasta el final).
 	var usos := {}
 	var tramos := {}
 	for e in 2:
 		for id in (equipos[e] as Team).en_cancha:
-			tramos[int(id)] = [0, -1]
+			tramos[_clave(int(id), e)] = [0, -1]
 	# El paso en que terminaron los 90: la experiencia se mide contra eso.
 	var pasos_90 := 0
 	# El último periodo que se jugó (0 primer tiempo ... 3 segundo del alargue).
@@ -108,7 +110,8 @@ static func _resultado(c: Object, home: Team, away: Team, rng: RandomNumberGener
 		var equipo: Team = equipos[e]
 		var rival: Team = equipos[1 - e]
 		var id := int(ev["jugador"])
-		var quien: Dictionary = plantel[id]["jugador"] if plantel.has(id) else {}
+		var k := _clave(id, e)
+		var quien: Dictionary = plantel[k]["jugador"] if id >= 0 and plantel.has(k) else {}
 		var paso := int(ev["paso"])
 		var minuto := float(ev["minuto"])
 		match str(ev["tipo"]):
@@ -118,13 +121,13 @@ static func _resultado(c: Object, home: Team, away: Team, rng: RandomNumberGener
 			"gol":
 				var asistente := int(ev["otro"])
 				var gol := {"minuto": int(minuto), "equipo": equipo.nombre, "jugador_id": id if not quien.is_empty() else -1,
-					"asistencia_id": asistente if plantel.has(asistente) else -1}
+					"asistencia_id": asistente if asistente >= 0 and plantel.has(_clave(asistente, e)) else -1}
 				if quien.is_empty():
 					gol["autogol"] = true
 				goles_log.append(gol)
 				var penal := int(ev["detalle"]) == 1
 				var linea := _evento(paso, minuto, "penal" if penal else "tiro_puerta", equipo, rival, quien, "gol")
-				linea["asistencia_clave"] = _clave(asistente, e) if plantel.has(asistente) else -1
+				linea["asistencia_clave"] = _clave(asistente, e) if asistente >= 0 and plantel.has(_clave(asistente, e)) else -1
 				linea["tecnica"] = _tecnica_del_gol(remates, id, paso)
 				if quien.is_empty():
 					linea["autogol"] = true
@@ -141,8 +144,8 @@ static func _resultado(c: Object, home: Team, away: Team, rng: RandomNumberGener
 				if doble:
 					equipo.amarillas_partido[id] = int(equipo.amarillas_partido.get(id, 0)) + 1
 				equipo.expulsados_partido[id] = true
-				if tramos.has(id):
-					tramos[id][1] = paso
+				if tramos.has(k):
+					tramos[k][1] = paso
 				equipo.suspendidos[id] = int(equipo.suspendidos.get(id, 0)) + 1
 				eventos.append(_evento(paso, minuto, "tarjeta", equipo, rival, quien, "roja_doble_amarilla" if doble else "roja"))
 				log.append("min %d - TARJETA ROJA%s (%s) - %s" % [int(minuto), " (doble amarilla)" if doble else "",
@@ -158,10 +161,11 @@ static func _resultado(c: Object, home: Team, away: Team, rng: RandomNumberGener
 				# gambeta que pierde el que la tenía (como el motor espacial).
 				var pierde_id := int(ev["otro"])
 				var con_entrada := int(ev["detalle"]) == 1
-				_usar(usos, id, "barrida" if con_entrada else "quite")
-				_usar(usos, pierde_id, "control")
-				if plantel.has(pierde_id) and not quien.is_empty():
-					var linea_q := _evento(paso, minuto, "gambeta", rival, equipo, plantel[pierde_id]["jugador"], "pierde")
+				var pierde := _clave(pierde_id, 1 - e)
+				_usar(usos, k, "barrida" if con_entrada else "quite")
+				_usar(usos, pierde, "control")
+				if pierde_id >= 0 and plantel.has(pierde) and not quien.is_empty():
+					var linea_q := _evento(paso, minuto, "gambeta", rival, equipo, plantel[pierde]["jugador"], "pierde")
 					linea_q["defensor_clave"] = _clave(id, e)
 					eventos.append(linea_q)
 			"lesion":
@@ -176,9 +180,9 @@ static func _resultado(c: Object, home: Team, away: Team, rng: RandomNumberGener
 			"cambio":
 				var entra := int(ev["otro"])
 				equipo.sustituir(id, entra)
-				if tramos.has(id):
-					tramos[id][1] = paso
-				tramos[entra] = [paso, -1]
+				if tramos.has(k):
+					tramos[k][1] = paso
+				tramos[_clave(entra, e)] = [paso, -1]
 				var motivo := "lesion" if int(ev["detalle"]) == 1 else "cansancio"
 				var linea_c := _evento(paso, minuto, "cambio", equipo, rival, quien, motivo)
 				linea_c["saliente_id"] = id
@@ -218,10 +222,12 @@ static func _resultado(c: Object, home: Team, away: Team, rng: RandomNumberGener
 	home.goles = int(goles[0])
 	away.goles = int(goles[1])
 	# La energía con la que terminó cada uno (el que salió, con la que se fue).
+	# (Por id: con ids repetidos entre los dos clubes, la de uno pisa la del otro.)
 	var energias: Dictionary = c.energias_por_id()
-	for id in energias:
-		if plantel.has(int(id)):
-			(equipos[int(plantel[int(id)]["lado"])] as Team).resistencia[int(id)] = float(energias[id])
+	for clave in tramos:
+		var id := int(plantel[clave]["id"]) if plantel.has(clave) else -1
+		if energias.has(id):
+			(equipos[int(plantel[clave]["lado"])] as Team).resistencia[id] = float(energias[id])
 
 	var estado: Dictionary = c.get_estado()
 	var minuto_final := int(float(estado["minuto"]))
@@ -266,7 +272,7 @@ static func _resultado(c: Object, home: Team, away: Team, rng: RandomNumberGener
 	}
 
 
-## Un evento con el formato de MotorEspacial y MatchEngine (lo leen
+## Un evento con el formato de MatchEngine (lo leen
 ## RelatoPartido y EstadisticasPartido), más `paso`: el paso del motor en que
 ## pasó, para que la pantalla lo cuente a tiempo.
 static func _evento(paso: int, minuto: float, tipo: String, equipo: Team, rival: Team, jugador: Dictionary,
@@ -275,60 +281,60 @@ static func _evento(paso: int, minuto: float, tipo: String, equipo: Team, rival:
 		"jugador_posicion": str(jugador.get("posicion", "")), "resultado": resultado}
 	if not jugador.is_empty():
 		ev["jugador_id"] = int(jugador["id"])
-		ev["clave"] = MotorEspacial.clave_de(int(jugador["id"]), equipo.local)
+		ev["clave"] = BasePartido.clave_de(int(jugador["id"]), equipo.local)
 	return ev
 
 
 static func _clave(id: int, lado: int) -> int:
-	return MotorEspacial.clave_de(id, lado == 0)
+	return BasePartido.clave_de(id, lado == 0)
 
 
 static func _nombre(jugador: Dictionary) -> String:
 	return "%s %s" % [jugador.get("nombre", "?"), jugador.get("apellido", "")] if not jugador.is_empty() else "en contra"
 
 
-static func _usar(usos: Dictionary, id: int, atributo: String) -> void:
-	if id < 0:
+## `clave`: la del jugador (BasePartido.clave_de); de un id -1, no anota nada.
+static func _usar(usos: Dictionary, clave: int, atributo: String) -> void:
+	if clave < 0 or clave == BasePartido.OFFSET_VISITANTE - 1:
 		return
-	if not usos.has(id):
-		usos[id] = {}
-	usos[id][atributo] = float(usos[id].get(atributo, 0.0)) + 1.0
+	if not usos.has(clave):
+		usos[clave] = {}
+	usos[clave][atributo] = float(usos[clave].get(atributo, 0.0)) + 1.0
 
 
-## §7.3: la experiencia del partido, con el mismo reparto que
-## MotorEspacial.xp_normalizada. Cada uno reparte `minutos/90` puntos entre lo
+## §7.3: la experiencia del partido. Cada uno reparte `minutos/90` puntos entre lo
 ## que hizo (pases, remates, quites...) y lo que su puesto exige
 ## (MEZCLA_PERFIL). El total es el mismo que da el motor abstracto: un titular
 ## crece igual de rápido en el partido del usuario que en los de la IA.
 static func _experiencia(usos: Dictionary, tramos: Dictionary, plantel: Dictionary, pasos_90: int) -> Dictionary:
 	var pesos: Dictionary = PlayerGenerator.get_weights()
 	var out := {"home": {}, "away": {}}
-	for id in tramos:
-		if not plantel.has(id):
+	for clave in tramos:
+		if not plantel.has(clave):
 			continue
-		var tramo: Array = tramos[id]
+		var tramo: Array = tramos[clave]
 		var hasta := pasos_90 if int(tramo[1]) < 0 else mini(int(tramo[1]), pasos_90)
 		var fraccion := clampf(float(hasta - int(tramo[0])) / float(maxi(pasos_90, 1)), 0.0, 1.0)
 		if fraccion <= 0.0:
 			continue
-		var hizo: Dictionary = usos.get(id, {})
+		var hizo: Dictionary = usos.get(clave, {})
 		var suma := 0.0
 		for a in hizo:
 			suma += float(hizo[a])
-		var perfil: Dictionary = pesos.get(str(plantel[id]["jugador"].get("posicion", "")), {})
+		var perfil: Dictionary = pesos.get(str(plantel[clave]["jugador"].get("posicion", "")), {})
 		var suma_p := 0.0
 		for a in perfil:
 			suma_p += float(perfil[a])
 		var norm := {}
 		if suma > 0.0:
 			for a in hizo:
-				norm[a] = float(hizo[a]) / suma * (1.0 - MotorEspacial.MEZCLA_PERFIL) * fraccion
-		var peso_perfil: float = MotorEspacial.MEZCLA_PERFIL if suma > 0.0 else 1.0
+				norm[a] = float(hizo[a]) / suma * (1.0 - BasePartido.MEZCLA_PERFIL) * fraccion
+		var peso_perfil: float = BasePartido.MEZCLA_PERFIL if suma > 0.0 else 1.0
 		if suma_p > 0.0:
 			for a in perfil:
 				norm[a] = float(norm.get(a, 0.0)) + float(perfil[a]) / suma_p * peso_perfil * fraccion
 		if not norm.is_empty():
-			out["home" if int(plantel[id]["lado"]) == 0 else "away"][id] = norm
+			out["home" if int(plantel[clave]["lado"]) == 0 else "away"][int(plantel[clave]["id"])] = norm
 	return out
 
 
@@ -355,16 +361,16 @@ static func _eventos_de_remates(remates: Array, equipos: Array, plantel: Diction
 		usos: Dictionary) -> void:
 	for r in remates:
 		var resultado: String = RESULTADOS_REMATE[clampi(int(r["resultado"]), 0, RESULTADOS_REMATE.size() - 1)]
-		var id := int(r["pateador_id"])
-		_usar(usos, id, "cabezazo" if int(r["golpe"]) == GOLPE_CABEZA else "tiro")
+		var e := int(r["equipo"])
+		var k := _clave(int(r["pateador_id"]), e)
+		_usar(usos, k, "cabezazo" if int(r["golpe"]) == GOLPE_CABEZA else "tiro")
 		if resultado == "atajado":
 			# El arquero que la atajó entrena reflejos (el que está al final:
 			# los arqueros casi no se cambian).
-			_usar(usos, _arquero_de(equipos[1 - int(r["equipo"])]), "reflejos")
-		if resultado == "gol" or not plantel.has(id):
+			_usar(usos, _clave(_arquero_de(equipos[1 - e]), 1 - e), "reflejos")
+		if resultado == "gol" or int(r["pateador_id"]) < 0 or not plantel.has(k):
 			continue
-		var e := int(r["equipo"])
-		var quien: Dictionary = plantel[id]["jugador"]
+		var quien: Dictionary = plantel[k]["jugador"]
 		var ev: Dictionary
 		match resultado:
 			"atajado":
@@ -385,16 +391,21 @@ static func _eventos_de_remates(remates: Array, equipos: Array, plantel: Diction
 static func _eventos_de_pases(pases: Array, equipos: Array, plantel: Dictionary, eventos: Array,
 		usos: Dictionary) -> void:
 	for p in pases:
-		if int(p["tipo"]) == TIPO_DESPEJE or not plantel.has(int(p["pateador_id"])):
-			continue
 		var e := int(p["equipo"])
-		var pasador: Dictionary = plantel[int(p["pateador_id"])]["jugador"]
+		var k := _clave(int(p["pateador_id"]), e)
+		if int(p["tipo"]) == TIPO_DESPEJE or int(p["pateador_id"]) < 0 or not plantel.has(k):
+			continue
+		var pasador: Dictionary = plantel[k]["jugador"]
 		var resultado := int(p["resultado"])
 		var minuto := float(p["minuto"])
 		var centro := int(p["tipo"]) == TIPO_CENTRO
-		# MotorEspacial: el pelotazo entrena fuerza y el centro, centros.
-		_usar(usos, int(pasador["id"]), "centros" if centro else ("fuerza" if int(p["tipo"]) == TIPO_PASE_LARGO else "pases"))
-		var toca: Dictionary = plantel[int(p["toca_id"])]["jugador"] if plantel.has(int(p["toca_id"])) else {}
+		# El pelotazo entrena fuerza y el centro, centros.
+		_usar(usos, k, "centros" if centro else ("fuerza" if int(p["tipo"]) == TIPO_PASE_LARGO else "pases"))
+		# El que la tocó al final: un compañero si llegó, un rival si la cortó
+		# o la agarró el arquero.
+		var lado_fin := e if resultado == PASE_COMPLETO or resultado == PASE_OTRO else 1 - e
+		var k_toca := _clave(int(p["toca_id"]), lado_fin)
+		var toca: Dictionary = plantel[k_toca]["jugador"] if int(p["toca_id"]) >= 0 and plantel.has(k_toca) else {}
 		var ev: Dictionary
 		if resultado == PASE_COMPLETO or resultado == PASE_OTRO:
 			ev = _evento(int(p["paso"]), minuto, "pase", equipos[e], equipos[1 - e], pasador, "avanza")

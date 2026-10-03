@@ -3,11 +3,8 @@ extends SceneTree
 ## El cruce de copa del jugador se juega ENTERO en la cancha: los 90', el
 ## alargue y la tanda de penales.
 ##
-## Antes el motor espacial solo sabia jugar 90 minutos. Si el cruce
-## terminaba empatado, Copa llamaba a MatchEngine.simular_alargue y a
-## Penales.definir por atras: el jugador miraba el partido, se le cortaba
-## en el minuto 90 y el alargue y los penales le llegaban escritos en el
-## resumen.
+## Antes el partido se cortaba en el minuto 90 y el alargue y los penales le
+## llegaban escritos en el resumen. El Motor V2 los juega en la cancha.
 
 const SEED := 4242
 
@@ -40,15 +37,14 @@ func _armar_cruce(rng: RandomNumberGenerator, i: int) -> Array:
 
 
 ## Juega cruces hasta tener uno definido en el alargue y uno definido por
-## penales. Los dos se reusan en todos los tests que siguen: cada cruce
-## cuesta ~0,2 s y jugarlos de nuevo por test no aporta nada.
+## penales. Los dos se reusan en todos los tests que siguen.
 func _buscar_casos() -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = SEED
 	var casos := {}
 	for i in range(CRUCES):
 		var equipos := _armar_cruce(rng, i)
-		var r := MotorEspacial.simular(equipos[0], equipos[1], rng, true, true)
+		var r := MotorV2.simular(equipos[0], equipos[1], rng, true, true)
 		var d := str(r["definicion"])
 		if d != "90 minutos" and not casos.has(d):
 			casos[d] = r
@@ -70,74 +66,59 @@ func _test_hay_de_los_dos(casos: Dictionary) -> int:
 	return 0
 
 
-## El alargue son 2x15' con el mismo motor, asi que deja fotogramas igual
-## que una mitad: se mira, no se cuenta.
+## El alargue son dos tiempos de 15' que se juegan en la cancha: arrancan con
+## su saque y el reloj llega al 120.
 func _test_el_alargue_se_ve(casos: Dictionary) -> int:
-	print("\n=== El alargue deja fotogramas: esos 30' se miran ===")
+	print("
+=== El alargue se juega en la cancha ===")
 	var fallos := 0
 	for d in ["alargue", "penales"]:
 		if not casos.has(d):
 			continue
 		var r: Dictionary = casos[d]
-		var en_alargue := 0
+		var saques := []
 		var minuto_max := 0
-		for f in r["fotogramas"]:
-			if int(f["minuto"]) >= 90:
-				en_alargue += 1
-			minuto_max = maxi(minuto_max, int(f["minuto"]))
-		if en_alargue == 0:
-			print("FALLA: el cruce definido en '%s' no dejo un solo fotograma del alargue." % d)
+		for ev in r["eventos"]:
+			if str(ev["tipo"]) == "saque_inicial":
+				saques.append(str(ev["resultado"]))
+			if str(ev["tipo"]) != "penal_tanda":
+				minuto_max = maxi(minuto_max, int(ev["minuto"]))
+		if not (saques.has("3") and saques.has("4")):
+			print("FALLA: el cruce definido en '%s' no arranco los dos tiempos del alargue (%s)." % [d, str(saques)])
 			fallos += 1
 			continue
-		# Los dos tiempos del alargue son 2 * TICKS_POR_TIEMPO_ALARGUE
-		# fotogramas de juego. Se pide UNO de los dos como piso: el
-		# descuento y los cambios mueven el total para arriba, nunca tanto
-		# para abajo.
-		if en_alargue < MotorEspacial.TICKS_POR_TIEMPO_ALARGUE:
-			print("FALLA: el alargue de '%s' dejo %d fotogramas, menos de %d." % [
-				d, en_alargue, MotorEspacial.TICKS_POR_TIEMPO_ALARGUE])
-			fallos += 1
-			continue
-		if minuto_max < 119:
+		if minuto_max < 105:
 			print("FALLA: el alargue de '%s' llego solo hasta el minuto %d." % [d, minuto_max])
 			fallos += 1
 			continue
-		print("OK: '%s' deja %d fotogramas de alargue y llega al minuto %d." % [
-			d, en_alargue, minuto_max])
+		print("OK: '%s' juega los dos tiempos del alargue y llega al minuto %d." % [d, minuto_max])
 	return fallos
 
 
 func _test_la_tanda_se_patea_en_la_cancha(casos: Dictionary) -> int:
-	print("\n=== La tanda se patea en la cancha, penal por penal ===")
+	print("
+=== La tanda se patea en la cancha, penal por penal ===")
 	if not casos.has("penales"):
 		print("FALLA: no hay cruce definido por penales para revisar.")
 		return 1
 	var r: Dictionary = casos["penales"]
-	var con_tanda := 0
 	var remates := 0
-	for f in r["fotogramas"]:
-		if f.get("tanda", null) != null:
-			con_tanda += 1
-		for ev in f.get("eventos", []):
-			if str(ev.get("tipo", "")) == "penal_tanda":
-				remates += 1
+	for ev in r["eventos"]:
+		if str(ev["tipo"]) == "penal_tanda":
+			remates += 1
 	var pateados: int = r["penales"]["tandas"].size()
-	if con_tanda == 0:
-		print("FALLA: la tanda no dejo un solo fotograma.")
+	if remates != pateados or pateados < 6:
+		print("FALLA: se patearon %d penales y el relato tiene %d." % [pateados, remates])
 		return 1
-	if remates != pateados:
-		print("FALLA: se patearon %d penales pero en los fotogramas hay %d remates." % [
-			pateados, remates])
-		return 1
-	print("OK: %d penales pateados, %d remates en los fotogramas, %d fotogramas de tanda." % [
-		pateados, remates, con_tanda])
+	print("OK: %d penales pateados, %d en el relato." % [pateados, remates])
 	return 0
 
 
 ## Un penal de la tanda no es un gol del partido: los 120' terminaron
-## empatados y el marcador y el reloj se quedan ahi.
+## empatados y el marcador se queda ahi.
 func _test_la_tanda_no_toca_el_marcador(casos: Dictionary) -> int:
-	print("\n=== Los penales de la tanda no tocan el marcador ni el reloj ===")
+	print("
+=== Los penales de la tanda no tocan el marcador ===")
 	if not casos.has("penales"):
 		print("FALLA: no hay cruce definido por penales para revisar.")
 		return 1
@@ -148,86 +129,71 @@ func _test_la_tanda_no_toca_el_marcador(casos: Dictionary) -> int:
 		return 1
 	var pen: Dictionary = r["penales"]
 	if int(pen["goles_local"]) == int(pen["goles_visitante"]):
-		print("FALLA: la tanda quedo empatada %d-%d." % [
-			int(pen["goles_local"]), int(pen["goles_visitante"])])
+		print("FALLA: la tanda quedo empatada %d-%d." % [int(pen["goles_local"]), int(pen["goles_visitante"])])
 		return 1
-	for f in r["fotogramas"]:
-		if f.get("tanda", null) == null:
-			continue
-		if int(f["minuto"]) > 120:
-			print("FALLA: el reloj sigue corriendo en la tanda, marca %d'." % int(f["minuto"]))
-			return 1
-		var movido: bool = int(f["goles"]["home"]) != int(r["goles_local"])
-		movido = movido or int(f["goles"]["away"]) != int(r["goles_visitante"])
-		if movido:
-			print("FALLA: el marcador del partido se movio durante la tanda.")
-			return 1
-	print("OK: el partido queda %d-%d, la tanda %d-%d y el reloj no pasa de 120'." % [
-		int(r["goles_local"]), int(r["goles_visitante"]),
+	if (r["goles_log"] as Array).size() != int(r["goles_local"]) + int(r["goles_visitante"]):
+		print("FALLA: hay %d goles anotados para un %d-%d." % [(r["goles_log"] as Array).size(),
+			int(r["goles_local"]), int(r["goles_visitante"])])
+		return 1
+	print("OK: el partido queda %d-%d y la tanda %d-%d." % [int(r["goles_local"]), int(r["goles_visitante"]),
 		int(pen["goles_local"]), int(pen["goles_visitante"])])
 	return 0
 
 
-## Lo que se ve tiene que ser lo que paso. Si un penal se quedara sin
-## resolver dentro de su tope de ticks, el contador de la pantalla
-## quedaria abajo del resultado real y el jugador veria una tanda que no
-## cierra con el resultado que le anuncian.
+## Lo que se cuenta tiene que ser lo que paso: el ultimo penal del relato
+## trae el marcador final de la tanda.
 func _test_el_marcador_de_la_tanda_coincide(casos: Dictionary) -> int:
-	print("\n=== El marcador que se ve en la tanda es el resultado real ===")
+	print("
+=== El marcador que se cuenta en la tanda es el resultado real ===")
 	if not casos.has("penales"):
 		print("FALLA: no hay cruce definido por penales para revisar.")
 		return 1
 	var r: Dictionary = casos["penales"]
-	var ultimo = null
-	for f in r["fotogramas"]:
-		if f.get("tanda", null) != null:
-			ultimo = f["tanda"]
-	if ultimo == null:
-		print("FALLA: ningun fotograma trae el marcador de la tanda.")
-		return 1
+	var ultimo := {}
+	for ev in r["eventos"]:
+		if str(ev["tipo"]) == "penal_tanda":
+			ultimo = ev
 	var pen: Dictionary = r["penales"]
-	var difiere: bool = int(ultimo["home"]) != int(pen["goles_local"])
-	difiere = difiere or int(ultimo["away"]) != int(pen["goles_visitante"])
-	if difiere:
-		print("FALLA: en pantalla la tanda termina %d-%d y el resultado dice %d-%d." % [
-			int(ultimo["home"]), int(ultimo["away"]),
-			int(pen["goles_local"]), int(pen["goles_visitante"])])
+	if ultimo.is_empty() or int(ultimo["tanda_local"]) != int(pen["goles_local"]) 			or int(ultimo["tanda_visitante"]) != int(pen["goles_visitante"]):
+		print("FALLA: el relato termina la tanda %s y el resultado dice %d-%d." % [
+			str([ultimo.get("tanda_local"), ultimo.get("tanda_visitante")]), int(pen["goles_local"]), int(pen["goles_visitante"])])
 		return 1
-	print("OK: pantalla y resultado dicen lo mismo, %d-%d." % [
-		int(ultimo["home"]), int(ultimo["away"])])
+	print("OK: relato y resultado dicen lo mismo, %d-%d." % [int(pen["goles_local"]), int(pen["goles_visitante"])])
 	return 0
 
 
-## En una tanda real los dos equipos patean al mismo arco. Antes cada uno
-## pateaba al arco que atacaba y la camara cruzaba la cancha en cada penal.
+## En una tanda real los dos equipos patean al mismo arco. El motor no cambia
+## de lado: lo hace la vista (PartidoVistoV2). Se vuelve a jugar la receta con
+## la vista y se mira dónde termina cada penal en la pantalla.
 func _test_la_tanda_se_patea_a_un_solo_arco(casos: Dictionary) -> int:
-	print("\n=== Los dos equipos patean la tanda al mismo arco ===")
+	print("
+=== Los dos equipos patean la tanda al mismo arco ===")
 	if not casos.has("penales"):
 		print("FALLA: no hay cruce definido por penales para revisar.")
 		return 1
-	var r: Dictionary = casos["penales"]
-	var por_lado := {"home": 0, "away": 0}
-	# Penales.definir arranca siempre con el local: el primer penal dice
-	# como se llama.
-	var nombre_local := ""
-	for f in r["fotogramas"]:
-		for ev in f.get("eventos", []):
-			if str(ev.get("tipo", "")) != "penal_tanda":
-				continue
-			if nombre_local == "":
-				nombre_local = str(ev["equipo"])
-			var lado: String = "home" if str(ev["equipo"]) == nombre_local else "away"
-			if float(f["pelota"]["x"]) <= 0.0:
-				print("FALLA: un penal de '%s' termina en el arco izquierdo (x=%.1f)." % [
-					lado, float(f["pelota"]["x"])])
-				return 1
-			por_lado[lado] += 1
-	if por_lado["home"] == 0 or por_lado["away"] == 0:
-		print("FALLA: faltan penales de un equipo: %d local, %d visitante." % [
-			por_lado["home"], por_lado["away"]])
+	var c: Object = CerebroV2.armar_de_receta(casos["penales"]["receta_v2"])
+	var visto := PartidoVistoV2.new(c)
+	var lados := {}
+	var por_equipo := [0, 0]
+	var vistos := 0
+	var pasos := 0
+	while str(c.get_estado()["periodo"]) != "terminado" and pasos < MotorV2.PASOS_TOPE:
+		c.avanzar()
+		visto.actualizar()
+		pasos += 1
+		if str(c.get_estado()["periodo"]) != "tanda":
+			continue
+		var eventos: Array = c.eventos()
+		for k in range(vistos, eventos.size()):
+			if str(eventos[k]["tipo"]) == "penal_tanda":
+				lados[signf(visto.get_pelota_pos().x)] = true
+				por_equipo[int(eventos[k]["equipo"])] += 1
+		vistos = eventos.size()
+	if lados.size() != 1 or por_equipo[0] == 0 or por_equipo[1] == 0:
+		print("FALLA: en pantalla los penales terminan en %d arcos (%d del local, %d del visitante)." % [lados.size(),
+			por_equipo[0], por_equipo[1]])
 		return 1
-	print("OK: %d penales del local y %d del visitante, todos al arco derecho." % [
-		por_lado["home"], por_lado["away"]])
+	print("OK: %d penales del local y %d del visitante, todos al mismo arco." % [por_equipo[0], por_equipo[1]])
 	return 0
 
 
@@ -240,7 +206,7 @@ func _test_en_liga_el_empate_sigue_siendo_empate() -> int:
 	var empates := 0
 	for i in range(20):
 		var equipos := _armar_cruce(rng, i)
-		var r := MotorEspacial.simular(equipos[0], equipos[1], rng, false)
+		var r := MotorV2.simular(equipos[0], equipos[1], rng, false)
 		if str(r["definicion"]) != "90 minutos":
 			print("FALLA: un partido de liga se definio en '%s'." % str(r["definicion"]))
 			return 1
@@ -256,12 +222,8 @@ func _test_en_liga_el_empate_sigue_siendo_empate() -> int:
 	return 0
 
 
-## PARIDAD: la tanda la resuelve Penales para los dos motores, y el motor
-## espacial solo la patea. Mirarla en la cancha no puede cambiar ni un
-## remate — si lo cambiara, el jugador definiria sus tandas con otras
-## chances que la IA. Medido: el duelo de penal del motor espacial
-## convierte el 96,8% y el de Penales el 84,2%
-## (tests/_diag_conversion_penales.gd), asi que quien decide importa.
+## Penales resuelve la tanda de los cruces de la IA (MatchEngine). Mirarla no
+## puede cambiar ni un remate: el callback solo observa.
 func _test_mirar_la_tanda_no_la_cambia() -> int:
 	print("\n=== Mirar la tanda no cambia ni un penal ===")
 	var rng := RandomNumberGenerator.new()

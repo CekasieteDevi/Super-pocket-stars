@@ -18,7 +18,7 @@ const COLOR_PELOTA := Color.WHITE
 const COLOR_ENCUADRE := Color(1, 1, 1, 0.5)
 const RADIO_JUGADOR := 2.6
 
-## Mismo formato que VistaCancha.entidades.
+## Una entrada por jugador y una por la pelota: {tipo, pos, color}.
 var entidades: Array = []
 ## Rectángulo de cancha que la cámara está mostrando, en metros.
 var encuadre := Rect2()

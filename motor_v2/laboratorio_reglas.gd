@@ -47,7 +47,7 @@ const NOMBRE_PARADA := {"nada": "", "saque_medio": "saque del medio", "lateral":
 	"corner": "córner", "tiro_libre": "tiro libre", "penal": "penal"}
 
 ## El tiro libre del guion va a esta distancia del arco, casi de frente: ahí
-## MotorEspacial.tipo_de_falta lo hace directo y se arma la barrera.
+## el motor lo hace directo y se arma la barrera.
 const TIRO_LIBRE_M := 22.0
 ## El guion: qué se fuerza y para quién (0 local, 1 visitante).
 const ESCENAS := [

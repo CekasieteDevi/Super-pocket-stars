@@ -2,9 +2,9 @@ class_name ArbitroV2
 extends RefCounted
 
 ## El árbitro del Motor V2 (docs/motor_v2.md, etapa 6). Es una capa visual,
-## como OficialesPartido en el motor espacial: no decide nada. Sigue el juego
+## como los oficiales del motor espacial: no decide nada. Sigue el juego
 ## a DISTANCIA_M de la pelota. Cuando el partido anota una tarjeta hace lo
-## mismo que en VistaCancha3D (_tarjeta_en_curso): corre hasta el costado del
+## mismo que en la vista 3D del motor espacial: corre hasta el costado del
 ## jugador (a lo sumo CORRE_MAX_SEG), se para de frente a la cámara y muestra
 ## la tarjeta (Tarjeta_Completa). El motor corta al saque a los `tarjeta_seg`
 ## (data/fisica_v2.json, "reglas"): CORRE_MAX_SEG más lo que dura el gesto.
@@ -13,8 +13,14 @@ extends RefCounted
 ## apurado a x16 llega igual.
 
 const PASO_SEG := 1.0 / 60.0
-## Cerca de la pelota, del lado del medio de la cancha (OficialesPartido).
-const DISTANCIA_M := OficialesPartido.DISTANCIA_ARBITRO_M
+## Cerca de la pelota, del lado del medio de la cancha (como en el motor espacial).
+const DISTANCIA_M := 8.0
+## La ropa y el pelo del árbitro, y su cara: fija y seria (la del
+## "concentrado" de assets/3d/caras.png).
+const COLOR_CAMISETA := Color("18c4cf")
+const COLOR_PANTALON := Color("171a20")
+const COLOR_PELO := Color("382014")
+const CARA := 13
 ## No sale a correr por cada metro que se mueve la pelota.
 const HOLGURA_M := 3.0
 const ACELERACION := 6.0
@@ -32,10 +38,11 @@ const PARADA_GIRO_RAD := 0.6
 ## en la revisión visual de la etapa 7, "el juez se mete en el medio".
 const PARADA_ATRAS_M := 4.0
 const PARADA_AL_COSTADO_M := 8.0
-## Lo más que tarda en llegar al jugador (VistaCancha3D.TARJETA_CORRE_MAX_TICKS).
-const CORRE_MAX_SEG := VistaCancha3D.TARJETA_CORRE_MAX_TICKS * MotorEspacial.TICK_SEG
-const CORRE_MIN_SEG := MotorEspacial.TICK_SEG
-## A cuánto del jugador se para. Con los 1,8 m de VistaCancha3D
+## Lo más y lo menos que tarda en llegar al jugador (8 ticks y 1 tick del
+## motor espacial, de 0,25 s).
+const CORRE_MAX_SEG := 2.0
+const CORRE_MIN_SEG := 0.25
+## A cuánto del jugador se para. Con los 1,8 m de la vista vieja
 ## (TARJETA_AL_LADO_M) quedaba lejos: esa vista acerca la cámara mucho más.
 const AL_LADO_M := 1.1
 
@@ -55,11 +62,11 @@ var _corre_seg := 0.0
 
 
 func _init(mundo: Node3D) -> void:
-	modelo = Jugador3D.new(load(VistaCancha3D.ESCENA_JUGADOR))
+	modelo = Jugador3D.new(load(Cancha3D.ESCENA_JUGADOR))
 	mundo.add_child(modelo)
-	modelo.colorear(OficialesPartido.COLOR_CAMISETA, OficialesPartido.COLOR_PANTALON, OficialesPartido.COLOR_PELO)
+	modelo.colorear(COLOR_CAMISETA, COLOR_PANTALON, COLOR_PELO)
 	modelo.poner_peinado(Jugador3D.PEINADO_OFICIAL)
-	modelo.poner_cara(GestosCara.CARA_OFICIAL, Jugador3D.Gesto.NORMAL)
+	modelo.poner_cara(CARA, Jugador3D.Gesto.NORMAL)
 	_tarjeta = Utileria3D.tarjeta()
 	_tarjeta.visible = false
 	mundo.add_child(_tarjeta)
@@ -109,7 +116,7 @@ func dibujar(paso: int, bola: Vector2, tarjeta: Dictionary, delta: float, parada
 		destino = _pos
 	var falta := _pos.distance_to(destino)
 	# Frena para llegar parado: v² = 2·a·d.
-	var tope := minf(VistaCancha3D.ARBITRO_CORRE_MS, sqrt(2.0 * ACELERACION * falta))
+	var tope := minf(Cancha3D.ARBITRO_CORRE_MS, sqrt(2.0 * ACELERACION * falta))
 	_rapidez = move_toward(_rapidez, tope, ACELERACION * dt)
 	if falta > 1e-3:
 		var avance := minf(_rapidez * dt, falta)
@@ -126,7 +133,7 @@ func _con_tarjeta(tarjeta: Dictionary, desde: float, dt: float, delta: float) ->
 	var jugador: Vector2 = tarjeta["pos"]
 	# Al costado del jugador (a lo largo de la cancha, del lado del medio)
 	# y un poco atrás: de frente a la cámara con el jugador al lado. Atrás
-	# del todo, el jugador le tapaba la tarjeta (VistaCancha3D). En cada
+	# del todo, el jugador le tapaba la tarjeta. En cada
 	# cuadro: el jugador frena unos metros después de la falta, y con el lugar
 	# calculado una sola vez el árbitro quedaba al lado del que la recibió.
 	var lado := -signf(jugador.x) if absf(jugador.x) > 1.0 else 1.0
@@ -134,7 +141,7 @@ func _con_tarjeta(tarjeta: Dictionary, desde: float, dt: float, delta: float) ->
 	if int(tarjeta["paso"]) != _tarjeta_paso:
 		_tarjeta_paso = int(tarjeta["paso"])
 		_desde_pos = _pos
-		_corre_seg = clampf(_desde_pos.distance_to(_lugar) / VistaCancha3D.ARBITRO_CORRE_MS, CORRE_MIN_SEG, CORRE_MAX_SEG)
+		_corre_seg = clampf(_desde_pos.distance_to(_lugar) / Cancha3D.ARBITRO_CORRE_MS, CORRE_MIN_SEG, CORRE_MAX_SEG)
 	var antes := _pos
 	_pos = _desde_pos.lerp(_lugar, smoothstep(0.0, _corre_seg, desde))
 	var avance := _pos.distance_to(antes)
@@ -152,31 +159,31 @@ func _con_tarjeta(tarjeta: Dictionary, desde: float, dt: float, delta: float) ->
 		_andar(_rapidez, float(_paso) * PASO_SEG, delta)
 		return
 	_rapidez = 0.0
-	# De frente a la cámara (a +z), como en VistaCancha3D.
+	# De frente a la cámara (a +z), como en la vista vieja.
 	_rumbo = 0.0
 	modelo.rotation.y = 0.0
 	var t := desde - _corre_seg
 	modelo.poner("Tarjeta_Completa", minf(t, modelo.duracion("Tarjeta_Completa")), delta)
-	if t >= VistaCancha3D.TARJETA_EN_MANO.x and t <= VistaCancha3D.TARJETA_EN_MANO.y:
+	if t >= Cancha3D.TARJETA_EN_MANO.x and t <= Cancha3D.TARJETA_EN_MANO.y:
 		_poner_tarjeta(bool(tarjeta["roja"]))
 
 
 func _andar(rapidez: float, segundo: float, delta: float) -> void:
-	var anim := VistaCancha3D.ANIM_QUIETO
-	if rapidez >= VistaCancha3D.VELOCIDAD_PARA_PIERNAS:
-		anim = VistaCancha3D._andar("Trotar", rapidez)
-		if anim == VistaCancha3D.ANIM_QUIETO:
+	var anim := Cancha3D.ANIM_QUIETO
+	if rapidez >= Cancha3D.VELOCIDAD_PARA_PIERNAS:
+		anim = Cancha3D.andar("Trotar", rapidez)
+		if anim == Cancha3D.ANIM_QUIETO:
 			anim = "Caminar"
-	if anim == VistaCancha3D.ANIM_QUIETO:
+	if anim == Cancha3D.ANIM_QUIETO:
 		modelo.poner(anim, fposmod(segundo, maxf(modelo.duracion(anim), 0.01)), delta)
 		return
 	var clips := FisicaV2.clips()
-	var ciclo := float(clips[anim].get("metros", VistaCancha3D.METROS_POR_CICLO)) if clips.has(anim) \
-		else VistaCancha3D.METROS_POR_CICLO
+	var ciclo := float(clips[anim].get("metros", Cancha3D.METROS_POR_CICLO)) if clips.has(anim) \
+		else Cancha3D.METROS_POR_CICLO
 	modelo.poner(anim, fposmod(_metros / ciclo, 1.0) * modelo.duracion(anim), delta)
 
 
-## La tarjeta en la mano derecha, a lo largo del antebrazo (como VistaCancha3D._poner_utileria).
+## La tarjeta en la mano derecha, a lo largo del antebrazo .
 func _poner_tarjeta(roja: bool) -> void:
 	_tarjeta.visible = true
 	Utileria3D.pintar_tarjeta(_tarjeta, roja)

@@ -45,12 +45,10 @@ func _test_el_motor_usa_la_formacion(rng: RandomNumberGenerator) -> void:
 	a.formacion = "3-5-2"
 	a.reset_partido()
 	b.reset_partido()
-	var st := MotorEspacial.crear_estado(a, b, rng)
+	var receta := CerebroV2.receta(a, b, int(rng.randi()), true)
 	var conteo := {}
-	for c in st["jugadores"]:
-		if not st["jugadores"][c]["equipo_local"]:
-			continue
-		var r: String = st["jugadores"][c]["rol"]
+	for f in receta["titulares"][0]:
+		var r: String = f["rol"]
 		conteo[r] = int(conteo.get(r, 0)) + 1
 	var esperado := Formaciones.conteo("3-5-2")
 	var ok: bool = conteo == esperado
@@ -67,11 +65,13 @@ func _test_tres_defensores_no_se_apilan(rng: RandomNumberGenerator) -> void:
 	a.formacion = "5-3-2"
 	a.reset_partido()
 	b.reset_partido()
-	var st := MotorEspacial.crear_estado(a, b, rng)
+	var partido: Object = CerebroV2.armar(a, b, int(rng.randi()), true)
 	var pos := []
-	for c in st["jugadores"]:
-		if st["jugadores"][c]["equipo_local"]:
-			pos.append(st["jugadores"][c]["pos"])
+	var equipos: PackedInt32Array = partido.get_equipos()
+	var en: PackedVector2Array = partido.get_pos()
+	for i in en.size():
+		if equipos[i] == 0:
+			pos.append(en[i])
 	var minima := 999.0
 	for i in range(pos.size()):
 		for k in range(i + 1, pos.size()):

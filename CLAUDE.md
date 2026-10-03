@@ -6,10 +6,10 @@ Editalo cuando quieras: lo que esté acá lo sigo.
 
 ## Cómo escribo el código
 
-Para fallos de animación, leer primero
-[docs/diagnostico_animaciones_partido.md](docs/diagnostico_animaciones_partido.md)
-y las reglas de [AGENTS.md](AGENTS.md). El caso de Ocampo documenta por qué
-validar solo el laboratorio o posiciones físicas no alcanza.
+Para fallos de animación, leer primero [match/3d/LEEME.md](match/3d/LEEME.md)
+y las reglas de [AGENTS.md](AGENTS.md). Validar solo el laboratorio o las
+posiciones del motor no alcanza: mirá el partido como lo ve el juego
+(`motor_v2/laboratorio_partido.tscn`).
 
 - **Todo en español**: nombres de variables, funciones, clases, archivos,
   comentarios y mensajes de commit.
@@ -66,9 +66,11 @@ muestra "Actualización v x.x.xx" y un botón "Changelog" con la lista.
 - **Medir antes de tocar, con la misma semilla, y volver a medir lo
   mismo después.** Un cambio de balance sin números medidos no se
   entrega.
-- Los dos motores tienen que dar resultados comparables: `MotorEspacial`
-  (tus partidos de liga) y `MatchEngine` (todo lo demás). La paridad
-  entre los dos es el ancla.
+- Los dos motores tienen que dar resultados comparables: `MotorV2`
+  (tus partidos) y `MatchEngine` (todo lo demás). La paridad entre los dos
+  es el ancla. La referencia de calibración del V2 es lo que daba el motor
+  espacial antes de borrarse: `docs/mediciones/calibracion_v2/` y
+  `tests/_diag_calibracion_v2.gd`.
 - Si un test empieza a fallar después de un cambio, revisar si el test
   estaba bien: varias veces pasaba por ruido y no porque midiera algo.
 
@@ -107,9 +109,11 @@ porque el arreglo define un contrato que hay que respetar.
 ## Documentación de diseño
 
 `docs/motor_espacial.md` es el documento de diseño. Las referencias tipo
-§8.4 #22 que aparecen en los comentarios del código apuntan ahí.
+§8.4 #22 que aparecen en los comentarios del código apuntan ahí. El motor
+espacial se borró en la etapa 8 del Motor V2; el documento sigue explicando
+de dónde salen los números.
 
-- `docs/motor_v2.md`: plan del motor nuevo, solo 3D (el modo 2D se abandona).
+- `docs/motor_v2.md`: plan del motor nuevo, solo 3D (el modo 2D se borró).
   Leelo antes de trabajar en cualquier etapa del Motor V2. Todo el motor va
   en C++ (`motor_v2/cpp`); seguí la sección "Cómo se escribe el C++".
 - `match/3d/LEEME.md`: cómo funciona la vista 3D actual.

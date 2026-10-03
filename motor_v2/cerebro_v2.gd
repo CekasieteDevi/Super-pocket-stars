@@ -63,7 +63,7 @@ static func receta(local: Team, visitante: Team, semilla: int, reglas := false, 
 		"cuerpo": FisicaV2.parametros_cuerpo(),
 		"clips": FisicaV2.clips(),
 		"toque": FisicaV2.parametros_toque(),
-		"pesos": MotorEspacial.pesos(),
+		"pesos": BasePartido.pesos(),
 		"cerebro": FisicaV2.parametros_cerebro(),
 		"remate": FisicaV2.parametros_remate(),
 		"arquero": FisicaV2.parametros_arquero(),
@@ -139,7 +139,7 @@ const CLAVE_DE_JUGADA := {Jugadas.CORNER_CORTO: "corner_corto", Jugadas.CORNER_B
 
 
 ## El plan de juego del estilo (Estilos) y las jugadas que sabe el club
-## (Jugadas), como los lee MotorEspacial.
+## (Jugadas).
 static func plan_de(equipo: Team, rival: Team) -> Dictionary:
 	var p: Dictionary = Estilos.plan(equipo.estilo).duplicate()
 	p["retroceso"] = Estilos.retroceso_sin_pelota(equipo.estilo) - Estilos.RETROCESO_DEFAULT
@@ -191,5 +191,5 @@ static func ficha_de(jugador: Dictionary, rol: String, base: Vector2, nivel: flo
 	f["metodico"] = Personalidad.tiene(jugador, "Metodico")
 	f["egoista"] = Personalidad.tiene(jugador, "Egoista")
 	f["pie_malo_lado"] = Personalidad.pie_preferido(jugador) if Personalidad.tiene(jugador, "Pie preferido") else 0
-	f["margen_offside"] = MotorEspacial.FACTOR_OFFSIDE_ENFOCADO if Personalidad.tiene(jugador, "Enfocado") else 1.0
+	f["margen_offside"] = BasePartido.FACTOR_OFFSIDE_ENFOCADO if Personalidad.tiene(jugador, "Enfocado") else 1.0
 	return f

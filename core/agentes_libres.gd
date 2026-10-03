@@ -308,7 +308,7 @@ static func _incorporar(equipo: Team, agente: Dictionary, anios: int,
 ## vencimiento, una venta o un prestamo.
 ##
 ## Entra al banco y no al once. El once reparte por SLOT (el slot `i` de
-## la formacion lo ocupa jugadores[i], ver MotorEspacial) y el banco es
+## la formacion lo ocupa jugadores[i], ver CerebroV2.receta) y el banco es
 ## una lista sin slots, asi que agregar ahi no le cambia el puesto a
 ## nadie. Si el once esta incompleto, quien sube al que llega es
 ## Alineacion.arreglar, igual que con cualquier otro suplente.
@@ -361,7 +361,7 @@ static func fichar(equipo: Team, pool: Array, jugador_id: int, anios: int,
 ## Que hace el plantel con un puesto que no tapo nadie.
 ##
 ## El hueco NO se deja en el once. El motor reparte por SLOT —el slot `i`
-## de la formacion lo ocupa jugadores[i], ver MotorEspacial— asi que sacar
+## de la formacion lo ocupa jugadores[i], ver CerebroV2.receta— asi que sacar
 ## al del medio le correria el puesto a todos los que siguen y el equipo
 ## saldria parado en una formacion que nadie eligio. Entonces:
 ##
@@ -679,7 +679,7 @@ static func _mirar_el_pool(equipo: Team, pool: Array) -> Dictionary:
 		equipo._limpiar_registro(int(saliente["id"]))
 		# Ocupa el MISMO lugar que el que sale: mismo puesto y mismo slot
 		# de la formacion (el slot `i` lo ocupa jugadores[i], ver
-		# MotorEspacial). Cambiarlo de lugar le correria el puesto a todos
+		# CerebroV2.receta). Cambiarlo de lugar le correria el puesto a todos
 		# los que siguen.
 		if bool(sale["en_banco"]):
 			equipo.banco[int(sale["indice"])] = entra

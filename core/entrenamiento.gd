@@ -79,7 +79,7 @@ const ATRIBUTOS := {
 	"presion": ["quite", "barrida"],
 }
 
-## Atributos de duelo que reciben el bonus en el MotorEspacial. Es el
+## Atributos de duelo que reciben el bonus en los duelos. Es el
 ## atributo que los motores le pasan a MatchEngine._bloques_equipo.
 ## Correr y jugadas armadas no están: su bonus va por otro lado (ver
 ## factor_desgaste y Familiaridad._ganancia).
@@ -93,7 +93,7 @@ const DUELOS := {
 }
 
 ## El penal no tiene atributo propio: se patea con `tiro`, igual que
-## cualquier remate. Por eso el MotorEspacial lo marca con esta situación.
+## cualquier remate. Por eso el motor lo marca con esta situación.
 const SITUACION_PENAL := "penal"
 ## El MatchEngine no juega penales, tiros libres, centros ni duelos
 ## aéreos: todo eso queda adentro de sus duelos de pase, gambeta, quite y
@@ -115,7 +115,7 @@ static var BONUS_DUELO := 3.0
 const FACTOR_DESGASTE_CORRER := 0.6
 
 ## Qué fracción del bonus recibe cada duelo del MatchEngine, por
-## ejercicio. Un ejercicio que en el MotorEspacial suma en UN tipo de
+## ejercicio. Un ejercicio que en los duelos suma en UN tipo de
 ## jugada, en el MatchEngine suma en los duelos donde esa jugada quedó
 ## plegada, con esta fracción. Sin esto, la IA que entrena centros no
 ## ganaría nada en sus partidos y la que entrena presión ganaría todo.

@@ -18,6 +18,23 @@ const MENOR := 1
 const NOTABLE := 2
 const MAXIMA := 3
 
+## Cuántos segundos de verdad se sostiene el relato según la importancia del
+## momento. En segundos de verdad y no del partido: así el texto se lee igual
+## a x1 que a x16.
+const SEG_RELATO := {MENOR: 2.0, NOTABLE: 3.0, MAXIMA: 4.0}
+
+
+## Tabla clave -> "ROL Apellido" de los dos planteles, para nombrar a cada
+## uno en el relato y en el cartel de quién tiene la pelota. Se arma acá y no
+## en el motor: es un dato de presentación.
+static func nombres(local: Team, visitante: Team) -> Dictionary:
+	var tabla := {}
+	for par in [[local, true], [visitante, false]]:
+		var equipo: Team = par[0]
+		for j in equipo.todos_los_jugadores():
+			tabla[BasePartido.clave_de(j["id"], par[1])] = "%s %s" % [j["posicion"], j["apellido"]]
+	return tabla
+
 
 ## Qué tan importante es este evento. NADA = no se cuenta.
 static func importancia(evento) -> int:
@@ -67,8 +84,8 @@ static func importancia(evento) -> int:
 	return NADA
 
 
-## La línea. `nombres` es la tabla clave -> "ROL Apellido" que ya arma
-## VistaPartido; si el evento no trae clave (o el jugador no está en la
+## La línea. `nombres` es la tabla clave -> "ROL Apellido" que arma
+## RelatoPartido.nombres; si el evento no trae clave (o el jugador no está en la
 ## tabla) se cae al rol, que siempre viene.
 static func linea(evento: Dictionary, nombres: Dictionary) -> String:
 	var quien := _quien(evento, nombres)

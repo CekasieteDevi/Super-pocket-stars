@@ -24,8 +24,8 @@ const GRAVEDAD := 9.81
 ## Cancha y arco, los mismos que el motor espacial.
 const MEDIO_LARGO := ProyeccionPartido.MEDIO_LARGO
 const MEDIO_ANCHO := ProyeccionPartido.MEDIO_ANCHO
-const ARCO_MEDIO_ANCHO := MotorEspacial.ARCO_MEDIO_ANCHO
-const ARCO_ALTO := MotorEspacial.ARCO_ALTO
+const ARCO_MEDIO_ANCHO := BasePartido.ARCO_MEDIO_ANCHO
+const ARCO_ALTO := BasePartido.ARCO_ALTO
 const RADIO_PALO := 0.06
 
 ## Pelota FIFA talle 5: 0.43 kg, radio 0.11 m.

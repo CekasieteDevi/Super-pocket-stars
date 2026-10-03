@@ -23,13 +23,5 @@ func _init() -> void:
 			var espejo := AtlasJugadores.textura(i, Color.RED, Color.WHITE, Color.SADDLE_BROWN, true, 0, estilo).get_image()
 			img.flip_x()
 			assert(img.get_data() == espejo.get_data())
-	var pelotas := {}
-	for i in range(12):
-		var img := SpritesPartido.pelota(i).get_image()
-		assert(img.get_size() == Vector2i(16, 16))
-		assert(img.get_pixel(0, 0).a == 0.0)
-		pelotas[hash(img.get_data())] = true
-	assert(pelotas.size() > 6, "La pelota debe girar")
-	assert(SpritesPartido.pelota(12) == SpritesPartido.pelota(0))
 	print("OK: %d cuadros, transparencia, espejos y secuencias" % (AtlasJugadores.TOTAL_CUADROS * AtlasJugadores.PEINADOS.size()))
 	quit()

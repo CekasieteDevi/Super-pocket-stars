@@ -86,9 +86,7 @@ var check_rotacion: CheckBox
 
 const OPCIONES_CAMBIOS := ["equilibrado", "descanso", "rendimiento"]
 const ETIQUETAS_CAMBIOS := {"equilibrado": "Equilibrado", "descanso": "Priorizar descanso", "rendimiento": "Priorizar rendimiento"}
-var vista_partido: VistaPartido
-## El partido del Motor V2 (docs/motor_v2.md, etapa 8). Comparte el panel con
-## `vista_partido`: se ve una o la otra.
+## La pantalla del partido (Motor V2, docs/motor_v2.md).
 var vista_partido_v2: VistaPartidoV2
 var resumen_partido: CenterContainer
 var contenedor_resumen: VBoxContainer
@@ -184,18 +182,14 @@ var dialogo_partida_nueva: ConfirmationDialog
 var option_fps: OptionButton
 var option_velocidad_partido: OptionButton
 var option_tema: OptionButton
-var option_simulacion: OptionButton
 
 const OPCIONES_FPS := [30, 60, 120]
 const OPCIONES_VELOCIDAD_PARTIDO := [1.0, 2.0, 4.0, 8.0, 16.0]
 const OPCIONES_TEMA := ["oscuro", "claro"]
-## Cómo se ve el partido animado: la cancha 3D (match/3d) o la 2D de siempre.
-const OPCIONES_SIMULACION := ["3d", "2d"]
 const RUTA_OPCIONES := "user://opciones.cfg"
 var fps_elegido := 60
 var velocidad_partido_elegida := 1.0
 var tema_visual := "oscuro"
-var simulacion_elegida := "2d"
 static var _recarga_por_tema := false
 static var _seccion_antes_del_tema := "jugar"
 static var _panel_antes_del_tema := ""
@@ -320,7 +314,6 @@ func _ready() -> void:
 	_construir_panel_vitrina(contenedor)
 	_construir_panel_historia_clubes(contenedor)
 	_construir_panel_palmares(contenedor)
-	_construir_panel_laboratorio(contenedor)
 	_construir_panel_sponsors(contenedor)
 	_construir_panel_roles(contenedor)
 	_construir_panel_entrenamiento(contenedor)
@@ -1231,9 +1224,8 @@ const ESTILOS_RETRATO_ESTABLES := [0, 1, 2, 3]
 ## Retrato: el mismo sprite que sale a la cancha, de frente y quieto, con
 ## la camiseta del club. Es el sprite del partido y no un dibujo aparte:
 ## asi el jugador que el usuario elige en el plantel es el que reconoce
-## despues corriendo. Sale del atlas (AtlasJugadores) con el mismo peinado
-## y tono de pelo que le da VistaPartido; antes salia de los sprites
-## dibujados por codigo, que el partido ya no usa.
+## despues corriendo. Sale del atlas (AtlasJugadores) con el mismo tono de
+## pelo que lleva en el partido.
 ##
 ## El dorsal va como etiqueta a la derecha y no estampado en el sprite:
 ## el atlas solo lo estampa en los cuadros de espalda.
@@ -1263,7 +1255,7 @@ func _retrato_jugador(equipo: Team, j: Dictionary) -> Control:
 		posmod(estilo_atlas, ESTILOS_RETRATO_ESTABLES.size())]
 	var atlas := AtlasJugadores.textura(AtlasJugadores.cuadro("", 0.0, 0, false),
 		ColoresClub.de_equipo(equipo), equipo.color_short,
-		SpritesPartido.tono_pelo_de(id), false, 0, estilo_retrato)
+		AtlasJugadores.tono_pelo_de(id), false, 0, estilo_retrato)
 	# Copiar el recorte a una textura propia evita que el escalado del atlas
 	# filtre píxeles de otra celda y los mezcle con el pelo o los hombros.
 	var retrato := atlas.get_image().get_region(Rect2i(RECORTE_RETRATO))
@@ -2535,35 +2527,13 @@ func _construir_panel_partido_animado(padre: Control) -> void:
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	paneles["partido_animado"] = panel
 
-	vista_partido = VistaPartido.new()
-	vista_partido.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	panel.add_child(vista_partido)
-	vista_partido.hud.menu_pedido.connect(func():
-		if viendo_laboratorio:
-			viendo_laboratorio = false
-			_mostrar_laboratorio()
-		else:
-			_volver_al_club())
-	# Al terminar NO se cierra solo. Aparece el resumen encima de la
-	# cancha y de ahi se sale a mano: cerrar de una no dejaba ver el
-	# ultimo minuto ni enterarse de como termino.
-	vista_partido.terminado.connect(func():
-		# Un clip del laboratorio no tiene resumen de partido que mostrar:
-		# se vuelve a la lista para poder tirar la jugada siguiente.
-		if viendo_laboratorio:
-			viendo_laboratorio = false
-			_mostrar_laboratorio()
-			return
-		# Saltar emite terminado desde el callback del boton. Diferir un frame
-		# asegura que el panel ya quedo en el ultimo fotograma antes de mostrar
-		# el cartel de estadisticas.
-		call_deferred("_mostrar_resumen_partido"))
-
 	vista_partido_v2 = VistaPartidoV2.new()
 	vista_partido_v2.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	vista_partido_v2.visible = false
 	panel.add_child(vista_partido_v2)
 	vista_partido_v2.hud.menu_pedido.connect(_volver_al_club)
+	# Al terminar no se cierra solo: aparece el resumen encima de la cancha y
+	# de ahí se sale a mano. Saltar emite `terminado` desde el botón: diferir
+	# un cuadro asegura que el panel ya quedó en el final.
 	vista_partido_v2.terminado.connect(func(): call_deferred("_mostrar_resumen_partido"))
 
 	_construir_resumen_partido(self)
@@ -6980,144 +6950,6 @@ func _linea_del_mejor(r: Dictionary, clave: String, campo: String,
 	return fila
 
 
-## EL LABORATORIO: disparar una animación sin esperar a que salga sola.
-##
-## Una expulsión aparece en 1 de cada 2 partidos y un penal en 1 de cada
-## 5, así que para mirar cómo quedó una animación había que jugar hasta
-## que la suerte la trajera. Acá se elige la situación y se ve en el acto,
-## con el motor de verdad: se monta la jugada y se tickea igual que en un
-## partido, así que lo que se ve es exactamente lo que va a pasar.
-##
-## La lógica de montar cada situación vive en core/laboratorio.gd.
-var laboratorio_estado: Label
-## Si el clip que se esta viendo salio del laboratorio: al terminar se
-## vuelve ahi y no al club.
-var viendo_laboratorio := false
-
-
-func _construir_panel_laboratorio(padre: Control) -> void:
-	var panel := VBoxContainer.new()
-	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	panel.visible = false
-	padre.add_child(panel)
-	paneles["laboratorio"] = panel
-
-	laboratorio_estado = Label.new()
-	laboratorio_estado.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	laboratorio_estado.text = "Elegí una jugada y se reproduce con el motor de verdad, sin esperar a que salga en un partido."
-	laboratorio_estado.add_theme_color_override("font_color", Tema.SUAVE)
-	panel.add_child(laboratorio_estado)
-
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.add_child(scroll)
-	var lista := VBoxContainer.new()
-	lista.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lista.add_theme_constant_override("separation", 8)
-	scroll.add_child(lista)
-
-	for s in Laboratorio.SITUACIONES:
-		lista.add_child(_fila_de_laboratorio(s))
-
-
-func _fila_de_laboratorio(s: Dictionary) -> Control:
-	var tarjeta := Componentes.tarjeta()
-	var caja := HBoxContainer.new()
-	caja.add_theme_constant_override("separation", 12)
-	tarjeta.add_child(caja)
-
-	var datos := VBoxContainer.new()
-	datos.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	datos.add_theme_constant_override("separation", 2)
-	caja.add_child(datos)
-	var titulo := Label.new()
-	titulo.text = str(s["nombre"])
-	Tema.numero(titulo, Tema.TAM_BASE)
-	datos.add_child(titulo)
-	datos.add_child(_texto_suave(str(s["que"])))
-
-	var clave := str(s["clave"])
-	var btn := Button.new()
-	btn.text = "Reproducir"
-	btn.custom_minimum_size = Vector2(150, Tema.ALTO_TACTIL)
-	Tema.primario(btn)
-	btn.pressed.connect(func(): _reproducir_laboratorio(clave))
-	caja.add_child(btn)
-	return tarjeta
-
-
-func _mostrar_laboratorio() -> void:
-	_ocultar_todos()
-	paneles["laboratorio"].visible = true
-
-
-func _reproducir_laboratorio(clave: String) -> void:
-	# Tu club contra el próximo rival, o contra el primero de la liga que
-	# no seas vos: así se ve con tus colores y tus jugadores.
-	var local: Team = GameState.equipo_jugador
-	var visitante: Team = _proximo_rival()
-	if visitante == null:
-		for e in GameState.liga_jugador().equipos:
-			if e != local:
-				visitante = e
-				break
-	if visitante == null:
-		laboratorio_estado.text = "No encontré un rival contra quien montarla."
-		return
-
-	# Se juega con COPIAS de los dos equipos. El motor lesiona y suspende
-	# de verdad —_chequear_lesion escribe en lesiones y una roja suma una
-	# fecha a suspendidos, y reset_partido() no limpia ninguna de las dos—
-	# asi que sin copiar, mirar una animacion te podia romper un titular.
-	var copia_local := Team.cargar(local.guardar())
-	var copia_visitante := Team.cargar(visitante.guardar())
-
-	# Rng aparte y con SEMILLA FIJA: montar una jugada no tiene por que
-	# mover el resto de la partida, y ademas la misma jugada tiene que dar
-	# siempre lo mismo. Si el resultado cambia entre una reproduccion y la
-	# siguiente no se puede comparar nada ni saber si un cambio la mejoro.
-	var rng := RandomNumberGenerator.new()
-	rng.seed = Laboratorio.SEMILLA
-	var r := Laboratorio.generar(clave, copia_local, copia_visitante, rng)
-	if r["fotogramas"].is_empty():
-		laboratorio_estado.text = "Esa jugada no genero nada."
-		return
-	if clave == "tiro_efecto":
-		for ev in r["eventos"]:
-			if str(ev.get("tipo", "")) == "tiro_puerta":
-				laboratorio_estado.text = "Tiro con efecto listo: curva %.1f m · calidad %.0f%%." % [
-					float(ev.get("curva_m", 0.0)), float(ev.get("calidad_tiro", 0.0)) * 100.0]
-				break
-	elif clave.begins_with("regate_"):
-		laboratorio_estado.text = "%s: gesto completo y salida con la pelota." % [
-			Laboratorio.nombre_de(clave)]
-	elif clave == "lesion":
-		laboratorio_estado.text = "Lesion: caída, salida por el lateral y entrada del reemplazo listas."
-
-	# Al terminar (o al tocar Menu) se vuelve ACA, no al club: se esta
-	# probando animaciones y lo normal es querer ver la siguiente.
-	viendo_laboratorio = true
-	_ocultar_todos()
-	paneles["partido_animado"].visible = true
-	if resumen_partido != null:
-		resumen_partido.visible = false
-	vista_partido.visible = true
-	vista_partido_v2.visible = false
-	var colores := ColoresClub.par_equipos(copia_local, copia_visitante)
-	_aplicar_simulacion()
-	vista_partido.iniciar(
-		r["fotogramas"], colores[0], colores[1],
-		copia_local.nombre, copia_visitante.nombre,
-		VistaPartido.construir_nombres(copia_local, copia_visitante),
-		VistaCancha.nivel_estadio_desde_calidad(copia_local.calidad_cancha),
-		copia_local.color_short, copia_visitante.color_short,
-		_nombre_marcador(copia_local), _nombre_marcador(copia_visitante),
-		copia_local.identidad_visual(), copia_visitante.identidad_visual())
-	vista_partido.velocidad = velocidad_partido_elegida
-
-
 ## LA VITRINA: todo lo que ganó el club, arriba el resumen y abajo el
 ## detalle temporada por temporada.
 ##
@@ -8618,13 +8450,6 @@ func _construir_panel_opciones(padre: Control) -> void:
 	option_tema.item_selected.connect(_on_tema_seleccionado)
 	dentro.add_child(_grupo_filtro("Tema visual", option_tema))
 
-	option_simulacion = OptionButton.new()
-	option_simulacion.add_item("3D")
-	option_simulacion.add_item("2D")
-	option_simulacion.custom_minimum_size = Vector2(150, Tema.ALTO_TACTIL)
-	option_simulacion.item_selected.connect(_on_simulacion_seleccionada)
-	dentro.add_child(_grupo_filtro("Simulación", option_simulacion))
-
 
 func _mostrar_opciones() -> void:
 	_ocultar_todos()
@@ -8632,31 +8457,6 @@ func _mostrar_opciones() -> void:
 	option_fps.select(OPCIONES_FPS.find(fps_elegido))
 	option_velocidad_partido.select(OPCIONES_VELOCIDAD_PARTIDO.find(velocidad_partido_elegida))
 	option_tema.select(OPCIONES_TEMA.find(tema_visual))
-	option_simulacion.select(OPCIONES_SIMULACION.find(simulacion_elegida))
-
-
-func _on_simulacion_seleccionada(indice: int) -> void:
-	simulacion_elegida = str(OPCIONES_SIMULACION[indice])
-	_guardar_opciones()
-
-
-## Pone en el partido animado la cancha de la simulación elegida: la 3D
-## (VistaCancha3D) o la 2D. Se cambia en el mismo lugar del árbol (debajo del
-## minimapa y del HUD), como el prototipo 3D, antes de iniciar cada partido.
-func _aplicar_simulacion() -> void:
-	if vista_partido == null or not is_instance_valid(vista_partido):
-		return
-	var quiere_3d := simulacion_elegida == "3d"
-	var vieja := vista_partido.vista
-	if vieja == null or (vieja is VistaCancha3D) == quiere_3d:
-		return
-	var nueva: VistaCancha = VistaCancha3D.new() if quiere_3d else VistaCancha.new()
-	nueva.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	vista_partido.add_child(nueva)
-	vista_partido.move_child(nueva, vieja.get_index())
-	vista_partido.remove_child(vieja)
-	vieja.queue_free()
-	vista_partido.vista = nueva
 
 
 func _on_fps_seleccionado(indice: int) -> void:
@@ -8667,8 +8467,6 @@ func _on_fps_seleccionado(indice: int) -> void:
 
 func _on_velocidad_partido_seleccionada(indice: int) -> void:
 	velocidad_partido_elegida = float(OPCIONES_VELOCIDAD_PARTIDO[indice])
-	if vista_partido != null and is_instance_valid(vista_partido):
-		vista_partido.velocidad = velocidad_partido_elegida
 	if vista_partido_v2 != null and is_instance_valid(vista_partido_v2):
 		vista_partido_v2.velocidad = velocidad_partido_elegida
 	_guardar_opciones()
@@ -8693,9 +8491,6 @@ func _cargar_opciones() -> void:
 	fps_elegido = int(archivo.get_value("video", "fps", 60))
 	velocidad_partido_elegida = float(archivo.get_value("partido", "velocidad", 1.0))
 	tema_visual = str(archivo.get_value("video", "tema", "oscuro"))
-	simulacion_elegida = str(archivo.get_value("partido", "simulacion", "2d"))
-	if not OPCIONES_SIMULACION.has(simulacion_elegida):
-		simulacion_elegida = "2d"
 	if not OPCIONES_FPS.has(fps_elegido):
 		fps_elegido = 60
 	if OPCIONES_VELOCIDAD_PARTIDO.find(velocidad_partido_elegida) == -1:
@@ -8709,7 +8504,6 @@ func _guardar_opciones() -> void:
 	archivo.set_value("video", "fps", fps_elegido)
 	archivo.set_value("video", "tema", tema_visual)
 	archivo.set_value("partido", "velocidad", velocidad_partido_elegida)
-	archivo.set_value("partido", "simulacion", simulacion_elegida)
 	archivo.save(RUTA_OPCIONES)
 
 
@@ -9413,41 +9207,22 @@ func _mostrar_partido_animado() -> void:
 	if resumen_partido != null:
 		resumen_partido.visible = false
 	var r: Dictionary = GameState.ultimo_resultado
-	# El estilo del rival ya no hace falta acá: dejó de ser un ajuste
-	# visual y pasó a mover a los jugadores dentro del propio motor
-	# (MotorEspacial._objetivo_sin_pelota), así que llega en las
-	# coordenadas de cada fotograma.
-	#
 	# GameState guarda el resultado con los NOMBRES de los equipos, pero la
-	# vista necesita los Team: las claves de los fotogramas se resuelven a
-	# apellidos con el plantel, y la textura de la cancha sale de la
-	# calidad de cancha del local. Se buscan en toda la piramide y no solo
-	# en la liga del jugador: en la Copa Nacional el rival puede ser de
-	# cualquiera de las diez divisiones.
+	# vista necesita los Team: los nombres del relato salen del plantel y el
+	# estadio, de la calidad de cancha del local. Se buscan en toda la
+	# pirámide y no solo en la liga del jugador: en la Copa Nacional el rival
+	# puede ser de cualquiera de las diez divisiones.
 	var local: Team = _equipo_por_nombre(str(r["local"]))
 	var visitante: Team = _equipo_por_nombre(str(r["visitante"]))
 	if local == null or visitante == null:
 		return
-	# El partido del Motor V2 no trae fotogramas: trae la receta, y su vista
-	# lo vuelve a jugar.
+	# El partido no trae fotogramas: trae la receta (va en el lugar de los
+	# fotogramas), y la vista lo vuelve a jugar.
 	var receta := MotorV2.receta_de(GameState.ultimos_fotogramas)
-	vista_partido.visible = receta.is_empty()
-	vista_partido_v2.visible = not receta.is_empty()
-	if not receta.is_empty():
-		vista_partido_v2.iniciar(receta, GameState.ultimos_eventos, local, visitante)
-		vista_partido_v2.velocidad = velocidad_partido_elegida
+	if receta.is_empty():
 		return
-	var colores := ColoresClub.par_equipos(local, visitante)
-	_aplicar_simulacion()
-	vista_partido.iniciar(
-		GameState.ultimos_fotogramas, colores[0], colores[1],
-		local.nombre, visitante.nombre,
-		VistaPartido.construir_nombres(local, visitante),
-		VistaCancha.nivel_estadio_desde_calidad(local.calidad_cancha),
-		local.color_short, visitante.color_short,
-		_nombre_marcador(local), _nombre_marcador(visitante),
-		local.identidad_visual(), visitante.identidad_visual())
-	vista_partido.velocidad = velocidad_partido_elegida
+	vista_partido_v2.iniciar(receta, GameState.ultimos_eventos, local, visitante)
+	vista_partido_v2.velocidad = velocidad_partido_elegida
 
 
 func _equipo_por_nombre(nombre: String) -> Team:
@@ -9690,7 +9465,7 @@ const SECCIONES := [
 		["prestamos", "Cesion"]]},
 	{"clave": "mas", "nombre": "Mas", "paneles": [
 		["noticias", "Noticias"], ["vitrina", "Vitrina"],
-		["seleccion", "Seleccion"], ["laboratorio", "Laboratorio"],
+		["seleccion", "Seleccion"],
 		["partida", "Partida"], ["opciones", "Opciones"]]},
 ]
 
@@ -9911,7 +9686,6 @@ func _mostrar_panel_de_seccion(clave: String) -> void:
 		"prestamos": "_mostrar_prestamos", "economia": "_mostrar_economia",
 		"noticias": "_mostrar_noticias", "vitrina": "_mostrar_vitrina",
 		"historia_clubes": "_mostrar_historia_clubes", "palmares": "_mostrar_palmares",
-		"laboratorio": "_mostrar_laboratorio",
 		"sponsors": "_mostrar_sponsors", "seleccion": "_mostrar_seleccion",
 		"partida": "_mostrar_partida_panel",
 		"opciones": "_mostrar_opciones",

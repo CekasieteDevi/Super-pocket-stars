@@ -45,17 +45,17 @@ static func parametros(calidad_cancha := 0.0, clima := "", direccion_viento := V
 
 ## Los de la locomoción y los gestos (CuerposV2Nativos.configurar,
 ## MundoV2Nativo.configurar_cuerpos). La locomoción usa los números del motor
-## actual (MotorEspacial.pesos(): fisica, control y esfuerzo), así los dos
+## actual (BasePartido.pesos(): fisica, control y esfuerzo), así los dos
 ## motores corren igual; de data/fisica_v2.json sale solo lo nuevo.
 static func parametros_cuerpo() -> Dictionary:
-	var fisica: Dictionary = MotorEspacial.pesos()["fisica"]
+	var fisica: Dictionary = BasePartido.pesos()["fisica"]
 	var p := {
 		"frenada": float(fisica["frenada"]),
 		"giro_acel": float(fisica["giro_acel"]),
 		"arranque_extra": float(fisica["arranque_extra"]),
-		"rapidez_para_girar": float(MotorEspacial.pesos_control()["rapidez_para_girar"]),
+		"rapidez_para_girar": float(BasePartido.pesos_control()["rapidez_para_girar"]),
 	}
-	var esfuerzo := MotorEspacial.pesos_esfuerzo()
+	var esfuerzo := BasePartido.pesos_esfuerzo()
 	for clave in ["peso_aceleracion", "umbral_sprint", "consumo_sprint", "recuperacion_reserva",
 			"reserva_para_frenar", "piso_sprint"]:
 		p[clave] = float(esfuerzo[clave])
@@ -80,9 +80,9 @@ static func clips() -> Dictionary:
 static func fisico_de(atributos: Dictionary, energia := 1.0) -> Dictionary:
 	var j := {"atributos": atributos}
 	return {
-		"vel_max": MotorEspacial._vel_max(j),
-		"aceleracion": MotorEspacial._aceleracion(j),
-		"giro": MotorEspacial._giro_de(j),
+		"vel_max": BasePartido.vel_max(j),
+		"aceleracion": BasePartido.aceleracion(j),
+		"giro": BasePartido.giro_de(j),
 		"cansancio": Cansancio.factor_stats(energia),
 	}
 
@@ -133,7 +133,7 @@ static func parametros_toque() -> Dictionary:
 
 
 ## Lo nuevo del cerebro (etapa 4; CanchitaV2Nativa.configurar_cerebro):
-## data/fisica_v2.json, "cerebro". El resto de sus pesos es MotorEspacial.pesos().
+## data/fisica_v2.json, "cerebro". El resto de sus pesos es BasePartido.pesos().
 static func parametros_cerebro() -> Dictionary:
 	return (datos()["cerebro"] as Dictionary).duplicate(true)
 
@@ -156,12 +156,12 @@ static func parametros_remate() -> Dictionary:
 ## (data/utility_pesos.json, "arquero"): una sola fuente para los dos motores.
 static func parametros_arquero() -> Dictionary:
 	var p: Dictionary = (datos()["arquero"] as Dictionary).duplicate(true)
-	var espacial := MotorEspacial.pesos_arquero()
+	var espacial := BasePartido.pesos_arquero()
 	for clave in ["achique_min", "achique_max", "achique_dist_rival", "achique_margen_pelota", "achique_carril",
 			"ventaja_base", "ventaja_por_metro"]:
 		p[clave] = float(espacial[clave])
 	# Parado o estirada: la misma regla que la vista 3D actual.
-	p["parada_max_m"] = VistaCancha3D.PARADA_TRAVESIA_M
+	p["parada_max_m"] = Cancha3D.PARADA_TRAVESIA_M
 	return p
 
 
@@ -173,21 +173,21 @@ static func parametros_arquero() -> Dictionary:
 ## por penales.
 static func parametros_reglas(tanda := false, alargue := false) -> Dictionary:
 	var p: Dictionary = (datos()["reglas"] as Dictionary).duplicate(true)
-	var fisica: Dictionary = MotorEspacial.pesos()["fisica"]
+	var fisica: Dictionary = BasePartido.pesos()["fisica"]
 	for clave in ["rango_libre_malo", "rango_libre_bueno", "angulo_minimo_tiro_libre", "dist_libre_al_area",
 			"dist_para_colgar_lejos"]:
 		p[clave] = float(fisica[clave])
-	var esfuerzo := MotorEspacial.pesos_esfuerzo()
+	var esfuerzo := BasePartido.pesos_esfuerzo()
 	p["recuperacion_entretiempo"] = float(esfuerzo["recuperacion_entretiempo"])
 	p["tope_entretiempo"] = float(esfuerzo["tope_entretiempo"])
 	# El partido dura de verdad lo mismo que en el motor espacial (2 minutos por
 	# tiempo) y el reloj muestra 0-90: decisión del usuario en la etapa 7.
-	p["segundos_tiempo"] = MotorEspacial.SEGUNDOS_POR_MITAD
-	p["minutos_tiempo"] = MotorEspacial.MINUTOS_MOSTRADOS_POR_MITAD
-	p["cierre_max_seg"] = float(MotorEspacial.TICKS_DE_DESCUENTO) * MotorEspacial.TICK_SEG
-	p["distancia_penal_m"] = MotorEspacial.DIST_PENAL
-	p["radio_circulo_m"] = MotorEspacial.RADIO_CIRCULO
-	p["ejecutor_max_m"] = MotorEspacial.DIST_MAX_AL_EJECUTOR
+	p["segundos_tiempo"] = BasePartido.SEGUNDOS_POR_MITAD
+	p["minutos_tiempo"] = BasePartido.MINUTOS_MOSTRADOS_POR_MITAD
+	p["cierre_max_seg"] = BasePartido.CIERRE_MAX_SEG
+	p["distancia_penal_m"] = BasePartido.DIST_PENAL
+	p["radio_circulo_m"] = BasePartido.RADIO_CIRCULO
+	p["ejecutor_max_m"] = BasePartido.DIST_MAX_AL_EJECUTOR
 	var pisos := []
 	for pct in Cansancio.FRANJA_PISO_PCT:
 		pisos.append(float(pct) / 100.0)
@@ -198,7 +198,7 @@ static func parametros_reglas(tanda := false, alargue := false) -> Dictionary:
 	p["cambios_max"] = Team.MAX_CAMBIOS
 	p["tanda"] = tanda
 	p["alargue"] = alargue
-	p["minutos_alargue"] = MotorEspacial.MINUTOS_MOSTRADOS_POR_TIEMPO_ALARGUE
+	p["minutos_alargue"] = BasePartido.MINUTOS_MOSTRADOS_POR_TIEMPO_ALARGUE
 	return p
 
 
@@ -239,7 +239,7 @@ static func reglas_de(jugador: Dictionary, equipo: Team, rival: Team) -> Diction
 	var arbitro := Arbitro.factor_tarjetas(equipo.arbitro_partido)
 	var clasico := Rivalidad.factor_tarjetas(Rivalidad.es_clasico(equipo, rival))
 	var amenaza := float(a.get("cabezazo", 50.0)) + float(a.get("salto", 50.0))
-	if MotorEspacial.ROLES_QUE_ATACAN.has(str(jugador["posicion"])):
+	if BasePartido.ROLES_QUE_ATACAN.has(str(jugador["posicion"])):
 		amenaza += 40.0
 	return {
 		"id": int(jugador["id"]),

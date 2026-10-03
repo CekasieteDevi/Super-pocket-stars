@@ -15,7 +15,7 @@ extends RefCounted
 ##   elegir pese.
 ##
 ##   SE VEN. Cada jugada cambia cómo se para y cómo se mueve el equipo en
-##   el MotorEspacial (ver los `_jugada_*` de core/motor_espacial.gd). El
+##   el Motor V2 (Canchita::_elegir_jugada y PlanEquipo, en motor_v2/cpp). El
 ##   MatchEngine no tiene cancha, así que recibe el efecto equivalente en
 ##   sus duelos (ver EQUIVALENCIA).
 ##
@@ -76,7 +76,7 @@ const SEMANAS := {
 const RITMO_CON_JUGADAS_ARMADAS := 1.5
 
 # ---------------------------------------------------------------------------
-# Efecto en el MotorEspacial
+# Efecto en el Motor V2
 # ---------------------------------------------------------------------------
 
 ## En qué fracción de las ocasiones se usa una jugada de pelota parada.
@@ -120,7 +120,7 @@ const VENTAJA_CONTRAPRESION := 5.0
 
 ## Contragolpe: cuánto más dura la transición del que recupera (0,5 = la
 ## mitad más). Es la ventana en que el equipo sale rápido y conduce hacia
-## adelante (ver MotorEspacial._transicion).
+## adelante (ver Cerebro::_transicion, en motor_v2/cpp).
 const EXTRA_CONTRAGOLPE := 0.5
 
 ## Si el rival también sabe la jugada, la lee y la ventaja se achica.

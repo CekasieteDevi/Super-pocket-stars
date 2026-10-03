@@ -102,7 +102,7 @@ static func textura(indice: int, camiseta: Color, pantalon: Color, pelo: Color,
 		var dorsal_x := 32 - (texto.length() * 4 - 1) / 2
 		var tinta := Color.WHITE if camiseta.get_luminance() < 0.55 else Color("18212c")
 		for i in range(texto.length()):
-			var digito: Array = SpritesPartido.DIGITOS[int(texto[i])]
+			var digito: Array = DIGITOS[int(texto[i])]
 			for y in range(5):
 				for x in range(3):
 					if digito[y][x] == "#":
@@ -301,3 +301,57 @@ const ROTACION_PEINADOS := 1
 
 static func estilo_de(jugador_id: int) -> int:
 	return posmod(jugador_id + ROTACION_PEINADOS, PEINADOS.size())
+
+
+# --- Pelo y números (salieron de SpritesPartido, la vista 2D que se borró) ---
+
+## Dígitos de 3x5. Es el tamaño más chico en el que un número se sigue
+## leyendo, y en la espalda entran dos.
+const DIGITOS := [
+	["###", "#.#", "#.#", "#.#", "###"],  # 0
+	[".#.", "##.", ".#.", ".#.", "###"],  # 1
+	["###", "..#", "###", "#..", "###"],  # 2
+	["###", "..#", "###", "..#", "###"],  # 3
+	["#.#", "#.#", "###", "..#", "..#"],  # 4
+	["###", "#..", "###", "..#", "###"],  # 5
+	["###", "#..", "###", "#.#", "###"],  # 6
+	["###", "..#", "..#", "..#", "..#"],  # 7
+	["###", "#.#", "###", "#.#", "###"],  # 8
+	["###", "#.#", "###", "..#", "###"],  # 9
+]
+
+## Tonos de pelo. Son siete y no un color libre para que el cache no
+## explote: estilo x tono x dirección x pose ya son muchas texturas.
+const TONOS_PELO := [
+	Color(0.10, 0.08, 0.07),  # negro
+	Color(0.30, 0.18, 0.09),  # castaño
+	Color(0.55, 0.34, 0.14),  # claro
+	Color(0.85, 0.72, 0.35),  # rubio
+	Color(0.68, 0.30, 0.12),  # pelirrojo
+	Color(0.92, 0.92, 0.90),  # blanco
+	Color(0.12, 0.35, 0.82),  # azul
+]
+
+const INDICE_PELO_BLANCO := 5
+const INDICE_PELO_AZUL := 6
+## Uno de cada tantos jugadores sale con el pelo azul y otro con el blanco.
+const UNO_CADA_TONO_RARO := 300
+
+
+## El tono de pelo de un jugador. Sale de su id y no de un sorteo: el mismo
+## jugador tiene el mismo pelo en el plantel, en el partido y en la repetición.
+static func tono_pelo_de(jugador_id: int) -> Color:
+	var huella := absi(jugador_id * 104729)
+	var rareza := huella % UNO_CADA_TONO_RARO
+	if rareza == 0:
+		return TONOS_PELO[INDICE_PELO_AZUL]
+	if rareza == 1:
+		return TONOS_PELO[INDICE_PELO_BLANCO]
+	return TONOS_PELO[huella % INDICE_PELO_BLANCO]
+
+
+## El número va blanco sobre camiseta oscura y negro sobre camiseta clara.
+## Con un color fijo desaparecía en la mitad de los clubes.
+static func color_numero(camiseta: Color) -> Color:
+	var luz := camiseta.r * 0.299 + camiseta.g * 0.587 + camiseta.b * 0.114
+	return Color(0.08, 0.08, 0.10) if luz > 0.55 else Color(0.97, 0.97, 0.98)

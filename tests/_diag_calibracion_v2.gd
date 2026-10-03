@@ -1,15 +1,18 @@
 extends SceneTree
 
 ## Etapa 7 del Motor V2 (docs/motor_v2.md): el reporte de calibración. Juega
-## los MISMOS planteles con la MISMA semilla en el Motor V2 (con reglas, sin
-## vista) y en el motor espacial, ida y vuelta, y compara por partido: goles,
+## los planteles en el Motor V2 (con reglas, sin vista), ida y vuelta, y los
+## compara con lo que daba el motor espacial con los MISMOS planteles y la
+## MISMA semilla (docs/mediciones/calibracion_v2/espacial_<semilla>.json,
+## 200 partidos por escenario, medido antes de borrarlo): goles,
 ## remates, posesión, pases, faltas, tarjetas, offside, penales y cuánto gana
 ## el mejor equipo. No es un test: mide.
 ##
 ##   <godot> --path . --headless --script tests/_diag_calibracion_v2.gd -- parejas=100 escenario=0 semilla=97000 salida=user://calibracion_v2_0
 ##
 ## `escenario`: índice de ESCENARIOS (-1 = todos). `parejas`: cada pareja son
-## dos partidos (ida y vuelta). `motor=v2|espacial|ambos`.
+## dos partidos (ida y vuelta). La referencia del motor espacial existe para
+## las semillas 97000 y 20261001; con otra semilla se mide solo el V2.
 ## `fisica=seccion.clave:valor,...` y `pesos=seccion.clave:valor,...` pisan en
 ## memoria data/fisica_v2.json y data/utility_pesos.json, para barrer un
 ## parámetro sin editar el archivo.
@@ -44,7 +47,6 @@ const RANGOS := {
 var parejas := 10
 var escenario := -1
 var semilla := SEED
-var motor := "ambos"
 var ruta := ""
 
 
@@ -57,9 +59,8 @@ func _init() -> void:
 			"parejas": parejas = maxi(1, int(partes[1]))
 			"escenario": escenario = int(partes[1])
 			"semilla": semilla = int(partes[1])
-			"motor": motor = partes[1]
 			"salida": ruta = partes[1]
-			"pesos": _pisar(MotorEspacial.pesos(), partes[1], "PESO")
+			"pesos": _pisar(BasePartido.pesos(), partes[1], "PESO")
 			"fisica": _pisar(FisicaV2.datos(), partes[1], "FISICA")
 	var celdas: Array = []
 	for i in ESCENARIOS.size():
@@ -67,17 +68,18 @@ func _init() -> void:
 			continue
 		var esc: Array = ESCENARIOS[i]
 		var celda := {"division_a": esc[0] + 1, "division_b": esc[1] + 1, "partidos": parejas * 2}
-		for nombre in ["v2", "espacial"]:
-			if motor != "ambos" and motor != nombre:
-				continue
+		var referencia := _referencia(semilla)
+		var clave := "D%d/D%d" % [esc[0] + 1, esc[1] + 1]
+		if referencia.has(clave):
+			celda["espacial"] = referencia[clave]
+		for nombre in ["v2"]:
 			var suma := {}
 			var cuadrados := {}
 			var t0 := Time.get_ticks_msec()
 			for indice in parejas:
 				var estilos: Array = ESTILOS[indice % ESTILOS.size()]
 				for vuelta in [false, true]:
-					var m: Dictionary = _v2(esc, estilos, semilla + indice, vuelta) if nombre == "v2" \
-						else _espacial(esc, estilos, semilla + indice, vuelta)
+					var m: Dictionary = _v2(esc, estilos, semilla + indice, vuelta)
 					for k in m:
 						suma[k] = float(suma.get(k, 0.0)) + float(m[k])
 						cuadrados[k] = float(cuadrados.get(k, 0.0)) + float(m[k]) * float(m[k])
@@ -165,33 +167,14 @@ func _v2(esc: Array, estilos: Array, semilla_partido: int, vuelta: bool) -> Dict
 	return m
 
 
-func _espacial(esc: Array, estilos: Array, semilla_partido: int, vuelta: bool) -> Dictionary:
-	var eq := _equipos(esc, estilos, semilla_partido)
-	var a: Team = eq[0]
-	var b: Team = eq[1]
-	var rng := RandomNumberGenerator.new()
-	rng.seed = semilla_partido
-	var res := MotorEspacial.simular(b if vuelta else a, a if vuelta else b, rng)
-	var st: Dictionary = res["stats"]
-	var lado_a := "away" if vuelta else "home"
-	var m := {}
-	_resultado(m, float(res["goles_visitante"] if vuelta else res["goles_local"]),
-		float(res["goles_local"] if vuelta else res["goles_visitante"]))
-	var al_arco := 0.0
-	for ev in res["eventos"]:
-		if str(ev["tipo"]) == "tiro_puerta":
-			al_arco += 1.0
-	m["remates"] = float(st["tiros"]["home"]) + float(st["tiros"]["away"])
-	m["al_arco"] = al_arco
-	m["posesion_a"] = 100.0 * float(st["posesion"][lado_a]) / maxf(float(st["posesion"]["home"]) + float(st["posesion"]["away"]), 1.0)
-	m["pases"] = float(st["pase_detalle"]["intentos"])
-	m["pases_completos"] = float(st["pases"]["home"]) + float(st["pases"]["away"])
-	m["faltas"] = float(st["faltas"])
-	m["amarillas"] = float(_contar(a.amarillas_partido)) + float(_contar(b.amarillas_partido))
-	m["rojas"] = float(a.expulsados_partido.size()) + float(b.expulsados_partido.size())
-	m["offsides"] = float(st["offsides"])
-	m["penales"] = float(st["penales"])
-	return m
+## Lo que daba el motor espacial con esta semilla: escenario ("D1/D4") ->
+## métrica -> media. Vacío si no hay referencia para la semilla.
+func _referencia(semilla_ref: int) -> Dictionary:
+	var ruta_ref := "res://docs/mediciones/calibracion_v2/espacial_%d.json" % semilla_ref
+	if not FileAccess.file_exists(ruta_ref):
+		return {}
+	var datos = JSON.parse_string(FileAccess.get_file_as_string(ruta_ref))
+	return datos["celdas"] if datos is Dictionary else {}
 
 
 ## Lo que pide la etapa 7: goles, remates, posesión, pases, faltas y tarjetas,
@@ -225,7 +208,7 @@ func _imprimir(celda: Dictionary) -> void:
 	for k in METRICAS:
 		var texto := "[calibracion]   %-16s" % k
 		texto += (" %9.2f %7.2f" % [v[k], celda["v2_error"][k]]) if v.has(k) else " %9s %7s" % ["-", "-"]
-		texto += (" %9.2f %7.2f" % [e[k], celda["espacial_error"][k]]) if e.has(k) else " %9s %7s" % ["-", "-"]
+		texto += (" %9.2f %7s" % [e[k], "-"]) if e.has(k) else " %9s %7s" % ["-", "-"]
 		if v.has(k) and e.has(k):
 			texto += (" %7.2f" % (float(v[k]) / float(e[k]))) if absf(float(e[k])) > 0.001 else " %7s" % "-"
 			var rango: Array = RANGOS[k]
@@ -245,5 +228,4 @@ func _imprimir(celda: Dictionary) -> void:
 			100.0 * v["gana_a"], 100.0 * v["empate"], 100.0 * v["pases_globo"] / maxf(v["pases"], 1.0), v["corners"],
 			v["laterales"], v["minutos"], int(v["correcciones"] * celda["partidos"]),
 			int(v["saltos_pelota"] * celda["partidos"]), int(v["colgado"] * celda["partidos"]), celda["v2_seg"]])
-	if not e.is_empty():
-		print("[calibracion]   espacial: gana A %.0f%% empata %.0f%%" % [100.0 * e["gana_a"], 100.0 * e["empate"]])
+

@@ -21,7 +21,7 @@ extends RefCounted
 ## Empates: si 90' terminan igualados se juega el alargue (2x15') y si
 ## sigue empatado se define por penales — partido único a eliminación
 ## directa real (§8.7). El cruce del jugador lo resuelve entero
-## MotorEspacial, con fotogramas; los de la IA, MatchEngine.simular_alargue
+## MotorV2, con su receta para mirarlo; los de la IA, MatchEngine.simular_alargue
 ## y Penales.definir.
 
 var nombre: String

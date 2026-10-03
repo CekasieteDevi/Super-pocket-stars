@@ -1,11 +1,12 @@
 extends SceneTree
 
 ## Medición de los modificadores de equipo (MatchEngine._bloques_equipo: local,
-## forma, armonía, racha, familiaridad...) en cada motor. Mismos clubes y misma
+## forma, armonía, racha, familiaridad...) en cada motor. Lo que daba el motor
+## espacial (ya borrado) está en data/fisica_v2.json, nivel.puntos_por_modificador. Mismos clubes y misma
 ## semilla en los tres. Mide la diferencia de gol del local y qué pasa cuando
 ## el local tiene `extra` puntos de armonía y racha a favor.
 ## Argumentos (después de `--`): `partidos=N` (300), `division=N` (4),
-## `motor=v2|abstracto|espacial`, `armonia=X` (la del local; la del visitante,
+## `motor=v2|abstracto`, `armonia=X` (la del local; la del visitante,
 ## la opuesta), `racha=N` (la del local), `k=X` (pisa nivel.puntos_por_modificador
 ## de data/fisica_v2.json en memoria).
 
@@ -50,7 +51,6 @@ func _init() -> void:
 		var r: Dictionary
 		match motor:
 			"abstracto": r = MatchEngine.simular(home, away, rng)
-			"espacial": r = _espacial(home, away, rng)
 			_: r = MotorV2.simular(home, away, rng)
 		# Con los equipos como quedaron armados para el partido (local, forma, clima).
 		var azar := RandomNumberGenerator.new()
@@ -68,7 +68,3 @@ func _init() -> void:
 		motor, division + 1, "normal" if is_nan(armonia) else "%+.0f" % armonia, racha, media, error, puntos / p, goles / p, ventaja / p, partidos])
 	quit()
 
-
-func _espacial(home: Team, away: Team, rng: RandomNumberGenerator) -> Dictionary:
-	var script: GDScript = load("res://core/motor_espacial.gd")
-	return script.simular(home, away, rng)

@@ -101,7 +101,7 @@ const RANGO_IDS_RESERVADO := 300
 const DERIVA_ANIMO_POR_SEMANA := 1.0
 ## Dorsal mas alto que se puede elegir. Son dos digitos porque el sprite
 ## estampa el numero en 12 px de ancho: con tres no entra (ver
-## SpritesPartido._estampar_numero).
+## Jugador3D.poner_numero).
 const DORSAL_MAXIMO := 99
 
 var nombre: String
@@ -1523,7 +1523,7 @@ func energia_proximo_partido(jugador_id: int) -> float:
 ## La resistencia nunca baja de Cansancio.ENERGIA_MINIMA dentro de un
 ## partido. §8.4 #19: con Calor, un 30% más rápido.
 ## multiplicador: cuánto pesa ESTE duelo en el desgaste. MatchEngine usa
-## 1.0 (está calibrado sobre sus ~180 duelos por partido); MotorEspacial
+## 1.0 (está calibrado sobre sus ~180 duelos por partido); el motor espacial (borrado)
 ## pasa otro valor porque resuelve una cantidad de duelos completamente
 ## distinta y, con 1.0, dejaba a los 22 jugadores en el piso de
 ## resistencia antes del entretiempo.
@@ -1553,7 +1553,7 @@ func desgastar_en_cancha(minutos: float) -> void:
 		desgastar_minutos(j, minutos)
 
 
-## La contracara de `desgastar`, para el entretiempo del MotorEspacial
+## La contracara de `desgastar`, para el entretiempo del motor espacial (borrado)
 ## (etapa 5). Nunca pasa de la energia con la que el jugador arranco el
 ## partido: el descanso de quince minutos no devuelve la fatiga de la
 ## semana.

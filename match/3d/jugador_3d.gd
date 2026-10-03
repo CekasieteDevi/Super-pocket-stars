@@ -4,7 +4,7 @@ extends Node3D
 ## Un personaje del partido 3D: el GLB, sus colores y la animación que
 ## muestra en cada cuadro.
 ##
-## La animación no corre sola. VistaCancha3D le dice qué animación y en qué
+## La animación no corre sola. VistaV2 le dice qué animación y en qué
 ## segundo, calculado desde el fotograma del motor: así pausa, velocidad x2 y
 ## saltos de índice se ven igual que en el 2D.
 
@@ -19,7 +19,7 @@ const ESCALA_CHIBI := 0.75
 const SHADER_PERSONAJE := preload("res://match/3d/personaje.gdshader")
 
 ## El short sin color elegido es blanco, igual que el pantalón por defecto
-## de los sprites (ver SpritesPartido).
+## de los sprites (ver AtlasJugadores).
 const SHORT_POR_DEFECTO := Color("f5f4f0")
 
 var animador: AnimationPlayer
@@ -122,7 +122,7 @@ func _init(escena: PackedScene) -> void:
 	var encontrados := modelo.find_children("*", "AnimationPlayer", true, false)
 	if not encontrados.is_empty():
 		animador = encontrados[0]
-		# El tiempo lo pone VistaCancha3D con seek(): sin esto el reproductor
+		# El tiempo lo pone VistaV2 con seek(): sin esto el reproductor
 		# avanzaría por su cuenta entre dos cuadros. En manual tampoco vuelve
 		# a aplicar la pose solo, y la mezcla de poner() no se pisa.
 		animador.speed_scale = 0.0
@@ -140,7 +140,7 @@ func colorear(camiseta: Color, short: Color, pelo: Color) -> void:
 	_material.set_shader_parameter("camiseta", camiseta)
 	_material.set_shader_parameter("color_short", SHORT_POR_DEFECTO if short.a < 0.01 else short)
 	_material.set_shader_parameter("pelo", pelo)
-	_material.set_shader_parameter("color_numero", SpritesPartido._color_numero(camiseta))
+	_material.set_shader_parameter("color_numero", AtlasJugadores.color_numero(camiseta))
 
 
 ## El dorsal de la espalda (1..99; 0 sin número, como los oficiales). El
@@ -156,7 +156,7 @@ func poner_numero(n: int) -> void:
 
 
 ## La cara de cada jugador sale de su jugador_id, como el peinado y el tono
-## de pelo del 2D (SpritesPartido.tono_pelo_de): es la misma en todos los
+## de pelo del 2D (AtlasJugadores.tono_pelo_de): es la misma en todos los
 ## partidos. Los planteles tienen ids seguidos: con este paso (17 caras por
 ## id, CARA_PASO * 20) 20 ids seguidos pasan por las 20 caras, así nadie
 ## repite cara en el equipo hasta el jugador 21. Un hash al azar daba 5
@@ -423,7 +423,7 @@ func poner(anim: String, tiempo: float, segundos: float = -1.0) -> void:
 	if animador == null:
 		return
 	if not tiene(anim):
-		anim = VistaCancha3D.ANIM_QUIETO if tiene(VistaCancha3D.ANIM_QUIETO) else "Quieto"
+		anim = Cancha3D.ANIM_QUIETO if tiene(Cancha3D.ANIM_QUIETO) else "Quieto"
 	if anim != _anim_actual:
 		if _anim_actual != "" and segundos >= 0.0 and _esqueleto != null:
 			_guardar_pose()

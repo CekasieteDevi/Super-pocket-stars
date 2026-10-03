@@ -3,7 +3,7 @@ extends RefCounted
 
 ## Lo que los oficiales llevan en la mano en el partido 3D: la bandera de los
 ## asistentes, la tarjeta del árbitro y el tablero de cambios del cuarto
-## árbitro. Son mallas simples (sin GLB) que VistaCancha3D pone cada cuadro
+## árbitro. Son mallas simples (sin GLB) que la vista pone cada cuadro
 ## en la mano del modelo, orientadas con el antebrazo.
 
 const AMARILLA := Color("ffd21f")
@@ -72,7 +72,7 @@ static func pintar_tarjeta(t: MeshInstance3D, roja: bool) -> void:
 ## Tablero luminoso de cambios, como el de la tele: marco gris, pantalla
 ## negra y los dos números (sale en rojo a la izquierda, entra en verde a la
 ## derecha) de los DOS lados, así lo ven la cancha y la cámara. El frente es
-## +Z. Dos mangos hacia abajo que VistaCancha3D pone en las manos.
+## +Z. Dos mangos hacia abajo que la vista pone en las manos.
 static func tablero() -> Node3D:
 	var n := Node3D.new()
 	n.add_child(_caja(TABLERO_TAM + Vector3(0.06, 0.06, -0.01), MANGO))

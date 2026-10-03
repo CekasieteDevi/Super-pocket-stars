@@ -89,8 +89,8 @@ func iniciar(receta: Dictionary, eventos: Array, local: Team, visitante: Team) -
 	_parpadeo_restante = 0.0
 	_corte_visto = -1
 	_tarjeta_seg = float((receta["reglas"] as Dictionary).get("tarjeta_seg", 4.5))
-	_nivel_estadio = VistaCancha.nivel_estadio_desde_calidad(local.calidad_cancha)
-	_nombres = VistaPartido.construir_nombres(local, visitante)
+	_nivel_estadio = EstadoCancha.nivel_estadio(local.calidad_cancha)
+	_nombres = RelatoPartido.nombres(local, visitante)
 	var colores := ColoresClub.par_equipos(local, visitante)
 	_camisetas = [colores[0], colores[1]]
 	_arqueros = ColoresClub.arqueros(colores[0], colores[1])
@@ -99,7 +99,7 @@ func iniciar(receta: Dictionary, eventos: Array, local: Team, visitante: Team) -
 	for equipo in [local, visitante]:
 		for j in (equipo as Team).todos_los_jugadores():
 			var id := int(j["id"])
-			_por_id[id] = {"numero": (equipo as Team).dorsal_de(id), "pelo": SpritesPartido.tono_pelo_de(id)}
+			_por_id[id] = {"numero": (equipo as Team).dorsal_de(id), "pelo": AtlasJugadores.tono_pelo_de(id)}
 	hud.nombre_local = local.nombre
 	hud.nombre_visitante = visitante.nombre
 	hud.nombre_local_marcador = _corto(local)
@@ -168,7 +168,7 @@ func _fin() -> bool:
 
 
 func _process(delta: float) -> void:
-	# Con el panel oculto el partido no corre (como VistaPartido).
+	# Con el panel oculto el partido no corre (como la vista vieja).
 	if not is_visible_in_tree() or _terminado or _partido == null:
 		return
 	if pausado:
@@ -250,7 +250,7 @@ func _narrar() -> void:
 		return
 	hud.relato = texto
 	_relato_peso = mejor_peso
-	_relato_total = float(VistaPartido.SEG_RELATO.get(mejor_peso, 2.0))
+	_relato_total = float(RelatoPartido.SEG_RELATO.get(mejor_peso, 2.0))
 	_relato_restante = _relato_total
 	hud.relato_alfa = 1.0
 	if str(mejor.get("resultado", "")) == "gol" and str(mejor.get("tipo", "")) in ["tiro_puerta", "penal"]:
@@ -299,5 +299,5 @@ func _mostrar(alfa: float, delta: float) -> void:
 	hud.poseedor = ""
 	if poseedor >= 0 and poseedor < ids.size():
 		var es_local := int(_partido.get_equipos()[poseedor]) == 0
-		hud.poseedor = str(_nombres.get(MotorEspacial.clave_de(int(ids[poseedor]), es_local), ""))
+		hud.poseedor = str(_nombres.get(BasePartido.clave_de(int(ids[poseedor]), es_local), ""))
 	hud.queue_redraw()

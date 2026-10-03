@@ -1,13 +1,14 @@
 # Animaciones: lectura obligatoria antes de corregirlas
 
-Leer [docs/diagnostico_animaciones_partido.md](docs/diagnostico_animaciones_partido.md)
-ante saltos, regates rotos o diferencias entre laboratorio y partido.
+Leer [match/3d/LEEME.md](match/3d/LEEME.md) ante saltos, patinadas o
+diferencias entre laboratorio y partido. `docs/diagnostico_animaciones_partido.md`
+es de la vista vieja (borrada en la etapa 8 del Motor V2): sirve como historia.
 
-- Reproducir el guardado y registrar la acción real antes de atribuir el síntoma a un regate.
-- Validar el camino completo: motor → fotogramas → VistaPartido → VistaCancha → textura.
-- No confundir ticks de simulación con cuadros del sprite. No restaurar «un tick por dibujo».
-- Revisar celdas vacías y dibujos repetidos por fallback: una textura no nula no prueba una animación.
-- Probar los cinco regates dentro de la vista del partido, con interpolación y render real.
+- Reproducir la receta del partido y registrar la acción real (`get_accion`) antes de atribuir el síntoma a un clip.
+- Validar el camino completo: motor (CanchitaV2Nativa) → PartidoVistoV2 → VistaV2 → Jugador3D.
+- El motor avanza a 60 pasos por segundo y la vista interpola entre dos pasos: no confundir pasos con cuadros.
+- Medir sobre el mundo, no sobre la vista: `SALTO_PELOTA`, `ENCIMADOS`, `PATINA` y `ESPERA` (docs/motor_v2.md).
+- Mirar el problema en `motor_v2/laboratorio_partido.tscn`, con render real.
 - Respetar las reglas de ejecución de Godot de abajo y las autorizaciones explícitas de la conversación.
 - Informar por separado lo observado, lo corregido y lo que no se pudo verificar.
 

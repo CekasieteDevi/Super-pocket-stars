@@ -2,7 +2,7 @@ extends SceneTree
 
 ## §7.3 aprendizaje por uso: se gana XP en el atributo que se usa, y eso
 ## acelera su crecimiento. Lo critico es la PARIDAD: un titular tiene que
-## acumular lo mismo en total lo resuelva el motor espacial (partidos del
+## acumular lo mismo en total lo resuelva el Motor V2 (partidos del
 ## usuario) o el abstracto (los otros 19 clubes), o sus jugadores crecen
 ## a distinto ritmo y el desbalance se acumula por temporada.
 ## Correr con: godot --headless --script tests/test_aprendizaje_uso.gd
@@ -14,7 +14,7 @@ func _init() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = SEED
 	_test_los_dos_motores_dan_el_mismo_total(rng)
-	_test_el_espacial_reparte_segun_lo_que_paso(rng)
+	_test_el_v2_reparte_segun_lo_que_paso(rng)
 	_test_usar_un_atributo_lo_hace_crecer_mas(rng)
 	_test_el_uso_se_consume(rng)
 	quit()
@@ -33,7 +33,7 @@ func _test_los_dos_motores_dan_el_mismo_total(rng: RandomNumberGenerator) -> voi
 		var b := Team.generar("B", r1)
 		var r2 := RandomNumberGenerator.new()
 		r2.seed = 100 + i
-		var esp := MotorEspacial.simular(a, b, r2, false)
+		var esp := MotorV2.simular(a, b, r2, false)
 		var a2 := Team.generar("A", RandomNumberGenerator.new())
 		var b2 := Team.generar("B", RandomNumberGenerator.new())
 		var r3 := RandomNumberGenerator.new()
@@ -54,10 +54,10 @@ func _test_los_dos_motores_dan_el_mismo_total(rng: RandomNumberGenerator) -> voi
 	var ok: bool = mejor_esp <= 1.01 and mejor_abs <= 1.01
 	ok = ok and absf(peor_esp - peor_abs) / maxf(peor_abs, 0.01) <= 0.15
 	if ok:
-		print("OK: %.2f de XP por partido el espacial contra %.2f el abstracto (tope 1.00 por jugador)." % [
+		print("OK: %.2f de XP por partido el V2 contra %.2f el abstracto (tope 1.00 por jugador)." % [
 			peor_esp, peor_abs])
 	else:
-		print("FALLA: espacial max %.2f total %.2f | abstracto max %.2f total %.2f" % [
+		print("FALLA: V2 max %.2f total %.2f | abstracto max %.2f total %.2f" % [
 			mejor_esp, peor_esp, mejor_abs, peor_abs])
 
 
@@ -84,9 +84,9 @@ func _total_maximo(xp: Dictionary) -> float:
 	return maximo
 
 
-func _test_el_espacial_reparte_segun_lo_que_paso(_rng: RandomNumberGenerator) -> void:
+func _test_el_v2_reparte_segun_lo_que_paso(_rng: RandomNumberGenerator) -> void:
 	print("
-=== El motor espacial reparte segun lo que cada puesto hace ===")
+=== El Motor V2 reparte segun lo que cada puesto hace ===")
 	# Un partido suelto no alcanza: hay delanteros que no rematan ninguna
 	# vez. Se agrega sobre varios, que es como se acumula en una temporada.
 	#
@@ -107,7 +107,7 @@ func _test_el_espacial_reparte_segun_lo_que_paso(_rng: RandomNumberGenerator) ->
 		var b := Team.generar("B", r1)
 		var r2 := RandomNumberGenerator.new()
 		r2.seed = 300 + i
-		var res := MotorEspacial.simular(a, b, r2, false)
+		var res := MotorV2.simular(a, b, r2, false)
 		var xp: Dictionary = res["xp"]["home"]
 		for j in a.jugadores:
 			var d: Dictionary = xp.get(j["id"], {})

@@ -89,7 +89,7 @@ var ultimo_resultado: Dictionary = {}
 var ultimo_log: Array = []
 var ultimos_eventos: Array = []
 ## Posiciones tick a tick de los 22 + la pelota del último partido propio
-## (MotorEspacial). Solo lo consume la animación — no se guarda en el save
+## (MotorV2: la receta va en este lugar). Solo lo consume la animación — no se guarda en el save
 ## (son ~21.600 fotogramas) y se pierde al cerrar el juego, igual que el log.
 var ultimos_fotogramas: Array = []
 

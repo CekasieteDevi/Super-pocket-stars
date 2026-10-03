@@ -26,3 +26,20 @@ static func modificador(calidad_cancha_local: float, atributo: String) -> float:
 	if atributo == "pases" or atributo == "control":
 		return calidad_cancha_local
 	return 0.0
+
+
+## Qué estadio tiene el club según la calidad de su cancha: de un potrero a
+## un estadio de élite. La pantalla del partido lo usa para armar el estadio
+## (VistaV2.poner_estadio).
+static func nivel_estadio(calidad: float) -> String:
+	if calidad <= -6.0:
+		return "potrero"
+	if calidad <= -4.0:
+		return "barrial"
+	if calidad <= -2.0:
+		return "regular"
+	if calidad <= 0.0:
+		return "cuidado"
+	if calidad <= 1.5:
+		return "profesional"
+	return "elite"

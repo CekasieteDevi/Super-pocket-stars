@@ -63,7 +63,7 @@ func _probar(vista: VistaV2) -> void:
 	for k in range(1, esperado.size()):
 		en_orden = en_orden and esperado[k] > esperado[k - 1]
 	_ok(en_orden, "hace media vuelta, arranca, corre y frena, en ese orden (%s)" % [orden])
-	_ok(p3._anim_actual == VistaCancha3D.ANIM_QUIETO, "termina quieto (%s)" % p3._anim_actual)
+	_ok(p3._anim_actual == Cancha3D.ANIM_QUIETO, "termina quieto (%s)" % p3._anim_actual)
 	var patina: Dictionary = medida["patina"]
 	var metros: Dictionary = medida["metros"]
 	for clip in patina:

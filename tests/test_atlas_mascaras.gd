@@ -74,7 +74,7 @@ func _referencia(indice: int, camiseta: Color, pantalon: Color, pelo: Color,
 		var dorsal_x := 32 - (texto.length() * 4 - 1) / 2
 		var tinta := Color.WHITE if camiseta.get_luminance() < 0.55 else Color("18212c")
 		for i in range(texto.length()):
-			var digito: Array = SpritesPartido.DIGITOS[int(texto[i])]
+			var digito: Array = AtlasJugadores.DIGITOS[int(texto[i])]
 			for y in range(5):
 				for x in range(3):
 					if digito[y][x] == "#":

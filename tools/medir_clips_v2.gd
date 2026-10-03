@@ -10,7 +10,7 @@ extends SceneTree
 ## si el cuerpo sigue corriendo mientras dura.
 
 const PREFIJO := "[acciones_v2]"
-const MODELOS := {"jugador": VistaCancha3D.ESCENA_JUGADOR, "golero": VistaCancha3D.ESCENA_GOLERO}
+const MODELOS := {"jugador": Cancha3D.ESCENA_JUGADOR, "golero": Cancha3D.ESCENA_GOLERO}
 ## Hueso de Blender -> punto del modelo que toca la pelota (nodos del GLB).
 const ANCLA_DE_HUESO := {"Pie.R": "Pie_R", "Pie.L": "Pie_L", "Cabeza": "Frente", "Torso": "Pecho",
 	"Antebrazo.L": "Mano_L", "Antebrazo.R": "Mano_R"}
@@ -121,25 +121,38 @@ func _medir() -> void:
 	quit()
 
 
-## Animación -> [ancla, fracción] desde la vista 3D (CONTACTO_3D por acción,
-## ANIM_DE_ACCION para saber qué clip es cada acción).
+## Animación -> [ancla, fracción del clip en que toca la pelota]. Salió de
+## la vista 3D del motor espacial (CONTACTO_3D por acción) antes de borrarla.
+## Las estiradas a la izquierda y la alta usan los cuadros de Atajar_Volando
+## (estirado en 10/24); las paradas tienen las manos en la pelota en 6/24
+## (animaciones_jugador.py, "ATAJADAS POR ZONA").
+const CONTACTO_DE_CLIP := {
+	"Agarrar": ["manos", 0.0],
+	"Arquero_Lanza": ["Mano_R", 14.0 / 24.0],
+	"Arquero_Voleo": ["Pie_R", 0.5],
+	"Atajar_Volando": ["manos", 10.0 / 24.0],
+	"Atajar_Volando_Izq": ["manos", 10.0 / 24.0],
+	"Atajar_Volando_Alto": ["manos", 10.0 / 24.0],
+	"Atajar_Volando_Alto_Izq": ["manos", 10.0 / 24.0],
+	"Atajar_Arriba": ["manos", 0.25],
+	"Atajar_Abajo": ["manos", 0.25],
+	"Barrida": ["Pie_L", 8.0 / 24.0],
+	"Bloquear": ["Pie_R", 5.0 / 18.0],
+	"Cabecear": ["Frente", 14.0 / 24.0],
+	"Chilena": ["Pie_R", 11.0 / 30.0],
+	"Control_Corriendo": ["Pie_R", 8.0 / 24.0],
+	"Lateral": ["manos", 0.25],
+	"Palomita": ["Frente", 0.375],
+	"Patear_Corriendo": ["Pie_R", 4.0 / 11.0],
+	"Pecho": ["Pecho", 0.0],
+	"Saque_Arco": ["Pie_R", 0.5],
+	"Taco": ["Talon_R", 0.5],
+	"Volea": ["Pie_R", 7.0 / 18.0],
+}
+
+
 func _contactos_de_la_vista() -> Dictionary:
-	var r := {}
-	for accion in VistaCancha3D.CONTACTO_3D:
-		if VistaCancha3D.ANIM_DE_ACCION.has(accion):
-			r[VistaCancha3D.ANIM_DE_ACCION[accion]] = VistaCancha3D.CONTACTO_3D[accion]
-	# Las atajadas que la vista elige aparte de ANIM_DE_ACCION (etapa 5 del
-	# Motor V2): la estirada a la izquierda y la alta usan los cuadros de
-	# Atajar_Volando (estirado en 10/24); las paradas tienen las manos en la
-	# pelota en 6/24 (animaciones_jugador.py, "ATAJADAS POR ZONA").
-	var vuela: Array = VistaCancha3D.CONTACTO_3D[MotorEspacial.ACCION_VUELA]
-	var parada := VistaCancha3D.PARADA_CONTACTO_TICKS / 4.0
-	for anim in [VistaCancha3D.ANIM_VUELA_IZQUIERDA, VistaCancha3D.ANIM_VUELA_ALTA,
-			VistaCancha3D.ANIM_VUELA_ALTA_IZQUIERDA]:
-		r[anim] = vuela
-	for anim in [VistaCancha3D.ANIM_ATAJA_ARRIBA, VistaCancha3D.ANIM_ATAJA_ABAJO]:
-		r[anim] = ["manos", parada]
-	return r
+	return CONTACTO_DE_CLIP.duplicate(true)
 
 
 static func _se_mueve(nombre: String) -> bool:

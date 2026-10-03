@@ -324,7 +324,7 @@ func _recorrido(param: Dictionary) -> int:
 ## cambian los clips hay que rehacerlo: tools/generar_acciones_v2.py.
 func _clips_contra_glb() -> void:
 	var en_glb := {}
-	for ruta in [VistaCancha3D.ESCENA_JUGADOR, VistaCancha3D.ESCENA_GOLERO]:
+	for ruta in [Cancha3D.ESCENA_JUGADOR, Cancha3D.ESCENA_GOLERO]:
 		var escena: Node = (load(ruta) as PackedScene).instantiate()
 		var ap: AnimationPlayer = escena.find_children("*", "AnimationPlayer", true, false)[0]
 		for n in ap.get_animation_list():
@@ -346,8 +346,8 @@ func _clips_contra_glb() -> void:
 
 ## Los clips en cinta (tools/blender/animaciones_jugador.py): un avance por
 ## cuadro del clip (24 por segundo) que no retrocede y termina en `metros`.
-## VistaCancha3D avanza Correr, Trotar y Caminar con constantes propias: si
-## no son esos metros, el pie apoyado vuelve a patinar.
+## Cancha3D.METROS_POR_CICLO es el ciclo de Correr cuando un clip no trae sus
+## metros (el árbitro): si no son esos, el pie apoyado vuelve a patinar.
 func _clips_en_cinta() -> void:
 	var malos := []
 	var en_cinta := 0
@@ -372,11 +372,9 @@ func _clips_en_cinta() -> void:
 	for m in malos:
 		_ok(false, m)
 	_ok(en_cinta >= 14 and malos.is_empty(), "%d clips en cinta con su avance por cuadro" % en_cinta)
-	var vista := {"Correr": VistaCancha3D.METROS_POR_CICLO, "Trotar": VistaCancha3D.CICLO_TROTAR_M,
-		"Caminar": VistaCancha3D.CICLO_CAMINAR_M}
-	for n in vista:
-		_ok(absf(float(_clips[n].get("metros", 0.0)) - float(vista[n])) < 0.001,
-			"VistaCancha3D avanza %s cada %.2f m, los metros de su ciclo (%.2f)" % [n, vista[n], _clips[n].get("metros", 0.0)])
+	_ok(absf(float(_clips["Correr"].get("metros", 0.0)) - Cancha3D.METROS_POR_CICLO) < 0.001,
+		"Cancha3D avanza Correr cada %.2f m, los metros de su ciclo (%.2f)" % [Cancha3D.METROS_POR_CICLO,
+			_clips["Correr"].get("metros", 0.0)])
 
 
 func _ok(condicion: bool, mensaje: String) -> void:

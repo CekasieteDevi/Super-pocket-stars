@@ -1,19 +1,18 @@
 class_name VistaV2
 extends Control
 
-## Vista mínima del Motor V2 para la etapa 0 (docs/motor_v2.md, capa 6): el
-## mismo estadio, luz, cámara y los mismos 22 Jugador3D que VistaCancha3D,
-## pero leyendo el mundo en vez de fotogramas. Dibuja interpolando entre los
+## La vista 3D del Motor V2 (docs/motor_v2.md, capa 6): el estadio, la luz, la
+## cámara y un Jugador3D por cada uno, leyendo el mundo del motor. Dibuja interpolando entre los
 ## dos últimos pasos y no mueve nada: solo pone posición, rumbo y la
 ## animación de andar según la velocidad real.
 ##
 ## Sirve para medir el costo de dibujo en el teléfono con la carga de un
 ## partido. La vista de verdad llega en la etapa 2.
 
-const ESCENA_ESTADIO := VistaCancha3D.ESCENA_ESTADIO
-const ESCENA_JUGADOR := VistaCancha3D.ESCENA_JUGADOR
-const ESCENA_GOLERO := VistaCancha3D.ESCENA_GOLERO
-const ESCENA_PELOTA := VistaCancha3D.ESCENA_PELOTA
+const ESCENA_ESTADIO := Cancha3D.ESCENA_ESTADIO
+const ESCENA_JUGADOR := Cancha3D.ESCENA_JUGADOR
+const ESCENA_GOLERO := Cancha3D.ESCENA_GOLERO
+const ESCENA_PELOTA := Cancha3D.ESCENA_PELOTA
 ## Sentido de la marcha -> ángulo respecto del rumbo (+ = a su izquierda) y
 ## el clip en cinta que anda así. 0 es adelante: lo elige _andar_de.
 const ANGULO_DE_SENTIDO := {0: 0.0, 1: PI * 0.5, -1: -PI * 0.5, 2: PI}
@@ -26,7 +25,7 @@ const GIRO_MODELO_RAD_S := 4.0 * PI
 ## Clips de una vez (docs/motor_v2.md, etapa 2). Sale con Arranque el que
 ## arranca de parado buscando al menos la rapidez de Correr: el que sale
 ## caminando o trotando no se tira como un velocista.
-const ARRANQUE_DESDE_MS := VistaCancha3D.ANDAR_TROTA_HASTA_MS
+const ARRANQUE_DESDE_MS := Cancha3D.ANDAR_TROTA_HASTA_MS
 ## Gira con Giro_90 o Giro_180 el que está quieto y le falta girar esto o más;
 ## desde GIRO_180_DESDE, media vuelta.
 const GIRO_DESDE := deg_to_rad(60.0)
@@ -70,7 +69,7 @@ const AJUSTE_ANTES_SEG := 0.15
 const AJUSTE_DESPUES_SEG := 0.1
 
 ## Etapa 8: el estadio según la cancha del local
-## (VistaCancha.nivel_estadio_desde_calidad). Qué partes del modelo
+## (EstadoCancha.nivel_estadio). Qué partes del modelo
 ## (assets/3d/estadio.glb) no tiene cada nivel y cuánto se seca el pasto
 ## (0 = el verde del modelo, 1 = COLOR_PASTO_SECO). "" o un nivel que no está
 ## acá: el estadio entero.
@@ -131,7 +130,7 @@ var _tiempo := 0.0
 ## Perillas del banco (etapa 0) para ver qué pesa en el dibujo del teléfono.
 var msaa := Viewport.MSAA_2X
 var sombras := true
-## Cortes de la sombra del sol: 4 es lo de VistaCancha3D (el modo por defecto).
+## Cortes de la sombra del sol: 4 es lo de la vista 3D vieja (el modo por defecto).
 var cortes_sombra := 4
 ## Manchas debajo de cada uno (SombrasRedondas) y si los personajes y la
 ## pelota proyectan la sombra del sol (con el sol prendido, el estadio sí).
@@ -195,18 +194,18 @@ func _ready() -> void:
 	_estadio = (load(ESCENA_ESTADIO) as PackedScene).instantiate()
 	_mundo_3d.add_child(_estadio)
 	Materiales3D.aplicar(_estadio, {}, ["Arco_Red"])
-	Materiales3D.cortar_lado_camara(_estadio, ProyeccionPartido.MEDIO_ANCHO + VistaCancha3D.DETRAS_DE_BANDA_M,
-		VistaCancha3D.MATERIALES_PISO)
+	Materiales3D.cortar_lado_camara(_estadio, ProyeccionPartido.MEDIO_ANCHO + Cancha3D.DETRAS_DE_BANDA_M,
+		Cancha3D.MATERIALES_PISO)
 	poner_estadio(nivel_estadio)
 	var fondo := MeshInstance3D.new()
 	var plano := PlaneMesh.new()
 	plano.size = Vector2(400.0, 400.0)
 	fondo.mesh = plano
 	fondo.position = Vector3(0.0, -0.05, 0.0)
-	fondo.material_override = Materiales3D.toon(VistaCancha3D.COLOR_PISO_FONDO)
+	fondo.material_override = Materiales3D.toon(Cancha3D.COLOR_PISO_FONDO)
 	_mundo_3d.add_child(fondo)
 	_pelota = (load(ESCENA_PELOTA) as PackedScene).instantiate()
-	_pelota.scale = Vector3.ONE * VistaCancha3D.ESCALA_PELOTA
+	_pelota.scale = Vector3.ONE * Cancha3D.ESCALA_PELOTA
 	_mundo_3d.add_child(_pelota)
 	Materiales3D.aplicar(_pelota)
 	if sombras_redondas:
@@ -421,7 +420,7 @@ func _armar_ambiente() -> void:
 	sol.look_at_from_position(Vector3.ZERO, Vector3(0.55, -0.75, -0.6), Vector3.UP)
 	_camara = Camera3D.new()
 	_camara.keep_aspect = Camera3D.KEEP_WIDTH
-	_camara.fov = VistaCancha3D.FOV_HORIZONTAL
+	_camara.fov = Cancha3D.FOV_HORIZONTAL
 	_camara.far = 400.0
 	_mundo_3d.add_child(_camara)
 	_camara.current = true
@@ -545,7 +544,7 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 		var accion: String = acciones[i][0] if i < acciones.size() else ""
 		var hace_gesto := accion != "" and p3.tiene(accion)
 		var paso := pos[i] - pos_previa[i]
-		if hace_gesto or v < VistaCancha3D.VELOCIDAD_PARA_PIERNAS or paso.length_squared() < 1e-10:
+		if hace_gesto or v < Cancha3D.VELOCIDAD_PARA_PIERNAS or paso.length_squared() < 1e-10:
 			_sentido[i] = 0
 		else:
 			var relativo := wrapf(atan2(paso.x, paso.y) - rumbo[i], -PI, PI)
@@ -558,7 +557,7 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 					_adelante[i] = 0
 				else:
 					_sentido[i] = 0
-		if hace_gesto or v < VistaCancha3D.VELOCIDAD_PARA_PIERNAS:
+		if hace_gesto or v < Cancha3D.VELOCIDAD_PARA_PIERNAS:
 			_adelante[i] = 0
 		if hace_gesto:
 			_una_vez[i] = {}
@@ -590,7 +589,7 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 			# fundido); si va más despacio, pasa a Trotar con el cambio de fase.
 			anim = "Correr"
 			_adelante[i] = 1
-		if _sentido[i] != 0 and anim != VistaCancha3D.ANIM_QUIETO and anim != "Golero_Guardia" \
+		if _sentido[i] != 0 and anim != Cancha3D.ANIM_QUIETO and anim != "Golero_Guardia" \
 				and p3.tiene(CLIP_DE_SENTIDO[_sentido[i]]):
 			anim = CLIP_DE_SENTIDO[_sentido[i]]
 		var actual := p3._anim_actual
@@ -602,10 +601,10 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 			if floorf(_ciclos[i] * 2.0) == floorf(otra * 2.0):
 				anim = actual
 		var tiempo: float
-		if anim == VistaCancha3D.ANIM_QUIETO or anim == "Golero_Guardia":
+		if anim == Cancha3D.ANIM_QUIETO or anim == "Golero_Guardia":
 			tiempo = fposmod(_tiempo + float(i) * 0.37, maxf(p3.duracion(anim), 0.01))
 		else:
-			_ciclos[i] += v * delta / float(_metros_ciclo.get(anim, VistaCancha3D.METROS_POR_CICLO))
+			_ciclos[i] += v * delta / float(_metros_ciclo.get(anim, Cancha3D.METROS_POR_CICLO))
 			tiempo = fposmod(_ciclos[i], 1.0) * p3.duracion(anim)
 		p3.poner(anim, tiempo, fundido)
 		p3.poner_cara(p3.cara, Jugador3D.Gesto.NORMAL, _tiempo)
@@ -647,7 +646,7 @@ func _ajustar_pie(p3: Jugador3D, accion: String, segundo: float) -> void:
 		p3.rotation.y += dif * peso
 	var ancla: String = _contacto_pie[accion][1]
 	var pie := p3.ancla_de_pose(ancla)
-	var radio := MundoV2.RADIO_PELOTA * VistaCancha3D.ESCALA_PELOTA
+	var radio := MundoV2.RADIO_PELOTA * Cancha3D.ESCALA_PELOTA
 	var borde := bola + (pie - bola).normalized() * radio if pie.distance_to(bola) > 1e-4 else bola
 	p3.llevar_pie(ancla, borde, peso)
 
@@ -726,7 +725,7 @@ func _una_vez_de(i: int, p3: Jugador3D, v: float, paso: Vector2, rumbo: float, i
 			u["t"] = float(u["t"]) + delta if parte >= 1.0 else maxf(float(u["t"]), por_grados)
 			# Si ya giró todo y el cuerpo arranca, sale: los pies del final
 			# están hechos en el lugar.
-			sigue = v < VistaCancha3D.VELOCIDAD_PARA_PIERNAS * 1.5 and (parte < 1.0 or v < 0.05)
+			sigue = v < Cancha3D.VELOCIDAD_PARA_PIERNAS * 1.5 and (parte < 1.0 or v < 0.05)
 		"media_vuelta":
 			# Hasta pasar por 0 el cuerpo frena parejo (giro_acel): los metros
 			# que le faltan para parar salen de su rapidez. Después suma lo
@@ -768,7 +767,7 @@ func _empezar_una_vez(i: int, p3: Jugador3D, v: float, paso: Vector2, rumbo: flo
 	var parar := float(intencion[1])
 	var falta_girar := float(intencion[2])
 	var actual := p3._anim_actual
-	var quieto := actual == VistaCancha3D.ANIM_QUIETO or actual == "Golero_Guardia"
+	var quieto := actual == Cancha3D.ANIM_QUIETO or actual == "Golero_Guardia"
 	var corre := actual in ["Correr", "Trotar"] and _sentido[i] == 0 and paso.length_squared() > 1e-12
 	var hacia_objetivo := wrapf(float(intencion[3]) - atan2(paso.x, paso.y), -PI, PI) \
 		if corre and intencion.size() > 3 else 0.0
@@ -780,7 +779,7 @@ func _empezar_una_vez(i: int, p3: Jugador3D, v: float, paso: Vector2, rumbo: flo
 	if corre and absf(hacia_objetivo) >= MEDIA_VUELTA_DESDE:
 		var falta := v * v / (2.0 * _giro_acel)
 		var fase := _ciclos[i]
-		var fase_luego := fase + v * delta / float(_metros_ciclo.get(actual, VistaCancha3D.METROS_POR_CICLO))
+		var fase_luego := fase + v * delta / float(_metros_ciclo.get(actual, Cancha3D.METROS_POR_CICLO))
 		for lado in ["Izq", "Der"]:
 			var clip: String = "Media_Vuelta_" + lado
 			if not (p3.tiene(clip) and _cinta.has(clip)):
@@ -796,7 +795,7 @@ func _empezar_una_vez(i: int, p3: Jugador3D, v: float, paso: Vector2, rumbo: flo
 					"ida": paso.normalized(), "volvio": false, "atras": 0.0,
 					"t": _segundo_de(c["recorrido_m"], frenado - falta, p3.duracion(clip))}
 		return {}
-	if v < VistaCancha3D.VELOCIDAD_PARA_PIERNAS and absf(falta_girar) >= GIRO_DESDE:
+	if v < Cancha3D.VELOCIDAD_PARA_PIERNAS and absf(falta_girar) >= GIRO_DESDE:
 		var clip := ("Giro_180_" if absf(falta_girar) >= GIRO_180_DESDE else "Giro_90_") \
 			+ ("Izq" if falta_girar > 0.0 else "Der")
 		if p3.tiene(clip) and _cinta.has(clip):
@@ -834,10 +833,10 @@ func _terminar_una_vez(i: int, u: Dictionary, c: Dictionary, dur: float) -> void
 			var tabla: Array = c["giro_por_cuadro"]
 			var k := clampi(roundi(float(u["t"]) / dur * float(tabla.size() - 1)), 0, tabla.size() - 1)
 			_rumbo_modelo[i] = wrapf(float(u["rumbo0"]) + deg_to_rad(float(tabla[k])), -PI, PI)
-			_andar[i] = VistaCancha3D.ANIM_QUIETO
+			_andar[i] = Cancha3D.ANIM_QUIETO
 			_sin_fundido[i] = 1
 		"frenada":
-			_andar[i] = VistaCancha3D.ANIM_QUIETO
+			_andar[i] = Cancha3D.ANIM_QUIETO
 	_una_vez[i] = {}
 
 
@@ -868,7 +867,7 @@ static func _sentido_de(actual: int, relativo: float) -> int:
 ## para que el pie apoyado no patine de costado. Llega girando, no de golpe.
 func _rumbo_mostrado(i: int, rumbo: float, paso: Vector2, v: float, hace_gesto: bool, delta: float) -> float:
 	var meta := rumbo
-	if not hace_gesto and v >= VistaCancha3D.VELOCIDAD_PARA_PIERNAS and paso.length_squared() > 1e-10:
+	if not hace_gesto and v >= Cancha3D.VELOCIDAD_PARA_PIERNAS and paso.length_squared() > 1e-10:
 		meta = atan2(paso.x, paso.y) - float(ANGULO_DE_SENTIDO[_sentido[i]])
 	if _sin_rumbo.has(i):
 		_sin_rumbo.erase(i)
@@ -890,9 +889,9 @@ func dibujar_pelota(pelota_previa: Vector3, pelota: Vector3, alfa: float, delta:
 	var bola := pelota_previa.lerp(pelota, alfa)
 	if giro.length() > 0.01:
 		_pelota.global_rotate(giro.normalized(), giro.length() * delta)
-	# El modelo de la pelota se dibuja al doble (VistaCancha3D.ESCALA_PELOTA):
+	# El modelo de la pelota se dibuja al doble (Cancha3D.ESCALA_PELOTA):
 	# se levanta lo que crece el radio para que no se hunda en el piso.
-	bola.y += MundoV2.RADIO_PELOTA * (VistaCancha3D.ESCALA_PELOTA - 1.0)
+	bola.y += MundoV2.RADIO_PELOTA * (Cancha3D.ESCALA_PELOTA - 1.0)
 	_pelota.position = bola
 	if _manchas != null:
 		_manchas.poner_pelota(_cantidad(), bola)
@@ -901,11 +900,11 @@ func dibujar_pelota(pelota_previa: Vector3, pelota: Vector3, alfa: float, delta:
 
 func _andar_de(i: int, v: float) -> String:
 	if _es_arquero(i):
-		return "Correr" if v > VistaCancha3D.ARQUERO_CORRE_MS else "Golero_Guardia"
-	var nuevo := VistaCancha3D._andar(_andar[i], v)
-	if v < VistaCancha3D.VELOCIDAD_PARA_PIERNAS:
-		nuevo = VistaCancha3D.ANIM_QUIETO
-	elif nuevo == VistaCancha3D.ANIM_QUIETO:
+		return "Correr" if v > Cancha3D.ARQUERO_CORRE_MS else "Golero_Guardia"
+	var nuevo := Cancha3D.andar(_andar[i], v)
+	if v < Cancha3D.VELOCIDAD_PARA_PIERNAS:
+		nuevo = Cancha3D.ANIM_QUIETO
+	elif nuevo == Cancha3D.ANIM_QUIETO:
 		nuevo = "Caminar"
 	_andar[i] = nuevo
 	return nuevo
@@ -915,24 +914,24 @@ func _andar_de(i: int, v: float) -> String:
 ## minimapa. Es el ancho que encuadra _mover_camara, con el alto que le toca
 ## por la forma de la pantalla.
 func encuadre_metros() -> Rect2:
-	var ancho_m: float = maxf(size.x, 1.0) / CamaraPartido.PX_POR_METRO_BASE / CamaraPartido3D.ACERCAMIENTO 		/ maxf(_acercamiento_actual, 0.01)
+	var ancho_m: float = maxf(size.x, 1.0) / Cancha3D.PX_POR_METRO_BASE / Cancha3D.ACERCAMIENTO 		/ maxf(_acercamiento_actual, 0.01)
 	var alto_m := ancho_m * maxf(size.y, 1.0) / maxf(size.x, 1.0)
 	return Rect2(_centro - Vector2(ancho_m, alto_m) * 0.5, Vector2(ancho_m, alto_m))
 
 
-## El encuadre de VistaCancha3D (_mover_camara) con el zoom base, siguiendo
+## El encuadre de la vista 3D vieja con el zoom base, siguiendo
 ## a la pelota con suavizado.
 func _mover_camara(bola: Vector2, delta: float) -> void:
 	var destino: Vector2 = foco if foco != null else bola
-	_centro = _centro.lerp(destino, clampf(delta * CamaraPartido.SUAVIZADO, 0.0, 1.0))
-	_acercamiento_actual = lerpf(_acercamiento_actual, acercamiento, clampf(delta * CamaraPartido.SUAVIZADO, 0.0, 1.0))
-	var ancho_m: float = maxf(size.x, 1.0) / CamaraPartido.PX_POR_METRO_BASE / CamaraPartido3D.ACERCAMIENTO \
+	_centro = _centro.lerp(destino, clampf(delta * Cancha3D.SUAVIZADO_CAMARA, 0.0, 1.0))
+	_acercamiento_actual = lerpf(_acercamiento_actual, acercamiento, clampf(delta * Cancha3D.SUAVIZADO_CAMARA, 0.0, 1.0))
+	var ancho_m: float = maxf(size.x, 1.0) / Cancha3D.PX_POR_METRO_BASE / Cancha3D.ACERCAMIENTO \
 		/ _acercamiento_actual
-	var distancia := ancho_m * 0.5 / tan(deg_to_rad(VistaCancha3D.FOV_HORIZONTAL) * 0.5)
-	var limite_x: float = ProyeccionPartido.MEDIO_LARGO + CamaraPartido.MARGEN_M - ancho_m * 0.5
-	var limite_y: float = ProyeccionPartido.MEDIO_ANCHO - CamaraPartido3D.MARGEN_LATERAL_M
+	var distancia := ancho_m * 0.5 / tan(deg_to_rad(Cancha3D.FOV_HORIZONTAL) * 0.5)
+	var limite_x: float = ProyeccionPartido.MEDIO_LARGO + Cancha3D.MARGEN_FONDO_M - ancho_m * 0.5
+	var limite_y: float = ProyeccionPartido.MEDIO_ANCHO - Cancha3D.MARGEN_LATERAL_M
 	var c := Vector2(clampf(_centro.x, -limite_x, limite_x), clampf(_centro.y, -limite_y, limite_y))
 	var objetivo := Vector3(c.x, 0.0, c.y)
-	var e := deg_to_rad(VistaCancha3D.ELEVACION_CAMARA)
+	var e := deg_to_rad(Cancha3D.ELEVACION_CAMARA)
 	_camara.position = objetivo + Vector3(0.0, sin(e), cos(e)) * distancia
 	_camara.look_at(objetivo, Vector3.UP)

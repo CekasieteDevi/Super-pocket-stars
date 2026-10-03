@@ -1,7 +1,7 @@
 extends SceneTree
 
 ## Etapa 8 del Motor V2 (docs/motor_v2.md): el puente MotorV2.simular entrega
-## lo mismo que MotorEspacial.simular y deja los equipos como los deja un
+## lo mismo que MatchEngine.simular y deja los equipos como los deja un
 ## partido: goleadores que cierran con el marcador, expulsados suspendidos,
 ## cambios anotados, energía gastada y eventos que el relato y las
 ## estadísticas saben leer. Y la receta vuelve a dar el mismo partido.
@@ -75,7 +75,7 @@ func _init() -> void:
 		# Los eventos van en orden y el relato y las estadísticas los leen.
 		var en_orden := true
 		var paso_previo := -1
-		var nombres := VistaPartido.construir_nombres(home, away)
+		var nombres := RelatoPartido.nombres(home, away)
 		for ev in r["eventos"]:
 			if int(ev["paso"]) < paso_previo:
 				en_orden = false

@@ -132,7 +132,7 @@ func _init() -> void:
 		var away: Team = Team.generar("Visitante", rng_p, 1000)
 		home.jugadas_aprendidas = Jugadas.LISTA.duplicate()
 		var res: Dictionary = MotorV2.simular(home, away, rng_p, true)
-		var nombres := VistaPartido.construir_nombres(home, away)
+		var nombres := RelatoPartido.nombres(home, away)
 		for ev in res["eventos"]:
 			if str(ev["tipo"]) != "jugada":
 				continue

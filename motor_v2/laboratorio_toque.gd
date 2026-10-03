@@ -123,7 +123,7 @@ func _medir(segundos: float) -> void:
 			var accion: String = _canchita.get_accion(i)
 			if i >= 0 and clips.has(accion) and str(clips[accion].get("ancla", "")) in ["Pie_R", "Pie_L"]:
 				var ancla: Vector3 = _vista._jugadores[i].ancla_de_pose(str(clips[accion]["ancla"]))
-				var radio := MundoV2.RADIO_PELOTA * VistaCancha3D.ESCALA_PELOTA
+				var radio := MundoV2.RADIO_PELOTA * Cancha3D.ESCALA_PELOTA
 				huecos.append(maxf(0.0, ancla.distance_to(_vista._pelota.position) - radio))
 		toques_antes = toques
 		var r: PackedFloat32Array = _canchita.get_rapidez()
