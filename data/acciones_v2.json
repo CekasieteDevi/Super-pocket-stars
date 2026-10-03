@@ -414,6 +414,27 @@
 			"alcance_m": 0.566,
 			"altura_m": 0.973
 		},
+		"Cabecear_Corriendo": {
+			"duracion": 0.5,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": true,
+			"mueve": true,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": 0.5833,
+			"ancla": "Frente",
+			"fuente_contacto": "tools/blender/animaciones_jugador.py",
+			"punto_contacto": [
+				0.0,
+				1.053,
+				0.594
+			],
+			"alcance_m": 0.594,
+			"altura_m": 1.053
+		},
 		"Caer": {
 			"duracion": 1.25,
 			"bucle": false,
@@ -527,6 +548,27 @@
 			],
 			"alcance_m": 0.238,
 			"altura_m": 0.088
+		},
+		"Control_Muslo": {
+			"duracion": 0.75,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": 0.25,
+			"ancla": "Muslo_R",
+			"fuente_contacto": "tools/blender/animaciones_jugador.py",
+			"punto_contacto": [
+				-0.096,
+				0.47,
+				0.102
+			],
+			"alcance_m": 0.14,
+			"altura_m": 0.47
 		},
 		"Correr": {
 			"duracion": 1.0,
@@ -1832,6 +1874,27 @@
 			],
 			"alcance_m": 0.494,
 			"altura_m": 0.431
+		},
+		"Volea_Costado": {
+			"duracion": 0.75,
+			"bucle": false,
+			"locomocion": false,
+			"aerea": false,
+			"mueve": false,
+			"modelos": [
+				"jugador",
+				"golero"
+			],
+			"contacto": 0.3889,
+			"ancla": "Pie_R",
+			"fuente_contacto": "tools/blender/animaciones_jugador.py",
+			"punto_contacto": [
+				-0.265,
+				0.514,
+				0.432
+			],
+			"alcance_m": 0.507,
+			"altura_m": 0.514
 		}
 	}
 }

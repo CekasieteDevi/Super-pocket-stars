@@ -303,11 +303,15 @@ func _ready() -> void:
 		var c: Dictionary = clips[nombre]
 		if c["contacto"] != null and str(c["ancla"]) in ["Pie_R", "Pie_L"]:
 			_contacto_pie[nombre] = [float(c["contacto"]) * float(c["duracion"]), str(c["ancla"])]
-		if (bool(c.get("mueve", false)) and str(c["ancla"]) in ["Pie_R", "Pie_L"]) or GESTOS_SUELTOS.has(nombre):
-			var lado := str(c["ancla"]).right(1) if str(c["ancla"]) in ["Pie_R", "Pie_L"] else ""
+		# El control de muslo es como el pecho (el cuerpo queda suelto después
+		# del toque), pero con una pierna que toca: la del ancla Muslo_R.
+		var con_pierna := str(c["ancla"]) in ["Pie_R", "Pie_L", "Muslo_R"]
+		if (bool(c.get("mueve", false)) and str(c["ancla"]) in ["Pie_R", "Pie_L"]) or GESTOS_SUELTOS.has(nombre) \
+				or str(c["ancla"]) == "Muslo_R":
+			var lado := str(c["ancla"]).right(1) if con_pierna else ""
 			var en := float(c["contacto"]) * float(c["duracion"]) if c["contacto"] != null and lado != "" else -1.0
 			_gesto_corriendo[nombre] = [en, lado]
-		if c["contacto"] != null and str(c["ancla"]) in ["Frente", "manos", "Pecho"]:
+		if c["contacto"] != null and str(c["ancla"]) in ["Frente", "manos", "Pecho", "Muslo_R"]:
 			_contacto_cuerpo[nombre] = [float(c["contacto"]) * float(c["duracion"]),
 				["Mano_L", "Mano_R"] if str(c["ancla"]) == "manos" else [str(c["ancla"])]]
 		if not c.has("metros"):

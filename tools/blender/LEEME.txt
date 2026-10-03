@@ -65,6 +65,12 @@ ANIMACIONES (24 fps, empiezan en t = 0; cuadro f del eventos.txt -> t = (f-1)/24
   El cuerpo queda en el lugar y el pie apoyado retrocede a la velocidad del cuerpo: avanzalos con los
   metros recorridos (avance_locomocion.json -> data/acciones_v2.json: metros, avance_m, giro), no con el reloj.
 
+  GESTOS DEL MOTOR V2 (animaciones_jugador.py, definiciones()):
+  Control_Muslo       0.75   no    contacto t=0.188 con el ancla Muslo_R (sube el muslo derecho)
+  Volea_Costado       0.75   no    IMPACTO t=0.292, como Volea: el juego la muestra en su lugar si la pelota cruza
+  Cabecear_Corriendo  0.50   no    IMPACTO t=0.292, como Cabecear: el juego lo muestra si llega corriendo
+  Las dos ultimas son variantes: tienen que durar y tocar igual que el clip que reemplazan.
+
   Transiciones: en 3D podes hacer crossfade de ~0.08-0.12 s entre animaciones y no hace falta
   esperar el cuadro exacto. Si queres el empalme perfecto (como en los sprites):
     correr -> *_Corriendo: arrancar la accion cuando correr esta en t = 0.375
@@ -78,3 +84,14 @@ ANIMACIONES (24 fps, empiezan en t = 0; cuadro f del eventos.txt -> t = (f-1)/24
 PUNTOS DE CONTACTO CON LA PELOTA
   Hueso "Pie.R" (punta del pie derecho) para patear/pase/control/quite.
   Huesos "Antebrazo.L" / "Antebrazo.R" (manos/guantes) para la atajada: la pelota va entre los dos.
+  Anclas (nodos vacios pegados a un hueso, poner_anclajes()): Mano_L, Mano_R, Pecho, Frente, Pie_R, Pie_L,
+  Talon_R y Muslo_R (la cara de adelante del muslo derecho, para Control_Muslo).
+
+COMO SE REHACEN SIN PANTALLA (Blender 5.2)
+  blender -b jugador_chibi.blend --python <script>   con, en el script:
+    exec(open(r"...animaciones_jugador.py", encoding="utf-8").read())
+    poner_anclajes(); construir_todas(solo=[...]); verificar_todas(solo=[...]); bpy.ops.wm.save_mainfile()
+  Lo mismo en golero_chibi.blend. Despues, en otra corrida (exportar no guarda el .blend):
+    exec(open(r"...exportar_juego3d.py", encoding="utf-8").read()); exportar("jugador", carpeta)
+  Copiar los .glb a assets/3d, importar (<godot> --path . --headless --import) y rehacer
+  data/acciones_v2.json (GODOT=... python tools/generar_acciones_v2.py).

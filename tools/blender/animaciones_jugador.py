@@ -767,6 +767,55 @@ def definiciones():
         (13, dict(ground=1, tL=-10, kL=30, tR=-10, kR=30, tp=5, hp=8, gL=(0.42, -0.1, 0.65), gR=(-0.42, -0.1, 0.65))),
         (19, dict(LISTO)),
     ])
+    # CONTROL DE MUSLO: 3 ticks como Pecho, pero la pelota llega en 0.25: el
+    # Motor V2 arranca el gesto antes del contacto y el muslo ya esta arriba
+    # (con Pecho, que toca en su primer cuadro, el muslo subia despues de que
+    # la pelota ya habia pegado). Sube el muslo derecho hasta la horizontal
+    # mirando la pelota, lo baja con ella (amortigua) y la deja caer al pie.
+    # El punto que toca es el ancla Muslo_R (poner_anclajes).
+    D['Control_Muslo'] = dict(ticks=3, contacto=0.25, aerea=False, hueso='Muslo.R', extremo='+z', claves=[
+        (1, dict(ground=1, tL=-8, kL=22, tR=-12, kR=28, tp=4, hp=4, gL=(0.5, -0.1, 0.8), gR=(-0.5, -0.1, 0.8))),
+        (3, dict(ground=1, tL=-5, kL=18, tR=-50, kR=75, fR=15, roll=3, tp=-2, hp=8, gL=(0.58, -0.06, 0.88), gR=(-0.58, -0.06, 0.88))),
+        (5, dict(ground=1, tL=-4, kL=16, tR=-80, kR=88, fR=20, roll=4, tp=-7, hp=12, gL=(0.64, -0.04, 0.92), gR=(-0.64, -0.04, 0.92))),
+        (6, dict(ground=1, tL=-4, kL=17, tR=-78, kR=88, fR=20, roll=4, tp=-6, hp=13, gL=(0.64, -0.04, 0.92), gR=(-0.64, -0.04, 0.92))),
+        (9, dict(ground=1, tL=-6, kL=22, tR=-52, kR=78, fR=12, roll=3, tp=0, hp=15, gL=(0.56, -0.08, 0.82), gR=(-0.56, -0.08, 0.82))),
+        (13, dict(ground=1, tL=-8, kL=26, tR=-18, kR=34, tp=7, hp=12, gL=(0.46, -0.1, 0.72), gR=(-0.46, -0.1, 0.72))),
+        (19, dict(LISTO)),
+    ])
+    # VOLEA DE COSTADO: 3 ticks y el golpe en el mismo cuadro que Volea (7/18):
+    # la vista del Motor V2 la muestra en lugar de Volea cuando la pelota le
+    # llega cruzada (un centro), sin cambiar el motor. El cuerpo se acuesta
+    # hacia su izquierda sobre la pierna de apoyo, la derecha sube abierta al
+    # costado con la cadera girada hacia afuera y barre en horizontal hasta
+    # adelante; termina cruzada, con la cadera girada hacia el otro lado.
+    D['Volea_Costado'] = dict(ticks=3, contacto=7.0 / 18.0, aerea=False, hueso='Pie.R', extremo='rapido', claves=[
+        (1, dict(ground=1, tL=-8, kL=26, tR=22, kR=62, abR=22, hy=-22, roll=5, tr=5, ty=-18, tp=2, hp=2,
+                 gL=(0.6, -0.18, 0.95), gR=(-0.56, 0.18, 0.85))),
+        (5, dict(ground=1, tL=-6, kL=32, tR=-12, kR=92, abR=52, yR=-30, hy=-34, roll=13, tr=12, ty=-10, tp=-4, hp=4,
+                 gL=(0.66, -0.1, 1.0), gR=(-0.6, 0.15, 0.9))),
+        (8, dict(ground=1, tL=-5, kL=30, tR=-62, kR=6, fR=35, abR=46, yR=-18, hy=6, roll=17, tr=18, ty=10, tp=-8, hp=6,
+                 gL=(0.66, 0.0, 0.98), gR=(-0.5, -0.2, 1.0))),
+        (12, dict(ground=1, tL=-5, kL=30, tR=-66, kR=30, fR=20, abR=12, yR=10, hy=42, roll=11, tr=8, ty=20, tp=-2, hp=2,
+                  gL=(0.58, 0.08, 0.85), gR=(-0.42, -0.3, 0.9))),
+        (19, dict(ground=1, tL=-10, kL=30, tR=-10, kR=30, tp=6, hp=-2, gL=(0.36, -0.1, 0.62), gR=(-0.36, -0.1, 0.62))),
+    ])
+    # CABEZAZO EN CARRERA: 2 ticks y el golpe en el mismo cuadro que Cabecear
+    # (7/12): la vista del Motor V2 lo muestra en lugar de Cabecear cuando el
+    # que cabecea llega corriendo. Sale de la carrera, pica con la izquierda con
+    # la rodilla derecha arriba y el cuerpo arqueado, golpea tirando el tronco
+    # adelante con las piernas atras y cae otra vez en la carrera.
+    D['Cabecear_Corriendo'] = dict(ticks=2, contacto=7.0 / 12.0, aerea=True, hueso='Cabeza', extremo='-y', claves=[
+        (1, carrera(0.0)),
+        (4, dict(tL=6, kL=22, tR=-58, kR=88, fR=10, tp=-14, hp=-16, pitch=-4, loc=(0, 0.0, 0.02),
+                 gL=(0.56, 0.08, 1.12), gR=(-0.56, 0.08, 1.12))),
+        (6, dict(tL=14, kL=34, tR=-48, kR=80, tp=-18, hp=-18, pitch=-2, loc=(0, 0.0, 0.09),
+                 gL=(0.6, 0.02, 1.2), gR=(-0.6, 0.02, 1.2))),
+        (8, dict(tL=24, kL=48, tR=-12, kR=52, tp=15, hp=14, pitch=6, loc=(0, 0.0, 0.1),
+                 gL=(0.44, 0.26, 0.76), gR=(-0.44, 0.26, 0.76))),
+        (10, dict(tL=10, kL=40, tR=-30, kR=40, tp=14, hp=6, pitch=5, loc=(0, 0.0, 0.04),
+                  gL=(0.4, 0.15, 0.72), gR=(-0.4, 0.15, 0.72))),
+        (13, carrera(0.5)),
+    ])
     # TACO: 2 ticks, contacto 0.5. Exagerado para que se lea de lejos: pasa la
     # pierna por arriba de la pelota, el talon sale fuerte para atras (cuerpo
     # adelante, mira por arriba del hombro) y termina con el talon arriba.
@@ -1114,6 +1163,9 @@ def poner_anclajes():
         'Pie_L': ('Pie.L', tail('Pie.L') + PUNTA_PIE),
         # talon: detras del tobillo, cerca del piso
         'Talon_R': ('Pie.R', b['Pie.R'].head_local + Vector((0, 0.09, -0.04))),
+        # muslo: la cara de adelante, a mitad del hueso (queda arriba con el
+        # muslo levantado): con ella baja la pelota Control_Muslo
+        'Muslo_R': ('Muslo.R', (b['Muslo.R'].head_local + tail('Muslo.R')) / 2 + Vector((0, -0.07, 0))),
     }
     for nombre, (hueso, mundo) in puntos.items():
         ob = bpy.data.objects.get(nombre) or bpy.data.objects.new(nombre, None)

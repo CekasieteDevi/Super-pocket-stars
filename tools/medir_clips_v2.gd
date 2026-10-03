@@ -12,7 +12,7 @@ extends SceneTree
 const PREFIJO := "[acciones_v2]"
 const MODELOS := {"jugador": Cancha3D.ESCENA_JUGADOR, "golero": Cancha3D.ESCENA_GOLERO}
 ## Hueso de Blender -> punto del modelo que toca la pelota (nodos del GLB).
-const ANCLA_DE_HUESO := {"Pie.R": "Pie_R", "Pie.L": "Pie_L", "Cabeza": "Frente", "Torso": "Pecho",
+const ANCLA_DE_HUESO := {"Pie.R": "Pie_R", "Pie.L": "Pie_L", "Cabeza": "Frente", "Torso": "Pecho", "Muslo.R": "Muslo_R",
 	"Antebrazo.L": "Mano_L", "Antebrazo.R": "Mano_R"}
 ## Clips en los que el cuerpo sigue avanzando con su locomoción mientras dura
 ## la acción: se patea, se controla o se gambetea corriendo. En el resto el

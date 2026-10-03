@@ -26,7 +26,7 @@
 		"radio_piernas": "Radio del cuerpo contra la pelota (las piernas del chibi). El de los cuerpos entre sí es 0,35 m: con ese, la pelota rebotaba contra el cuerpo antes de llegar al pie de Control_Corriendo, que toca a 0,24 m.",
 		"reaccion_seg": "Lo que tardan en leer la pelota nueva todos menos el que la tocó y el receptor del pase (al que le avisan al patear): hasta ahí siguen con el plan viejo.",
 		"pie_hasta": "Recepción según la altura del centro de la pelota: pie hasta pie_hasta, muslo hasta muslo_hasta, pecho hasta pecho_hasta, cabeza hasta cabeza_hasta; más arriba pasa por encima. Salen de la altura del punto de contacto de los clips del chibi (Pecho 0,72 m, Frente 0,97 m). cabeza_hasta era 1,3 (la cabeza del que está parado): nadie cabeceaba un centro, porque la pelota pasa por esa franja en 0,05 s. Con 1,8 cabecea saltando: la vista lleva la frente a la pelota (VistaV2._ajustar_cuerpo). Medido antes: en 120 minutos, 2 cabezazos al arco, y de 19 córners 13 los controlaba el que defendía.",
-		"clip_recepcion": "Clip de pie, muslo, pecho y cabeza. No hay clip de muslo: usa Pecho hasta que se haga Control_Muslo en Blender.",
+		"clip_recepcion": "Clip de pie, muslo, pecho y cabeza. El de muslo es Control_Muslo (antes Pecho, que toca en su primer cuadro: el gesto arrancaba cuando la pelota ya había pegado). Control_Muslo toca a los 0,19 s con el ancla Muslo_R, a 0,47 m de alto: el gesto arranca antes del contacto. En 200 partidos de quinta (semilla 97000, tests/_diag_aereos_v2.gd): controles de muslo 3,1 a 4,8 por partido y de pecho 5,9 a 4,5 (el gatillo mira la pelota en el cuadro de contacto de cada clip); el que controla de muslo se queda con la pelota el 93% antes y el 95% después; goles 2,20 y 2,21; remates 7,75 y 7,58.",
 		"llegada_pase_ms": "El pase raso sale con la rapidez más baja que llega al punto todavía a esto: un pase firme. Con 5 m/s el defensor que corría de atrás alcanzaba los pases cortos.",
 		"elevacion_globo": "Ángulo de salida del globo (rad): 0,6 son 34°.",
 		"error_pase_rad": "Desvío del ángulo del pase (desvío estándar) con pases 0; con pases 100 es el 20%. Un rival a menos de presion_m lo sube hasta 1,5 veces, y patear de espaldas a adonde mira lo duplica (de costado, 1,5 veces). error_pase_rapidez: lo mismo para la rapidez, en fracción. Etapa 7: 0,16 (era 0,1). Con los pases seguros y los controles de cabeza y pecho de la segunda revisión visual, décima completaba 41 pases por partido, lo mismo que primera (el motor espacial: 34 y 37).",
@@ -166,7 +166,7 @@
 		"clip_conduce": "Control_Corriendo",
 		"clip_recepcion": [
 			"Control_Corriendo",
-			"Pecho",
+			"Control_Muslo",
 			"Pecho",
 			"Cabecear"
 		]
