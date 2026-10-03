@@ -1464,8 +1464,61 @@ El banco anota la medida en la línea "armar la pantalla del partido".
 **Qué falta:**
 
 1. Revisión visual de esta vuelta en el teléfono.
-2. `Giro_90_Izq/Der` con el cuerpo andando (0,2 a 0,3 m/s) todavía desliza: 35 m por partido.
-3. `Trotar -> Frenada` entra sin esperar el pie del clip: 17 m por partido.
+2. `Giro_90_Izq/Der` con el cuerpo andando (0,2 a 0,3 m/s) todavía desliza: 35 m por partido. Hecho: ver el resultado que sigue.
+3. `Trotar -> Frenada` entra sin esperar el pie del clip: 17 m por partido. Hecho: ver el resultado que sigue.
+
+#### Resultado (2026-10-03): giros, frenada, gestos corriendo y tres clips nuevos
+
+Hecho en la PC. Los cambios 1 a 3 son de la vista: el motor no cambia y no hay que rearmar las bibliotecas. Medido con `tests/_diag_patina_partido_v2.gd`, un partido de quinta, semilla 20261201.
+
+**1. `Giro_90` con el cuerpo andando.** La causa no era el giro: era su primer cuadro. El giro entraba sin fundido desde el clip de andar. Los pies saltaban 12 a 17 cm, del paso a la pose parada del giro. Eran 29 de los 35 m. Ahora la entrada funde como cualquier cambio de clip (`VistaV2._empezar_una_vez`). La salida sigue sin fundido: ahí el modelo gira de golpe lo que giró la cadera del clip.
+
+**2. `Trotar -> Frenada`.** El que frena pasa de Correr a Trotar a 4 m/s y la Frenada entra a 3,6 m/s. La Frenada entraba en medio de ese fundido 302 de 396 veces. `Jugador3D.poner` fundía entonces desde una pose congelada y el pie apoyado viajaba con el cuerpo: 15,6 de los 17,3 m. Ahora la Frenada espera a que termine el fundido en curso (0,15 s como mucho).
+
+**3. Gestos corriendo.** El detector medía otra cosa. Contaba como apoyado el pie que va a la pelota y el pie del que salta a cabecear. El pie de apoyo no contaba: el suelo del gesto queda 4 cm debajo del suelo de Correr.
+
+- **Detector PATINA** (`DetectorPatinaV2`): debajo de un gesto, cada pie usa el suelo de su clip de andar (`Jugador3D.suelo_del_pie`). El pie que va a la pelota no cuenta (`Jugador3D.pie_en_la_pelota`). El alto se mide desde la cancha, no desde el modelo.
+- **Pie de apoyo clavado debajo del gesto** (`Jugador3D.clavar_pies`): usa el apoyo del clip de andar que lleva las piernas (`_anim_piernas`). La pierna que toca se clava recién cuando vuelve a ser de la carrera.
+- **El giro hacia la pelota va antes de clavar** (`VistaV2._girar_al_toque`): girando después, el pie ya clavado giraba con el modelo.
+- **La pierna que tocó vuelve desde la pose del contacto y por el aire** (`Jugador3D.piernas_de`): el gesto, hecho en el lugar, apoyaba ese pie en el piso mientras el cuerpo corría.
+- **Ajuste de pie** (`Jugador3D.llevar_pie`): la segunda vuelta llevaba el pie entero a la pelota con cualquier peso. El pie quedaba pegado a la pelota toda la ventana y volvía de golpe, 30 a 55 cm en un cuadro. Ahora el peso vale en las dos vueltas.
+
+| Metros patinados por partido | Antes | Después |
+| --- | --- | --- |
+| `Giro_90_Izq` + `Giro_90_Der` | 34,6 | 0,5 (más 5 en sus fundidos) |
+| Fundido `Trotar -> Frenada` | 17,3 | 3,2 |
+| `Control_Corriendo`, detector viejo (medía el pie de la pelota) | 8,3 | — |
+| `Control_Corriendo`, pie de apoyo | 51,4 (43% de lo que avanza el cuerpo) | 4,9 (6%) |
+| `Patear_Corriendo`, pie de apoyo | 12,5 (51%) | 2,2 (12%) |
+| `Pecho` | 1,2 | 0,7 |
+| `Cabecear` (el detector viejo contaba 7,4 m del que salta) | 0,2 | 0,1 |
+| Fundidos, todos | 223 | 203 |
+
+Costo: el código de la pantalla pasa de 0,71 a 0,74 ms por cuadro en la PC (`tests/_diag_cuadros_lentos_v2.gd`).
+
+**4. Clips nuevos de Blender.** `tools/blender/animaciones_jugador.py`, armados sin pantalla en `jugador_chibi.blend` y `golero_chibi.blend`. Los clips viejos salen iguales: `data/acciones_v2.json` solo suma líneas.
+
+- **`Control_Muslo`** (0,75 s, toca a los 0,19 s): sube el muslo derecho, baja con la pelota y la deja caer al pie. Punto nuevo del modelo: `Muslo_R`, la cara de adelante del muslo. `toque.clip_recepcion` lo usa para el muslo en lugar de `Pecho`. `Pecho` toca en su primer cuadro: el gesto arrancaba cuando la pelota ya había pegado. Este cambio sí mueve el motor: ver la tabla.
+- **`Volea_Costado`** y **`Cabecear_Corriendo`**: variantes que elige la vista (`VistaV2.VARIANTES`, `_clip_mostrado`). Duran lo mismo y tocan en el mismo segundo que `Volea` y `Cabecear`. El motor no sabe de ellas: el partido es el mismo. La vista muestra el cabezazo en carrera si el que cabecea llega a 1,8 m/s o más (2 a 9 veces por partido en 8 partidos). Muestra la volea de costado si la pelota le cruza o el arco le queda al costado, a 50° o más de adonde mira (5 de 10 voleas en 16 partidos).
+
+| 200 partidos de quinta, semilla 97000 (`tests/_diag_aereos_v2.gd`) | Muslo con `Pecho` | Muslo con `Control_Muslo` |
+| --- | --- | --- |
+| Controles de muslo por partido | 3,1 | 4,8 |
+| Controles de pecho por partido | 5,9 | 4,5 |
+| El que controla de muslo se queda con la pelota | 93% | 95% |
+| Goles por partido | 2,20 | 2,21 |
+| Remates por partido | 7,75 | 7,58 |
+
+Hay más controles de muslo porque el gatillo mira la pelota en el cuadro de contacto de cada clip: la que hoy está a la altura del pecho, 0,19 s después está a la del muslo.
+
+Test: `tests/test_vista_cinta_v2.gd` suma seis casos. Cada uno falla si se saca su arreglo (probado con el giro, la frenada y el pie clavado).
+
+**Qué falta:**
+
+1. Revisión visual en el teléfono: no se pudo verificar. En la PC se miraron hojas de cuadros con render real de los cuatro casos y de los tres clips.
+2. `Volea_Costado` es solo de pierna derecha, como `Volea`.
+3. El cabezazo en carrera es una variante de la vista: el cuerpo del motor frena igual que con `Cabecear`. Un cabezazo que no frene es un cambio del motor (C++).
+4. Los fundidos de costado a `Trotar` siguen siendo lo que más patina: 73 m por partido (39 desde `Correr_Costado_Der` y 34 desde `_Izq`, en 533 cambios).
 
 **Herramientas que acompañan todas las etapas:** un detector nuevo que mide sobre el mundo (no sobre la vista) `SALTO_PELOTA`, `ENCIMADOS` (cápsulas superpuestas), `PATINA` (pie que desliza), `ESPERA` (jugador quieto con la pelota viniendo a él) y ms por frame; y una grabación por semilla que se puede reproducir y rebobinar para ver cualquier minuto.
 

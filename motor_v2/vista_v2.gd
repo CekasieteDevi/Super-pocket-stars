@@ -224,6 +224,27 @@ var _contacto_pie := {}
 ## (tests/_diag_patina_partido_v2.gd).
 var _gesto_corriendo := {}
 const GESTOS_SUELTOS := ["Pecho", "Cabecear"]
+## Variantes de un gesto que elige la vista: clip del motor -> el que se
+## muestra en su lugar. El motor no sabe de ellas: duran lo mismo y tocan la
+## pelota en el mismo segundo (si no, la variante no se usa; lo controla
+## tests/test_vista_cinta_v2.gd), así el partido es el mismo con o sin ellas.
+## - Cabecear_Corriendo: el que cabecea llega a CABEZAZO_CARRERA_MS o más.
+##   Parado en el lugar, Cabecear dobla las dos rodillas juntas y sale derecho
+##   para arriba.
+## - Volea_Costado: la pelota le llega cruzada (un centro) o el arco le
+##   queda al costado, a VOLEA_COSTADO_DESDE o más de adonde mira. La volea
+##   es siempre un remate: su arco es el más cercano. En 16 partidos de quinta
+##   hubo 10 voleas y 5 fueron así (la pelota cruzaba a 58°-89° o el arco
+##   quedaba a 94°-132°): con Volea, que patea hacia adelante, la pelota
+##   salía para otro lado que la pierna.
+const VARIANTES := {"Cabecear": "Cabecear_Corriendo", "Volea": "Volea_Costado"}
+const CABEZAZO_CARRERA_MS := Cancha3D.ANDAR_CAMINA_HASTA_MS
+const VOLEA_COSTADO_DESDE := deg_to_rad(50.0)
+## Las variantes que valen (ver VARIANTES) y, por jugador, el clip del motor
+## del gesto en curso y el que se muestra: se elige al empezar el gesto.
+var _variantes := {}
+var _gesto_motor: Array[String] = []
+var _gesto_mostrado: Array[String] = []
 ## La pierna que toca va con el gesto desde este tiempo antes del contacto y
 ## hasta este tiempo después; fuera de eso, con la carrera.
 const GESTO_PIERNA_ANTES_SEG := 0.2
@@ -287,6 +308,10 @@ func _ready() -> void:
 	_giro_fundido.resize(_cantidad())
 	_gesto_previo.resize(_cantidad())
 	_gesto_previo.fill("")
+	_gesto_motor.resize(_cantidad())
+	_gesto_motor.fill("")
+	_gesto_mostrado.resize(_cantidad())
+	_gesto_mostrado.fill("")
 	var arquero := FisicaV2.parametros_arquero()
 	for lado in ["der", "izq"]:
 		for estirada in ["clip_vuela_", "clip_vuela_alta_"]:
@@ -314,11 +339,17 @@ func _ready() -> void:
 		if c["contacto"] != null and str(c["ancla"]) in ["Frente", "manos", "Pecho", "Muslo_R"]:
 			_contacto_cuerpo[nombre] = [float(c["contacto"]) * float(c["duracion"]),
 				["Mano_L", "Mano_R"] if str(c["ancla"]) == "manos" else [str(c["ancla"])]]
-		if not c.has("metros"):
-			continue
-		_cinta[nombre] = c
-		if c["bucle"]:
-			_metros_ciclo[nombre] = float(c["metros"])
+		if c.has("metros"):
+			_cinta[nombre] = c
+			if c["bucle"]:
+				_metros_ciclo[nombre] = float(c["metros"])
+	for nombre in VARIANTES:
+		var variante: String = VARIANTES[nombre]
+		if clips.has(nombre) and clips.has(variante) and clips[nombre]["contacto"] != null \
+				and clips[variante]["contacto"] != null \
+				and is_equal_approx(float(clips[nombre]["duracion"]), float(clips[variante]["duracion"])) \
+				and is_equal_approx(float(clips[nombre]["contacto"]), float(clips[variante]["contacto"])):
+			_variantes[nombre] = variante
 
 
 ## Muestra el estadio del nivel `nivel`: saca las tribunas, las torres o los
@@ -404,6 +435,10 @@ func recomponer(equipos_n: PackedInt32Array, arqueros_n: PackedInt32Array, ids_n
 	_giro_fundido.resize(n)
 	_gesto_previo.resize(n)
 	_gesto_previo.fill("")
+	_gesto_motor.resize(n)
+	_gesto_motor.fill("")
+	_gesto_mostrado.resize(n)
+	_gesto_mostrado.fill("")
 	for lista in [_ciclos, _sentido, _rumbo_modelo, _v_previa, _desacelera, _adelante, _sin_fundido]:
 		lista.resize(n)
 		lista.fill(0)
@@ -587,10 +622,15 @@ func _poner_cuerpos(c: Object, alfa: float, delta: float) -> void:
 	var acciones := []
 	var intenciones := []
 	var en_manos: int = c.get_en_manos() if c.has_method("get_en_manos") else -1
+	var rumbos: PackedFloat32Array = c.get_rumbo()
+	var rapideces: PackedFloat32Array = c.get_rapidez()
+	# Los cuerpos de la etapa 2 no tienen pelota.
+	var bola_va: Vector3 = c.get_pelota_pos() - c.get_pelota_previa() if c.has_method("get_pelota_pos") else Vector3.ZERO
+	var lugares: PackedVector2Array = c.get_pos()
 	for i in _cantidad():
 		# El tiempo de la acción es el del paso actual: se lo lleva al del
 		# cuadro con lo que falta del paso (alfa).
-		var accion: String = c.get_accion(i)
+		var accion := _clip_mostrado(i, c.get_accion(i), rumbos[i], rapideces[i], bola_va, lugares[i])
 		if accion == "" and i == en_manos:
 			# Etapa 5: el arquero que la agarró la tiene contra el pecho hasta
 			# soltarla (el motor la lleva en sus manos).
@@ -601,6 +641,34 @@ func _poner_cuerpos(c: Object, alfa: float, delta: float) -> void:
 			c.get_rumbo_buscado(i)])
 	_dibujar_jugadores(c.get_pos_previa(), c.get_pos(), c.get_rumbo(), c.get_rapidez(), acciones, alfa, delta,
 		intenciones)
+
+
+## El clip que se muestra por el gesto `accion` del motor: el mismo o su
+## variante (ver VARIANTES). Se elige cuando el gesto empieza y no cambia
+## hasta que termina. `rumbo`, `v` y `en`: adónde mira, a cuánto va y dónde
+## está el jugador; `bola_va`: lo que se movió la pelota en el último paso.
+func _clip_mostrado(i: int, accion: String, rumbo: float, v: float, bola_va: Vector3, en: Vector2) -> String:
+	if accion == _gesto_motor[i]:
+		return _gesto_mostrado[i]
+	_gesto_motor[i] = accion
+	_gesto_mostrado[i] = accion
+	if not _variantes.has(accion) or not _jugadores[i].tiene(_variantes[accion]):
+		return accion
+	var usa := false
+	match accion:
+		"Cabecear":
+			usa = v >= CABEZAZO_CARRERA_MS
+		"Volea":
+			if Vector2(bola_va.x, bola_va.z).length_squared() > 1e-10:
+				# Cuánto se aparta el camino de la pelota de la línea en que mira:
+				# 0 si viene de frente o de atrás, 90° si cruza.
+				var cruza := absf(wrapf(atan2(bola_va.x, bola_va.z) - rumbo, -PI, PI))
+				usa = minf(cruza, PI - cruza) >= VOLEA_COSTADO_DESDE
+			var arco := Vector2(ProyeccionPartido.MEDIO_LARGO if en.x >= 0.0 else -ProyeccionPartido.MEDIO_LARGO, 0.0)
+			usa = usa or absf(wrapf(atan2(arco.x - en.x, arco.y - en.y) - rumbo, -PI, PI)) >= VOLEA_COSTADO_DESDE
+	if usa:
+		_gesto_mostrado[i] = _variantes[accion]
+	return _gesto_mostrado[i]
 
 
 ## `acciones[i]` = [clip, segundo]; "" o sin entrada = anda.

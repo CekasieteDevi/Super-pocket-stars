@@ -62,6 +62,14 @@ historial de git (este archivo hasta la versión 0.7.96).
 - `tests/_diag_patina_partido_v2.gd` mide el patinaje por clip en un partido
   (`clavados=0`: sin el pie clavado).
 
+## Variantes de un gesto
+
+La vista puede mostrar otro clip que el del motor (`VistaV2.VARIANTES`):
+`Cabecear_Corriendo` por `Cabecear` si llega corriendo, y `Volea_Costado` por
+`Volea` si la pelota le cruza o el arco le queda al costado. La variante dura
+lo mismo y toca la pelota en el mismo segundo: si no, la vista no la usa. El
+motor no cambia. `tests/test_vista_cinta_v2.gd` lo controla.
+
 ## Laboratorios
 
 Las escenas de `motor_v2/` muestran cada parte sin entrar a una partida:

@@ -20,6 +20,13 @@ extends SceneTree
 ## camina: el pie apoyado queda clavado (Jugador3D.clavar_pies) y el modelo
 ## gira los 90° junto con el fundido. Sin eso, de costado deslizaba el 5% y
 ## 0,89 m en cada cambio a correr (ahora 0,19), y caminando el 27% (ahora 3%).
+## Uno camina, frena y mira al costado: entra al Giro_90 todavía andando y los
+## pies no saltan (el giro entra con fundido). Otro pica y frena: la Frenada
+## no entra en medio del fundido de Correr a Trotar.
+## Uno conduce girando 115° por segundo: el pie de apoyo del toque queda
+## clavado y la pierna que tocó vuelve a la carrera por el aire.
+## Las variantes que elige la vista (Cabecear_Corriendo, Volea_Costado) duran
+## y tocan como el clip del motor, y Control_Muslo es el clip del muslo.
 
 const SEED := 20260930
 const PASO := 1.0 / 60.0
@@ -102,6 +109,7 @@ func _probar(vista: VistaV2) -> void:
 	_frenada_despues_del_fundido(c, vista)
 	_gestos_corriendo(vista)
 	_gesto_girando(vista)
+	_variantes(vista)
 	_arquero_se_levanta(vista)
 	print("FALLOS=%d" % fallos)
 	quit(1 if fallos else 0)
@@ -334,6 +342,46 @@ func _gesto_girando(vista: VistaV2) -> void:
 	_ok(medio.distance_to(pie.lerp(meta, 0.5)) < 0.03 and entero.distance_to(meta) < 0.05,
 		"el ajuste de pie con medio peso lleva el pie a mitad de camino (queda a %.2f m de la mitad; con el peso entero, a %.2f m de la pelota)"
 		% [medio.distance_to(pie.lerp(meta, 0.5)), entero.distance_to(meta)])
+
+
+## Las variantes de la vista y el clip del muslo: los datos coinciden con
+## los del clip del motor y la vista elige la variante cuando corresponde.
+func _variantes(vista: VistaV2) -> void:
+	var clips := FisicaV2.clips()
+	var p3: Jugador3D = vista._jugadores[VARIANTE]
+	var bien := true
+	for nombre in VistaV2.VARIANTES:
+		var v: String = VistaV2.VARIANTES[nombre]
+		bien = bien and vista._variantes.get(nombre, "") == v and p3.tiene(v) and clips.has(v) \
+			and str(clips[v]["ancla"]) == str(clips[nombre]["ancla"])
+	_ok(bien, "las variantes de la vista están en el GLB y duran y tocan como el clip del motor (%s)" % [vista._variantes])
+	# Cerca del arco de x positivo y mirándolo (el rumbo PI/2 mira a +x).
+	var en := Vector2(40.0, 0.0)
+	var al_arco := PI * 0.5
+	var quieto := vista._clip_mostrado(VARIANTE, "Cabecear", al_arco, 0.5, Vector3.ZERO, en)
+	vista._clip_mostrado(VARIANTE, "", 0.0, 0.0, Vector3.ZERO, en)
+	var corriendo := vista._clip_mostrado(VARIANTE, "Cabecear", al_arco, 4.0, Vector3.ZERO, en)
+	# Ya empezado, el gesto no cambia de clip aunque el cuerpo frene.
+	var sigue := vista._clip_mostrado(VARIANTE, "Cabecear", al_arco, 0.2, Vector3.ZERO, en)
+	vista._clip_mostrado(VARIANTE, "", 0.0, 0.0, Vector3.ZERO, en)
+	_ok(quieto == "Cabecear" and corriendo == "Cabecear_Corriendo" and sigue == "Cabecear_Corriendo",
+		"cabecea en carrera el que llega corriendo (%s parado, %s a 4 m/s, %s al frenar)" % [quieto, corriendo, sigue])
+	var de_frente := vista._clip_mostrado(VARIANTE, "Volea", al_arco, 2.0, Vector3(-0.2, 0.0, 0.0), en)
+	vista._clip_mostrado(VARIANTE, "", 0.0, 0.0, Vector3.ZERO, en)
+	var cruzada := vista._clip_mostrado(VARIANTE, "Volea", al_arco, 2.0, Vector3(-0.05, 0.0, 0.2), en)
+	vista._clip_mostrado(VARIANTE, "", 0.0, 0.0, Vector3.ZERO, en)
+	# Mira a la banda: el arco le queda a 90°.
+	var arco_al_costado := vista._clip_mostrado(VARIANTE, "Volea", 0.0, 2.0, Vector3(0.0, 0.0, -0.2), en)
+	vista._clip_mostrado(VARIANTE, "", 0.0, 0.0, Vector3.ZERO, en)
+	_ok(de_frente == "Volea" and cruzada == "Volea_Costado" and arco_al_costado == "Volea_Costado",
+		"la volea es de costado con la pelota cruzada o el arco al costado (%s de frente, %s cruzada, %s con el arco a 90°)"
+		% [de_frente, cruzada, arco_al_costado])
+	var muslo := str((FisicaV2.parametros_toque()["clip_recepcion"] as Array)[1])
+	_ok(muslo == "Control_Muslo" and p3.tiene(muslo) and str(clips[muslo]["ancla"]) == "Muslo_R"
+		and float(clips[muslo]["contacto"]) > 0.0 and vista._contacto_cuerpo.has(muslo)
+		and vista._gesto_corriendo.has(muslo) and str(vista._gesto_corriendo[muslo][1]) == "R"
+		and DetectorPatinaV2.ancla_de(p3, "Muslo_R") != p3.global_position,
+		"el control de muslo tiene su clip, toca después de empezar y con el ancla Muslo_R (%s)" % muslo)
 
 
 ## Sin motor: la vista recibe las posiciones de dos que andan derecho. El
