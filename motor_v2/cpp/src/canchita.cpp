@@ -3522,8 +3522,17 @@ bool Canchita::_decidir_remate_de_primera(int i, V3 bola, double t) {
 	}
 	// Amague de tiro libre: el socio le pega de primera sí o sí.
 	bool amague = modo == PARTIDO && _amague_id >= 0 && _id(i) == _amague_id && paso <= _amague_hasta;
+	// El centro de un compañero se juega de primera (volea o cabezazo) desde
+	// más lejos que otra pelota: parándolo en el área, con los rivales
+	// encima, la perdía la mitad de las veces (revisión del 2026-10-03:
+	// "hacen centros y la pierden cuando la controlan o les rebotan").
+	double geometria = param_remate.primera_geometria;
+	if (_pase_activo && _pase_centro && _pateador >= 0 && _pateador != i
+			&& jugadores[size_t(_pateador)].equipo == j.equipo) {
+		geometria = std::min(geometria, param_remate.primera_geometria_centro);
+	}
 	if (modo != PARTIDO || (!amague && (!cerebro.alcanza_para_tirar(i, bola.x, bola.z)
-			|| cerebro.factor_geometria(bola.x, bola.z, j.equipo) < param_remate.primera_geometria))) {
+			|| cerebro.factor_geometria(bola.x, bola.z, j.equipo) < geometria))) {
 		return false;
 	}
 	_plan_bola = bola;

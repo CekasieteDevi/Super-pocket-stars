@@ -9,6 +9,8 @@ extends SceneTree
 ## los cabezazos al arco y su rapidez de salida.
 ##
 ##   <godot> --path . --headless --script tests/_diag_aereos_v2.gd -- partidos=40 a=4 b=4 semilla=97000
+##
+## `fisica=seccion.clave:valor,...` pisa data/fisica_v2.json en memoria.
 
 const SEED := 97000
 const PARTES := ["pie", "muslo", "pecho", "cabeza"]
@@ -33,13 +35,23 @@ func _init() -> void:
 			"a": a = int(p[1])
 			"b": b = int(p[1])
 			"semilla": semilla = int(p[1])
+			"fisica":
+				for par in p[1].split(","):
+					var kv := par.split(":")
+					var clave := kv[0].split(".")
+					FisicaV2.datos()[clave[0]][clave[1]] = float(kv[1])
 	# parte -> {n, mismo, companero, rival, nadie, alto (suma), en_area}
 	var por_parte := {}
 	for parte in PARTES:
 		por_parte[parte] = {"n": 0, "mismo": 0, "companero": 0, "rival": 0, "nadie": 0, "alto": 0.0, "en_area": 0,
 			"en_area_pierde": 0}
 	var alturas := {}
-	var cabezazos := {"n": 0, "rapidez": 0.0, "gol": 0}
+	var cabezazos := {"n": 0, "rapidez": 0.0, "gol": 0, "atajado": 0}
+	var goles := 0
+	var remates := 0
+	# Remates de primera con la pelota en el aire (la mayoría, tras un centro).
+	var primera_centro := 0
+	var voleas := 0
 	for n in partidos:
 		var c: Object = CerebroV2.armar_partido(semilla + n, "", "", a, b, true)
 		var previo: Dictionary = c.contadores()
@@ -91,7 +103,14 @@ func _init() -> void:
 				if s["en_area"] and res in ["rival", "nadie"]:
 					d["en_area_pierde"] += 1
 			siguiendo = quedan
+		var g: PackedInt32Array = c.get_goles()
+		goles += g[0] + g[1]
 		for r in c.registro_remates():
+			remates += 1
+			if bool(r.get("de_primera", false)) and float(r.get("alto", 0.0)) > 0.3:
+				primera_centro += 1
+				if int(r.get("golpe", -1)) != 4:
+					voleas += 1
 			if int(r.get("golpe", -1)) == 4:
 				cabezazos["n"] += 1
 				cabezazos["rapidez"] += float(r.get("rapidez", 0.0))
@@ -113,5 +132,7 @@ func _init() -> void:
 	if int(cabezazos["n"]) > 0:
 		print("[aereos] cabezazos al arco: %.2f por partido, salen a %.1f m/s, goles %d" % [float(cabezazos["n"]) / partidos,
 			cabezazos["rapidez"] / cabezazos["n"], cabezazos["gol"]])
+	print("[aereos] %.2f goles y %.2f remates por partido; de primera tras un centro: %.2f (%.2f de volea)" % [
+		float(goles) / partidos, float(remates) / partidos, float(primera_centro) / partidos, float(voleas) / partidos])
 	print("FALLOS=0")
 	quit()

@@ -63,6 +63,9 @@ struct ParametrosRemate {
 	// Desde qué distancia al arco (m) remata de primera un receptor, y qué
 	// factor_geometria necesita.
 	double primera_geometria = 0.25;
+	// La que necesita con un centro de un compañero (más baja: el centro se
+	// juega de primera).
+	double primera_geometria_centro = 0.15;
 	// Clips (índices en los clips del cuerpo); los pone quien configura.
 	int clip_pie = -1;
 	int clip_efecto = -1;

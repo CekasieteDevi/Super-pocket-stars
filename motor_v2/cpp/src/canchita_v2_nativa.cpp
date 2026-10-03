@@ -107,6 +107,7 @@ const NumeroRemate NUMEROS_REMATE[] = {
 	{ "primera_marcado", &motor_v2::ParametrosRemate::primera_marcado },
 	{ "alto_factor", &motor_v2::ParametrosRemate::alto_factor },
 	{ "primera_geometria", &motor_v2::ParametrosRemate::primera_geometria },
+	{ "primera_geometria_centro", &motor_v2::ParametrosRemate::primera_geometria_centro },
 };
 const char *GOLPES[motor_v2::TIPOS_REMATE] = { "colocado", "fuerte", "efecto", "globo", "cabeza" };
 
