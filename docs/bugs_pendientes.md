@@ -29,7 +29,7 @@ El registro se contrastó con [Manual del vestuario](manual_del_vestuario.pdf). 
 ## BUG-003 — El historial lleno oculta novedades al avance automático
 
 - **Prioridad:** alta.
-- **Estado:** pendiente; mecanismo reproducido con los métodos reales de `GameState`.
+- **Estado:** corregido el 2026-10-04. `GameState.noticias_agregadas` cuenta cada noticia que entra y sólo crece. `avanzar_un_dia` cuenta las nuevas con ese contador y no con el tamaño del feed. Test: `tests/test_flujo_partidos_v2.gd`.
 - **Ubicación:** `game/game_state.gd:661`, `avanzar_un_dia`; `:778`, `avanzar_hasta_el_partido`; `:1936`, `_recortar_noticias`.
 - **Problema:** las novedades se detectan restando el tamaño anterior del historial al tamaño posterior. El historial elimina noticias antiguas cuando alcanza 60 por categoría o 400 en total. Por eso, agregar noticias no siempre aumenta su tamaño.
 - **Reproducción realizada:** agregar 60 noticias de categoría `fichajes`; guardar el tamaño; agregar una noticia más de esa categoría; calcular la diferencia de tamaños.
@@ -41,7 +41,7 @@ El registro se contrastó con [Manual del vestuario](manual_del_vestuario.pdf). 
 ## BUG-004 — El foco individual acredita tiempo que no registra
 
 - **Prioridad:** media.
-- **Estado:** pendiente; falta de seguimiento temporal confirmada en código y operación de actualización reproducida. Falta medir el efecto mediante una temporada completa.
+- **Estado:** obsoleto el 2026-10-04. El foco individual se sacó del juego (GDD 7.3). La racha para aprender una habilidad sale ahora del atributo más usado en la cancha (`Aprendizaje.actualizar_racha`), que se mide partido a partido.
 - **Referencia del manual:** página 9, requisito de dos temporadas seguidas de foco individual para aprender una habilidad. El seguimiento de temporadas completas se describe con más precisión en los comentarios de `Entrenamiento.actualizar_racha`.
 - **Ubicación:** `core/entrenamiento.gd:30`, `asignar`; `:49`, `actualizar_racha`; `core/liga.gd:521` y `:561`, aplicación de progreso al plantel y a la cantera.
 - **Problema:** el cierre anual aplica el foco individual vigente e incrementa su racha de temporadas. No registra los días efectivos por atributo ni interrumpe la racha al cambiar o quitar el foco durante el año. Esto contradice el requisito documentado de temporadas completas consecutivas.

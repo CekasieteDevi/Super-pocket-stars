@@ -128,6 +128,9 @@ var historial_copas: Dictionary = {}
 ## Ver _guardar_resumen_de_temporada.
 var resumen_temporada: Dictionary = {}
 var noticias: Array = []
+## Cuántas noticias entraron desde que arrancó la sesión. Sólo crece: el
+## feed se recorta y su tamaño no sirve para saber cuántas son nuevas.
+var noticias_agregadas: int = 0
 ## Avisos breves de hechos que afectan al club del jugador. A diferencia
 ## del feed general, quedan en la portada hasta que el jugador los descarta.
 const MAX_ANUNCIOS_PORTADA := 30
@@ -719,7 +722,7 @@ func avanzar_un_dia() -> Array:
 	if (hay_partido_hoy() or hay_partido_de_copa_hoy()
 			or hay_partido_internacional_hoy() or hay_partido_de_playoff_hoy()):
 		return []
-	var noticias_antes: int = noticias.size()
+	var noticias_antes: int = noticias_agregadas
 	# Los que se recuperan se preguntan ANTES y DESPUES: Team.avanzar_dias
 	# los devuelve, pero pasa por Liga, que resuelve los 20 clubes y no los
 	# reenvia. Comparar la lista de lesionados propios es mas simple que
@@ -823,7 +826,11 @@ func avanzar_un_dia() -> Array:
 	# Las nuevas quedan ADELANTE: _agregar_noticia hace push_front. Leerlas
 	# desde `noticias_antes` hacia el final devolvia las mas viejas del
 	# feed —las que quedaron corridas— y no las que acababan de pasar.
-	for i in range(noticias.size() - noticias_antes):
+	#
+	# Se cuentan con el contador y no con el tamaño del feed (BUG-003): con
+	# el feed lleno, el recorte saca una vieja por cada nueva, el tamaño no
+	# cambia y "Ir al próximo partido" pasaba de largo una oferta.
+	for i in range(mini(noticias_agregadas - noticias_antes, noticias.size())):
 		novedades.append(str(noticias[i]["texto"]))
 	return novedades
 
@@ -2161,6 +2168,7 @@ func _agregar_entrada(entrada: Dictionary) -> void:
 	if not Noticias.es_visible(entrada):
 		return
 	noticias.push_front(entrada)
+	noticias_agregadas += 1
 	_recortar_noticias()
 
 
