@@ -370,6 +370,11 @@ struct JugadorCanchita {
 	// contacto (en el piso) y si alguna vez estuvo a la altura.
 	double toque_d_min = 1e9;
 	bool toque_alto_ok = false;
+	// Si el gesto que arrancó va a llegar a la pelota según lo que calculó al
+	// arrancarlo (_gatillo). Solo lo lee la vista: el arquero se tira a tiempo
+	// aunque no llegue, y la vista le llevaba las manos a la pelota igual
+	// (la pelota le pasaba por las manos sin que la tocara).
+	bool alcanza = true;
 	// Pase: al punto (meta_x, meta_z), a `receptor`, raso o globo.
 	double meta_x = 0.0, meta_z = 0.0;
 	int receptor = -1;

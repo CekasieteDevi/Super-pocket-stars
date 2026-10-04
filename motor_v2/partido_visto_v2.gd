@@ -188,6 +188,14 @@ func get_tiempo_accion(i: int) -> float:
 	return float(_afuera[i - _cantidad].get("tiempo_accion", 0.0)) if _de_afuera(i) else partido.get_tiempo_accion(i)
 
 
+## Si el gesto en curso llega a la pelota. Con una biblioteca vieja del motor
+## (sin get_alcanza) dice que sí, como antes.
+func get_alcanza(i: int) -> bool:
+	if _de_afuera(i) or not partido.has_method("get_alcanza"):
+		return true
+	return partido.get_alcanza(i)
+
+
 func get_rapidez_buscada(i: int) -> float:
 	return float(_afuera[i - _cantidad]["rapidez"]) if _de_afuera(i) else partido.get_rapidez_buscada(i)
 

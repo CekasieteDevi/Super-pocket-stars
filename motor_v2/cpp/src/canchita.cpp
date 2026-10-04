@@ -1539,6 +1539,26 @@ void Canchita::_gatillo(int i) {
 					j.toque_pendiente = true;
 					j.toque_d_min = 1e9;
 					j.toque_alto_ok = false;
+					j.alcanza = alto_ok && d[0] <= tolerancia;
+					if (ataja && !j.alcanza) {
+						// La atajada se resuelve en toda la ventana del contacto, con
+						// el tramo que recorre la pelota en cada paso (_resolver_toques):
+						// mirando solo el cuadro del contacto, una de cada cinco
+						// atajadas que sí tocaba quedaba sin las manos en la pelota.
+						const Clip &kc = clips[size_t(clip)];
+						int medio = int(param_cuerpo.ventana_contacto_seg * 0.5 / PASO_SEG + 0.5);
+						int centro = int(tc / PASO_SEG + 0.5);
+						for (int q_paso = std::max(centro - medio, 1); q_paso <= centro + medio && !j.alcanza; q_paso++) {
+							V3 a = _bola_en(paso + q_paso - 1), b = _bola_en(paso + q_paso);
+							Cuerpo luego = c;
+							luego.x += c.vx * double(q_paso) * PASO_SEG;
+							luego.z += c.vz * double(q_paso) * PASO_SEG;
+							V3 mano = punto_de_contacto(luego, kc, _rumbo_contacto(j, luego, clip, c.rumbo, b.x, b.z));
+							bool alto_tramo = std::max(a.y, b.y) >= _alto_minimo(j.clip_arquero, kc)
+									&& std::min(a.y, b.y) <= kc.punto_y + _tolerancia_alto(j.clip_arquero, true);
+							j.alcanza = alto_tramo && _distancia_al_brazo(j, luego, mano, a, b) <= tolerancia;
+						}
+					}
 					if (por_altura) {
 						cuenta.gestos_parte[std::clamp(int(parte), 0, 3)]++;
 					}

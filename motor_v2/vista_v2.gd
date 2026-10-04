@@ -640,7 +640,8 @@ func _poner_cuerpos(c: Object, alfa: float, delta: float) -> void:
 			# soltarla (el motor la lleva en sus manos).
 			acciones.append([ANIM_SOSTIENE, fmod(_tiempo, 2.0)])
 		else:
-			acciones.append([accion, maxf(0.0, float(c.get_tiempo_accion(i)) - (1.0 - alfa) / 60.0)])
+			acciones.append([accion, maxf(0.0, float(c.get_tiempo_accion(i)) - (1.0 - alfa) / 60.0),
+				c.get_alcanza(i) if c.has_method("get_alcanza") else true])
 		intenciones.append([c.get_rapidez_buscada(i), c.get_metros_para_parar(i), c.get_giro_pendiente(i),
 			c.get_rumbo_buscado(i)])
 	_dibujar_jugadores(c.get_pos_previa(), c.get_pos(), c.get_rumbo(), c.get_rapidez(), acciones, alfa, delta,
@@ -675,7 +676,8 @@ func _clip_mostrado(i: int, accion: String, rumbo: float, v: float, bola_va: Vec
 	return _gesto_mostrado[i]
 
 
-## `acciones[i]` = [clip, segundo]; "" o sin entrada = anda.
+## `acciones[i]` = [clip, segundo, llega?]; "" o sin entrada = anda. `llega?`
+## (opcional, sí si falta): si el gesto llega a la pelota (get_alcanza).
 ## `intenciones[i]` = [rapidez buscada, metros para parar, giro que falta,
 ## rumbo hacia el objetivo]; sin entrada no usa Arranque, Frenada, los giros
 ## ni la media vuelta.
@@ -728,7 +730,10 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 				if una_vez.is_empty() or una_vez[2] == null else una_vez[2]
 		if hace_gesto:
 			p3.poner(accion, float(acciones[i][1]), delta)
-			if _ajustar_pies and _contacto_cuerpo.has(accion):
+			# Solo si el motor dice que llega: el arquero que se tira sin llegar
+			# no lleva las manos a la pelota (le pasaba entre las manos).
+			if _ajustar_pies and _contacto_cuerpo.has(accion) \
+					and ((acciones[i] as Array).size() < 3 or bool(acciones[i][2])):
 				_ajustar_cuerpo(i, p3, accion, float(acciones[i][1]))
 			if _gesto_corriendo.has(accion) and v >= Cancha3D.VELOCIDAD_PARA_PIERNAS \
 					and p3.position.y < GESTO_PIERNAS_HASTA_ALTO_M:

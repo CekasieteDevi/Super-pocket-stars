@@ -628,6 +628,11 @@ double CanchitaV2Nativa::get_tiempo_accion(int64_t i) const {
 	return _valido(i) ? _c.jugadores[size_t(i)].cuerpo.tiempo_accion : 0.0;
 }
 
+// Si el gesto en curso llega a la pelota (JugadorCanchita::alcanza).
+bool CanchitaV2Nativa::get_alcanza(int64_t i) const {
+	return !_valido(i) || _c.jugadores[size_t(i)].alcanza;
+}
+
 double CanchitaV2Nativa::get_rapidez_buscada(int64_t i) const {
 	return _valido(i) ? _c.jugadores[size_t(i)].cuerpo.rapidez_buscada(_c.param_cuerpo) : 0.0;
 }
@@ -1208,6 +1213,7 @@ void CanchitaV2Nativa::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_accion", "i"), &CanchitaV2Nativa::get_accion);
 	ClassDB::bind_method(D_METHOD("get_fase", "i"), &CanchitaV2Nativa::get_fase);
 	ClassDB::bind_method(D_METHOD("get_tiempo_accion", "i"), &CanchitaV2Nativa::get_tiempo_accion);
+	ClassDB::bind_method(D_METHOD("get_alcanza", "i"), &CanchitaV2Nativa::get_alcanza);
 	ClassDB::bind_method(D_METHOD("get_rapidez_buscada", "i"), &CanchitaV2Nativa::get_rapidez_buscada);
 	ClassDB::bind_method(D_METHOD("get_metros_para_parar", "i"), &CanchitaV2Nativa::get_metros_para_parar);
 	ClassDB::bind_method(D_METHOD("get_giro_pendiente", "i"), &CanchitaV2Nativa::get_giro_pendiente);
