@@ -8901,13 +8901,13 @@ func _jugar_el_partido_de_hoy(mostrar_partido: bool = true) -> void:
 ## protegido contra dos hilos a la vez: si el usuario abre otra pantalla
 ## y la UI lee el plantel mientras la simulación lo modifica, la lectura
 ## puede ver datos a medio escribir.
-func _en_segundo_plano(trabajo: Callable) -> void:
+func _en_segundo_plano(trabajo: Callable, texto: String = TEXTO_CARGANDO_PARTIDO) -> void:
 	var velo := ColorRect.new()
 	velo.color = Color(0.0, 0.0, 0.0, 0.35)
 	velo.mouse_filter = Control.MOUSE_FILTER_STOP
 	velo.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var aviso := Label.new()
-	aviso.text = TEXTO_CARGANDO_PARTIDO
+	aviso.text = texto
 	aviso.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	aviso.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	aviso.grow_vertical = Control.GROW_DIRECTION_BOTH
@@ -8990,16 +8990,12 @@ func _on_simular_temporada() -> void:
 	if not GameState.hay_fecha_pendiente():
 		return
 
-	# Simular una temporada entera bloquea el hilo unos segundos. Los dos
-	# await dejan que Godot dibuje el aviso ANTES de empezar a laburar:
-	# sin ellos la pantalla se congela sin explicacion.
-	_mostrar_novedades("Simulando la temporada, esto tarda unos segundos...")
-	await get_tree().process_frame
-	await get_tree().process_frame
-
+	# Una temporada entera son decenas de fechas de 100 partidos. En el
+	# hilo principal la pantalla quedaba congelada y Android la marcaba
+	# como "no responde" (BUG-005): corre en otro hilo, como el partido.
 	var temporada_antes := GameState.temporada_actual
-	GameState.simular_temporada_completa()
-	dialogo_novedades.hide()
+	await _en_segundo_plano(GameState.simular_temporada_completa,
+		"Simulando la temporada, esto tarda unos segundos...")
 
 	if GameState.temporada_actual != temporada_antes:
 		_mostrar_resumen_temporada()
@@ -9911,8 +9907,11 @@ func _refrescar_portada() -> void:
 	btn_simular.size_flags_stretch_ratio = 1.0
 	btn_simular.tooltip_text = "Juega de una todas las fechas que quedan, las tuyas incluidas: no vas a poder tocar nada hasta el final."
 	btn_simular.disabled = rival == null
+	# El await importa: sin él, la portada se rearmaba mientras la
+	# temporada se simulaba en el otro hilo y leía el plantel a medio
+	# escribir.
 	btn_simular.pressed.connect(func():
-		_on_simular_temporada()
+		await _on_simular_temporada()
 		_refrescar_portada()
 	)
 	fila_acciones.add_child(btn_simular)

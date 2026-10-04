@@ -53,7 +53,7 @@ El registro se contrastó con [Manual del vestuario](manual_del_vestuario.pdf). 
 ## BUG-005 — La simulación bloquea la respuesta de la interfaz
 
 - **Prioridad:** media.
-- **Estado:** pendiente; ejecución síncrona confirmada en código. Duración y gravedad pendientes de medir en el dispositivo objetivo.
+- **Estado:** corregido el 2026-10-04. El partido ya corría en otro hilo (`_en_segundo_plano`). Ahora "Simular temporada" también corre ahí, con el velo que toma los toques. El botón de la portada espera a que termine antes de rearmar la pantalla. Falta medir la duración en el teléfono.
 - **Referencia del manual:** página 2, mediciones históricas de 1,5–2,2 segundos por partido y unos 57 segundos por temporada. El manual considera descartado su riesgo de rendimiento original. Esas mediciones no prueban la respuesta de la interfaz actual; este pendiente requiere comprobar si el bloqueo tiene un impacto que justifique cambiarlo.
 - **Ubicación:** `ui/main.gd:7546`, `_jugar_el_partido_de_hoy`; `:7630`, `_on_simular_temporada`.
 - **Problema:** la interfaz espera dos fotogramas para dibujar un aviso y después ejecuta la simulación completa en el mismo hilo. Durante ese cálculo no procesa normalmente dibujo ni entrada.

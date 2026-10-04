@@ -1,4 +1,5 @@
 [
+	{"version": "0.8.27", "fecha": "2026-10-04", "cambio": "Simular la temporada ya no congela la pantalla."},
 	{"version": "0.8.26", "fecha": "2026-10-04", "cambio": "Ir al próximo partido frena siempre que llega una noticia nueva, aunque el diario esté lleno."},
 	{"version": "0.8.25", "fecha": "2026-10-04", "cambio": "Guardar la partida ya no la puede romper: si algo falla queda el guardado anterior y el juego te avisa."},
 	{"version": "0.8.24", "fecha": "2026-10-04", "cambio": "La Presión alta aprieta con más jugadores en campo rival y deja en offside al rival si sus defensores son inteligentes."},
