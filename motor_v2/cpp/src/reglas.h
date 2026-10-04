@@ -180,7 +180,7 @@ struct ParametrosReglas {
 	// El que contiene a esto o menos de la pelota del rival se puede tirar a
 	// quitarla: chance por cada vez que piensa, por quite (0..100).
 	double entrada_dist_m = 2.0;
-	double entrada_prob = 0.55;
+	double entrada_prob = 0.5;
 	// El que ya tiene amarilla se tira con esta fracción de la chance.
 	double entrada_amonestado = 0.4;
 	// El pie de la entrada que pasa a esto del medio del rival le pega en

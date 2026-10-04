@@ -1520,6 +1520,76 @@ Test: `tests/test_vista_cinta_v2.gd` suma seis casos. Cada uno falla si se saca 
 3. El cabezazo en carrera es una variante de la vista: el cuerpo del motor frena igual que con `Cabecear`. Un cabezazo que no frene es un cambio del motor (C++).
 4. Los fundidos de costado a `Trotar` siguen siendo lo que más patina: 73 m por partido (39 desde `Correr_Costado_Der` y 34 desde `_Izq`, en 533 cambios).
 
+#### Resultado (2026-10-03): revisión de los pendientes de juego y calibración
+
+Los ocho pendientes de "Qué falta" de las etapas 7, 7b y 8, medidos de nuevo. Quinta división, semilla 97000, salvo donde dice otra cosa. Tres se arreglaron; el motor cambia y las bibliotecas de Windows y Android están rearmadas (`test_reglas_v2`: huella 369205416129417478 en Windows).
+
+| Pendiente | Lo que decía | Medido antes | Después |
+| --- | --- | --- | --- |
+| Rival pegado al que saca el lateral | A menos de 2 m en las capturas | A 1,88 m del punto de la raya; a menos de 1,9 m en el 41% de los laterales y a menos de 1,5 m en el 13% | 2,10 m; 5% y 1% |
+| Offsides | 0,25 a 0,3 (el motor espacial: 0,1) | 0,12 a 0,34 en las divisiones parejas; 0,54 a 0,63 con tres de diferencia | 0,08 a 0,21; 0,32 a 0,40 |
+| Despejes | 5,9 por partido (el motor espacial: 2 a 4) | 7,35; el 45% va al rival | 3,80 (de quinta a décima 3,3 a 4,0; de primera a cuarta 4,4 a 5,7) |
+| Globos | Un tercio de los pases | 36% (pelotazos, centros y despejes) | 27% |
+| Pelota afuera después de un control | 1,25 por partido | 0,57: ya había bajado | 0,22 |
+| Posesión por estilo | 49 a 51% | 49,0 a 50,6% | 49,5 a 51,0%: sigue |
+| El área en los ataques por la banda | 0,87 compañeros contra 3,5 rivales | 1,07 contra 3,28; ninguno el 48% del tiempo | 0,96 contra 3,21; ninguno el 51%: sigue |
+| El pasador no busca su pase | 2,5 s (`DESCANSO_PASE_PROPIO`) | 2,2 a 2,9 pases por partido viajan más de 2,5 s (el 5 a 6%); 1,0 a 1,4 de esos se pierden | No se tocó |
+
+**Qué se hizo:**
+
+- **Lateral** (`Canchita::_ubicar`). El que marca al que saca va a la pelota. La pelota está en las manos, a 0,2 m del punto y a veces afuera de la raya. El lado hacia el que se alejaba cambiaba con ese 0,2 m: cruzaba por el punto y el recorte a la cancha lo dejaba en la raya. Ahora el que ya está cerca se aleja derecho desde donde está parado. Medición: `tests/_diag_lateral_v2.gd`.
+- **Offsides.** `fisica.offside_margen_torpe` de `data/utility_pesos.json` baja de 5,5 a 1,0: el delantero de poca inteligencia se pasa de la línea 1 m, no 5,5. Los goles no cambian.
+- **Despejes.** `fisica.presion_despeje` sube de 0,45 a 0,6: el apretado en su campo revienta la pelota la mitad de las veces. Con 0,75 son 2,5 por partido.
+- **Faltas.** Con menos despejes el apretado se queda con la pelota y le entran más: las faltas subían a 2,87 en tercera y 3,22 en sexta (el motor espacial: 2,29 y 2,65). `reglas.entrada_prob` baja de 0,55 a 0,5.
+
+**Presión: dónde recupera la pelota cada estilo** (`tests/_diag_recupera_v2.gd`, 60 partidos, el local con cada estilo contra el Juego directo). La altura es en metros desde su línea de fondo.
+
+| Estilo | Recuperaciones | Altura | En campo rival | El rival la tiene | Quites | Posesión |
+| --- | --- | --- | --- | --- | --- | --- |
+| Tiki taka | 12,2 | 41,0 m | 35% | 5,8 s | 6,3 | 50,4% |
+| Contragolpe | 11,4 | 38,3 m | 32% | 6,5 s | 6,1 | 49,5% |
+| Juego directo | 11,8 | 38,5 m | 32% | 6,4 s | 5,8 | 49,4% |
+| Presión alta | 13,7 | 44,6 m | 39% | 5,4 s | 7,1 | 50,6% |
+| Defensivo | 12,1 | 39,9 m | 33% | 6,3 s | 6,6 | 50,3% |
+| Físico | 11,9 | 36,6 m | 28% | 6,4 s | 6,6 | 49,0% |
+
+La Presión alta recupera 6 m más arriba que el Contragolpe, dos veces más por partido y un segundo antes. No le alcanza para tener más la pelota.
+
+**Tres divisiones de diferencia** (`tests/_diag_desparejo_v2.gd`, 100 partidos por pareja). "Aprieta": parte del tiempo en que el rival tiene la pelota dominada y hay un hombre suyo a menos de 3 m.
+
+| Equipo | Posesión | Faltas | Quites | Recupera a | Aprieta | Su hombre más cercano |
+| --- | --- | --- | --- | --- | --- | --- |
+| D5 contra D5 (los dos) | 49,8 y 50,2% | 1,14 y 1,33 | 6,5 y 6,0 | 38,9 y 45,1 m | 40 y 54% | 4,1 y 3,5 m |
+| D1 contra D4 | 59,3% | 0,94 | 10,1 | 61,6 m | 70% | 3,0 m |
+| D4 contra D1 | 40,7% | 0,74 | 6,2 | 27,0 m | 25% | 5,4 m |
+| D5 contra D8 | 56,6% | 1,29 | 8,8 | 58,5 m | 72% | 3,1 m |
+| D8 contra D5 | 43,4% | 1,02 | 6,0 | 29,2 m | 30% | 4,8 m |
+| D7 contra D10 | 55,0% | 1,56 | 6,7 | 53,9 m | 71% | 3,1 m |
+| D10 contra D7 | 45,0% | 1,25 | 5,3 | 30,9 m | 31% | 4,9 m |
+
+El peor aprieta la mitad que en un partido parejo y recupera 10 m más atrás. Faltas hace menos solo el D4 contra el D1; ahí también el D1 hace pocas.
+
+**Calibración** (`tests/_diag_calibracion_v2.gd`, 200 partidos por escenario, semillas 97000 y 20261001), antes y después de esta vuelta:
+
+- **Divisiones parejas:** 17 de 20 pasan. Quedan afuera por goles sexta en la semilla 97000 (2,33 contra 1,75) y octava y novena en la otra (1,97 y 1,99 contra 1,63). Antes: sexta fallaba igual en la 97000 (2,13); en la 20261001 se midieron solo sexta, octava, novena y décima, y fallaban octava por goles (2,04) y décima por amarillas y rojas. Con 600 partidos por división (semilla 500000) los goles de octava a décima dan 1,94, 1,99 y 1,76 antes y 1,99, 1,99 y 1,83 después: no cambian.
+- **D1/D4:** 4 de 10 afuera, igual que antes: remates +23 a 30%, pases completos +28 a 31%, faltas 1,62 contra 2,20 y amarillas 0,56 a 0,68 contra 1,0.
+- **D5/D8:** los pases completos, +29%. **D10/D7:** pasa.
+- **Divisiones vecinas:** D1/D2 queda afuera en los puntos y en la diferencia de gol (0,42 a 0,46 contra 1,0 a 1,1) y D5/D6 en una semilla (0,77 contra 1,25). En esos escenarios el equipo A juega siempre con el Tiki taka o la Presión alta contra el Juego directo o el Contragolpe, que les ganan por la tabla de `Estilos.MATRIZ`. En los parejos el A pierde por 0,2 a 0,8 goles (de primera a sexta, 0,5 a 0,8) y con el motor espacial perdía por 0,1.
+
+**Todos contra todos por estilo** (40 partidos por cruce): Tiki taka -0,16, Contragolpe +0,12, Juego directo +0,03, Presión alta -0,23, Defensivo +0,23, Físico +0,01. La etapa 7b pedía ±0,15 y medía -0,03 a +0,12. Esa medida es de antes de los modificadores de equipo de la etapa 8, que suman el choque de estilos de `Estilos.MATRIZ`: el Tiki taka y la Presión alta son los que más cruces pierden en la tabla. El error de cada número es 0,08.
+
+**Qué falta:**
+
+1. **El choque de estilos pesa más que en el motor espacial:** ver arriba. Decisión abierta: bajar el peso del choque en el V2 o aceptar la tabla como está.
+2. **Posesión por estilo:** 49,5 a 51,0%. La presión ya se ve en dónde se recupera; falta que el equipo de toque pierda menos la pelota.
+3. **El área en los ataques por la banda:** 0,96 compañeros contra 3,21 rivales.
+4. **D1/D4:** el peor no llega a apretar. Es la diferencia de rapidez que hace ganar al favorito: la decisión abierta de "Primera contra cuarta".
+5. **Offsides con tres divisiones de diferencia:** 0,32 a 0,40 contra 0,11 a 0,17.
+6. **Despejes de primera a cuarta:** 4,4 a 5,7.
+7. **Goles de sexta para abajo:** en el borde de arriba del rango.
+8. **El pasador y su pase:** no se tocó. Afecta a 1 pase por partido.
+9. **El teléfono:** falta comparar la huella de `test_reglas_v2` y mirar un partido.
+
 **Herramientas que acompañan todas las etapas:** un detector nuevo que mide sobre el mundo (no sobre la vista) `SALTO_PELOTA`, `ENCIMADOS` (cápsulas superpuestas), `PATINA` (pie que desliza), `ESPERA` (jugador quieto con la pelota viniendo a él) y ms por frame; y una grabación por semilla que se puede reproducir y rebobinar para ver cualquier minuto.
 
 **Dónde se hace cada etapa:** todas en la PC del usuario. Las etapas 1 y 3 a 6 se hicieron en la nube (Linux); desde el 2026-10-02 la nube no se usa y no hay biblioteca de Linux.

@@ -161,10 +161,10 @@ struct PesosCerebro {
 	double vel_min = 3.6, vel_max = 9.2, vel_pase_min = 11.0, vel_pase_max = 24.0;
 	double hueco_min = 6.0, hueco_max = 15.0, vision_minima_hueco = 45.0, hueco_por_vision = 0.45;
 	double pases_minimo_pared = 40.0, centros_minimo = 15.0, banda_para_centrar = 5.5, apego_a_la_banda = 0.5;
-	double avance_para_centrar = 0.25, offside_margen_torpe = 5.5, avance_para_jugar_en_el_hombro = 0.2;
+	double avance_para_centrar = 0.25, offside_margen_torpe = 1.0, avance_para_jugar_en_el_hombro = 0.2;
 	double apoyo_del_delantero = 0.35, apoyo_del_nueve = 0.0, avance_para_acompanar = 0.5;
 	double avance_acompanamiento_pleno = 0.75, desplazamiento_por_estilo = 16.0;
-	double angulo_minimo_tiro_libre = 0.35, zona_despeje = 0.42, presion_despeje = 0.45;
+	double angulo_minimo_tiro_libre = 0.35, zona_despeje = 0.42, presion_despeje = 0.6;
 	double despeje_corto = 30.0, despeje_largo = 55.0;
 	double pared_muro_cerca = 6.0, pared_muro_lejos = 17.0, pared_avance_min = 5.0, pared_avance_max = 14.0;
 	double max_dist_pase_malo = 16.0, max_dist_pase_bueno = 32.0;

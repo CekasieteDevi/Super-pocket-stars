@@ -1,4 +1,7 @@
 [
+	{"version": "0.8.21", "fecha": "2026-10-03", "cambio": "Los defensores revientan menos la pelota cuando los aprietan cerca de su arco."},
+	{"version": "0.8.20", "fecha": "2026-10-03", "cambio": "Los delanteros caen menos veces en offside."},
+	{"version": "0.8.19", "fecha": "2026-10-03", "cambio": "El rival ya no queda pegado al jugador que saca el lateral."},
 	{"version": "0.8.18", "fecha": "2026-10-03", "cambio": "Los pies ya no patinan cuando el jugador que anda de costado sale trotando hacia adelante."},
 	{"version": "0.8.17", "fecha": "2026-10-03", "cambio": "Hay dos gestos nuevos: la volea de costado y el cabezazo en carrera."},
 	{"version": "0.8.16", "fecha": "2026-10-03", "cambio": "Los jugadores bajan con el muslo las pelotas que llegan a media altura."},

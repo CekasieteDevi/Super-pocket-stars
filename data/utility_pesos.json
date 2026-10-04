@@ -122,8 +122,8 @@
     "altura_centro": 6.0,
     "altura_centro_medio": 1.15,
     "z_inalcanzable": 2.5,
-    "_offside": "Margen de error al medir el desmarque: un delantero inteligente se queda al filo de la linea, uno limitado se pasa. Sin margen nadie se iria nunca en offside y la infraccion no existiria.",
-    "offside_margen_torpe": 5.5,
+    "_offside": "Margen de error al medir el desmarque: un delantero inteligente se queda al filo de la linea, uno limitado se pasa. Sin margen nadie se iria nunca en offside y la infraccion no existiria. Motor V2 (tests/_diag_calibracion_v2.gd, 200 partidos por division, semillas 97000 y 20261001): con 5,5 habia 0,12 a 0,34 offsides por partido y 0,54 a 0,63 con tres divisiones de diferencia; el motor espacial daba 0,05 a 0,17. Con 1,0: 0,08 a 0,21 y 0,32 a 0,40, sin mover los goles.",
+    "offside_margen_torpe": 1.0,
     "_apoyo_del_delantero": "Desde que avance de campo el delantero se para en el hombro del ultimo defensor, y cuanto BAJA a recibir cuando la pelota esta lejos. Sin esto los de arriba quedaban clavados contra la linea rival aunque la pelota estuviera a sesenta metros, el equipo quedaba partido en dos y la unica forma de llegarles era el pelotazo.",
     "avance_para_jugar_en_el_hombro": 0.2,
     "apoyo_del_delantero": 0.35,
@@ -148,7 +148,7 @@
     "_avance_para_jugar_la_falta_adelante": "De la mitad de la cancha para adelante, un reinicio se juega hacia ADELANTE. Antes se buscaba siempre al companero mas atrasado —bien para un lateral propio, mal para una falta a favor en campo rival: el equipo retrocedia treinta metros cada vez que le cobraban una falta.",
     "avance_para_jugar_la_falta_adelante": 0.5,
     "zona_despeje": 0.42,
-    "presion_despeje": 0.45,
+    "presion_despeje": 0.6,
     "despeje_corto": 30.0,
     "despeje_largo": 55.0,
     "altura_despeje": 8.0,
@@ -243,7 +243,7 @@
     "_mezcla_fisica_rango_tiro": "Mezcla del alcance: 0 relativo al nivel del partido, 1 atributo absoluto. Afecta la habilitacion fisica del intento; no aumenta su utilidad.",
     "mezcla_fisica_rango_tiro": 0.8,
     "_apoyo_del_nueve": "Cuanto del apoyo le toca al 9. En cero: no baja, se queda de referencia. Medido, que baje aunque sea un poco cuesta 0,4 goles por partido en las tres divisiones — el equipo se queda sin nadie en el area. Los que bajan a recibir son el enganche y los extremos.",
-    "_presion_despeje": "Presion a partir de la cual, en zona propia, aparece el despeje Y se DESCARTAN las opciones de seguir jugando la pelota: quedan solo el despeje y el pelotazo. Es una regla y no un peso — subirle el peso al despeje no alcanzaba porque el pase largo se evalua una vez por cada companero, asi que competian diez opciones contra una sola y el maximo de diez ganaba casi siempre. Medido: despejes en el area propia 4% -> 20%, y la pelota sale del area el 58% de las veces."
+    "_presion_despeje": "Presion a partir de la cual, en zona propia, aparece el despeje Y se DESCARTAN las opciones de seguir jugando la pelota: quedan solo el despeje y el pelotazo. Es una regla y no un peso — subirle el peso al despeje no alcanzaba porque el pase largo se evalua una vez por cada companero, asi que competian diez opciones contra una sola y el maximo de diez ganaba casi siempre. Medido: despejes en el area propia 4% -> 20%, y la pelota sale del area el 58% de las veces. Motor V2 (tests/_diag_calibracion_v2.gd, quinta, 200 partidos, semilla 97000): con 0,45 habia 7,4 despejes por partido (el motor espacial: 2 a 4) y el 45% iba al rival; con 0,6 son 3,9 y con 0,75 son 2,5. Queda 0,6: de quinta a decima da 3,3 a 4,0 y de primera a cuarta 4,4 a 5,7, con los mismos goles."
   },
   "arquero": {
     "_comentario": "Etapa 6: arqueros con decisiones. El lector (MotorEspacial.pesos_arquero) trae estos mismos valores por defecto.",

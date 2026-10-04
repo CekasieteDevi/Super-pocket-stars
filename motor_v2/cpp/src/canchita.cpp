@@ -1287,6 +1287,21 @@ void Canchita::_ubicar(int i) {
 		if (d < lejos) {
 			double ux = d > 1e-6 ? (qx - punto.x) / d : -_ataca(j.equipo);
 			double uz = d > 1e-6 ? (qz - punto.z) / d : 0.0;
+			// El que ya está cerca se aleja derecho desde donde está parado, y
+			// también el que por su objetivo se iría afuera de la cancha. En el
+			// lateral el que marca al que saca va a la pelota, que está en las
+			// manos, a 0,2 m del punto y a veces afuera de la raya: el lado al
+			// que se alejaba cambiaba con ese 0,2 m, cruzaba por el punto y el
+			// recorte de abajo lo dejaba en la raya, al lado del que saca. 80
+			// partidos de quinta, semilla 97000: a menos de 1,9 m del punto en
+			// el 41% de los laterales y a menos de 1,5 m en el 13%.
+			double bx = c.x - punto.x, bz = c.z - punto.z;
+			double lb = hipot(bx, bz);
+			bool afuera = std::abs(punto.x + ux * lejos) > _medio_x() || std::abs(punto.z + uz * lejos) > _medio_z();
+			if (lb > 1e-6 && (afuera || lb < lejos + param_reglas.llegada_m)) {
+				ux = bx / lb;
+				uz = bz / lb;
+			}
 			qx = punto.x + ux * lejos;
 			qz = punto.z + uz * lejos;
 		}
