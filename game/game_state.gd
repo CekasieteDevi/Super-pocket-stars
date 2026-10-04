@@ -2219,10 +2219,24 @@ func _recortar_noticias() -> void:
 ## sim continúe exactamente donde estaba, no desde el mismo arranque de
 ## siempre.
 const RUTA_PARTIDA := "user://partida.json"
+## Versión del formato. Un archivo con una versión mayor viene de un juego
+## más nuevo: cargarlo a ciegas podría romper la partida (BUG-002).
+const VERSION_PARTIDA := 1
+## Los tests apuntan acá un archivo propio: la partida del usuario no se
+## toca nunca desde una prueba.
+var ruta_partida := RUTA_PARTIDA
+
+
+func _ruta_temporal() -> String:
+	return ruta_partida + ".tmp"
+
+
+func _ruta_respaldo() -> String:
+	return ruta_partida + ".bak"
 
 
 func hay_partida_guardada() -> bool:
-	return FileAccess.file_exists(RUTA_PARTIDA)
+	return FileAccess.file_exists(ruta_partida) or FileAccess.file_exists(_ruta_respaldo())
 
 
 ## Datos del archivo guardado, para que la pantalla pueda decir QUE hay
@@ -2230,17 +2244,29 @@ func hay_partida_guardada() -> bool:
 func info_partida_guardada() -> Dictionary:
 	if not hay_partida_guardada():
 		return {}
+	var ruta := ruta_partida if FileAccess.file_exists(ruta_partida) else _ruta_respaldo()
 	var t := Time.get_datetime_dict_from_unix_time(
-		int(FileAccess.get_modified_time(RUTA_PARTIDA)))
+		int(FileAccess.get_modified_time(ruta)))
+	var archivo := FileAccess.open(ruta, FileAccess.READ)
+	var megas := 0.0
+	if archivo != null:
+		megas = float(archivo.get_length()) / 1048576.0
+		archivo.close()
 	return {
 		"cuando": "%02d/%02d/%d %02d:%02d" % [t["day"], t["month"], t["year"], t["hour"], t["minute"]],
-		"megas": float(FileAccess.open(RUTA_PARTIDA, FileAccess.READ).get_length()) / 1048576.0,
+		"megas": megas,
 	}
 
 
-func guardar_partida() -> void:
+## Devuelve true solo si el archivo quedó escrito entero (BUG-001).
+##
+## Escribe primero un temporal y lo relee. Recién entonces mueve el
+## guardado anterior a `.bak` y pone el temporal en su lugar. Si algo
+## falla en el medio, el guardado anterior sigue ahí: un corte de luz o un
+## disco lleno ya no dejan la partida a medio escribir.
+func guardar_partida() -> bool:
 	var datos := {
-		"version": 1,
+		"version": VERSION_PARTIDA,
 		"rng_seed": rng.seed,
 		"rng_state": rng.state,
 		"piramide": piramide.guardar(),
@@ -2287,9 +2313,39 @@ func guardar_partida() -> void:
 	}
 
 
-	var file := FileAccess.open(RUTA_PARTIDA, FileAccess.WRITE)
-	file.store_string(JSON.stringify(datos))
+	var texto := JSON.stringify(datos)
+	var temporal := _ruta_temporal()
+	var file := FileAccess.open(temporal, FileAccess.WRITE)
+	if file == null:
+		push_error("No se pudo abrir %s: %s" % [temporal, error_string(FileAccess.get_open_error())])
+		return false
+	var escribio := file.store_string(texto)
+	var error_escritura := file.get_error()
 	file.close()
+	# Releer el temporal es la única prueba de que el disco lo tiene entero.
+	var leido := FileAccess.open(temporal, FileAccess.READ)
+	var largo := -1
+	if leido != null:
+		largo = leido.get_length()
+		leido.close()
+	if not escribio or error_escritura != OK or largo != texto.to_utf8_buffer().size():
+		push_error("El guardado quedó incompleto en %s" % temporal)
+		DirAccess.remove_absolute(temporal)
+		return false
+	if FileAccess.file_exists(ruta_partida):
+		if FileAccess.file_exists(_ruta_respaldo()):
+			DirAccess.remove_absolute(_ruta_respaldo())
+		if DirAccess.rename_absolute(ruta_partida, _ruta_respaldo()) != OK:
+			push_error("No se pudo respaldar %s" % ruta_partida)
+			DirAccess.remove_absolute(temporal)
+			return false
+	if DirAccess.rename_absolute(temporal, ruta_partida) != OK:
+		push_error("No se pudo reemplazar %s" % ruta_partida)
+		# El respaldo vuelve a su lugar: el usuario no pierde nada.
+		if FileAccess.file_exists(_ruta_respaldo()):
+			DirAccess.rename_absolute(_ruta_respaldo(), ruta_partida)
+		return false
+	return true
 
 
 func _guardar_copas_division() -> Array:
@@ -2305,19 +2361,68 @@ func _guardar_copas_division() -> Array:
 func cargar_partida() -> bool:
 	if not hay_partida_guardada():
 		return false
+	# Si el archivo principal está roto, el respaldo del guardado anterior
+	# todavía sirve (BUG-001).
+	var datos := _leer_partida(ruta_partida)
+	if datos.is_empty():
+		datos = _leer_partida(_ruta_respaldo())
+	if datos.is_empty():
+		return false
+	return _aplicar_partida(datos)
 
-	var file := FileAccess.open(RUTA_PARTIDA, FileAccess.READ)
+
+## Claves sin las que una partida no se puede rearmar, con su tipo.
+const _CLAVES_PARTIDA := {
+	"rng_seed": [TYPE_INT, TYPE_FLOAT], "rng_state": [TYPE_INT, TYPE_FLOAT],
+	"piramide": [TYPE_DICTIONARY], "confederacion": [TYPE_DICTIONARY],
+	"seleccion": [TYPE_DICTIONARY],
+	"division_jugador": [TYPE_INT, TYPE_FLOAT],
+	"equipo_jugador_nombre": [TYPE_STRING],
+	"fecha_actual": [TYPE_INT, TYPE_FLOAT], "temporada_actual": [TYPE_INT, TYPE_FLOAT],
+	"noticias": [TYPE_ARRAY],
+	"ultimo_informe_economico": [TYPE_DICTIONARY],
+	"ultima_posicion_final": [TYPE_DICTIONARY],
+}
+
+
+## Lee y valida el archivo. Devuelve {} si no sirve (BUG-002): tipo raíz,
+## versión, claves obligatorias y división del jugador. Así un JSON válido
+## pero incompatible no llega a tocar el estado activo.
+func _leer_partida(ruta: String) -> Dictionary:
+	if not FileAccess.file_exists(ruta):
+		return {}
+	var file := FileAccess.open(ruta, FileAccess.READ)
+	if file == null:
+		return {}
 	var texto := file.get_as_text()
 	file.close()
-
 	var json := JSON.new()
-	if json.parse(texto) != OK:
-		return false
+	if json.parse(texto) != OK or typeof(json.data) != TYPE_DICTIONARY:
+		return {}
 	var datos: Dictionary = json.data
+	var version = datos.get("version", 0)
+	if not (version is int or version is float) or int(version) < 1 or int(version) > VERSION_PARTIDA:
+		return {}
+	for clave in _CLAVES_PARTIDA:
+		if not datos.has(clave) or not (typeof(datos[clave]) in _CLAVES_PARTIDA[clave]):
+			return {}
+	var divisiones = datos["piramide"].get("divisiones", null)
+	if typeof(divisiones) != TYPE_ARRAY:
+		return {}
+	var division := int(datos["division_jugador"])
+	if division < 0 or division >= divisiones.size():
+		return {}
+	return datos
 
+
+func _aplicar_partida(datos: Dictionary) -> bool:
 	var nueva_piramide := Piramide.cargar(datos["piramide"])
+	if nueva_piramide == null:
+		return false
 	var nuevo_equipo_jugador: Team = null
-	var nueva_division: int = datos["division_jugador"]
+	var nueva_division: int = int(datos["division_jugador"])
+	if nueva_division >= nueva_piramide.divisiones.size():
+		return false
 	var nombre_buscado: String = datos["equipo_jugador_nombre"]
 	for e in nueva_piramide.divisiones[nueva_division].equipos:
 		if e.nombre == nombre_buscado:
@@ -2446,5 +2551,6 @@ func cargar_partida() -> bool:
 
 
 func borrar_partida() -> void:
-	if hay_partida_guardada():
-		DirAccess.remove_absolute(RUTA_PARTIDA)
+	for ruta in [ruta_partida, _ruta_respaldo(), _ruta_temporal()]:
+		if FileAccess.file_exists(ruta):
+			DirAccess.remove_absolute(ruta)

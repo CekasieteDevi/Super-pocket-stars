@@ -8533,7 +8533,10 @@ func _refrescar_partida_guardado() -> void:
 
 
 func _on_guardar_partida() -> void:
-	GameState.guardar_partida()
+	if not GameState.guardar_partida():
+		label_partida_estado.text = "No se pudo guardar la partida. El guardado anterior sigue intacto."
+		_refrescar_partida_guardado()
+		return
 	label_partida_estado.text = "Partida guardada: temporada %d, division %d, %s." % [
 		GameState.temporada_actual, GameState.division_jugador + 1, GameState.equipo_jugador.nombre
 	]

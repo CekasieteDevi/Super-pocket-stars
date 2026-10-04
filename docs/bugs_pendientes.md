@@ -9,7 +9,7 @@ El registro se contrastó con [Manual del vestuario](manual_del_vestuario.pdf). 
 ## BUG-001 — Guardado sin protección frente a errores de escritura
 
 - **Prioridad:** alta.
-- **Estado:** pendiente; confirmado por revisión de código. No se provocó una interrupción sobre una partida real.
+- **Estado:** corregido el 2026-10-04. `guardar_partida` escribe un temporal, lo relee, mueve el guardado anterior a `.bak` y recién entonces reemplaza el definitivo. Devuelve `true` o `false`, y la pantalla avisa el fallo. `cargar_partida` usa el `.bak` si el principal está roto. Test: `tests/test_guardado_archivo.gd`.
 - **Ubicación:** `game/game_state.gd:1979`, `guardar_partida`; `ui/main.gd:7234`, `_on_guardar_partida`.
 - **Problema:** el guardado abre directamente `user://partida.json` en modo escritura. No comprueba si la apertura devuelve `null`, no conserva un respaldo y no escribe primero un archivo temporal. El método tampoco devuelve un resultado que permita a la interfaz confirmar el éxito.
 - **Consecuencia:** una apertura fallida produce un error de ejecución. Una interrupción durante la escritura puede dejar la partida incompleta. La interfaz no dispone de una confirmación real para informar que guardó correctamente.
@@ -19,7 +19,7 @@ El registro se contrastó con [Manual del vestuario](manual_del_vestuario.pdf). 
 ## BUG-002 — Carga sin validación suficiente del archivo
 
 - **Prioridad:** alta.
-- **Estado:** pendiente; confirmado por revisión de código. Falta ejecutar casos de archivos incompatibles sobre una ruta de prueba.
+- **Estado:** corregido el 2026-10-04. `_leer_partida` valida el tipo raíz, la versión (`VERSION_PARTIDA`), las claves obligatorias con su tipo y la división del jugador antes de tocar el estado activo. Test: `tests/test_guardado_archivo.gd` (lista JSON, diccionario vacío, versión futura, división inexistente, sin pirámide y texto que no es JSON). Pendiente: las migraciones por versión, cuando haya una versión 2 del formato.
 - **Ubicación:** `game/game_state.gd:2039`, `cargar_partida`.
 - **Problema:** después de interpretar el JSON, la carga presupone un diccionario y accede directamente a claves e índices. El archivo incluye `version`, pero la carga no valida su valor. Además, sustituye parte del estado activo antes de terminar de reconstruir todos los componentes.
 - **Consecuencia:** un JSON sintácticamente válido pero incompleto, incompatible o con índices inválidos puede producir errores. Un fallo tardío puede dejar parte del estado activo reemplazado.

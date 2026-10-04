@@ -1,4 +1,5 @@
 [
+	{"version": "0.8.25", "fecha": "2026-10-04", "cambio": "Guardar la partida ya no la puede romper: si algo falla queda el guardado anterior y el juego te avisa."},
 	{"version": "0.8.24", "fecha": "2026-10-04", "cambio": "La Presión alta aprieta con más jugadores en campo rival y deja en offside al rival si sus defensores son inteligentes."},
 	{"version": "0.8.23", "fecha": "2026-10-04", "cambio": "Los delanteros del Contragolpe y del Juego directo pican a la espalda de la defensa y sus compañeros les tiran el pelotazo."},
 	{"version": "0.8.22", "fecha": "2026-10-03", "cambio": "Ningún estilo le gana a otro por regla: la ventaja sale de cómo juega cada equipo en la cancha."},
