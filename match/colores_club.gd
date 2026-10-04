@@ -77,11 +77,23 @@ static func _parecidos(a: Color, b: Color) -> bool:
 ## a propósito: el arquero tiene que distinguirse de los 20 de campo de un
 ## vistazo, y si compartiera paleta tarde o temprano coincidiría con
 ## alguno de los dos equipos.
+##
+## Sin negro: el negro es del árbitro (ver `arbitro`). Con el negro en esta
+## paleta el segundo arquero salía negro casi siempre y el árbitro, cian:
+## el usuario lo vio como "un jugador azul random que juega para todos lados".
 const PALETA_ARQUERO := [
 	Color(0.55, 0.85, 0.15),  # verde flúor
-	Color(0.15, 0.18, 0.22),  # negro
 	Color(0.98, 0.55, 0.75),  # rosa
 	Color(0.35, 0.90, 0.85),  # turquesa
+	Color(0.72, 0.58, 0.95),  # lila
+]
+
+## Camisetas del árbitro, en orden de preferencia: negro como en la tele; si
+## un equipo juega de negro, amarillo flúor; si tampoco, gris claro.
+const PALETA_ARBITRO := [
+	Color(0.06, 0.06, 0.07),  # negro
+	Color(0.92, 0.98, 0.10),  # amarillo flúor
+	Color(0.62, 0.62, 0.66),  # gris
 ]
 
 
@@ -107,3 +119,18 @@ static func arqueros(c_local: Color, c_visitante: Color) -> Array:
 		usados.append(elegido)
 		salida.append(elegido)
 	return salida
+
+
+## La camiseta del árbitro: la primera de PALETA_ARBITRO que no se parece a
+## ninguna de `usados` (las dos de campo y las dos de arquero). Si todas se
+## parecen a algo, la primera.
+static func arbitro(usados: Array) -> Color:
+	for c in PALETA_ARBITRO:
+		var libre := true
+		for u in usados:
+			if _parecidos(c, u):
+				libre = false
+				break
+		if libre:
+			return c
+	return PALETA_ARBITRO[0]

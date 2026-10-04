@@ -184,6 +184,9 @@ const MARGEN_CAMARA_M := 1.5
 ## Etapa 6: el árbitro (ArbitroV2). Se arma solo al dibujar un partido con
 ## reglas (el que tiene get_tarjeta).
 var arbitro: ArbitroV2
+## La camiseta del árbitro (ColoresClub.arbitro). La pone VistaPartidoV2 con
+## los colores del partido; los laboratorios dejan la de siempre.
+var camiseta_arbitro := ArbitroV2.COLOR_CAMISETA
 ## El último corte al saque que ya se dibujó (PartidoVistoV2.get_corte).
 var _corte_visto := -1
 ## Cuánto se acerca la cámara (1 = el encuadre del partido). El laboratorio
@@ -547,7 +550,8 @@ func seguir_de(otra: VistaV2) -> void:
 	_acercamiento_actual = otra._acercamiento_actual
 	_corte_visto = otra._corte_visto
 	if otra.arbitro != null:
-		arbitro = ArbitroV2.new(_mundo_3d)
+		arbitro = ArbitroV2.new(_mundo_3d, otra.camiseta_arbitro)
+		camiseta_arbitro = otra.camiseta_arbitro
 		arbitro.copiar_de(otra.arbitro)
 
 
@@ -604,7 +608,7 @@ func dibujar_canchita(c: Object, alfa: float, delta: float) -> void:
 	# sin la pelota.
 	if c.has_method("get_tarjeta"):
 		if arbitro == null:
-			arbitro = ArbitroV2.new(_mundo_3d)
+			arbitro = ArbitroV2.new(_mundo_3d, camiseta_arbitro)
 		var bola: Vector3 = c.get_pelota_pos()
 		arbitro.dibujar(c.get_paso(), Vector2(bola.x, bola.z), c.get_tarjeta(), delta, c.get_parada())
 	# En las manos (el lateral o el arquero que la agarró): se dibuja entre las

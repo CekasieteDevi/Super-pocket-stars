@@ -154,6 +154,7 @@ func _rearmar_vista() -> void:
 	vista.arqueros = arqueros
 	vista.ids = ids
 	vista.ropa = ropa
+	vista.camiseta_arbitro = ColoresClub.arbitro(_camisetas + _arqueros)
 	# Como la vista del juego: sin la sombra del sol en los personajes y con
 	# una mancha debajo de cada uno (docs/motor_v2.md, etapa 0).
 	# En el teléfono, con el sol prendido solo para el estadio el banco de la

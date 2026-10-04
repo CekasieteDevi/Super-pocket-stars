@@ -16,8 +16,10 @@ const PASO_SEG := 1.0 / 60.0
 ## Cerca de la pelota, del lado del medio de la cancha (como en el motor espacial).
 const DISTANCIA_M := 8.0
 ## La ropa y el pelo del árbitro, y su cara: fija y seria (la del
-## "concentrado" de assets/3d/caras.png).
-const COLOR_CAMISETA := Color("18c4cf")
+## "concentrado" de assets/3d/caras.png). La camiseta la elige quien lo arma
+## (ColoresClub.arbitro, contra los cuatro colores del partido); esta es la
+## de los laboratorios, que no tienen clubes.
+const COLOR_CAMISETA := Color(0.06, 0.06, 0.07)
 const COLOR_PANTALON := Color("171a20")
 const COLOR_PELO := Color("382014")
 const CARA := 13
@@ -61,10 +63,10 @@ var _lugar := Vector2.ZERO
 var _corre_seg := 0.0
 
 
-func _init(mundo: Node3D) -> void:
+func _init(mundo: Node3D, camiseta := COLOR_CAMISETA) -> void:
 	modelo = Jugador3D.new(load(Cancha3D.ESCENA_JUGADOR))
 	mundo.add_child(modelo)
-	modelo.colorear(COLOR_CAMISETA, COLOR_PANTALON, COLOR_PELO)
+	modelo.colorear(camiseta, COLOR_PANTALON, COLOR_PELO)
 	modelo.poner_peinado(Jugador3D.PEINADO_OFICIAL)
 	modelo.poner_cara(CARA, Jugador3D.Gesto.NORMAL)
 	_tarjeta = Utileria3D.tarjeta()
