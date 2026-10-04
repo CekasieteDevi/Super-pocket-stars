@@ -1,5 +1,6 @@
 {
 	"_notas": {
+		"frena_giro": "toque.frena_giro_*: el que conduce a más de frena_giro_desde_ms, sin rival a menos de presion_m + 1, y quiere girar más de frena_giro_desde_rad, primero toca la pelota corta girada frena_giro_rad de lo que corre y a frena_giro_rapidez de lo que corre hacia ahí; gira en el toque siguiente. Sin esto el cuerpo se pasaba de la pelota (más de 0,8 m detrás el 1,19% del tiempo corriendo con ella; ahora 0,98%). Quites 17,6 a 16,0 y goles 1,93 a 1,90 por partido (60 partidos de quinta, semilla 97000). frena_giro_desde_ms 0 lo apaga.",
 		"pelota": "Motor V2, etapa 1 (docs/motor_v2.md). Los valores de partida salen de la balística de pelota (docs/motor_v2.md, 'Cómo lo resuelven FIFA y PES'); los calibrados dicen contra qué. Unidades: m, s, kg, rad. motor_v2/cpp/src/pelota.h tiene los mismos valores para quien no la configura; tests/test_pelota_v2.gd falla si se separan.",
 		"cd_lenta": "Arrastre a baja velocidad (pase flotado). Entre crisis_desde y crisis_hasta baja en rampa a cd_rapida (crisis de arrastre, tiro fuerte).",
 		"cl_por_giro": "Sustentación de Magnus = cl_por_giro × radio × giro / velocidad, tope cl_tope. Con 55 rad/s (unas 9 vueltas por segundo, lo de un tiro libre con comba) un tiro a 25 m/s se curva 4,5 m en 23 m: laboratorio_pelota, 'tiro con efecto'.",
@@ -159,6 +160,10 @@
 		"toque_corto_m": 0.5,
 		"conduccion_factor": 0.75,
 		"conduce_gana_seg": 0.15,
+		"frena_giro_desde_ms": 3.5,
+		"frena_giro_desde_rad": 1.75,
+		"frena_giro_rad": 0.6,
+		"frena_giro_rapidez": 0.5,
 		"control_raya_m": 1.5,
 		"sin_rebote_seg": 0.3,
 		"margen_seguro_seg": 0.25,

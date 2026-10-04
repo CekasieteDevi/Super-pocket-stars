@@ -2711,6 +2711,33 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 		j.dir_x = _ataca(j.equipo);
 		j.dir_z = 0.0;
 	}
+	// Corriendo rápido y sin rival encima no da vuelta la pelota de un toque:
+	// la toca corta un poco girada, frena con ella y gira en el toque
+	// siguiente. Tocándola para atrás a 5-6 m/s, el cuerpo se pasaba y la
+	// pelota le quedaba atrás (revisión del usuario 2026-10-04: "dejan la
+	// pelota atrás"). Con un rival encima gira igual de un toque: frenando
+	// siempre, los quites bajaban 18% (17,6 a 14,3 por partido, 60 partidos
+	// de quinta, semilla 97000); así bajan 9% (a 16,0) y los goles quedan
+	// igual (1,93 y 1,90). La pelota a más de 0,8 m detrás del que corre con
+	// ella pasa del 1,19% al 0,98% del tiempo (frenando siempre, 0,67%).
+	bool frena_antes = false;
+	if (param_toque.frena_giro_desde_ms > 0.0 && j.cuerpo.rapidez() > param_toque.frena_giro_desde_ms
+			&& _rival_mas_cerca(i, bola.x, bola.z) > param_toque.presion_m + 1.0) {
+		const Cuerpo &cf = j.cuerpo;
+		double corre_rumbo = rumbo_de(cf.vx, cf.vz);
+		double dif = mate::envolver(rumbo_de(j.dir_x, j.dir_z) - corre_rumbo);
+		if (std::abs(dif) > param_toque.frena_giro_desde_rad) {
+			double sn, cn;
+			mate::seno_coseno(corre_rumbo + (dif > 0.0 ? param_toque.frena_giro_rad : -param_toque.frena_giro_rad), sn, cn);
+			// Solo si ese toque no la manda contra una raya: frenando contra la
+			// raya la pelota se iba afuera.
+			if (std::abs(bola.x + sn * 5.0) <= _medio_x() - 3.0 && std::abs(bola.z + cn * 5.0) <= _medio_z() - 3.0) {
+				j.dir_x = sn;
+				j.dir_z = cn;
+				frena_antes = true;
+			}
+		}
+	}
 	// Más largo con espacio, más corto con mejor control (igual que el partidito).
 	double presion = _rival_mas_cerca(i, bola.x, bola.z);
 	double espacio = std::clamp((presion - 2.0) / 4.0, 0.0, 1.0);
@@ -2737,6 +2764,10 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 	j.ritmo_conduce = d.tipo == DEC_CONDUCIR ? d.ritmo : 1.0;
 	double corre = std::clamp(hacia + j.cuerpo.aceleracion * param_toque.conduce_gana_seg, 0.0,
 			j.cuerpo.vel_max * j.cuerpo.cansancio * param_toque.conduccion_factor * j.ritmo_conduce);
+	if (frena_antes) {
+		largo = param_toque.toque_corto_m;
+		corre = std::min(corre, hacia * param_toque.frena_giro_rapidez);
+	}
 	j.toque = TOQUE_CONDUCE;
 	j.rapidez_toque = _rapidez_conduce(corre, largo);
 }

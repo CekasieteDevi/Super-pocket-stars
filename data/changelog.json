@@ -1,4 +1,5 @@
 [
+	{"version": "0.8.28", "fecha": "2026-10-04", "cambio": "El jugador que corre con la pelota frena un poco antes de darse vuelta y ya no la deja atrás."},
 	{"version": "0.8.27", "fecha": "2026-10-04", "cambio": "El arquero que se tira queda acostado en el pasto, con la sombra debajo, en vez de flotar en el aire."},
 	{"version": "0.8.26", "fecha": "2026-10-04", "cambio": "El arquero que se tira y no llega ya no pone las manos en la pelota: si la toca, la ataja o la desvía."},
 	{"version": "0.8.25", "fecha": "2026-10-04", "cambio": "El árbitro se viste de negro (o de otro color si un equipo juega de negro) para que no se confunda con un jugador."},
