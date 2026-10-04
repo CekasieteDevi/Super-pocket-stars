@@ -9210,12 +9210,13 @@ func _mostrar_partido_animado() -> void:
 	# puede ser de cualquiera de las diez divisiones.
 	var local: Team = _equipo_por_nombre(str(r["local"]))
 	var visitante: Team = _equipo_por_nombre(str(r["visitante"]))
-	if local == null or visitante == null:
-		return
 	# El partido no trae fotogramas: trae la receta (va en el lugar de los
 	# fotogramas), y la vista lo vuelve a jugar.
 	var receta := MotorV2.receta_de(GameState.ultimos_fotogramas)
-	if receta.is_empty():
+	if local == null or visitante == null or receta.is_empty():
+		# Sin equipos o sin receta no hay nada que dibujar: se muestra el
+		# resultado en vez de dejar la pantalla del partido en blanco.
+		_mostrar_historial_partidos()
 		return
 	vista_partido_v2.iniciar(receta, GameState.ultimos_eventos, local, visitante)
 	vista_partido_v2.velocidad = velocidad_partido_elegida
@@ -9229,6 +9230,10 @@ func _equipo_por_nombre(nombre: String) -> Team:
 		for e in liga.equipos:
 			if e.nombre == nombre:
 				return e
+	# En la copa internacional el rival suele ser un club del exterior: no
+	# está en la pirámide y, sin esto, la pantalla del partido quedaba vacía.
+	if GameState.confederacion != null:
+		return GameState.confederacion.indice_de_equipos().get(nombre, null)
 	return null
 
 

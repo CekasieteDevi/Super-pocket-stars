@@ -47,6 +47,8 @@ LENTOS="$LENTOS test_phase7_internacional test_copas_por_temporada"
 # Medidos el 2026-09-23 con 12 en paralelo: copa_jugable 215s,
 # playoff_ascenso 203s, fin_de_mitad 142s.
 LENTOS="$LENTOS test_copa_jugable test_playoff_ascenso test_fin_de_mitad"
+# Una temporada a mano y otra simulada con el V2: ~6 min en la nube.
+LENTOS="$LENTOS test_flujo_partidos_v2"
 ORDEN=""
 for n in $LENTOS; do
 	[ -f "tests/$n.gd" ] && ORDEN="$ORDEN tests/$n.gd"
