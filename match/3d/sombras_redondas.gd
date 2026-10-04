@@ -48,8 +48,12 @@ func _init(cantidad: int) -> void:
 
 
 ## La mancha `i` debajo de un jugador parado en `pie` (en el piso).
-func poner_jugador(i: int, pie: Vector3) -> void:
-	_poner(i, Vector2(pie.x, pie.z) + HACIA_SOMBRA * CORRIDA_JUGADOR, ANCHO_JUGADOR, LARGO_JUGADOR, 1.0)
+## `parado` (Jugador3D.parado): 1 parado; tirado en el piso, la mancha queda
+## debajo del cuerpo y redonda. Con la mancha estirada hacia el sol, el
+## arquero tirado se veía flotando.
+func poner_jugador(i: int, pie: Vector3, parado := 1.0) -> void:
+	_poner(i, Vector2(pie.x, pie.z) + HACIA_SOMBRA * CORRIDA_JUGADOR * parado, ANCHO_JUGADOR,
+		lerpf(ANCHO_JUGADOR * 1.2, LARGO_JUGADOR, parado), 1.0)
 
 
 ## La mancha `i` debajo de la pelota: más chica y más clara cuanto más alta.

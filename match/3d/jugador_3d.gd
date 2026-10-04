@@ -940,6 +940,22 @@ func corrimiento_cadera() -> Vector2:
 	return Vector2(v.x, v.z)
 
 
+## Qué tan parado está: cuánto apunta hacia arriba la línea de la cadera a
+## la cabeza (1 parado, 0 acostado). Con el alto de la cadera no sirve: las
+## estiradas dejan al arquero acostado con la cadera más alta que parado.
+func parado() -> float:
+	if _esqueleto == null:
+		return 1.0
+	var cadera := _esqueleto.find_bone("Cadera")
+	var cabeza := _esqueleto.find_bone("Cabeza")
+	if cadera < 0 or cabeza < 0:
+		return 1.0
+	var eje := _esqueleto.get_bone_global_pose(cabeza).origin - _esqueleto.get_bone_global_pose(cadera).origin
+	if eje.length_squared() < 1e-8:
+		return 1.0
+	return clampf((_esqueleto.global_transform.basis * eje).normalized().y, 0.0, 1.0)
+
+
 func tiene(anim: String) -> bool:
 	return animador != null and animador.has_animation(anim)
 

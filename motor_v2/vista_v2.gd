@@ -75,6 +75,15 @@ const LEVANTA_DESDE_SEG := 0.5
 const LEVANTA_ALCANZA_DESDE := 0.5
 ## Clip de estirada -> el clip con que se levanta (data/fisica_v2.json, "arquero").
 var _levanta_de := {}
+## El arquero tirado en el piso. Las estiradas y Arquero_Levanta (golero.glb)
+## lo dejan acostado con la cadera a 0,5 m y el hueso más bajo a 0,3 m: más
+## alto que parado (cadera a 0,35 m). Se veía flotando en el aire (revisión
+## del usuario 2026-10-04). Desde que cae (LEEME de assets/3d: "cae al piso
+## t=0.583" de 0,96 s) se lo baja hasta que el hueso más bajo quede a
+## TIRADO_PISO_M, lo que queda del pie parado sobre el pasto.
+const TIRADO_PISO_M := 0.06
+const TIRADO_CAE_DESDE := 0.5
+const TIRADO_CAE_HASTA := 0.62
 ## El gesto que hacía cada uno en el cuadro anterior ("" = ninguno).
 var _gesto_previo: Array[String] = []
 ## Media vuelta corriendo: el objetivo queda a esto o más de la carrera. El
@@ -688,8 +697,6 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 		var p := pos_previa[i].lerp(pos[i], alfa)
 		var p3 := _jugadores[i]
 		p3.position = Vector3(p.x, 0.0, p.y)
-		if _manchas != null:
-			_manchas.poner_jugador(i, p3.position)
 		var v: float = rapidez[i]
 		if not is_equal_approx(v, _v_previa[i]):
 			_desacelera[i] = (_v_previa[i] - v) / MundoV2.PASO_SEG
@@ -735,6 +742,7 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 			if _ajustar_pies and _contacto_cuerpo.has(accion) \
 					and ((acciones[i] as Array).size() < 3 or bool(acciones[i][2])):
 				_ajustar_cuerpo(i, p3, accion, float(acciones[i][1]))
+			_apoyar_tirado(p3, accion, float(acciones[i][1]))
 			if _gesto_corriendo.has(accion) and v >= Cancha3D.VELOCIDAD_PARA_PIERNAS \
 					and p3.position.y < GESTO_PIERNAS_HASTA_ALTO_M:
 				_piernas_de_carrera(i, p3, accion, float(acciones[i][1]), v, delta)
@@ -758,6 +766,8 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 				p3.position = (_una_vez[i]["en"] as Vector3).lerp(p3.position,
 					smoothstep(LEVANTA_ALCANZA_DESDE, 1.0, parte))
 			p3.poner(una_vez[0], una_vez[1], fundido)
+			if se_levanta:
+				_apoyar_tirado(p3, una_vez[0], una_vez[1])
 			_clavar_pies(p3, fundido, not se_levanta)
 			p3.poner_cara(p3.cara, Jugador3D.Gesto.NORMAL, _tiempo)
 			continue
@@ -809,6 +819,16 @@ func _dibujar_jugadores(pos_previa: PackedVector2Array, pos: PackedVector2Array,
 			p3.rotation.y = _rumbo_mostrado(i, rumbo[i], paso, v, false, delta, sentido_clip)
 		_clavar_pies(p3, fundido)
 		p3.poner_cara(p3.cara, Jugador3D.Gesto.NORMAL, _tiempo)
+	# La mancha va debajo de la cadera, con la pose ya puesta. Debajo de los
+	# pies (position) quedaba donde el arquero empezaba a tirarse: el clip lo
+	# lleva 1 a 1,5 m al costado y, con la sombra en otro lado, se veía
+	# flotando en el aire mientras estaba tirado en el piso. Tirado, la mancha
+	# tampoco se corre hacia el sol (SombrasRedondas.poner_jugador).
+	if _manchas != null:
+		for i in _cantidad():
+			var p3 := _jugadores[i]
+			var cadera := p3.corrimiento_cadera()
+			_manchas.poner_jugador(i, p3.position + Vector3(cadera.x, 0.0, cadera.y), p3.parado())
 
 
 ## Clava los pies apoyados de `p3` (Jugador3D.clavar_pies) si la cámara lo
@@ -877,6 +897,24 @@ func _ajustar_cuerpo(i: int, p3: Jugador3D, accion: String, segundo: float) -> v
 		var piso := Vector2(falta.x, falta.z).limit_length(AJUSTE_CUERPO_PISO_M)
 		_corrido[i] = Vector3(piso.x, clampf(falta.y, 0.0, AJUSTE_CUERPO_SUBE_M), piso.y)
 	p3.position += (_corrido[i] as Vector3) * peso
+
+
+## Baja al arquero tirado hasta el piso (ver TIRADO_PISO_M). En la estirada
+## entra de a poco mientras cae; levantándose, el clip ya sube solo.
+func _apoyar_tirado(p3: Jugador3D, clip: String, segundo: float) -> void:
+	var peso := 0.0
+	if _levanta_de.has(clip):
+		var dur := p3.duracion(clip)
+		peso = smoothstep(TIRADO_CAE_DESDE * dur, TIRADO_CAE_HASTA * dur, segundo)
+	elif clip in _levanta_de.values():
+		peso = 1.0
+	if peso <= 0.0 or p3._esqueleto == null:
+		return
+	var sk := p3._esqueleto
+	var abajo := INF
+	for b in sk.get_bone_count():
+		abajo = minf(abajo, (sk.global_transform * sk.get_bone_global_pose(b)).origin.y)
+	p3.position.y -= maxf(abajo - TIRADO_PISO_M, 0.0) * peso
 
 
 ## Cerca del contacto gira el modelo hacia la pelota, lo que el motor le deja
