@@ -1580,7 +1580,7 @@ El peor aprieta la mitad que en un partido parejo y recupera 10 m más atrás. F
 
 **Qué falta:**
 
-1. **El choque de estilos pesa más que en el motor espacial:** ver arriba. Decisión abierta: bajar el peso del choque en el V2 o aceptar la tabla como está.
+1. **El choque de estilos pesa más que en el motor espacial:** ver arriba. Hecho: la tabla se sacó (ver el resultado que sigue).
 2. **Posesión por estilo:** 49,5 a 51,0%. La presión ya se ve en dónde se recupera; falta que el equipo de toque pierda menos la pelota.
 3. **El área en los ataques por la banda:** 0,96 compañeros contra 3,21 rivales.
 4. **D1/D4:** el peor no llega a apretar. Es la diferencia de rapidez que hace ganar al favorito: la decisión abierta de "Primera contra cuarta".
@@ -1589,6 +1589,45 @@ El peor aprieta la mitad que en un partido parejo y recupera 10 m más atrás. F
 7. **Goles de sexta para abajo:** en el borde de arriba del rango.
 8. **El pasador y su pase:** no se tocó. Afecta a 1 pase por partido.
 9. **El teléfono:** falta comparar la huella de `test_reglas_v2` y mirar un partido.
+
+#### Resultado (2026-10-03): ningún estilo le gana a otro por tabla
+
+Decisión del usuario: la ventaja de un estilo sobre otro sale de cómo juega cada uno en la cancha, no de puntos de más. Ejemplo que dio: la defensa adelantada contra el contragolpe queda mal parada porque, si falla el offside, el rival queda solo frente al arquero.
+
+**Qué se hizo:** se borraron `Estilos.MATRIZ`, `Estilos.BONUS`, `Estilos.BONUS_CONTRA_PRESION` y `Estilos.modificador`, y su suma en el bloque C de `MatchEngine._bloques_equipo`. Sale de los dos motores: del V2, que la recibía por `MatchEngine.modificador_de_equipo`, y de `MatchEngine`, que simula los partidos de los demás clubes. El motor en C++ no cambia: no hay que rearmar las bibliotecas. `tests/test_estilos.gd` ya no prueba la tabla.
+
+**Todos contra todos** (`tests/_diag_estilos_v2.gd` con `todos=1`, quinta, 40 partidos por cruce). Diferencia de gol por partido:
+
+| Estilo | Con la tabla (97000) | Sin la tabla (97000) | Sin la tabla (20261001) |
+| --- | --- | --- | --- |
+| Tiki taka | -0,16 | +0,04 | -0,13 |
+| Contragolpe | +0,12 | +0,14 | +0,01 |
+| Juego directo | +0,03 | +0,01 | +0,04 |
+| Presión alta | -0,23 | -0,17 | -0,13 |
+| Defensivo | +0,23 | +0,01 | +0,06 |
+| Físico | +0,01 | -0,02 | +0,14 |
+
+**Qué estilo le gana a cuál por cómo juega.** La medición imprime ahora el cuadro de cruces (80 partidos por cruce; el error de cada número es 0,17). Se repiten en las dos semillas:
+
+- El Contragolpe le gana a la Presión alta: +0,19 y +0,25.
+- El Defensivo le gana a la Presión alta: +0,16 y +0,31.
+- El Físico le gana a la Presión alta: +0,30 y +0,21.
+
+Los demás cruces cambian de signo de una semilla a la otra: no se distinguen del ruido.
+
+**Calibración** (200 partidos por escenario, las dos semillas):
+
+- **Divisiones vecinas:** D1/D2 y D5/D6 pasan en las dos semillas (diferencia de gol 1,12 a 1,29 contra 1,0 a 1,25). Antes fallaban en tres de cuatro. D10/D9 queda afuera en una semilla (-0,67 contra -1,08).
+- **Divisiones parejas:** 18 de 20 pasan. El equipo A pierde ahora por 0,3 a gana por 0,3 (antes perdía por 0,2 a 0,8). Quedan afuera octava y décima en la semilla 20261001, por goles (2,05 y 1,93 contra 1,63 y 1,55).
+- **Tres divisiones de diferencia:** D1/D4 sigue con 4 de 10 afuera. D5/D8 suma los remates (+21 a 23%) a los pases completos.
+
+La regresión completa pasa: 0 fallas de 117.
+
+**Qué falta:**
+
+1. **La Presión alta pierde contra casi todos:** -0,13 a -0,17. Recupera más arriba (ver el resultado anterior) pero no saca ventaja de eso y deja la espalda libre.
+2. **Los demás cruces no se distinguen:** para que el estilo decida más, cada plan tiene que cambiar más lo que hace el equipo (`Estilos.PLANES`, `cerebro.estilo_*`).
+3. **`MatchEngine`:** no lee el estilo. Sin la tabla, en los partidos de los demás clubes el estilo ya no cambia el resultado; solo queda la familiaridad táctica al cambiarlo.
 
 **Herramientas que acompañan todas las etapas:** un detector nuevo que mide sobre el mundo (no sobre la vista) `SALTO_PELOTA`, `ENCIMADOS` (cápsulas superpuestas), `PATINA` (pie que desliza), `ESPERA` (jugador quieto con la pelota viniendo a él) y ms por frame; y una grabación por semilla que se puede reproducir y rebobinar para ver cualquier minuto.
 

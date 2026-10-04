@@ -5,7 +5,7 @@ extends RefCounted
 ## a partir de "eventos" (el mismo Array que ya devuelve MatchEngine.simular()
 ## y que alimenta PartidoVisual) — sin tocar el motor de partido en sí.
 ##
-## Sirve para que efectos como el choque de estilos (§8.6.3) o el rasgo del
+## Sirve para que efectos como el rasgo del
 ## DT (§8.6.4) se puedan VER: hoy cambian el % de éxito de cada duelo, pero
 ## eso queda invisible si lo único que se muestra es el marcador. "Posesión"
 ## se aproxima como la proporción de acciones de ataque (pase/gambeta/tiro)

@@ -550,9 +550,8 @@ static func cargar(datos: Dictionary) -> Team:
 	if datos.has("estilo"):
 		t.estilo = datos["estilo"]
 	else:
-		# Migracion de guardados de antes de que existiera §8.6.3 (choque de
-		# estilos): en vez de dejarlo en "" para siempre (matchup neutro
-		# eterno), se le sortea un estilo determinado por el nombre del
+		# Migracion de guardados de antes de que existiera el estilo del
+		# club: en vez de dejarlo en "" para siempre, se le sortea un estilo determinado por el nombre del
 		# club, asi es estable entre cargas sucesivas del mismo guardado.
 		var rng_migracion := RandomNumberGenerator.new()
 		rng_migracion.seed = hash(datos["nombre"])

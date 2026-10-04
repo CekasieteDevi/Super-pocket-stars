@@ -9064,9 +9064,6 @@ func _refrescar_portada_si_visible() -> void:
 		_refrescar_portada()
 
 
-## §8.6.3/§8.6.5: le muestra al jugador con qué rival juega la próxima
-## fecha y cómo pega el choque de estilos, para que elija táctica con
-## información en vez de a ciegas.
 ## Si el proximo partido lo juega de local.
 func _juega_de_local() -> bool:
 	if not GameState.hay_fecha_pendiente():

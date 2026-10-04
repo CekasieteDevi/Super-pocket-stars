@@ -28,8 +28,8 @@ func _init() -> void:
 	var division := 4
 	var semilla := SEED
 	# Con todos=1: cada estilo contra cada uno de los otros, de local y de
-	# visitante. Es la medida del balance: contra un solo rival pesa la tabla
-	# de Estilos.MATRIZ (el Juego directo le gana al Tiki taka).
+	# visitante. Es la medida del balance, y el cuadro de cruces dice qué
+	# estilo le gana a cuál por cómo juega.
 	var todos := false
 	for arg in OS.get_cmdline_user_args():
 		var p := arg.split("=", true, 1)
@@ -113,8 +113,13 @@ func _init() -> void:
 
 func _todos_contra_todos(partidos: int, division: int, semilla: int) -> void:
 	var k := {}
+	# cruces[a][b]: goles de diferencia de `a` contra `b`, sumados.
+	var cruces := {}
 	for e in Estilos.LISTA:
 		k[e] = {"n": 0.0, "puntos": 0.0, "favor": 0.0, "contra": 0.0, "posesion": 0.0, "remates": 0.0, "pases": 0.0}
+		cruces[e] = {}
+		for rival in Estilos.LISTA:
+			cruces[e][rival] = 0.0
 	for a in Estilos.LISTA:
 		for b in Estilos.LISTA:
 			if a == b:
@@ -137,6 +142,7 @@ func _todos_contra_todos(partidos: int, division: int, semilla: int) -> void:
 					var d: Dictionary = k[estilos[lado]]
 					d["n"] += 1.0
 					d["favor"] += goles[lado]
+					cruces[estilos[lado]][estilos[1 - lado]] += goles[lado] - goles[1 - lado]
 					d["contra"] += goles[1 - lado]
 					d["puntos"] += 3.0 if goles[lado] > goles[1 - lado] else (1.0 if goles[lado] == goles[1 - lado] else 0.0)
 					d["posesion"] += 100.0 * float(cuenta["posesion_%d" % lado]) / maxf(total, 1.0)
@@ -149,6 +155,17 @@ func _todos_contra_todos(partidos: int, division: int, semilla: int) -> void:
 		var n: float = maxf(d["n"], 1.0)
 		print("[estilos] %-14s %7.2f %7.2f %7.2f %+7.2f %6.1f%% %7.2f %7.1f" % [e, d["puntos"] / n, d["favor"] / n, d["contra"] / n,
 			(d["favor"] - d["contra"]) / n, d["posesion"] / n, d["remates"] / n, d["pases"] / n])
+	# Cada cruce se juega de local y de visitante: 2 × partidos.
+	print("[estilos] Cruces: goles de diferencia por partido de la fila contra la columna (%d partidos por cruce)." % (partidos * 2))
+	var cabecera := "[estilos] %-14s" % ""
+	for rival in Estilos.LISTA:
+		cabecera += " %13s" % rival
+	print(cabecera)
+	for e in Estilos.LISTA:
+		var fila := "[estilos] %-14s" % e
+		for rival in Estilos.LISTA:
+			fila += (" %13s" % "-") if rival == e else (" %+13.2f" % (float(cruces[e][rival]) / (partidos * 2.0)))
+		print(fila)
 
 
 func _pisar(datos: Dictionary, texto: String) -> void:

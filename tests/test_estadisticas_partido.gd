@@ -90,9 +90,7 @@ func _test_integracion_con_un_partido_real(rng: RandomNumberGenerator) -> void:
 # Nota: no hay un test acá comparando posesión promedio entre estilos
 # enfrentados (ej. Tiki taka vs Presión alta) — se probó, pero con
 # equipos generados al azar la calidad de las líneas medias varía tanto
-# entre sí (independientemente del estilo) que el efecto del choque de
-# estilos en la posesión queda enterrado en el ruido incluso con
-# cientos de muestras. Que el choque de estilos afecta el resultado
-# real del partido ya está probado de forma mucho más directa y estable
-# en tests/test_estilos.gd (comparación de goles). Este archivo se limita
-# a probar que EstadisticasPartido cuenta bien lo que ya pasó.
+# entre sí (independientemente del estilo) que el efecto del estilo en
+# la posesión queda enterrado en el ruido incluso con cientos de
+# muestras. Este archivo se limita a probar que EstadisticasPartido
+# cuenta bien lo que ya pasó.

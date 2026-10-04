@@ -5,8 +5,8 @@ extends RefCounted
 ## Cadena de posesiones tick a tick, sin ningún nodo de Godot: 1000 partidos
 ## deben poder simularse en segundos.
 ##
-## Modificadores conectados en esta fase: local + choque de estilos (§8.3 y
-## §8.6.3, bloque C) y racha de acciones exitosas + armonía + capitán
+## Modificadores conectados en esta fase: local (§8.3,
+## bloque C) y racha de acciones exitosas + armonía + capitán
 ## (bloque B); DT según marcador (§8.6.4); clima, estado de la cancha,
 ## árbitro y objetivo de directiva en riesgo (§8.4 #18/19/20/21/23/30). El
 ## resto de los 37 modificadores (§8.4) llega cuando existan sus sistemas
@@ -161,8 +161,8 @@ static func _asistente(equipo: Team, goleador_id: int, rng: RandomNumberGenerato
 
 ## §8.5: bloque A (forma del día ver Team.forma_partido, fuera de
 ## posición §8.4#4 y partidos seguidos §8.4#25), bloque B
-## (equipo/racha/armonía/capitán/familiaridad táctica §7.4.5), bloque C (local + choque de estilos
-## §8.6.3 + rasgo del DT según el marcador §8.6.4 + clima §8.4#18/20 +
+## (equipo/racha/armonía/capitán/familiaridad táctica §7.4.5), bloque C (local
+## + rasgo del DT según el marcador §8.6.4 + clima §8.4#18/20 +
 ## estado de la cancha §8.4#21 + árbitro casero §8.4#23 + público §8.4#22
 ## + varianza de clásico §8.4#14) y bloque D (motivación §8.4#26-30 —
 ## por ahora solo #30, objetivo de directiva en riesgo— (personalidad + habilidad de ESE jugador en ESE
@@ -214,7 +214,6 @@ static func _bloques_equipo(equipo: Team, rival: Team, jugador: Dictionary, atri
 	if companero_id >= 0:
 		bloque_b += Quimica.bonus(equipo, jugador_id, companero_id)
 	var bloque_c := 5.0 if equipo.local else 0.0
-	bloque_c += Estilos.modificador(equipo.estilo, rival.estilo)
 	bloque_c += DT.modificador_partido(equipo, rival, atributo, minuto)
 	bloque_c += Clima.modificador(equipo.clima_partido, atributo)
 	var cancha_del_local: float = equipo.calidad_cancha if equipo.local else rival.calidad_cancha
@@ -238,7 +237,7 @@ const MINUTO_MEDIO := 45
 ## Lo que suman los bloques A a D de `equipo` contra `rival`, en puntos de
 ## duelo, promediado entre los titulares y los atributos de duelo. Es para el
 ## motor que no resuelve duelos (MotorV2): ahí la localía, la forma del día,
-## la armonía, la racha, la familiaridad táctica, el choque de estilos, el
+## la armonía, la racha, la familiaridad táctica, el
 ## clima, la cancha, el público y los rasgos entran una sola vez, al armar el
 ## partido, como puntos de más o de menos del equipo (CerebroV2.receta).
 static func modificador_de_equipo(equipo: Team, rival: Team, rng: RandomNumberGenerator) -> float:
