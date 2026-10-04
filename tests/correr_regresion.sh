@@ -71,9 +71,13 @@ TOPE_TEST="${TOPE_TEST:-900}"
 
 # Mata el Godot de un test. El _console.exe lanza otro proceso Godot
 # hijo, y matar solo el de bash deja al hijo vivo; por eso se busca por
-# linea de comando en Windows.
+# linea de comando en Windows. En Linux (la nube) no hay powershell y el
+# proceso es uno solo: alcanza con su pid.
 matar_test() {
-	powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name like 'Godot%'\" | Where-Object { \$_.CommandLine -like '*$1*' } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force }" >/dev/null 2>&1
+	if command -v powershell.exe >/dev/null 2>&1; then
+		powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name like 'Godot%'\" | Where-Object { \$_.CommandLine -like '*$1*' } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force }" >/dev/null 2>&1
+	fi
+	kill -9 "$2" 2>/dev/null
 }
 
 correr_test() {
@@ -89,7 +93,7 @@ correr_test() {
 		sleep 2
 		if [ $(( $(date +%s) - inicio )) -ge "$TOPE_TEST" ]; then
 			echo "FALLA: colgado, supero ${TOPE_TEST}s" >>"$log"
-			matar_test "$f"
+			matar_test "$f" "$pid"
 			break
 		fi
 		grep -q "SCRIPT ERROR" "$log" || continue
@@ -102,11 +106,14 @@ correr_test() {
 		fi
 		if [ "$quieto" -ge "$CUELGUE_TRAS_ERROR" ]; then
 			echo "FALLA: colgado tras SCRIPT ERROR" >>"$log"
-			matar_test "$f"
+			matar_test "$f" "$pid"
 			break
 		fi
 	done
 	wait "$pid" 2>/dev/null
+	# El codigo de salida cuenta aparte del texto: un Godot que se cae
+	# (crash, falta de memoria) no llega a imprimir FALLA (BUG-006).
+	echo "$?" >"$SALIDA/$nombre.codigo"
 	echo "$(( $(date +%s) - inicio )) $nombre" >"$SALIDA/$nombre.tiempo"
 }
 
@@ -123,10 +130,19 @@ FALLOS=0
 for f in $ORDEN; do
 	nombre="$(basename "$f" .gd)"
 	log="$SALIDA/$nombre.log"
-	[ -f "$log" ] || continue
-	if grep -q "FALLA\|SCRIPT ERROR" "$log"; then
+	# Un test sin registro o sin codigo no corrio: antes se salteaba y
+	# contaba como pasado (BUG-006).
+	if [ ! -f "$log" ] || [ ! -f "$SALIDA/$nombre.codigo" ]; then
+		echo "### $f"
+		echo "FALLA: el test no dejo registro o no termino"
+		FALLOS=$(( FALLOS + 1 ))
+		continue
+	fi
+	codigo="$(cat "$SALIDA/$nombre.codigo")"
+	if grep -q "FALLA\|SCRIPT ERROR" "$log" || [ "$codigo" != "0" ]; then
 		echo "### $f"
 		grep "FALLA\|SCRIPT ERROR" "$log" | head -5
+		[ "$codigo" != "0" ] && echo "FALLA: Godot salio con codigo $codigo"
 		FALLOS=$(( FALLOS + 1 ))
 	fi
 done

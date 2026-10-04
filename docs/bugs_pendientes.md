@@ -64,7 +64,7 @@ El registro se contrastó con [Manual del vestuario](manual_del_vestuario.pdf). 
 ## BUG-006 — El ejecutor de regresión puede omitir fallos de proceso
 
 - **Prioridad:** media.
-- **Estado:** pendiente; confirmado por revisión del script. No se ejecutó una prueba de fallo artificial del ejecutor.
+- **Estado:** corregido el 2026-10-04. El script anota el código de salida de cada test, cuenta como falla un test sin registro o sin código, y en Linux mata al colgado por su pid.
 - **Ubicación:** `tests/correr_regresion.sh:62`, espera y consolidación de resultados.
 - **Problema:** el script no consolida los códigos de salida individuales. Busca únicamente `FALLA` o `SCRIPT ERROR`, omite registros inexistentes y no exige una señal de finalización. Tampoco limita el tiempo de cada proceso.
 - **Consecuencia:** un proceso abortado o que termine con error sin esos textos puede no contarse como fallo. Un proceso colgado puede impedir que la regresión termine.
@@ -74,7 +74,7 @@ El registro se contrastó con [Manual del vestuario](manual_del_vestuario.pdf). 
 ## SIM-001 — Diferencia de goles entre motores
 
 - **Prioridad:** media; calibración pendiente.
-- **Estado:** medido después de incorporar identidad táctica, el 10 de septiembre de 2026.
+- **Estado:** reemplazado el 2026-10-04. El motor espacial se borró en la etapa 8 del Motor V2. La paridad entre `MotorV2` y `MatchEngine` se calibra en la etapa 7 de [motor_v2.md](motor_v2.md). Lo de abajo queda como registro histórico.
 - **Reproducción:** `tests/_diag_goles_motores.gd`, semilla 4400, cuarenta partidos por división.
 - **Resultado:** espacial / abstracto: división 10, 2,13 / 3,08; división 5, 2,25 / 2,73; división 1, 2,35 / 2,88 goles por partido.
 - **Consecuencia:** el partido visible y los encuentros del resto de la liga mantienen distinta producción de goles en esta muestra.

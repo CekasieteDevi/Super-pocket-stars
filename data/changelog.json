@@ -1,4 +1,5 @@
 [
+	{"version": "0.8.29", "fecha": "2026-10-04", "cambio": "Las pruebas automáticas avisan cuando una prueba se cae sin dejar mensaje."},
 	{"version": "0.8.28", "fecha": "2026-10-04", "cambio": "Los partidos internacionales contra clubes del exterior se ven en la cancha."},
 	{"version": "0.8.27", "fecha": "2026-10-04", "cambio": "Simular la temporada ya no congela la pantalla."},
 	{"version": "0.8.26", "fecha": "2026-10-04", "cambio": "Ir al próximo partido frena siempre que llega una noticia nueva, aunque el diario esté lleno."},
