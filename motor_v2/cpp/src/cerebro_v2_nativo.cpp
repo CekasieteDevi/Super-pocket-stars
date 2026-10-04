@@ -208,6 +208,13 @@ const Entrada NUEVOS[] = {
 	{ "cerebro", "via_libre_m", &PesosCerebro::via_libre_m },
 	{ "cerebro", "castigo_espaldas", &PesosCerebro::castigo_espaldas },
 	{ "cerebro", "contrapresion_seg", &PesosCerebro::contrapresion_seg },
+	{ "cerebro", "presion_alta_segundo", &PesosCerebro::presion_alta_segundo },
+	{ "cerebro", "trampa_m", &PesosCerebro::trampa_m },
+	{ "cerebro", "presion_alta_cierres", &PesosCerebro::presion_alta_cierres },
+	{ "cerebro", "pique_m", &PesosCerebro::pique_m },
+	{ "cerebro", "pique_bono", &PesosCerebro::pique_bono },
+	{ "cerebro", "pique_espera_seg", &PesosCerebro::pique_espera_seg },
+	{ "cerebro", "pique_riesgo", &PesosCerebro::pique_riesgo },
 	{ "cerebro", "llegada_area_extra", &PesosCerebro::llegada_area_extra },
 	{ "cerebro", "centro_alto_m", &PesosCerebro::centro_alto_m },
 	{ "cerebro", "centro_elevacion_rad", &PesosCerebro::centro_elevacion_rad },
@@ -281,6 +288,7 @@ void godot::leer_plan_equipo(const Dictionary &d, motor_v2::PlanEquipo &p) {
 	leer(d, "intencion_centro", p.intencion_centro);
 	leer(d, "contragolpe", p.contragolpe);
 	leer(d, "presion_alta", p.presion_alta);
+	leer(d, "pique", p.pique);
 	leer(d, "defensivo", p.defensivo);
 	leer(d, "extra_pared", p.extra_pared);
 	leer(d, "extra_contragolpe", p.extra_contragolpe);

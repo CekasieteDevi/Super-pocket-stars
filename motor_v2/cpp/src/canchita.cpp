@@ -490,6 +490,12 @@ void Canchita::_analizar() {
 		if (cerebro.planes[defiende & 1].contrapresion > 0.0 && cerebro.transicion_de(_mundo, 1 - defiende) > 0.0) {
 			mejor_t *= 1.0 + cerebro.planes[defiende & 1].contrapresion;
 		}
+		// Presión alta: con la pelota en campo rival aprietan dos, siempre.
+		// En partidos parejos recuperaba a 41 m de su fondo, igual que los
+		// otros cinco estilos (tests/_diag_identidad_v2.gd).
+		if (cerebro.planes[defiende & 1].presion_alta && pelota.pos.x * _ataca(defiende) > 0.0) {
+			mejor_t *= 1.0 + cerebro.pesos.presion_alta_segundo;
+		}
 		for (size_t i = 0; i < jugadores.size(); i++) {
 			const JugadorCanchita &j = jugadores[i];
 			if (j.equipo != defiende || j.arquero || int(i) == _perseguidor[defiende]) {

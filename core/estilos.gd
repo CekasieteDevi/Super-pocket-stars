@@ -44,6 +44,17 @@ static func intencion_centro(estilo: String) -> float:
 static func multiplicador_palomita(estilo: String) -> float:
 	return MULTIPLICADOR_PALOMITA_BASE + MULTIPLICADOR_PALOMITA_POR_CENTRO * intencion_centro(estilo)
 
+## Cuánto pican los delanteros a la espalda de la defensa rival (0 = nunca).
+## Es de los estilos verticales: el Contragolpe vive de eso y el Juego
+## directo lo busca con el pelotazo. Contra una línea adelantada es lo que
+## deja a un delantero solo frente al arquero, o en offside.
+const PIQUE_A_LA_ESPALDA := {"Contragolpe": 1.0, "Juego directo": 0.7}
+
+
+static func pique_a_la_espalda(estilo: String) -> float:
+	return float(PIQUE_A_LA_ESPALDA.get(estilo, 0.0))
+
+
 static func generar(rng: RandomNumberGenerator) -> String:
 	return LISTA[rng.randi() % LISTA.size()]
 

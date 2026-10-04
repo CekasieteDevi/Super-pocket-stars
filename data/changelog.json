@@ -1,4 +1,6 @@
 [
+	{"version": "0.8.24", "fecha": "2026-10-04", "cambio": "La Presión alta aprieta con más jugadores en campo rival y deja en offside al rival si sus defensores son inteligentes."},
+	{"version": "0.8.23", "fecha": "2026-10-04", "cambio": "Los delanteros del Contragolpe y del Juego directo pican a la espalda de la defensa y sus compañeros les tiran el pelotazo."},
 	{"version": "0.8.22", "fecha": "2026-10-03", "cambio": "Ningún estilo le gana a otro por regla: la ventaja sale de cómo juega cada equipo en la cancha."},
 	{"version": "0.8.21", "fecha": "2026-10-03", "cambio": "Los defensores revientan menos la pelota cuando los aprietan cerca de su arco."},
 	{"version": "0.8.20", "fecha": "2026-10-03", "cambio": "Los delanteros caen menos veces en offside."},

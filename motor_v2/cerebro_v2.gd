@@ -145,6 +145,7 @@ static func plan_de(equipo: Team, rival: Team) -> Dictionary:
 	p["retroceso"] = Estilos.retroceso_sin_pelota(equipo.estilo) - Estilos.RETROCESO_DEFAULT
 	p["acompanamiento"] = Estilos.acompanamiento(equipo.estilo) / Estilos.ACOMPANAMIENTO_DEFAULT
 	p["intencion_centro"] = Estilos.intencion_centro(equipo.estilo)
+	p["pique"] = Estilos.pique_a_la_espalda(equipo.estilo)
 	p["contragolpe"] = equipo.estilo == "Contragolpe"
 	p["presion_alta"] = equipo.estilo == "Presión alta"
 	p["defensivo"] = equipo.estilo == "Defensivo"

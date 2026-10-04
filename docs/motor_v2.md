@@ -1629,6 +1629,70 @@ La regresión completa pasa: 0 fallas de 117.
 2. **Los demás cruces no se distinguen:** para que el estilo decida más, cada plan tiene que cambiar más lo que hace el equipo (`Estilos.PLANES`, `cerebro.estilo_*`).
 3. **`MatchEngine`:** no lee el estilo. Sin la tabla, en los partidos de los demás clubes el estilo ya no cambia el resultado; solo queda la familiaridad táctica al cambiarlo.
 
+#### Resultado (2026-10-04): identidad por estilo, Presión alta y Contragolpe
+
+Pedido del usuario: el estilo dice qué intenta el equipo y los atributos, qué tan bien le sale. Ejemplos que dio: los defensores buenos de la Presión alta dejan al rival en offside y los malos no; el Contragolpe se mete atrás y sale con pases largos, y si es malo no los sabe dar.
+
+**Medición nueva:** `tests/_diag_identidad_v2.gd`. Cada estilo juega con un plantel bueno y uno malo contra el mismo rival. Opciones: `solo=defensores|volantes|delanteros`, `atributo=<nombre>` (cambia solo ese atributo y deja la media), `rival_estilo=<n>`, `estilos=<n,n>`.
+
+**Antes de tocar** (planteles de 65 contra un Juego directo de 65, 120 partidos por fila):
+
+- Los atributos ya pesaban. Plantel de 95 contra plantel de 35: pases que llegan 85 a 88% contra 64 a 81%; pelotazos que llegan 80 a 86% contra 52 a 63%; recupera a 62 a 64 m de su fondo contra 25 a 34 m.
+- La identidad se veía en los pases (Tiki taka 28 por partido de 14 m; Contragolpe 19 de 19 m) y en el primer pase al recuperar (Contragolpe: 49% largo o al hueco; Tiki taka: 77% corto).
+- No se veía en lo demás. Los seis estilos recuperaban a 40 a 42 m de su fondo, 4 veces por partido en campo rival, y perdían la pelota antes de 6 s el 45 a 48% de las veces. La posesión era 49 a 51%.
+- El offside dependía solo del delantero: la Presión alta con defensores de 95 de inteligencia cobraba 0,06 por partido y con defensores de 35, 0,09.
+- Todas las corridas terminaban en la línea del offside (`Cerebro::_destino_legal`): había 3 pases a la espalda por partido.
+
+**Qué se hizo** (C++; los números en `data/fisica_v2.json`, "cerebro", con su nota en `_notas.identidad`):
+
+- **El pique a la espalda** (`Estilos.PIQUE_A_LA_ESPALDA`: Contragolpe 1 y Juego directo 0,7; `PlanEquipo::pique`). El delantero cerca de la línea pica `pique_m` (10 m) detrás de ella si hay espacio hasta el arco. Espera al filo `pique_espera_seg` × 2 × su inteligencia y después cruza: llega lanzado, o queda en offside si el pase tarda. El que tiene la pelota le tira el globo (`pique_bono`, `pique_riesgo`).
+- **La trampa del offside** (`Cerebro::_trampa_m`, `trampa_m` 3 m). La juega el equipo de línea adelantada: la Presión alta o la jugada "defensa adelantada". Sale de la inteligencia de centrales y laterales: con 50 de media no hay trampa. Se cuenta en la foto del pase: el paso al frente de verdad no entra en el gesto del pase (0,3 s: el defensor avanza 0,2 m).
+- **La presión en campo rival** de la Presión alta: tres más tapan las salidas de la pelota (`presion_alta_cierres`) y el segundo hombre sale desde el doble de lejos (`presion_alta_segundo`).
+- **Sin reglas por el nombre del rival.** La salida rápida del Contragolpe valía solo contra la Presión alta, y la Presión alta no cerraba contra el Contragolpe. Ahora valen contra cualquiera.
+- **Probado y descartado:** dejar al 9 del Contragolpe arriba sin la pelota. No cambió nada: al recuperar ya había 2,2 compañeros delante de la pelota.
+
+**Después** (mismos partidos):
+
+| Estilo | Posesión | Pases y largo | Pelotazos | Bloque | Offsides que cobra | El rival la tiene | Remates del rival solo |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Tiki taka | 53,2% | 30,2 de 14,0 m | 2,4 | 40,4 m | 0,24 | 5,6 s | 1,54 |
+| Contragolpe | 49,2% | 19,3 de 20,6 m | 7,8 | 36,9 m | 0,11 | 6,4 s | 1,98 |
+| Juego directo | 49,9% | 21,3 de 19,4 m | 7,6 | 39,4 m | 0,21 | 6,2 s | 1,76 |
+| Presión alta | 55,9% | 30,1 de 15,0 m | 3,9 | 45,8 m | 0,96 | 5,2 s | 1,10 |
+| Defensivo | 50,8% | 21,3 de 16,9 m | 5,5 | 35,8 m | 0,02 | 6,1 s | 2,26 |
+| Físico | 51,2% | 21,5 de 17,8 m | 5,8 | 39,3 m | 0,20 | 5,9 s | 1,61 |
+
+**La trampa depende de los defensores** (Presión alta contra Contragolpe, 80 partidos por fila; cambia solo la inteligencia de centrales y laterales):
+
+| Inteligencia de los defensores | Offsides que cobra | Goles en contra | Remates del rival solo |
+| --- | --- | --- | --- |
+| 95 | 1,41 | 1,02 | 1,19 |
+| 35 | 0,56 | 1,15 | 1,36 |
+
+Contra el Juego directo (60 partidos): 1,43 y 0,50 offsides; 0,93 y 1,30 goles en contra.
+
+**La escala.** El Barcelona de 2024-25 dejó al rival en offside unas 7 veces por partido, con unos 10 remates del rival: 0,7 offsides por remate. Acá el rival remata 3,6 veces (el partido dura 4 minutos de verdad): 1,4 offsides son 0,4 por remate. Antes eran 0,02.
+
+**Todos contra todos** (40 partidos por cruce, semillas 97000 y 20261001): Tiki taka +0,05 y -0,19; Contragolpe +0,01 y +0,07; Juego directo +0,08 y +0,04; Presión alta -0,10 y -0,12; Defensivo -0,03 y +0,02; Físico -0,01 y +0,18. La posesión separa por primera vez: Presión alta 53,4%, Tiki taka 51 a 52%, Juego directo 48,3%, Contragolpe 47,2%.
+
+**Calibración** (200 partidos por escenario, las dos semillas):
+
+- **Goles, remates, pases, faltas y tarjetas:** como antes. Quedan afuera por goles sexta en una semilla y octava en la otra, y décima por remates en una.
+- **La posesión queda afuera en 9 de 20 parejos** (54 a 56% contra 49%). En esos escenarios el equipo A juega siempre con el Tiki taka o la Presión alta contra el Juego directo o el Contragolpe. El motor espacial no separaba la posesión por estilo: ese rango ya no sirve para los parejos. Por lo mismo quedan afuera D10/D7 (49 a 50% contra 42%) y D10/D9 en una semilla.
+- **Offsides:** 0,4 a 0,7 por partido en los parejos y 1,3 a 1,4 en D10/D7 (el motor espacial: 0,05 a 0,17).
+- **Pases completos:** suben a 40 a 42 (36,6); D1/D2 queda afuera (+22%).
+
+La regresión completa pasa: 0 fallas de 117. Bibliotecas de Windows y Android rearmadas (`test_reglas_v2`: huella 6236477683712598190 en Windows).
+
+**Qué falta:**
+
+1. **La escala de los offsides:** 0,4 por remate del rival contra 0,7 del Barcelona. Subir `trampa_m` más de 3 m deja en offside al que está 3 m habilitado.
+2. **El robo arriba no rinde más:** la Presión alta remata 1,2 veces por partido en los 8 s después de recuperar en campo rival, igual que los demás.
+3. **El Contragolpe no hace más contras que los demás** contra un rival que no sube (0,42 remates en los 12 s después de recuperar en su campo). Contra la Presión alta, 0,5 a 0,7.
+4. **Los otros cuatro estilos:** falta medir y marcar su identidad (Tiki taka, Juego directo, Defensivo, Físico).
+5. **El rango de posesión de la calibración:** hay que medirlo con los dos equipos del mismo estilo, o sacarlo.
+6. **El teléfono:** falta comparar la huella y mirar un partido.
+
 **Herramientas que acompañan todas las etapas:** un detector nuevo que mide sobre el mundo (no sobre la vista) `SALTO_PELOTA`, `ENCIMADOS` (cápsulas superpuestas), `PATINA` (pie que desliza), `ESPERA` (jugador quieto con la pelota viniendo a él) y ms por frame; y una grabación por semilla que se puede reproducir y rebobinar para ver cualquier minuto.
 
 **Dónde se hace cada etapa:** todas en la PC del usuario. Las etapas 1 y 3 a 6 se hicieron en la nube (Linux); desde el 2026-10-02 la nube no se usa y no hay biblioteca de Linux.

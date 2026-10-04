@@ -243,6 +243,28 @@ struct PesosCerebro {
 	// Etapa 7: además del que presiona, va a la pelota del rival el que llega
 	// en menos de esto (segundos). 0 = nadie más.
 	double contrapresion_seg = 1.0;
+	// Identidad de la Presión alta: con la pelota en campo rival, ese segundo
+	// hombre sale desde (1 + esto) veces más lejos. 0 = como los demás.
+	double presion_alta_segundo = 1.0;
+	// La trampa del offside (Cerebro::_trampa_m): metros con defensores de 100
+	// de inteligencia. 0 = sin trampa.
+	double trampa_m = 3.0;
+	// Identidad de la Presión alta: con la pelota en campo rival, cuántos
+	// más tapan las salidas de la pelota (hasta Defensa::CIERRES_DE_MAS).
+	double presion_alta_cierres = 3.0;
+	// El pique a la espalda (PlanEquipo::pique): metros detrás de la línea
+	// del offside adonde pica el delantero, y lo que vale de más esa corrida
+	// (para el que pica) y el pase a ella (para el que la tiene).
+	// 0 metros = nadie pica.
+	double pique_m = 10.0;
+	double pique_bono = 3.0;
+	// El que pica espera al filo de la línea esto × 2 × su inteligencia (0 a
+	// 1) y después cruza, salga o no el pase. El de 100 espera lo que dura el
+	// pique: no cruza antes del pase. El torpe arranca enseguida.
+	double pique_espera_seg = 0.75;
+	// El globo al que pica es una carrera contra el defensor: se da con hasta
+	// este riesgo (los demás globos, hasta riesgo_maximo).
+	double pique_riesgo = 1.0;
 	// Etapa 7: valor de más de la corrida al área cuando la pelota va por la
 	// banda en el último tercio. 0 = como en el motor espacial.
 	double llegada_area_extra = 2.0;
@@ -271,6 +293,9 @@ struct PlanEquipo {
 	// Estilos.acompanamiento(estilo) / Estilos.ACOMPANAMIENTO_DEFAULT.
 	double acompanamiento = 1.0;
 	double intencion_centro = 1.0;
+	// Estilos.pique_a_la_espalda(estilo): cuánto pican sus delanteros a la
+	// espalda de la defensa rival.
+	double pique = 0.0;
 	bool contragolpe = false;
 	bool presion_alta = false;
 	bool defensivo = false;
@@ -409,6 +434,11 @@ struct PlanDesmarque {
 	// Sale de la grilla de apoyo (nuevo, Simple Soccer).
 	bool de_grilla = false;
 	double espacio_x = 0.0, espacio_z = 0.0;
+	// El pique a la espalda: el destino queda detrás de la línea del offside.
+	// El que pica espera al filo de la línea (pesos.pique_espera_seg) desde
+	// que arranca el pique.
+	bool a_la_espalda = false;
+	double desde = 0.0;
 	// La llegada al área: adónde quiere ir, antes de recortar por el offside.
 	bool tiene_deseo = false;
 	double deseo_x = 0.0, deseo_z = 0.0;
@@ -427,6 +457,9 @@ struct OpcionVista {
 struct ContadoresCerebro {
 	int64_t decisiones[DECISIONES] = {};
 	int64_t corridas_preparadas = 0;
+	// Piques a la espalda que arrancaron y pases que salieron a uno.
+	int64_t piques = 0;
+	int64_t pases_al_pique = 0;
 	// Qué decide el que tiene la pelota según el factor_geometria de donde
 	// está: franjas de 0,05 a 0,15, a 0,3, a 0,5 y más. `zona_con_tiro`: las
 	// veces que el remate estaba entre las opciones.
@@ -528,6 +561,7 @@ public:
 	// Offside en el cuadro del pase: `receptor` está adelantado respecto de la
 	// pelota y del último defensor de campo, en campo rival.
 	bool en_offside(const Mundo &m, int receptor) const;
+	double _trampa_m(int defiende) const;
 	double linea_offside(int equipo) const {
 		return _linea_offside[equipo & 1];
 	}
@@ -564,6 +598,12 @@ private:
 		bool enganchado = false;
 		double cierre_x = 0.0, cierre_z = 0.0;
 		bool hay_cierre = false;
+		// Presión alta: los que tapan otras salidas de la pelota, además del
+		// cierre (pesos.presion_alta_cierres).
+		static constexpr int CIERRES_DE_MAS = 3;
+		int cierres_de_mas = 0;
+		int cierre_de_mas[CIERRES_DE_MAS] = { -1, -1, -1 };
+		double cierre_de_mas_x[CIERRES_DE_MAS] = {}, cierre_de_mas_z[CIERRES_DE_MAS] = {};
 		double intensidad = 0.0;
 	};
 	struct Ritmo {
@@ -682,7 +722,8 @@ private:
 	void _recortar_a_la_zona(int i, double &x, double &z) const;
 	double _intensidad_de_presion(const Mundo &m, int defiende) const;
 	void _punto_de_cobertura(const Mundo &m, int presionante_, double intensidad, double &x, double &z) const;
-	bool _punto_de_cierre(const Mundo &m, int defiende, double evitar_x, double evitar_z, double &x, double &z) const;
+	bool _punto_de_cierre(const Mundo &m, int defiende, double evitar_x, double evitar_z, double &x, double &z,
+			int saltear = 0) const;
 	bool _presion_superada(const Mundo &m, int defiende) const;
 
 	void _planificar_grilla(const Mundo &m);

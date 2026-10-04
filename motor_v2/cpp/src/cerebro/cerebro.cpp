@@ -19,6 +19,12 @@ constexpr double DESMARQUE_MIN_SEG = 1.0;
 constexpr double DESMARQUE_MAX_SEG = 3.0;
 constexpr double SEPARACION_DESMARQUE = 4.0;
 constexpr int MAX_RUPTURAS = 2;
+// El pique a la espalda: lo arranca el que está a menos de esto de la línea
+// del offside, y se cierra hacia el arco esta parte de su carril.
+constexpr double PIQUE_DESDE_M = 8.0;
+constexpr double PIQUE_CIERRE = 0.6;
+// No pica a menos de esto de la línea de fondo: esa pelota es del arquero.
+constexpr double PIQUE_DEL_FONDO_M = 6.0;
 constexpr double PRESION_DESTINO_INVIABLE = 0.85;
 constexpr double PRESION_SIN_PERSECUCION = 0.35;
 constexpr double CONO_SOLO_M = 15.0;
@@ -921,17 +927,27 @@ void Cerebro::_evaluar(const Mundo &m, int i, std::vector<Opcion> &op) const {
 				listo = dist(c.x, c.z, corrida.x, corrida.z)
 						<= c.vel_max * de / std::max(pesos.vel_pase_max, 1.0) * 0.75 + 1.5;
 			}
-			if (avance > 2.0 && de <= max_largo && riesgo < 0.55 && listo) {
+			// Al que pica a la espalda, si el pase raso no pasa la línea, va por
+			// arriba: el globo se mide más abajo con su propio margen
+			// (margen_globo). Raso solo, la línea lo cortaba siempre y salían
+			// 0,1 pases por partido a 25 piques.
+			bool por_arriba = corrida.a_la_espalda && riesgo >= 0.55;
+			if (avance > 2.0 && de <= max_largo && (riesgo < 0.55 || por_arriba) && listo) {
 				double u = pesos.hueco_base + pesos.hueco_progreso * (valor_posicion(corrida.x, corrida.z, equipo) - mi_valor)
 						+ pesos.hueco_seguridad * (1.0 - riesgo) - pesos.hueco_distancia * de / max_largo;
 				Opcion o;
-				o.tipo = de > max_dist ? DEC_PASE_LARGO : DEC_PASE_HUECO;
+				o.tipo = de > max_dist || por_arriba ? DEC_PASE_LARGO : DEC_PASE_HUECO;
 				o.receptor = r;
 				o.tiene_punto = true;
 				o.x = corrida.x;
 				o.z = corrida.z;
 				o.corrida_preparada = true;
 				o.utilidad = u * sesgo_pase * factor_vision + 0.35 * (1.0 - riesgo);
+				if (corrida.a_la_espalda) {
+					// El equipo que pica busca ese pase: con la utilidad de
+					// cualquier pase arriesgado salían 1,4 por partido a 15 piques.
+					o.utilidad += pesos.pique_bono * plan.pique;
+				}
 				op.push_back(o);
 			}
 		}
@@ -1123,8 +1139,12 @@ void Cerebro::_evaluar(const Mundo &m, int i, std::vector<Opcion> &op) const {
 			const JugadorVisto &r = m.jugadores[size_t(o.receptor)];
 			double margen = planeador->margen_globo(i, o.receptor, o.tiene_punto ? o.x : r.x, o.tiene_punto ? o.z : r.z);
 			double riesgo = _riesgo_de_margen(margen);
-			// El globo que cae donde un rival llega antes tampoco se ofrece.
-			if (riesgo > pesos.riesgo_maximo) {
+			// El globo que cae donde un rival llega antes tampoco se ofrece. El
+			// del pique sí, hasta pique_riesgo: con el tope de todos salían 0,6
+			// por partido a 22 piques.
+			bool al_pique = o.corrida_preparada && _desmarques[size_t(o.receptor)].vivo
+					&& _desmarques[size_t(o.receptor)].a_la_espalda;
+			if (riesgo > (al_pique ? pesos.pique_riesgo : pesos.riesgo_maximo)) {
 				continue;
 			}
 			if (o.tipo == DEC_CENTRO) {
@@ -1339,7 +1359,12 @@ void Cerebro::_ponderar(const Mundo &m, int i, std::vector<Opcion> &op, double p
 	double asociacion = ASOCIACION_MEDIA + pesos.estilo_fuerza * (plan.asociacion - ASOCIACION_MEDIA);
 	double lejos_del_arco = planeador ? clamp01(1.0 - factor_geometria(p.x, p.z, equipo) / TIRO_CLARO) : 1.0;
 	double verticalidad = VERTICALIDAD_MEDIA + pesos.estilo_fuerza * (plan.verticalidad - VERTICALIDAD_MEDIA);
-	bool contra_presion = plan.contragolpe && rival.presion_alta && transicion > 0.0;
+	// La salida rápida es del Contragolpe contra cualquiera. Valía solo contra
+	// la Presión alta: una regla por el nombre del rival. En partidos parejos
+	// el Contragolpe remataba 0,4 veces por partido en los 12 s después de
+	// recuperar en su campo, igual que los otros cinco estilos
+	// (tests/_diag_identidad_v2.gd).
+	bool salida_rapida = plan.contragolpe && transicion > 0.0;
 	int grupos[DECISIONES] = {};
 	for (const Opcion &o : op) {
 		grupos[o.tipo]++;
@@ -1363,7 +1388,7 @@ void Cerebro::_ponderar(const Mundo &m, int i, std::vector<Opcion> &op, double p
 		if (o.tipo == DEC_CONDUCIR) {
 			ajuste += 0.45 * camino * (1.0 - presion) * (1.0 - asociacion);
 			ajuste += transicion * camino * 0.6;
-			if (contra_presion) {
+			if (salida_rapida) {
 				ajuste += 0.50 * transicion * camino;
 			}
 			ajuste -= asociacion * 0.2;
@@ -1395,13 +1420,13 @@ void Cerebro::_ponderar(const Mundo &m, int i, std::vector<Opcion> &op, double p
 				// lo daba y no llegaba al arco.
 				double filtra = planeador ? std::max(verticalidad, asociacion * pesos.estilo_hueco) : verticalidad;
 				ajuste += (filtra * 0.35 + transicion * 0.8) * libertad * clamp01(adelante / 15.0);
-				if (contra_presion) {
+				if (salida_rapida) {
 					ajuste += 0.65 * transicion * libertad * clamp01(adelante / 15.0);
 				}
 			} else {
 				ajuste += verticalidad * 0.3 + transicion * 0.45;
 				ajuste -= asociacion * 0.6;
-				if (contra_presion) {
+				if (salida_rapida) {
 					ajuste += 0.40 * transicion * libertad;
 				}
 				if (adelante < -2.0) {
@@ -1671,6 +1696,9 @@ Decision Cerebro::decidir(const Mundo &m, int i, bool puede_pasar, Azar &azar) {
 	}
 	if (dec.corrida_preparada) {
 		cuenta.corridas_preparadas++;
+		if (dec.receptor >= 0 && _desmarques[size_t(dec.receptor)].vivo && _desmarques[size_t(dec.receptor)].a_la_espalda) {
+			cuenta.pases_al_pique++;
+		}
 	}
 	return dec;
 }
@@ -1725,6 +1753,34 @@ int Cerebro::muro_de_pared(const Mundo &m, int &corredor, double &x, double &z) 
 	return _pared.muro;
 }
 
+// La trampa del offside: los metros que la línea de `defiende` da al frente
+// en el cuadro del pase. Sale de la inteligencia de sus centrales y
+// laterales: con 50 de media no hay trampa y con 100 es pesos.trampa_m. Solo
+// la juega el equipo de línea adelantada (la Presión alta o la jugada
+// "defensa adelantada"). El paso de verdad no entra en el gesto del pase
+// (0,3 s: el defensor avanza 0,2 m), así que se cuenta en la foto. Antes el
+// offside dependía solo del delantero: la Presión alta con defensores de 95
+// cobraba 0,00 por partido y con defensores de 35, 0,50
+// (tests/_diag_identidad_v2.gd).
+double Cerebro::_trampa_m(int defiende) const {
+	const PlanEquipo &plan = planes[defiende & 1];
+	if (!plan.presion_alta && plan.paso_defensa <= 0.0) {
+		return 0.0;
+	}
+	double suma = 0.0;
+	int cuantos = 0;
+	for (const FichaCerebro &f : fichas) {
+		if (f.equipo == defiende && (f.rol == DFC || f.rol == LAT)) {
+			suma += f.bruto[AT_INTELIGENCIA];
+			cuantos++;
+		}
+	}
+	if (cuantos == 0) {
+		return 0.0;
+	}
+	return pesos.trampa_m * clamp01(suma / double(cuantos) / 50.0 - 1.0);
+}
+
 // Offside con la foto del cuadro del pase: en campo rival, delante de la
 // pelota y delante del penúltimo rival.
 bool Cerebro::en_offside(const Mundo &m, int receptor) const {
@@ -1750,7 +1806,7 @@ bool Cerebro::en_offside(const Mundo &m, int receptor) const {
 			segundo = r;
 		}
 	}
-	return x > segundo;
+	return x > segundo - _trampa_m(1 - equipo);
 }
 
 // --- Planes (cada uno con su reloj) ---
@@ -1985,7 +2041,8 @@ void Cerebro::_punto_de_cobertura(const Mundo &m, int pres, double intensidad, d
 	z = p.z + dz * atras;
 }
 
-bool Cerebro::_punto_de_cierre(const Mundo &m, int defiende, double evitar_x, double evitar_z, double &x, double &z) const {
+bool Cerebro::_punto_de_cierre(const Mundo &m, int defiende, double evitar_x, double evitar_z, double &x, double &z,
+		int saltear) const {
 	struct Salida {
 		int clave;
 		double d2;
@@ -2007,7 +2064,7 @@ bool Cerebro::_punto_de_cierre(const Mundo &m, int defiende, double evitar_x, do
 		const JugadorVisto &c = m.jugadores[size_t(s.clave)];
 		double px = lerp(m.pelota_x, c.x, pesos.def_cierre_carril);
 		double pz = lerp(m.pelota_z, c.z, pesos.def_cierre_carril);
-		if (dist(px, pz, evitar_x, evitar_z) > 4.0) {
+		if (dist(px, pz, evitar_x, evitar_z) > 4.0 && saltear-- <= 0) {
 			x = px;
 			z = pz;
 			return true;
@@ -2089,16 +2146,13 @@ void Cerebro::_planificar_defensa(const Mundo &m, int defiende) {
 	}
 	plan.cierre = -1;
 	plan.hay_cierre = false;
+	plan.cierres_de_mas = 0;
 	if (plan.presionante != -1 && plan.cobertura != -1) {
 		const PlanEquipo &propio = planes[defiende & 1];
-		const PlanEquipo &rival = planes[(defiende + 1) & 1];
 		double urg = _urgencia[defiende & 1];
 		double umbral = pesos.def_intensidad_para_cierre - urg * pesos.marc_cierre;
 		bool guardando = urg <= -pesos.marc_urgencia_para_guardar;
 		bool permite = !guardando && (propio.presion_alta || intensidad >= umbral);
-		if (propio.presion_alta && rival.contragolpe) {
-			permite = false;
-		}
 		if (permite && !_presion_superada(m, defiende)) {
 			double px, pz;
 			if (_punto_de_cierre(m, defiende, cob_x, cob_z, px, pz)) {
@@ -2116,6 +2170,43 @@ void Cerebro::_planificar_defensa(const Mundo &m, int defiende) {
 						plan.cierre = k;
 					}
 				}
+				// Presión alta: con la pelota en campo rival tapan también las
+				// salidas que siguen, cada una el que llega antes. Con un solo
+				// cierre el apretado tenía siempre un pase libre: recuperaba en
+				// campo rival 4,3 veces por partido, igual que los otros estilos.
+				bool arriba = m.pelota_x * signo(defiende) > 0.0;
+				int de_mas = propio.presion_alta && arriba
+						? std::clamp(int(pesos.presion_alta_cierres + 0.5), 0, int(Defensa::CIERRES_DE_MAS)) : 0;
+				for (int n = 0; n < de_mas; n++) {
+					double qx, qz;
+					if (!_punto_de_cierre(m, defiende, cob_x, cob_z, qx, qz, n + 1)) {
+						break;
+					}
+					int quien = -1;
+					double t_quien = 1e18;
+					for (int k : disponibles) {
+						bool ocupado = k == plan.presionante || k == plan.cobertura || k == plan.cierre;
+						for (int u = 0; u < plan.cierres_de_mas; u++) {
+							ocupado = ocupado || plan.cierre_de_mas[u] == k;
+						}
+						// Los centrales guardan la línea.
+						if (ocupado || fichas[size_t(k)].rol == DFC) {
+							continue;
+						}
+						double t = _tiempo_de_llegada(m, k, qx, qz);
+						if (t < t_quien) {
+							t_quien = t;
+							quien = k;
+						}
+					}
+					if (quien < 0) {
+						break;
+					}
+					plan.cierre_de_mas[plan.cierres_de_mas] = quien;
+					plan.cierre_de_mas_x[plan.cierres_de_mas] = qx;
+					plan.cierre_de_mas_z[plan.cierres_de_mas] = qz;
+					plan.cierres_de_mas++;
+				}
 			}
 		}
 	}
@@ -2132,6 +2223,11 @@ int Cerebro::papel(int i) const {
 	}
 	if (d.cierre == i) {
 		return CIERRE;
+	}
+	for (int u = 0; u < d.cierres_de_mas; u++) {
+		if (d.cierre_de_mas[u] == i) {
+			return CIERRE;
+		}
 	}
 	return SIN_PAPEL;
 }
@@ -2359,6 +2455,20 @@ void Cerebro::_objetivo_sin_pelota(const Mundo &m, int i, bool tiene, double &x,
 		x = lerp(x, _linea_defensiva[f.equipo & 1], clamp01(pesos.linea_mezcla));
 	}
 	double margen = pesos.offside_margen_torpe * (1.0 - clamp01(f.bruto[AT_INTELIGENCIA] / 100.0)) * f.margen_offside;
+	if (tiene && _desmarques[size_t(i)].vivo && _desmarques[size_t(i)].a_la_espalda) {
+		// El que pica espera al filo: el inteligente 1,5 m antes de la línea y
+		// el torpe pasado, como el que juega en el hombro (_ancla). Después
+		// cruza: llega lanzado al pase, o queda en offside si el pase tarda.
+		// Esperando siempre, el pase al pique era una carrera pareja con el
+		// defensor desde parado: el planeador lo daba por cortado y salían
+		// 0,1 por partido.
+		double intel = clamp01(f.bruto[AT_INTELIGENCIA] / 100.0);
+		if (m.segundos - _desmarques[size_t(i)].desde >= pesos.pique_espera_seg * 2.0 * intel) {
+			z = std::clamp(z, -MEDIO_ANCHO + 1.0, MEDIO_ANCHO - 1.0);
+			return;
+		}
+		margen = lerp(pesos.offside_margen_torpe, -1.5, intel) * f.margen_offside;
+	}
 	if (f.equipo == 0) {
 		x = std::min(x, _linea_offside[0] + margen);
 	} else {
@@ -2389,6 +2499,12 @@ Objetivo Cerebro::objetivo(const Mundo &m, int i) const {
 		if (o.papel == CIERRE && d.hay_cierre) {
 			o.x = d.cierre_x;
 			o.z = d.cierre_z;
+			for (int u = 0; u < d.cierres_de_mas; u++) {
+				if (d.cierre_de_mas[u] == i) {
+					o.x = d.cierre_de_mas_x[u];
+					o.z = d.cierre_de_mas_z[u];
+				}
+			}
 			return o;
 		}
 		if (o.papel == PRESIONANTE) {
@@ -2629,6 +2745,22 @@ void Cerebro::_candidatos_desmarque(const Mundo &m, int i, int poseedor, double 
 			_destino_legal(e.x + rx * largo, e.z + rz * largo, equipo, lx, lz);
 			agregar(DES_RUPTURA, lx, lz, poseedor, 0.0);
 		}
+		// El pique a la espalda: al espacio entre la línea rival y el arco. Solo
+		// si hay espacio (contra una defensa metida atrás no hay adónde picar)
+		// y si él está cerca de la línea. Todas las corridas terminaban en la
+		// línea del offside: había 3 pases a la espalda por partido y 0,1 a 0,3
+		// offsides (el Barcelona de 2024-25 dejaba al rival en offside 7 veces
+		// por partido).
+		const PlanEquipo &plan_propio = planes[equipo & 1];
+		double linea = _linea_offside[equipo & 1];
+		double espacio = (ax - linea) * s;
+		if (plan_propio.pique > 0.0 && pesos.pique_m > 0.0 && espacio > pesos.pique_m + PIQUE_DEL_FONDO_M
+				&& std::abs(e.x - linea) < PIQUE_DESDE_M && (linea - d.x) * s > 2.0) {
+			// Hacia el arco: se cierra un poco desde su carril.
+			Candidato &c = agregar(DES_RUPTURA, linea + s * pesos.pique_m, e.z * PIQUE_CIERRE, poseedor,
+					pesos.pique_bono * plan_propio.pique);
+			c.plan.a_la_espalda = true;
+		}
 		// Arrastre: se lleva a su marca y le abre el carril al poseedor.
 		int marcador = -1;
 		double d_marcador = 6.0;
@@ -2712,6 +2844,18 @@ bool Cerebro::_desmarque_sigue_vivo(const Mundo &m, int i) {
 	// con la pelota y el que llega sigue hasta adentro. Con el destino
 	// recortado al planear, se quedaba en el borde. Tampoco se cae porque el
 	// área esté llena de rivales: es donde tiene que estar.
+	if (plan.a_la_espalda) {
+		// El destino va con la línea: si la defensa retrocede, el espacio se
+		// achica y el pique se cae.
+		int equipo = fichas[size_t(i)].equipo;
+		double s = signo(equipo);
+		double linea = _linea_offside[equipo & 1];
+		if ((MEDIO_LARGO * s - linea) * s <= pesos.pique_m + PIQUE_DEL_FONDO_M) {
+			return false;
+		}
+		plan.x = linea + s * pesos.pique_m;
+		return true;
+	}
 	bool al_area = pesos.llegada_area_extra > 0.0 && plan.tiene_deseo;
 	_destino_legal(al_area ? plan.deseo_x : plan.x, al_area ? plan.deseo_z : plan.z, fichas[size_t(i)].equipo, lx, lz);
 	if (!al_area && presion_normalizada(m, lx, lz, fichas[size_t(i)].equipo) > PRESION_DESTINO_INVIABLE) {
@@ -2733,8 +2877,12 @@ void Cerebro::_anotar_desmarque(const Mundo &m, int i, const PlanDesmarque &p) {
 	PlanDesmarque &plan = _desmarques[size_t(i)];
 	plan = p;
 	plan.vivo = true;
+	plan.desde = m.segundos;
 	plan.hasta = m.segundos + dura;
 	cuenta.desmarques[std::clamp(p.tipo, 0, 3)]++;
+	if (p.a_la_espalda) {
+		cuenta.piques++;
+	}
 	if (p.de_grilla) {
 		cuenta.apoyos_de_grilla++;
 	}

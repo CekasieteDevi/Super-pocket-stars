@@ -1059,6 +1059,8 @@ Dictionary CanchitaV2Nativa::contadores_cerebro() const {
 		d[decisiones[t]] = k.decisiones[t];
 	}
 	d["corridas_preparadas"] = k.corridas_preparadas;
+	d["piques"] = k.piques;
+	d["pases_al_pique"] = k.pases_al_pique;
 	for (int f = 0; f < 4; f++) {
 		for (int t = 0; t < motor_v2::DECISIONES; t++) {
 			d[String("zona") + String::num_int64(f) + "_" + decisiones[t]] = k.en_zona[f][t];
