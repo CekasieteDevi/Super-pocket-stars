@@ -149,7 +149,16 @@ El partido de referencia es el que le toca al usuario en la partida guardada del
 
 ### BUG-011 — En el córner van demasiados jugadores a la pelota y nadie salta
 
-- **Estado:** anotado, sin investigar.
+- **Estado:** corregido el 2026-10-05 en el motor y en la vista. Falta la revisión visual en el teléfono.
+- **Causa del amontonamiento:** al centro iban todos los que lo podían cabecear moviéndose 3 m, de los dos equipos (`Canchita::_pensar_jugador`). Con el centro que cae de alto todos tienen el mismo punto: quedaban encimados.
+- **Causa de "sin saltar":** el modelo sí subía (0,7 a 0,9 m, `VistaV2._ajustar_cuerpo`). Cuatro o cinco saltaban a la vez, uno adentro del otro, y el salto no se distinguía. Además el gesto terminaba con el modelo a 0,3-0,5 m del piso y bajaba de golpe en un cuadro.
+- **Corrección en el motor:** al centro va el que llega primero de cada equipo y un compañero más, el que lo tiene más a tiro (`Canchita::_analizar`, `motor_v2/cpp/src/canchita.cpp`). Los demás siguen en su lugar.
+- **Corrección en la vista:** el modelo vuelve al piso antes de que termine el clip (`VistaV2._ajustar_cuerpo`, `motor_v2/vista_v2.gd`).
+- **Medición:** 400 córners forzados de quinta, semilla 97000, en el primer toque del centro. Córners con tres o más compañeros a 1,5 m de la pelota: 36% → 10%. Córners con más de cinco jugadores a 2,5 m: 24% → 6%. Pares de jugadores a menos de 1 m: 3,77 → 1,95 por córner. Gestos de cabeza: 1,90 → 1,42 por córner.
+- **Balance:** cabezazos al arco, 40% → 38% de los córners; goles, 2,8% → 2,5%; lo toca primero el que ataca, 48% → 49% (`tests/_diag_corners_v2.gd`). `tests/_diag_calibracion_v2.gd`, 100 partidos por escenario, semilla 97000: 16 → 19 medidas fuera de rango; goles y remates se mueven menos que el error de la media. Las tres medidas nuevas son de posesión y de puntos del favorito. Con la semilla 20261001 y 200 partidos, los seis escenarios desparejos dan los mismos puntos y las mismas medidas fuera de rango antes y después.
+- **Probado y descartado:** que el segundo no vaya al mismo punto que el primero. El amontonamiento baja al 2%, pero los cabezazos al arco bajan al 25% de los córners y los goles suben al 4,8%.
+- **Prueba de regresión:** `tests/test_corner_monton_v2.gd`. `tests/test_alargue_y_penales.gd` buscaba un empate en 20 partidos de liga y ahora busca en 40: con el cambio no hay ninguno en los primeros 20 (12 en 60).
+- **Pendiente:** en el 10% de los córners quedan tres compañeros a 1,5 m: el tercero no va a la pelota, estaba en su marca. `Cabecear` dura 0,5 s: el modelo baja 0,9 m en 0,21 s, más rápido que una caída real.
 - **Observado:** cuando cobran el córner, todos van adonde cae la pelota y se amontonan. Además los jugadores cabecean parados, sin saltar.
 
 ### BUG-012 — Pregunta: hay regates

@@ -11,6 +11,10 @@ const SEED := 4242
 ## Cuantos cruces se prueban buscando los dos casos que hacen falta: uno
 ## que se defina en el alargue y uno que llegue a los penales.
 const CRUCES := 60
+## Partidos de liga buscando un empate. Empata uno de cada cinco (12 de 60
+## con esta semilla): con 20 partidos el test fallaba por azar, sin ningun
+## empate en los primeros 20 (BUG-011 movio los resultados).
+const PARTIDOS_DE_LIGA := 40
 
 
 func _init() -> void:
@@ -204,7 +208,7 @@ func _test_en_liga_el_empate_sigue_siendo_empate() -> int:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = SEED
 	var empates := 0
-	for i in range(20):
+	for i in range(PARTIDOS_DE_LIGA):
 		var equipos := _armar_cruce(rng, i)
 		var r := MotorV2.simular(equipos[0], equipos[1], rng, false)
 		if str(r["definicion"]) != "90 minutos":
@@ -216,9 +220,9 @@ func _test_en_liga_el_empate_sigue_siendo_empate() -> int:
 		if int(r["goles_local"]) == int(r["goles_visitante"]):
 			empates += 1
 	if empates == 0:
-		print("FALLA: en 20 partidos de liga no hubo ni un empate: el test no midio nada.")
+		print("FALLA: en %d partidos de liga no hubo ni un empate: el test no midio nada." % PARTIDOS_DE_LIGA)
 		return 1
-	print("OK: 20 partidos de liga, %d empates, ninguno con alargue ni penales." % empates)
+	print("OK: %d partidos de liga, %d empates, ninguno con alargue ni penales." % [PARTIDOS_DE_LIGA, empates])
 	return 0
 
 

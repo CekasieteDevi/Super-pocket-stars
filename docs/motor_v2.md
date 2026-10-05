@@ -944,6 +944,7 @@ El usuario miró otra vez `laboratorio_reglas.tscn` y marcó seis fallas. Medici
 - **El arreglo:** cada parte se prueba con la pelota en el cuadro de contacto de su propio clip, de arriba para abajo. Vale para todo lo que llega por arriba: el pelotazo ahora se baja de cabeza o de pecho.
 - **Centro tendido (`cerebro.centro_elevacion_rad` 0,3 y `centro_alto_m` 1,3):** un perfil de vuelo propio (`Perfiles::CENTRO`). El córner con el globo de 34° subía a 7-9 m y caía casi vertical. Si tendido no llega, va el globo.
 - **Saltan todos (`cerebro.centro_al_que_llega`):** al centro va todo el que lo puede cabecear moviéndose 3 m como mucho, de los dos equipos. Antes iba uno por equipo.
+- **Saltan dos por equipo (BUG-011 de `docs/bugs_pendientes.md`, 2026-10-05):** va el que llega primero y un compañero más, el que lo tiene más a tiro (`Canchita::_analizar`). Saltando todos quedaban tres o más compañeros encimados en el 36% de los córners; ahora en el 10%. Los cabezazos al arco no cambian (40% → 38% de los córners).
 - **Dos que saltan no se hacen falta:** el cruce cuenta como falta solo con la pierna.
 - **Gestos de cabeza:** 17 por partido (antes 4); erra el 10% (antes 15-19%).
 

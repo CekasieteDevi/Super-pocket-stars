@@ -48,8 +48,8 @@ const AJUSTE_CUERPO_SUBE_SEG := 0.1
 ## Lo más que sube y lo más que se corre en el piso.
 const AJUSTE_CUERPO_SUBE_M := 0.9
 const AJUSTE_CUERPO_PISO_M := 0.6
-## Clip -> [segundo del contacto, [anclas]] de los que tocan con la frente o
-## con las manos.
+## Clip -> [segundo del contacto, [anclas], segundos de clip después del
+## contacto] de los que tocan con la frente o con las manos.
 var _contacto_cuerpo := {}
 ## Lo que se corrió cada uno en el contacto (ver _ajustar_cuerpo).
 var _corrido := {}
@@ -350,7 +350,8 @@ func _ready() -> void:
 			_gesto_corriendo[nombre] = [en, lado]
 		if c["contacto"] != null and str(c["ancla"]) in ["Frente", "manos", "Pecho", "Muslo_R"]:
 			_contacto_cuerpo[nombre] = [float(c["contacto"]) * float(c["duracion"]),
-				["Mano_L", "Mano_R"] if str(c["ancla"]) == "manos" else [str(c["ancla"])]]
+				["Mano_L", "Mano_R"] if str(c["ancla"]) == "manos" else [str(c["ancla"])],
+				(1.0 - float(c["contacto"])) * float(c["duracion"])]
 		if c.has("metros"):
 			_cinta[nombre] = c
 			if c["bucle"]:
@@ -879,8 +880,12 @@ func _piernas_de_carrera(i: int, p3: Jugador3D, accion: String, segundo: float, 
 ## después se queda con lo que se había corrido y lo suelta de a poco.
 func _ajustar_cuerpo(i: int, p3: Jugador3D, accion: String, segundo: float) -> void:
 	var contacto: float = _contacto_cuerpo[accion][0]
+	# Baja antes de que termine el clip. A Cabecear le quedan 0,21 s después
+	# del contacto: con AJUSTE_CUERPO_DESPUES_SEG entero, el gesto terminaba
+	# con el modelo a 0,3-0,5 m del piso y caía de golpe en un cuadro.
+	var despues := minf(AJUSTE_CUERPO_DESPUES_SEG, float(_contacto_cuerpo[accion][2]))
 	var peso := smoothstep(contacto - AJUSTE_CUERPO_ANTES_SEG, contacto, segundo) \
-		* (1.0 - smoothstep(contacto, contacto + AJUSTE_CUERPO_DESPUES_SEG, segundo))
+		* (1.0 - smoothstep(contacto, contacto + despues, segundo))
 	# Hasta este segundo sigue a la pelota; después se queda con lo corrido.
 	var sigue := contacto
 	if contacto < AJUSTE_CUERPO_SUBE_SEG:

@@ -273,8 +273,9 @@ struct PesosCerebro {
 	// pelotazo.
 	double centro_alto_m = 1.3;
 	double centro_elevacion_rad = 0.3;
-	// Etapa 7: 1 = al centro va el compañero que antes llega; 0 = el que lo
-	// esperaba, salvo que otro llegue medio segundo antes (como cualquier pase).
+	// Etapa 7: 1 = al centro va el compañero que antes llega, y uno más por
+	// equipo (Canchita::_analizar); 0 = el que lo esperaba, salvo que otro
+	// llegue medio segundo antes (como cualquier pase).
 	double centro_al_que_llega = 1.0;
 	// Etapa 7: multiplica la utilidad del remate (tiro.base y tiro.geometria
 	// son del motor espacial y los dos motores los leen).

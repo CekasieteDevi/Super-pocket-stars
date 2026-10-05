@@ -67,7 +67,8 @@ constexpr double SAQUE_DE_ARCO_M = 5.5;
 constexpr double CONDUCE_LEJOS_M = 2.5;
 // Lo más fuerte que sale un centro tendido (el pase llega a pase_max_ms).
 constexpr double CENTRO_MAX_MS = 30.0;
-// Al centro salta el que lo puede cabecear moviéndose esto como mucho.
+// Al centro salta, además del que va a la pelota, el compañero que lo puede
+// cabecear moviéndose menos, y esto como mucho.
 constexpr double CENTRO_A_TIRO_M = 3.0;
 constexpr double ESPACIO_TARDE_SEG = 0.3;
 constexpr double ESPACIO_RESTO_MS = 2.0;
@@ -507,6 +508,32 @@ void Canchita::_analizar() {
 			}
 		}
 	}
+	// Al centro salta uno más por equipo: el que lo tiene más a tiro. Con uno
+	// solo yendo a la pelota, el centro pasaba a un metro de los demás y nadie
+	// saltaba (revisión visual de la etapa 7: "no cabecean"). Saltando todos
+	// los que lo tenían a tiro, en el 36% de los córners quedaban tres o más
+	// compañeros a 1,5 m de la pelota, encimados y saltando a la vez (BUG-011,
+	// 400 córners, semilla 97000); con uno más, en el 10%.
+	// Probado y descartado: que el segundo no vaya al punto del primero (a
+	// menos de 1,5 m). Baja al 2%, pero los cabezazos al arco pasan del 40% al
+	// 25% de los córners y los goles del 2,8% al 4,8%.
+	if (_pase_activo && _pase_centro && cerebro.pesos.centro_al_que_llega > 0.0 && poseedor < 0) {
+		double cerca[2] = { CENTRO_A_TIRO_M, CENTRO_A_TIRO_M };
+		for (size_t i = 0; i < jugadores.size(); i++) {
+			const JugadorCanchita &j = jugadores[i];
+			int e = j.equipo & 1;
+			if (j.arquero || int(i) == _pateador || int(i) == _perseguidor[e] || _k_llega[i] < 0
+					|| _k_llega[i] >= int(trayectoria.pos.size()) - 1) {
+				continue;
+			}
+			const V3 &q = trayectoria.pos[size_t(_k_llega[i])];
+			double d = hipot(q.x - j.cuerpo.x, q.z - j.cuerpo.z);
+			if (q.y >= param_toque.pecho_hasta && d <= cerca[e]) {
+				cerca[e] = d;
+				_segundo[e] = int(i);
+			}
+		}
+	}
 	// Etapa 6: en una parada nadie va a la pelota; cuando saca, solo el que saca.
 	if (reglas && modo == PARTIDO && (_parada.activa || periodo >= TANDA)) {
 		_perseguidor[0] = _perseguidor[1] = -1;
@@ -634,14 +661,6 @@ void Canchita::_pensar_jugador(int i) {
 			&& jugadores[size_t(poseedor)].equipo == equipo_con_pelota
 			&& _t_llega[size_t(i)] > _t_llega[size_t(poseedor)] - gana;
 	bool va = _perseguidor[j.equipo] == i || _segundo[j.equipo] == i;
-	// Al centro saltan todos los que lo tienen a tiro, de los dos equipos: con
-	// uno solo por equipo yendo a la pelota, el centro pasaba a un metro de
-	// los demás y nadie saltaba (revisión visual de la etapa 7: "no cabecean").
-	if (!va && _pase_activo && _pase_centro && cerebro.pesos.centro_al_que_llega > 0.0 && !j.arquero
-			&& i != _pateador && _k_llega[size_t(i)] >= 0 && _k_llega[size_t(i)] < int(trayectoria.pos.size()) - 1) {
-		const V3 &q = trayectoria.pos[size_t(_k_llega[size_t(i)])];
-		va = q.y >= param_toque.pecho_hasta && hipot(q.x - j.cuerpo.x, q.z - j.cuerpo.z) <= CENTRO_A_TIRO_M;
-	}
 	if (va && contiene) {
 		// La tiene controlada otro y no le gana de mano: se para delante y
 		// espera el error (o el pase), no se tira a ciegas. Etapa 6: de cerca,
