@@ -1827,6 +1827,13 @@ void Canchita::_tarjeta(int i, double gravedad) {
 	double g = std::clamp(gravedad, 0.2, 4.0);
 	double p_roja = r.roja_por_falta * j.reglas.factor_roja * g * g;
 	double p_amarilla = r.amarilla_por_falta * j.reglas.factor_amarilla * g;
+	// ponytail: el arquero no se va expulsado, ni por roja ni por la segunda
+	// amarilla. El equipo sin arquero no está resuelto (nadie se pone los
+	// guantes): resolverlo antes de sacar esto.
+	if (j.arquero) {
+		p_roja = 0.0;
+		p_amarilla = j.amarillas > 0 ? 0.0 : p_amarilla;
+	}
 	double tirada = _azar.uno();
 	if (tirada < p_roja) {
 		_sacar_tarjeta(i, true);

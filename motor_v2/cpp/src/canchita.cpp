@@ -1774,9 +1774,20 @@ bool Canchita::_resolver_toques() {
 		// El que barre mal le pega más al rival: en el motor espacial las
 		// faltas suben de 2,2 por partido en primera a 3,1 en décima, y con
 		// un radio igual para todos acá no cambiaban con la división.
-		const FichaReglas &fr = jugadores[size_t(de)].reglas;
-		double torpeza = 1.0 - std::clamp((fr.quite + fr.barrida) / 200.0, 0.0, 1.0);
+		// El arquero que sale a los pies no barre: su oficio es el achique.
+		const JugadorCanchita &jd = jugadores[size_t(de)];
+		const FichaReglas &fr = jd.reglas;
+		double torpeza = 1.0 - std::clamp(jd.arquero ? jd.achique / 100.0 : (fr.quite + fr.barrida) / 200.0, 0.0, 1.0);
 		double radio = param_reglas.falta_radio_m * (1.0 + param_reglas.falta_torpeza * torpeza);
+		if (jd.arquero) {
+			// El radio del más torpe, por su torpeza: el arquero de achique 100
+			// no hace falta. Con el radio de la barrida el achique casi no
+			// pesaba: en 1.800 partidos (semilla 97000) el mejor arquero del
+			// partido hacía 56 faltas y el peor 67. Así, con 20 puntos de
+			// achique de más y de menos, 9 contra 51 (BUG-014,
+			// docs/bugs_pendientes.md).
+			radio = param_reglas.falta_radio_m * (1.0 + param_reglas.falta_torpeza) * torpeza;
+		}
 		for (size_t o = 0; o < jugadores.size(); o++) {
 			if (jugadores[o].equipo != jugadores[size_t(de)].equipo
 					&& hipot(q.x - jugadores[o].cuerpo.x, q.z - jugadores[o].cuerpo.z) <= radio) {
@@ -1829,10 +1840,15 @@ bool Canchita::_resolver_toques() {
 		}
 		j.toque_d_min = std::min(j.toque_d_min, d);
 		j.toque_alto_ok = j.toque_alto_ok || alto_ok;
+		// El arquero que se tira a los pies del que lleva la pelota hace falta
+		// igual que el que barre: las manos llegan al rival antes que a la
+		// pelota. Es penal: sale a los pies solo en su área (_pensar_jugador).
+		bool a_los_pies = j.toque == TOQUE_ATAJADA && poseedor >= 0 && jugadores[size_t(poseedor)].equipo != j.equipo
+				&& !(_remate.activo && _remate.equipo != j.equipo);
 		if (alto_ok && d <= tolerancia && d < mejor_d) {
 			mejor = int(i);
 			mejor_d = d;
-		} else if (con_reglas && j.toque == TOQUE_ENTRADA && falta_de < 0) {
+		} else if (con_reglas && (j.toque == TOQUE_ENTRADA || a_los_pies) && falta_de < 0) {
 			int a = piernas(int(i), q);
 			if (a >= 0) {
 				falta_de = int(i);
@@ -1844,6 +1860,7 @@ bool Canchita::_resolver_toques() {
 	if (mejor < 0 && falta_de >= 0) {
 		// La pierna llegó antes a las piernas que a la pelota: falta.
 		jugadores[size_t(falta_de)].toque_pendiente = false;
+		cuenta.faltas_arquero += jugadores[size_t(falta_de)].arquero ? 1 : 0;
 		_falta(falta_de, falta_a, falta_gravedad, true);
 		return false;
 	}

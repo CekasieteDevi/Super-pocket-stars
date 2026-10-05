@@ -873,6 +873,7 @@ Dictionary CanchitaV2Nativa::contadores() const {
 	d["faltas_1"] = k.faltas[1];
 	d["faltas_entrada"] = k.faltas_entrada;
 	d["faltas_cruce"] = k.faltas_cruce;
+	d["faltas_arquero"] = k.faltas_arquero;
 	d["amarillas_0"] = k.amarillas[0];
 	d["amarillas_1"] = k.amarillas[1];
 	d["rojas_0"] = k.rojas[0];

@@ -213,12 +213,22 @@ El partido de referencia es el que le toca al usuario en la partida guardada del
   - Calibración: `tests/_diag_calibracion_v2.gd`, 100 partidos por escenario, semilla 97000. Goles por partido: primera 2,44 → 2,47, quinta 2,04 → 1,97, décima 1,78 → 1,77, primera contra cuarta 2,72 → 2,77, quinta contra octava 2,66 → 2,67.
   - Probado y descartado: seguirlo igual si la pelota está más cerca del arco que el arquero (66 llegadas cortadas en primera contra 65). Seguir al que se aleja a menos de 30 grados de la tangente: corta lo mismo (65) y el arquero se va con el rival 2 veces en primera y 5 en quinta.
   - Revisión visual: hecha en la PC, en `motor_v2/laboratorio_partido.tscn` con `semilla=20261307 saltar=3018`. El rival se lleva la pelota del área chica hacia el punto del penal. El arquero queda entre la pelota y el arco, cerca de su línea.
-- **Prueba de regresión:** `tests/test_arquero_a_los_pies_v2.gd`. En 60 partidos de quinta el arquero corta 6 llegadas (10 cuando seguía al que se aleja); con la biblioteca anterior a BUG-014, 2. Cuenta también las muestras con el arquero y la pelota alejándose del arco: 34 (119 cuando lo seguía).
+- **La falta del arquero (2026-10-05):** el arquero que se tira a los pies hace falta si las manos llegan al rival antes que a la pelota (`Canchita::_resolver_toques`). Es la misma regla de la barrida. La falta es penal: el arquero sale a los pies solo en su área.
+  - Pedido del usuario: el penal sale más veces con el arquero malo; el arquero bueno quita mejor de los pies.
+  - El atributo: `achique`. El radio de la falta es `falta_radio_m` × (1 + `falta_torpeza`) × (1 − `achique` / 100). El arquero de `achique` 100 no hace falta.
+  - Medición: 300 partidos por división, semilla 97000. Faltas del arquero por partido: 0 → 0,060 en primera, 0 → 0,060 en quinta, 0 → 0,007 en décima. Penales por partido: 0,137 → 0,190, 0,157 → 0,210 y 0,137 → 0,140.
+  - Lo que no cambia: goles por partido 2,28 → 2,31 en primera, 2,25 → 2,26 en quinta, 1,69 → 1,69 en décima. Llegadas cortadas: 65 → 62, 37 → 35 y 15 → 14. Rojas: 6 → 6, 7 → 7 y 15 → 15.
+  - Según el atributo: 600 partidos por división, un arquero con 20 puntos de `achique` de más y el otro de menos. Faltas del mejor y del peor: 6 y 28 en primera, 2 y 18 en quinta, 1 y 5 en décima. Llegadas que corta el mejor y el peor: 65 de 423 y 27 de 397 en primera, 41 de 332 y 23 de 332 en quinta.
+  - Calibración: `tests/_diag_calibracion_v2.gd`, 100 partidos por escenario, semilla 97000. Goles por partido: primera 2,47 → 2,48, quinta 1,97 → 1,96, décima 1,77 → 1,77, primera contra cuarta 2,77 → 2,81, quinta contra octava 2,67 → 2,68.
+  - Probado y descartado: el radio de la barrida, `falta_radio_m` × (1 + `falta_torpeza` × torpeza). El `achique` casi no pesaba: en 1.800 partidos el mejor arquero del partido hacía 56 faltas y el peor 67. Las faltas eran 0,093 por partido en primera y los penales 0,220.
+  - Tarjeta: el arquero puede ver una amarilla. No ve roja ni segunda amarilla (`Canchita::_tarjeta`): el equipo sin arquero no está resuelto.
+  - Revisión visual: hecha en la PC, en `motor_v2/laboratorio_partido.tscn` con `semilla=20261346 saltar=7394`. El arquero sale al rival en el área chica y el rival patea el penal. Un jugador tapa al arquero en esa toma: el gesto de tirarse no se pudo confirmar.
+- **Prueba de regresión:** `tests/test_arquero_a_los_pies_v2.gd`. En 120 partidos de primera con 40 puntos de `achique` de diferencia, el arquero peor hace 7 faltas y el mejor ninguna; las 7 son penal. En 60 partidos de quinta el arquero corta 6 llegadas (10 cuando seguía al que se aleja); con la biblioteca anterior a BUG-014, 2. Cuenta también las muestras con el arquero y la pelota alejándose del arco: 34 (119 cuando lo seguía).
 - **Revisión visual:** hecha en la PC, en `motor_v2/laboratorio_partido.tscn` con `semilla=20261236 saltar=10600`. El arquero sale del arco y sigue al que lleva la pelota. Las capturas no muestran el gesto de tirarse: no se pudo confirmar.
 - **Caso de referencia:** no se pudo reproducir. El partido de referencia en la PC ya no tiene un gol al minuto 32: el motor cambió desde que el usuario lo miró.
 - **Pendiente:**
   - Los remates desde menos de 6 m casi no cambian: 0,54 → 0,50 por partido en quinta, y 6 de cada 10 son gol. La llegada dura menos de 1 s y el rival remata antes de que el arquero llegue.
-  - El arquero que se tira a los pies nunca hace falta.
+  - El arquero no se va expulsado. Falta resolver quién ataja cuando el equipo queda sin arquero.
 - **Observado:** el jugador entra corriendo al arco con la pelota y el arquero no hace nada.
 - **Caso para reproducir:** gol del minuto 32 del partido de referencia.
 

@@ -3,6 +3,8 @@ extends SceneTree
 ## BUG-014 (docs/bugs_pendientes.md): el arquero sale a los pies del rival que
 ## lleva la pelota en su área (Canchita::_pensar_jugador). Antes volvía a su
 ## línea y el rival entraba al arco conduciendo.
+## El que llega al rival antes que a la pelota hace falta, y es penal
+## (Canchita::_resolver_toques).
 ##
 ## Juega partidos enteros con reglas, sin vista. Cuenta las llegadas (un rival
 ## lleva la pelota a menos de LLEGADA_M del medio del arco) y cuántas terminan
@@ -12,6 +14,10 @@ extends SceneTree
 
 const SEED := 97000
 const PARTIDOS := 60
+## La falta del arquero sale una vez cada 17 partidos: hacen falta más partidos
+## y arqueros bien distintos para contarla.
+const PARTIDOS_FALTA := 120
+const DIFERENCIA := 40.0
 const ESTILOS := [["Tiki taka", "Juego directo"], ["Presión alta", "Contragolpe"]]
 ## Hasta dónde cuenta una llegada: el doble de lo que sale el arquero a los
 ## pies (achique_margen_pelota, 4 m).
@@ -49,6 +55,12 @@ func _init() -> void:
 	pesos["achique_margen_pelota"] = margen
 	_ok(sin["del_arquero"] * 2 <= con["del_arquero"], "sin la salida a los pies son menos de la mitad (%d)."
 		% sin["del_arquero"])
+	# La falta del que sale a los pies es penal y depende del achique: en estos
+	# partidos el arquero con 40 puntos de menos hace 7 y el otro ninguna.
+	var faltas := _faltas()
+	_ok(faltas[1] >= 4, "el arquero de poco achique hace 4 faltas o más saliendo a los pies (%d)." % faltas[1])
+	_ok(faltas[0] * 3 <= faltas[1], "el de mucho achique hace la tercera parte o menos (%d)." % faltas[0])
+	_ok(faltas[2] == faltas[0] + faltas[1], "todas son penal (%d de %d)." % [faltas[2], faltas[0] + faltas[1]])
 	print("FALLOS=%d" % fallos)
 	quit(1 if fallos else 0)
 
@@ -59,6 +71,53 @@ func _ok(condicion: bool, mensaje: String) -> void:
 	else:
 		fallos += 1
 		print("FALLA: %s" % mensaje)
+
+
+## Las faltas del arquero en PARTIDOS_FALTA partidos de primera, donde hay más
+## llegadas: [las del arquero de más achique, las del de menos, las que son
+## penal]. Un arquero juega con DIFERENCIA puntos de achique de más y el otro de
+## menos; cada dos partidos cambian.
+func _faltas() -> Array:
+	var r := [0, 0, 0]
+	for n in PARTIDOS_FALTA:
+		var estilos: Array = ESTILOS[n % ESTILOS.size()]
+		var rng := RandomNumberGenerator.new()
+		rng.seed = SEED + n
+		var local := Team.generar("Local", rng, 0, NivelDivision.potencial(0), "Uruguay", NivelDivision.realizacion(0))
+		var visitante := Team.generar("Visitante", rng, 1000, NivelDivision.potencial(0), "Uruguay",
+			NivelDivision.realizacion(0))
+		local.estilo = estilos[0]
+		visitante.estilo = estilos[1]
+		var c: Object = CerebroV2.armar(local, visitante, SEED + n, true)
+		# El arquero de cada equipo y su achique, ya cambiado.
+		var equipos: PackedInt32Array = c.get_equipos()
+		var arqueros: PackedInt32Array = c.get_arqueros()
+		var ids: PackedInt32Array = c.get_ids()
+		var id_arquero := [-1, -1]
+		var achique := [0.0, 0.0]
+		var signo := 1.0 if n % 4 < 2 else -1.0
+		for i in equipos.size():
+			if arqueros[i] == 0:
+				continue
+			var e := equipos[i]
+			id_arquero[e] = ids[i]
+			for j in ([local, visitante][e] as Team).jugadores:
+				if int(j["id"]) == ids[i]:
+					achique[e] = clampf(float(j["atributos"]["achique"]) + (signo if e == 0 else -signo) * DIFERENCIA,
+						1.0, 99.0)
+					j["atributos"]["achique"] = achique[e]
+		# El motor lee los atributos al armar: se arma de nuevo con el achique cambiado.
+		c = CerebroV2.armar(local, visitante, SEED + n, true)
+		var pasos := 0
+		while str(c.get_estado()["periodo"]) != "terminado" and pasos < 60 * 60 * 20:
+			c.simular(600)
+			pasos += 600
+		for ev in c.eventos():
+			var e := int(ev["equipo"])
+			if str(ev["tipo"]) == "falta" and int(ev["jugador"]) == id_arquero[e]:
+				r[int(achique[e] < achique[1 - e])] += 1
+				r[2] += int(int(ev["detalle"]) == 1)
+	return r
 
 
 ## Las llegadas de PARTIDOS partidos de quinta y cuántas corta el arquero.

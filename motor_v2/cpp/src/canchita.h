@@ -247,6 +247,8 @@ struct ContadoresCanchita {
 	int64_t faltas[2] = { 0, 0 };
 	int64_t faltas_entrada = 0;
 	int64_t faltas_cruce = 0;
+	// Las del arquero que sale a los pies (van también en faltas_entrada).
+	int64_t faltas_arquero = 0;
 	int64_t amarillas[2] = { 0, 0 };
 	int64_t rojas[2] = { 0, 0 };
 	int64_t rojas_directas = 0;
