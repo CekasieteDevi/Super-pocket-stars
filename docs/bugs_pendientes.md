@@ -179,7 +179,18 @@ El partido de referencia es el que le toca al usuario en la partida guardada del
 
 ### BUG-013 — Pregunta: hay palomitas, voleas y chilenas
 
-- **Estado:** pregunta sin responder.
+- **Estado:** respondido el 2026-10-05. La chilena entró al partido el 2026-10-05, por pedido del usuario. Falta la revisión visual en el teléfono.
+- **Respuesta:** la volea y la palomita existían y se veían. La chilena tenía el clip (animación) hecho, pero el motor no la elegía nunca.
+- **Volea:** el motor la elige cuando el que remata con el pie toca la pelota a la altura del muslo (`Canchita::_clip_de_parte`, `motor_v2/cpp/src/canchita.cpp`). La vista muestra `Volea_Costado` en su lugar si la pelota le cruza o el arco le queda al costado (`VARIANTES`, `motor_v2/vista_v2.gd`).
+- **Palomita:** el motor la elige cuando el que remata de cabeza toca la pelota a la altura del pecho. A la altura de la cabeza usa `Cabecear`.
+- **Chilena, antes:** el clip `Chilena` estaba en el modelo y en `data/acciones_v2.json`. `data/fisica_v2.json` no tenía un `clip_chilena` y `_clip_de_parte` no la devolvía en ningún caso.
+- **Medición de la respuesta:** 40 partidos por división, semilla 97000, contando cada vez que un jugador empieza el clip. Volea: 0,55 por partido en quinta y 0,47 en primera. Palomita: 0,20 en quinta y 0,35 en primera. Chilena: 0 en las dos.
+- **Corrección:** `Canchita::_de_chilena` (`motor_v2/cpp/src/canchita.cpp`) y `remate.clip_chilena` (`data/fisica_v2.json`). Le pega de chilena el que remata de primera de espaldas al arco, adentro del área grande, con la pelota desde 0,77 m hasta 1,8 m de alto. Solo el jugador con más `tiro` que `cabezazo`: el otro la sigue peinando de cabeza. El jugador se para de espaldas al arco, casi encima de la pelota. La chilena sale con el golpe fuerte.
+- **Vista:** `VistaV2` sube el modelo entero hasta la pelota, igual que en el cabezazo. El relato dice "de chilena" (`MotorV2._tecnica`).
+- **Medición de la corrección:** 120 partidos por división, semilla 97000. Chilenas que le pegan a la pelota: 0,125 por partido en quinta y en primera (una cada ocho partidos). El clip arranca 0,32 veces por partido en quinta y 0,28 en primera: en las demás el jugador no llega a la pelota. Goles de chilena: 3 en cada división. Goles por partido: 2,00 → 1,98 en quinta y 2,10 → 2,11 en primera. Remates por partido: 6,80 → 6,51 y 7,23 → 7,20. Remates de cabeza: 1,78 → 1,58 y 1,75 → 1,50.
+- **Probado y descartado:** decidir la chilena solo con la pelota a 1,02 m (más o menos 0,25 m): ninguna chilena en 240 partidos, y 6 remates de cabeza menos en quinta y 19 en primera. Decidirla al arrancar el gesto: 2 chilenas en 240 partidos. El jugador ya estaba parado para cabecear, 0,6 m más lejos, y no llegaba.
+- **Revisión visual:** hecha en la PC, en `motor_v2/laboratorio_partido.tscn` con `semilla=20261225 saltar=3380` (gol de chilena al minuto 17). El jugador gira en el aire y la pelota sale hacia el arco. Un compañero tapa el pie en esa toma: el contacto del pie con la pelota no se pudo confirmar.
+- **Prueba de regresión:** `tests/test_chilena_v2.gd`. `tests/test_remate_de_espaldas_v2.gd` no cuenta las chilenas como remates de espaldas sin permiso.
 - **Pedido del usuario:** informar cuáles de los tres remates existen y cuáles se ven en el partido.
 
 ### BUG-014 — El jugador entra corriendo al arco con la pelota y el arquero no hace nada

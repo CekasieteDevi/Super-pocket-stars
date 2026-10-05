@@ -364,8 +364,15 @@ static func _tecnica_del_gol(remates: Array, id: int, paso: int) -> String:
 	for k in range(remates.size() - 1, -1, -1):
 		var r: Dictionary = remates[k]
 		if int(r["paso"]) <= paso and int(r["pateador_id"]) == id:
-			return "cabezazo" if int(r["golpe"]) == GOLPE_CABEZA else ""
+			return _tecnica(r)
 	return ""
+
+
+## El gesto de un remate para el relato (RelatoPartido._nombre_tecnica).
+static func _tecnica(r: Dictionary) -> String:
+	if bool(r["chilena"]):
+		return "chilena"
+	return "cabezazo" if int(r["golpe"]) == GOLPE_CABEZA else ""
 
 
 ## Los remates que no fueron gol (el gol sale del evento "gol", que también
@@ -392,7 +399,7 @@ static func _eventos_de_remates(remates: Array, equipos: Array, plantel: Diction
 				ev = _evento(int(r["paso"]), float(r["minuto"]), "tiro", equipos[e], equipos[1 - e], quien, resultado)
 			_:
 				ev = _evento(int(r["paso"]), float(r["minuto"]), "tiro", equipos[e], equipos[1 - e], quien, "afuera")
-		ev["tecnica"] = "cabezazo" if int(r["golpe"]) == GOLPE_CABEZA else ""
+		ev["tecnica"] = _tecnica(r)
 		ev["con_efecto"] = int(r["golpe"]) == GOLPE_EFECTO
 		eventos.append(ev)
 

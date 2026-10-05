@@ -1,4 +1,5 @@
 [
+	{"version": "0.8.35", "fecha": "2026-10-05", "cambio": "El delantero que recibe una pelota alta de espaldas al arco, adentro del área, le pega de chilena."},
 	{"version": "0.8.34", "fecha": "2026-10-05", "cambio": "Los jugadores con buen control encaran al rival y lo pasan con una elástica o una croqueta."},
 	{"version": "0.8.33", "fecha": "2026-10-05", "cambio": "En el córner ya no se amontonan todos donde cae la pelota: van a cabecear dos por equipo y se los ve saltar."},
 	{"version": "0.8.32", "fecha": "2026-10-04", "cambio": "Ningún jugador corre más rápido de lo que da su velocidad: el equipo mejor ya no vuela ni el peor queda parado."},

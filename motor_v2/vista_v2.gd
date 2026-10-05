@@ -337,9 +337,13 @@ func _ready() -> void:
 	_giro_acel = float(FisicaV2.parametros_cuerpo()["giro_acel"])
 	var clips := FisicaV2.clips()
 	_giro_alcance = float(FisicaV2.parametros_toque()["giro_alcance_rad"])
+	# La chilena toca con el pie, pero el motor la deja pegarle hasta
+	# toque.cabeza_hasta como al cabezazo: sube el modelo entero
+	# (_ajustar_cuerpo). El ajuste de pie, además, lo giraba hacia la pelota.
+	var chilena := str(FisicaV2.parametros_remate().get("clip_chilena", ""))
 	for nombre in clips:
 		var c: Dictionary = clips[nombre]
-		if c["contacto"] != null and str(c["ancla"]) in ["Pie_R", "Pie_L"]:
+		if c["contacto"] != null and str(c["ancla"]) in ["Pie_R", "Pie_L"] and nombre != chilena:
 			_contacto_pie[nombre] = [float(c["contacto"]) * float(c["duracion"]), str(c["ancla"])]
 		# El control de muslo es como el pecho (el cuerpo queda suelto después
 		# del toque), pero con una pierna que toca: la del ancla Muslo_R.
@@ -351,7 +355,7 @@ func _ready() -> void:
 			var lado := str(c["ancla"]).right(1) if con_pierna else ""
 			var en := float(c["contacto"]) * float(c["duracion"]) if c["contacto"] != null and lado != "" else -1.0
 			_gesto_corriendo[nombre] = [en, lado]
-		if c["contacto"] != null and str(c["ancla"]) in ["Frente", "manos", "Pecho", "Muslo_R"]:
+		if c["contacto"] != null and (str(c["ancla"]) in ["Frente", "manos", "Pecho", "Muslo_R"] or nombre == chilena):
 			_contacto_cuerpo[nombre] = [float(c["contacto"]) * float(c["duracion"]),
 				["Mano_L", "Mano_R"] if str(c["ancla"]) == "manos" else [str(c["ancla"])],
 				(1.0 - float(c["contacto"])) * float(c["duracion"])]

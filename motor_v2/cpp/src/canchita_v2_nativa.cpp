@@ -169,7 +169,7 @@ const NumeroArquero NUMEROS_ARQUERO[] = {
 };
 const char *CLIPS_ARQUERO[motor_v2::CLIPS_ARQUERO] = { "clip_agarra", "clip_abajo", "clip_arriba", "clip_vuela_der",
 	"clip_vuela_izq", "clip_vuela_alta_der", "clip_vuela_alta_izq" };
-const char *CLIPS_REMATE[5] = { "clip_pie", "clip_efecto", "clip_volea", "clip_palomita", "clip_cabeza" };
+const char *CLIPS_REMATE[6] = { "clip_pie", "clip_efecto", "clip_volea", "clip_palomita", "clip_cabeza", "clip_chilena" };
 const char *ATRIBUTOS_CANCHITA[7] = { "tiro", "golpe", "cabezazo", "reflejos", "estirada", "agarre", "achique" };
 
 // Etapa 6: data/fisica_v2.json, "reglas" (más lo que FisicaV2.parametros_reglas
@@ -397,8 +397,8 @@ void godot::leer_parametros_remate(const Dictionary &d, const std::vector<String
 			leer(e, GOLPES[k], p.error_tipo[k]);
 		}
 	}
-	int *clips[5] = { &p.clip_pie, &p.clip_efecto, &p.clip_volea, &p.clip_palomita, &p.clip_cabeza };
-	for (int k = 0; k < 5; k++) {
+	int *clips[6] = { &p.clip_pie, &p.clip_efecto, &p.clip_volea, &p.clip_palomita, &p.clip_cabeza, &p.clip_chilena };
+	for (int k = 0; k < 6; k++) {
 		if (d.has(CLIPS_REMATE[k])) {
 			*clips[k] = indice(nombres, d[CLIPS_REMATE[k]]);
 		}
@@ -1059,6 +1059,7 @@ Array CanchitaV2Nativa::registro_remates() const {
 		d["paso"] = g.paso_remate;
 		d["golpe"] = g.golpe;
 		d["de_primera"] = g.de_primera;
+		d["chilena"] = g.chilena;
 		d["de_lado"] = g.de_lado;
 		d["desde"] = Vector2(real_t(g.desde_x), real_t(g.desde_z));
 		d["alto"] = g.alto;

@@ -83,7 +83,8 @@ func _medir() -> Dictionary:
 			c.simular(600)
 			pasos += 600
 		for r in c.registro_remates():
-			if int(r["golpe"]) == MotorV2.GOLPE_CABEZA:
+			# La chilena (BUG-013) es de espaldas a propósito.
+			if int(r["golpe"]) == MotorV2.GOLPE_CABEZA or bool(r["chilena"]):
 				continue
 			s["pie"] += 1
 			if float(r["de_lado"]) <= DE_ESPALDAS:

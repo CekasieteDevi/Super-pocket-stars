@@ -83,6 +83,8 @@ struct ParametrosRemate {
 	int clip_volea = -1;
 	int clip_palomita = -1;
 	int clip_cabeza = -1;
+	// La chilena (Canchita::_de_chilena); -1 la apaga.
+	int clip_chilena = -1;
 };
 
 // Los clips de atajada que puede elegir el arquero.

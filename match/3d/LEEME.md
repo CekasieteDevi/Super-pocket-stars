@@ -74,6 +74,14 @@ La vista puede mostrar otro clip que el del motor (`VistaV2.VARIANTES`):
 lo mismo y toca la pelota en el mismo segundo: si no, la vista no la usa. El
 motor no cambia. `tests/test_vista_cinta_v2.gd` lo controla.
 
+## La chilena
+
+El motor elige `Chilena` (`remate.clip_chilena` de `data/fisica_v2.json`)
+para el que remata de primera de espaldas al arco, adentro del área, con la
+pelota alta. El pie le pega hasta 1,8 m de alto y el del clip llega a 1,02 m:
+la vista sube el modelo entero (`VistaV2._ajustar_cuerpo`), igual que en el
+cabezazo. No usa el ajuste de pie, que giraba el modelo hacia la pelota.
+
 ## Laboratorios
 
 Las escenas de `motor_v2/` muestran cada parte sin entrar a una partida:

@@ -743,6 +743,7 @@ void Canchita::_plan_tocar(int i) {
 	j.toque = j.entra ? TOQUE_ENTRADA : TOQUE_CONTROL;
 	j.rapidez_pase = 0.0;
 	j.tipo_pase = DEC_NADA;
+	j.chilena = false;
 	int corredor_pared = -1;
 	double retorno_x = 0.0, retorno_z = 0.0;
 	bool devuelve_pared = modo == PARTIDO && ataca && _pase_activo && p.y <= param_toque.pie_hasta
@@ -823,6 +824,14 @@ void Canchita::_plan_tocar(int i) {
 		fx = p.x - c.x;
 		fz = p.z - c.z;
 	}
+	// De chilena se para de espaldas al arco: el pie le pega a la pelota
+	// encima del cuerpo, a 0,17 m del centro. Mirando a la pelota, parado
+	// sobre ella el rumbo cambiaba en cada paso y con él su lugar.
+	bool chilena = j.toque == TOQUE_REMATE && clip == param_remate.clip_chilena;
+	if (chilena) {
+		fx = p.x - param_pelota.medio_largo * _ataca(j.equipo);
+		fz = p.z;
+	}
 	Cuerpo en_cero;
 	V3 corre = punto_de_contacto(en_cero, clips[size_t(clip)], rumbo_de(fx, fz));
 	double bx = p.x - corre.x, bz = p.z - corre.z;
@@ -831,8 +840,8 @@ void Canchita::_plan_tocar(int i) {
 	double f = disputada || factor >= 1.0 ? 1.0 : std::clamp(necesita, 0.25, 1.0);
 	c.ir_a(bx, bz, f, necesita < 0.25);
 	c.mira = true;
-	c.mira_x = p.x;
-	c.mira_z = p.z;
+	c.mira_x = p.x + (chilena ? fx : 0.0);
+	c.mira_z = p.z + (chilena ? fz : 0.0);
 	j.persigue = true;
 	j.paso_meta = paso + int64_t(t / PASO_SEG + 0.5);
 }
@@ -1379,7 +1388,11 @@ int Canchita::_clip_de_parte(const JugadorCanchita &j, Parte parte) const {
 	}
 	if (j.toque == TOQUE_REMATE) {
 		// De cabeza: parado (Cabecear) o tirándose de palomita a la pelota más
-		// baja. De pie: el empeine, o de volea a la altura del muslo.
+		// baja. De pie: el empeine, o de volea a la altura del muslo. De
+		// chilena: con el pie arriba, donde iría la cabeza.
+		if (j.chilena && (parte == PECHO || parte == CABEZA)) {
+			return param_remate.clip_chilena;
+		}
 		if (j.golpe_remate == REMATE_CABEZA) {
 			return parte == CABEZA ? param_remate.clip_cabeza : (parte == PECHO ? param_remate.clip_palomita : -1);
 		}
@@ -1607,9 +1620,10 @@ void Canchita::_gatillo(int i) {
 				// La entrada va a la pelota del piso (el punto de Barrida es el
 				// de la tibia, a 0,37 m: con su alto no tocaba ninguna).
 				alto_ok = p.y <= param_toque.pie_hasta + param_toque.tolerancia_alto_m;
-			} else if (clip == param_remate.clip_cabeza) {
-				// El cabezazo al arco: en toda la franja de la cabeza (salta).
-				alto_ok = p.y >= param_toque.pecho_hasta - param_toque.tolerancia_alto_m
+			} else if (clip == param_remate.clip_cabeza || clip == param_remate.clip_chilena) {
+				// El cabezazo al arco: en toda la franja de la cabeza (salta). La
+				// chilena también, desde la altura de su pie.
+				alto_ok = p.y >= _alto_desde(clip) - param_toque.tolerancia_alto_m
 						&& p.y <= param_toque.cabeza_hasta + param_toque.tolerancia_alto_m;
 			} else {
 				alto_ok = std::abs(clips[size_t(clip)].punto_y - p.y) <= param_toque.tolerancia_alto_m;
@@ -1761,9 +1775,9 @@ bool Canchita::_resolver_toques() {
 			// La pierna que barre tapa más que el pie que controla.
 			tolerancia = std::max(tolerancia, param_reglas.entrada_alcance_m);
 			alto_ok = std::min(pelota.previa.y, pelota.pos.y) <= param_toque.pie_hasta + param_toque.tolerancia_alto_m;
-		} else if (j.clip_toque == param_remate.clip_cabeza) {
+		} else if (j.clip_toque == param_remate.clip_cabeza || j.clip_toque == param_remate.clip_chilena) {
 			double bajo = std::min(pelota.previa.y, pelota.pos.y), alto = std::max(pelota.previa.y, pelota.pos.y);
-			alto_ok = alto >= param_toque.pecho_hasta - param_toque.tolerancia_alto_m
+			alto_ok = alto >= _alto_desde(j.clip_toque) - param_toque.tolerancia_alto_m
 					&& bajo <= param_toque.cabeza_hasta + param_toque.tolerancia_alto_m;
 		} else {
 			alto_ok = std::min(std::abs(pelota.previa.y - q.y), std::abs(pelota.pos.y - q.y)) <= param_toque.tolerancia_alto_m;
@@ -3402,7 +3416,10 @@ double Canchita::_factor_acomodarse(const Cuerpo &c) const {
 // la alejaba.
 double Canchita::_rumbo_contacto(const JugadorCanchita &j, const Cuerpo &c, int clip, double rumbo, double x,
 		double z) const {
-	if (j.toque != TOQUE_ATAJADA || clip < 0) {
+	// La mano del arquero y el pie de la chilena no quedan adelante del
+	// cuerpo: gira para llevar ese punto a la pelota, no el frente.
+	bool ataja = j.toque == TOQUE_ATAJADA;
+	if (clip < 0 || (!ataja && clip != param_remate.clip_chilena)) {
 		return _rumbo_al_tocar(c, rumbo, x, z);
 	}
 	double dx = x - c.x, dz = z - c.z;
@@ -3412,8 +3429,8 @@ double Canchita::_rumbo_contacto(const JugadorCanchita &j, const Cuerpo &c, int 
 	Cuerpo cero;
 	V3 o = punto_de_contacto(cero, clips[size_t(clip)], 0.0);
 	double desfase = o.x * o.x + o.z * o.z > 1e-9 ? rumbo_de(o.x, o.z) : 0.0;
-	double dif = std::clamp(mate::envolver(rumbo_de(dx, dz) - (rumbo + desfase)), -param_arquero.giro_alcance_rad,
-			param_arquero.giro_alcance_rad);
+	double alcance = ataja ? param_arquero.giro_alcance_rad : param_toque.giro_alcance_rad;
+	double dif = std::clamp(mate::envolver(rumbo_de(dx, dz) - (rumbo + desfase)), -alcance, alcance);
 	return rumbo + dif;
 }
 
@@ -3793,7 +3810,32 @@ bool Canchita::_decidir_remate_de_primera(int i, V3 bola, double t) {
 	j.meta_alto = d.alto;
 	j.meta_z = d.z;
 	j.golpe_remate = d.golpe;
+	j.chilena = !amague && _de_chilena(i, bola);
 	return true;
+}
+
+// BUG-013 (pedido del usuario 2026-10-05: que la chilena entre al partido).
+// El clip estaba hecho y el motor no lo elegía nunca. Le pega de chilena el
+// que remata de primera de espaldas al arco, adentro del área grande, con la
+// pelota desde la altura del pie del clip (1,02 m) para arriba. Antes esa
+// pelota la peinaba de cabeza. Solo el que tiene más tiro que cabezazo: el
+// otro la sigue peinando.
+// Se decide al planear el remate y no al arrancar el gesto: el punto de
+// contacto de la chilena queda 0,6 m más atrás que el del cabezazo, y el que
+// se había parado para cabecear no llegaba (2 chilenas en 240 partidos).
+bool Canchita::_de_chilena(int i, V3 bola) const {
+	const JugadorCanchita &j = jugadores[size_t(i)];
+	int clip = param_remate.clip_chilena;
+	if (clip < 0 || j.tiro <= j.cabezazo || bola.y < _alto_desde(clip) - param_toque.tolerancia_alto_m) {
+		return false;
+	}
+	return _en_area_rival(j, bola) && _da_la_espalda(i, bola, param_pelota.medio_largo * _ataca(j.equipo), 0.0);
+}
+
+// Desde qué altura toca la pelota el gesto que salta (el cabezazo o la
+// chilena): la vista sube el modelo hasta la pelota, no lo baja.
+double Canchita::_alto_desde(int clip) const {
+	return clip == param_remate.clip_cabeza ? param_toque.pecho_hasta : clips[size_t(clip)].punto_y;
 }
 
 // BUG-008 (revisión del usuario 2026-10-04: "le pegan de taco hacia el arco
@@ -3802,21 +3844,29 @@ bool Canchita::_decidir_remate_de_primera(int i, V3 bola, double t) {
 // miraba. Devuelve true si este jugador, tocando la pelota en `bola`, queda
 // de espaldas al punto y no le puede pegar de taco: tiene que darse vuelta.
 bool Canchita::_remate_de_espaldas(int i, V3 bola, double meta_x, double meta_z) const {
+	const JugadorCanchita &j = jugadores[size_t(i)];
+	return _da_la_espalda(i, bola, meta_x, meta_z)
+			&& !(_en_area_rival(j, bola) && j.reglas.tiro >= param_remate.taco_tiro);
+}
+
+// Tocando la pelota en `bola`, el punto le queda a más de taco_desde_rad de
+// adonde mira.
+bool Canchita::_da_la_espalda(int i, V3 bola, double meta_x, double meta_z) const {
 	const ParametrosRemate &r = param_remate;
 	if (r.taco_desde_rad <= 0.0) {
 		return false;
 	}
-	const JugadorCanchita &j = jugadores[size_t(i)];
-	const Cuerpo &c = j.cuerpo;
+	const Cuerpo &c = jugadores[size_t(i)].cuerpo;
 	// Al tocarla mira hacia la pelota (_perseguir); encima de ella, adonde ya mira.
 	double fx = bola.x - c.x, fz = bola.z - c.z;
 	double mira = fx * fx + fz * fz > 0.09 ? rumbo_de(fx, fz) : c.rumbo;
-	if (std::abs(mate::envolver(rumbo_de(meta_x - bola.x, meta_z - bola.z) - mira)) <= r.taco_desde_rad) {
-		return false;
-	}
-	bool en_area = std::abs(param_pelota.medio_largo * _ataca(j.equipo) - bola.x) <= Cerebro::AREA_LARGO
+	return std::abs(mate::envolver(rumbo_de(meta_x - bola.x, meta_z - bola.z) - mira)) > r.taco_desde_rad;
+}
+
+// La pelota está en el área grande del arco al que ataca.
+bool Canchita::_en_area_rival(const JugadorCanchita &j, V3 bola) const {
+	return std::abs(param_pelota.medio_largo * _ataca(j.equipo) - bola.x) <= Cerebro::AREA_LARGO
 			&& std::abs(bola.z) <= Cerebro::AREA_MEDIO_ANCHO;
-	return !(en_area && j.reglas.tiro >= r.taco_tiro);
 }
 
 double Canchita::_rapidez_remate(const JugadorCanchita &j, int golpe) const {
@@ -3864,7 +3914,9 @@ void Canchita::_patear_al_arco(int i, bool de_primera, double apretado) {
 	JugadorCanchita &j = jugadores[size_t(i)];
 	const Cuerpo &c = j.cuerpo;
 	const ParametrosRemate &r = param_remate;
-	int golpe = j.golpe_remate;
+	// La chilena es un remate fuerte de pie: el golpe se planeó de cabeza.
+	bool chilena = param_remate.clip_chilena >= 0 && j.clip_toque == param_remate.clip_chilena;
+	int golpe = chilena ? REMATE_FUERTE : j.golpe_remate;
 	V3 desde = pelota.pos;
 	V3 meta = { j.meta_x, std::max(j.meta_alto, param_pelota.radio), j.meta_z };
 	double rapidez = _rapidez_remate(j, golpe);
@@ -3963,6 +4015,7 @@ void Canchita::_patear_al_arco(int i, bool de_primera, double apretado) {
 	reg.minuto = reglas ? minuto() : double(paso) * PASO_SEG / 60.0;
 	reg.golpe = golpe;
 	reg.de_primera = de_primera;
+	reg.chilena = chilena;
 	reg.de_lado = de_lado;
 	reg.desde_x = desde.x;
 	reg.desde_z = desde.z;

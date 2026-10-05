@@ -325,6 +325,7 @@ struct RegistroRemate {
 	double minuto = 0.0;
 	int golpe = 0;
 	bool de_primera = false;
+	bool chilena = false;
 	// 0 = hacia donde mira el que remata, 1 = de espaldas.
 	double de_lado = 0.0;
 	double desde_x = 0.0, desde_z = 0.0;
@@ -411,6 +412,8 @@ struct JugadorCanchita {
 	// Remate: al punto (meta_x, meta_alto, meta_z) con el golpe `golpe_remate`.
 	double meta_alto = 0.0;
 	int golpe_remate = REMATE_COLOCADO;
+	// Este remate de primera va de chilena (_de_chilena).
+	bool chilena = false;
 	// Atajada: el clip del arquero (ClipArquero de remate.h).
 	int clip_arquero = -1;
 	// Modo ARCO: le pega al arco la próxima pelota (rematar()).
@@ -888,6 +891,10 @@ private:
 	void _soltar();
 	bool _decidir_remate_de_primera(int i, V3 bola, double t);
 	bool _remate_de_espaldas(int i, V3 bola, double meta_x, double meta_z) const;
+	bool _da_la_espalda(int i, V3 bola, double meta_x, double meta_z) const;
+	bool _en_area_rival(const JugadorCanchita &j, V3 bola) const;
+	bool _de_chilena(int i, V3 bola) const;
+	double _alto_desde(int clip) const;
 	double _rapidez_remate(const JugadorCanchita &j, int golpe) const;
 	double _error_remate(const JugadorCanchita &j, int golpe, double de_lado, double alto_pelota, double llega_ms,
 			double apretado, double cruce_pie_malo) const;
