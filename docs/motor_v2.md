@@ -1050,6 +1050,7 @@ El usuario miró otra vez `laboratorio_reglas.tscn` y marcó seis cosas. Dos med
 **Conducción:**
 
 - **La rapidez del toque con signo** (`Canchita::_decidir_partido`, `toque.conduce_gana_seg` 0,15): cuenta lo que corre hacia donde manda la pelota, con signo. El que va para el otro lado primero tiene que frenar: la media vuelta deja la pelota casi quieta. Antes sumaba medio segundo de aceleración y los toques que giraban 110 a 140 grados salían a 5 m/s.
+- **La pelota acompaña al cuerpo** (`toque.conduce_inercia` 1, BUG-009 de `docs/bugs_pendientes.md`): el toque suma lo que el cuerpo sigue corriendo para otro lado hasta el toque siguiente. Reemplaza a `toque.frena_giro_*`. `reglas.entrada_prob` pasa a 0,75 y `nivel.tecnica_por_punto` a 3.
 - **Probado y descartado:** que el toque no gire más de 70 grados. La pelota no se alejaba, pero salía de la cancha 1,07 veces por partido conduciendo y los quites al que conduce bajaban de 6,8 a 2,4.
 - **El control mira la raya** (`toque.control_raya_m` 1,5): el punto adonde la manda, 4 m adelante, se trae adentro de la cancha.
 - **Espera a los compañeros** (`cerebro.conduce_espera` 0,6, `Cerebro::ritmo_de_conduccion`): el que se adelantó a su equipo baja el ritmo. A fondo: de contra, encarando o con un rival a menos de 2,5 m. Pesa poco: con un marcador cerca va casi siempre a fondo.

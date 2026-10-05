@@ -63,10 +63,7 @@ void godot::leer_parametros_toque(const Dictionary &d, const std::vector<String>
 	leer(d, "toque_corto_m", p.toque_corto_m);
 	leer(d, "conduccion_factor", p.conduccion_factor);
 	leer(d, "conduce_gana_seg", p.conduce_gana_seg);
-	leer(d, "frena_giro_desde_ms", p.frena_giro_desde_ms);
-	leer(d, "frena_giro_desde_rad", p.frena_giro_desde_rad);
-	leer(d, "frena_giro_rad", p.frena_giro_rad);
-	leer(d, "frena_giro_rapidez", p.frena_giro_rapidez);
+	leer(d, "conduce_inercia", p.conduce_inercia);
 	leer(d, "control_raya_m", p.control_raya_m);
 	leer(d, "sin_rebote_seg", p.sin_rebote_seg);
 	leer(d, "margen_seguro_seg", p.margen_seguro_seg);

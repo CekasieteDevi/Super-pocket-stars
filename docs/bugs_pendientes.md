@@ -125,7 +125,13 @@ El partido de referencia es el que le toca al usuario en la partida guardada del
 
 ### BUG-009 — El que conduce sigue corriendo y deja la pelota atrás
 
-- **Estado:** anotado, sin investigar. El usuario avisa que sigue pasando después de los arreglos anteriores.
+- **Estado:** corregido el 2026-10-04 en el motor. Falta la revisión visual en el teléfono.
+- **Causa:** el toque de conducción contaba solo lo que el jugador corría hacia donde mandaba la pelota (`Canchita::_decidir_partido`). El que corría a 6,6 m/s y giraba 110 grados dejaba la pelota casi quieta. El cuerpo tarda medio segundo en frenar: seguía 1,8 m y volvía. El arreglo anterior (`toque.frena_giro_*`) solo cubría los giros de más de 100 grados sin un rival cerca.
+- **Corrección:** el toque suma lo que el cuerpo sigue corriendo para otro lado hasta el toque siguiente. La pelota sale hacia donde va a estar el cuerpo y llega con él. El jugador termina el giro en el toque siguiente. `toque.conduce_inercia` (1 es todo, 0 lo apaga) reemplaza a `toque.frena_giro_*`.
+- **Medición:** 60 partidos por división, semilla 97000. Episodio: el último que la tocó corre a más de 2 m/s alejándose, la pelota va a menos de 2,5 m/s y queda a más de 0,9 m detrás, 0,15 s o más. Después de un toque de conducción: 4,63 → 1,37 por partido en quinta, 7,02 → 2,07 en primera. Contando todos los toques: 6,05 → 2,72 en quinta, 9,97 → 4,23 en primera.
+- **Balance:** al que conduce se la quitan menos (7,2 → 4,0 veces por partido en quinta). `reglas.entrada_prob` pasa de 0,5 a 0,75 y `nivel.tecnica_por_punto` de 6 a 3. `tests/_diag_calibracion_v2.gd`, 100 partidos por escenario: 18 medidas fuera de rango en los 16 escenarios (antes 19). Quinta: goles 2,06 → 1,99 (motor espacial 2,26), remates 6,28 → 6,89 (7,29), faltas 2,54 → 2,48 (2,44). Primera: goles 1,99 → 2,45 (2,31), remates 7,05 → 7,54 (8,15), faltas 2,09 → 2,11 (2,24).
+- **Pendiente:** quinta contra octava queda en 3,95 goles (antes 3,32; motor espacial 3,38). Los episodios que quedan salen de controles, quites y giros contra una raya. La pelota conducida a más de 2,5 m pasa de 0,6% a 0,9% del tiempo en quinta, y de 2,1% a 1,3% en primera.
+- **Prueba de regresión:** `tests/test_pelota_atras_v2.gd`.
 - **Observado:** el jugador se va solo, la pelota queda quieta atrás y el jugador tiene que volver a buscarla.
 - **Caso para reproducir:** Mco Romero, minuto 23 del partido de referencia.
 - **Relacionado:** BUG-018.

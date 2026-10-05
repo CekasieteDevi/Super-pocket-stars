@@ -55,15 +55,10 @@ struct ParametrosToque {
 	// Los segundos de aceleración que cuenta la rapidez del toque de
 	// conducción.
 	double conduce_gana_seg = 0.15;
-	// El que conduce rápido y quiere girar más que frena_giro_desde_rad
-	// primero frena con la pelota: la toca corta, girada a lo sumo
-	// frena_giro_rad de lo que corre, a frena_giro_rapidez de lo que corre
-	// hacia ahí; gira en el toque siguiente. Solo a más de frena_giro_desde_ms
-	// (0 lo apaga).
-	double frena_giro_desde_ms = 0.0;
-	double frena_giro_desde_rad = 1.75;
-	double frena_giro_rad = 0.6;
-	double frena_giro_rapidez = 0.5;
+	// Cuánto de lo que el cuerpo sigue corriendo hasta el toque siguiente se
+	// suma al toque de conducción (Canchita::_decidir_partido): 1 es todo, 0
+	// lo apaga.
+	double conduce_inercia = 0.0;
 	double sin_rebote_seg = 0.3;
 	double margen_seguro_seg = 0.25;
 	double giro_alcance_rad = 1.0;

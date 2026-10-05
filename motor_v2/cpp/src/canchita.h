@@ -821,7 +821,7 @@ private:
 	double _rapidez_raso(double d, int &k);
 	double _rapidez_globo(double d, int &k, bool centro = false);
 	bool _centro_tendido(double d);
-	double _rapidez_conduce(double corre, double largo);
+	double _rapidez_conduce(double corre, double largo, double alcanza_m = 0.0, double alcanza_seg = 0.0);
 	double _espacio_adelante(int i, V3 bola, double dx, double dz) const;
 	double _rival_mas_cerca(int i, double x, double z) const;
 	double _claridad(V3 bola, double x, double z, int equipo) const;
