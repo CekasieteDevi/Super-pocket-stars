@@ -1258,10 +1258,16 @@ bool Canchita::_decidir_saque_de_manos() {
 		cuenta.arquero_mano++;
 	}
 	_mano.activo = true;
+	// Corta el gesto del agarre, que le traba el rumbo, y mira adonde la
+	// manda. El gesto del saque arranca cuando quedó de frente (avanzar); el
+	// tope es lo que tarda en dar media vuelta, por si no llega a girar.
 	Cuerpo &ca = jugadores[size_t(i)].cuerpo;
 	ca.clip = -1;
 	ca.fase = SIN_ACCION;
-	ca.empezar(_mano.voleo ? r.clip_arquero_voleo : r.clip_arquero_lanza);
+	ca.mira = true;
+	ca.mira_x = _mano.x;
+	ca.mira_z = _mano.z;
+	_mano.gira_hasta = paso + int64_t(mate::PI / std::max(ca.giro, 0.1) / PASO_SEG) + 1;
 	return true;
 }
 

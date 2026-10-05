@@ -92,6 +92,9 @@ constexpr double MANOS_ALTO_M = 0.6;
 constexpr double PASOS_PASADA = 6.0;
 // Al soltarla para jugar, la deja caer adelante a esta rapidez.
 constexpr double SUELTA_MS = 1.0;
+// El arquero arranca el saque con la mano cuando le falta girar menos que
+// esto hacia donde la manda (3°, menos que el error del pase).
+constexpr double MANO_DE_FRENTE_RAD = 0.05;
 
 double hipot(double x, double z) {
 	return std::sqrt(x * x + z * z);
@@ -3227,9 +3230,21 @@ bool Canchita::_reglas_partido() {
 	}
 	if (_en_manos >= 0) {
 		if (con_reglas && _mano.activo) {
-			// Etapa 6: la saca en el contacto del gesto.
-			const Cuerpo &c = jugadores[size_t(_en_manos)].cuerpo;
-			if ((c.eventos & ABRE_CONTACTO) || c.clip < 0) {
+			Cuerpo &c = jugadores[size_t(_en_manos)].cuerpo;
+			if (!_mano.lanzando) {
+				// BUG-016: primero gira hacia donde la manda. El gesto traba el
+				// rumbo y la pelota salía para otro lado que el cuerpo: en 120
+				// partidos de primera (semilla 97000), 71° de mediana entre los
+				// dos y 19 de 68 saques a más de 90°.
+				double falta = mate::envolver(rumbo_de(_mano.x - c.x, _mano.z - c.z) - c.rumbo);
+				if (std::abs(falta) <= MANO_DE_FRENTE_RAD || paso >= _mano.gira_hasta) {
+					c.clip = -1;
+					c.fase = SIN_ACCION;
+					c.empezar(_mano.voleo ? param_reglas.clip_arquero_voleo : param_reglas.clip_arquero_lanza);
+					_mano.lanzando = true;
+				}
+			} else if ((c.eventos & ABRE_CONTACTO) || c.clip < 0) {
+				// Etapa 6: la saca en el contacto del gesto.
 				_sacar_de_manos();
 			}
 		} else if (paso >= _suelta_en && modo == PARTIDO && !(con_reglas && _decidir_saque_de_manos())) {

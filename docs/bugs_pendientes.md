@@ -241,7 +241,14 @@ El partido de referencia es el que le toca al usuario en la partida guardada del
 
 ### BUG-016 — El arquero hace el pase con las manos de espaldas
 
-- **Estado:** anotado, sin investigar.
+- **Estado:** corregido el 2026-10-05 en el motor. Falta la revisión visual en el teléfono.
+- **Causa:** `Canchita::_decidir_saque_de_manos` arrancaba `Arquero_Lanza` o `Arquero_Voleo` con el arquero mirando hacia donde había agarrado la pelota. El gesto traba el rumbo del cuerpo. La pelota salía hacia el receptor y el cuerpo quedaba para otro lado.
+- **Corrección:** el arquero elige adónde la manda, mira hacia ahí (`Cuerpo::mira`) y el gesto arranca cuando le faltan menos de 3° (`MANO_DE_FRENTE_RAD`, `Canchita::avanzar` en `motor_v2/cpp/src/canchita.cpp`). El tope de espera es lo que tarda en dar media vuelta con su `giro`.
+- **Medición:** 120 partidos por división, semilla 97000. Ángulo entre el rumbo del arquero y la salida de la pelota, mediana: 71° → 2° en primera, 71° → 3° en quinta, 72° → 5° en décima. Saques a más de 90°: 19 de 68 → 0 de 68, 22 de 72 → 0 de 82 y 18 de 50 → 0 de 48. Lo que queda es el error del pase; el peor es 21°.
+- **Lo que cambia:** el arquero tiene la pelota 0,1 a 0,2 s más: 2,03 → 2,15 s en primera, 1,98 → 2,20 en quinta, 1,94 → 2,14 en décima.
+- **Lo que no cambia:** goles por partido 2,37 → 2,47 en primera, 2,28 → 2,23 en quinta, 1,63 → 1,69 en décima. Saques con la mano por partido: 0,57 → 0,57, 0,58 → 0,67 y 0,42 → 0,40.
+- **Prueba de regresión:** `tests/test_arquero_saca_de_frente_v2.gd`. En 15 partidos de quinta ningún saque sale a más de 30° del rumbo del arquero (el peor, 7°). Con la biblioteca anterior, 5 de 7.
+- **Revisión visual:** hecha en la PC, en `motor_v2/laboratorio_partido.tscn` con `semilla=20261218 saltar=6890`. El arquero agarra de frente a la cámara, gira 159° y saca de espaldas a la cámara, hacia donde va la pelota.
 - **Observado:** la animación del saque con las manos se ve con el arquero de espaldas a la dirección del pase.
 
 ### BUG-017 — El sustituido y el lesionado salen lento y por el lugar equivocado

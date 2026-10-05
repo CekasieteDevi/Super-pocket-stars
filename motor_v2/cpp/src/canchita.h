@@ -789,9 +789,12 @@ private:
 	int _tanda_id = -1;
 	// Los que entraron y todavía no pisaron la cancha.
 	std::vector<int> _entrando;
-	// El arquero que saca con la mano o de voleo (arrancó el gesto).
+	// El arquero que saca con la mano o de voleo: ya eligió adónde (activo),
+	// gira hacia ahí hasta gira_hasta como mucho y arranca el gesto (lanzando).
 	struct SaqueMano {
 		bool activo = false;
+		bool lanzando = false;
+		int64_t gira_hasta = 0;
 		bool voleo = false;
 		int receptor = -1;
 		double x = 0.0, z = 0.0;
