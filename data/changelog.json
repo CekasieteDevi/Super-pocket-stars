@@ -1,4 +1,5 @@
 [
+	{"version": "0.8.37", "fecha": "2026-10-05", "cambio": "El arquero ya no persigue por el área al rival que se aleja del arco con la pelota: vuelve a su lugar."},
 	{"version": "0.8.36", "fecha": "2026-10-05", "cambio": "El arquero sale a los pies del rival que le llega con la pelota, en vez de quedarse parado en el arco."},
 	{"version": "0.8.35", "fecha": "2026-10-05", "cambio": "El delantero que recibe una pelota alta de espaldas al arco, adentro del área, le pega de chilena."},
 	{"version": "0.8.34", "fecha": "2026-10-05", "cambio": "Los jugadores con buen control encaran al rival y lo pasan con una elástica o una croqueta."},

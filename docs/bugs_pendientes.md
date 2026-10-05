@@ -205,12 +205,19 @@ El partido de referencia es el que le toca al usuario en la partida guardada del
 - **Lo que no cambia:** goles por partido 2,23 → 2,19 en primera, 2,08 → 2,11 en quinta, 1,72 → 1,74 en décima. Salidas falladas por partido: 0,42 → 0,40, 0,28 → 0,29 y 0,17 → 0,18. Quites por partido: 15,35 → 15,20 y 13,17 → 12,81.
 - **Calibración:** `tests/_diag_calibracion_v2.gd`, 100 partidos por escenario, semilla 97000. Goles por partido: primera 2,36 → 2,44, quinta 1,95 → 2,04, décima 1,77 → 1,78, primera contra cuarta 2,76 → 2,72, quinta contra octava 2,82 → 2,66. Con la semilla 20261001 y 200 partidos, quinta contra octava da 2,81 → 2,84.
 - **Probado y descartado:** contar la frenada en todos los gestos que frenan al jugador (la barrida, el cabezazo). En quinta los quites pasaban de 13,2 a 14,9 por partido y los goles de 2,08 a 1,94.
-- **Prueba de regresión:** `tests/test_arquero_a_los_pies_v2.gd`. En 60 partidos de quinta el arquero corta 10 llegadas; con la biblioteca anterior, 2.
+- **No sigue al que se aleja (2026-10-05):** el arquero no sale a los pies del rival que se aleja del medio del arco (`Canchita::_pensar_jugador`). Vuelve a su lugar (`Canchita::_ubicar_arquero`). Antes lo seguía hasta el borde del área grande.
+  - Medición: 300 partidos por división, semilla 97000. Episodio: el rival lleva la pelota en el área a menos de 4 m del arquero. Episodios en que el arquero y la pelota terminan 2 m más lejos del arco: 15 → 0 en primera, 7 → 0 en quinta, 3 → 1 en décima.
+  - Tiempo con los dos alejándose del arco: 0,14 → 0,04 s por partido en primera, 0,11 → 0,03 en quinta. Lo que queda es lo que el arquero tarda en frenar.
+  - Costo: el arquero corta menos llegadas. 75 de 422 → 65 de 424 en primera, 49 de 365 → 37 de 369 en quinta, 18 de 225 → 15 de 234 en décima. Las que pierde son del rival que ya se iba.
+  - Lo que no cambia: goles por partido 2,26 → 2,28 en primera, 2,23 → 2,25 en quinta, 1,69 → 1,69 en décima. Salidas falladas: 0,41 → 0,39, 0,29 → 0,28 y 0,16 → 0,16.
+  - Calibración: `tests/_diag_calibracion_v2.gd`, 100 partidos por escenario, semilla 97000. Goles por partido: primera 2,44 → 2,47, quinta 2,04 → 1,97, décima 1,78 → 1,77, primera contra cuarta 2,72 → 2,77, quinta contra octava 2,66 → 2,67.
+  - Probado y descartado: seguirlo igual si la pelota está más cerca del arco que el arquero (66 llegadas cortadas en primera contra 65). Seguir al que se aleja a menos de 30 grados de la tangente: corta lo mismo (65) y el arquero se va con el rival 2 veces en primera y 5 en quinta.
+  - Revisión visual: hecha en la PC, en `motor_v2/laboratorio_partido.tscn` con `semilla=20261307 saltar=3018`. El rival se lleva la pelota del área chica hacia el punto del penal. El arquero queda entre la pelota y el arco, cerca de su línea.
+- **Prueba de regresión:** `tests/test_arquero_a_los_pies_v2.gd`. En 60 partidos de quinta el arquero corta 6 llegadas (10 cuando seguía al que se aleja); con la biblioteca anterior a BUG-014, 2. Cuenta también las muestras con el arquero y la pelota alejándose del arco: 34 (119 cuando lo seguía).
 - **Revisión visual:** hecha en la PC, en `motor_v2/laboratorio_partido.tscn` con `semilla=20261236 saltar=10600`. El arquero sale del arco y sigue al que lleva la pelota. Las capturas no muestran el gesto de tirarse: no se pudo confirmar.
 - **Caso de referencia:** no se pudo reproducir. El partido de referencia en la PC ya no tiene un gol al minuto 32: el motor cambió desde que el usuario lo miró.
 - **Pendiente:**
   - Los remates desde menos de 6 m casi no cambian: 0,54 → 0,50 por partido en quinta, y 6 de cada 10 son gol. La llegada dura menos de 1 s y el rival remata antes de que el arquero llegue.
-  - El arquero sigue al rival mientras lo tiene a menos de 4 m adentro del área grande. Si el rival se aleja del arco, el arquero se aleja con él.
   - El arquero que se tira a los pies nunca hace falta.
 - **Observado:** el jugador entra corriendo al arco con la pelota y el arquero no hace nada.
 - **Caso para reproducir:** gol del minuto 32 del partido de referencia.

@@ -679,6 +679,21 @@ void Canchita::_pensar_jugador(int i) {
 	bool a_los_pies = j.arquero && la_lleva_el_rival && _es_mi_area(i, pelota.pos.x, pelota.pos.z)
 			&& hipot(pelota.pos.x - j.cuerpo.x, pelota.pos.z - j.cuerpo.z) < param_arquero.achique_margen_pelota;
 	if (a_los_pies) {
+		// Al rival que se aleja del medio del arco no lo sigue: vuelve a su
+		// lugar (_ubicar_arquero). Siguiéndolo se iba con él hasta el borde
+		// del área. En 300 partidos por división (semilla 97000) terminaba 2 m
+		// más lejos del arco, igual que el rival, 15 veces en primera y 7 en
+		// quinta; así, ninguna.
+		// Probado y descartado: seguirlo igual si la pelota está más cerca del
+		// arco que él (el rival que ya lo pasó). No cambia nada: 66 llegadas
+		// cortadas en primera contra 65. Seguir al que se aleja a menos de 30
+		// grados de la tangente: tampoco corta más (65) y se va con él 2 veces
+		// en primera y 5 en quinta.
+		const Cuerpo &cr = jugadores[size_t(poseedor)].cuerpo;
+		double gx = -_ataca(j.equipo) * param_pelota.medio_largo;
+		a_los_pies = cr.vx * (cr.x - gx) + cr.vz * cr.z <= 0.0;
+	}
+	if (a_los_pies) {
 		_plan_tocar(i);
 	} else if (va && contiene) {
 		// La tiene controlada otro y no le gana de mano: se para delante y
