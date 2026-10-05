@@ -129,8 +129,8 @@ El partido de referencia es el que le toca al usuario en la partida guardada del
 - **Causa:** el toque de conducción contaba solo lo que el jugador corría hacia donde mandaba la pelota (`Canchita::_decidir_partido`). El que corría a 6,6 m/s y giraba 110 grados dejaba la pelota casi quieta. El cuerpo tarda medio segundo en frenar: seguía 1,8 m y volvía. El arreglo anterior (`toque.frena_giro_*`) solo cubría los giros de más de 100 grados sin un rival cerca.
 - **Corrección:** el toque suma lo que el cuerpo sigue corriendo para otro lado hasta el toque siguiente. La pelota sale hacia donde va a estar el cuerpo y llega con él. El jugador termina el giro en el toque siguiente. `toque.conduce_inercia` (1 es todo, 0 lo apaga) reemplaza a `toque.frena_giro_*`.
 - **Medición:** 60 partidos por división, semilla 97000. Episodio: el último que la tocó corre a más de 2 m/s alejándose, la pelota va a menos de 2,5 m/s y queda a más de 0,9 m detrás, 0,15 s o más. Después de un toque de conducción: 4,63 → 1,37 por partido en quinta, 7,02 → 2,07 en primera. Contando todos los toques: 6,05 → 2,72 en quinta, 9,97 → 4,23 en primera.
-- **Balance:** al que conduce se la quitan menos (7,2 → 4,0 veces por partido en quinta). `reglas.entrada_prob` pasa de 0,5 a 0,75 y `nivel.tecnica_por_punto` de 6 a 3. `tests/_diag_calibracion_v2.gd`, 100 partidos por escenario: 18 medidas fuera de rango en los 16 escenarios (antes 19). Quinta: goles 2,06 → 1,99 (motor espacial 2,26), remates 6,28 → 6,89 (7,29), faltas 2,54 → 2,48 (2,44). Primera: goles 1,99 → 2,45 (2,31), remates 7,05 → 7,54 (8,15), faltas 2,09 → 2,11 (2,24).
-- **Pendiente:** quinta contra octava queda en 3,95 goles (antes 3,32; motor espacial 3,38). Los episodios que quedan salen de controles, quites y giros contra una raya. La pelota conducida a más de 2,5 m pasa de 0,6% a 0,9% del tiempo en quinta, y de 2,1% a 1,3% en primera.
+- **Balance:** al que conduce se la quitan menos (7,2 → 4,0 veces por partido en quinta). `reglas.entrada_prob` pasa de 0,5 a 0,75. El favorito pasaba a hacer de más (quinta contra octava, 3,95 goles contra 3,38 del motor espacial): lo corrige BUG-010. Con los dos arreglos, `tests/_diag_calibracion_v2.gd` da 16 medidas fuera de rango en los 16 escenarios (antes 19). Quinta: goles 2,06 → 2,15 (motor espacial 2,26), remates 6,28 → 6,74 (7,29), faltas 2,54 → 2,29 (2,44). Primera: goles 1,99 → 2,20 (2,31), remates 7,05 → 7,45 (8,15), faltas 2,09 → 1,99 (2,24).
+- **Pendiente:** los episodios que quedan salen de controles, quites y giros contra una raya. La pelota conducida a más de 2,5 m pasa de 0,6% a 0,9% del tiempo en quinta, y de 2,1% a 1,3% en primera.
 - **Prueba de regresión:** `tests/test_pelota_atras_v2.gd`.
 - **Observado:** el jugador se va solo, la pelota queda quieta atrás y el jugador tiene que volver a buscarla.
 - **Caso para reproducir:** Mco Romero, minuto 23 del partido de referencia.
@@ -138,7 +138,12 @@ El partido de referencia es el que le toca al usuario en la partida guardada del
 
 ### BUG-010 — Pregunta: qué velocidad tiene un jugador de 99
 
-- **Estado:** pregunta sin responder.
+- **Estado:** respondido y corregido el 2026-10-04. Falta la revisión visual.
+- **Respuesta:** la punta de un jugador de velocidad 99 es 9,1 m/s (32,8 km/h); la de uno de 41, 5,9 m/s (21 km/h). Los futbolistas más rápidos del mundo llegan a unos 10 m/s (36 km/h). El problema era el multiplicador por nivel del equipo (`FisicaV2.ventaja_de_nivel`): multiplicaba la punta hasta ±42% en tercera.
+- **Caso medido:** partido de referencia en la PC, Racing Arroyo Seco (media 80,7) contra Umbrella (75,8). Racing corría con ×1,31 y Umbrella con ×0,69: el jugador de velocidad 99 de Racing llegaba a 12,0 m/s (43 km/h) y el de Umbrella a 6,3 m/s (23 km/h). El primer gol: un jugador de velocidad 72 lleva la pelota 40 m en 5,5 s, a 27–34 km/h, y nadie de Umbrella pasa de 5,3 m/s.
+- **Corrección:** `nivel.punta_tope` 0,05 (`FisicaV2.punta_de_nivel`): la punta cambia a lo sumo ±5% por el nivel del equipo. `nivel.rapidez_tope` baja de 0,25 a 0,09 (aceleración, ±15% en tercera) y `nivel.tecnica_por_punto` sube de 6 a 9. En el mismo partido: 9,6 m/s (34,6 km/h) y 8,7 m/s.
+- **Medición:** `tests/_diag_calibracion_v2.gd`, 100 partidos por escenario, semilla 97000. Puntos por partido del equipo A (motor espacial entre paréntesis): primera contra cuarta 2,66 (2,96), quinta contra octava 2,86 (2,84), décima contra séptima 0,15 (0,10), primera contra segunda 2,12 (2,00), quinta contra sexta 2,38 (2,14), décima contra novena 0,79 (0,70).
+- **Pendiente:** con tres divisiones de diferencia la goleada queda más chica: primera le saca 2,02 goles a cuarta (motor espacial 3,82) y quinta 2,35 a octava (3,15).
 - **Observado:** algunos jugadores corren más rápido que un caballo.
 - **Pedido del usuario:** informar la velocidad máxima, en metros por segundo y en kilómetros por hora, de un jugador con velocidad 99. Compararla con la de un futbolista real.
 
@@ -164,7 +169,8 @@ El partido de referencia es el que le toca al usuario en la partida guardada del
 
 ### BUG-015 — Pregunta: el rival domina más de lo que el plantel justifica
 
-- **Estado:** pregunta sin responder.
+- **Estado:** respondido el 2026-10-04; la causa se corrige en BUG-010.
+- **Respuesta:** no estaba justificado. En el partido de referencia el rival tiene 4,9 puntos más de media (80,7 contra 75,8) y 7,6 puntos más de modificadores de equipo (localía y otros). Con eso el motor le daba 31% más de punta y de aceleración, y al equipo del usuario 31% menos: corría al doble.
 - **Observado:** el usuario no tiene un equipo malo y siente que el rival lo pasa por arriba.
 - **Pedido del usuario:** comparar los dos planteles del partido de referencia y decir si el dominio del rival está justificado por los atributos.
 

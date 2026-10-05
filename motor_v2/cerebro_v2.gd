@@ -165,13 +165,13 @@ static func plan_de(equipo: Team, rival: Team) -> Dictionary:
 ## (MatchEngine.relativo_al_nivel) y los rasgos que cambian decisiones.
 ##
 ## `ventaja` (etapa 7): FisicaV2.ventaja_de_nivel del equipo. Multiplica la
-## punta y la aceleración.
+## aceleración; la punta, con el tope de FisicaV2.punta_de_nivel.
 ## `puntos`: los puntos de media que el equipo le saca al nivel del partido.
 ## Corren los pases y el control (FisicaV2.tecnica_de_nivel).
 static func ficha_de(jugador: Dictionary, rol: String, base: Vector2, nivel: float, ventaja := 1.0, puntos := 0.0) -> Dictionary:
 	var atributos: Dictionary = jugador["atributos"]
 	var f := FisicaV2.jugador_de(atributos)
-	f["vel_max"] = float(f["vel_max"]) * ventaja
+	f["vel_max"] = float(f["vel_max"]) * FisicaV2.punta_de_nivel(puntos, nivel)
 	f["aceleracion"] = float(f["aceleracion"]) * ventaja
 	var tecnica := FisicaV2.tecnica_de_nivel(puntos, nivel)
 	f["pases"] = clampf(float(f["pases"]) + tecnica, 0.0, 100.0)

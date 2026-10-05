@@ -140,8 +140,10 @@ func _init() -> void:
 				"%s: la receta vuelve a dar el mismo partido" % texto)
 	_ok(cambios > 0, "en %d partidos hay cambios (%d)" % [PARTIDOS, cambios])
 
-	# Los modificadores de equipo: el mismo club corre más de local que de
-	# visitante, y más con la armonía a favor (MatchEngine.modificador_de_equipo).
+	# Los modificadores de equipo: el mismo club controla mejor de local que de
+	# visitante, y mejor con la armonía a favor (MatchEngine.modificador_de_equipo,
+	# FisicaV2.tecnica_de_nivel). La punta y la aceleración no sirven para
+	# medirlo: tienen tope (nivel.punta_tope y nivel.rapidez_tope).
 	var rng_m := RandomNumberGenerator.new()
 	rng_m.seed = SEED + 900
 	var a: Team = Team.generar("Local", rng_m, 0)
@@ -152,18 +154,18 @@ func _init() -> void:
 	b.armonia = 0.0
 	a.local = true
 	b.local = false
-	var de_local := float(CerebroV2.receta(a, b, SEED, true)["titulares"][0][0]["vel_max"])
+	var de_local := float(CerebroV2.receta(a, b, SEED, true)["titulares"][0][0]["control"])
 	var azar := RandomNumberGenerator.new()
 	azar.seed = SEED
 	var ventaja := MatchEngine.modificador_de_equipo(a, b, azar) - MatchEngine.modificador_de_equipo(b, a, azar)
 	a.local = false
 	b.local = true
-	var de_visitante := float(CerebroV2.receta(a, b, SEED, true)["titulares"][0][0]["vel_max"])
+	var de_visitante := float(CerebroV2.receta(a, b, SEED, true)["titulares"][0][0]["control"])
 	a.armonia = 5.0
 	b.armonia = -5.0
-	var con_armonia := float(CerebroV2.receta(a, b, SEED, true)["titulares"][0][0]["vel_max"])
+	var con_armonia := float(CerebroV2.receta(a, b, SEED, true)["titulares"][0][0]["control"])
 	_ok(ventaja >= 5.0 and de_local > de_visitante and con_armonia > de_visitante,
-		"el local tiene %.1f puntos de duelo a favor y corre a %.2f m/s (de visitante, a %.2f; con la armonía a favor, a %.2f)" % [
+		"el local tiene %.1f puntos de duelo a favor y su control es %.1f (de visitante, %.1f; con la armonía a favor, %.1f)" % [
 			ventaja, de_local, de_visitante, con_armonia])
 	_ok(relatados > PARTIDOS * 5, "el relato cuenta %d momentos" % relatados)
 	_ok(tiros_total > PARTIDOS * 3, "las estadísticas cuentan %d tiros en %d partidos" % [tiros_total, PARTIDOS])

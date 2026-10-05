@@ -1,4 +1,5 @@
 [
+	{"version": "0.8.32", "fecha": "2026-10-04", "cambio": "Ningún jugador corre más rápido de lo que da su velocidad: el equipo mejor ya no vuela ni el peor queda parado."},
 	{"version": "0.8.31", "fecha": "2026-10-04", "cambio": "El jugador que corre con la pelota y gira ya no la deja quieta atrás: la pelota lo acompaña en el giro."},
 	{"version": "0.8.30", "fecha": "2026-10-04", "cambio": "El jugador que queda de espaldas al arco se da vuelta y remata de frente; el taco queda para los que tienen 90 o más de tiro, adentro del área."},
 	{"version": "0.8.29", "fecha": "2026-10-04", "cambio": "En Windows ya andan el arquero que no pone las manos si no llega y el jugador que frena antes de darse vuelta."},

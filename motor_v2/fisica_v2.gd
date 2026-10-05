@@ -87,8 +87,8 @@ static func fisico_de(atributos: Dictionary, energia := 1.0) -> Dictionary:
 	}
 
 
-## Etapa 7: por cuánto se multiplican la punta y la aceleración de un jugador
-## según cuántos puntos de media le saca al nivel del partido
+## Etapa 7: por cuánto se multiplica la aceleración de un jugador según
+## cuántos puntos de media le saca al nivel del partido
 ## (MatchEngine.nivel_partido). data/fisica_v2.json, "nivel".
 ## `nivel`: el del partido; cada punto pesa según peso_del_nivel.
 static func ventaja_de_nivel(puntos: float, nivel := -1.0) -> float:
@@ -96,6 +96,15 @@ static func ventaja_de_nivel(puntos: float, nivel := -1.0) -> float:
 	var peso := peso_del_nivel(nivel)
 	var tope := float(n["rapidez_tope"]) * peso
 	return 1.0 + clampf(float(n["rapidez_por_punto"]) * puntos * peso, -tope, tope)
+
+
+## Por cuánto se multiplica la punta: la misma cuenta, con el tope
+## nivel.punta_tope. La punta es la del jugador (BasePartido.vel_max): con el
+## tope de la aceleración, un equipo de media 80,7 contra uno de 75,8 corría
+## a 12,0 m/s (43 km/h) con su jugador de velocidad 99 y el otro a 6,3 m/s.
+static func punta_de_nivel(puntos: float, nivel := -1.0) -> float:
+	var tope := float(datos()["nivel"].get("punta_tope", 0.0))
+	return clampf(ventaja_de_nivel(puntos, nivel), 1.0 - tope, 1.0 + tope)
 
 
 ## Etapa 7: cuánto pesa un punto de media según el nivel del partido:
