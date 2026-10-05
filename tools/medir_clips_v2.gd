@@ -145,6 +145,12 @@ const CONTACTO_DE_CLIP := {
 	"Palomita": ["Frente", 0.375],
 	"Patear_Corriendo": ["Pie_R", 4.0 / 11.0],
 	"Pecho": ["Pecho", 0.0],
+	# Los regates: el cuadro en que el pie derecho cruza la pelota hacia la
+	# izquierda (tools/blender/animaciones_jugador.py). Croqueta: la pelota
+	# va del derecho al izquierdo desde la fase 0,30. Elástica: el exterior la
+	# saca hasta el cuadro 8 de 19 y el interior la cruza desde ahí.
+	"Regate_Croqueta": ["Pie_R", 0.3],
+	"Regate_Elastica": ["Pie_R", 8.0 / 18.0],
 	"Saque_Arco": ["Pie_R", 0.5],
 	"Taco": ["Talon_R", 0.5],
 	"Volea": ["Pie_R", 7.0 / 18.0],

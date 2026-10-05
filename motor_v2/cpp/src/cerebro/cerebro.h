@@ -30,9 +30,12 @@
 // adónde y cómo patear (elegir_remate, con el valor que da el planeador). Lo
 // que hace el arquero lo resuelve la canchita (canchita.h).
 //
-// Qué NO entra todavía: gambeta (faltan los clips de regate). La pelota parada
-// de la etapa 6 la arma la canchita (canchita_reglas.cpp) y le pide al
-// cerebro la decisión del que saca.
+// El regate (la opción `gambeta` del motor espacial, DEC_REGATE): el cerebro
+// elige a quién encarar y por dónde sale la pelota. El amague y quién se
+// queda la pelota los resuelve la canchita (Canchita::_amagar).
+//
+// La pelota parada de la etapa 6 la arma la canchita (canchita_reglas.cpp) y
+// le pide al cerebro la decisión del que saca.
 //
 // Unidades: el motor espacial contaba en ticks de 0,25 s. Acá todo va en
 // segundos; los parámetros que vienen de data/utility_pesos.json en ticks se
@@ -82,6 +85,8 @@ enum Atributo : int {
 	AT_ESTIRADA,
 	AT_AGARRE,
 	AT_ACHIQUE,
+	// Del que marca: el regate mira el quite del rival al que encara.
+	AT_QUITE,
 	ATRIBUTOS,
 };
 
@@ -108,6 +113,9 @@ enum TipoDecision : int {
 	// Etapa 5: tirar al arco. El punto y el tipo de golpe salen de
 	// Cerebro::elegir_remate.
 	DEC_REMATE,
+	// Encarar a un rival: `rival` es a quién y (dir_x, dir_z) por dónde sale
+	// la pelota.
+	DEC_REGATE,
 	DECISIONES,
 };
 
@@ -136,6 +144,9 @@ struct PesosCerebro {
 	double conducir_base = 0.3, conducir_espacio = 0.5, conducir_progreso = 0.3, conducir_camino = 0.15;
 	// pase
 	double pase_base = 0.25, pase_progreso = 1.0, pase_seguridad = 0.45, pase_distancia = 0.55, pase_retroceso_libre = 1.2;
+	// gambeta
+	double gambeta_base = 0.12, gambeta_habilidad = 1.6, gambeta_progreso = 0.25, gambeta_presion = 0.4;
+	double gambeta_banda = 1.5;
 	// despeje
 	double despeje_base = 0.15, despeje_presion = 0.85, despeje_zona = 0.55;
 	// centro
@@ -171,7 +182,7 @@ struct PesosCerebro {
 	double max_pelotazo_debil = 11.0, max_pelotazo_fuerte = 62.0;
 	double corredor_conduccion = 18.0, ticks_control_malo = 9.0, ticks_control_bueno = 2.0;
 	double rango_tiro_medio = 24.0, tercio_propio_arquero = 30.0, dist_saque_largo = 28.0;
-	double radio_tackle = 2.0, gambeta_cono_frontal = -0.1;
+	double radio_tackle = 2.0, gambeta_cono_frontal = -0.1, control_minimo_gambeta = 50.0;
 	double rango_tiro_malo = 16.0, rango_tiro_bueno = 36.0, mezcla_fisica_rango_tiro = 0.8;
 	double geometria_minima_tiro = 0.03;
 	// ritmo
@@ -280,6 +291,18 @@ struct PesosCerebro {
 	// Etapa 7: multiplica la utilidad del remate (tiro.base y tiro.geometria
 	// son del motor espacial y los dos motores los leen).
 	double tiro_factor = 0.75;
+	// El regate. A cuántos metros tiene que estar el rival para encararlo: el
+	// motor espacial resolvía el duelo en el acto, a 8 m (radio_gambeta); acá
+	// el gesto dura lo que dura el clip y el rival tiene que estar encima.
+	double regate_radio_m = 4.0;
+	// Cuánto se abre la salida de la línea que va al rival (radianes).
+	double regate_salida_rad = 0.9;
+	// El que corre no encara si la salida gira más que esto de adonde corre
+	// (radianes): la pelota le quedaba atrás.
+	double regate_giro_max_rad = 1.4;
+	// Multiplica la utilidad del regate (gambeta.* son del motor espacial y
+	// los dos motores los leen). 0 = nadie encara.
+	double regate_factor = 1.0;
 	// No sale de ningún JSON: es toque.reaccion_seg, que la canchita le copia
 	// al empezar (una sola fuente de verdad).
 	double reaccion_seg = 0.2;
@@ -407,6 +430,8 @@ struct Decision {
 	double ritmo = 1.0;
 	// Viene de un desmarque preparado (pase al espacio que "sale solo").
 	bool corrida_preparada = false;
+	// Regate: el rival al que encara.
+	int rival = -1;
 	// Remate: el golpe (TipoRemate de remate.h) y el alto del punto del arco
 	// (x, z es el punto sobre la línea).
 	int golpe = 0;
@@ -650,6 +675,9 @@ private:
 		int corredor = -1;
 		bool pase_atras_al_area = false;
 		bool corrida_preparada = false;
+		// Regate: a quién encara y por dónde sale.
+		int rival = -1;
+		double dir_x = 0.0, dir_z = 0.0;
 	};
 
 	Defensa _defensa[2];
@@ -690,7 +718,8 @@ private:
 	bool _en_el_area(double x, double z, int equipo) const;
 	bool _solo_frente_al_arco(const Mundo &m, int i) const;
 	bool _arquero_encerrado(const Mundo &m, int equipo) const;
-	int _rival_a_encarar(const Mundo &m, int i) const;
+	int _rival_a_encarar(const Mundo &m, int i, double radio) const;
+	bool _salida_de_regate(const Mundo &m, int i, int rival, double &dx, double &dz) const;
 	double _ventaja_cambio_frente(const Mundo &m, double ax, double az, double bx, double bz, int equipo) const;
 	void _punto_al_hueco(const Mundo &m, int r, double &x, double &z) const;
 	void _punto_retorno_pared(double x, double z, int equipo, double avance, double &rx, double &rz) const;

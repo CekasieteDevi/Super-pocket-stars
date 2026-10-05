@@ -186,6 +186,9 @@ struct ContadoresCanchita {
 	int64_t quites_conduccion = 0;
 	int64_t quites_control = 0;
 	int64_t quites_suelta = 0;
+	// Regates: los gestos que arrancaron, los que el rival se comió
+	// (_amagar) y los que terminaron con la pelota en su equipo.
+	int64_t regates = 0, regates_amague = 0, regates_ganados = 0;
 
 	// Etapa 5 (docs/motor_v2.md, "Pasa si"): el embudo de remates, con los
 	// mismos cortes que tests/_diag_embudo_remates.gd. Al arco = gol + atajado.
@@ -427,6 +430,12 @@ struct JugadorCanchita {
 	// Cuánto de su rapidez de conducción usa (la decisión de conducir del
 	// cerebro; 1 si la última no fue conducir).
 	double ritmo_conduce = 1.0;
+	// El regate (TipoRegate) que sorteó al decidir DEC_REGATE y el del toque
+	// de conducción que está planeando; -1 = ninguno.
+	int regate_elegido = -1;
+	int regate = -1;
+	// Se comió un amague: hasta este paso sigue de largo (_amagar).
+	int64_t amagado_hasta = -1;
 };
 
 // Etapa 6: el que se va de la cancha (expulsado, cambiado o lesionado). Ya no
@@ -749,6 +758,13 @@ private:
 	int _gol_de_id = -1, _gol_de_equipo = -1;
 	int64_t _gol_de_paso = -1000000;
 	int _entrada_de = -1;
+	// El regate que el rival se comió: quién (id), a quién (id), cuál, de qué
+	// equipo y en qué paso se mira si sirvió (_cerrar_regate). -1 = ninguno.
+	int _regate_de_id = -1, _regate_rival_id = -1, _regate_tipo = 0, _regate_equipo = 0;
+	int64_t _regate_hasta = -1;
+	int _clip_conduce_de(const JugadorCanchita &j) const;
+	void _amagar(int i, int clip);
+	void _cerrar_regate();
 	double _separa_max = 0.0;
 	void _cerrar_separacion(int equipo_que_sigue);
 	void _cerrar_pase(int resultado);

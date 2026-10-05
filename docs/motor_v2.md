@@ -431,7 +431,9 @@ Hecha en la nube. Test: `tests/test_cerebro_v2.gd`. Medición: `tests/_diag_cere
 - **Offside en el cuadro del pase:** `Cerebro::en_offside` mira la foto del momento en que sale la pelota. Se cuenta; cobrarlo es la etapa 6.
 - **El cerebro planea con la física del mundo:** la canchita es un `Planeador`. Mientras el poseedor decide, el cerebro le pregunta el margen de cada pase (a los pies, al punto y globo) con el mismo cálculo con que después sale la pelota.
 
-**Qué no entra todavía:** remate y arquero (etapa 5), gambeta (faltan clips de regate), pelota parada y jugadas preparadas de pelota parada (etapa 6), `_opciones_orientadas` (en el V2 el cuerpo gira de verdad y el pase de costado ya es más impreciso).
+**El regate (BUG-012 de `docs/bugs_pendientes.md`, 2026-10-05):** la opción `gambeta` del motor espacial entra como `DEC_REGATE`. El cerebro elige a quién encarar y por dónde sale la pelota (`Cerebro::_salida_de_regate`). La canchita hace el toque con el clip del regate y sortea si el rival se come el amague (`Canchita::_amagar`). Nadie adjudica la pelota: el rival que se lo come sigue de largo 0,8 s y el que no, la puede sacar. En 60 partidos de quinta salen 7,2 regates por partido y el 45% deja la pelota en su equipo.
+
+**Qué no entra todavía:** remate y arquero (etapa 5), pelota parada y jugadas preparadas de pelota parada (etapa 6), `_opciones_orientadas` (en el V2 el cuerpo gira de verdad y el pase de costado ya es más impreciso).
 
 **Banco sin reglas:** la pelota que sale vuelve con un lateral, un córner o un saque de arco. Si un equipo controla la pelota en el área rival es una llegada y el otro saca del arco. Los once de cada equipo son los de la formación; el arquero juega con los pies (no ataja).
 

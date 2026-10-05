@@ -71,7 +71,10 @@ enum TipoEvento : int {
 	// Etapa 8: salió una jugada preparada (core/jugadas.gd). `detalle` es la
 	// Jugada; `jugador`, el que saca o el que recupera; `otro`, el socio.
 	EV_JUGADA = 11,
-	EVENTOS = 12,
+	// `jugador` dejó atrás a `otro` con un regate y su equipo sigue con la
+	// pelota. `detalle` es el TipoRegate (toque.h).
+	EV_REGATE = 12,
+	EVENTOS = 13,
 };
 
 // Las jugadas preparadas que se ven en la cancha (core/jugadas.gd). Paredes y

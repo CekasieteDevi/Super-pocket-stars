@@ -242,7 +242,10 @@ void Canchita::empezar(int modo_, int64_t semilla) {
 		j.remata_prueba = false;
 		j.entra = false;
 		j.entrada_hasta = -1;
+		j.regate = j.regate_elegido = -1;
+		j.amagado_hasta = -1;
 	}
+	_regate_de_id = -1;
 	_parada = Parada();
 	if (modo == PARTIDO) {
 		_armar_mundo();
@@ -348,6 +351,7 @@ void Canchita::avanzar() {
 		_remate.palo = true;
 	}
 	_reglas();
+	_cerrar_regate();
 	// La predicción llega a HORIZONTE pasos (5 s). Si en ese tiempo nadie
 	// toca la pelota y sigue moviéndose, hay que rehacerla: todos iban al
 	// último punto previsto, le pegaban al aire a 7 m de la pelota y el
@@ -654,6 +658,10 @@ void Canchita::_pensar_jugador(int i) {
 		}
 		return;
 	}
+	// Se comió un amague: sigue de largo hacia donde se tiró (_amagar).
+	if (paso < j.amagado_hasta) {
+		return;
+	}
 	// En el partido el cerebro decide cuánta ventaja pide para tirarse
 	// (cerebro.pesos.entrada_ventaja_seg).
 	double gana = modo == PARTIDO ? cerebro.pesos.entrada_ventaja_seg : GANA_CARRERA_SEG;
@@ -710,9 +718,11 @@ void Canchita::_plan_tocar(int i) {
 	int no_antes = 0;
 	if (poseedor_ && param_toque.clip_conduce >= 0) {
 		double falta = c.clip >= 0 ? std::max(clips[size_t(c.clip)].duracion - c.tiempo_accion, 0.0) : 0.0;
-		falta += std::max(clips[size_t(param_toque.clip_conduce)].contacto_seg, 0.0);
+		// El regate que ya decidió tarda más en llegar a su contacto.
+		falta += std::max(clips[size_t(_clip_conduce_de(j))].contacto_seg, 0.0);
 		no_antes = int(falta / PASO_SEG + 0.5);
 	}
+	j.regate = -1;
 	_alcance(i, factor, k, t, no_antes);
 	// Si sin apurarse la alcanza recién lejos (o no la alcanza), va a fondo
 	// y la toma antes. Detrás de un pelotazo que rodaba a 5 m/s el más
@@ -1386,9 +1396,79 @@ int Canchita::_clip_de_parte(const JugadorCanchita &j, Parte parte) const {
 		return parte == PIE ? param_reglas.clip_entrada : -1;
 	}
 	if (j.toque == TOQUE_CONDUCE) {
-		return param_toque.clip_conduce;
+		return _clip_conduce_de(j);
 	}
 	return parte == NINGUNA ? -1 : param_toque.clip_recepcion[parte];
+}
+
+// El gesto del toque de conducción: el del regate que está planeando o el de
+// siempre.
+int Canchita::_clip_conduce_de(const JugadorCanchita &j) const {
+	return j.regate >= 0 && param_toque.clips_regate[j.regate] >= 0 ? param_toque.clips_regate[j.regate]
+																	: param_toque.clip_conduce;
+}
+
+// El amague del regate: arranca el gesto y el rival al que encara se lo come
+// o no. Pesan el control y la agilidad del que encara contra el quite y la
+// agilidad del que marca, como en el duelo del motor espacial
+// (_resolver_gambeta). Nadie adjudica la pelota: el que se lo come se tira
+// hacia el lado contrario al de la salida y hasta amagado_hasta no va a la
+// pelota. El que no se lo come sigue jugando y se la puede sacar.
+void Canchita::_amagar(int i, int clip) {
+	JugadorCanchita &j = jugadores[size_t(i)];
+	cuenta.regates++;
+	int r = j.decision.rival;
+	if (r < 0 || r >= int(jugadores.size()) || jugadores[size_t(r)].equipo == j.equipo
+			|| cerebro.fichas.size() != jugadores.size()) {
+		return;
+	}
+	JugadorCanchita &jr = jugadores[size_t(r)];
+	const FichaCerebro &fa = cerebro.fichas[size_t(i)];
+	const FichaCerebro &fd = cerebro.fichas[size_t(r)];
+	double habilidad = fa.bruto[AT_CONTROL] * 0.7 + fa.bruto[AT_AGILIDAD] * 0.3;
+	double marca = fd.bruto[AT_QUITE] * 0.7 + fd.bruto[AT_AGILIDAD] * 0.3;
+	double pica = std::clamp(param_toque.regate_pica_base + param_toque.regate_pica_por_punto * (habilidad - marca), 0.05,
+			0.95);
+	if (jr.cuerpo.clip >= 0 || paso < jr.en_el_piso_hasta || _azar.uno() >= pica) {
+		return;
+	}
+	cuenta.regates_amague++;
+	const Clip &k = clips[size_t(clip)];
+	jr.amagado_hasta = paso + int64_t((std::max(k.contacto_seg, 0.0) + param_toque.regate_pasado_seg) / PASO_SEG + 0.5);
+	// Hacia el lado contrario al de la salida, visto desde el que encara.
+	double ux = jr.cuerpo.x - j.cuerpo.x, uz = jr.cuerpo.z - j.cuerpo.z;
+	double l = std::max(hipot(ux, uz), 1e-6);
+	ux /= l;
+	uz /= l;
+	double a_lo_largo = j.dir_x * ux + j.dir_z * uz;
+	double lx = j.dir_x - ux * a_lo_largo, lz = j.dir_z - uz * a_lo_largo;
+	double ll = hipot(lx, lz);
+	if (ll > 1e-6) {
+		jr.cuerpo.ir_a(jr.cuerpo.x - lx / ll * param_toque.regate_pica_m, jr.cuerpo.z - lz / ll * param_toque.regate_pica_m,
+				1.0, true);
+	}
+	jr.persigue = false;
+	jr.toque = TOQUE_NADA;
+	_regate_de_id = _id(i);
+	_regate_rival_id = _id(r);
+	_regate_tipo = j.regate;
+	_regate_equipo = j.equipo;
+	_regate_hasta = jr.amagado_hasta;
+}
+
+// El regate sirvió si, cuando el rival vuelve a jugar, la pelota sigue en el
+// equipo del que encaró y el juego no se paró.
+void Canchita::_cerrar_regate() {
+	if (_regate_de_id < 0 || paso < _regate_hasta) {
+		return;
+	}
+	if (equipo_con_pelota == _regate_equipo && !(reglas && _parada.activa) && _saque_medio_en < 0) {
+		cuenta.regates_ganados++;
+		if (reglas && modo == PARTIDO) {
+			_anotar(EV_REGATE, _regate_equipo, _regate_de_id, _regate_rival_id, _regate_tipo, pelota.pos.x, pelota.pos.z);
+		}
+	}
+	_regate_de_id = -1;
 }
 
 // La parte con que la toca a esta altura: la del que recibe va con el pecho
@@ -1423,7 +1503,7 @@ double Canchita::_rumbo_al_tocar(const Cuerpo &c, double rumbo, double x, double
 void Canchita::_gatillo(int i) {
 	JugadorCanchita &j = jugadores[size_t(i)];
 	Cuerpo &c = j.cuerpo;
-	if (!j.persigue || c.clip >= 0) {
+	if (!j.persigue || c.clip >= 0 || paso < j.amagado_hasta) {
 		return;
 	}
 	if (paso < _reinicio_hasta && j.equipo != equipo_con_pelota) {
@@ -1561,6 +1641,9 @@ void Canchita::_gatillo(int i) {
 					j.toque_d_min = 1e9;
 					j.toque_alto_ok = false;
 					j.alcanza = alto_ok && d[0] <= tolerancia;
+					if (j.toque == TOQUE_CONDUCE && j.regate >= 0) {
+						_amagar(i, clip);
+					}
 					if (ataja && !j.alcanza) {
 						// La atajada se resuelve en toda la ventana del contacto, con
 						// el tramo que recorre la pelota en cada paso (_resolver_toques):
@@ -2171,6 +2254,7 @@ void Canchita::_tocar(int i, double distancia) {
 	}
 	j.rapidez_pase = 0.0;
 	j.tipo_pase = DEC_NADA;
+	j.regate = -1;
 	j.inmune_hasta = paso + int64_t(param_toque.sin_rebote_seg / PASO_SEG + 0.5);
 	_rebote_equipo = -1;
 	ultimo_toque = i;
@@ -2650,6 +2734,8 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 		j.decision = cerebro.decidir(_mundo, i, puede_pasar, _azar);
 		cerebro.planeador = nullptr;
 		j.hay_decision = true;
+		// Cuál regate hace: se sortea una vez, al decidir.
+		j.regate_elegido = j.decision.tipo == DEC_REGATE ? std::min(int(_azar.uno() * double(REGATES)), REGATES - 1) : -1;
 		double vale = cerebro.pesos.decision_vigencia_seg;
 		if (j.decision.tipo == DEC_CONDUCIR) {
 			vale = puede_pasar ? cadencia : std::max(cadencia - tiene, PASO_SEG);
@@ -2694,7 +2780,10 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 		j.golpe_remate = d.golpe;
 		return;
 	}
-	if (d.tipo != DEC_CONDUCIR && d.tipo != DEC_NADA) {
+	// Sin el clip de ese regate (los bancos que no lo configuran), conduce.
+	bool regatea = d.tipo == DEC_REGATE && j.regate_elegido >= 0 && param_toque.clips_regate[j.regate_elegido] >= 0
+			&& param_toque.clip_conduce >= 0;
+	if (d.tipo != DEC_CONDUCIR && d.tipo != DEC_REGATE && d.tipo != DEC_NADA) {
 		Pase pase = _pase_a(i, bola, t_patada, d);
 		if (pase.hay) {
 			j.toque = TOQUE_PASE;
@@ -2711,9 +2800,12 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 	// cuerpo protege la pelota: la aleja del rival más cercano igual que el
 	// control orientado (_orientar). Con el carril solo, la pelota iba suelta
 	// hacia el que presionaba y se perdían 8 pelotas por minuto conduciendo.
-	double dx = d.tipo == DEC_CONDUCIR ? d.dir_x : _ataca(j.equipo);
-	double dz = d.tipo == DEC_CONDUCIR ? d.dir_z : 0.0;
-	{
+	bool con_rumbo = d.tipo == DEC_CONDUCIR || d.tipo == DEC_REGATE;
+	double dx = con_rumbo ? d.dir_x : _ataca(j.equipo);
+	double dz = con_rumbo ? d.dir_z : 0.0;
+	// El regate sale por donde eligió el cerebro: pasa al lado del rival, no
+	// se aleja de él.
+	if (!regatea) {
 		int cerca = -1;
 		double d_cerca = 1e9;
 		for (size_t o = 0; o < jugadores.size(); o++) {
@@ -2756,6 +2848,9 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 	double espacio = std::clamp((presion - 2.0) / 4.0, 0.0, 1.0);
 	double largo = (param_toque.toque_corto_m + (param_toque.toque_largo_m - param_toque.toque_corto_m) * espacio)
 			* (1.2 - 0.4 * j.control / 100.0);
+	if (regatea) {
+		largo = param_toque.regate_largo_m;
+	}
 	// Lo que corre HACIA donde la manda, no su rapidez: el que cambiaba de
 	// dirección conduciendo (el carril nuevo, o alejarla del rival) la tocaba
 	// como si ya corriera para ese lado, a 7 m/s. Él tenía que frenar y dar la
@@ -2797,7 +2892,17 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 	// también lo que corre de más hacia adelante, el favorito conducía a
 	// fondo (quinta contra octava, 4,11 goles; así 3,98; antes 3,32).
 	double alcanza_m = 0.0, alcanza_seg = 0.0;
-	if (param_toque.conduce_inercia > 0.0 && param_toque.clip_conduce >= 0) {
+	if (regatea) {
+		// El regate es el cambio de dirección: la pelota sale por la salida
+		// entera, sin acompañar lo que el cuerpo sigue corriendo (eso la dejaba
+		// a unos 30 grados y derecho al rival). Hasta que termina el clip y
+		// llega el contacto del toque siguiente no la puede volver a tocar: la
+		// pelota tiene que haber recorrido lo que él corre en ese tiempo.
+		const Clip &kr = clips[size_t(param_toque.clips_regate[j.regate_elegido])];
+		alcanza_seg = kr.duracion - std::max(kr.contacto_seg, 0.0)
+				+ std::max(clips[size_t(param_toque.clip_conduce)].contacto_seg, 0.0);
+		alcanza_m = corre * alcanza_seg;
+	} else if (param_toque.conduce_inercia > 0.0 && param_toque.clip_conduce >= 0) {
 		double t_sig = clips[size_t(param_toque.clip_conduce)].duracion;
 		// Los segundos que pesa, hasta t_sig, una velocidad `resto` que el
 		// cuerpo pierde a `a` por segundo.
@@ -2832,6 +2937,7 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 		}
 	}
 	j.toque = TOQUE_CONDUCE;
+	j.regate = regatea ? j.regate_elegido : -1;
 	j.rapidez_toque = _rapidez_conduce(corre, largo, alcanza_m, alcanza_seg);
 }
 

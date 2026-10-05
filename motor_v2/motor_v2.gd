@@ -32,6 +32,9 @@ const PARADA_CORNER := 4
 ## `detalle` del evento "jugada": la Jugada del motor (reglas.h).
 const JUGADAS := ["", Jugadas.CORNER_CORTO, Jugadas.CORNER_BLOQUE, Jugadas.AMAGUE, Jugadas.DEFENSA_ADELANTADA,
 	Jugadas.CONTRAPRESION]
+## `detalle` del evento "regate": el TipoRegate del motor (toque.h), con el
+## nombre que entiende RelatoPartido._nombre_regate.
+const REGATES := ["elastica", "croqueta"]
 
 
 ## Los mismos argumentos y el mismo resultado que MatchEngine.simular. Con
@@ -168,6 +171,16 @@ static func _resultado(c: Object, home: Team, away: Team, rng: RandomNumberGener
 					var linea_q := _evento(paso, minuto, "gambeta", rival, equipo, plantel[pierde]["jugador"], "pierde")
 					linea_q["defensor_clave"] = _clave(id, e)
 					eventos.append(linea_q)
+			"regate":
+				# `jugador` dejó atrás a `otro`; `detalle` dice con cuál regate.
+				var pasado := _clave(int(ev["otro"]), 1 - e)
+				_usar(usos, k, "control")
+				_usar(usos, pasado, "quite")
+				if not quien.is_empty():
+					var linea_r := _evento(paso, minuto, "gambeta", equipo, rival, quien, "pasa")
+					linea_r["defensor_clave"] = pasado
+					linea_r["regate"] = str(REGATES[clampi(int(ev["detalle"]), 0, REGATES.size() - 1)])
+					eventos.append(linea_r)
 			"lesion":
 				if not quien.is_empty() and not equipo.esta_lesionado(id):
 					var lesion := Lesiones.sortear(quien, rng)

@@ -236,6 +236,7 @@ var _contacto_pie := {}
 ## (tests/_diag_patina_partido_v2.gd).
 var _gesto_corriendo := {}
 const GESTOS_SUELTOS := ["Pecho", "Cabecear"]
+const PREFIJO_REGATE := "Regate_"
 ## Variantes de un gesto que elige la vista: clip del motor -> el que se
 ## muestra en su lugar. El motor no sabe de ellas: duran lo mismo y tocan la
 ## pelota en el mismo segundo (si no, la variante no se usa; lo controla
@@ -343,8 +344,10 @@ func _ready() -> void:
 		# El control de muslo es como el pecho (el cuerpo queda suelto después
 		# del toque), pero con una pierna que toca: la del ancla Muslo_R.
 		var con_pierna := str(c["ancla"]) in ["Pie_R", "Pie_L", "Muslo_R"]
-		if (bool(c.get("mueve", false)) and str(c["ancla"]) in ["Pie_R", "Pie_L"]) or GESTOS_SUELTOS.has(nombre) \
-				or str(c["ancla"]) == "Muslo_R":
+		# Los regates no: el gesto ES lo que hacen las piernas (la elástica, la
+		# croqueta). Con las piernas de la carrera debajo se veía un toque más.
+		if (bool(c.get("mueve", false)) and str(c["ancla"]) in ["Pie_R", "Pie_L"] and not nombre.begins_with(PREFIJO_REGATE)) \
+				or GESTOS_SUELTOS.has(nombre) or str(c["ancla"]) == "Muslo_R":
 			var lado := str(c["ancla"]).right(1) if con_pierna else ""
 			var en := float(c["contacto"]) * float(c["duracion"]) if c["contacto"] != null and lado != "" else -1.0
 			_gesto_corriendo[nombre] = [en, lado]

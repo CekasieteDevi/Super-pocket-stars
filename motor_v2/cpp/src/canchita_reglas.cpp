@@ -1373,7 +1373,7 @@ void Canchita::_decidir_saque(int i, V3 bola, double t_patada) {
 			d = cerebro.decidir(_mundo, i, true, _azar);
 		}
 		cerebro.planeador = nullptr;
-		if (d.tipo == DEC_CONDUCIR || d.tipo == DEC_NADA || (d.tipo == DEC_REMATE && !al_arco)) {
+		if (d.tipo == DEC_CONDUCIR || d.tipo == DEC_REGATE || d.tipo == DEC_NADA || (d.tipo == DEC_REMATE && !al_arco)) {
 			// El pase más seguro; si no hay, a la otra mitad.
 			Pase pase = _planear_pase(i, bola, t_patada);
 			if (pase.hay) {

@@ -20,8 +20,12 @@ const DE_ESPALDAS := 0.5
 ## (2,3%); con el arreglo apagado, 127 de 616 (21%). En los 24 de este test,
 ## 4 de 126 y 28 de 125. Con 8 partidos (39 remates) el test fallaba por
 ## azar: 3 remates ya pasaban el tope.
+## Con los regates (BUG-012) el partido es otro: en 120 partidos, 8 de 603 y
+## 129 de 633 (20%); en los 24 de este test, 2 de 125 y 19 de 133 (14%). El
+## piso era 0,15: con 133 remates el error es de 3,5 puntos y fallaba por
+## azar. Con 0,10 queda a tres errores del 20% y arriba del tope.
 const TOPE_CON_ARREGLO := 0.08
-const PISO_SIN_ARREGLO := 0.15
+const PISO_SIN_ARREGLO := 0.10
 ## El área grande de un arco, con x en valor absoluto (Cerebro::MEDIO_LARGO,
 ## AREA_LARGO y AREA_MEDIO_ANCHO de motor_v2/cpp/src/cerebro/cerebro.h).
 const AREA_GRANDE := Rect2(52.5 - 16.5, -20.16, 16.5, 40.32)

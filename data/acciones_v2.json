@@ -1656,8 +1656,16 @@
 				"jugador",
 				"golero"
 			],
-			"contacto": null,
-			"ancla": ""
+			"contacto": 0.3,
+			"ancla": "Pie_R",
+			"fuente_contacto": "match/3d/vista_cancha_3d.gd CONTACTO_3D",
+			"punto_contacto": [
+				-0.166,
+				0.078,
+				0.193
+			],
+			"alcance_m": 0.255,
+			"altura_m": 0.078
 		},
 		"Regate_Elastica": {
 			"duracion": 0.75,
@@ -1669,8 +1677,16 @@
 				"jugador",
 				"golero"
 			],
-			"contacto": null,
-			"ancla": ""
+			"contacto": 0.4444,
+			"ancla": "Pie_R",
+			"fuente_contacto": "match/3d/vista_cancha_3d.gd CONTACTO_3D",
+			"punto_contacto": [
+				-0.385,
+				0.259,
+				0.333
+			],
+			"alcance_m": 0.509,
+			"altura_m": 0.259
 		},
 		"Regate_Globito": {
 			"duracion": 2.0,

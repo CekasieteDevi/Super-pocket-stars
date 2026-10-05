@@ -62,10 +62,34 @@ struct ParametrosToque {
 	double sin_rebote_seg = 0.3;
 	double margen_seguro_seg = 0.25;
 	double giro_alcance_rad = 1.0;
+	// El regate (Canchita::_decidir_partido con DEC_REGATE y Canchita::_amagar).
+	// Metros que la pelota le queda adelante al que encara cuando puede volver
+	// a tocarla.
+	double regate_largo_m = 1.5;
+	// Probabilidad de que el rival se coma el amague cuando el control y la
+	// agilidad del que encara igualan su quite y su agilidad, y cuánto cambia
+	// por cada punto de diferencia.
+	double regate_pica_base = 0.5;
+	double regate_pica_por_punto = 0.01;
+	// Segundos que el rival que se comió el amague sigue de largo después del
+	// toque: no va a la pelota ni se tira.
+	double regate_pasado_seg = 0.8;
+	// Metros que se va hacia el lado contrario al de la salida.
+	double regate_pica_m = 1.5;
 	// Clips (índices en los clips del cuerpo); los pone quien configura.
 	int clip_pase = -1;
 	int clip_conduce = -1;
 	int clip_recepcion[4] = { -1, -1, -1, -1 };
+	// Uno por TipoRegate; -1 = ese regate no se hace.
+	int clips_regate[2] = { -1, -1 };
+};
+
+// Los regates que tienen clip con contacto (data/acciones_v2.json). Los dos
+// cruzan la pelota del pie derecho hacia la izquierda.
+enum TipoRegate : int {
+	REGATE_ELASTICA = 0,
+	REGATE_CROQUETA = 1,
+	REGATES = 2,
 };
 
 // Con qué parte recibe, según la altura del centro de la pelota.

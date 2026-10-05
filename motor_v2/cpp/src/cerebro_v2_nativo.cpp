@@ -25,6 +25,11 @@ const Entrada ENTRADAS[] = {
 	{ "pase", "seguridad", &PesosCerebro::pase_seguridad },
 	{ "pase", "distancia", &PesosCerebro::pase_distancia },
 	{ "pase", "retroceso_libre", &PesosCerebro::pase_retroceso_libre },
+	{ "gambeta", "base", &PesosCerebro::gambeta_base },
+	{ "gambeta", "habilidad", &PesosCerebro::gambeta_habilidad },
+	{ "gambeta", "progreso", &PesosCerebro::gambeta_progreso },
+	{ "gambeta", "presion", &PesosCerebro::gambeta_presion },
+	{ "gambeta", "banda", &PesosCerebro::gambeta_banda },
 	{ "despeje", "base", &PesosCerebro::despeje_base },
 	{ "despeje", "presion", &PesosCerebro::despeje_presion },
 	{ "despeje", "zona", &PesosCerebro::despeje_zona },
@@ -99,6 +104,7 @@ const Entrada ENTRADAS[] = {
 	{ "fisica", "dist_saque_largo", &PesosCerebro::dist_saque_largo },
 	{ "fisica", "radio_tackle", &PesosCerebro::radio_tackle },
 	{ "fisica", "gambeta_cono_frontal", &PesosCerebro::gambeta_cono_frontal },
+	{ "fisica", "control_minimo_gambeta", &PesosCerebro::control_minimo_gambeta },
 	{ "fisica", "rango_tiro_malo", &PesosCerebro::rango_tiro_malo },
 	{ "fisica", "rango_tiro_bueno", &PesosCerebro::rango_tiro_bueno },
 	{ "fisica", "mezcla_fisica_rango_tiro", &PesosCerebro::mezcla_fisica_rango_tiro },
@@ -219,12 +225,16 @@ const Entrada NUEVOS[] = {
 	{ "cerebro", "centro_alto_m", &PesosCerebro::centro_alto_m },
 	{ "cerebro", "centro_elevacion_rad", &PesosCerebro::centro_elevacion_rad },
 	{ "cerebro", "centro_al_que_llega", &PesosCerebro::centro_al_que_llega },
+	{ "cerebro", "regate_radio_m", &PesosCerebro::regate_radio_m },
+	{ "cerebro", "regate_salida_rad", &PesosCerebro::regate_salida_rad },
+	{ "cerebro", "regate_giro_max_rad", &PesosCerebro::regate_giro_max_rad },
+	{ "cerebro", "regate_factor", &PesosCerebro::regate_factor },
 };
 
 // Los atributos de Player, en el orden de motor_v2::Atributo.
 const char *ATRIBUTOS[motor_v2::ATRIBUTOS] = { "pases", "vision", "inteligencia", "control", "centros", "fuerza",
 	"golpe", "velocidad", "aceleracion", "energia", "agilidad", "cabezazo", "tiro", "pies", "reflejos", "estirada",
-	"agarre", "achique" };
+	"agarre", "achique", "quite" };
 
 const char *ROLES[motor_v2::ROLES] = { "ARQ", "DFC", "LAT", "MC", "MCO", "EXT", "DC" };
 

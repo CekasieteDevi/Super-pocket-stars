@@ -163,7 +163,18 @@ El partido de referencia es el que le toca al usuario en la partida guardada del
 
 ### BUG-012 — Pregunta: hay regates
 
-- **Estado:** pregunta sin responder.
+- **Estado:** respondido y corregido el 2026-10-05. Falta la revisión visual en el teléfono.
+- **Respuesta:** el partido no tenía regates. El cerebro del Motor V2 no ofrecía la opción: su comentario decía "faltan los clips de regate". Los cinco clips `Regate_*` existían en el modelo, pero sin cuadro de contacto, y el motor no usaba ninguno. El relato solo contaba la gambeta perdida (el quite).
+- **Corrección en el cerebro:** el poseedor puede encarar al rival que tiene delante a menos de 4 m (`DEC_REGATE`, `motor_v2/cpp/src/cerebro/cerebro.cpp`). Usa los pesos `gambeta` de `data/utility_pesos.json`, los mismos del motor espacial: pesa su control contra el quite de ese rival. Con menos de 50 de control la opción no aparece. El que corre no encara si la salida gira más de 1,4 rad de adonde corre.
+- **Corrección en el motor:** el toque sale con el clip del regate, abierto 0,9 rad de la línea que va al rival (`Canchita::_decidir_partido`). Al arrancar el gesto el motor sortea si el rival se come el amague (`Canchita::_amagar`): pesan el control y la agilidad del que encara contra el quite y la agilidad del que marca. El rival que se lo come se tira al otro lado y no va a la pelota hasta 0,8 s después del toque. El que no se lo come sigue jugando y la puede sacar. Nadie adjudica la pelota.
+- **Corrección en la vista:** el regate muestra el clip entero. Los demás gestos corriendo llevan las piernas de la carrera debajo (`VistaV2`, `motor_v2/vista_v2.gd`).
+- **Regates habilitados:** elástica y croqueta. `tools/medir_clips_v2.gd` les pone el cuadro de contacto y `data/acciones_v2.json` se regeneró.
+- **Relato:** el regate que deja la pelota en su equipo sale con su nombre: "¡Elástica de X! Deja atrás a Y" (`MotorV2`, evento `regate` del motor).
+- **Medición:** `tests/_diag_regates_v2.gd`, 60 partidos de quinta, semilla 97000. Regates por partido: 0 → 7,2. El rival se come el amague en el 51%. El 45% deja la pelota en el equipo del que encaró.
+- **Balance:** en esos 60 partidos, quites 12,0 → 13,2; faltas 2,40 → 2,43; goles 2,33 → 2,05; remates 6,87 → 6,95; pases 57,3 → 55,7. `tests/_diag_calibracion_v2.gd`, 100 partidos por escenario: con la semilla 97000, 19 → 14 medidas fuera de rango; con la semilla 20261001, 16 → 20. Las medidas que cambian de lado se mueven menos que el error de la media. En las divisiones parejas, con la semilla 97000: goles 2,11 → 2,12; remates 6,66 → 6,42; pases completos 41,8 → 41,0 (el motor espacial: 36,0); faltas 2,45 → 2,47 (el motor espacial: 2,56).
+- **Probado y descartado:** la salida a cualquier ángulo de lo que corre. Salían 11,8 regates por partido, pero con el rival al costado la pelota quedaba atrás del que encaraba: `tests/test_pelota_atras_v2.gd` pasaba de 3,00 a 5,25 episodios por partido (con el tope de 1,4 rad, 3,13).
+- **Prueba de regresión:** `tests/test_regate_v2.gd`.
+- **Pendiente:** la salida hacia la derecha y los regates que faltan (bicicleta, ruleta y sombrerito) están en BUG-020.
 - **Pedido del usuario:** informar si el partido tiene regates. Si no los tiene, habilitarlos.
 
 ### BUG-013 — Pregunta: hay palomitas, voleas y chilenas
@@ -203,3 +214,15 @@ El partido de referencia es el que le toca al usuario en la partida guardada del
 
 - **Estado:** pregunta sin responder.
 - **Pedido del usuario:** informar si los remates tienen efecto (curva de la pelota en el aire).
+
+### BUG-020 — Faltan tres regates y la salida hacia la derecha
+
+- **Estado:** anotado el 2026-10-05, sin empezar. Sale de BUG-012.
+- **Pedido del usuario:** agregar la bicicleta, la ruleta y el sombrerito.
+- **Qué hay hoy:** elástica y croqueta (`toque.clips_regate` de `data/fisica_v2.json`, `TipoRegate` de `motor_v2/cpp/src/toque.h`). Los clips `Regate_Bicicleta`, `Regate_Ruleta` y `Regate_Globito` existen en el modelo, sin cuadro de contacto. El relato ya conoce los cinco nombres (`RelatoPartido._nombre_regate`).
+- **Por qué no entraron:** en el Motor V2 un gesto toca la pelota una sola vez, en el cuadro de contacto del clip. Ninguno de los tres se probó: la causa sale de leer los clips en `tools/blender/animaciones_jugador.py`.
+- **Bicicleta:** las piernas pasan alrededor de la pelota sin tocarla. El único toque es la salida, a los 1,17 s de un clip de 1,5 s. Con el rival a menos de 4 m la pelota rueda suelta todo ese tiempo. Hace falta que el amague empiece antes del toque: el rival se lo come al arrancar el gesto y la pelota sigue con el que encara hasta la salida.
+- **Ruleta:** el jugador pisa la pelota con un pie, gira 360° y la pisa con el otro. Hacen falta dos contactos en un gesto y que el cuerpo del motor gire con el clip. Hoy gira solo el modelo.
+- **Sombrerito:** la pelota pasa por arriba del rival. Hace falta un toque de regate con elevación y que el mismo jugador la reciba en el aire del otro lado. El toque de conducción solo la manda por el piso.
+- **Salida hacia la derecha:** la elástica y la croqueta cruzan la pelota del pie derecho al izquierdo y el modelo no se espeja. La pelota sale siempre hacia la izquierda del que encara (`Cerebro::_salida_de_regate`). Hacen falta los clips espejados en Blender.
+- **Al agregar cada uno:** poner el cuadro de contacto en `tools/medir_clips_v2.gd` y regenerar `data/acciones_v2.json`; sumar el tipo en `TipoRegate`, en `toque.clips_regate` y en `MotorV2.REGATES`; medir con `tests/_diag_regates_v2.gd` y `tests/_diag_calibracion_v2.gd` antes y después; ampliar `tests/test_regate_v2.gd`.

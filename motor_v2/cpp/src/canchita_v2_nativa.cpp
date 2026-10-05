@@ -68,6 +68,11 @@ void godot::leer_parametros_toque(const Dictionary &d, const std::vector<String>
 	leer(d, "sin_rebote_seg", p.sin_rebote_seg);
 	leer(d, "margen_seguro_seg", p.margen_seguro_seg);
 	leer(d, "giro_alcance_rad", p.giro_alcance_rad);
+	leer(d, "regate_largo_m", p.regate_largo_m);
+	leer(d, "regate_pica_base", p.regate_pica_base);
+	leer(d, "regate_pica_por_punto", p.regate_pica_por_punto);
+	leer(d, "regate_pasado_seg", p.regate_pasado_seg);
+	leer(d, "regate_pica_m", p.regate_pica_m);
 	if (d.has("clip_pase")) {
 		p.clip_pase = indice(nombres, d["clip_pase"]);
 	}
@@ -78,6 +83,12 @@ void godot::leer_parametros_toque(const Dictionary &d, const std::vector<String>
 		Array r = d["clip_recepcion"];
 		for (int64_t k = 0; k < r.size() && k < 4; k++) {
 			p.clip_recepcion[k] = indice(nombres, r[k]);
+		}
+	}
+	if (d.has("clips_regate")) {
+		Array r = d["clips_regate"];
+		for (int64_t k = 0; k < r.size() && k < motor_v2::REGATES; k++) {
+			p.clips_regate[k] = indice(nombres, r[k]);
 		}
 	}
 }
@@ -240,7 +251,7 @@ const NumeroReglas NUMEROS_REGLAS[] = {
 const char *PARADAS[motor_v2::PARADAS] = { "nada", "saque_medio", "lateral", "saque_arco", "corner", "tiro_libre",
 	"penal" };
 const char *EVENTOS[motor_v2::EVENTOS] = { "saque", "gol", "falta", "amarilla", "roja", "offside", "lesion", "cambio",
-	"fin_tiempo", "penal_tanda", "quite", "jugada" };
+	"fin_tiempo", "penal_tanda", "quite", "jugada", "regate" };
 
 void leer_cuatro(const Dictionary &d, const char *clave, double *destino) {
 	if (!d.has(clave)) {
@@ -742,7 +753,7 @@ Dictionary CanchitaV2Nativa::contadores() const {
 	d["lleva_pasos"] = k.lleva_pasos;
 	{
 		const char *decisiones[motor_v2::DECISIONES] = { "nada", "conducir", "pase", "pase_hueco", "pase_largo", "centro",
-			"pared", "despeje", "remate" };
+			"pared", "despeje", "remate", "regate" };
 		for (int f = 0; f < 3; f++) {
 			for (int t = 0; t < motor_v2::DECISIONES; t++) {
 				d[String("libre") + String::num_int64(f) + "_" + decisiones[t]] = k.via_libre[f][t];
@@ -808,6 +819,9 @@ Dictionary CanchitaV2Nativa::contadores() const {
 	d["quites_conduccion"] = k.quites_conduccion;
 	d["quites_control"] = k.quites_control;
 	d["quites_suelta"] = k.quites_suelta;
+	d["regates"] = k.regates;
+	d["regates_amague"] = k.regates_amague;
+	d["regates_ganados"] = k.regates_ganados;
 	// Etapa 5: el embudo de remates.
 	const char *resultados[motor_v2::RESULTADOS_REMATE] = { "gol", "atajado", "palo", "bloqueado", "afuera", "otro" };
 	for (int r = 0; r < motor_v2::RESULTADOS_REMATE; r++) {
@@ -1064,7 +1078,7 @@ Array CanchitaV2Nativa::registro_remates() const {
 Dictionary CanchitaV2Nativa::contadores_cerebro() const {
 	const motor_v2::ContadoresCerebro &k = _c.cerebro.cuenta;
 	const char *decisiones[motor_v2::DECISIONES] = { "nada", "conducir", "pase", "pase_hueco", "pase_largo", "centro",
-		"pared", "despeje", "remate" };
+		"pared", "despeje", "remate", "regate" };
 	Dictionary d;
 	for (int t = 0; t < motor_v2::DECISIONES; t++) {
 		d[decisiones[t]] = k.decisiones[t];
@@ -1141,7 +1155,7 @@ int64_t CanchitaV2Nativa::get_fase_ritmo() const {
 
 Dictionary CanchitaV2Nativa::ultima_decision() const {
 	const char *tipos[motor_v2::DECISIONES] = { "nada", "conducir", "pase", "pase_hueco", "pase_largo", "centro", "pared",
-		"despeje", "remate" };
+		"despeje", "remate", "regate" };
 	Dictionary d;
 	d["decisor"] = _c.cerebro.ultimo_decisor;
 	d["temperatura"] = _c.cerebro.ultima_temperatura;

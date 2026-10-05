@@ -62,6 +62,10 @@ constexpr double PASE_ATRAS_MARGEN_M = 2.5;
 constexpr double PASE_ATRAS_CERCA_M = 30.0;
 // A menos de esto del arco (el punto penal) no se centra.
 constexpr double CENTRO_DESDE_M = 11.0;
+// El regate no sale si a esta distancia por la salida ya no hay cancha.
+constexpr double REGATE_MIRA_M = 5.0;
+// Por debajo de esta rapidez el que encara gira para cualquier lado.
+constexpr double REGATE_CORRE_MS = 2.0;
 constexpr double PROFUNDIDAD_DEL_NUEVE_AL_CENTRO = 8.0;
 constexpr double ARQUERO_X_MIN = 51.8;
 constexpr double ARQUERO_X_MAX = 36.0;
@@ -562,14 +566,14 @@ bool Cerebro::_arquero_encerrado(const Mundo &m, int equipo) const {
 	return false;
 }
 
-int Cerebro::_rival_a_encarar(const Mundo &m, int i) const {
+int Cerebro::_rival_a_encarar(const Mundo &m, int i, double radio) const {
 	const JugadorVisto &p = m.jugadores[size_t(i)];
 	int equipo = fichas[size_t(i)].equipo;
 	double ax = MEDIO_LARGO * signo(equipo);
 	double dx = ax - p.x, dz = -p.z;
 	normalizar(dx, dz);
 	int mejor = -1;
-	double mejor_d = pesos.radio_tackle;
+	double mejor_d = radio;
 	for (size_t o = 0; o < fichas.size(); o++) {
 		if (fichas[o].equipo == equipo || fichas[o].rol == ARQ) {
 			continue;
@@ -586,6 +590,40 @@ int Cerebro::_rival_a_encarar(const Mundo &m, int i) const {
 		mejor = int(o);
 	}
 	return mejor;
+}
+
+// Por dónde sale la pelota del regate: abierta regate_salida_rad de la línea
+// que va al rival, hacia la izquierda del que encara. Los clips de regate
+// (Regate_Elastica, Regate_Croqueta) cruzan la pelota del pie derecho al
+// izquierdo y el modelo no se espeja. No hay salida si se va de la cancha o
+// vuelve hacia su arco.
+bool Cerebro::_salida_de_regate(const Mundo &m, int i, int rival, double &dx, double &dz) const {
+	const JugadorVisto &p = m.jugadores[size_t(i)];
+	double ux = m.jugadores[size_t(rival)].x - p.x, uz = m.jugadores[size_t(rival)].z - p.z;
+	normalizar(ux, uz);
+	if (ux == 0.0 && uz == 0.0) {
+		return false;
+	}
+	double sa, ca;
+	mate::seno_coseno(pesos.regate_salida_rad, sa, ca);
+	// A la izquierda del que mira hacia (ux, uz) queda (uz, -ux).
+	dx = ux * ca + uz * sa;
+	dz = uz * ca - ux * sa;
+	// Encarar es ir hacia el rival. Con el rival al costado la salida giraba
+	// más de 90 grados de lo que corría: él seguía de largo y la pelota le
+	// quedaba atrás (tests/test_pelota_atras_v2.gd: 3,00 episodios por partido
+	// sin regates y 5,25 con la salida a cualquier ángulo).
+	double corre = dist(0.0, 0.0, p.vx, p.vz);
+	if (corre > REGATE_CORRE_MS) {
+		double sg, cg;
+		mate::seno_coseno(pesos.regate_giro_max_rad, sg, cg);
+		if ((dx * p.vx + dz * p.vz) / corre < cg) {
+			return false;
+		}
+	}
+	double qx = p.x + dx * REGATE_MIRA_M, qz = p.z + dz * REGATE_MIRA_M;
+	return dx * signo(fichas[size_t(i)].equipo) >= 0.0 && std::abs(qx) <= MEDIO_LARGO - 2.0
+			&& std::abs(qz) <= MEDIO_ANCHO - 2.0;
 }
 
 // Cambio de frente desde el último tercio: vale si del lado de la pelota hay
@@ -852,9 +890,32 @@ void Cerebro::_evaluar(const Mundo &m, int i, std::vector<Opcion> &op) const {
 		o.utilidad = pesos.despeje_base + pesos.despeje_presion * presion + pesos.despeje_zona * (1.0 - mi_valor);
 		op.push_back(o);
 	}
-	// La gambeta espera sus clips de regate; el rival que tapa el camino lo
-	// sigue necesitando la pared.
-	int rival_delante = _rival_a_encarar(m, i);
+	// Encarar (la `gambeta` del motor espacial). Hay que saber hacerlo: por
+	// debajo de control_minimo_gambeta la opción no aparece. Lo que decide es
+	// si a ESE rival lo pasa: su control contra el quite del otro.
+	int rival_regate = es_arquero || f.bruto[AT_CONTROL] < pesos.control_minimo_gambeta || pesos.regate_factor <= 0.0
+			? -1
+			: _rival_a_encarar(m, i, pesos.regate_radio_m);
+	double regate_x = 0.0, regate_z = 0.0;
+	if (rival_regate != -1 && _salida_de_regate(m, i, rival_regate, regate_x, regate_z)) {
+		double ventaja = clamp01((f.bruto[AT_CONTROL] - fichas[size_t(rival_regate)].bruto[AT_QUITE]) / 100.0 + 0.5);
+		Opcion o;
+		o.tipo = DEC_REGATE;
+		o.rival = rival_regate;
+		o.dir_x = regate_x;
+		o.dir_z = regate_z;
+		o.utilidad = pesos.gambeta_base + pesos.gambeta_habilidad * ventaja * ventaja
+				+ pesos.gambeta_progreso * (1.0 - mi_valor) - pesos.gambeta_presion * presion;
+		// El extremo que encara para acomodarse frente al arco: los dos
+		// umbrales de puede_centrar.
+		if (std::abs(z) >= pesos.banda_para_centrar && mi_valor >= pesos.avance_para_centrar) {
+			o.utilidad += pesos.gambeta_banda;
+		}
+		o.utilidad *= pesos.regate_factor;
+		op.push_back(o);
+	}
+	// El rival que tapa el camino también lo necesita la pared.
+	int rival_delante = _rival_a_encarar(m, i, pesos.radio_tackle);
 
 	double max_dist = _por_atributo(i, es_arquero ? AT_GOLPE : AT_PASES, pesos.max_dist_pase_malo,
 			pesos.max_dist_pase_bueno, 1.0);
@@ -1288,6 +1349,9 @@ double Cerebro::_ajuste_de_marcador(double urg, int tipo, double adelante, doubl
 			case DEC_CENTRO:
 				a += pesos.marc_riesgo * urg * 0.5;
 				break;
+			case DEC_REGATE:
+				a += pesos.marc_riesgo * urg * 0.4;
+				break;
 			case DEC_PASE:
 			case DEC_PASE_LARGO:
 				a += atras ? -pesos.marc_riesgo * urg : pesos.marc_riesgo * urg * 0.6 * gana;
@@ -1309,6 +1373,9 @@ double Cerebro::_ajuste_de_marcador(double urg, int tipo, double adelante, doubl
 			case DEC_PASE_HUECO:
 				a -= pesos.marc_seguridad * p * 0.6;
 				break;
+			case DEC_REGATE:
+				a -= pesos.marc_seguridad * p * 0.5;
+				break;
 			default:
 				break;
 		}
@@ -1322,6 +1389,9 @@ double Cerebro::_ajuste_de_perfil(int i, int receptor, int tipo, double adelante
 	switch (tipo) {
 		case DEC_CONDUCIR:
 			a += pesos.perfil_regate * _gusto(i, REGATE) * camino * (1.0 - presion);
+			break;
+		case DEC_REGATE:
+			a += pesos.perfil_regate * _gusto(i, REGATE) * (1.0 - presion);
 			break;
 		case DEC_PARED:
 			a += pesos.perfil_asociacion * _gusto(i, ASOCIACION) * 0.8;
@@ -1443,7 +1513,7 @@ void Cerebro::_ponderar(const Mundo &m, int i, std::vector<Opcion> &op, double p
 				ajuste -= pesos.ritmo_devolucion_castigo
 						* std::min(double(_veces_de_la_pareja(i, devolver_a)), pesos.ritmo_devolucion_max);
 			}
-		} else if (o.tipo == DEC_CENTRO) {
+		} else if (o.tipo == DEC_CENTRO || o.tipo == DEC_REGATE) {
 			ajuste += _ajuste_de_marcador(urg, o.tipo, 0.0, 0.0, 0.0);
 			ajuste += _ajuste_de_perfil(i, -1, o.tipo, 0.0, 0.0, 0.0, presion, camino);
 		}
@@ -1549,7 +1619,8 @@ Decision Cerebro::decidir(const Mundo &m, int i, bool puede_pasar, Azar &azar) {
 		// Pie preferido: le cuesta jugar hacia su lado malo.
 		if (f.pie_malo_lado != 0) {
 			for (Opcion &o : op) {
-				if (o.tipo == DEC_CONDUCIR || o.tipo == DEC_DESPEJE || (o.receptor < 0 && o.tipo != DEC_REMATE)) {
+				if (o.tipo == DEC_CONDUCIR || o.tipo == DEC_REGATE || o.tipo == DEC_DESPEJE
+						|| (o.receptor < 0 && o.tipo != DEC_REMATE)) {
 					continue;
 				}
 				bool con_punto = o.tiene_punto && (es_pase(o.tipo) || o.tipo == DEC_REMATE);
@@ -1666,6 +1737,10 @@ Decision Cerebro::decidir(const Mundo &m, int i, bool puede_pasar, Azar &azar) {
 		dec.dir_x = dx;
 		dec.dir_z = dz;
 		dec.ritmo = ritmo_de_conduccion(m, i);
+	} else if (o.tipo == DEC_REGATE) {
+		dec.rival = o.rival;
+		dec.dir_x = o.dir_x;
+		dec.dir_z = o.dir_z;
 	} else if (o.tipo == DEC_DESPEJE) {
 		// Arriba y lejos, sin buscar a nadie: más lejos cuanto más pierna.
 		double largo = _por_atributo(i, AT_FUERZA, pesos.despeje_corto, pesos.despeje_largo, 1.0);
