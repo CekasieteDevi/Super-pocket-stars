@@ -317,6 +317,9 @@ struct FichaReglas {
 	double centros = 50.0;
 	double fuerza = 50.0;
 	double salto = 50.0;
+	// El tiro que muestra la ficha, sin relativizar al nivel del partido
+	// (JugadorCanchita.tiro va relativo): decide quién puede rematar de taco.
+	double tiro = 50.0;
 	// Al córner sube por amenaza aérea (cabezazo + salto, +40 si es de ataque).
 	double amenaza = 100.0;
 	// Al banco: con qué rol (Rol de cerebro.h) puede entrar.

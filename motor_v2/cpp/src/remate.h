@@ -66,6 +66,17 @@ struct ParametrosRemate {
 	// La que necesita con un centro de un compañero (más baja: el centro se
 	// juega de primera).
 	double primera_geometria_centro = 0.15;
+	// De espaldas al punto del arco (a más de taco_desde_rad de adonde va a
+	// mirar al tocarla) no remata con el pie: se da vuelta. Solo el que tiene
+	// tiro taco_tiro o más (el de la ficha, FichaReglas.tiro) le pega igual,
+	// de taco, y solo adentro del área grande. 0 lo apaga.
+	// Medido en 120 partidos, semilla 97000: sin esto, el 27% de los remates
+	// de pie salía de espaldas (162 en quinta, 121 en primera sin contar los
+	// de tiro 90+ en el área). Con 1,57 quedaban 7 y 14: al tocarla mira un
+	// poco distinto que al decidir. Con 1,4 quedan 3 y 3; goles 2,02 a 1,97
+	// en quinta y 2,19 a 2,00 en primera.
+	double taco_desde_rad = 1.4;
+	double taco_tiro = 90.0;
 	// Clips (índices en los clips del cuerpo); los pone quien configura.
 	int clip_pie = -1;
 	int clip_efecto = -1;

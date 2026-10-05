@@ -20,6 +20,7 @@ func _init() -> void:
 	var quites := 0
 	var centros := 0
 	var pases_con_minuto := 0
+	var tiros_total := 0
 	for n in PARTIDOS:
 		var rng := RandomNumberGenerator.new()
 		rng.seed = SEED + n
@@ -92,7 +93,11 @@ func _init() -> void:
 		var stats: Dictionary = EstadisticasPartido.calcular(r["eventos"], home.nombre, away.nombre)
 		var pases := int(stats[home.nombre]["pases_intentados"]) + int(stats[away.nombre]["pases_intentados"])
 		var tiros := int(stats[home.nombre]["tiros"]) + int(stats[away.nombre]["tiros"])
-		_ok(pases >= 20 and tiros >= 1 and tiros >= home.goles + away.goles,
+		# Un partido puede terminar sin remates (1 de 100 con esta semilla
+		# después de BUG-008; la media es 6,4): que haya tiros se mira en el
+		# total, no partido por partido.
+		tiros_total += tiros
+		_ok(pases >= 20 and tiros >= home.goles + away.goles,
 			"%s: las estadísticas cuentan %d pases y %d tiros" % [texto, pases, tiros])
 		_ok(not (r["xp"]["home"] as Dictionary).is_empty() and not (r["xp"]["away"] as Dictionary).is_empty(),
 			"%s: hay experiencia para los dos equipos" % texto)
@@ -161,6 +166,7 @@ func _init() -> void:
 		"el local tiene %.1f puntos de duelo a favor y corre a %.2f m/s (de visitante, a %.2f; con la armonía a favor, a %.2f)" % [
 			ventaja, de_local, de_visitante, con_armonia])
 	_ok(relatados > PARTIDOS * 5, "el relato cuenta %d momentos" % relatados)
+	_ok(tiros_total > PARTIDOS * 3, "las estadísticas cuentan %d tiros en %d partidos" % [tiros_total, PARTIDOS])
 	_ok(quites > PARTIDOS and centros > 0 and pases_con_minuto > PARTIDOS * 10,
 		"el relato tiene %d quites, %d centros y %d pases con su minuto" % [quites, centros, pases_con_minuto])
 	print("rojas %d, cambios %d, lesiones %d" % [rojas, cambios, lesiones])

@@ -2649,6 +2649,21 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 			}
 		}
 	}
+	// De espaldas al arco no remata: lleva la pelota hacia el punto que
+	// eligió, con un toque corto, y vuelve a decidir en el toque siguiente,
+	// ya de frente (_remate_de_espaldas).
+	bool gira_al_arco = j.decision.tipo == DEC_REMATE && _remate_de_espaldas(i, bola, j.decision.x, j.decision.z);
+	if (gira_al_arco) {
+		Decision gira;
+		gira.tipo = DEC_CONDUCIR;
+		double gx = j.decision.x - bola.x, gz = j.decision.z - bola.z;
+		double gl = std::max(hipot(gx, gz), 1e-6);
+		gira.dir_x = gx / gl;
+		gira.dir_z = gz / gl;
+		j.decision = gira;
+		j.decision_hasta = paso;
+		cuenta.giros_al_arco++;
+	}
 	const Decision &d = j.decision;
 	if (d.tipo == DEC_REMATE) {
 		j.toque = TOQUE_REMATE;
@@ -2767,6 +2782,9 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 	if (frena_antes) {
 		largo = param_toque.toque_corto_m;
 		corre = std::min(corre, hacia * param_toque.frena_giro_rapidez);
+	} else if (gira_al_arco) {
+		// Cerca del arco un toque largo se lo queda el arquero.
+		largo = param_toque.toque_corto_m;
 	}
 	j.toque = TOQUE_CONDUCE;
 	j.rapidez_toque = _rapidez_conduce(corre, largo);
@@ -3607,6 +3625,13 @@ bool Canchita::_decidir_remate_de_primera(int i, V3 bola, double t) {
 			|| cerebro.factor_geometria(bola.x, bola.z, j.equipo) < geometria))) {
 		return false;
 	}
+	// De espaldas al arco no le pega de primera con el pie: la controla (el
+	// control lo deja de frente). De cabeza sí: la peina.
+	if (!amague && parte != CABEZA && parte != PECHO
+			&& _remate_de_espaldas(i, bola, param_pelota.medio_largo * _ataca(j.equipo), 0.0)) {
+		cuenta.giros_al_arco++;
+		return false;
+	}
 	_plan_bola = bola;
 	_plan_t = t;
 	cerebro.planeador = this;
@@ -3618,6 +3643,29 @@ bool Canchita::_decidir_remate_de_primera(int i, V3 bola, double t) {
 	j.meta_z = d.z;
 	j.golpe_remate = d.golpe;
 	return true;
+}
+
+// BUG-008 (revisión del usuario 2026-10-04: "le pegan de taco hacia el arco
+// estando de espaldas"). El que patea va derecho a la pelota y la manda
+// adonde sea (_perseguir): el remate salía también para atrás de adonde
+// miraba. Devuelve true si este jugador, tocando la pelota en `bola`, queda
+// de espaldas al punto y no le puede pegar de taco: tiene que darse vuelta.
+bool Canchita::_remate_de_espaldas(int i, V3 bola, double meta_x, double meta_z) const {
+	const ParametrosRemate &r = param_remate;
+	if (r.taco_desde_rad <= 0.0) {
+		return false;
+	}
+	const JugadorCanchita &j = jugadores[size_t(i)];
+	const Cuerpo &c = j.cuerpo;
+	// Al tocarla mira hacia la pelota (_perseguir); encima de ella, adonde ya mira.
+	double fx = bola.x - c.x, fz = bola.z - c.z;
+	double mira = fx * fx + fz * fz > 0.09 ? rumbo_de(fx, fz) : c.rumbo;
+	if (std::abs(mate::envolver(rumbo_de(meta_x - bola.x, meta_z - bola.z) - mira)) <= r.taco_desde_rad) {
+		return false;
+	}
+	bool en_area = std::abs(param_pelota.medio_largo * _ataca(j.equipo) - bola.x) <= Cerebro::AREA_LARGO
+			&& std::abs(bola.z) <= Cerebro::AREA_MEDIO_ANCHO;
+	return !(en_area && j.reglas.tiro >= r.taco_tiro);
 }
 
 double Canchita::_rapidez_remate(const JugadorCanchita &j, int golpe) const {
@@ -3764,6 +3812,7 @@ void Canchita::_patear_al_arco(int i, bool de_primera, double apretado) {
 	reg.minuto = reglas ? minuto() : double(paso) * PASO_SEG / 60.0;
 	reg.golpe = golpe;
 	reg.de_primera = de_primera;
+	reg.de_lado = de_lado;
 	reg.desde_x = desde.x;
 	reg.desde_z = desde.z;
 	reg.alto = meta.y;

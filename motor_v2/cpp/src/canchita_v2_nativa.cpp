@@ -112,6 +112,8 @@ const NumeroRemate NUMEROS_REMATE[] = {
 	{ "alto_factor", &motor_v2::ParametrosRemate::alto_factor },
 	{ "primera_geometria", &motor_v2::ParametrosRemate::primera_geometria },
 	{ "primera_geometria_centro", &motor_v2::ParametrosRemate::primera_geometria_centro },
+	{ "taco_desde_rad", &motor_v2::ParametrosRemate::taco_desde_rad },
+	{ "taco_tiro", &motor_v2::ParametrosRemate::taco_tiro },
 };
 const char *GOLPES[motor_v2::TIPOS_REMATE] = { "colocado", "fuerte", "efecto", "globo", "cabeza" };
 
@@ -276,6 +278,7 @@ void leer_ficha_reglas(const Dictionary &fisico, motor_v2::FichaReglas &f) {
 	leer(d, "centros", f.centros);
 	leer(d, "fuerza", f.fuerza);
 	leer(d, "salto", f.salto);
+	leer(d, "tiro", f.tiro);
 	leer(d, "amenaza", f.amenaza);
 	leer(d, "media", f.media);
 	f.designado = int(d.get("designado", 0));
@@ -821,6 +824,7 @@ Dictionary CanchitaV2Nativa::contadores() const {
 	d["remates_1"] = k.remates_equipo[1];
 	d["remates_cabeza"] = k.remates_cabeza;
 	d["remates_primera"] = k.remates_primera;
+	d["giros_al_arco"] = k.giros_al_arco;
 	d["goles_0"] = k.goles[0];
 	d["goles_1"] = k.goles[1];
 	d["goles_cabeza"] = k.goles_cabeza;
@@ -1044,6 +1048,7 @@ Array CanchitaV2Nativa::registro_remates() const {
 		d["paso"] = g.paso_remate;
 		d["golpe"] = g.golpe;
 		d["de_primera"] = g.de_primera;
+		d["de_lado"] = g.de_lado;
 		d["desde"] = Vector2(real_t(g.desde_x), real_t(g.desde_z));
 		d["alto"] = g.alto;
 		d["lateral"] = g.lateral;

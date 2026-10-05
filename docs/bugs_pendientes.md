@@ -105,3 +105,80 @@ La división de archivos grandes, los identificadores estables de clubes, la act
 - **Prueba de regresión:** `tests/test_tiro_lejano.gd`, mil semillas por escena en ambos sentidos. Falla con el comportamiento anterior y pasa con la corrección. Verifica también diagnóstico, estadísticas, eventos, XP y RNG.
 - **Resultados y límites:** [informe de BUG-007](mediciones/bug007_resultados.md). La diferencia entre motores sigue registrada en SIM-001. No se realizó revisión visual.
 - **Detalle completo:** [plan de realismo](plan_realismo_simulacion.md), "Observado jugando, 2026-09-10: el tiro de lejos se abusa".
+
+## Observado jugando, 2026-10-04
+
+El usuario anotó estos puntos mirando un partido en el teléfono. Ninguno está investigado: falta ubicar el código y medir. Las entradas marcadas como **pregunta** piden primero una respuesta, no un arreglo.
+
+El partido de referencia es el que le toca al usuario en la partida guardada del teléfono. No modificar esa partida: copiala a una ruta de prueba antes de reproducir.
+
+### BUG-008 — Cualquier jugador remata de taco de espaldas al arco
+
+- **Estado:** corregido el 2026-10-04 en el motor. Falta la revisión visual en el teléfono.
+- **Causa:** el que patea va derecho a la pelota y la manda adonde sea (`Canchita::_perseguir`). El remate salía también para atrás de adonde miraba: el 27% de los remates de pie.
+- **Corrección:** `Canchita::_remate_de_espaldas` (`motor_v2/cpp/src/canchita.cpp`). El que queda a más de `remate.taco_desde_rad` (80 grados) del punto del arco lleva la pelota hacia el arco con un toque corto y remata de frente. Si la pelota le llegaba de primera, la controla. El que tiene `tiro` 90 o más (`remate.taco_tiro`) y está adentro del área grande le pega igual. El cabezazo no cambia.
+- **Medición:** 120 partidos por división, semilla 97000. Remates de pie de espaldas sin permiso: 162 → 3 en quinta, 121 → 3 en primera. Goles por partido: 2,02 → 1,97 en quinta, 2,19 → 2,00 en primera. Remates por partido: 7,13 → 6,10 en quinta, 7,61 → 7,18 en primera. Quites por partido: 14,63 → 15,13 en quinta, 17,17 → 18,33 en primera.
+- **Prueba de regresión:** `tests/test_remate_de_espaldas_v2.gd`. `tests/test_motor_v2_puente.gd` pedía un tiro en cada partido y ahora pide tiros en el total: 1 de 100 partidos termina sin remates.
+- **Pendiente:** el jugador con `tiro` 90 o más usa el clip de remate común (`Patear_Corriendo`), no el clip `Taco`. El clip `Taco` toca con el talón detrás del cuerpo: usarlo cambia por dónde llega el jugador a la pelota.
+- **Observado:** los jugadores le pegan de taco hacia el arco estando de espaldas al arco.
+- **Pedido del usuario:** el remate de taco queda solo para los jugadores con `tiro` de 90 o más, y solo desde adentro del área grande. Los demás jugadores se dan vuelta y rematan de frente al arco.
+
+### BUG-009 — El que conduce sigue corriendo y deja la pelota atrás
+
+- **Estado:** anotado, sin investigar. El usuario avisa que sigue pasando después de los arreglos anteriores.
+- **Observado:** el jugador se va solo, la pelota queda quieta atrás y el jugador tiene que volver a buscarla.
+- **Caso para reproducir:** Mco Romero, minuto 23 del partido de referencia.
+- **Relacionado:** BUG-018.
+
+### BUG-010 — Pregunta: qué velocidad tiene un jugador de 99
+
+- **Estado:** pregunta sin responder.
+- **Observado:** algunos jugadores corren más rápido que un caballo.
+- **Pedido del usuario:** informar la velocidad máxima, en metros por segundo y en kilómetros por hora, de un jugador con velocidad 99. Compararla con la de un futbolista real.
+
+### BUG-011 — En el córner van demasiados jugadores a la pelota y nadie salta
+
+- **Estado:** anotado, sin investigar.
+- **Observado:** cuando cobran el córner, todos van adonde cae la pelota y se amontonan. Además los jugadores cabecean parados, sin saltar.
+
+### BUG-012 — Pregunta: hay regates
+
+- **Estado:** pregunta sin responder.
+- **Pedido del usuario:** informar si el partido tiene regates. Si no los tiene, habilitarlos.
+
+### BUG-013 — Pregunta: hay palomitas, voleas y chilenas
+
+- **Estado:** pregunta sin responder.
+- **Pedido del usuario:** informar cuáles de los tres remates existen y cuáles se ven en el partido.
+
+### BUG-014 — El jugador entra corriendo al arco con la pelota y el arquero no hace nada
+
+- **Estado:** anotado, sin investigar.
+- **Caso para reproducir:** gol del minuto 32 del partido de referencia.
+
+### BUG-015 — Pregunta: el rival domina más de lo que el plantel justifica
+
+- **Estado:** pregunta sin responder.
+- **Observado:** el usuario no tiene un equipo malo y siente que el rival lo pasa por arriba.
+- **Pedido del usuario:** comparar los dos planteles del partido de referencia y decir si el dominio del rival está justificado por los atributos.
+
+### BUG-016 — El arquero hace el pase con las manos de espaldas
+
+- **Estado:** anotado, sin investigar.
+- **Observado:** la animación del saque con las manos se ve con el arquero de espaldas a la dirección del pase.
+
+### BUG-017 — El sustituido y el lesionado salen lento y por el lugar equivocado
+
+- **Estado:** anotado, sin investigar. El usuario lo pidió varias veces antes.
+- **Pedido del usuario:** el jugador que sale por cambio o por lesión se va más rápido. Sale por el medio de la banda de abajo, donde va el cuarto árbitro con los cambios.
+
+### BUG-018 — El que corre rápido pasa de largo y no se lleva la pelota
+
+- **Estado:** anotado, sin investigar.
+- **Observado:** algunos jugadores llegan a la pelota tan rápido que la pasan de largo sin tomarla.
+- **Relacionado:** BUG-009 y BUG-010.
+
+### BUG-019 — Pregunta: hay tiros con efecto
+
+- **Estado:** pregunta sin responder.
+- **Pedido del usuario:** informar si los remates tienen efecto (curva de la pelota en el aire).

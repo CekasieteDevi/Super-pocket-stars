@@ -263,6 +263,7 @@ static func reglas_de(jugador: Dictionary, equipo: Team, rival: Team) -> Diction
 		"centros": float(a.get("centros", 50.0)),
 		"fuerza": float(a.get("fuerza", 50.0)),
 		"salto": float(a.get("salto", 50.0)),
+		"tiro": float(a.get("tiro", 50.0)),
 		"amenaza": amenaza,
 		"media": float(jugador.get("media", 50.0)),
 	}

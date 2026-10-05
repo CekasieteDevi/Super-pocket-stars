@@ -193,6 +193,8 @@ struct ContadoresCanchita {
 	int64_t remates_equipo[2] = { 0, 0 };
 	int64_t remates_cabeza = 0;
 	int64_t remates_primera = 0;
+	// Las veces que no remató por quedar de espaldas al arco (_remate_de_espaldas).
+	int64_t giros_al_arco = 0;
 	int64_t resultados[RESULTADOS_REMATE] = {};
 	int64_t goles[2] = { 0, 0 };
 	int64_t goles_cabeza = 0;
@@ -320,6 +322,8 @@ struct RegistroRemate {
 	double minuto = 0.0;
 	int golpe = 0;
 	bool de_primera = false;
+	// 0 = hacia donde mira el que remata, 1 = de espaldas.
+	double de_lado = 0.0;
 	double desde_x = 0.0, desde_z = 0.0;
 	double alto = 0.0, lateral = 0.0;
 	double rapidez = 0.0;
@@ -867,6 +871,7 @@ private:
 	void _llevar_en_manos();
 	void _soltar();
 	bool _decidir_remate_de_primera(int i, V3 bola, double t);
+	bool _remate_de_espaldas(int i, V3 bola, double meta_x, double meta_z) const;
 	double _rapidez_remate(const JugadorCanchita &j, int golpe) const;
 	double _error_remate(const JugadorCanchita &j, int golpe, double de_lado, double alto_pelota, double llega_ms,
 			double apretado, double cruce_pie_malo) const;

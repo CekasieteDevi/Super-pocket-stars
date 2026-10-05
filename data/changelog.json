@@ -1,4 +1,5 @@
 [
+	{"version": "0.8.30", "fecha": "2026-10-04", "cambio": "El jugador que queda de espaldas al arco se da vuelta y remata de frente; el taco queda para los que tienen 90 o más de tiro, adentro del área."},
 	{"version": "0.8.29", "fecha": "2026-10-04", "cambio": "En Windows ya andan el arquero que no pone las manos si no llega y el jugador que frena antes de darse vuelta."},
 	{"version": "0.8.28", "fecha": "2026-10-04", "cambio": "El jugador que corre con la pelota frena un poco antes de darse vuelta y ya no la deja atrás."},
 	{"version": "0.8.27", "fecha": "2026-10-04", "cambio": "El arquero que se tira queda acostado en el pasto, con la sombra debajo, en vez de flotar en el aire."},
