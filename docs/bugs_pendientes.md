@@ -195,7 +195,24 @@ El partido de referencia es el que le toca al usuario en la partida guardada del
 
 ### BUG-014 — El jugador entra corriendo al arco con la pelota y el arquero no hace nada
 
-- **Estado:** anotado, sin investigar.
+- **Estado:** corregido el 2026-10-05 en el motor. Falta la revisión visual en el teléfono.
+- **Causa:** el arquero no tenía ninguna regla para la pelota que un rival lleva cerca de él.
+  - `Canchita::_analizar` lo manda a la pelota solo si llega antes que el rival más rápido. A la pelota que lleva un rival no llega nunca antes.
+  - `Canchita::_ubicar_arquero` lo para a 0,15 m de su línea por cada metro que la pelota está del arco. En el mano a mano achica, pero nunca a menos de 4 m de la pelota (`achique_margen_pelota`). El arquero volvía a su línea a medida que el rival se acercaba.
+- **Corrección:** salida a los pies (`Canchita::_pensar_jugador`, `motor_v2/cpp/src/canchita.cpp`). El arquero va a la pelota que un rival lleva en su área a menos de `achique_margen_pelota` (4 m) de él. Se tira con `Atajar_Abajo` cuando las manos llegan a la pelota. La agarra, la da en rebote o no llega: nadie adjudica la pelota.
+- **Corrección del gesto:** la atajada frena al arquero. `Canchita::_gatillo` contaba su velocidad entera: el arquero que salía corriendo se tiraba 0,4 a 0,6 m antes de llegar. Ahora cuenta la frenada. A los pies del que lleva la pelota el arquero no suma `salida_error_m`.
+- **Medición:** 120 partidos por división, semilla 97000. Llegada: un rival lleva la pelota a menos de 8 m del medio del arco. Llegadas que terminan con la pelota en las manos del arquero o tocada por él: 16 de 174 → 34 de 167 en primera, 4 de 127 → 19 de 146 en quinta, 0 de 89 → 9 de 98 en décima.
+- **Lo que no cambia:** goles por partido 2,23 → 2,19 en primera, 2,08 → 2,11 en quinta, 1,72 → 1,74 en décima. Salidas falladas por partido: 0,42 → 0,40, 0,28 → 0,29 y 0,17 → 0,18. Quites por partido: 15,35 → 15,20 y 13,17 → 12,81.
+- **Calibración:** `tests/_diag_calibracion_v2.gd`, 100 partidos por escenario, semilla 97000. Goles por partido: primera 2,36 → 2,44, quinta 1,95 → 2,04, décima 1,77 → 1,78, primera contra cuarta 2,76 → 2,72, quinta contra octava 2,82 → 2,66. Con la semilla 20261001 y 200 partidos, quinta contra octava da 2,81 → 2,84.
+- **Probado y descartado:** contar la frenada en todos los gestos que frenan al jugador (la barrida, el cabezazo). En quinta los quites pasaban de 13,2 a 14,9 por partido y los goles de 2,08 a 1,94.
+- **Prueba de regresión:** `tests/test_arquero_a_los_pies_v2.gd`. En 60 partidos de quinta el arquero corta 10 llegadas; con la biblioteca anterior, 2.
+- **Revisión visual:** hecha en la PC, en `motor_v2/laboratorio_partido.tscn` con `semilla=20261236 saltar=10600`. El arquero sale del arco y sigue al que lleva la pelota. Las capturas no muestran el gesto de tirarse: no se pudo confirmar.
+- **Caso de referencia:** no se pudo reproducir. El partido de referencia en la PC ya no tiene un gol al minuto 32: el motor cambió desde que el usuario lo miró.
+- **Pendiente:**
+  - Los remates desde menos de 6 m casi no cambian: 0,54 → 0,50 por partido en quinta, y 6 de cada 10 son gol. La llegada dura menos de 1 s y el rival remata antes de que el arquero llegue.
+  - El arquero sigue al rival mientras lo tiene a menos de 4 m adentro del área grande. Si el rival se aleja del arco, el arquero se aleja con él.
+  - El arquero que se tira a los pies nunca hace falta.
+- **Observado:** el jugador entra corriendo al arco con la pelota y el arquero no hace nada.
 - **Caso para reproducir:** gol del minuto 32 del partido de referencia.
 
 ### BUG-015 — Pregunta: el rival domina más de lo que el plantel justifica

@@ -253,7 +253,7 @@
     "_ventaja": "Cuantos segundos tiene que ganarle al atacante mas rapido para salir a cortar: ventaja_base mas ventaja_por_metro por cada metro que se aleja de su linea. Es el precio de dejar el arco.",
     "ventaja_base": 0.25,
     "ventaja_por_metro": 0.02,
-    "_achique": "Uno contra uno: metros que sale sobre la bisectriz segun `achique` (min con 0, max con 100). Solo si el rival con pelota esta a menos de achique_dist_rival del arco y ningun companero esta a menos de achique_carril de su camino al arco. Nunca a menos de achique_margen_pelota de la pelota.",
+    "_achique": "Uno contra uno: metros que sale sobre la bisectriz segun `achique` (min con 0, max con 100). Solo si el rival con pelota esta a menos de achique_dist_rival del arco y ningun companero esta a menos de achique_carril de su camino al arco. Nunca a menos de achique_margen_pelota de la pelota. En el Motor V2 ese margen es tambien desde donde sale a los pies: va a la pelota que el rival lleva en su area a menos de eso de el (BUG-014, docs/bugs_pendientes.md).",
     "achique_min": 2.5,
     "achique_max": 6.5,
     "achique_dist_rival": 24.0,

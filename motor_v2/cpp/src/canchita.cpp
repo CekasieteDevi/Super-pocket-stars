@@ -665,11 +665,22 @@ void Canchita::_pensar_jugador(int i) {
 	// En el partido el cerebro decide cuánta ventaja pide para tirarse
 	// (cerebro.pesos.entrada_ventaja_seg).
 	double gana = modo == PARTIDO ? cerebro.pesos.entrada_ventaja_seg : GANA_CARRERA_SEG;
-	bool contiene = j.equipo != equipo_con_pelota && poseedor >= 0
-			&& jugadores[size_t(poseedor)].equipo == equipo_con_pelota
-			&& _t_llega[size_t(i)] > _t_llega[size_t(poseedor)] - gana;
+	bool la_lleva_el_rival = j.equipo != equipo_con_pelota && poseedor >= 0
+			&& jugadores[size_t(poseedor)].equipo == equipo_con_pelota;
+	bool contiene = la_lleva_el_rival && _t_llega[size_t(i)] > _t_llega[size_t(poseedor)] - gana;
 	bool va = _perseguidor[j.equipo] == i || _segundo[j.equipo] == i;
-	if (va && contiene) {
+	// Salida a los pies: el arquero va a la pelota que el rival lleva en su
+	// área a menos de achique_margen_pelota de él, y se tira cuando las manos
+	// llegan (_gatillo). Ese margen es hasta donde achica: más cerca no
+	// tenía ninguna regla. No era el perseguidor (le tenía que ganar al que la
+	// lleva) y volvía a su línea a medida que la pelota se acercaba: el rival
+	// entraba al arco conduciendo con él parado al lado (BUG-014,
+	// docs/bugs_pendientes.md).
+	bool a_los_pies = j.arquero && la_lleva_el_rival && _es_mi_area(i, pelota.pos.x, pelota.pos.z)
+			&& hipot(pelota.pos.x - j.cuerpo.x, pelota.pos.z - j.cuerpo.z) < param_arquero.achique_margen_pelota;
+	if (a_los_pies) {
+		_plan_tocar(i);
+	} else if (va && contiene) {
 		// La tiene controlada otro y no le gana de mano: se para delante y
 		// espera el error (o el pase), no se tira a ciegas. Etapa 6: de cerca,
 		// a veces se tira igual (una entrada, que puede ser falta).
@@ -1574,6 +1585,22 @@ void Canchita::_gatillo(int i) {
 		tolerancia = std::max(tolerancia, param_reglas.entrada_alcance_m);
 	}
 	double gatillo = ataja ? tolerancia * 0.5 : param_toque.gatillo_m;
+	// Cuánto avanza el arquero en `t` segundos de atajada, en segundos de su
+	// velocidad de ahora. La atajada no se hace corriendo y lo frena
+	// (Cuerpo::_moverse): contando la velocidad entera, el que salía corriendo
+	// a los pies del rival se tiraba 0,4 a 0,6 m antes de llegar (BUG-014,
+	// docs/bugs_pendientes.md).
+	// Probado y descartado: la misma cuenta para todos los gestos que frenan
+	// (la barrida, el cabezazo). En 120 partidos de quinta (semilla 97000) los
+	// quites pasaban de 13,2 a 14,9 por partido y los goles de 2,08 a 1,94.
+	auto avanza = [&](double t) {
+		double r = c.rapidez();
+		if (!ataja || clips[size_t(clip)].mueve || r < 1e-6) {
+			return t;
+		}
+		double frena = std::min(t, r / std::max(param_cuerpo.frenada, 1e-6));
+		return frena - 0.5 * param_cuerpo.frenada * frena * frena / r;
+	};
 	for (int vuelta = 0; vuelta < 2; vuelta++) {
 		double tc = std::max(clips[size_t(clip)].contacto_seg, 0.0);
 		V3 p = _bola_en(paso + int64_t(tc / PASO_SEG + 0.5));
@@ -1600,8 +1627,8 @@ void Canchita::_gatillo(int i) {
 				double t = tc + double(luego_de) * PASO_SEG;
 				V3 pt = _bola_en(paso + int64_t(t / PASO_SEG + 0.5));
 				Cuerpo luego = c;
-				luego.x += c.vx * t;
-				luego.z += c.vz * t;
+				luego.x += c.vx * avanza(t);
+				luego.z += c.vz * avanza(t);
 				q = punto_de_contacto(luego, clips[size_t(clip)], _rumbo_contacto(j, luego, clip, c.rumbo, pt.x, pt.z));
 				d[luego_de] = ataja ? _distancia_al_brazo(j, luego, q, pt, pt) : hipot(q.x - pt.x, q.z - pt.z);
 				if (luego_de == 0) {
@@ -1644,8 +1671,11 @@ void Canchita::_gatillo(int i) {
 			// (0,40 por partido) que las que tocaban (0,29). Revisión del
 			// 2026-10-03: "le pasó por arriba; debería pasar cuando el golero
 			// es malo".
+			// A los pies del que la lleva (BUG-014) no calcula mal: tirándose
+			// desde más lejos, en 120 partidos de primera fallaba 0,60 salidas
+			// por partido (0,42 antes de salir a los pies); así, 0,40.
 			if (a_tiempo && !(_remate.activo && _remate.equipo != j.equipo)) {
-				a_tiempo = d[0] <= tolerancia + segun_atributo(j.achique, param_arquero.salida_error_m, 0.0);
+				a_tiempo = d[0] <= tolerancia + (poseedor >= 0 ? 0.0 : segun_atributo(j.achique, param_arquero.salida_error_m, 0.0));
 			}
 			if ((alto_ok && (d[0] <= gatillo || mejor_ahora || (quietos && d[0] <= tolerancia))) || a_tiempo) {
 				if (c.empezar(clip)) {
@@ -1669,8 +1699,8 @@ void Canchita::_gatillo(int i) {
 						for (int q_paso = std::max(centro - medio, 1); q_paso <= centro + medio && !j.alcanza; q_paso++) {
 							V3 a = _bola_en(paso + q_paso - 1), b = _bola_en(paso + q_paso);
 							Cuerpo luego = c;
-							luego.x += c.vx * double(q_paso) * PASO_SEG;
-							luego.z += c.vz * double(q_paso) * PASO_SEG;
+							luego.x += c.vx * avanza(double(q_paso) * PASO_SEG);
+							luego.z += c.vz * avanza(double(q_paso) * PASO_SEG);
 							V3 mano = punto_de_contacto(luego, kc, _rumbo_contacto(j, luego, clip, c.rumbo, b.x, b.z));
 							bool alto_tramo = std::max(a.y, b.y) >= _alto_minimo(j.clip_arquero, kc)
 									&& std::min(a.y, b.y) <= kc.punto_y + _tolerancia_alto(j.clip_arquero, true);
