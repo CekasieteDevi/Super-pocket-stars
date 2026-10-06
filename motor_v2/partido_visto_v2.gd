@@ -179,7 +179,7 @@ func _de_afuera(i: int) -> bool:
 	return i >= _cantidad
 
 
-## El que se va camina; el lesionado primero termina de caer.
+## El que se va corre; el lesionado primero termina de caer.
 func get_accion(i: int) -> String:
 	return str(_afuera[i - _cantidad].get("accion", "")) if _de_afuera(i) else partido.get_accion(i)
 

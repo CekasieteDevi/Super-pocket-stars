@@ -253,7 +253,23 @@ El partido de referencia es el que le toca al usuario en la partida guardada del
 
 ### BUG-017 — El sustituido y el lesionado salen lento y por el lugar equivocado
 
-- **Estado:** anotado, sin investigar. El usuario lo pidió varias veces antes.
+- **Estado:** corregido el 2026-10-05 en el motor. Falta la revisión visual en el teléfono.
+- **Causa:** el que salía iba a la banda más cercana (`Canchita::_cambiar` y `Canchita::_quitar`, `motor_v2/cpp/src/canchita_reglas.cpp`). La mitad de las veces salía por la banda de arriba. El cambiado corría a 0,7 de su punta y el lesionado a 0,5, los dos con el cansancio del partido.
+- **Corrección:** `Canchita::_saliente` arma al que se va. El cambiado, el lesionado y el expulsado salen por el medio de la banda de la cámara (`Canchita::_banda_cambios`). Primero van al medio de la banda, sobre la raya, y ahí cruzan. El que entra espera en la misma banda: antes entraba siempre por -z, que en el primer tiempo es la banda de arriba.
+- **Velocidad:** el cambiado sale a `reglas.salir_ms` (9 m/s) y el lesionado a `reglas.salir_lesionado_ms` (7,5 m/s), de `data/fisica_v2.json`. La velocidad es fija: no depende de la velocidad ni de la energía del jugador. El expulsado no cambia.
+- **Medición:** 40 partidos por división, semilla 97000. Cambiados que salen por la banda de abajo: 60 de 130 → 132 de 132 en quinta, 66 de 133 → 133 de 133 en primera. Distancia del medio al cruzar la raya: 25,6 → 1,4 m en quinta, 26,7 → 1,4 m en primera.
+  - Velocidad media del cambiado: 3,9 → 7,8 m/s en quinta, 4,7 → 7,9 m/s en primera.
+  - Tiempo hasta cruzar la raya: 6,3 → 5,9 s en quinta, 4,9 → 6,0 s en primera. El jugador corre el doble de rápido y recorre el doble: 24,6 → 46,0 m en quinta, 23,0 → 47,4 m en primera.
+  - El más lento: 10,0 → 9,2 s en quinta, 8,6 → 9,1 s en primera.
+  - Lesionados (2 antes y 1 después en quinta, 2 y 3 en primera): 12,6 → 10,0 s y 9,8 → 9,0 s, contando el tiempo en el piso. Son pocos casos: el número es una guía.
+- **Calibración:** `tests/_diag_calibracion_v2.gd`, 100 partidos por escenario, semilla 97000. Goles por partido: primera 2,46 → 2,53, quinta 2,03 → 2,04, décima 1,66 → 1,76, primera contra cuarta 2,79 → 2,69, quinta contra octava 2,66 → 2,83. El error de cada número es 0,11 a 0,17.
+- **Revisión visual:** hecha en la PC, en `motor_v2/laboratorio_reglas.tscn` con `solo=lesión`. El lesionado cruza la cancha corriendo y sale por el medio de la banda de abajo. El cambio por cansancio no se revisó en capturas.
+- **Prueba de regresión:** `tests/test_reglas_v2.gd`. Los que se van cruzan la raya por la banda de la cámara, a menos de 10 m del medio, y llegan a 7 m/s.
+- **Test de BUG-014 corregido:** `tests/test_arquero_a_los_pies_v2.gd` falló después de este cambio. Pedía 5 llegadas cortadas en 60 partidos y dieron 4 (antes 6). Era ruido: en 300 partidos son 28 antes y 29 después. El test pasa a 600 partidos.
+  - Con 600 partidos el arquero corta 68 de 682 llegadas. Sin la salida a los pies corta 43 de 682. El test pedía menos de la mitad: con 60 partidos daba 2 y 6. Ahora pide menos llegadas cortadas sin la salida.
+- **Pendiente:**
+  - El cuarto árbitro no existe en la vista. Nadie espera en el medio de la banda con el tablero (`Utileria3D.tablero`).
+  - El saque espera lo mismo que antes. Para bajar la espera, subí `reglas.salir_ms`: no hace falta rearmar las bibliotecas.
 - **Pedido del usuario:** el jugador que sale por cambio o por lesión se va más rápido. Sale por el medio de la banda de abajo, donde va el cuarto árbitro con los cambios.
 
 ### BUG-018 — El que corre rápido pasa de largo y no se lleva la pelota

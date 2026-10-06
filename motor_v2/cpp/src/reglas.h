@@ -233,6 +233,10 @@ struct ParametrosReglas {
 	double riesgo_franja[4] = { 1.0, 1.0, 1.0, 1.5 };
 	// El lesionado queda en el piso esto antes de salir caminando.
 	double lesionado_seg = 4.0;
+	// A qué velocidad sale de la cancha el cambiado y el lesionado, m/s. Es
+	// fija: no depende de la velocidad ni de la energía del que sale.
+	double salir_ms = 9.0;
+	double salir_lesionado_ms = 7.5;
 
 	// --- Energía y cambios ---
 	// Desgaste por segundo: desgaste_minuto / 60 × (base + carrera ×

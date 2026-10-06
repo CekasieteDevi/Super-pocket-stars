@@ -4,7 +4,7 @@ extends Control
 ## minutos con reglas (CanchitaV2Nativa con configurar_reglas) dibujado con
 ## los Jugador3D del partido (VistaV2). Se ve cada reanudación con el que saca
 ## llegando a la pelota, las faltas, las tarjetas, el offside, los cambios
-## (el que sale camina hasta afuera) y el segundo tiempo con los lados
+## (el que sale corre hasta afuera) y el segundo tiempo con los lados
 ## cambiados (PartidoVistoV2 gira la cancha).
 ##
 ## Con pantalla: arriba a la izquierda el reloj, el marcador, la parada y lo

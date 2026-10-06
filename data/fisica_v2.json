@@ -362,6 +362,8 @@
 		"roja_por_falta": 0.0092,
 		"lesion_por_contacto": 8.0,
 		"lesionado_seg": 4.0,
+		"salir_ms": 9.0,
+		"salir_lesionado_ms": 7.5,
 		"esfuerzo_base": 0.6,
 		"esfuerzo_carrera": 1.2,
 		"cambio_desde_min": 55.0,

@@ -237,6 +237,8 @@ const NumeroReglas NUMEROS_REGLAS[] = {
 	{ "roja_por_falta", &motor_v2::ParametrosReglas::roja_por_falta },
 	{ "lesion_por_contacto", &motor_v2::ParametrosReglas::lesion_por_contacto },
 	{ "lesionado_seg", &motor_v2::ParametrosReglas::lesionado_seg },
+	{ "salir_ms", &motor_v2::ParametrosReglas::salir_ms },
+	{ "salir_lesionado_ms", &motor_v2::ParametrosReglas::salir_lesionado_ms },
 	{ "esfuerzo_base", &motor_v2::ParametrosReglas::esfuerzo_base },
 	{ "esfuerzo_carrera", &motor_v2::ParametrosReglas::esfuerzo_carrera },
 	{ "energia_minima", &motor_v2::ParametrosReglas::energia_minima },

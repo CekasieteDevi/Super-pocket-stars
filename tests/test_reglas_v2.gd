@@ -29,6 +29,12 @@ const FALTAS_MIN := 50
 const AMARILLAS_MIN := 20
 ## Más que esto entre dos pasos es un teletransporte.
 const SALTO_MAX_M := 0.5
+## BUG-017: el que se va cruza la raya a menos de esto del medio de la banda
+## de la cámara (con cinco saliendo juntos, el último va a 5 m del medio).
+const SALIDA_DEL_MEDIO_M := 10.0
+## Y el cambiado o el lesionado llega a correr a esto (reglas.salir_lesionado_ms
+## es 7,5; cuando salían a 0,7 de su punta cansada no pasaban de 5 m/s).
+const SALIDA_MS := 7.0
 
 var fallos := 0
 
@@ -162,6 +168,11 @@ func _expulsiones() -> void:
 	var pasos := 0
 	var en_cancha_ok := true
 	var sin_esperar := 0
+	var por_otro_lado := 0
+	# Los que se van y ya pisaron la cancha: al que cobran afuera (el que iba a
+	# sacar un lateral) no se le cuenta la banda donde estaba.
+	var adentro := {}
+	var rapidez_salida := 0.0
 	var medio_ancho := ProyeccionPartido.MEDIO_ANCHO
 	while str(c.get_estado()["periodo"]) != "terminado" and pasos < 60 * 60 * 150:
 		c.avanzar()
@@ -172,6 +183,16 @@ func _expulsiones() -> void:
 			continue
 		var afuera: Array = c.get_afuera()
 		salidas = maxi(salidas, afuera.size())
+		# La banda de la cámara: +z en el primer tiempo, -z en el segundo.
+		var banda := 1.0 if int(c.get_estado()["lado"]) == 0 else -1.0
+		for a in afuera:
+			var p: Vector2 = a["pos"]
+			if absf(p.y) < medio_ancho:
+				adentro[a["id"]] = true
+			elif adentro.has(a["id"]) and (p.y * banda < 0.0 or absf(p.x) > SALIDA_DEL_MEDIO_M):
+				por_otro_lado += 1
+			if not bool(a["expulsado"]):
+				rapidez_salida = maxf(rapidez_salida, float(a["rapidez"]))
 		if str(c.get_estado()["parada"]) == "nada":
 			for a in afuera:
 				if absf((a["pos"] as Vector2).y) < medio_ancho - 0.5:
@@ -192,6 +213,9 @@ func _expulsiones() -> void:
 		"los que se van salen por sus medios (hasta %d a la vez) y nadie salta (peor %.2f m)" % [salidas,
 			k["peor_salto_cuerpo_m"]])
 	_ok(sin_esperar == 0, "el saque espera a que el que se va salga de la cancha (%d veces no)" % sin_esperar)
+	_ok(por_otro_lado == 0 and rapidez_salida >= SALIDA_MS,
+		"los que se van salen por el medio de la banda de la cámara (%d por otro lado) y corriendo (%.1f m/s)" % [
+			por_otro_lado, rapidez_salida])
 
 
 ## Un partido corto empatado se define por penales y la tanda tiene ganador.

@@ -1,4 +1,5 @@
 [
+	{"version": "0.8.40", "fecha": "2026-10-05", "cambio": "El jugador que sale por cambio o por lesión se va corriendo por el medio de la banda de abajo, y su reemplazo entra por ahí."},
 	{"version": "0.8.39", "fecha": "2026-10-05", "cambio": "El arquero se da vuelta hacia el compañero antes de sacar con la mano, en vez de tirarla de espaldas."},
 	{"version": "0.8.38", "fecha": "2026-10-05", "cambio": "El arquero que se tira a los pies y llega tarde hace penal: el arquero malo lo hace más veces y el bueno saca más pelotas."},
 	{"version": "0.8.37", "fecha": "2026-10-05", "cambio": "El arquero ya no persigue por el área al rival que se aleja del arco con la pelota: vuelve a su lugar."},

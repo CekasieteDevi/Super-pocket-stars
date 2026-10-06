@@ -13,7 +13,10 @@ extends SceneTree
 ## Correr con: godot --path . --headless --script tests/test_arquero_a_los_pies_v2.gd
 
 const SEED := 97000
-const PARTIDOS := 60
+## Con 60 partidos el arquero cortaba 6 llegadas y el test pedía 5. BUG-017
+## cambió por dónde sale el cambiado, no el arquero, y dieron 4: era ruido.
+## En 300 partidos son 28 antes de BUG-017 y 29 después; en 600, 68.
+const PARTIDOS := 600
 ## La falta del arquero sale una vez cada 17 partidos: hacen falta más partidos
 ## y arqueros bien distintos para contarla.
 const PARTIDOS_FALTA := 120
@@ -39,13 +42,13 @@ var fallos := 0
 func _init() -> void:
 	var con := _medir()
 	_ok(con["llegadas"] >= PARTIDOS / 2, "hay llegadas en %d partidos (%d)." % [PARTIDOS, con["llegadas"]])
-	# Antes del arreglo: 2 en estos mismos partidos (4 en 120). Con el arquero
-	# siguiendo al rival que se aleja eran 10; sin seguirlo, 6.
-	_ok(con["del_arquero"] >= 5, "el arquero se queda con la pelota o la toca en 5 llegadas o más (%d)."
+	# Antes del arreglo: 4 en 120 partidos. Con el arquero siguiendo al rival
+	# que se aleja eran 10 en 60; sin seguirlo, 6 en 60 y 68 en 600.
+	_ok(con["del_arquero"] >= 40, "el arquero se queda con la pelota o la toca en 40 llegadas o más (%d)."
 		% con["del_arquero"])
-	# Siguiendo al rival que se aleja: 119 muestras. Sin seguirlo quedan 34, lo
-	# que tarda en frenar.
-	_ok(con["se_aleja"] <= 60, "el arquero no se aleja del arco detrás del rival: 60 muestras o menos (%d)."
+	# Siguiendo al rival que se aleja: 119 muestras en 60 partidos. Sin seguirlo
+	# quedan 197 en 600, lo que tarda en frenar.
+	_ok(con["se_aleja"] <= 500, "el arquero no se aleja del arco detrás del rival: 500 muestras o menos (%d)."
 		% con["se_aleja"])
 	# El test mide algo: sin el margen el arquero no sale a los pies.
 	var pesos := BasePartido.pesos_arquero()
@@ -53,7 +56,9 @@ func _init() -> void:
 	pesos["achique_margen_pelota"] = 0.0
 	var sin := _medir()
 	pesos["achique_margen_pelota"] = margen
-	_ok(sin["del_arquero"] * 2 <= con["del_arquero"], "sin la salida a los pies son menos de la mitad (%d)."
+	# En 600 partidos: 43 sin la salida y 68 con ella. En 60 daba 2 y 6, y el
+	# test pedía menos de la mitad: con más partidos la diferencia es menor.
+	_ok(sin["del_arquero"] < con["del_arquero"], "sin la salida a los pies corta menos llegadas (%d)."
 		% sin["del_arquero"])
 	# La falta del que sale a los pies es penal y depende del achique: en estos
 	# partidos el arquero con 40 puntos de menos hace 7 y el otro ninguna.

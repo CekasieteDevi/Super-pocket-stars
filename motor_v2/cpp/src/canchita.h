@@ -456,6 +456,8 @@ struct Saliente {
 	int64_t espera_hasta = -1;
 	double factor = 1.0;
 	bool saliendo = false;
+	// Ya llegó al medio de la banda: va al punto de afuera.
+	bool cruza = false;
 };
 
 // Etapa 6: un suplente, con todo lo que necesita para entrar.
@@ -945,6 +947,8 @@ private:
 	void _lesionar(int i);
 	void _caer(int i, int clip, double segundos);
 	void _quitar(int i, bool expulsado);
+	double _banda_cambios() const;
+	Saliente _saliente(const JugadorCanchita &j, bool expulsado) const;
 	void _hacer_cambios(bool entretiempo);
 	void _cambiar(int sale, size_t entra);
 	void _anotar(int tipo, int equipo, int jugador, int otro, int detalle, double x, double z);

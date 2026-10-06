@@ -31,15 +31,16 @@ int64_t pasos_de(double segundos) {
 constexpr double ARQUERO_EN_LA_LINEA_M = 0.5;
 // La salida del que se va: pasando la línea, para que se lo vea salir.
 constexpr double AFUERA_M = 3.0;
-// El que entra espera en la línea, frente al banco (del lado de -z).
-constexpr double BANCO_Z = -(Cerebro::MEDIO_ANCHO + 1.0);
-// El que sale va corriendo, como el expulsado, y el lesionado al trote. Con
-// todos al paso (0,35, como en el motor espacial) el saque esperaba hasta
-// 17 s. Con 0,5 y 0,35 el lesionado tardaba 11 s en cruzar la cancha: en la
-// tercera revisión visual de la etapa 7 se veía a los demás parados esperando.
-constexpr double FACTOR_SALIR = 0.7;
+// A esto del medio de la banda deja de ir a la raya y sale.
+constexpr double CRUZA_M = 1.5;
+// El que entra espera a esto de la raya, del lado de afuera.
+constexpr double ENTRA_AFUERA_M = 1.0;
+// Los que entran o salen juntos van uno al lado del otro: en el mismo punto
+// el choque entre cuerpos separaba de golpe a los que entran (un salto de 0,6 m).
+constexpr double AL_LADO_M = 1.2;
+// El expulsado sale corriendo. El cambiado y el lesionado salen a una
+// velocidad fija (reglas.salir_ms y salir_lesionado_ms).
 constexpr double FACTOR_SALIR_EXPULSADO = 0.85;
-constexpr double FACTOR_SALIR_LESIONADO = 0.5;
 // Detector de la etapa 6: el ejecutor que, lejos de su lugar y ya arrancado,
 // va a menos de esto, camina.
 constexpr double CAMINA_MS = 3.0;
@@ -1659,14 +1660,23 @@ void Canchita::_desgastar() {
 	}
 	for (size_t k = 0; k < afuera.size();) {
 		Saliente &s = afuera[k];
+		// Primero va al medio de la banda, sobre la raya, y recién ahí sale.
+		// Yendo derecho al punto de afuera, el que estaba cerca de la banda
+		// cruzaba la raya a más de 10 m del medio (tests/test_reglas_v2.gd).
+		double raya_z = (s.z >= 0.0 ? 1.0 : -1.0) * _medio_z();
 		if (!s.saliendo && paso >= s.espera_hasta) {
 			s.saliendo = true;
-			s.cuerpo.ir_a(s.x, s.z, s.factor, true);
+			s.cuerpo.ir_a(s.x, raya_z, s.factor, false);
 			// Mira adonde va. Seguía mirando la jugada (el `mira` que traía
 			// del partido) y salía de espaldas.
 			s.cuerpo.mira = true;
 			s.cuerpo.mira_x = s.x;
 			s.cuerpo.mira_z = s.z;
+		}
+		if (s.saliendo && !s.cruza
+				&& (std::abs(s.cuerpo.z) >= _medio_z() || hipot(s.cuerpo.x - s.x, s.cuerpo.z - raya_z) < CRUZA_M)) {
+			s.cruza = true;
+			s.cuerpo.ir_a(s.x, s.z, s.factor, true);
 		}
 		s.cuerpo.paso(param_cuerpo, clips, PASO_SEG);
 		if (hipot(s.cuerpo.x - s.x, s.cuerpo.z - s.z) < 0.5) {
@@ -1929,34 +1939,51 @@ void Canchita::_caer(int i, int clip, double segundos) {
 	j.en_el_piso_hasta = std::max(j.en_el_piso_hasta, paso + pasos_de(segundos));
 }
 
-// Se va de la cancha (expulsado, o lesionado sin cambio): deja de jugar y
-// camina hasta el lateral más cercano. Los índices de los que siguen bajan uno.
-void Canchita::_quitar(int i, bool expulsado) {
-	if (i < 0 || i >= int(jugadores.size())) {
-		return;
-	}
-	JugadorCanchita &j = jugadores[size_t(i)];
+// La banda de los cambios: la de la cámara (+z en el primer tiempo; en el
+// segundo la vista gira la cancha y es -z). Ahí va el cuarto árbitro.
+double Canchita::_banda_cambios() const {
+	return lado() == 0 ? 1.0 : -1.0;
+}
+
+// El que se va (expulsado, cambiado o lesionado) sale por el medio de la banda
+// de los cambios. Saliendo por la banda más cercana, la mitad de las veces se
+// iba por la banda de arriba (BUG-017).
+Saliente Canchita::_saliente(const JugadorCanchita &j, bool expulsado) const {
 	Saliente s;
 	s.cuerpo = j.cuerpo;
 	s.equipo = j.equipo;
 	s.id = j.reglas.id;
 	s.expulsado = expulsado;
-	energia_al_salir.push_back({ j.reglas.id, j.energia });
-	s.x = j.cuerpo.x;
-	s.z = (j.cuerpo.z >= 0.0 ? 1.0 : -1.0) * (_medio_z() + AFUERA_M);
-	// El lesionado termina de caer (el gesto sigue) y después camina.
+	double al_lado = AL_LADO_M * double(afuera.size());
+	s.x = (afuera.size() % 2 == 0 ? 1.0 : -1.0) * al_lado;
+	s.z = _banda_cambios() * (_medio_z() + AFUERA_M);
+	// El lesionado termina de caer (el gesto sigue) y después sale.
 	if (!j.lesionado) {
 		s.cuerpo.clip = -1;
 		s.cuerpo.fase = SIN_ACCION;
 	}
 	if (expulsado) {
-		// El expulsado se va al vestuario: por el medio de la banda de la
-		// cámara (+z en el primer tiempo; en el segundo la vista gira la
-		// cancha y es -z).
-		s.x = 0.0;
-		s.z = (lado() == 0 ? 1.0 : -1.0) * (_medio_z() + AFUERA_M);
+		s.factor = FACTOR_SALIR_EXPULSADO;
+		return s;
 	}
-	s.factor = expulsado ? FACTOR_SALIR_EXPULSADO : (j.lesionado ? FACTOR_SALIR_LESIONADO : FACTOR_SALIR);
+	// El cambiado y el lesionado salen a una velocidad fija, sin el cansancio
+	// del partido. Con 0,7 y 0,5 de su punta cansada, el cambiado de quinta
+	// salía a 3,9 m/s de media (BUG-017).
+	s.cuerpo.vel_max = j.lesionado ? param_reglas.salir_lesionado_ms : param_reglas.salir_ms;
+	s.cuerpo.cansancio = 1.0;
+	s.cuerpo.reserva = 1.0;
+	return s;
+}
+
+// Se va de la cancha (expulsado, o lesionado sin cambio): deja de jugar y
+// sale. Los índices de los que siguen bajan uno.
+void Canchita::_quitar(int i, bool expulsado) {
+	if (i < 0 || i >= int(jugadores.size())) {
+		return;
+	}
+	JugadorCanchita &j = jugadores[size_t(i)];
+	Saliente s = _saliente(j, expulsado);
+	energia_al_salir.push_back({ j.reglas.id, j.energia });
 	if (expulsado && _tarjeta_paso == paso) {
 		// Se queda donde está hasta que el árbitro llega y le muestra la roja,
 		// y después sale corriendo. Saliendo enseguida, se iba antes de que
@@ -2096,27 +2123,16 @@ void Canchita::_hacer_cambios(bool entretiempo) {
 }
 
 // El que entra ocupa el lugar (el casillero y el rol) del que sale: un cambio
-// no inventa un puesto nuevo. Sale caminando por el lateral más cercano y el
-// que entra arranca frente al banco.
+// no inventa un puesto nuevo. El que sale y el que entra pasan por el medio
+// de la banda de los cambios.
 void Canchita::_cambiar(int sale, size_t entra) {
 	const ParametrosReglas &r = param_reglas;
 	Suplente su = banco[entra];
 	banco.erase(banco.begin() + int64_t(entra));
 	JugadorCanchita &j = jugadores[size_t(sale)];
 	int e = j.equipo;
-	Saliente s;
-	s.cuerpo = j.cuerpo;
-	s.equipo = e;
-	s.id = j.reglas.id;
-	s.x = j.cuerpo.x;
-	s.z = (j.cuerpo.z >= 0.0 ? 1.0 : -1.0) * (_medio_z() + AFUERA_M);
-	if (!j.lesionado) {
-		s.cuerpo.clip = -1;
-		s.cuerpo.fase = SIN_ACCION;
-	}
-	s.factor = j.lesionado ? FACTOR_SALIR_LESIONADO : FACTOR_SALIR;
 	energia_al_salir.push_back({ j.reglas.id, j.energia });
-	afuera.push_back(s);
+	afuera.push_back(_saliente(j, false));
 	cuenta.cambios[e & 1]++;
 	_adicion[lado() & 1] += r.adicion_cambio_seg;
 	_anotar(EV_CAMBIO, e, j.reglas.id, su.jugador.reglas.id, j.lesionado ? 1 : 0, j.cuerpo.x, j.cuerpo.z);
@@ -2135,11 +2151,9 @@ void Canchita::_cambiar(int sale, size_t entra) {
 	nuevo.lesionado = false;
 	nuevo.en_el_piso_hasta = -1;
 	Cuerpo &c = nuevo.cuerpo;
-	// Si entran dos juntos, uno al lado del otro: en el mismo punto el choque
-	// entre cuerpos los separaba de golpe (un salto de 0,6 m).
-	double al_lado = 1.2 * double(_entrando.size());
+	double al_lado = AL_LADO_M * double(_entrando.size());
 	c.x = c.previa_x = (_entrando.size() % 2 == 0 ? 1.0 : -1.0) * al_lado;
-	c.z = c.previa_z = BANCO_Z;
+	c.z = c.previa_z = _banda_cambios() * (_medio_z() + ENTRA_AFUERA_M);
 	c.vx = c.vz = 0.0;
 	c.rumbo = 0.0;
 	c.clip = -1;
