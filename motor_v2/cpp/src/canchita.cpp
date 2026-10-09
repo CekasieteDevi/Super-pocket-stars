@@ -340,6 +340,7 @@ void Canchita::lanzar(V3 p, V3 v, V3 giro, int equipo) {
 	equipo_con_pelota = equipo;
 	poseedor = ultimo_toque = -1;
 	ultimo_tipo = TOQUE_NADA;
+	_rebote_salida = false;
 	_pase_activo = false;
 	_receptor = -1;
 	_reinicio_en = _reinicio_hasta = -1;
@@ -431,7 +432,6 @@ void Canchita::avanzar() {
 			_pasos_parados++;
 		}
 	}
-}
 	if (traza_activa) {
 		_registrar_traza();
 	}
@@ -481,7 +481,8 @@ void Canchita::activar_traza(bool on) {
 
 const char *Canchita::build_id() {
 	// La versión del motor (la de data/changelog.json) y la fecha de compilación.
-	return "motor_v2 0.8.44 " __DATE__ " " __TIME__;
+	return "motor_v2 0.8.46 " __DATE__ " " __TIME__;
+}
 
 // --- Cerebro sencillo ---
 
@@ -723,8 +724,8 @@ bool Canchita::_alcance(int i, double factor, int &k, double &t, int no_antes) c
 	const V3 &ultima = trayectoria.pos[size_t(k)];
 	t = std::max(double(_tray_paso + k + 1 - paso) * PASO_SEG,
 			tiempo_de_llegada(c, ultima.x, ultima.z, ALCANCE_PLAN_M, factor));
-}
 	return false;
+}
 
 void Canchita::_pensar_jugador(int i) {
 	JugadorCanchita &j = jugadores[size_t(i)];
@@ -2497,6 +2498,7 @@ void Canchita::_tocar(int i, double distancia) {
 	_rebote_equipo = -1;
 	ultimo_toque = i;
 	ultimo_tipo = entrada ? TOQUE_NADA : tipo;
+	_rebote_salida = false;
 	if (poseedor == i && (ultimo_tipo == TOQUE_CONTROL || ultimo_tipo == TOQUE_CONDUCE)) {
 		_separa_tipo = ultimo_tipo == TOQUE_CONDUCE ? 1 : 0;
 		_separa_de = i;
@@ -2557,6 +2559,12 @@ bool Canchita::_rebotes() {
 		// contaba el toque anterior: la pelota que rebotaba en uno y se iba
 		// por la banda la sacaba él mismo.
 		_rebote_equipo = j.equipo;
+		// Cuenta como salida de rebote solo si lo pegó un rival o un arquero: el
+		// de su propio equipo deja el último toque como estaba.
+		const int tocador = ultimo_toque >= 0 ? jugadores[size_t(ultimo_toque)].equipo : equipo_con_pelota;
+		_rebote_salida = j.arquero || j.equipo != tocador;
+		_rebote_de = ultimo_toque;
+		_rebote_tipo = ultimo_tipo;
 		// Etapa 5: el remate que pega en el arquero es atajada (aunque siga
 		// hacia el arco: se decide cuando termina); en un rival, bloqueo.
 		if (_remate.activo && j.equipo != _remate.equipo) {
@@ -2652,6 +2660,7 @@ void Canchita::_reiniciar(int equipo, double x, double z) {
 	poseedor = saca;
 	ultimo_toque = saca;
 	ultimo_tipo = saca >= 0 ? TOQUE_CONTROL : TOQUE_NADA;
+	_rebote_salida = false;
 	_desde_control = paso;
 	_pase_activo = false;
 	_receptor = -1;
@@ -2918,21 +2927,21 @@ void Canchita::_ubicar_partido(int i, double &qx, double &qz, double &factor, bo
 // sale; si no, a cada paso cambiaría de idea por el sorteo del softmax.
 void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 	if (reglas && _parada.activa && _parada.sacando && i == _parada.ejecutor) {
+		jugadores[size_t(i)].motivo = MOTIVO_SAQUE;
 		_decidir_saque(i, bola, t_patada);
 		return;
 	}
 	JugadorCanchita &j = jugadores[size_t(i)];
+	j.motivo = MOTIVO_NINGUNO;
 	double tiene = double(paso - _desde_control) * PASO_SEG;
 	double cadencia = cerebro.cadencia_seg(i);
 	if (_corto_id >= 0 && _id(i) == _corto_id) {
 		// Córner corto: el socio centra apenas la controla, al de más amenaza
 		// de los que quedaron en el área. Decidiendo como en el juego abierto
-		jugadores[size_t(i)].motivo = MOTIVO_SAQUE;
 		// se la llevaba o la tocaba atrás y el área se vaciaba (7,3% de gol
 		// contra 12,0% del córner colgado, tests/_diag_jugadas_v2.gd).
 		// Lo decide cada vez que piensa hasta que centra: la decisión vence
 		// antes de que vuelva a tocar la pelota.
-	j.motivo = MOTIVO_NINGUNO;
 		bool a_tiempo = paso <= _corto_hasta;
 		if (!a_tiempo) {
 			_corto_id = -1;
@@ -2961,6 +2970,7 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 			j.decision = d;
 			j.hay_decision = true;
 			j.decision_hasta = paso + int64_t(cerebro.pesos.decision_vigencia_seg / PASO_SEG + 0.5);
+			j.motivo = MOTIVO_CORNER_CORTO;
 		}
 	}
 	if (!j.hay_decision || paso >= j.decision_hasta) {
@@ -2970,11 +2980,11 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 		bool puede_pasar = tiene >= cadencia || _rival_mas_cerca(i, bola.x, bola.z) < param_toque.presion_m + 1.0;
 		_plan_bola = bola;
 		_plan_t = t_patada;
-			j.motivo = MOTIVO_CORNER_CORTO;
 		cerebro.planeador = this;
 		j.decision = cerebro.decidir(_mundo, i, puede_pasar, _azar);
 		cerebro.planeador = nullptr;
 		j.hay_decision = true;
+		j.motivo = MOTIVO_CEREBRO;
 		// Cuál regate hace: se sortea una vez, al decidir.
 		j.regate_elegido = j.decision.tipo == DEC_REGATE ? std::min(int(_azar.uno() * double(REGATES)), REGATES - 1) : -1;
 		double vale = cerebro.pesos.decision_vigencia_seg;
@@ -2984,7 +2994,6 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 			// sin decidir entraba al área sin patear.
 			if (cerebro.factor_geometria(bola.x, bola.z, j.equipo) >= Cerebro::TIRO_CLARO) {
 				vale = std::min(vale, DECIDE_A_TIRO_SEG);
-		j.motivo = MOTIVO_CEREBRO;
 			}
 			if (puede_pasar && cerebro.pesos.conduce_decide_seg > 0.0) {
 				vale = std::min(vale, cerebro.pesos.conduce_decide_seg);
@@ -2997,6 +3006,8 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 				cuenta.via_libre[al_arco <= 16.5 ? 0 : (al_arco <= 25.0 ? 1 : 2)][std::clamp(j.decision.tipo, 0, DECISIONES - 1)]++;
 			}
 		}
+	} else if (j.motivo == MOTIVO_NINGUNO) {
+		j.motivo = MOTIVO_VIGENTE;
 	}
 	// De espaldas al arco no remata: lleva la pelota hacia el punto que
 	// eligió, con un toque corto, y vuelve a decidir en el toque siguiente,
@@ -3006,14 +3017,13 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 		Decision gira;
 		gira.tipo = DEC_CONDUCIR;
 		double gx = j.decision.x - bola.x, gz = j.decision.z - bola.z;
-	} else if (j.motivo == MOTIVO_NINGUNO) {
-		j.motivo = MOTIVO_VIGENTE;
 		double gl = std::max(hipot(gx, gz), 1e-6);
 		gira.dir_x = gx / gl;
 		gira.dir_z = gz / gl;
 		j.decision = gira;
 		j.decision_hasta = paso;
 		cuenta.giros_al_arco++;
+		j.motivo = MOTIVO_GIRO_AL_ARCO;
 	}
 	const Decision &d = j.decision;
 	if (d.tipo == DEC_REMATE) {
@@ -3023,7 +3033,6 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 		j.meta_z = d.z;
 		j.golpe_remate = d.golpe;
 		return;
-		j.motivo = MOTIVO_GIRO_AL_ARCO;
 	}
 	// Sin el clip de ese regate (los bancos que no lo configuran), conduce.
 	bool regatea = d.tipo == DEC_REGATE && j.regate_elegido >= 0 && param_toque.clips_regate[j.regate_elegido] >= 0
@@ -3040,6 +3049,7 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 			j.tipo_pase = d.tipo;
 			return;
 		}
+		j.motivo = MOTIVO_PASE_IMPOSIBLE;
 	}
 	// Conduce por el carril que eligió el cerebro, sin irse de la cancha. El
 	// cuerpo protege la pelota: la aleja del rival más cercano igual que el
@@ -3049,7 +3059,6 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 	double dx = con_rumbo ? d.dir_x : _ataca(j.equipo);
 	double dz = con_rumbo ? d.dir_z : 0.0;
 	// El regate sale por donde eligió el cerebro: pasa al lado del rival, no
-		j.motivo = MOTIVO_PASE_IMPOSIBLE;
 	// se aleja de él.
 	if (!regatea) {
 		int cerca = -1;
@@ -3432,7 +3441,7 @@ bool Canchita::_reglas_partido() {
 	}
 	if (_remate_reciente()) {
 		cuenta.salidas_remate++;
-	} else if (_rebote_equipo >= 0) {
+	} else if (_rebote_salida && _rebote_de == ultimo_toque && _rebote_tipo == ultimo_tipo) {
 		cuenta.salidas_rebote++;
 	} else if (_pase_activo) {
 		cuenta.salidas_pase++;

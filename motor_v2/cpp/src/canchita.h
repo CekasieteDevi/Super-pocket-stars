@@ -678,6 +678,11 @@ private:
 	// El equipo del último que la pelota le rebotó en el cuerpo después del
 	// último toque (-1 si nadie): cuenta para saber quién saca si sale.
 	int _rebote_equipo = -1;
+	// Último contacto fue un rebote en un rival o un arquero (no en uno de su
+	// propio equipo), con el toque que había entonces: solo clasifica la salida.
+	bool _rebote_salida = false;
+	int _rebote_de = -1;
+	int _rebote_tipo = TOQUE_NADA;
 	// Paso de la última tarjeta: la parada de esa falta espera al árbitro.
 	int64_t _tarjeta_paso = -1;
 	int _reaccion_pasos = 12;
@@ -905,12 +910,12 @@ private:
 	void _asignar_marcas();
 	void _separar_cuerpos();
 	void _medir();
+	void _registrar_traza();
 
 	// PARTIDO.
 	void _armar_mundo();
 	void _ubicar_partido(int i, double &qx, double &qz, double &factor, bool &frenar);
 	void _decidir_partido(int i, V3 bola, double t_patada);
-	void _registrar_traza();
 	Pase _pase_a(int i, V3 bola, double t_patada, const Decision &d);
 	double _rapidez_al_espacio(double d, double t_receptor, double t_patada);
 	bool _reglas_partido();

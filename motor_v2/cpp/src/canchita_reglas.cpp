@@ -1105,6 +1105,7 @@ void Canchita::_ejecutar_parada() {
 	poseedor = p.ejecutor;
 	ultimo_toque = p.ejecutor;
 	ultimo_tipo = TOQUE_CONTROL;
+	_rebote_salida = false;
 	_desde_control = paso;
 	j.pensar_ya = true;
 	j.hay_decision = false;
@@ -1196,6 +1197,7 @@ void Canchita::_lanzar_a(int e, V3 desde, double tx, double tz, double elevacion
 	j.inmune_hasta = paso + int64_t(param_toque.sin_rebote_seg / PASO_SEG + 0.5);
 	ultimo_toque = e;
 	ultimo_tipo = TOQUE_PASE;
+	_rebote_salida = false;
 	poseedor = -1;
 	_visto_paso = paso + _reaccion_pasos;
 	_cambio = true;
