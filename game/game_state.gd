@@ -1403,6 +1403,8 @@ func _tomar_ultimo_partido(nombre_torneo: String, s: Dictionary) -> void:
 		"definicion": s["definicion"], "penales_texto": s["penales_texto"],
 		"ganador": s["ganador"],
 		"forfeit": bool(s.get("forfeit", false)),
+		# Receta para volver a jugar el cruce (ver copa.gd resolver_cruce).
+		"receta": str(s.get("receta", "")),
 	}
 	ultimo_log = s["log"]
 	ultimos_eventos = s["eventos"]

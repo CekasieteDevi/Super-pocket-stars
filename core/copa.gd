@@ -200,6 +200,10 @@ static func resolver_cruce(home: Team, away: Team, rng: RandomNumberGenerator,
 		"definicion": definicion, "penales_texto": penales_texto,
 		"goles_log": goles_log, "log": r.get("log", []), "eventos": eventos,
 		"fotogramas": r.get("fotogramas", []),
+		# Receta del partido del jugador (ver Liga.jugar_fecha): cubre 90', alargue
+		# y penales porque MotorV2 los juega dentro del mismo partido. Texto
+		# var_to_str por la misma razon que en liga.gd.
+		"receta": var_to_str(r.get("receta_v2", {})),
 	}
 
 
@@ -222,6 +226,7 @@ static func detalle_seguido(cruce: Dictionary) -> Dictionary:
 	d["log"] = cruce["log"]
 	d["eventos"] = cruce["eventos"]
 	d["fotogramas"] = cruce["fotogramas"]
+	d["receta"] = cruce["receta"]
 	return d
 
 
