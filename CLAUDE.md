@@ -132,3 +132,19 @@ de dónde salen los números.
 - Nada de metáforas, ironía ni frases de relleno.
 - Listas para pasos o condiciones. Nunca párrafos largos con pasos adentro.
 - Español rioplatense, claro y directo.
+
+## Flujo para bugs del cerebro
+
+Cuando una petición trate sobre decisiones autónomas, máquinas de estados,
+GOAP, utility AI, behavior trees, memoria, prioridades, navegación o acciones
+extrañas de jugadores y NPCs:
+
+1. Usá primero el subagente `brain-scout` para investigar.
+2. Dejá que `brain-scout` haga solo diagnóstico y búsqueda.
+3. Revisá sus conclusiones en el código antes de aceptarlas.
+4. Reproducí el bug si es posible.
+5. Aplicá la corrección mínima.
+6. Ejecutá una verificación específica después del cambio.
+7. No hagas refactors no relacionados.
+
+El usuario solo necesita describir el síntoma y cómo reproducirlo.

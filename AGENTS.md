@@ -37,36 +37,30 @@ Usar siempre Godot 4.7.2-stable:
 - Console: `E:\IntelliJ\Super Pocket Stars\Godot_v4.7.2-stable_win64_console.exe`
 - No usar Godot 4.7.1 ni otra versión.
 
-Codex puede ejecutar Godot 4.7.2 únicamente para exportar builds cuando el usuario lo pida explícitamente.
+Godot 4.7.2 se usa para verificar fixes en modo headless o para exportar builds.
 
-Puede:
-- Ejecutar Godot 4.7.2 en modo consola/headless.
-- Exportar APK de Android.
-- Instalar el APK mediante ADB.
-- Verificar que la aplicación abra.
+Permitido (agentes y subagentes):
+- Ejecutar `Godot_v4.7.2-stable_win64_console.exe --headless` para correr pruebas, regresiones y verificaciones de escena.
+- Exportar APK de Android solo si el usuario lo pide explícitamente.
+- Instalar el APK por ADB y verificar que abra solo si el usuario lo pide explícitamente.
 
-No puede:
-- Abrir ni controlar el editor gráfico.
-- Cerrar una instancia del editor.
+Prohibido:
+- Abrir el editor gráfico (`Godot_v4.7.2-stable_win64.exe`, `godot --editor`).
+- Abrir, cerrar, reiniciar o interactuar con una instancia de Godot que el usuario tenga abierta.
+- Matar procesos de Godot que no hayas iniciado vos.
 - Usar otra versión de Godot.
 
-Never run:
-
-- Godot.exe
-- Godot_v4.7.2-stable_win64.exe
-- godot --editor
-- any Godot project validation command
-
-Do not launch, stop, restart, or interact with my running Godot editor.
-
-You may:
-
-- inspect the project
-- edit GDScript files
-- edit source files
-- inspect .tscn/.tres files when necessary
-- use Git and static analysis
+Además podés: inspeccionar el proyecto, editar GDScript y fuentes, revisar `.tscn`/`.tres`, usar Git y análisis estático.
 
 After making changes, tell me exactly what I should test manually in Godot.
 
 I will run the Godot editor and game myself.
+
+# SUBAGENTES
+
+- Haiku 5.5 explora y lee código. No edita archivos ni hace commits; su salida es un hallazgo con archivo y línea.
+- Opus 5.5 arregla los bugs y después verifica que el fix funcione: corre Godot headless según la sección de Godot y reporta el resultado.
+- Los subagentes no ven esta conversación ni este archivo salvo que se lo pases en la tarea: incluir archivos permitidos, archivos prohibidos, síntoma y criterio de aceptación.
+- Un solo agente integra los cambios compartidos, la entrada de changelog y el commit.
+- Reportar por separado: observado, corregido, verificado en headless, y pendiente de prueba manual en Godot.
+

@@ -1,4 +1,5 @@
 [
+	{"version": "0.8.47", "fecha": "2026-10-09", "cambio": "Las reglas del proyecto separan los permisos de Godot y de los subagentes, y se versionan los .uid de Godot que faltaban."},
 	{"version": "0.8.46", "fecha": "2026-10-09", "cambio": "El conteo de salidas por rebote ya no toma un rebote viejo después de un saque o un pase."},
 	{"version": "0.8.45", "fecha": "2026-10-09", "cambio": "Un jugador que corre ya no deja la pelota atrás al controlarla, conducirla o regatear."},
 	{"version": "0.8.44", "fecha": "2026-10-09", "cambio": "El replay de un partido guardado ahora muestra qué decidió el cerebro en cada paso."},
