@@ -43,9 +43,10 @@ Permitido (agentes y subagentes):
 - Ejecutar `Godot_v4.7.2-stable_win64_console.exe --headless` para correr pruebas, regresiones y verificaciones de escena.
 - Exportar APK de Android solo si el usuario lo pide explícitamente.
 - Instalar el APK por ADB y verificar que abra solo si el usuario lo pide explícitamente.
+- Abrir el juego con el editor gráfico (`Godot_v4.7.2-stable_win64.exe --path .`) cuando el usuario lo pida en ese momento, para que pruebe o vea el juego.
 
 Prohibido:
-- Abrir el editor gráfico (`Godot_v4.7.2-stable_win64.exe`, `godot --editor`).
+- Abrir el editor gráfico sin que el usuario lo haya pedido en ese momento.
 - Abrir, cerrar, reiniciar o interactuar con una instancia de Godot que el usuario tenga abierta.
 - Matar procesos de Godot que no hayas iniciado vos.
 - Usar otra versión de Godot.

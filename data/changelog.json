@@ -1,4 +1,5 @@
 [
+	{"version": "0.8.51", "fecha": "2026-10-09", "cambio": "Las reglas del proyecto permiten abrir el juego en Godot con ventana cuando el usuario lo pide."},
 	{"version": "0.8.50", "fecha": "2026-10-09", "cambio": "La guía del replay indica dónde están los nombres de decisiones, toques y motivos, y las etiquetas que imprime cada fila."},
 	{"version": "0.8.49", "fecha": "2026-10-09", "cambio": "La guía del replay explica que un partido sin salidas es lo esperado, porque el control mantiene la pelota dentro de la cancha."},
 	{"version": "0.8.48", "fecha": "2026-10-09", "cambio": "Las reglas del proyecto ya no piden un subagente que no existe para investigar bugs del cerebro."},
