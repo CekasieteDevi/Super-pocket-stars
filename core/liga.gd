@@ -268,7 +268,12 @@ func jugar_fecha(idx: int, rng: RandomNumberGenerator, equipo_seguido: Team = nu
 				"forfeit": bool(r.get("forfeit", false)),
 				# Quien los hizo: lo usa el resumen de fin de partido, y
 				# era el unico dato del partido que no llegaba a la UI.
-				"goles_log": r.get("goles_log", [])}
+				"goles_log": r.get("goles_log", []),
+				# La receta del partido (MotorV2) para volver a jugarlo igual aunque
+				# los equipos ya hayan cambiado. Va como texto (var_to_str) porque
+				# JSON del save pierde tipos (int, claves numericas) y el partido
+				# rehecho sale distinto. Se lee con str_to_var.
+				"receta": var_to_str(r.get("receta_v2", {}))}
 			log_seguido = r["log"]
 			eventos_seguido = r["eventos"]
 			fotogramas_seguido = r.get("fotogramas", [])
