@@ -76,6 +76,24 @@ enum TipoToque : int {
 	TOQUE_ENTRADA = 6,
 };
 
+// Por qué el cerebro eligió lo que eligió para cada toque (la traza de cada paso).
+enum MotivoDecision : int {
+	// Sin decisión del cerebro: el saque, o un toque fuera de _decidir_partido.
+	MOTIVO_NINGUNO = 0,
+	// Centro del córner corto al de más amenaza del área.
+	MOTIVO_CORNER_CORTO,
+	// Decisión nueva de la utility AI (Cerebro::decidir).
+	MOTIVO_CEREBRO,
+	// La decisión anterior todavía vale (decision_vigencia_seg).
+	MOTIVO_VIGENTE,
+	// De espaldas al arco: se da vuelta antes de rematar (_remate_de_espaldas).
+	MOTIVO_GIRO_AL_ARCO,
+	// Pidió un pase y no hubo pase factible: conduce de respaldo.
+	MOTIVO_PASE_IMPOSIBLE,
+	// Saque (_decidir_saque).
+	MOTIVO_SAQUE,
+};
+
 // Cómo terminó un remate (el mundo lo decide, ver Canchita::_cerrar_remate).
 enum ResultadoRemate : int {
 	REMATE_GOL = 0,
@@ -347,6 +365,24 @@ struct RegistroRemate {
 	int resultado = -1;
 };
 
+// Una fila de la traza (Canchita::activar_traza). Lo que se graba es lo que decidió
+// el poseedor del paso; sin poseedor, decision y accion quedan en NADA y dir/rapidez en 0.
+struct PasoTraza {
+	int64_t paso = 0;
+	V3 pelota;
+	int poseedor = -1;
+	int decision = DEC_NADA;
+	int accion = TOQUE_NADA;
+	int motivo = MOTIVO_NINGUNO;
+	// Rumbo (x, z) y rapidez del toque. El pase y el remate apuntan a su destino;
+	// el remate no tiene rapidez planeada.
+	double dir_x = 0.0;
+	double dir_z = 0.0;
+	double rapidez = 0.0;
+	// Metros de la pelota a la raya más cercana (banda o línea de fondo).
+	double raya_m = 0.0;
+};
+
 struct JugadorCanchita {
 	Cuerpo cuerpo;
 	int equipo = 0;
@@ -411,6 +447,8 @@ struct JugadorCanchita {
 	// La decisión del cerebro que armó el pase de este toque (DEC_NADA si no
 	// salió del cerebro).
 	int tipo_pase = DEC_NADA;
+	// Por qué el cerebro eligió la decisión de este toque (MotivoDecision); lo lee la traza.
+	int motivo = MOTIVO_NINGUNO;
 	// Remate: al punto (meta_x, meta_alto, meta_z) con el golpe `golpe_remate`.
 	double meta_alto = 0.0;
 	int golpe_remate = REMATE_COLOCADO;
@@ -509,6 +547,9 @@ public:
 	int poseedor = -1;
 	int ultimo_toque = -1;
 	int ultimo_tipo = TOQUE_NADA;
+	// Traza por paso (activar_traza): apagada, nada la llena ni cuesta.
+	bool traza_activa = false;
+	std::vector<PasoTraza> traza;
 
 	// Antes de empezar: los jugadores, con su físico ya pasado a unidades.
 	void agregar(int equipo, const Cuerpo &fisico, double pases, double control);
@@ -532,6 +573,10 @@ public:
 	}
 	void avanzar();
 	uint64_t huella() const;
+	// Traza por paso, opt-in (ver PasoTraza). Encenderla o apagarla vacía el buffer.
+	void activar_traza(bool on);
+	// Versión del motor y fecha de compilación: cada traza dice qué build la hizo.
+	static const char *build_id();
 
 	// Etapa 6: reglas del partido (reglas.h). Se activan antes de empezar.
 	ParametrosReglas param_reglas;
@@ -865,6 +910,7 @@ private:
 	void _armar_mundo();
 	void _ubicar_partido(int i, double &qx, double &qz, double &factor, bool &frenar);
 	void _decidir_partido(int i, V3 bola, double t_patada);
+	void _registrar_traza();
 	Pase _pase_a(int i, V3 bola, double t_patada, const Decision &d);
 	double _rapidez_al_espacio(double d, double t_receptor, double t_patada);
 	bool _reglas_partido();

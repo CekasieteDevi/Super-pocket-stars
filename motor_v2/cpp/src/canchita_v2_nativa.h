@@ -148,6 +148,14 @@ public:
 	// receptor, punto, utilidad}]}.
 	Dictionary ultima_decision() const;
 	int64_t huella() const;
+	// Activa o apaga la traza por paso (apagada por defecto, sin costo). Encenderla o
+	// apagarla vacía el buffer.
+	void activar_traza(bool on);
+	// Una fila por paso: {build_id, paso, pelota, poseedor, decision, accion, motivo,
+	// direccion (x, z), rapidez, raya_m}.
+	Array get_traza() const;
+	// Versión y fecha de compilación del motor (va en cada fila de la traza).
+	String get_build_id() const;
 
 protected:
 	static void _bind_methods();

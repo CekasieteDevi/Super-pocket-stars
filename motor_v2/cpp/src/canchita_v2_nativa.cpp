@@ -34,6 +34,26 @@ int indice(const std::vector<String> &nombres, const Variant &nombre) {
 Vector3 a_godot(motor_v2::V3 v) {
 	return Vector3(real_t(v.x), real_t(v.y), real_t(v.z));
 }
+
+// Nombres de la traza: son los identificadores del C++ (DEC_CONDUCIR, TOQUE_PASE,
+// MOTIVO_CEREBRO), así se buscan en el código al leer la traza desde GDScript.
+const char *nombre_decision(int d) {
+	static const char *const nombres[] = { "DEC_NADA", "DEC_CONDUCIR", "DEC_PASE", "DEC_PASE_HUECO", "DEC_PASE_LARGO",
+		"DEC_CENTRO", "DEC_PARED", "DEC_DESPEJE", "DEC_REMATE", "DEC_REGATE" };
+	return nombres[std::clamp(d, 0, int(sizeof(nombres) / sizeof(nombres[0])) - 1)];
+}
+
+const char *nombre_toque(int t) {
+	static const char *const nombres[] = { "TOQUE_NADA", "TOQUE_PASE", "TOQUE_CONDUCE", "TOQUE_CONTROL", "TOQUE_REMATE",
+		"TOQUE_ATAJADA", "TOQUE_ENTRADA" };
+	return nombres[std::clamp(t, 0, int(sizeof(nombres) / sizeof(nombres[0])) - 1)];
+}
+
+const char *nombre_motivo(int m) {
+	static const char *const nombres[] = { "MOTIVO_NINGUNO", "MOTIVO_CORNER_CORTO", "MOTIVO_CEREBRO", "MOTIVO_VIGENTE",
+		"MOTIVO_GIRO_AL_ARCO", "MOTIVO_PASE_IMPOSIBLE", "MOTIVO_SAQUE" };
+	return nombres[std::clamp(m, 0, int(sizeof(nombres) / sizeof(nombres[0])) - 1)];
+}
 } // namespace
 
 void godot::leer_parametros_toque(const Dictionary &d, const std::vector<String> &nombres, motor_v2::ParametrosToque &p) {
@@ -1189,6 +1209,34 @@ void CanchitaV2Nativa::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("agregar_suplente", "equipo", "fisico"), &CanchitaV2Nativa::agregar_suplente);
 	ClassDB::bind_method(D_METHOD("configurar_reglas", "reglas"), &CanchitaV2Nativa::configurar_reglas);
 	ClassDB::bind_method(D_METHOD("configurar_reglas_equipo", "equipo", "club"), &CanchitaV2Nativa::configurar_reglas_equipo);
+void CanchitaV2Nativa::activar_traza(bool on) {
+	_c.activar_traza(on);
+}
+
+Array CanchitaV2Nativa::get_traza() const {
+	const String build = get_build_id();
+	Array filas;
+	for (const motor_v2::PasoTraza &t : _c.traza) {
+		Dictionary d;
+		d["build_id"] = build;
+		d["paso"] = t.paso;
+		d["pelota"] = a_godot(t.pelota);
+		d["poseedor"] = t.poseedor;
+		d["decision"] = String(nombre_decision(t.decision));
+		d["accion"] = String(nombre_toque(t.accion));
+		d["motivo"] = String(nombre_motivo(t.motivo));
+		d["direccion"] = Vector2(real_t(t.dir_x), real_t(t.dir_z));
+		d["rapidez"] = t.rapidez;
+		d["raya_m"] = t.raya_m;
+		filas.push_back(d);
+	}
+	return filas;
+}
+
+String CanchitaV2Nativa::get_build_id() const {
+	return String(motor_v2::Canchita::build_id());
+}
+
 	ClassDB::bind_method(D_METHOD("reglas_de_fabrica"), &CanchitaV2Nativa::reglas_de_fabrica);
 	ClassDB::bind_method(D_METHOD("eventos"), &CanchitaV2Nativa::eventos);
 	ClassDB::bind_method(D_METHOD("get_ids"), &CanchitaV2Nativa::get_ids);
@@ -1198,6 +1246,9 @@ void CanchitaV2Nativa::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_estado"), &CanchitaV2Nativa::get_estado);
 	ClassDB::bind_method(D_METHOD("forzar_parada", "tipo", "equipo", "pos"), &CanchitaV2Nativa::forzar_parada);
 	ClassDB::bind_method(D_METHOD("forzar_falta", "tarjeta", "lesion"), &CanchitaV2Nativa::forzar_falta);
+	ClassDB::bind_method(D_METHOD("activar_traza", "on"), &CanchitaV2Nativa::activar_traza);
+	ClassDB::bind_method(D_METHOD("get_traza"), &CanchitaV2Nativa::get_traza);
+	ClassDB::bind_method(D_METHOD("get_build_id"), &CanchitaV2Nativa::get_build_id);
 	ClassDB::bind_method(D_METHOD("forzar_fin_de_tiempo"), &CanchitaV2Nativa::forzar_fin_de_tiempo);
 	ClassDB::bind_method(D_METHOD("get_lateral_en_manos"), &CanchitaV2Nativa::get_lateral_en_manos);
 	ClassDB::bind_method(D_METHOD("configurar_remate", "remate", "arquero"), &CanchitaV2Nativa::configurar_remate);

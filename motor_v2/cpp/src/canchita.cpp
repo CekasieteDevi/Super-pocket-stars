@@ -432,6 +432,56 @@ void Canchita::_analizar() {
 			}
 			if (_pase_activo && int(i) == _pateador && _receptor >= 0 && _receptor != int(i)
 					&& paso - j.pateo_en < DESCANSO_PASE_PROPIO) {
+	if (traza_activa) {
+		_registrar_traza();
+	}
+}
+
+// La traza del paso: lo que decidió el que tiene la pelota. Solo la llama avanzar()
+// con la traza encendida y solo lee el estado, así la simulación es la misma con la
+// traza encendida o apagada.
+void Canchita::_registrar_traza() {
+	PasoTraza t;
+	t.paso = paso;
+	t.pelota = pelota.pos;
+	t.poseedor = poseedor;
+	t.raya_m = std::min(_medio_x() - std::abs(pelota.pos.x), _medio_z() - std::abs(pelota.pos.z));
+	if (poseedor >= 0) {
+		const JugadorCanchita &j = jugadores[size_t(poseedor)];
+		t.decision = j.hay_decision ? j.decision.tipo : DEC_NADA;
+		t.accion = j.toque;
+		t.motivo = j.motivo;
+		switch (j.toque) {
+		case TOQUE_PASE:
+		case TOQUE_REMATE: {
+			double ax = j.meta_x - pelota.pos.x, az = j.meta_z - pelota.pos.z;
+			double l = std::max(hipot(ax, az), 1e-6);
+			t.dir_x = ax / l;
+			t.dir_z = az / l;
+			t.rapidez = j.toque == TOQUE_PASE ? j.rapidez_pase : 0.0;
+			break;
+		}
+		case TOQUE_CONDUCE:
+		case TOQUE_CONTROL:
+			t.dir_x = j.dir_x;
+			t.dir_z = j.dir_z;
+			t.rapidez = j.rapidez_toque;
+			break;
+		default:
+			break;
+		}
+	}
+	traza.push_back(t);
+}
+
+void Canchita::activar_traza(bool on) {
+	traza_activa = on;
+	traza.clear();
+}
+
+const char *Canchita::build_id() {
+	// La versión del motor (la de data/changelog.json) y la fecha de compilación.
+	return "motor_v2 0.8.44 " __DATE__ " " __TIME__;
 				continue;
 			}
 			// Etapa 5: el arquero sale solo a la pelota que alcanza en su área
@@ -2877,10 +2927,12 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 	}
 	// Conduce por el carril que eligió el cerebro, sin irse de la cancha. El
 	// cuerpo protege la pelota: la aleja del rival más cercano igual que el
+		jugadores[size_t(i)].motivo = MOTIVO_SAQUE;
 	// control orientado (_orientar). Con el carril solo, la pelota iba suelta
 	// hacia el que presionaba y se perdían 8 pelotas por minuto conduciendo.
 	bool con_rumbo = d.tipo == DEC_CONDUCIR || d.tipo == DEC_REGATE;
 	double dx = con_rumbo ? d.dir_x : _ataca(j.equipo);
+	j.motivo = MOTIVO_NINGUNO;
 	double dz = con_rumbo ? d.dir_z : 0.0;
 	// El regate sale por donde eligió el cerebro: pasa al lado del rival, no
 	// se aleja de él.
@@ -2918,6 +2970,7 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 			j.dir_z = (qz - bola.z) / l;
 		} else {
 			j.dir_x = _ataca(j.equipo);
+			j.motivo = MOTIVO_CORNER_CORTO;
 			j.dir_z = 0.0;
 		}
 	};
@@ -2931,6 +2984,7 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 		largo = param_toque.regate_largo_m;
 	}
 	// Lo que corre HACIA donde la manda, no su rapidez: el que cambiaba de
+		j.motivo = MOTIVO_CEREBRO;
 	// dirección conduciendo (el carril nuevo, o alejarla del rival) la tocaba
 	// como si ya corriera para ese lado, a 7 m/s. Él tenía que frenar y dar la
 	// vuelta, y la pelota se le iba 3 m (169 veces en 20 partidos; de ahí
@@ -2952,6 +3006,8 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 	double tope = j.cuerpo.vel_max * j.cuerpo.cansancio * param_toque.conduccion_factor * j.ritmo_conduce;
 	double corre = std::clamp(hacia + j.cuerpo.aceleracion * param_toque.conduce_gana_seg, 0.0, tope);
 	if (gira_al_arco) {
+	} else if (j.motivo == MOTIVO_NINGUNO) {
+		j.motivo = MOTIVO_VIGENTE;
 		// Cerca del arco un toque largo se lo queda el arquero.
 		largo = param_toque.toque_corto_m;
 	}
@@ -2967,6 +3023,7 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 	// toque.frena_giro_*, que la tocaba a 34 grados de lo que corría, pero
 	// solo girando más de 100 grados y sin un rival cerca; esta cuenta da
 	// unos 30 grados en ese caso.
+		j.motivo = MOTIVO_GIRO_AL_ARCO;
 	// La pelota no va más rápido que el ritmo de conducción (`tope`): sumando
 	// también lo que corre de más hacia adelante, el favorito conducía a
 	// fondo (quinta contra octava, 4,11 goles; así 3,98; antes 3,32).
@@ -2992,6 +3049,7 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 		double atras = std::min(hacia, 0.0);
 		double gx = j.cuerpo.vx - j.dir_x * (hacia - atras), gz = j.cuerpo.vz - j.dir_z * (hacia - atras);
 		double gira = hipot(gx, gz);
+		j.motivo = MOTIVO_PASE_IMPOSIBLE;
 		if (gira > 0.1) {
 			double sigue = corre * t_sig;
 			double k = pesa(gira, param_cuerpo.giro_acel);
