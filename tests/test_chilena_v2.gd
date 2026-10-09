@@ -60,8 +60,10 @@ func _medir() -> Dictionary:
 		local.estilo = estilos[0]
 		visitante.estilo = estilos[1]
 		var atributos := {}
+		# Los del banco también: el suplente que entra y le pega de chilena
+		# quedaba sin atributos y contaba como si no tuviera tiro.
 		for equipo in [local, visitante]:
-			for j in equipo.jugadores:
+			for j in equipo.jugadores + equipo.banco:
 				atributos[int(j["id"])] = j["atributos"]
 		var c: Object = CerebroV2.armar(local, visitante, SEED + n, true)
 		var pasos := 0

@@ -103,6 +103,66 @@ double hipot(double x, double z) {
 double rumbo_de(double dx, double dz) {
 	return mate::arcotangente2(dx, dz);
 }
+
+// La pelota acompaña al cuerpo hasta el toque siguiente. El cuerpo no cambia
+// de velocidad en el acto (Cuerpo::_moverse): lo que corre para otro lado lo
+// pierde a giro_acel por segundo. Hasta que puede volver a tocarla (`t_sig`,
+// lo que dura el gesto de conducir) recorre `px, pz`. La pelota sale hacia
+// ahí, más el largo hacia donde quiere ir, y llega con él: el giro termina en
+// el toque siguiente. Sin esto el toque contaba solo lo que corría hacia donde
+// la mandaba: el que iba a 6,6 m/s y la tocaba a 110 grados la dejaba casi
+// quieta, seguía 1,8 m de largo y volvía a buscarla (BUG-009,
+// docs/bugs_pendientes.md). Reemplaza a toque.frena_giro_*, que la tocaba a
+// 34 grados de lo que corría, pero solo girando más de 100 grados y sin un
+// rival cerca; esta cuenta da unos 30 grados en ese caso.
+// Lo que corre de más hacia adelante (llega a 8 m/s y va a llevarla a 3,6) lo
+// pierde a `frenada` por segundo, y la pelota también lo acompaña. Con la
+// pelota al ritmo de conducción desde el primer toque, el cuerpo seguía 2 m
+// de largo (BUG-018).
+// Entra con la dirección que quiere (dx, dz), lo que va a correr hacia ahí y
+// el largo del toque; sale con los del toque que acompaña. `limitar` corrige
+// la dirección nueva (la raya). Devuelve false si ya corre así.
+template <typename Limitar>
+bool acompanar(const Cuerpo &c, double t_sig, double giro_acel, double frenada, double inercia, double &dx, double &dz,
+		double &corre, double &largo, double &alcanza_m, Limitar limitar) {
+	// Los segundos que pesa, hasta t_sig, una velocidad `resto` que el
+	// cuerpo pierde a `a` por segundo.
+	auto pesa = [&](double resto, double a) {
+		double t = std::min(t_sig, resto / std::max(a, 0.1));
+		return resto > 1e-9 ? (t - 0.5 * t * t * a / resto) * inercia : 0.0;
+	};
+	double hacia = c.vx * dx + c.vz * dz;
+	double atras = std::min(hacia, 0.0);
+	double gx = c.vx - dx * (hacia - atras), gz = c.vz - dz * (hacia - atras);
+	double gira = hipot(gx, gz);
+	double sobra = std::max(hacia - corre, 0.0);
+	if (gira <= 0.1 && sobra <= 0.1) {
+		return false;
+	}
+	double sigue = corre * t_sig + sobra * pesa(sobra, frenada);
+	double k = pesa(gira, giro_acel);
+	double px = dx * sigue + gx * k, pz = dz * sigue + gz * k;
+	double lp = hipot(px, pz);
+	// El largo no la deja detrás de donde va a estar el cuerpo: el que
+	// da la media vuelta la lleva hasta donde frena.
+	double lx = dx * largo, lz = dz * largo;
+	double contra = lp > 1e-6 ? (lx * px + lz * pz) / lp : 0.0;
+	if (contra < 0.0) {
+		lx -= contra * px / lp;
+		lz -= contra * pz / lp;
+	}
+	double lt = hipot(px + lx, pz + lz);
+	if (lt <= 1e-6) {
+		return false;
+	}
+	dx = (px + lx) / lt;
+	dz = (pz + lz) / lt;
+	limitar(dx, dz);
+	alcanza_m = std::max(px * dx + pz * dz, 0.0);
+	corre = alcanza_m / t_sig;
+	largo = std::max(lx * dx + lz * dz, 0.0);
+	return true;
+}
 } // namespace
 
 void Canchita::agregar(int equipo, const Cuerpo &fisico, double pases, double control) {
@@ -372,6 +432,56 @@ void Canchita::avanzar() {
 		}
 	}
 }
+	if (traza_activa) {
+		_registrar_traza();
+	}
+}
+
+// La traza del paso: lo que decidió el que tiene la pelota. Solo la llama avanzar()
+// con la traza encendida y solo lee el estado, así la simulación es la misma con la
+// traza encendida o apagada.
+void Canchita::_registrar_traza() {
+	PasoTraza t;
+	t.paso = paso;
+	t.pelota = pelota.pos;
+	t.poseedor = poseedor;
+	t.raya_m = std::min(_medio_x() - std::abs(pelota.pos.x), _medio_z() - std::abs(pelota.pos.z));
+	if (poseedor >= 0) {
+		const JugadorCanchita &j = jugadores[size_t(poseedor)];
+		t.decision = j.hay_decision ? j.decision.tipo : DEC_NADA;
+		t.accion = j.toque;
+		t.motivo = j.motivo;
+		switch (j.toque) {
+		case TOQUE_PASE:
+		case TOQUE_REMATE: {
+			double ax = j.meta_x - pelota.pos.x, az = j.meta_z - pelota.pos.z;
+			double l = std::max(hipot(ax, az), 1e-6);
+			t.dir_x = ax / l;
+			t.dir_z = az / l;
+			t.rapidez = j.toque == TOQUE_PASE ? j.rapidez_pase : 0.0;
+			break;
+		}
+		case TOQUE_CONDUCE:
+		case TOQUE_CONTROL:
+			t.dir_x = j.dir_x;
+			t.dir_z = j.dir_z;
+			t.rapidez = j.rapidez_toque;
+			break;
+		default:
+			break;
+		}
+	}
+	traza.push_back(t);
+}
+
+void Canchita::activar_traza(bool on) {
+	traza_activa = on;
+	traza.clear();
+}
+
+const char *Canchita::build_id() {
+	// La versión del motor (la de data/changelog.json) y la fecha de compilación.
+	return "motor_v2 0.8.44 " __DATE__ " " __TIME__;
 
 // --- Cerebro sencillo ---
 
@@ -432,56 +542,6 @@ void Canchita::_analizar() {
 			}
 			if (_pase_activo && int(i) == _pateador && _receptor >= 0 && _receptor != int(i)
 					&& paso - j.pateo_en < DESCANSO_PASE_PROPIO) {
-	if (traza_activa) {
-		_registrar_traza();
-	}
-}
-
-// La traza del paso: lo que decidió el que tiene la pelota. Solo la llama avanzar()
-// con la traza encendida y solo lee el estado, así la simulación es la misma con la
-// traza encendida o apagada.
-void Canchita::_registrar_traza() {
-	PasoTraza t;
-	t.paso = paso;
-	t.pelota = pelota.pos;
-	t.poseedor = poseedor;
-	t.raya_m = std::min(_medio_x() - std::abs(pelota.pos.x), _medio_z() - std::abs(pelota.pos.z));
-	if (poseedor >= 0) {
-		const JugadorCanchita &j = jugadores[size_t(poseedor)];
-		t.decision = j.hay_decision ? j.decision.tipo : DEC_NADA;
-		t.accion = j.toque;
-		t.motivo = j.motivo;
-		switch (j.toque) {
-		case TOQUE_PASE:
-		case TOQUE_REMATE: {
-			double ax = j.meta_x - pelota.pos.x, az = j.meta_z - pelota.pos.z;
-			double l = std::max(hipot(ax, az), 1e-6);
-			t.dir_x = ax / l;
-			t.dir_z = az / l;
-			t.rapidez = j.toque == TOQUE_PASE ? j.rapidez_pase : 0.0;
-			break;
-		}
-		case TOQUE_CONDUCE:
-		case TOQUE_CONTROL:
-			t.dir_x = j.dir_x;
-			t.dir_z = j.dir_z;
-			t.rapidez = j.rapidez_toque;
-			break;
-		default:
-			break;
-		}
-	}
-	traza.push_back(t);
-}
-
-void Canchita::activar_traza(bool on) {
-	traza_activa = on;
-	traza.clear();
-}
-
-const char *Canchita::build_id() {
-	// La versión del motor (la de data/changelog.json) y la fecha de compilación.
-	return "motor_v2 0.8.44 " __DATE__ " " __TIME__;
 				continue;
 			}
 			// Etapa 5: el arquero sale solo a la pelota que alcanza en su área
@@ -603,14 +663,15 @@ const char *Canchita::build_id() {
 
 // El primer punto de la trayectoria al que llega a tiempo corriendo a
 // `factor` de su punta, y en cuántos segundos. La pelota más alta que la
-// cabeza no cuenta. Si no llega a ninguno, el último.
-void Canchita::_alcance(int i, double factor, int &k, double &t, int no_antes) const {
+// cabeza no cuenta. Si no llega a ninguno, el último (el último de adentro de
+// la cancha si la pelota se va), y devuelve false.
+bool Canchita::_alcance(int i, double factor, int &k, double &t, int no_antes) const {
 	const Cuerpo &c = jugadores[size_t(i)].cuerpo;
 	int n = int(trayectoria.pos.size());
 	if (n == 0) {
 		k = -1;
 		t = tiempo_de_llegada(c, pelota.pos.x, pelota.pos.z, ALCANCE_PLAN_M, factor);
-		return;
+		return true;
 	}
 	int desde = std::max(0, _indice_tray(paso + 1 + no_antes));
 	desde = std::min(desde, std::max(n - 1, 0));
@@ -650,12 +711,12 @@ void Canchita::_alcance(int i, double factor, int &k, double &t, int no_antes) c
 				if (llega(atras, ta)) {
 					k = atras;
 					t = ta;
-					return;
+					return true;
 				}
 			}
 			k = q;
 			t = tq;
-			return;
+			return true;
 		}
 	}
 	k = n - 1;
@@ -663,6 +724,7 @@ void Canchita::_alcance(int i, double factor, int &k, double &t, int no_antes) c
 	t = std::max(double(_tray_paso + k + 1 - paso) * PASO_SEG,
 			tiempo_de_llegada(c, ultima.x, ultima.z, ALCANCE_PLAN_M, factor));
 }
+	return false;
 
 void Canchita::_pensar_jugador(int i) {
 	JugadorCanchita &j = jugadores[size_t(i)];
@@ -802,7 +864,15 @@ void Canchita::_plan_tocar(int i) {
 		no_antes = int(falta / PASO_SEG + 0.5);
 	}
 	j.regate = -1;
-	_alcance(i, factor, k, t, no_antes);
+	// El que la lleva la toca apenas puede (no_antes), donde esté la pelota:
+	// el ritmo de la conducción lo pone la rapidez del toque, y él llega a
+	// tiempo (`necesita`). Buscando el punto a su ritmo de conducción, el que
+	// venía a 8,5 m/s con la pelota a sus pies y pasaba a conducir a 4 m/s
+	// "no la alcanzaba" hasta 4 s después, a 15 m: planeaba el toque para ese
+	// punto (contra la raya: hacia atrás y casi quieto), el gesto salía igual
+	// porque la tenía al pie, y la pelota quedaba seca atrás de él (BUG-018,
+	// docs/bugs_pendientes.md).
+	bool llega = _alcance(i, poseedor_ ? 1.0 : factor, k, t, no_antes);
 	// Si sin apurarse la alcanza recién lejos (o no la alcanza), va a fondo
 	// y la toma antes. Detrás de un pelotazo que rodaba a 5 m/s el más
 	// cercano la seguía a 3 m, a la misma rapidez, 5 segundos sin tocarla
@@ -810,10 +880,16 @@ void Canchita::_plan_tocar(int i) {
 	// Solo con la pelota que se aleja de él: a la que viene la espera en su
 	// punto (y la recibe con el pecho o la cabeza si llega alta).
 	bool se_aleja = pelota.vel.x * (pelota.pos.x - c.x) + pelota.vel.z * (pelota.pos.z - c.z) > 0.0;
-	if (factor < 1.0 && !poseedor_ && se_aleja && (k == int(trayectoria.pos.size()) - 1 || t > ENCUENTRO_LEJOS_SEG)) {
+	// "No la alcanza" es lo que devuelve _alcance, no que el punto sea el
+	// último de la predicción: con la pelota yéndose de la cancha el punto es
+	// el último de adentro. El que la llevaba a 8 m/s y pasaba a conducir
+	// despacio no la alcanzaba a ese ritmo, y planeaba tocarla en la raya, a
+	// 13 m: el toque salía hacia adentro y casi quieto, con la pelota a sus
+	// pies, y él seguía de largo (BUG-018, docs/bugs_pendientes.md).
+	if (factor < 1.0 && !poseedor_ && se_aleja && (!llega || t > ENCUENTRO_LEJOS_SEG)) {
 		_alcance(i, 1.0, k, t, no_antes);
 		factor = 1.0;
-	} else if (factor < 1.0 && k == int(trayectoria.pos.size()) - 1) {
+	} else if (factor < 1.0 && !llega) {
 		_alcance(i, 1.0, k, t, no_antes);
 	}
 	V3 p = k >= 0 ? trayectoria.pos[size_t(k)] : pelota.pos;
@@ -916,7 +992,9 @@ void Canchita::_plan_tocar(int i) {
 	double bx = p.x - corre.x, bz = p.z - corre.z;
 	double dist = hipot(bx - c.x, bz - c.z);
 	double necesita = dist / std::max(t, 0.05) / vmax * 1.15;
-	double f = disputada || factor >= 1.0 ? 1.0 : std::clamp(necesita, 0.25, 1.0);
+	// El que la lleva no llega antes de poder tocarla: corriendo a fondo con
+	// un rival cerca pasaba a la pelota, que salió a su ritmo de conducción.
+	double f = !poseedor_ && (disputada || factor >= 1.0) ? 1.0 : std::clamp(necesita, 0.25, 1.0);
 	c.ir_a(bx, bz, f, necesita < 0.25);
 	c.mira = true;
 	c.mira_x = p.x + (chilena ? fx : 0.0);
@@ -2236,21 +2314,26 @@ void Canchita::_tocar(int i, double distancia) {
 			}
 			double dificil = (0.5 + vin / 15.0) * (parte == PIE ? 1.0 : 1.3) * apretado;
 			double torpeza = (1.0 - 0.8 * j.control / 100.0) * (modo == PARTIDO ? cerebro.error_de_estilo(j.equipo) : 1.0);
-			angulo = rumbo_de(j.dir_x, j.dir_z) + _azar.normal() * param_toque.error_control_rad * torpeza * dificil;
-			if (modo == PARTIDO && !entrada && param_toque.control_raya_m > 0.0) {
-				// Cerca de la raya la para hacia adentro: el control (con su
-				// error) salía de la cancha 1,2 veces por partido
-				// (tests/_diag_juego_v2.gd). El punto adonde la manda, a
-				// CONTROL_MIRA_M, se trae adentro de la cancha.
+			double error = _azar.normal() * param_toque.error_control_rad * torpeza * dificil;
+			// Cerca de la raya la para hacia adentro: el control (con su
+			// error) salía de la cancha 1,2 veces por partido
+			// (tests/_diag_juego_v2.gd). El punto adonde la manda, a
+			// CONTROL_MIRA_M, se trae adentro de la cancha.
+			auto adentro = [&](double a) {
+				if (modo != PARTIDO || entrada || param_toque.control_raya_m <= 0.0) {
+					return a;
+				}
 				double sa, ca;
-				mate::seno_coseno(angulo, sa, ca);
+				mate::seno_coseno(a, sa, ca);
 				double qx = pelota.pos.x + sa * CONTROL_MIRA_M, qz = pelota.pos.z + ca * CONTROL_MIRA_M;
 				double lx = std::clamp(qx, -_medio_x() + param_toque.control_raya_m, _medio_x() - param_toque.control_raya_m);
 				double lz = std::clamp(qz, -_medio_z() + param_toque.control_raya_m, _medio_z() - param_toque.control_raya_m);
 				if ((lx != qx || lz != qz) && hipot(lx - pelota.pos.x, lz - pelota.pos.z) > 0.1) {
-					angulo = rumbo_de(lx - pelota.pos.x, lz - pelota.pos.z);
+					return rumbo_de(lx - pelota.pos.x, lz - pelota.pos.z);
 				}
-			}
+				return a;
+			};
+			angulo = adentro(rumbo_de(j.dir_x, j.dir_z) + error);
 			// El que controla corriendo se la lleva: sale para quedarle
 			// toque_corto_m adelante a lo que corre hacia ahí. Con control_ms
 			// fijo (1,5 m/s) el que llegaba a 5 m/s la pasaba de largo: tenía
@@ -2261,14 +2344,40 @@ void Canchita::_tocar(int i, double distancia) {
 			// Lo que corre hacia ahí, hasta lo que va a correr llevándola
 			// (conduccion_factor de su punta): con la rapidez a la que
 			// llegaba, la pelota salía a 7 m/s y se le iba 1,2 m.
-			double lleva = std::clamp(c.vx * sd + c.vz * cd, 0.0, c.vel_max * c.cansancio * param_toque.conduccion_factor);
+			double tope = c.vel_max * c.cansancio * param_toque.conduccion_factor;
+			double lleva = std::clamp(c.vx * sd + c.vz * cd, 0.0, tope);
 			// Con un rival cerca la deja más cerca del pie (como la conducción).
 			double largo = param_toque.toque_corto_m * (0.3 + 0.7 * _espacio_adelante(i, pelota.pos, sd, cd));
-			double base = std::max(param_toque.control_ms, _rapidez_conduce(lleva, largo));
+			// Y acompaña lo que sigue corriendo para otro lado, igual que el
+			// toque de conducción (acompanar). El que llegaba a fondo y la
+			// paraba hacia otro lado la dejaba casi quieta y seguía de largo
+			// hasta 3,5 m (BUG-018, docs/bugs_pendientes.md).
+			// La cuenta sale de la dirección que quería y el error del control
+			// va después.
+			double alcanza_m = 0.0, alcanza_seg = 0.0;
+			if (!entrada && param_toque.control_inercia > 0.0 && param_toque.clip_conduce >= 0) {
+				double t_sig = clips[size_t(param_toque.clip_conduce)].duracion;
+				double ax = j.dir_x, az = j.dir_z;
+				double lleva_a = std::clamp(c.vx * ax + c.vz * az, 0.0, tope);
+				double largo_a = param_toque.toque_corto_m * (0.3 + 0.7 * _espacio_adelante(i, pelota.pos, ax, az));
+				if (acompanar(c, t_sig, param_cuerpo.giro_acel, param_cuerpo.frenada, param_toque.control_inercia, ax, az, lleva_a, largo_a,
+							alcanza_m, [](double &, double &) {})) {
+					angulo = adentro(rumbo_de(ax, az) + error);
+					lleva = lleva_a;
+					largo = largo_a;
+					alcanza_seg = t_sig;
+				}
+			}
+			double base = std::max(param_toque.control_ms,
+					_rapidez_conduce(lleva, largo, alcanza_m, alcanza_seg));
 			rapidez = base + std::abs(_azar.normal()) * param_toque.error_control_ms * torpeza * dificil;
-			// Pecho, muslo y cabeza la bajan: sale más lenta y cae.
+			// Pecho, muslo y cabeza la bajan: sale más lenta y cae. El que
+			// viene corriendo se la lleva igual: con la pelota 30% más lenta
+			// seguía de largo 1 a 2 m (BUG-018).
 			if (parte != PIE) {
-				rapidez *= 0.7;
+				if (alcanza_seg <= 0.0) {
+					rapidez *= 0.7;
+				}
 				vertical = parte == CABEZA ? 1.0 : 0.3;
 				// Y sigue jugando: esos gestos no dejan moverse hasta que
 				// terminan, y la pelota que bajaba se le iba antes de que
@@ -2818,10 +2927,12 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 	if (_corto_id >= 0 && _id(i) == _corto_id) {
 		// Córner corto: el socio centra apenas la controla, al de más amenaza
 		// de los que quedaron en el área. Decidiendo como en el juego abierto
+		jugadores[size_t(i)].motivo = MOTIVO_SAQUE;
 		// se la llevaba o la tocaba atrás y el área se vaciaba (7,3% de gol
 		// contra 12,0% del córner colgado, tests/_diag_jugadas_v2.gd).
 		// Lo decide cada vez que piensa hasta que centra: la decisión vence
 		// antes de que vuelva a tocar la pelota.
+	j.motivo = MOTIVO_NINGUNO;
 		bool a_tiempo = paso <= _corto_hasta;
 		if (!a_tiempo) {
 			_corto_id = -1;
@@ -2859,6 +2970,7 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 		bool puede_pasar = tiene >= cadencia || _rival_mas_cerca(i, bola.x, bola.z) < param_toque.presion_m + 1.0;
 		_plan_bola = bola;
 		_plan_t = t_patada;
+			j.motivo = MOTIVO_CORNER_CORTO;
 		cerebro.planeador = this;
 		j.decision = cerebro.decidir(_mundo, i, puede_pasar, _azar);
 		cerebro.planeador = nullptr;
@@ -2872,6 +2984,7 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 			// sin decidir entraba al área sin patear.
 			if (cerebro.factor_geometria(bola.x, bola.z, j.equipo) >= Cerebro::TIRO_CLARO) {
 				vale = std::min(vale, DECIDE_A_TIRO_SEG);
+		j.motivo = MOTIVO_CEREBRO;
 			}
 			if (puede_pasar && cerebro.pesos.conduce_decide_seg > 0.0) {
 				vale = std::min(vale, cerebro.pesos.conduce_decide_seg);
@@ -2893,6 +3006,8 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 		Decision gira;
 		gira.tipo = DEC_CONDUCIR;
 		double gx = j.decision.x - bola.x, gz = j.decision.z - bola.z;
+	} else if (j.motivo == MOTIVO_NINGUNO) {
+		j.motivo = MOTIVO_VIGENTE;
 		double gl = std::max(hipot(gx, gz), 1e-6);
 		gira.dir_x = gx / gl;
 		gira.dir_z = gz / gl;
@@ -2908,6 +3023,7 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 		j.meta_z = d.z;
 		j.golpe_remate = d.golpe;
 		return;
+		j.motivo = MOTIVO_GIRO_AL_ARCO;
 	}
 	// Sin el clip de ese regate (los bancos que no lo configuran), conduce.
 	bool regatea = d.tipo == DEC_REGATE && j.regate_elegido >= 0 && param_toque.clips_regate[j.regate_elegido] >= 0
@@ -2927,14 +3043,13 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 	}
 	// Conduce por el carril que eligió el cerebro, sin irse de la cancha. El
 	// cuerpo protege la pelota: la aleja del rival más cercano igual que el
-		jugadores[size_t(i)].motivo = MOTIVO_SAQUE;
 	// control orientado (_orientar). Con el carril solo, la pelota iba suelta
 	// hacia el que presionaba y se perdían 8 pelotas por minuto conduciendo.
 	bool con_rumbo = d.tipo == DEC_CONDUCIR || d.tipo == DEC_REGATE;
 	double dx = con_rumbo ? d.dir_x : _ataca(j.equipo);
-	j.motivo = MOTIVO_NINGUNO;
 	double dz = con_rumbo ? d.dir_z : 0.0;
 	// El regate sale por donde eligió el cerebro: pasa al lado del rival, no
+		j.motivo = MOTIVO_PASE_IMPOSIBLE;
 	// se aleja de él.
 	if (!regatea) {
 		int cerca = -1;
@@ -2970,7 +3085,6 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 			j.dir_z = (qz - bola.z) / l;
 		} else {
 			j.dir_x = _ataca(j.equipo);
-			j.motivo = MOTIVO_CORNER_CORTO;
 			j.dir_z = 0.0;
 		}
 	};
@@ -2984,7 +3098,6 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 		largo = param_toque.regate_largo_m;
 	}
 	// Lo que corre HACIA donde la manda, no su rapidez: el que cambiaba de
-		j.motivo = MOTIVO_CEREBRO;
 	// dirección conduciendo (el carril nuevo, o alejarla del rival) la tocaba
 	// como si ya corriera para ese lado, a 7 m/s. Él tenía que frenar y dar la
 	// vuelta, y la pelota se le iba 3 m (169 veces en 20 partidos; de ahí
@@ -3006,27 +3119,11 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 	double tope = j.cuerpo.vel_max * j.cuerpo.cansancio * param_toque.conduccion_factor * j.ritmo_conduce;
 	double corre = std::clamp(hacia + j.cuerpo.aceleracion * param_toque.conduce_gana_seg, 0.0, tope);
 	if (gira_al_arco) {
-	} else if (j.motivo == MOTIVO_NINGUNO) {
-		j.motivo = MOTIVO_VIGENTE;
 		// Cerca del arco un toque largo se lo queda el arquero.
 		largo = param_toque.toque_corto_m;
 	}
-	// La pelota acompaña al cuerpo hasta el toque siguiente. El cuerpo no
-	// cambia de velocidad en el acto (Cuerpo::_moverse): lo que corre para
-	// otro lado lo pierde a giro_acel por segundo. Hasta que puede volver a
-	// tocarla (lo que dura el gesto de conducir) recorre `px, pz`. La pelota
-	// sale hacia ahí, más el largo hacia donde quiere ir, y llega con él: el
-	// giro termina en el toque siguiente. Sin esto el toque contaba solo lo
-	// que corría hacia donde la mandaba: el que iba a 6,6 m/s y la tocaba a
-	// 110 grados la dejaba casi quieta, seguía 1,8 m de largo y volvía a
-	// buscarla (BUG-009, docs/bugs_pendientes.md). Reemplaza a
-	// toque.frena_giro_*, que la tocaba a 34 grados de lo que corría, pero
-	// solo girando más de 100 grados y sin un rival cerca; esta cuenta da
-	// unos 30 grados en ese caso.
-		j.motivo = MOTIVO_GIRO_AL_ARCO;
-	// La pelota no va más rápido que el ritmo de conducción (`tope`): sumando
-	// también lo que corre de más hacia adelante, el favorito conducía a
-	// fondo (quinta contra octava, 4,11 goles; así 3,98; antes 3,32).
+	// La pelota acompaña lo que el cuerpo sigue corriendo (acompanar). El
+	// ritmo de conducción (`tope`) es adonde llega cuando el cuerpo frena.
 	double alcanza_m = 0.0, alcanza_seg = 0.0;
 	if (regatea) {
 		// El regate es el cambio de dirección: la pelota sale por la salida
@@ -3040,37 +3137,14 @@ void Canchita::_decidir_partido(int i, V3 bola, double t_patada) {
 		alcanza_m = corre * alcanza_seg;
 	} else if (param_toque.conduce_inercia > 0.0 && param_toque.clip_conduce >= 0) {
 		double t_sig = clips[size_t(param_toque.clip_conduce)].duracion;
-		// Los segundos que pesa, hasta t_sig, una velocidad `resto` que el
-		// cuerpo pierde a `a` por segundo.
-		auto pesa = [&](double resto, double a) {
-			double t = std::min(t_sig, resto / std::max(a, 0.1));
-			return resto > 1e-9 ? (t - 0.5 * t * t * a / resto) * param_toque.conduce_inercia : 0.0;
-		};
-		double atras = std::min(hacia, 0.0);
-		double gx = j.cuerpo.vx - j.dir_x * (hacia - atras), gz = j.cuerpo.vz - j.dir_z * (hacia - atras);
-		double gira = hipot(gx, gz);
-		j.motivo = MOTIVO_PASE_IMPOSIBLE;
-		if (gira > 0.1) {
-			double sigue = corre * t_sig;
-			double k = pesa(gira, param_cuerpo.giro_acel);
-			double px = j.dir_x * sigue + gx * k, pz = j.dir_z * sigue + gz * k;
-			double lp = hipot(px, pz);
-			// El largo no la deja detrás de donde va a estar el cuerpo: el que
-			// da la media vuelta la lleva hasta donde frena.
-			double lx = j.dir_x * largo, lz = j.dir_z * largo;
-			double contra = lp > 1e-6 ? (lx * px + lz * pz) / lp : 0.0;
-			if (contra < 0.0) {
-				lx -= contra * px / lp;
-				lz -= contra * pz / lp;
-			}
-			double lt = hipot(px + lx, pz + lz);
-			if (lt > 1e-6) {
-				apuntar((px + lx) / lt, (pz + lz) / lt);
-				alcanza_m = std::clamp(px * j.dir_x + pz * j.dir_z, 0.0, tope * t_sig);
-				alcanza_seg = t_sig;
-				corre = alcanza_m / t_sig;
-				largo = std::max(lx * j.dir_x + lz * j.dir_z, 0.0);
-			}
+		double ax = j.dir_x, az = j.dir_z;
+		if (acompanar(j.cuerpo, t_sig, param_cuerpo.giro_acel, param_cuerpo.frenada, param_toque.conduce_inercia, ax, az, corre, largo,
+					alcanza_m, [&](double &qx, double &qz) {
+						apuntar(qx, qz);
+						qx = j.dir_x;
+						qz = j.dir_z;
+					})) {
+			alcanza_seg = t_sig;
 		}
 	}
 	j.toque = TOQUE_CONDUCE;

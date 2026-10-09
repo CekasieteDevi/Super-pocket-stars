@@ -95,6 +95,7 @@ public:
 	int64_t get_poseedor() const;
 	int64_t get_equipo_con_pelota() const;
 	int64_t get_ultimo_toque() const;
+	int64_t get_ultimo_tipo() const;
 	int64_t get_receptor() const;
 	// Etapa 5.
 	int64_t get_en_manos() const;
@@ -147,7 +148,6 @@ public:
 	// La última decisión del cerebro: {decisor, temperatura, opciones: [{tipo,
 	// receptor, punto, utilidad}]}.
 	Dictionary ultima_decision() const;
-	int64_t huella() const;
 	// Activa o apaga la traza por paso (apagada por defecto, sin costo). Encenderla o
 	// apagarla vacía el buffer.
 	void activar_traza(bool on);
@@ -156,6 +156,7 @@ public:
 	Array get_traza() const;
 	// Versión y fecha de compilación del motor (va en cada fila de la traza).
 	String get_build_id() const;
+	int64_t huella() const;
 
 protected:
 	static void _bind_methods();

@@ -59,6 +59,8 @@ struct ParametrosToque {
 	// suma al toque de conducción (Canchita::_decidir_partido): 1 es todo, 0
 	// lo apaga.
 	double conduce_inercia = 0.0;
+	// Lo mismo para el toque de control (Canchita::_tocar).
+	double control_inercia = 1.0;
 	double sin_rebote_seg = 0.3;
 	double margen_seguro_seg = 0.25;
 	double giro_alcance_rad = 1.0;

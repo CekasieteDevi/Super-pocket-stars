@@ -77,6 +77,7 @@ func _init() -> void:
 		var en_orden := true
 		var paso_previo := -1
 		var nombres := RelatoPartido.nombres(home, away)
+		var goles_de_penal := 0
 		for ev in r["eventos"]:
 			if int(ev["paso"]) < paso_previo:
 				en_orden = false
@@ -86,6 +87,9 @@ func _init() -> void:
 			match str(ev["tipo"]):
 				"gambeta": quites += 1
 				"centro": centros += 1
+				"penal":
+					if str(ev["resultado"]) == "gol":
+						goles_de_penal += 1
 				"pase":
 					if int(ev["minuto"]) > 0:
 						pases_con_minuto += 1
@@ -97,7 +101,10 @@ func _init() -> void:
 		# después de BUG-008; la media es 6,4): que haya tiros se mira en el
 		# total, no partido por partido.
 		tiros_total += tiros
-		_ok(pases >= 20 and tiros >= home.goles + away.goles,
+		# El gol de penal sale como evento "penal", que las estadísticas no
+		# cuentan como tiro: un 3-1 con un penal y tres remates, los tres gol,
+		# tiene 3 tiros y 4 goles (semilla 20261106 después de BUG-018).
+		_ok(pases >= 20 and tiros + goles_de_penal >= home.goles + away.goles,
 			"%s: las estadísticas cuentan %d pases y %d tiros" % [texto, pases, tiros])
 		_ok(not (r["xp"]["home"] as Dictionary).is_empty() and not (r["xp"]["away"] as Dictionary).is_empty(),
 			"%s: hay experiencia para los dos equipos" % texto)

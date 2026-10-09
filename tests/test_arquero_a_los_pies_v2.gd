@@ -19,7 +19,7 @@ const SEED := 97000
 const PARTIDOS := 600
 ## La falta del arquero sale una vez cada 17 partidos: hacen falta más partidos
 ## y arqueros bien distintos para contarla.
-const PARTIDOS_FALTA := 120
+const PARTIDOS_FALTA := 360
 const DIFERENCIA := 40.0
 const ESTILOS := [["Tiki taka", "Juego directo"], ["Presión alta", "Contragolpe"]]
 ## Hasta dónde cuenta una llegada: el doble de lo que sale el arquero a los
@@ -61,7 +61,9 @@ func _init() -> void:
 	_ok(sin["del_arquero"] < con["del_arquero"], "sin la salida a los pies corta menos llegadas (%d)."
 		% sin["del_arquero"])
 	# La falta del que sale a los pies es penal y depende del achique: en estos
-	# partidos el arquero con 40 puntos de menos hace 7 y el otro ninguna.
+	# partidos el arquero con 40 puntos de menos hace 10 y el otro ninguna.
+	# Eran 120 partidos (7 y 0). Después de BUG-018 el que lleva la pelota
+	# llega más despacio al arquero y en 120 quedaban 2 y 0.
 	var faltas := _faltas()
 	_ok(faltas[1] >= 4, "el arquero de poco achique hace 4 faltas o más saliendo a los pies (%d)." % faltas[1])
 	_ok(faltas[0] * 3 <= faltas[1], "el de mucho achique hace la tercera parte o menos (%d)." % faltas[0])

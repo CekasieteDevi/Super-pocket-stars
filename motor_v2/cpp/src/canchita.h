@@ -861,7 +861,7 @@ private:
 
 	void _pensar();
 	void _analizar();
-	void _alcance(int i, double factor, int &k, double &t, int no_antes = 0) const;
+	bool _alcance(int i, double factor, int &k, double &t, int no_antes = 0) const;
 	void _pensar_jugador(int i);
 	void _plan_tocar(int i);
 	void _decidir(int i, V3 bola, double t_patada);

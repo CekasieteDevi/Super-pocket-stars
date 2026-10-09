@@ -84,6 +84,7 @@ void godot::leer_parametros_toque(const Dictionary &d, const std::vector<String>
 	leer(d, "conduccion_factor", p.conduccion_factor);
 	leer(d, "conduce_gana_seg", p.conduce_gana_seg);
 	leer(d, "conduce_inercia", p.conduce_inercia);
+	leer(d, "control_inercia", p.control_inercia);
 	leer(d, "control_raya_m", p.control_raya_m);
 	leer(d, "sin_rebote_seg", p.sin_rebote_seg);
 	leer(d, "margen_seguro_seg", p.margen_seguro_seg);
@@ -698,6 +699,11 @@ int64_t CanchitaV2Nativa::get_ultimo_toque() const {
 	return _c.ultimo_toque;
 }
 
+// Qué fue ese toque (motor_v2::TipoToque: 2 conducción, 3 control).
+int64_t CanchitaV2Nativa::get_ultimo_tipo() const {
+	return _c.ultimo_tipo;
+}
+
 int64_t CanchitaV2Nativa::get_receptor() const {
 	return _c.receptor();
 }
@@ -1203,12 +1209,6 @@ int64_t CanchitaV2Nativa::huella() const {
 	return int64_t(_c.huella() & 0x7fffffffffffffffULL);
 }
 
-void CanchitaV2Nativa::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("configurar", "pelota", "cuerpo", "clips", "toque"), &CanchitaV2Nativa::configurar);
-	ClassDB::bind_method(D_METHOD("agregar", "equipo", "fisico"), &CanchitaV2Nativa::agregar);
-	ClassDB::bind_method(D_METHOD("agregar_suplente", "equipo", "fisico"), &CanchitaV2Nativa::agregar_suplente);
-	ClassDB::bind_method(D_METHOD("configurar_reglas", "reglas"), &CanchitaV2Nativa::configurar_reglas);
-	ClassDB::bind_method(D_METHOD("configurar_reglas_equipo", "equipo", "club"), &CanchitaV2Nativa::configurar_reglas_equipo);
 void CanchitaV2Nativa::activar_traza(bool on) {
 	_c.activar_traza(on);
 }
@@ -1237,18 +1237,24 @@ String CanchitaV2Nativa::get_build_id() const {
 	return String(motor_v2::Canchita::build_id());
 }
 
+void CanchitaV2Nativa::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("configurar", "pelota", "cuerpo", "clips", "toque"), &CanchitaV2Nativa::configurar);
+	ClassDB::bind_method(D_METHOD("agregar", "equipo", "fisico"), &CanchitaV2Nativa::agregar);
+	ClassDB::bind_method(D_METHOD("agregar_suplente", "equipo", "fisico"), &CanchitaV2Nativa::agregar_suplente);
+	ClassDB::bind_method(D_METHOD("configurar_reglas", "reglas"), &CanchitaV2Nativa::configurar_reglas);
+	ClassDB::bind_method(D_METHOD("configurar_reglas_equipo", "equipo", "club"), &CanchitaV2Nativa::configurar_reglas_equipo);
 	ClassDB::bind_method(D_METHOD("reglas_de_fabrica"), &CanchitaV2Nativa::reglas_de_fabrica);
 	ClassDB::bind_method(D_METHOD("eventos"), &CanchitaV2Nativa::eventos);
 	ClassDB::bind_method(D_METHOD("get_ids"), &CanchitaV2Nativa::get_ids);
+	ClassDB::bind_method(D_METHOD("activar_traza", "on"), &CanchitaV2Nativa::activar_traza);
+	ClassDB::bind_method(D_METHOD("get_traza"), &CanchitaV2Nativa::get_traza);
+	ClassDB::bind_method(D_METHOD("get_build_id"), &CanchitaV2Nativa::get_build_id);
 	ClassDB::bind_method(D_METHOD("get_energias"), &CanchitaV2Nativa::get_energias);
 	ClassDB::bind_method(D_METHOD("energias_por_id"), &CanchitaV2Nativa::energias_por_id);
 	ClassDB::bind_method(D_METHOD("get_afuera"), &CanchitaV2Nativa::get_afuera);
 	ClassDB::bind_method(D_METHOD("get_estado"), &CanchitaV2Nativa::get_estado);
 	ClassDB::bind_method(D_METHOD("forzar_parada", "tipo", "equipo", "pos"), &CanchitaV2Nativa::forzar_parada);
 	ClassDB::bind_method(D_METHOD("forzar_falta", "tarjeta", "lesion"), &CanchitaV2Nativa::forzar_falta);
-	ClassDB::bind_method(D_METHOD("activar_traza", "on"), &CanchitaV2Nativa::activar_traza);
-	ClassDB::bind_method(D_METHOD("get_traza"), &CanchitaV2Nativa::get_traza);
-	ClassDB::bind_method(D_METHOD("get_build_id"), &CanchitaV2Nativa::get_build_id);
 	ClassDB::bind_method(D_METHOD("forzar_fin_de_tiempo"), &CanchitaV2Nativa::forzar_fin_de_tiempo);
 	ClassDB::bind_method(D_METHOD("get_lateral_en_manos"), &CanchitaV2Nativa::get_lateral_en_manos);
 	ClassDB::bind_method(D_METHOD("configurar_remate", "remate", "arquero"), &CanchitaV2Nativa::configurar_remate);
@@ -1296,6 +1302,7 @@ String CanchitaV2Nativa::get_build_id() const {
 	ClassDB::bind_method(D_METHOD("get_poseedor"), &CanchitaV2Nativa::get_poseedor);
 	ClassDB::bind_method(D_METHOD("get_equipo_con_pelota"), &CanchitaV2Nativa::get_equipo_con_pelota);
 	ClassDB::bind_method(D_METHOD("get_ultimo_toque"), &CanchitaV2Nativa::get_ultimo_toque);
+	ClassDB::bind_method(D_METHOD("get_ultimo_tipo"), &CanchitaV2Nativa::get_ultimo_tipo);
 	ClassDB::bind_method(D_METHOD("get_receptor"), &CanchitaV2Nativa::get_receptor);
 	ClassDB::bind_method(D_METHOD("get_pelota_pos"), &CanchitaV2Nativa::get_pelota_pos);
 	ClassDB::bind_method(D_METHOD("get_pelota_previa"), &CanchitaV2Nativa::get_pelota_previa);

@@ -66,6 +66,14 @@ constexpr double CENTRO_DESDE_M = 11.0;
 constexpr double REGATE_MIRA_M = 5.0;
 // Por debajo de esta rapidez el que encara gira para cualquier lado.
 constexpr double REGATE_CORRE_MS = 2.0;
+// Lo más que puede correr para el costado de la salida el que encara. El
+// cuerpo pierde eso a giro_acel (12 m/s²): con 5 m/s sigue 1 m de largo. El
+// regate no acompaña al cuerpo (Canchita::_decidir_partido): el que encaraba
+// a 8 m/s con la salida a 50 grados seguía 1,5 a 3 m y volvía a buscarla. En
+// 200 partidos por división (semilla 97000) pasaba 13 veces en quinta y 22 en
+// primera (BUG-018, docs/bugs_pendientes.md). Con 3,5 quedan la mitad de los
+// regates.
+constexpr double REGATE_COSTADO_MS = 5.0;
 constexpr double PROFUNDIDAD_DEL_NUEVE_AL_CENTRO = 8.0;
 constexpr double ARQUERO_X_MIN = 51.8;
 constexpr double ARQUERO_X_MAX = 36.0;
@@ -604,26 +612,33 @@ bool Cerebro::_salida_de_regate(const Mundo &m, int i, int rival, double &dx, do
 	if (ux == 0.0 && uz == 0.0) {
 		return false;
 	}
-	double sa, ca;
-	mate::seno_coseno(pesos.regate_salida_rad, sa, ca);
-	// A la izquierda del que mira hacia (ux, uz) queda (uz, -ux).
-	dx = ux * ca + uz * sa;
-	dz = uz * ca - ux * sa;
-	// Encarar es ir hacia el rival. Con el rival al costado la salida giraba
-	// más de 90 grados de lo que corría: él seguía de largo y la pelota le
-	// quedaba atrás (tests/test_pelota_atras_v2.gd: 3,00 episodios por partido
-	// sin regates y 5,25 con la salida a cualquier ángulo).
 	double corre = dist(0.0, 0.0, p.vx, p.vz);
-	if (corre > REGATE_CORRE_MS) {
-		double sg, cg;
-		mate::seno_coseno(pesos.regate_giro_max_rad, sg, cg);
-		if ((dx * p.vx + dz * p.vz) / corre < cg) {
-			return false;
+	// El que corre mucho para el costado de la salida la abre menos: tres
+	// cuartos y la mitad del ángulo. Sin salida para ninguno, no encara.
+	for (double parte : { 1.0, 0.75, 0.5 }) {
+		double sa, ca;
+		mate::seno_coseno(pesos.regate_salida_rad * parte, sa, ca);
+		// A la izquierda del que mira hacia (ux, uz) queda (uz, -ux).
+		dx = ux * ca + uz * sa;
+		dz = uz * ca - ux * sa;
+		// Encarar es ir hacia el rival. Con el rival al costado la salida giraba
+		// más de 90 grados de lo que corría: él seguía de largo y la pelota le
+		// quedaba atrás (tests/test_pelota_atras_v2.gd: 3,00 episodios por partido
+		// sin regates y 5,25 con la salida a cualquier ángulo).
+		if (corre > REGATE_CORRE_MS) {
+			double sg, cg;
+			mate::seno_coseno(pesos.regate_giro_max_rad, sg, cg);
+			double hacia = dx * p.vx + dz * p.vz;
+			if (hacia / corre < cg || corre * corre - hacia * hacia > REGATE_COSTADO_MS * REGATE_COSTADO_MS) {
+				continue;
+			}
+		}
+		double qx = p.x + dx * REGATE_MIRA_M, qz = p.z + dz * REGATE_MIRA_M;
+		if (dx * signo(fichas[size_t(i)].equipo) >= 0.0 && std::abs(qx) <= MEDIO_LARGO - 2.0 && std::abs(qz) <= MEDIO_ANCHO - 2.0) {
+			return true;
 		}
 	}
-	double qx = p.x + dx * REGATE_MIRA_M, qz = p.z + dz * REGATE_MIRA_M;
-	return dx * signo(fichas[size_t(i)].equipo) >= 0.0 && std::abs(qx) <= MEDIO_LARGO - 2.0
-			&& std::abs(qz) <= MEDIO_ANCHO - 2.0;
+	return false;
 }
 
 // Cambio de frente desde el último tercio: vale si del lado de la pelota hay
