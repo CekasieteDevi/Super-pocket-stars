@@ -69,8 +69,11 @@ Las filas de `--pasos` y `--minuto` tienen estas columnas:
 eligió esa decisión), `direccion` (x, z), `rapidez`, `raya_m` (metros de la
 pelota a la raya más cercana).
 
-Los nombres salen del código C++: `DEC_*` en `canchita_v2_nativa.cpp`, `TOQUE_*`
-y `MOTIVO_*` en `canchita.h`. Así se busca en el código lo que aparece en la fila.
+Los nombres salen del código C++: `DEC_*` en `cerebro/cerebro.h`, `TOQUE_*` y
+`MOTIVO_*` en `canchita.h`. Los textos que imprime el replay están en
+`canchita_v2_nativa.cpp`. En la salida, cada fila usa estas etiquetas:
+`paso=`, `min=`, `pelota=`, `poseedor=`, `decision=`, `accion=`, `motivo=`,
+`dir=`, `rapidez=`, `raya=`. Así se busca en el código lo que aparece en la fila.
 
 ## Salidas (pelota fuera)
 
