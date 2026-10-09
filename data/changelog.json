@@ -1,4 +1,5 @@
 [
+	{"version": "0.8.49", "fecha": "2026-10-09", "cambio": "La guía del replay explica que un partido sin salidas es lo esperado, porque el control mantiene la pelota dentro de la cancha."},
 	{"version": "0.8.48", "fecha": "2026-10-09", "cambio": "Las reglas del proyecto ya no piden un subagente que no existe para investigar bugs del cerebro."},
 	{"version": "0.8.47", "fecha": "2026-10-09", "cambio": "Las reglas del proyecto separan los permisos de Godot y de los subagentes, y se versionan los .uid de Godot que faltaban."},
 	{"version": "0.8.46", "fecha": "2026-10-09", "cambio": "El conteo de salidas por rebote ya no toma un rebote viejo después de un saque o un pase."},

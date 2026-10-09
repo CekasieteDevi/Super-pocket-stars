@@ -80,12 +80,16 @@ clasificador: no mira la pelota en cada paso, mira el último toque cuando sale.
 
 Estado al 2026-10-09: en el partido de referencia (Racing Punta Norte 2-1 Umbrella,
 día 133, 18635 pasos) dio **0 salidas**. Se midió que la pelota nunca estuvo a
-menos de 1,72 m de la banda. Causa: el control y la conducción apuntan hacia
-adentro de la cancha (`control_raya_m = 1,5` en `toque.h`, y el margen de 2 m en
-`Canchita::apuntar`). Eso se agregó a propósito porque el control salía de la
-cancha 1,2 veces por partido (comentario en `canchita.cpp`, control). Quitar el
-margen trae de vuelta las salidas, así que es una decisión de juego, no de
-conteo. Pendiente: reconciliar el número de salidas con la medición de semillas
+menos de 1,72 m de la banda. Causa: el control apunta hacia adentro de la cancha
+(`control_raya_m = 1,5` en `toque.h`), y el apuntado tiene un margen de 2 m
+(`Canchita::apuntar`). El control se corrige así porque sin eso salía de la cancha
+1,2 veces por partido (comentario en `canchita.cpp`, control).
+
+Decisión (2026-10-09): el clamp es diseño y se mantiene. Un 0 de salidas en un
+partido es esperado, no un fallo de conteo. Cambiarlo es una decisión de juego
+aparte, con medición antes.
+
+Pendiente: reconciliar el número de salidas con la medición de semillas
 (260 contra 165 en las semillas 97000–97039).
 
 ## Qué no hace
