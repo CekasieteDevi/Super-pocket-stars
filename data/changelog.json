@@ -1,4 +1,6 @@
 [
+	{"version": "0.8.53", "fecha": "2026-10-10", "cambio": "Un partido ya no se traba a los 63 minutos cuando un jugador entra por un cambio durante un tiro libre."},
+	{"version": "0.8.52","fecha": "2026-10-09", "cambio": "Cuando el arquero saca de arco a un lateral, la pelota ahora va por el piso y no por el aire, para que no se vaya por la banda."},
 	{"version": "0.8.51", "fecha": "2026-10-09", "cambio": "Las reglas del proyecto permiten abrir el juego en Godot con ventana cuando el usuario lo pide."},
 	{"version": "0.8.50", "fecha": "2026-10-09", "cambio": "La guía del replay indica dónde están los nombres de decisiones, toques y motivos, y las etiquetas que imprime cada fila."},
 	{"version": "0.8.49", "fecha": "2026-10-09", "cambio": "La guía del replay explica que un partido sin salidas es lo esperado, porque el control mantiene la pelota dentro de la cancha."},

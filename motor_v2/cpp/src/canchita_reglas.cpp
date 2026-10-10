@@ -1045,10 +1045,13 @@ bool Canchita::_avanzar_parada() {
 			}
 		}
 	}
-	// El que entra en un cambio tiene que pisar la cancha antes del saque.
+	// El que entra en un cambio tiene que pisar la cancha antes del saque, pero
+	// solo hasta el tope de la parada: si no pisa, la parada no lo espera para
+	// siempre. Sin el tope, un tiro libre a los 63' de la semilla 20261627 (prueba
+	// del puente) quedó clavado 400.000 pasos: el que entra no se movía.
 	for (size_t k = 0; k < _entrando.size();) {
 		const Cuerpo &ce = jugadores[size_t(_entrando[k])].cuerpo;
-		if (std::abs(ce.z) < _medio_z() - 0.5) {
+		if (std::abs(ce.z) < _medio_z() - 0.5 || paso >= p.tope) {
 			_entrando.erase(_entrando.begin() + int64_t(k));
 		} else {
 			ubicados = false;
@@ -1205,18 +1208,20 @@ void Canchita::_lanzar_a(int e, V3 desde, double tx, double tz, double elevacion
 
 // El arquero con la pelota en las manos: a un compañero libre con la mano; si
 // no hay y tiene rivales cerca, de voleo bien lejos; si están lejos, la suelta
-// y la juega con el pie (devuelve false).
+// y la juega con el pie (devuelve false). En saque de arco no lo busca con la
+// mano ni de voleo: el lateral recibe raso.
 bool Canchita::_decidir_saque_de_manos() {
 	const ParametrosReglas &r = param_reglas;
 	int i = _en_manos;
 	const JugadorCanchita &j = jugadores[size_t(i)];
 	const Cuerpo &c = j.cuerpo;
 	double s = _ataca(j.equipo);
+	const bool saque_arco = _parada.tipo == SAQUE_ARCO;
 	int mejor = -1;
 	double mejor_valor = -1e18;
 	for (size_t k = 0; k < jugadores.size(); k++) {
 		const JugadorCanchita &o = jugadores[k];
-		if (int(k) == i || o.equipo != j.equipo || o.arquero) {
+		if (int(k) == i || o.equipo != j.equipo || o.arquero || (saque_arco && o.reglas.rol == LAT)) {
 			continue;
 		}
 		double d = hipot(o.cuerpo.x - c.x, o.cuerpo.z - c.z);
@@ -1243,7 +1248,7 @@ bool Canchita::_decidir_saque_de_manos() {
 		double d_mejor = 1e18;
 		for (size_t k = 0; k < jugadores.size(); k++) {
 			const JugadorCanchita &o = jugadores[k];
-			if (int(k) != i && o.equipo == j.equipo && !o.arquero) {
+			if (int(k) != i && o.equipo == j.equipo && !o.arquero && !(saque_arco && o.reglas.rol == LAT)) {
 				double d = hipot(o.cuerpo.x - _mano.x, o.cuerpo.z - _mano.z);
 				if (d < d_mejor) {
 					d_mejor = d;

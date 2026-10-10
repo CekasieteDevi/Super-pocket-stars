@@ -1224,8 +1224,8 @@ Canchita::Pase Canchita::_planear_pase(int i, V3 bola, double t_patada, int solo
 				mejor = { true, int(r), tx, tz, false, margen, puntaje };
 			}
 		}
-		// Globo por arriba de los defensores, a los pies.
-		if (d0 >= 7.0) {
+		// En saque de arco el lateral recibe raso: el globo cae en la banda.
+		if (d0 >= 7.0 && !(_parada.tipo == SAQUE_ARCO && jr.reglas.rol == LAT)) {
 			int k;
 			double v = _rapidez_globo(d0, k);
 			if (v > 0.0) {
@@ -3223,7 +3223,9 @@ Canchita::Pase Canchita::_pase_a(int i, V3 bola, double t_patada, const Decision
 	if (dd < 1.0) {
 		return r;
 	}
-	bool globo = d.tipo == DEC_PASE_LARGO || d.tipo == DEC_CENTRO || d.tipo == DEC_DESPEJE;
+	// En saque de arco el lateral recibe raso: ni globo ni centro, que caen en la banda.
+	bool lat = _parada.tipo == SAQUE_ARCO && receptor >= 0 && jugadores[size_t(receptor)].reglas.rol == LAT;
+	bool globo = !lat && (d.tipo == DEC_PASE_LARGO || d.tipo == DEC_CENTRO || d.tipo == DEC_DESPEJE);
 	if (globo) {
 		// Si ni el globo más fuerte llega, cae más cerca en la misma línea.
 		int k;
