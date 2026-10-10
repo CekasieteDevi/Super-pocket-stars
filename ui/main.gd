@@ -9096,46 +9096,53 @@ func _avanzar_dias(hasta_el_partido: bool) -> void:
 	if GameState.temporada_actual != temporada_antes:
 		_mostrar_resumen_temporada()
 		return
-	if not novedades.is_empty():
+	var texto_cartel := _texto_de_novedades(novedades)
+	if not texto_cartel.is_empty():
 		_mostrar_novedades("%s
 
 %s" % [
 			Calendario.texto_largo(GameState.dia_absoluto),
-			_texto_de_novedades(novedades)])
+			texto_cartel])
 
 
-## Cuantas novedades entran en el cartel antes de mandar el resto a
-## Noticias. El cierre de temporada genera 225 lineas —los 200 clubes de
-## la piramide fichando, liberando y subiendo juveniles— y un cartel con
-## eso adentro no se lee: es una pared de texto donde lo tuyo esta perdido.
+## Una novedad es del club si nombra a ese club como palabra entera. Un
+## `contains` a secas dejaba pasar "Rampla" dentro de "Rampla Nueva
+## Esperanza": el cartel mostraba un club ajeno. Si la novedad nombra a otro
+## club que contiene el nuestro ("Umbrella II" para "Umbrella"), tampoco es
+## nuestra: por eso se revisan todos los clubes de la piramide.
+func _es_del_club(texto: String, club: String) -> bool:
+	if club.is_empty() or not _nombra_club(texto, club):
+		return false
+	for liga in GameState.piramide.divisiones:
+		for equipo in liga.equipos:
+			var otro: String = equipo.nombre
+			if otro != club and otro.contains(club) and _nombra_club(texto, otro):
+				return false
+	return true
+
+
+func _nombra_club(texto: String, club: String) -> bool:
+	var patron := RegEx.new()
+	patron.compile("\\b%s\\b" % club)
+	return patron.search(texto) != null
+
+
+## Tope de lineas del cartel. Lo que pasa en tu club cabe de sobra; el tope
+## evita una pared de texto si un dia llegan muchas de golpe.
 const MAX_NOVEDADES := 24
 
 
-## El texto del cartel. Lo TUYO primero: el cierre de temporada mete al
-## final las noticias de rutina de los 200 clubes, y como se leen de la
-## mas nueva a la mas vieja, terminaban arriba y tu posicion final, tu
-## objetivo y tu ascenso quedaban debajo de doscientas lineas de "un MCO
-## queda libre de un club que no conoces".
+## El texto del cartel: solo lo de TU club. Las novedades de los demas clubes
+## (fichajes, cesiones, libres, ofertas ajenas) no entran aca. Si el cartel
+## las mostraba, el jugador veia ventas de clubes que no le importan. Esas
+## lineas siguen en Mas › Noticias. Devuelve "" si no hubo nada tuyo: en ese
+## caso el cartel no se abre.
 func _texto_de_novedades(novedades: Array) -> String:
 	var mio: String = GameState.equipo_jugador.nombre
-	var mias := []
-	var resto := []
-	for n in novedades:
-		if str(n).contains(mio):
-			mias.append(str(n))
-		else:
-			resto.append(str(n))
-
 	var lineas := []
-	for n in mias:
-		lineas.append("  ·  %s" % n)
-	var cupo: int = maxi(MAX_NOVEDADES - lineas.size(), 0)
-	for i in range(mini(cupo, resto.size())):
-		lineas.append("  ·  %s" % resto[i])
-	var quedaron: int = resto.size() - mini(cupo, resto.size())
-	if quedaron > 0:
-		lineas.append("")
-		lineas.append("Y %d novedad(es) mas del resto de la piramide, en Mas › Noticias." % quedaron)
+	for n in novedades:
+		if _es_del_club(str(n), mio) and lineas.size() < MAX_NOVEDADES:
+			lineas.append("  ·  %s" % str(n))
 	return "
 ".join(lineas)
 
